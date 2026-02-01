@@ -1,0 +1,36 @@
+-- Adicionar campos para controle das 3 etapas do pedido
+ALTER TABLE public.quotes 
+ADD COLUMN IF NOT EXISTS current_stage INTEGER DEFAULT 1,
+ADD COLUMN IF NOT EXISTS current_step INTEGER DEFAULT 1,
+
+-- Etapa 1: Produção
+ADD COLUMN IF NOT EXISTS quote_pdf_url TEXT,
+ADD COLUMN IF NOT EXISTS quote_approved_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS contract_link TEXT,
+ADD COLUMN IF NOT EXISTS contract_signed_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS production_payment_link TEXT,
+ADD COLUMN IF NOT EXISTS production_paid_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS wants_logo BOOLEAN,
+ADD COLUMN IF NOT EXISTS logo_url TEXT,
+ADD COLUMN IF NOT EXISTS production_started_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS production_completed_at TIMESTAMP WITH TIME ZONE,
+
+-- Etapa 2: Embarque
+ADD COLUMN IF NOT EXISTS shipping_payment_link TEXT,
+ADD COLUMN IF NOT EXISTS shipping_paid_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS shipping_form_link TEXT,
+ADD COLUMN IF NOT EXISTS shipping_form_completed_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS shipping_address_street TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_number TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_complement TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_neighborhood TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_city TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_state TEXT,
+ADD COLUMN IF NOT EXISTS shipping_address_cep TEXT,
+ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS arrived_port_at TIMESTAMP WITH TIME ZONE,
+
+-- Etapa 3: Liberação Aduaneira
+ADD COLUMN IF NOT EXISTS customs_started_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS customs_cleared_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE;
