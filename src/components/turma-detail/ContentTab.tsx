@@ -97,11 +97,6 @@ const ContentTab = ({
               <FolderPlus className="h-4 w-4" /><span className="hidden sm:inline">Nova Pasta</span>
             </Button>
           )}
-          {canCreateLesson && (
-            <Button size="sm" onClick={onShowAddLesson} className="gap-2">
-              <Plus className="h-4 w-4" /><span className="hidden sm:inline">Adicionar</span>
-            </Button>
-          )}
         </div>
       </div>
 
