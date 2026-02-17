@@ -25,7 +25,7 @@ export interface CoverageAnalysis {
 }
 
 export type DetailLevel = 'essential' | 'standard' | 'comprehensive';
-export type CardFormat = 'definition' | 'cloze' | 'qa' | 'multiple_choice';
+export type CardFormat = 'cloze' | 'qa' | 'multiple_choice';
 
 export const DETAIL_OPTIONS: { value: DetailLevel; label: string; desc: string }[] = [
   { value: 'essential', label: 'Essencial', desc: 'Conceitos básicos para revisão rápida' },
@@ -34,9 +34,8 @@ export const DETAIL_OPTIONS: { value: DetailLevel; label: string; desc: string }
 ];
 
 export const FORMAT_OPTIONS: { value: CardFormat; label: string }[] = [
-  { value: 'definition', label: 'Definição / significado' },
-  { value: 'cloze', label: 'Preencha o espaço' },
   { value: 'qa', label: 'Pergunta / resposta' },
+  { value: 'cloze', label: 'Preencha o espaço' },
   { value: 'multiple_choice', label: 'Múltipla escolha' },
 ];
 

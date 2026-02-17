@@ -47,7 +47,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   // Config
   const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
-  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['definition', 'cloze', 'qa', 'multiple_choice']);
+  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze', 'multiple_choice']);
   const [customInstructions, setCustomInstructions] = useState('');
   const [targetCardCount, setTargetCardCount] = useState(0); // 0 = auto (AI decides)
 
@@ -74,7 +74,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const resetState = useCallback(() => {
     setStep('upload'); setDeckName(''); setInputMode(null); setFileName(''); setRawText('');
     setPages([]); setLoadProgress({ current: 0, total: 0 });
-    setDetailLevel('standard'); setCardFormats(['definition', 'cloze', 'qa', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
+    setDetailLevel('standard'); setCardFormats(['qa', 'cloze', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
     setGenProgress({ current: 0, total: 0, creditsUsed: 0 });
     setCards([]); setEditingIdx(null); setAnalysis(null);
     setIsLoading(false); setIsSaving(false);
