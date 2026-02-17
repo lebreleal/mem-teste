@@ -15,7 +15,7 @@ import { useFolders } from '@/hooks/useFolders';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaExams';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -469,41 +469,36 @@ const LessonDetail = () => {
     );
   }
 
-  const lessonDateFormatted = lesson.lesson_date
-    ? format(new Date(lesson.lesson_date + 'T00:00:00'), "dd 'de' MMMM, yyyy", { locale: ptBR })
-    : null;
-
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
+      {/* Header — same style as ContentTab */}
       <header className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center gap-3 px-4 py-3">
+        <div className="container mx-auto flex items-center gap-2 px-4 py-3 max-w-2xl">
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => {
             if (lesson.subject_id) navigate(`/turmas/${turmaId}?folder=${lesson.subject_id}`);
             else navigate(`/turmas/${turmaId}`);
           }}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground truncate">
-              {subject ? `${turma.name} › ${subject.name}` : turma.name}
-            </p>
+          <div className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
+            <button onClick={() => navigate(`/turmas/${turmaId}`)} className="text-muted-foreground hover:bg-muted rounded px-1.5 py-0.5 truncate max-w-[100px] transition-colors">
+              {turma.name}
+            </button>
+            {subject && (
+              <>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <button onClick={() => navigate(`/turmas/${turmaId}?folder=${subject.id}`)} className="text-muted-foreground hover:bg-muted rounded px-1.5 py-0.5 truncate max-w-[100px] transition-colors">
+                  {subject.name}
+                </button>
+              </>
+            )}
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="font-semibold text-foreground truncate">{lesson.name}</span>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 max-w-2xl">
-        {/* Hero / Title */}
-        <div className="pt-6 pb-5">
-          {lessonDateFormatted && (
-            <div className="inline-flex items-center gap-1.5 rounded-lg bg-primary/8 border border-primary/15 px-3 py-1.5 mb-3">
-              <Calendar className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold text-primary">{lessonDateFormatted}</span>
-            </div>
-          )}
-          <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{lesson.name}</h1>
-        </div>
-
+      <main className="container mx-auto px-4 max-w-2xl pt-4">
         {/* Unified Content Section */}
         <LessonContent
           lessonFiles={lessonFiles}
