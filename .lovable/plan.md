@@ -1,96 +1,98 @@
 
-# Enviar Paginas como Imagens para a IA (Vision API)
+## Plano: Mini-Game no Loading, Somente Texto (sem imagens), Formatos Respeitados, Remover Analise de Cobertura
 
-## Problema Atual
+### Resumo das Mudancas
 
-O sistema so extrai **texto** dos PDFs/documentos. Paginas com diagramas, graficos, formulas, tabelas visuais ou imagens sao tratadas como "sem conteudo" e geram cards ruins ou nenhum card. Isso e muito comum em materiais de faculdade (slides com imagens, esquemas, fotos de experimentos, etc).
+Tres grandes melhorias + uma remocao:
 
-## Solucao
+1. **Loading interativo com mini-game do dinossauro** durante a geracao
+2. **Remover processamento de imagens** - usar apenas texto extraido do PDF (mais rapido, mais barato)
+3. **Forcar formatos selecionados pelo usuario** no backend
+4. **Remover funcionalidade de analise de cobertura** (analyze + fill-gaps)
 
-Enviar cada pagina como **imagem** (base64) para a API da OpenAI usando o recurso de **Vision**. Os modelos GPT-4o e GPT-4o-mini ja suportam receber imagens e "ler" tudo: texto, diagramas, graficos, formulas, tabelas.
+---
 
-O texto extraido continua sendo enviado junto como complemento, mas a imagem passa a ser a fonte principal de informacao.
+### 1. Mini-Game do Dinossauro no Loading
 
-## Como vai funcionar para o usuario
+**Arquivo:** `src/components/ai-deck/GenerationProgress.tsx`
 
-Nada muda na interface. O usuario continua fazendo upload do arquivo, selecionando paginas e gerando cards. A diferenca e que a IA agora "enxerga" as paginas em vez de apenas ler o texto, gerando cards muito melhores para conteudo visual.
+Reescrever completamente com:
 
-## Mudancas Tecnicas
+- Canvas com mini-game estilo dino do Chrome: personagem pula (click/touch/space) sobre obstaculos
+- Score visivel enquanto joga
+- Status de progresso real abaixo do game: "Lote 2 de 5 - Criando seus flashcards..."
+- Barra de progresso com percentual e creditos
+- Dicas motivacionais rotativas ("Flashcards aumentam retencao em 50%!")
+- Funciona em mobile (touch) e desktop (click/space)
 
-### 1. `src/lib/pdfUtils.ts` -- Renderizar paginas em resolucao maior
+Logica do game:
+- Canvas ~280x120
+- Dino: retangulo/emoji na esquerda, gravidade simula pulo
+- Cactos: obstaculos movendo da direita pra esquerda
+- Colisao reseta score
+- requestAnimationFrame loop
+- Cleanup no unmount
 
-Atualmente as paginas sao renderizadas em `scale: 0.4` (so para thumbnail). Vamos adicionar um segundo render em `scale: 1.0` para gerar uma imagem de qualidade suficiente para a IA interpretar.
+---
 
-- Novo campo `imageBase64` no tipo `PDFPageData` -- contem a imagem da pagina em base64 (JPEG, qualidade 0.6)
-- A thumbnail continua em `scale: 0.4` para a UI
-- A imagem para IA usa `scale: 1.0` (boa qualidade sem ser excessivamente grande)
+### 2. Remover Processamento de Imagens (Somente Texto)
 
-### 2. `src/types/ai.ts` -- Adicionar campo `imageBase64` ao `PageItem`
+A decisao e usar **apenas texto extraido** do PDF. Motivos:
+- Enviar imagens para GPT-4o custa ~10x mais tokens
+- A maioria dos PDFs academicos tem texto rico que o pdf.js ja extrai bem
+- Elimina a necessidade de usar gpt-4o (vision), pode usar modelo mais barato
+- Geracao fica ~50% mais rapida
 
-```text
-export interface PageItem {
-  pageNumber: number;
-  thumbnailUrl?: string;
-  textContent: string;
-  imageBase64?: string;   // <-- novo: imagem da pagina para enviar a IA
-  selected: boolean;
-}
-```
+**Arquivos afetados:**
 
-### 3. `src/lib/docUtils.ts` -- Para PPTX/DOCX
-
-Documentos Office nao podem ser renderizados como imagem no browser facilmente. Para esses formatos, o comportamento atual (so texto) sera mantido. Apenas PDFs enviarao imagens.
-
-### 4. `src/components/ai-deck/useAIDeckFlow.ts` -- Enviar imagens junto com texto
-
-Na funcao `handleGenerate`, ao montar os batches (de 4 paginas):
-- Se a pagina tem `imageBase64`, inclui na chamada
-- O campo `pageImages` (array de strings base64) e enviado junto com `textContent`
-
-### 5. `src/services/aiService.ts` -- Novo campo `pageImages`
-
-Adicionar campo opcional `pageImages?: string[]` ao `GenerateDeckParams` e passa-lo para a edge function.
-
-### 6. `supabase/functions/generate-deck/index.ts` -- Usar Vision API
-
-Esta e a mudanca principal. Quando `pageImages` estiver presente:
-
-- Montar o campo `content` da mensagem do usuario como um array (formato multimodal da OpenAI):
-  - Primeiro item: texto (o prompt com instrucoes + texto extraido)
-  - Itens seguintes: cada imagem como `{ type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }`
-- O modelo GPT-4o e GPT-4o-mini ja aceitam esse formato nativamente
-- Quando nao tem imagens, continua funcionando exatamente como hoje (so texto)
-
-Exemplo do formato multimodal:
-```text
-messages: [
-  { role: "system", content: "..." },
-  { role: "user", content: [
-    { type: "text", text: "prompt com instrucoes..." },
-    { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/..." } },
-    { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/..." } },
-  ]}
-]
-```
-
-### 7. Batch de 4 paginas (conforme ja aprovado)
-
-O batching de 4 paginas continua valendo. Cada batch envia ate 4 imagens + texto combinado. Isso mantem o tamanho da requisicao gerenciavel (~200-400KB por batch com JPEG comprimido).
-
-## Limites e protecoes
-
-- Imagens renderizadas em JPEG qualidade 0.6 e `scale: 1.0` -- cada pagina fica ~50-100KB
-- Maximo de 4 imagens por chamada (batch de 4)
-- Texto continua sendo enviado como complemento (ajuda a IA quando o OCR dela falhar em algo)
-- Para DOCX/PPTX: continua so texto (sem imagem) -- limitacao tecnica do browser
-- Custo de energia nao muda para o usuario
-
-## Resumo das alteracoes
-
-| Arquivo | O que muda |
+| Arquivo | Mudanca |
 |---|---|
-| `src/types/ai.ts` | Novo campo `imageBase64` em `PageItem` |
-| `src/lib/pdfUtils.ts` | Render em `scale:1.0` e exportar base64 |
-| `src/services/aiService.ts` | Novo campo `pageImages` no `GenerateDeckParams` |
-| `src/components/ai-deck/useAIDeckFlow.ts` | Batch de 4 + enviar imagens |
-| `supabase/functions/generate-deck/index.ts` | Formato multimodal (vision) na chamada OpenAI |
+| `src/lib/pdfUtils.ts` | Remover geracao de `imageBase64` e `aiCanvas`. Manter apenas thumbnail + texto |
+| `src/components/ai-deck/useAIDeckFlow.ts` | Remover envio de `pageImages` no batch. Filtrar pages apenas por `textContent.trim().length > 0` |
+| `supabase/functions/generate-deck/index.ts` | Remover toda logica de `hasPageImages`, `visionModel`, `pageImages`, content multimodal. Sempre usar modelo texto (`selectedModel`) |
+| `src/services/aiService.ts` | Remover `pageImages` do `GenerateDeckParams` |
+| `src/types/ai.ts` | Remover `imageBase64` do `PageItem` |
+
+---
+
+### 3. Forcar Formatos do Usuario no Backend
+
+**Arquivo:** `supabase/functions/generate-deck/index.ts`
+
+Problema atual: linha 253-255 mapeia qualquer tipo desconhecido para "basic", mesmo que o usuario nao tenha selecionado "qa".
+
+Mudancas:
+- No mapeamento final de tipos (linha 253-257), se o tipo retornado pela IA nao esta nos `formats` permitidos, converter para o **primeiro formato permitido** (ex: se usuario escolheu `['cloze', 'multiple_choice']`, converter "basic" para "cloze")
+- Adicionar instrucao explicita no prompt: "PROIBIDO gerar cartoes do tipo X" para formatos nao selecionados
+- Gerar exemplos de saida APENAS com os formatos selecionados
+
+---
+
+### 4. Remover Analise de Cobertura
+
+Remover completamente as funcionalidades "Analisar Cobertura" e "Preencher Lacunas".
+
+**Arquivos afetados:**
+
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/ai-deck/AnalysisStep.tsx` | Deletar arquivo |
+| `src/components/ai-deck/types.ts` | Remover steps `'analyzing'` e `'analysis'` do tipo `Step` |
+| `src/components/ai-deck/useAIDeckFlow.ts` | Remover `handleAnalyze`, `handleFillGaps`, state `analysis`, e exportacoes relacionadas |
+| `src/components/ai-deck/CardReviewStep.tsx` | Remover botao "Analisar cobertura" e prop `onAnalyze` |
+| `src/components/AICreateDeckDialog.tsx` | Remover import do `AnalysisStep`, remover bloco de render do step `analysis`, remover props `onAnalyze`/`onFillGaps` |
+| `src/services/aiService.ts` | Remover `analyzeCoverage()`, `fillGaps()`, e interfaces `AnalyzeCoverageParams`, `FillGapsParams` |
+| `src/types/ai.ts` | Remover interface `CoverageAnalysis` |
+| `supabase/functions/generate-deck/index.ts` | Remover blocos `action === "analyze"` e `action === "fill-gaps"` |
+
+---
+
+### Detalhes Tecnicos
+
+**Ordem de implementacao:**
+1. Remover analise de cobertura (limpar codigo morto primeiro)
+2. Remover processamento de imagens (simplificar pipeline)
+3. Forcar formatos no backend
+4. Implementar mini-game no loading
+
+**Deploy:** Edge function `generate-deck` sera redeployada apos as mudancas.
