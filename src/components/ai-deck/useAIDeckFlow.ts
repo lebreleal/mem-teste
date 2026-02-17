@@ -3,7 +3,7 @@
  * Components only handle presentation; this hook owns the business logic.
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -156,6 +156,18 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const selectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: true }))), []);
   const deselectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: false }))), []);
 
+  // Warn user before closing tab during generation
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (step === 'generating' || isBackgroundRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [step]);
+
   // === Save cards to DB (reusable for both foreground and background) ===
   const saveCardsToDeck = useCallback(async (generatedCards: GeneratedCard[], name: string) => {
     if (!user || generatedCards.length === 0) return;
@@ -164,7 +176,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     if (existingDeckId) {
       targetDeckId = existingDeckId;
     } else {
-      const deck = await deckService.createDeck(user.id, name.trim(), folderId ?? null);
+      // Resolve unique name to avoid duplicates
+      const uniqueName = await deckService.resolveUniqueDeckName(user.id, name.trim());
+      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null);
       targetDeckId = (deck as any).id;
     }
 

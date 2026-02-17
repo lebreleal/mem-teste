@@ -74,6 +74,21 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
   });
 }
 
+/** Resolve a unique deck name by appending (1), (2), etc. if needed. */
+export async function resolveUniqueDeckName(userId: string, baseName: string): Promise<string> {
+  const { data } = await supabase
+    .from('decks')
+    .select('name')
+    .eq('user_id', userId)
+    .ilike('name', `${baseName}%`);
+  if (!data || data.length === 0) return baseName;
+  const existing = new Set(data.map((d: any) => d.name));
+  if (!existing.has(baseName)) return baseName;
+  let i = 1;
+  while (existing.has(`${baseName} (${i})`)) i++;
+  return `${baseName} (${i})`;
+}
+
 /** Create a new deck. */
 export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null) {
   const { data, error } = await supabase
