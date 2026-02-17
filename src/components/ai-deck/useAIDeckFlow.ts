@@ -150,30 +150,39 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const selectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: true }))), []);
   const deselectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: false }))), []);
 
-  // === Generation ===
+  // === Generation (batch of 4 pages) ===
   const handleGenerate = useCallback(async () => {
-    const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
+    const selected = pages.filter(p => p.selected && (p.textContent.trim().length > 0 || p.imageBase64));
     if (selected.length === 0) {
-      toast({ title: 'Nenhuma página com texto', description: 'As páginas selecionadas não possuem texto extraível.', variant: 'destructive' });
+      toast({ title: 'Nenhuma página selecionada', description: 'As páginas selecionadas não possuem conteúdo extraível.', variant: 'destructive' });
       return;
     }
 
     setStep('generating'); setIsLoading(true);
-    setGenProgress({ current: 0, total: selected.length, creditsUsed: 0 });
+    const BATCH_SIZE = 4;
+    const totalBatches = Math.ceil(selected.length / BATCH_SIZE);
+    setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
     const allCards: GeneratedCard[] = [];
 
-    for (let i = 0; i < selected.length; i++) {
-      setGenProgress({ current: i + 1, total: selected.length, creditsUsed: (i + 1) * getCost(CREDITS_PER_PAGE) });
+    for (let b = 0; b < totalBatches; b++) {
+      const batch = selected.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+      const batchText = batch.map(p => p.textContent).join('\n\n');
+      const batchImages = batch.map(p => p.imageBase64).filter(Boolean) as string[];
+      const batchCost = batch.length * getCost(CREDITS_PER_PAGE);
+      const batchCardCount = targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / totalBatches)) : 0;
+
+      setGenProgress({ current: b + 1, total: totalBatches, creditsUsed: (b + 1) * batch.length * getCost(CREDITS_PER_PAGE) });
       try {
         const newCards = await aiService.generateDeckCards({
-          textContent: selected[i].textContent,
-          cardCount: targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / selected.length)) : 0,
+          textContent: batchText,
+          cardCount: batchCardCount,
           detailLevel, cardFormats,
           customInstructions: customInstructions.trim() || undefined,
-          aiModel: model, energyCost: getCost(CREDITS_PER_PAGE),
+          aiModel: model, energyCost: batchCost,
+          pageImages: batchImages.length > 0 ? batchImages : undefined,
         });
         allCards.push(...newCards);
-      } catch (err) { console.error(`Page ${selected[i].pageNumber} failed:`, err); }
+      } catch (err) { console.error(`Batch ${b + 1} failed:`, err); }
     }
 
     if (allCards.length === 0) {

@@ -14,6 +14,7 @@ export interface PageItem {
   pageNumber: number;
   thumbnailUrl?: string;
   textContent: string;
+  imageBase64?: string;
   selected: boolean;
 }
 

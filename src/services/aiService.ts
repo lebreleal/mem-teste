@@ -14,6 +14,7 @@ export interface GenerateDeckParams {
   customInstructions?: string;
   aiModel: string;
   energyCost: number;
+  pageImages?: string[];
 }
 
 export interface AnalyzeCoverageParams {
@@ -73,6 +74,7 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       action: 'generate',
       aiModel: params.aiModel,
       energyCost: params.energyCost,
+      ...(params.pageImages?.length ? { pageImages: params.pageImages } : {}),
     },
   });
   if (error) throw error;
