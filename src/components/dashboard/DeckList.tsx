@@ -1,16 +1,19 @@
 /**
  * Renders the list of folders and decks in the current view.
+ * Includes pending (background-generating) decks as ghost items.
  */
 
 import {
   FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2
+  ChevronRight, GraduationCap, Link2, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
+import { usePendingDecks } from '@/stores/usePendingDecks';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
@@ -19,6 +22,7 @@ interface DeckListProps {
   isLoading: boolean;
   currentFolders: Folder[];
   currentDecks: DeckWithStats[];
+  currentFolderId?: string | null;
   
   // DeckRow props
   deckSelectionMode: boolean;
@@ -47,12 +51,17 @@ interface DeckListProps {
 }
 
 const DeckList = ({
-  isLoading, currentFolders, currentDecks,
+  isLoading, currentFolders, currentDecks, currentFolderId,
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
   navigateToCommunity,
   ...deckRowProps
 }: DeckListProps) => {
+  const { pendingDecks } = usePendingDecks();
+
+  // Filter pending decks for current folder
+  const visiblePending = pendingDecks.filter(p => p.folderId === (currentFolderId ?? null));
+
   if (isLoading) {
     return (
       <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
@@ -74,7 +83,7 @@ const DeckList = ({
     );
   }
 
-  if (currentFolders.length === 0 && currentDecks.length === 0) {
+  if (currentFolders.length === 0 && currentDecks.length === 0 && visiblePending.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -89,6 +98,31 @@ const DeckList = ({
 
   return (
     <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+      {/* Pending (background generating) decks */}
+      {visiblePending.map(pending => {
+        const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
+        return (
+          <div
+            key={pending.id}
+            className="flex items-center gap-3 px-5 py-4 opacity-50 pointer-events-none select-none"
+          >
+            <div className="flex h-6 w-6 items-center justify-center shrink-0">
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-display font-semibold text-foreground truncate">{pending.name}</h3>
+              <div className="flex items-center gap-2 mt-1">
+                <Progress value={progressPct} className="h-1.5 flex-1 max-w-[120px]" />
+                <p className="text-[10px] text-muted-foreground">
+                  {pending.status === 'saving' ? 'Salvando...' : `Gerando lote ${pending.progress.current}/${pending.progress.total}`}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </div>
+        );
+      })}
+
       {/* Folders */}
       {currentFolders.map(folder => (
         <div
