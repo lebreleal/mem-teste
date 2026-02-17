@@ -5,31 +5,47 @@ import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTo
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const DEFAULT_SYSTEM_PROMPT = "Você é um assistente educacional especializado em criar flashcards de estudo a partir de materiais acadêmicos. Sua tarefa é analisar o conteúdo educacional fornecido (texto e/ou imagens de páginas de documentos acadêmicos como PDFs, slides e apostilas) e gerar flashcards de alta qualidade. Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido. NUNCA invente ou use conhecimento externo. REGRA IMPORTANTE: Cada cartão deve ser AUTOCONTIDO — nunca referencie 'anexo', 'figura', 'imagem acima', 'tabela ao lado' ou qualquer elemento externo. Descreva o contexto necessário diretamente no cartão. Por exemplo, ao invés de 'O que o anexo mostra?', escreva 'Qual síndrome é caracterizada por cariótipo 45,X?'. Responda APENAS com o JSON solicitado, sem texto adicional.";
+const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards usando técnicas de aprendizagem ativa (active recall, interleaving, elaborative interrogation).
+
+Sua missão: criar flashcards que ajudem o estudante a DOMINAR o conteúdo — não apenas memorizar, mas compreender profundamente e aplicar.
+
+PRINCÍPIOS:
+1. VARIEDADE DE FORMATOS: Distribua UNIFORMEMENTE entre os formatos solicitados (pergunta/resposta, cloze, múltipla escolha). NUNCA gere todos do mesmo tipo.
+2. PROFUNDIDADE: Crie perguntas que testem compreensão, não apenas memorização. Ex: "Por que X causa Y?" ao invés de "O que é X?"
+3. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
+4. PRÁTICO: Inclua perguntas de aplicação clínica/prática quando relevante.
+5. CONEXÕES: Faça perguntas que conectem conceitos entre si.
+6. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados.
+
+Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
-    case "essential": return "Crie poucos cartões focados APENAS nos conceitos mais fundamentais. Priorize definições-chave e fatos essenciais. Seja conciso.";
-    case "comprehensive": return "Crie muitos cartões com cobertura detalhada. Inclua conceitos principais, secundários, exemplos, exceções e relações entre tópicos.";
-    default: return "Crie um bom equilíbrio de cartões cobrindo as informações-chave sem excesso de detalhes.";
+    case "essential": return "Crie poucos cartões focados nos conceitos mais fundamentais. Priorize o que cairia numa prova.";
+    case "comprehensive": return "Crie cartões com cobertura ampla e detalhada. Inclua conceitos principais, secundários, mecanismos, exemplos clínicos, exceções e relações entre tópicos.";
+    default: return "Crie um bom equilíbrio cobrindo conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
 
 function getFormatInstructions(formats: string[]): string {
   const parts: string[] = [];
-  // "definition" is mapped to "qa" (basic front/back) — no standalone definition format
-  if (formats.includes("definition") || formats.includes("qa")) parts.push('- "qa": Pergunta direta e autocontida na frente, resposta concisa no verso. Use type:"basic". A pergunta DEVE conter todo o contexto necessário para ser respondida sem ver o material original.');
-  if (formats.includes("cloze")) parts.push('- "cloze": Frase completa e autocontida com lacuna usando {{c1::resposta}}. "front" contém o texto com {{c1::...}}, "back" fica vazio. Use type:"cloze". A frase deve fazer sentido sozinha.');
-  if (formats.includes("multiple_choice")) parts.push('- "multiple_choice": Pergunta autocontida na frente ("front"), sem texto no "back". Adicione "options" (array de 4-5 strings) e "correctIndex" (índice da resposta correta, 0-based). Use type:"multiple_choice". A pergunta deve ter contexto suficiente sem referenciar anexos.');
-  if (parts.length === 0) parts.push('- Use type:"basic" com pergunta autocontida na frente e resposta no verso.');
-  const total = parts.length;
+  if (formats.includes("definition") || formats.includes("qa")) parts.push('- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.');
+  if (formats.includes("cloze")) parts.push('- type:"cloze": Afirmação completa com lacuna estratégica usando {{c1::resposta}}. "front" contém o texto com {{c1::...}}, "back" fica vazio. A lacuna deve testar um conceito-chave, não uma palavra trivial.');
+  if (formats.includes("multiple_choice")) parts.push('- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis (não absurdas). "correctIndex" com o índice correto (0-based). As alternativas incorretas devem ser distratores realistas.');
+  if (parts.length === 0) parts.push('- Use type:"basic" com pergunta desafiadora na frente e resposta no verso.');
+
+  const count = parts.length;
   const formatNames: string[] = [];
   if (formats.includes("definition") || formats.includes("qa")) formatNames.push("pergunta/resposta");
   if (formats.includes("cloze")) formatNames.push("cloze");
   if (formats.includes("multiple_choice")) formatNames.push("múltipla escolha");
   if (formatNames.length === 0) formatNames.push("pergunta/resposta");
-  if (total === 1) { parts.push(`\nIMPORTANTE: Use EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões.`); }
-  else { parts.push(`\nIMPORTANTE: Use APENAS os ${total} formatos listados acima (${formatNames.join(", ")}). Distribua uniformemente entre eles.\nNUNCA referencie 'anexo', 'figura', 'imagem', 'tabela' ou qualquer elemento externo nos cartões.`); }
+
+  if (count === 1) {
+    parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões.`);
+  } else {
+    parts.push(`\nDISTRIBUÇÃO OBRIGATÓRIA: Distribua os cartões UNIFORMEMENTE entre: ${formatNames.join(", ")}. Cada formato deve ter aproximadamente ${Math.round(100/count)}% dos cartões. NÃO gere todos do tipo "basic".`);
+  }
   return parts.join("\n");
 }
 
@@ -53,7 +69,6 @@ Deno.serve(async (req) => {
     const hasPageImages = Array.isArray(pageImages) && pageImages.length > 0;
     if (!textContent?.trim() && !hasPageImages) return jsonResponse({ error: "textContent ou pageImages é obrigatório" }, 400);
 
-    // For vision requests, always use gpt-4o (not mini) for better image understanding
     const visionModel = "gpt-4o";
 
     const cost = energyCost || 0;
@@ -65,20 +80,19 @@ Deno.serve(async (req) => {
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
-    const temperature = promptConfig?.temperature ?? 0.4;
+    const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = (textContent || "").slice(0, 15000);
-    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0; // 0 = auto
+    const trimmedContent = (textContent || "").slice(0, 8000);
+    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
-    
-    // If customInstructions mention "PROVA", switch system prompt to exam mode
+
     if (customInstructions && /prova|exame|questões/i.test(customInstructions)) {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
     }
-    
+
     let prompt: string;
 
     if (action === "analyze") {
@@ -106,24 +120,35 @@ Responda APENAS com JSON válido:
 }`;
     } else if (action === "fill-gaps") {
       const existingJson = JSON.stringify(existingCards || []);
-      prompt = `Você é um gerador de flashcards. Crie cartões para tópicos AINDA NÃO cobertos.\n\nMATERIAL:\n${trimmedContent}\n\nCARTÕES EXISTENTES (NÃO repita):\n${existingJson}\n\nREGRAS:\n- ${requestedCount > 0 ? `Crie ${requestedCount} cartões novos.` : 'Crie a quantidade de cartões necessária para cobrir os tópicos faltantes.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}\n\nFORMATO DE SAÍDA (apenas JSON array):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice": {"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
+      prompt = `Crie cartões para tópicos AINDA NÃO cobertos.\n\nMATERIAL:\n${trimmedContent}\n\nCARTÕES EXISTENTES (NÃO repita):\n${existingJson}\n\nREGRAS:\n- ${requestedCount > 0 ? `Crie ${requestedCount} cartões novos.` : 'Crie a quantidade necessária para cobrir os tópicos faltantes.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}\n\nFORMATO DE SAÍDA (apenas JSON array):\n[{"front":"...","back":"...","type":"basic"},{"front":"{{c1::resposta}} completa frase","back":"","type":"cloze"},{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}]`;
     } else {
-      if (promptConfig?.user_prompt_template) {
-        prompt = promptConfig.user_prompt_template
-          .replace("{{cardCount}}", requestedCount > 0 ? String(requestedCount) : "a quantidade que você julgar ideal para cobrir o conteúdo")
-          .replace("{{detailInstruction}}", getDetailInstruction(detail))
-          .replace("{{customInstructions}}", customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : "")
-          .replace("{{formatInstructions}}", getFormatInstructions(formats))
-          .replace("{{material}}", trimmedContent);
-      } else {
-        const materialSection = hasPageImages
-          ? (trimmedContent ? `\nTEXTO EXTRAÍDO (complementar às imagens):\n${trimmedContent}` : "\nAs imagens das páginas estão anexadas abaixo.")
-          : `\nMATERIAL:\n${trimmedContent}`;
-        prompt = `REGRA CRÍTICA: Gere cards EXCLUSIVAMENTE sobre o conteúdo fornecido abaixo (texto e/ou imagens). NÃO use conhecimento externo. NÃO invente informações que não estejam no material.\n\nREGRAS:\n- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade de cartões que você julgar ideal para cobrir o conteúdo de forma completa.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n- Cubra conceitos-chave, definições, fatos e relações PRESENTES NO MATERIAL.\n- Evite perguntas triviais ou vagas.\n${hasPageImages ? "- ANALISE as imagens das páginas fornecidas. Extraia informações de diagramas, gráficos, fórmulas, tabelas e todo conteúdo visual. Use SOMENTE o que está nas imagens.\n" : ""}${customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : ""}\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}${materialSection}\n\nFORMATO DE SAÍDA (apenas JSON array, sem texto extra):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice", use:\n{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
-      }
+      const materialSection = hasPageImages
+        ? (trimmedContent ? `\nTEXTO EXTRAÍDO (complementar às imagens):\n${trimmedContent}` : "\nAs imagens das páginas estão anexadas abaixo.")
+        : `\nMATERIAL:\n${trimmedContent}`;
+
+      prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
+
+REGRAS:
+- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade ideal para cobrir o conteúdo de forma completa.'}
+- ${getDetailInstruction(detail)}
+- TUDO em PORTUGUÊS (ou na língua do material).
+- Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
+- Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
+${hasPageImages ? "- ANALISE as imagens das páginas. Extraia informações de diagramas, gráficos, fórmulas e tabelas. Descreva o conteúdo visual diretamente no cartão.\n" : ""}${customInstructions ? `\nINSTRUÇÕES DO USUÁRIO:\n${customInstructions}` : ""}
+
+FORMATOS PERMITIDOS:
+${getFormatInstructions(formats)}
+${materialSection}
+
+FORMATO DE SAÍDA (apenas JSON array, sem texto extra):
+[
+  {"front":"Qual o mecanismo pelo qual X causa Y?","back":"X inibe Z, levando a...","type":"basic"},
+  {"front":"A {{c1::proteína p53}} é responsável por...","back":"","type":"cloze"},
+  {"front":"Paciente com sintomas X, Y e Z. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Opção A","Opção B","Opção C","Opção D"],"correctIndex":1}
+]`;
     }
 
-    // Build user message content: multimodal if pageImages exist, plain text otherwise
+    // Build user message content
     let userContent: any;
     if (hasPageImages) {
       userContent = [
@@ -137,9 +162,13 @@ Responda APENAS com JSON válido:
       userContent = prompt;
     }
 
-    // Use gpt-4o for vision requests (better image understanding), selectedModel for text-only
     const modelToUse = hasPageImages ? visionModel : selectedModel;
     console.log(`Using model: ${modelToUse}, hasImages: ${hasPageImages}, textLen: ${trimmedContent.length}, imageCount: ${hasPageImages ? pageImages.length : 0}`);
+
+    // Track total token usage for single log entry
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalTokensSum = 0;
 
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
@@ -157,9 +186,17 @@ Responda APENAS com JSON válido:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? "";
     console.log("AI response length:", rawContent.length, "first 200 chars:", rawContent.substring(0, 200));
-    await logTokenUsage(supabase, userId, "generate_deck", modelToUse, aiData.usage, cost);
+
+    // Accumulate tokens
+    if (aiData.usage) {
+      totalPromptTokens += aiData.usage.prompt_tokens || 0;
+      totalCompletionTokens += aiData.usage.completion_tokens || 0;
+      totalTokensSum += aiData.usage.total_tokens || 0;
+    }
 
     if (action === "analyze") {
+      // Log once for analysis
+      await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
       let analysis;
       try { const m = rawContent.match(/\{[\s\S]*\}/); analysis = JSON.parse(m ? m[0] : rawContent); } catch { analysis = { coveragePercent: 0, missingTopics: [], summary: "Não foi possível analisar." }; }
       return jsonResponse({ analysis });
@@ -169,12 +206,11 @@ Responda APENAS com JSON válido:
     const m = rawContent.match(/\[[\s\S]*\]/);
     if (m) jsonStr = m[0];
 
-    let cards: { front: string; back: string; type: string }[];
+    let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
       console.error("Parse failed, raw:", rawContent.substring(0, 500));
-      // If AI refused or returned non-JSON with images, retry text-only BUT only if we have enough text
       if (hasPageImages && trimmedContent.trim().length > 100) {
-        console.log("Retrying without images (text-only fallback), text length:", trimmedContent.length);
+        console.log("Retrying without images (text-only fallback)");
         const fallbackResponse = await fetch(OPENAI_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
@@ -183,37 +219,45 @@ Responda APENAS com JSON válido:
         if (fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
           const fallbackRaw = fallbackData.choices?.[0]?.message?.content ?? "";
-          console.log("Fallback response length:", fallbackRaw.length, "first 200:", fallbackRaw.substring(0, 200));
+          // Accumulate fallback tokens
+          if (fallbackData.usage) {
+            totalPromptTokens += fallbackData.usage.prompt_tokens || 0;
+            totalCompletionTokens += fallbackData.usage.completion_tokens || 0;
+            totalTokensSum += fallbackData.usage.total_tokens || 0;
+          }
           const fm = fallbackRaw.match(/\[[\s\S]*\]/);
           if (fm) {
-            try {
-              cards = JSON.parse(fm[0]);
-              await logTokenUsage(supabase, userId, "generate_deck_fallback", selectedModel, fallbackData.usage, 0);
-            } catch {
-              console.error("Fallback parse also failed:", fallbackRaw.substring(0, 300));
+            try { cards = JSON.parse(fm[0]); } catch {
+              await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
               return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas." }, 500);
             }
           } else {
+            await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
             return jsonResponse({ error: "A IA não conseguiu gerar cards. O conteúdo pode ser muito visual — tente páginas com mais texto." }, 500);
           }
         } else {
-          const errText = await fallbackResponse.text();
-          console.error("Fallback API error:", fallbackResponse.status, errText);
+          await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
           return jsonResponse({ error: "Falha ao processar conteúdo. Tente novamente." }, 500);
         }
       } else {
-        // No fallback possible — not enough text content
+        await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
         return jsonResponse({ error: "A IA não conseguiu interpretar as imagens. Verifique se o PDF tem conteúdo legível e tente novamente." }, 500);
       }
     }
 
-    if (!Array.isArray(cards) || cards.length === 0) return jsonResponse({ error: "Nenhum cartão gerado." }, 400);
+    if (!Array.isArray(cards) || cards.length === 0) {
+      await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
+      return jsonResponse({ error: "Nenhum cartão gerado." }, 400);
+    }
 
     cards = cards.map(c => ({
       front: c.front || "", back: c.back || "",
       type: c.type === "cloze" ? "cloze" : c.type === "multiple_choice" ? "multiple_choice" : "basic",
       ...(c.type === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
     }));
+
+    // Single log entry per request (combining main + fallback if any)
+    await logTokenUsage(supabase, userId, "generate_deck", modelToUse, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
 
     return jsonResponse({ cards });
   } catch (err) {
