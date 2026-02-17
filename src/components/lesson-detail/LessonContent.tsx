@@ -1,6 +1,6 @@
 /**
  * Unified lesson content section – files (top) + decks, with optional folder grouping.
- * Replaces separate LessonFiles and LessonDecks components.
+ * Priority: folders → attachments → decks
  */
 
 import { useState, useRef } from 'react';
@@ -16,8 +16,8 @@ import {
 import {
   Plus, Upload, Eye, Download, Lock, Pencil, Trash2,
   Paperclip, FileIcon, FileText, Image, Crown, Globe,
-  Layers, MoreVertical, Copy, Link2, FolderPlus, FolderOpen,
-  ChevronRight, ArrowLeft,
+  MoreVertical, Copy, Link2, FolderPlus, FolderOpen,
+  ChevronRight, ArrowLeft, FolderInput, ArrowUpDown, ClipboardList,
 } from 'lucide-react';
 
 const formatFileSize = (bytes: number) => {
@@ -67,10 +67,13 @@ interface LessonContentProps {
   isAddingToCollection: boolean;
   isDownloading: boolean;
   turmaId: string;
+  lessonId?: string;
   subscriptionPrice?: number;
   onCreateFolder: (name: string, parentId: string | null) => void;
   onRenameFolder: (folderId: string, newName: string) => void;
   onDeleteFolder: (folderId: string) => void;
+  onMoveItem?: (itemType: 'file' | 'deck', itemId: string, targetFolderId: string | null) => void;
+  onNavigateToExamCreate?: () => void;
 }
 
 const LessonContent = ({
@@ -78,7 +81,8 @@ const LessonContent = ({
   userId, uploading, onFileUpload, onDeleteFile, onRenameFile, onPreviewPdf,
   onUpdateFileVisibility, onShowAddDeck, onPreviewDeck, onAddToCollection,
   onDownloadDeck, onEditPricing, onUnshareDeck, isAddingToCollection, isDownloading,
-  turmaId, subscriptionPrice, onCreateFolder, onRenameFolder, onDeleteFolder,
+  turmaId, lessonId, subscriptionPrice, onCreateFolder, onRenameFolder, onDeleteFolder,
+  onMoveItem, onNavigateToExamCreate,
 }: LessonContentProps) => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +94,7 @@ const LessonContent = ({
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState<ContentFolder | null>(null);
   const [renameFolderName, setRenameFolderName] = useState('');
+  const [movingItem, setMovingItem] = useState<{ type: 'file' | 'deck'; id: string; name: string } | null>(null);
 
   // Helpers
   const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
@@ -151,6 +156,26 @@ const LessonContent = ({
     setRenamingFolder(null);
   };
 
+  const handleMoveItem = (targetFolderId: string | null) => {
+    if (!movingItem || !onMoveItem) return;
+    onMoveItem(movingItem.type, movingItem.id, targetFolderId);
+    setMovingItem(null);
+  };
+
+  // Available folders for move (exclude current location)
+  const getMoveTargetFolders = () => {
+    const targets: { id: string | null; name: string; depth: number }[] = [{ id: null, name: 'Raiz (Conteúdo)', depth: 0 }];
+    const addChildren = (parentId: string | null, depth: number) => {
+      const children = contentFolders.filter(f => f.parent_id === parentId);
+      for (const child of children) {
+        targets.push({ id: child.id, name: child.name, depth });
+        addChildren(child.id, depth + 1);
+      }
+    };
+    addChildren(null, 1);
+    return targets;
+  };
+
   const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0;
 
   return (
@@ -198,7 +223,10 @@ const LessonContent = ({
                 <Upload className="mr-2 h-4 w-4" /> Anexo
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onShowAddDeck}>
-                <Layers className="mr-2 h-4 w-4" /> Baralho
+                <Copy className="mr-2 h-4 w-4" /> Baralho
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigateToExamCreate?.()}>
+                <ClipboardList className="mr-2 h-4 w-4" /> Prova
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { setShowNewFolder(true); setNewFolderName(''); }}>
                 <FolderPlus className="mr-2 h-4 w-4" /> Pasta
@@ -239,7 +267,7 @@ const LessonContent = ({
             </div>
           ))}
 
-          {/* Files (always on top of decks) */}
+          {/* Files (always above decks) */}
           {currentFiles.map((file: any) => {
             const Icon = getFileIcon(file.file_type);
             const isImage = file.file_type?.startsWith('image/');
@@ -281,21 +309,33 @@ const LessonContent = ({
                     </Button>
                   )}
                   {canEdit && (
-                    <>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEditFile(file)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => onDeleteFile(file.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditFile(file)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        {onMoveItem && (
+                          <DropdownMenuItem onClick={() => setMovingItem({ type: 'file', id: file.id, name: file.file_name })}>
+                            <FolderInput className="mr-2 h-4 w-4" /> Mover
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem className="text-destructive" onClick={() => onDeleteFile(file.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </div>
             );
           })}
 
-          {/* Decks */}
+          {/* Decks (no icon before title) */}
           {currentDecks.map((td: any) => {
             const isOwner = td.shared_by === userId;
             const alreadyLinked = userHasLinkedDeck(td.id);
@@ -306,9 +346,6 @@ const LessonContent = ({
             const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
             return (
               <div key={td.id} className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/8">
-                  <Layers className="h-4 w-4 text-primary" />
-                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{td.deck_name}</h3>
@@ -354,6 +391,11 @@ const LessonContent = ({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => onEditPricing(td)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                          {onMoveItem && (
+                            <DropdownMenuItem onClick={() => setMovingItem({ type: 'deck', id: td.id, name: td.deck_name })}>
+                              <FolderInput className="mr-2 h-4 w-4" /> Mover
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem className="text-destructive" onClick={() => onUnshareDeck(td.id)}><Trash2 className="mr-2 h-4 w-4" /> Remover</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -411,6 +453,30 @@ const LessonContent = ({
             <Input value={renameFolderName} onChange={e => setRenameFolderName(e.target.value)} autoFocus maxLength={100} />
             <Button type="submit" className="w-full" disabled={!renameFolderName.trim()}>Salvar</Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Item Dialog */}
+      <Dialog open={!!movingItem} onOpenChange={open => !open && setMovingItem(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-sm">
+              Mover "{movingItem?.name}"
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {getMoveTargetFolders().map(target => (
+              <button
+                key={target.id ?? 'root'}
+                onClick={() => handleMoveItem(target.id)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-left hover:bg-muted/70 transition-colors"
+                style={{ paddingLeft: `${12 + target.depth * 16}px` }}
+              >
+                <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+                <span className="truncate">{target.name}</span>
+              </button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </section>
