@@ -17,7 +17,7 @@ import Profile from "./pages/Profile";
 import Turmas from "./pages/Turmas";
 import TurmaDetail from "./pages/TurmaDetail";
 import LessonDetail from "./pages/LessonDetail";
-import TurmaExamCreate from "./pages/TurmaExamCreate";
+
 import TurmaExamTake from "./pages/TurmaExamTake";
 import TurmaExamResults from "./pages/TurmaExamResults";
 
@@ -61,7 +61,7 @@ const App = () => (
               <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
               <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
               <Route path="/turmas/:turmaId/lessons/:lessonId" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />
-              <Route path="/turmas/:turmaId/exams/new" element={<ProtectedRoute><TurmaExamCreate /></ProtectedRoute>} />
+              
               <Route path="/turmas/:turmaId/exams/:examId" element={<ProtectedRoute><TurmaExamTake /></ProtectedRoute>} />
               <Route path="/turmas/:turmaId/exams/:examId/results/:attemptId" element={<ProtectedRoute><TurmaExamResults /></ProtectedRoute>} />
               <Route path="/activity" element={<ProtectedRoute><ActivityView /></ProtectedRoute>} />
