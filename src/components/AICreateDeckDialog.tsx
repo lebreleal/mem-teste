@@ -14,7 +14,6 @@ import PageSelectionStep from '@/components/ai-deck/PageSelectionStep';
 import ConfigStep from '@/components/ai-deck/ConfigStep';
 import GenerationProgress from '@/components/ai-deck/GenerationProgress';
 import CardReviewStep from '@/components/ai-deck/CardReviewStep';
-import AnalysisStep from '@/components/ai-deck/AnalysisStep';
 
 interface AICreateDeckDialogProps {
   open: boolean;
@@ -31,7 +30,6 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
     pages: 'Selecione as páginas',
     config: 'Configurações de IA',
     review: 'Revisar Cartões',
-    analysis: 'Análise de Cobertura',
   };
 
   return (
@@ -98,8 +96,8 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
           />
         )}
 
-        {(flow.step === 'generating' || flow.step === 'analyzing') && (
-          <GenerationProgress step={flow.step} genProgress={flow.genProgress} />
+        {flow.step === 'generating' && (
+          <GenerationProgress genProgress={flow.genProgress} />
         )}
 
         {flow.step === 'review' && (
@@ -115,18 +113,9 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
             onCancelEdit={() => flow.setStep('review')}
             onDeleteCard={flow.deleteCard}
             onToggleType={flow.toggleType}
-            onAnalyze={flow.handleAnalyze}
             onSave={flow.handleSave}
             onBack={() => { flow.setStep('config'); }}
             isSaving={flow.isSaving}
-          />
-        )}
-
-        {flow.step === 'analysis' && flow.analysis && (
-          <AnalysisStep
-            analysis={flow.analysis}
-            onBack={() => flow.setStep('review')}
-            onFillGaps={flow.handleFillGaps}
           />
         )}
       </DialogContent>
