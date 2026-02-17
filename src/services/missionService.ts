@@ -111,12 +111,9 @@ export async function claimMissionReward(userId: string, mission: MissionWithPro
 
   if (umError) throw umError;
 
-  const { error: creditError } = await supabase
-    .from('profiles')
-    .update({
-      energy: (await supabase.from('profiles').select('energy').eq('id', userId).single()).data!.energy + mission.reward_credits,
-    })
-    .eq('id', userId);
+  // Use deduct_energy with negative cost to add credits atomically
+  const { data: remaining, error: creditError } = await supabase
+    .rpc('deduct_energy', { p_user_id: userId, p_cost: -mission.reward_credits });
 
   if (creditError) throw creditError;
 
