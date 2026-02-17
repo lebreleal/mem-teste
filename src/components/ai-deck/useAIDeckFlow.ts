@@ -28,7 +28,7 @@ interface UseAIDeckFlowParams {
 export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
+  const { model, setModel, getCost, MODEL_CONFIG } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -188,7 +188,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     return targetDeckId;
   }, [user, existingDeckId, folderId, queryClient]);
 
-  // === Generation (batch of 4 pages) ===
+  // === Generation (batch of 6 pages) ===
   const handleGenerate = useCallback(async () => {
     const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
     if (selected.length === 0) {
@@ -200,18 +200,24 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     pendingIdRef.current = pendingId;
 
     setStep('generating'); setIsLoading(true);
-    const BATCH_SIZE = 4;
+    const BATCH_SIZE = 6;
     const totalBatches = Math.ceil(selected.length / BATCH_SIZE);
     setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
     const allCards: GeneratedCard[] = [];
+
+    // Accumulate token usage across all batches for a single aggregated log
+    const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    let totalEnergyCost = 0;
+    let usedModel = '';
 
     for (let b = 0; b < totalBatches; b++) {
       const batch = selected.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
       const batchText = batch.map(p => p.textContent).join('\n\n');
       const batchCost = batch.length * getCost(CREDITS_PER_PAGE);
+      totalEnergyCost += batchCost;
       const batchCardCount = targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / totalBatches)) : 0;
 
-      const progress = { current: b + 1, total: totalBatches, creditsUsed: (b + 1) * batch.length * getCost(CREDITS_PER_PAGE) };
+      const progress = { current: b + 1, total: totalBatches, creditsUsed: totalEnergyCost };
       setGenProgress(progress);
 
       // Update pending store if running in background
@@ -220,16 +226,33 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       }
 
       try {
-        const newCards = await aiService.generateDeckCards({
+        const result = await aiService.generateDeckCards({
           textContent: batchText,
           cardCount: batchCardCount,
           detailLevel, cardFormats,
           customInstructions: customInstructions.trim() || undefined,
           aiModel: model, energyCost: batchCost,
+          skipLog: true, // Don't log per-batch; we'll log once at the end
         });
-        allCards.push(...newCards);
+        allCards.push(...result.cards);
+
+        // Accumulate usage
+        if (result.usage) {
+          aggregatedUsage.prompt_tokens += result.usage.prompt_tokens;
+          aggregatedUsage.completion_tokens += result.usage.completion_tokens;
+          aggregatedUsage.total_tokens += result.usage.total_tokens;
+        }
+
+        // Resolve actual model name for logging
+        const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
+        if (modelConfig) usedModel = modelConfig.backendModel as string;
       } catch (err) { console.error(`Batch ${b + 1} failed:`, err); }
     }
+
+    // Log aggregated token usage once for the entire deck generation
+    try {
+      await aiService.logAggregatedTokenUsage(usedModel, aggregatedUsage, totalEnergyCost);
+    } catch (e) { console.error('Failed to log aggregated usage:', e); }
 
     queryClient.invalidateQueries({ queryKey: ['energy'] });
 
@@ -259,7 +282,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       setCards(allCards); setStep('review');
     }
     setIsLoading(false);
-  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState]);
+  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG]);
 
   // === Dismiss to background ===
   const handleDismissToBackground = useCallback(() => {

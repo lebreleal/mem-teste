@@ -6,6 +6,12 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { GeneratedCard, DetailLevel, CardFormat } from '@/types/ai';
 
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 export interface GenerateDeckParams {
   textContent: string;
   cardCount: number;
@@ -14,6 +20,12 @@ export interface GenerateDeckParams {
   customInstructions?: string;
   aiModel: string;
   energyCost: number;
+  skipLog?: boolean;
+}
+
+export interface GenerateDeckResult {
+  cards: GeneratedCard[];
+  usage?: TokenUsage;
 }
 
 export interface GradeExamParams {
@@ -46,7 +58,7 @@ export interface GenerateExamQuestionsParams {
 }
 
 /** Generate flashcards from text content via edge function. */
-export async function generateDeckCards(params: GenerateDeckParams): Promise<GeneratedCard[]> {
+export async function generateDeckCards(params: GenerateDeckParams): Promise<GenerateDeckResult> {
   const { data, error } = await supabase.functions.invoke('generate-deck', {
     body: {
       textContent: params.textContent,
@@ -54,14 +66,34 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       detailLevel: params.detailLevel,
       cardFormats: params.cardFormats,
       customInstructions: params.customInstructions,
-      action: 'generate',
       aiModel: params.aiModel,
       energyCost: params.energyCost,
+      skipLog: params.skipLog ?? false,
     },
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-  return data?.cards ?? [];
+  return { cards: data?.cards ?? [], usage: data?.usage };
+}
+
+/** Log aggregated token usage for a complete deck generation session. */
+export async function logAggregatedTokenUsage(
+  model: string,
+  usage: TokenUsage,
+  totalEnergyCost: number,
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from('ai_token_usage').insert({
+    user_id: user.id,
+    feature_key: 'generate_deck',
+    model,
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    energy_cost: totalEnergyCost,
+  });
 }
 
 
