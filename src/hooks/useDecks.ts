@@ -17,9 +17,9 @@ export const useDecks = () => {
   });
 
   const createDeck = useMutation({
-    mutationFn: ({ name, folderId, parentDeckId }: { name: string; folderId?: string | null; parentDeckId?: string | null }) => {
+    mutationFn: ({ name, folderId, parentDeckId, algorithmMode }: { name: string; folderId?: string | null; parentDeckId?: string | null; algorithmMode?: string }) => {
       if (!user) throw new Error('Not authenticated');
-      return deckService.createDeck(user.id, name, folderId, parentDeckId);
+      return deckService.createDeck(user.id, name, folderId, parentDeckId, algorithmMode);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['decks'] }),
   });

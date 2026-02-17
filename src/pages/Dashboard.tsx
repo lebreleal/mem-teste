@@ -19,18 +19,22 @@ import PremiumModal from '@/components/dashboard/PremiumModal';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
+import { usePremium } from '@/hooks/usePremium';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const state = useDashboardState();
+  const { isPremium } = usePremium();
+
+  const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
     if (state.createType === 'deck') {
       state.createDeck.mutate(
-        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId },
+        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
         {
           onSuccess: () => {
             state.setCreateType(null); state.setCreateName('');
@@ -349,7 +353,8 @@ const Dashboard = () => {
               user!.id,
               deckName,
               state.currentFolderId,
-              cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType }))
+              cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+              defaultAlgorithm
             );
             toast({ title: `${cards.length} cartões importados!` });
             state.setImportOpen(false);
