@@ -21,7 +21,9 @@ export interface PageItem {
 export interface CoverageAnalysis {
   coveragePercent: number;
   missingTopics: string[];
+  coveredTopics?: string[];
   summary: string;
+  recommendation?: string;
 }
 
 export type DetailLevel = 'essential' | 'standard' | 'comprehensive';
