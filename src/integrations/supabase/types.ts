@@ -14,16 +14,1975 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_chat_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_prompts: {
+        Row: {
+          default_model: string
+          feature_key: string
+          id: string
+          label: string
+          system_prompt: string
+          temperature: number
+          updated_at: string
+          user_prompt_template: string
+        }
+        Insert: {
+          default_model?: string
+          feature_key: string
+          id?: string
+          label?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+          user_prompt_template?: string
+        }
+        Update: {
+          default_model?: string
+          feature_key?: string
+          id?: string
+          label?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+          user_prompt_template?: string
+        }
+        Relationships: []
+      }
+      ai_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      ai_token_usage: {
+        Row: {
+          completion_tokens: number
+          created_at: string
+          energy_cost: number
+          feature_key: string
+          id: string
+          model: string
+          prompt_tokens: number
+          total_tokens: number
+          user_id: string
+        }
+        Insert: {
+          completion_tokens?: number
+          created_at?: string
+          energy_cost?: number
+          feature_key: string
+          id?: string
+          model: string
+          prompt_tokens?: number
+          total_tokens?: number
+          user_id: string
+        }
+        Update: {
+          completion_tokens?: number
+          created_at?: string
+          energy_cost?: number
+          feature_key?: string
+          id?: string
+          model?: string
+          prompt_tokens?: number
+          total_tokens?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      app_error_logs: {
+        Row: {
+          component_name: string | null
+          created_at: string
+          error_message: string
+          error_stack: string | null
+          id: string
+          metadata: Json | null
+          route: string | null
+          severity: string
+          user_id: string | null
+        }
+        Insert: {
+          component_name?: string | null
+          created_at?: string
+          error_message?: string
+          error_stack?: string | null
+          id?: string
+          metadata?: Json | null
+          route?: string | null
+          severity?: string
+          user_id?: string | null
+        }
+        Update: {
+          component_name?: string | null
+          created_at?: string
+          error_message?: string
+          error_stack?: string | null
+          id?: string
+          metadata?: Json | null
+          route?: string | null
+          severity?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      cards: {
+        Row: {
+          back_content: string
+          card_type: string
+          created_at: string
+          deck_id: string
+          difficulty: number
+          front_content: string
+          id: string
+          scheduled_date: string
+          stability: number
+          state: number
+          updated_at: string
+        }
+        Insert: {
+          back_content: string
+          card_type?: string
+          created_at?: string
+          deck_id: string
+          difficulty?: number
+          front_content: string
+          id?: string
+          scheduled_date?: string
+          stability?: number
+          state?: number
+          updated_at?: string
+        }
+        Update: {
+          back_content?: string
+          card_type?: string
+          created_at?: string
+          deck_id?: string
+          difficulty?: number
+          front_content?: string
+          id?: string
+          scheduled_date?: string
+          stability?: number
+          state?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          listing_id: string
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          listing_id: string
+          rating: number
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string
+          rating?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_reviews_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decks: {
+        Row: {
+          algorithm_mode: string
+          created_at: string
+          daily_new_limit: number
+          daily_review_limit: number
+          easy_bonus: number
+          folder_id: string | null
+          id: string
+          interval_modifier: number
+          is_archived: boolean
+          learning_steps: string[]
+          max_interval: number
+          name: string
+          parent_deck_id: string | null
+          requested_retention: number
+          shuffle_cards: boolean
+          source_listing_id: string | null
+          source_turma_deck_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_mode?: string
+          created_at?: string
+          daily_new_limit?: number
+          daily_review_limit?: number
+          easy_bonus?: number
+          folder_id?: string | null
+          id?: string
+          interval_modifier?: number
+          is_archived?: boolean
+          learning_steps?: string[]
+          max_interval?: number
+          name: string
+          parent_deck_id?: string | null
+          requested_retention?: number
+          shuffle_cards?: boolean
+          source_listing_id?: string | null
+          source_turma_deck_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_mode?: string
+          created_at?: string
+          daily_new_limit?: number
+          daily_review_limit?: number
+          easy_bonus?: number
+          folder_id?: string | null
+          id?: string
+          interval_modifier?: number
+          is_archived?: boolean
+          learning_steps?: string[]
+          max_interval?: number
+          name?: string
+          parent_deck_id?: string | null
+          requested_retention?: number
+          shuffle_cards?: boolean
+          source_listing_id?: string | null
+          source_turma_deck_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decks_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decks_parent_deck_id_fkey"
+            columns: ["parent_deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decks_source_listing_id_fkey"
+            columns: ["source_listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decks_source_turma_deck_id_fkey"
+            columns: ["source_turma_deck_id"]
+            isOneToOne: false
+            referencedRelation: "turma_decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_folders: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          name: string
+          parent_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "exam_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_questions: {
+        Row: {
+          ai_feedback: string | null
+          card_id: string | null
+          correct_answer: string
+          correct_indices: number[] | null
+          created_at: string
+          exam_id: string
+          id: string
+          is_graded: boolean
+          options: Json | null
+          points: number
+          question_text: string
+          question_type: string
+          scored_points: number
+          selected_indices: number[] | null
+          sort_order: number
+          user_answer: string | null
+        }
+        Insert: {
+          ai_feedback?: string | null
+          card_id?: string | null
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          exam_id: string
+          id?: string
+          is_graded?: boolean
+          options?: Json | null
+          points?: number
+          question_text: string
+          question_type?: string
+          scored_points?: number
+          selected_indices?: number[] | null
+          sort_order?: number
+          user_answer?: string | null
+        }
+        Update: {
+          ai_feedback?: string | null
+          card_id?: string | null
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          exam_id?: string
+          id?: string
+          is_graded?: boolean
+          options?: Json | null
+          points?: number
+          question_text?: string
+          question_type?: string
+          scored_points?: number
+          selected_indices?: number[] | null
+          sort_order?: number
+          user_answer?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_questions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_questions_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exams: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          deck_id: string
+          folder_id: string | null
+          id: string
+          scored_points: number
+          source_turma_exam_id: string | null
+          started_at: string
+          status: string
+          time_limit_seconds: number | null
+          title: string
+          total_points: number
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          deck_id: string
+          folder_id?: string | null
+          id?: string
+          scored_points?: number
+          source_turma_exam_id?: string | null
+          started_at?: string
+          status?: string
+          time_limit_seconds?: number | null
+          title?: string
+          total_points?: number
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          deck_id?: string
+          folder_id?: string | null
+          id?: string
+          scored_points?: number
+          source_turma_exam_id?: string | null
+          started_at?: string
+          status?: string
+          time_limit_seconds?: number | null
+          title?: string
+          total_points?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "exam_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_source_turma_exam_id_fkey"
+            columns: ["source_turma_exam_id"]
+            isOneToOne: false
+            referencedRelation: "turma_exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_comments: {
+        Row: {
+          content: string
+          created_at: string
+          feature_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          feature_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          feature_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_comments_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_requests: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+          vote_count: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+          vote_count?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          vote_count?: number
+        }
+        Relationships: []
+      }
+      feature_votes: {
+        Row: {
+          created_at: string
+          feature_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feature_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feature_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_votes_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folders: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          name: string
+          parent_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_listings: {
+        Row: {
+          avg_rating: number | null
+          card_count: number
+          category: string
+          created_at: string
+          deck_id: string
+          description: string | null
+          downloads: number
+          id: string
+          is_free: boolean
+          is_published: boolean
+          price: number
+          rating_count: number
+          seller_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          avg_rating?: number | null
+          card_count?: number
+          category?: string
+          created_at?: string
+          deck_id: string
+          description?: string | null
+          downloads?: number
+          id?: string
+          is_free?: boolean
+          is_published?: boolean
+          price?: number
+          rating_count?: number
+          seller_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          avg_rating?: number | null
+          card_count?: number
+          category?: string
+          created_at?: string
+          deck_id?: string
+          description?: string | null
+          downloads?: number
+          id?: string
+          is_free?: boolean
+          is_published?: boolean
+          price?: number
+          rating_count?: number
+          seller_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_listings_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_purchases: {
+        Row: {
+          buyer_id: string
+          created_at: string
+          id: string
+          listing_id: string
+          price_paid: number
+        }
+        Insert: {
+          buyer_id: string
+          created_at?: string
+          id?: string
+          listing_id: string
+          price_paid?: number
+        }
+        Update: {
+          buyer_id?: string
+          created_at?: string
+          id?: string
+          listing_id?: string
+          price_paid?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_purchases_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      memocoin_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          reference_id: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string
+          id?: string
+          reference_id?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          reference_id?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mission_definitions: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          is_active: boolean
+          key: string
+          reward_credits: number
+          sort_order: number
+          target_type: string
+          target_value: number
+          title: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          reward_credits?: number
+          sort_order?: number
+          target_type?: string
+          target_value?: number
+          title: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          reward_credits?: number
+          sort_order?: number
+          target_type?: string
+          target_value?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          creator_tier: number
+          daily_cards_studied: number
+          daily_energy_earned: number
+          daily_free_gradings: number
+          email: string
+          energy: number
+          id: string
+          is_banned: boolean
+          last_energy_recharge: string | null
+          last_grading_reset_date: string | null
+          last_study_reset_date: string | null
+          memocoins: number
+          name: string
+          onboarding_completed: boolean
+          premium_expires_at: string | null
+          successful_cards_counter: number
+          tier_last_evaluated: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_tier?: number
+          daily_cards_studied?: number
+          daily_energy_earned?: number
+          daily_free_gradings?: number
+          email?: string
+          energy?: number
+          id: string
+          is_banned?: boolean
+          last_energy_recharge?: string | null
+          last_grading_reset_date?: string | null
+          last_study_reset_date?: string | null
+          memocoins?: number
+          name?: string
+          onboarding_completed?: boolean
+          premium_expires_at?: string | null
+          successful_cards_counter?: number
+          tier_last_evaluated?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_tier?: number
+          daily_cards_studied?: number
+          daily_energy_earned?: number
+          daily_free_gradings?: number
+          email?: string
+          energy?: number
+          id?: string
+          is_banned?: boolean
+          last_energy_recharge?: string | null
+          last_grading_reset_date?: string | null
+          last_study_reset_date?: string | null
+          memocoins?: number
+          name?: string
+          onboarding_completed?: boolean
+          premium_expires_at?: string | null
+          successful_cards_counter?: number
+          tier_last_evaluated?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      review_logs: {
+        Row: {
+          card_id: string
+          difficulty: number
+          id: string
+          rating: number
+          reviewed_at: string
+          scheduled_date: string
+          stability: number
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          difficulty?: number
+          id?: string
+          rating: number
+          reviewed_at?: string
+          scheduled_date?: string
+          stability?: number
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          difficulty?: number
+          id?: string
+          rating?: number
+          reviewed_at?: string
+          scheduled_date?: string
+          stability?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_logs_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_decks: {
+        Row: {
+          allow_download: boolean
+          created_at: string
+          deck_id: string
+          id: string
+          lesson_id: string | null
+          price: number
+          price_type: string
+          shared_by: string
+          subject_id: string | null
+          turma_id: string
+        }
+        Insert: {
+          allow_download?: boolean
+          created_at?: string
+          deck_id: string
+          id?: string
+          lesson_id?: string | null
+          price?: number
+          price_type?: string
+          shared_by: string
+          subject_id?: string | null
+          turma_id: string
+        }
+        Update: {
+          allow_download?: boolean
+          created_at?: string
+          deck_id?: string
+          id?: string
+          lesson_id?: string | null
+          price?: number
+          price_type?: string
+          shared_by?: string
+          subject_id?: string | null
+          turma_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_decks_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_decks_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "turma_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_decks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_decks_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_exam_answers: {
+        Row: {
+          ai_feedback: string | null
+          attempt_id: string
+          created_at: string
+          id: string
+          is_graded: boolean
+          question_id: string
+          scored_points: number
+          selected_indices: number[] | null
+          user_answer: string | null
+        }
+        Insert: {
+          ai_feedback?: string | null
+          attempt_id: string
+          created_at?: string
+          id?: string
+          is_graded?: boolean
+          question_id: string
+          scored_points?: number
+          selected_indices?: number[] | null
+          user_answer?: string | null
+        }
+        Update: {
+          ai_feedback?: string | null
+          attempt_id?: string
+          created_at?: string
+          id?: string
+          is_graded?: boolean
+          question_id?: string
+          scored_points?: number
+          selected_indices?: number[] | null
+          user_answer?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_exam_answers_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "turma_exam_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_exam_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "turma_exam_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_exam_attempts: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          exam_id: string
+          id: string
+          scored_points: number
+          started_at: string
+          status: string
+          total_points: number
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          exam_id: string
+          id?: string
+          scored_points?: number
+          started_at?: string
+          status?: string
+          total_points?: number
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          exam_id?: string
+          id?: string
+          scored_points?: number
+          started_at?: string
+          status?: string
+          total_points?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_exam_attempts_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "turma_exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_exam_questions: {
+        Row: {
+          correct_answer: string
+          correct_indices: number[] | null
+          created_at: string
+          exam_id: string
+          id: string
+          options: Json | null
+          points: number
+          question_id: string | null
+          question_text: string
+          question_type: string
+          sort_order: number
+        }
+        Insert: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          exam_id: string
+          id?: string
+          options?: Json | null
+          points?: number
+          question_id?: string | null
+          question_text: string
+          question_type?: string
+          sort_order?: number
+        }
+        Update: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          exam_id?: string
+          id?: string
+          options?: Json | null
+          points?: number
+          question_id?: string | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_exam_questions_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "turma_exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_exam_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "turma_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_exams: {
+        Row: {
+          avg_rating: number | null
+          created_at: string
+          created_by: string
+          description: string | null
+          downloads: number
+          id: string
+          is_marketplace: boolean
+          is_published: boolean
+          lesson_id: string | null
+          price: number
+          rating_count: number
+          subject_id: string | null
+          subscribers_only: boolean
+          time_limit_seconds: number | null
+          title: string
+          total_questions: number
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          avg_rating?: number | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          downloads?: number
+          id?: string
+          is_marketplace?: boolean
+          is_published?: boolean
+          lesson_id?: string | null
+          price?: number
+          rating_count?: number
+          subject_id?: string | null
+          subscribers_only?: boolean
+          time_limit_seconds?: number | null
+          title: string
+          total_questions?: number
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          avg_rating?: number | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          downloads?: number
+          id?: string
+          is_marketplace?: boolean
+          is_published?: boolean
+          lesson_id?: string | null
+          price?: number
+          rating_count?: number
+          subject_id?: string | null
+          subscribers_only?: boolean
+          time_limit_seconds?: number | null
+          title?: string
+          total_questions?: number
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_exams_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "turma_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_exams_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_exams_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_lesson_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          lesson_id: string
+          price_type: string
+          turma_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number
+          file_type?: string
+          file_url: string
+          id?: string
+          lesson_id: string
+          price_type?: string
+          turma_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          lesson_id?: string
+          price_type?: string
+          turma_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_lesson_files_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "turma_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_lesson_files_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_lessons: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_published: boolean
+          lesson_date: string | null
+          materials: Json | null
+          name: string
+          sort_order: number
+          subject_id: string | null
+          summary: string | null
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          lesson_date?: string | null
+          materials?: Json | null
+          name: string
+          sort_order?: number
+          subject_id?: string | null
+          summary?: string | null
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          lesson_date?: string | null
+          materials?: Json | null
+          name?: string
+          sort_order?: number
+          subject_id?: string | null
+          summary?: string | null
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_lessons_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_lessons_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_members: {
+        Row: {
+          id: string
+          is_subscriber: boolean
+          joined_at: string
+          role: Database["public"]["Enums"]["turma_role"]
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_subscriber?: boolean
+          joined_at?: string
+          role?: Database["public"]["Enums"]["turma_role"]
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_subscriber?: boolean
+          joined_at?: string
+          role?: Database["public"]["Enums"]["turma_role"]
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_members_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_permissions: {
+        Row: {
+          created_at: string
+          granted: boolean
+          granted_by: string
+          id: string
+          permission: string
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted?: boolean
+          granted_by: string
+          id?: string
+          permission: string
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted?: boolean
+          granted_by?: string
+          id?: string
+          permission?: string
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_permissions_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_questions: {
+        Row: {
+          correct_answer: string
+          correct_indices: number[] | null
+          created_at: string
+          created_by: string
+          id: string
+          lesson_id: string | null
+          options: Json | null
+          points: number
+          question_text: string
+          question_type: string
+          subject_id: string | null
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by: string
+          id?: string
+          lesson_id?: string | null
+          options?: Json | null
+          points?: number
+          question_text: string
+          question_type?: string
+          subject_id?: string | null
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          lesson_id?: string | null
+          options?: Json | null
+          points?: number
+          question_text?: string
+          question_type?: string
+          subject_id?: string | null
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_questions_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "turma_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_questions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_questions_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_ratings_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_semesters: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_semesters_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_subjects: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          semester_id: string | null
+          sort_order: number
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          semester_id?: string | null
+          sort_order?: number
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          semester_id?: string | null
+          sort_order?: number
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_subjects_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_subjects_semester_id_fkey"
+            columns: ["semester_id"]
+            isOneToOne: false
+            referencedRelation: "turma_semesters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turma_subjects_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turma_subscriptions: {
+        Row: {
+          amount: number
+          created_at: string
+          expires_at: string
+          id: string
+          started_at: string
+          turma_id: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          started_at?: string
+          turma_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          started_at?: string
+          turma_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turma_subscriptions_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turmas: {
+        Row: {
+          avg_rating: number | null
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          invite_code: string
+          is_private: boolean
+          name: string
+          owner_id: string
+          rating_count: number
+          subscription_price: number
+          updated_at: string
+        }
+        Insert: {
+          avg_rating?: number | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invite_code?: string
+          is_private?: boolean
+          name: string
+          owner_id: string
+          rating_count?: number
+          subscription_price?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_rating?: number | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invite_code?: string
+          is_private?: boolean
+          name?: string
+          owner_id?: string
+          rating_count?: number
+          subscription_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_missions: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          is_claimed: boolean
+          is_completed: boolean
+          mission_id: string
+          period_start: string
+          progress: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_claimed?: boolean
+          is_completed?: boolean
+          mission_id: string
+          period_start?: string
+          progress?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          is_claimed?: boolean
+          is_completed?: boolean
+          mission_id?: string
+          period_start?: string
+          progress?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_missions_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "mission_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_get_profiles: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          created_at: string
+          creator_tier: number
+          daily_cards_studied: number
+          email: string
+          energy: number
+          id: string
+          is_banned: boolean
+          memocoins: number
+          name: string
+          onboarding_completed: boolean
+          successful_cards_counter: number
+        }[]
+      }
+      admin_get_user_decks: {
+        Args: { p_user_id: string }
+        Returns: {
+          card_count: number
+          created_at: string
+          id: string
+          is_archived: boolean
+          name: string
+        }[]
+      }
+      admin_get_user_study_history: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          avg_rating: number
+          cards_reviewed: number
+          study_date: string
+        }[]
+      }
+      admin_get_user_token_usage: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          feature_key: string
+          model: string
+          total_calls: number
+          total_completion_tokens: number
+          total_energy_cost: number
+          total_prompt_tokens: number
+          total_tokens_sum: number
+        }[]
+      }
+      admin_update_profile: {
+        Args: {
+          p_energy?: number
+          p_is_banned?: boolean
+          p_memocoins?: number
+          p_name?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      deduct_energy: {
+        Args: { p_cost: number; p_user_id: string }
+        Returns: number
+      }
+      delete_deck_cascade: { Args: { p_deck_id: string }; Returns: undefined }
+      delete_folder_cascade: {
+        Args: { p_folder_id: string }
+        Returns: undefined
+      }
+      find_turma_by_invite_code: {
+        Args: { p_invite_code: string }
+        Returns: {
+          avg_rating: number
+          cover_image_url: string
+          description: string
+          id: string
+          is_private: boolean
+          name: string
+          owner_id: string
+          rating_count: number
+          subscription_price: number
+        }[]
+      }
+      get_all_user_deck_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          deck_id: string
+          learning_count: number
+          new_count: number
+          new_graduated_today: number
+          new_reviewed_today: number
+          review_count: number
+          reviewed_today: number
+        }[]
+      }
+      get_community_full_preview: {
+        Args: { p_turma_id: string }
+        Returns: Json
+      }
+      get_community_preview_stats: {
+        Args: { p_turma_id: string }
+        Returns: Json
+      }
+      get_deck_stats: {
+        Args: { p_deck_id: string }
+        Returns: {
+          learning_count: number
+          new_count: number
+          new_graduated_today: number
+          new_reviewed_today: number
+          review_count: number
+          reviewed_today: number
+        }[]
+      }
+      get_marketplace_fee: { Args: { tier: number }; Returns: number }
+      get_public_profiles: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          creator_tier: number
+          id: string
+          name: string
+        }[]
+      }
+      get_turma_role: {
+        Args: { _turma_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["turma_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_turma_permission: {
+        Args: { _permission: string; _turma_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_turma_member: {
+        Args: { _turma_id: string; _user_id: string }
+        Returns: boolean
+      }
+      leave_turma: { Args: { _turma_id: string }; Returns: undefined }
+      process_marketplace_purchase: {
+        Args: { p_listing_id: string }
+        Returns: Json
+      }
+      process_turma_subscription: {
+        Args: { p_turma_id: string }
+        Returns: Json
+      }
+      restore_subscription_status: {
+        Args: { p_turma_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin"
+      turma_role: "admin" | "moderator" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +2109,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin"],
+      turma_role: ["admin", "moderator", "member"],
+    },
   },
 } as const
