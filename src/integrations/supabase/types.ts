@@ -694,6 +694,61 @@ export type Database = {
           },
         ]
       }
+      lesson_content_folders: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          lesson_id: string
+          name: string
+          parent_id: string | null
+          sort_order: number
+          turma_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          lesson_id: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number
+          turma_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          lesson_id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number
+          turma_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_content_folders_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "turma_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_content_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_content_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_content_folders_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_listings: {
         Row: {
           avg_rating: number | null
@@ -973,6 +1028,7 @@ export type Database = {
       turma_decks: {
         Row: {
           allow_download: boolean
+          content_folder_id: string | null
           created_at: string
           deck_id: string
           id: string
@@ -985,6 +1041,7 @@ export type Database = {
         }
         Insert: {
           allow_download?: boolean
+          content_folder_id?: string | null
           created_at?: string
           deck_id: string
           id?: string
@@ -997,6 +1054,7 @@ export type Database = {
         }
         Update: {
           allow_download?: boolean
+          content_folder_id?: string | null
           created_at?: string
           deck_id?: string
           id?: string
@@ -1008,6 +1066,13 @@ export type Database = {
           turma_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "turma_decks_content_folder_id_fkey"
+            columns: ["content_folder_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_content_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "turma_decks_deck_id_fkey"
             columns: ["deck_id"]
@@ -1277,6 +1342,7 @@ export type Database = {
       }
       turma_lesson_files: {
         Row: {
+          content_folder_id: string | null
           created_at: string
           file_name: string
           file_size: number
@@ -1289,6 +1355,7 @@ export type Database = {
           uploaded_by: string
         }
         Insert: {
+          content_folder_id?: string | null
           created_at?: string
           file_name: string
           file_size?: number
@@ -1301,6 +1368,7 @@ export type Database = {
           uploaded_by: string
         }
         Update: {
+          content_folder_id?: string | null
           created_at?: string
           file_name?: string
           file_size?: number
@@ -1313,6 +1381,13 @@ export type Database = {
           uploaded_by?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "turma_lesson_files_content_folder_id_fkey"
+            columns: ["content_folder_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_content_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "turma_lesson_files_lesson_id_fkey"
             columns: ["lesson_id"]

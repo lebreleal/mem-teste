@@ -20,8 +20,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import LessonFiles from '@/components/lesson-detail/LessonFiles';
-import LessonDecks from '@/components/lesson-detail/LessonDecks';
+import LessonContent from '@/components/lesson-detail/LessonContent';
 import LessonDialogs from '@/components/lesson-detail/LessonDialogs';
 
 const LessonDetail = () => {
@@ -62,6 +61,21 @@ const LessonDetail = () => {
         .select('*')
         .eq('lesson_id', lessonId)
         .order('created_at', { ascending: false });
+      return (data ?? []) as any[];
+    },
+    enabled: !!lessonId,
+  });
+
+  // Fetch content folders
+  const { data: contentFolders = [] } = useQuery({
+    queryKey: ['lesson-content-folders', lessonId],
+    queryFn: async () => {
+      if (!lessonId) return [];
+      const { data } = await supabase
+        .from('lesson_content_folders' as any)
+        .select('*')
+        .eq('lesson_id', lessonId)
+        .order('sort_order');
       return (data ?? []) as any[];
     },
     enabled: !!lessonId,
@@ -112,7 +126,6 @@ const LessonDetail = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lesson-files', lessonId] });
       toast({ title: 'Nome atualizado!' });
-      setRenamingFile(null);
     },
   });
 
@@ -125,6 +138,35 @@ const LessonDetail = () => {
       queryClient.invalidateQueries({ queryKey: ['lesson-files', lessonId] });
       toast({ title: 'Visibilidade atualizada!' });
     },
+  });
+
+  // Content folder mutations
+  const createContentFolder = useMutation({
+    mutationFn: async ({ name, parentId }: { name: string; parentId: string | null }) => {
+      if (!user || !turmaId || !lessonId) throw new Error('Missing context');
+      const { error } = await supabase.from('lesson_content_folders' as any).insert({
+        lesson_id: lessonId, turma_id: turmaId, name, parent_id: parentId, created_by: user.id,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['lesson-content-folders', lessonId] }); toast({ title: 'Pasta criada!' }); },
+    onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
+  });
+
+  const renameContentFolder = useMutation({
+    mutationFn: async ({ folderId, newName }: { folderId: string; newName: string }) => {
+      const { error } = await supabase.from('lesson_content_folders' as any).update({ name: newName } as any).eq('id', folderId);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['lesson-content-folders', lessonId] }); toast({ title: 'Pasta renomeada!' }); },
+  });
+
+  const deleteContentFolder = useMutation({
+    mutationFn: async (folderId: string) => {
+      const { error } = await supabase.from('lesson_content_folders' as any).delete().eq('id', folderId);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['lesson-content-folders', lessonId] }); toast({ title: 'Pasta removida!' }); },
   });
 
   // Sharer profiles
@@ -149,8 +191,6 @@ const LessonDetail = () => {
   const [editPrice, setEditPrice] = useState('');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
   const [previewDeck, setPreviewDeck] = useState<any>(null);
-  const [renamingFile, setRenamingFile] = useState<any>(null);
-  const [renameFileName, setRenameFileName] = useState('');
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewRestricted, setPdfPreviewRestricted] = useState(false);
 
@@ -173,7 +213,6 @@ const LessonDetail = () => {
   const addToCollection = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
-      // Block non-subscribers from adding restricted decks
       const isDeckFreeCheck = !td.price_type || td.price_type === 'free';
       if (!isDeckFreeCheck && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) {
         throw new Error('SUBSCRIBER_ONLY');
@@ -210,22 +249,18 @@ const LessonDetail = () => {
 
       const existingLinked = latestDecks.find((d: any) => d.source_turma_deck_id === td.id);
       if (existingLinked) {
-        // Unarchive the linked deck if archived
         if (existingLinked.is_archived) {
           await supabase.from('decks').update({ is_archived: false } as any).eq('id', existingLinked.id);
         }
-        // Unarchive parent deck if archived
         if (existingLinked.parent_deck_id) {
           const parent = latestDecks.find((d: any) => d.id === existingLinked.parent_deck_id);
           if (parent?.is_archived) {
             await supabase.from('decks').update({ is_archived: false } as any).eq('id', parent.id);
           }
         }
-        // Unarchive turma folder if archived
         if (turmaFolder && (turmaFolder as any).is_archived) {
           await supabase.from('folders').update({ is_archived: false } as any).eq('id', (turmaFolder as any).id);
         }
-        // Sync missing cards
         const { data: sourceCards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
         const { data: userCards } = await supabase.from('cards').select('front_content, back_content').eq('deck_id', existingLinked.id);
         const userCardKeys = new Set((userCards || []).map((c: any) => `${c.front_content}|||${c.back_content}`));
@@ -327,13 +362,6 @@ const LessonDetail = () => {
   // Helpers for deck access
   const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
   const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
-  const isDeckFree = (td: any) => !td.price_type || td.price_type === 'free';
-  const canAccessDeck = (td: any) => {
-    if (isDeckFree(td)) return true;
-    if (td.shared_by === user?.id || userOwnsDeck(td.deck_id)) return true;
-    if (isAdmin || isMod || isSubscriber) return true;
-    return false;
-  };
 
   const handleAddDeck = () => {
     if (!selectedDeckId) return;
@@ -406,32 +434,23 @@ const LessonDetail = () => {
           <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{lesson.name}</h1>
         </div>
 
-        {/* Files Section */}
-        <LessonFiles
+        {/* Unified Content Section */}
+        <LessonContent
           lessonFiles={lessonFiles}
+          lessonDecks={lessonDecks}
+          contentFolders={contentFolders}
+          userDecks={userDecks}
           canEdit={canEdit}
-          isSubscriber={isSubscriber}
           isAdmin={isAdmin}
           isMod={isMod}
+          isSubscriber={isSubscriber}
+          userId={user?.id}
           uploading={uploading}
           onFileUpload={handleFileUpload}
           onDeleteFile={(id) => deleteFile.mutate(id)}
           onRenameFile={(fileId, newName) => renameFile.mutate({ fileId, newName })}
           onPreviewPdf={(url, restricted) => { setPdfPreviewUrl(url); setPdfPreviewRestricted(restricted); }}
           onUpdateFileVisibility={(fileId, priceType) => updateFileVisibility.mutate({ fileId, priceType })}
-        />
-
-        {/* Decks Section */}
-        <LessonDecks
-          turmaId={turmaId!}
-          lessonDecks={lessonDecks}
-          userDecks={userDecks}
-          canEdit={canEdit}
-          isAdmin={isAdmin}
-          isSubscriber={isSubscriber}
-          isMod={isMod}
-          userId={user?.id}
-          subscriptionPrice={turma.subscription_price}
           onShowAddDeck={() => { setShowAddDeck(true); setAllowDownload(false); }}
           onPreviewDeck={setPreviewDeck}
           onAddToCollection={(td) => addToCollection.mutate(td)}
@@ -440,12 +459,16 @@ const LessonDetail = () => {
           onUnshareDeck={(id) => mutations.unshareDeck.mutate(id, { onSuccess: () => toast({ title: 'Baralho removido' }) })}
           isAddingToCollection={addToCollection.isPending}
           isDownloading={downloadDeck.isPending}
+          turmaId={turmaId!}
+          subscriptionPrice={turma.subscription_price}
+          onCreateFolder={(name, parentId) => createContentFolder.mutate({ name, parentId })}
+          onRenameFolder={(folderId, newName) => renameContentFolder.mutate({ folderId, newName })}
+          onDeleteFolder={(folderId) => deleteContentFolder.mutate(folderId)}
         />
       </main>
 
       {/* Dialogs */}
       <LessonDialogs
-        // Add Deck
         showAddDeck={showAddDeck} setShowAddDeck={setShowAddDeck}
         selectedDeckId={selectedDeckId} setSelectedDeckId={setSelectedDeckId}
         availableDecks={availableDecks.map(d => ({ id: d.id, name: d.name }))}
@@ -454,19 +477,16 @@ const LessonDetail = () => {
         allowDownload={allowDownload} setAllowDownload={setAllowDownload}
         onAddDeck={handleAddDeck}
         isAddingDeck={mutations.shareDeck.isPending}
-        // Edit Pricing
         editingDeck={editingDeck} setEditingDeck={setEditingDeck}
         editPriceType={editPriceType} setEditPriceType={setEditPriceType}
         editPrice={editPrice} setEditPrice={setEditPrice}
         editAllowDownload={editAllowDownload} setEditAllowDownload={setEditAllowDownload}
         onEditPricing={handleEditPricing}
         isEditingPricing={mutations.updateDeckPricing.isPending}
-        // Rename File (handled inside LessonFiles now)
         renamingFile={null} setRenamingFile={() => {}}
         renameFileName={''} setRenameFileName={() => {}}
         onRenameFile={() => {}}
         isRenaming={false}
-        // Preview Deck
         previewDeck={previewDeck} setPreviewDeck={setPreviewDeck}
         userHasLinkedDeck={userHasLinkedDeck}
         userOwnsDeck={userOwnsDeck}
@@ -474,7 +494,6 @@ const LessonDetail = () => {
         onDownloadDeck={(td) => downloadDeck.mutate(td, { onSuccess: () => setPreviewDeck(null) })}
         isAddingToCollection={addToCollection.isPending}
         isDownloading={downloadDeck.isPending}
-        // PDF Preview
         pdfPreviewUrl={pdfPreviewUrl} setPdfPreviewUrl={setPdfPreviewUrl}
         pdfPreviewRestricted={pdfPreviewRestricted}
       />
