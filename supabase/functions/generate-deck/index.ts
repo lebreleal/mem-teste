@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.4;
 
-    const trimmedContent = textContent.slice(0, 8000);
+    const trimmedContent = textContent.slice(0, 15000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0; // 0 = auto
     const formats = cardFormats?.length ? cardFormats : ["definition", "qa"];
     const detail = detailLevel || "standard";
