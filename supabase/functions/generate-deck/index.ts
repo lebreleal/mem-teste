@@ -5,7 +5,7 @@ import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTo
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const DEFAULT_SYSTEM_PROMPT = "Você é um assistente educacional especializado em criar flashcards de estudo a partir de materiais acadêmicos. Sua tarefa é analisar o conteúdo educacional fornecido (texto e/ou imagens de páginas de documentos acadêmicos como PDFs, slides e apostilas) e gerar flashcards de alta qualidade. Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido. NUNCA invente ou use conhecimento externo. Responda APENAS com o JSON solicitado, sem texto adicional.";
+const DEFAULT_SYSTEM_PROMPT = "Você é um assistente educacional especializado em criar flashcards de estudo a partir de materiais acadêmicos. Sua tarefa é analisar o conteúdo educacional fornecido (texto e/ou imagens de páginas de documentos acadêmicos como PDFs, slides e apostilas) e gerar flashcards de alta qualidade. Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido. NUNCA invente ou use conhecimento externo. REGRA IMPORTANTE: Cada cartão deve ser AUTOCONTIDO — nunca referencie 'anexo', 'figura', 'imagem acima', 'tabela ao lado' ou qualquer elemento externo. Descreva o contexto necessário diretamente no cartão. Por exemplo, ao invés de 'O que o anexo mostra?', escreva 'Qual síndrome é caracterizada por cariótipo 45,X?'. Responda APENAS com o JSON solicitado, sem texto adicional.";
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -17,15 +17,19 @@ function getDetailInstruction(level: string): string {
 
 function getFormatInstructions(formats: string[]): string {
   const parts: string[] = [];
-  if (formats.includes("definition")) parts.push('- "definition": Frente com o termo/conceito, verso com a definição/significado. Use type:"basic".');
-  if (formats.includes("cloze")) parts.push('- "cloze": Texto com lacunas usando {{c1::resposta}}. "front" contém o texto com {{c1::...}}, "back" fica vazio. Use type:"cloze".');
-  if (formats.includes("qa")) parts.push('- "qa": Pergunta direta na frente, resposta concisa no verso. Use type:"basic".');
-  if (formats.includes("multiple_choice")) parts.push('- "multiple_choice": Pergunta na frente ("front"), sem texto no "back". Adicione "options" (array de 4-5 strings) e "correctIndex" (índice da resposta correta, 0-based). Use type:"multiple_choice".');
-  if (parts.length === 0) parts.push('- Use type:"basic" com pergunta na frente e resposta no verso.');
-  const total = formats.length;
-  const formatNames = formats.map(f => f === "definition" ? "definição" : f === "cloze" ? "cloze" : f === "qa" ? "pergunta/resposta" : "múltipla escolha");
+  // "definition" is mapped to "qa" (basic front/back) — no standalone definition format
+  if (formats.includes("definition") || formats.includes("qa")) parts.push('- "qa": Pergunta direta e autocontida na frente, resposta concisa no verso. Use type:"basic". A pergunta DEVE conter todo o contexto necessário para ser respondida sem ver o material original.');
+  if (formats.includes("cloze")) parts.push('- "cloze": Frase completa e autocontida com lacuna usando {{c1::resposta}}. "front" contém o texto com {{c1::...}}, "back" fica vazio. Use type:"cloze". A frase deve fazer sentido sozinha.');
+  if (formats.includes("multiple_choice")) parts.push('- "multiple_choice": Pergunta autocontida na frente ("front"), sem texto no "back". Adicione "options" (array de 4-5 strings) e "correctIndex" (índice da resposta correta, 0-based). Use type:"multiple_choice". A pergunta deve ter contexto suficiente sem referenciar anexos.');
+  if (parts.length === 0) parts.push('- Use type:"basic" com pergunta autocontida na frente e resposta no verso.');
+  const total = parts.length;
+  const formatNames: string[] = [];
+  if (formats.includes("definition") || formats.includes("qa")) formatNames.push("pergunta/resposta");
+  if (formats.includes("cloze")) formatNames.push("cloze");
+  if (formats.includes("multiple_choice")) formatNames.push("múltipla escolha");
+  if (formatNames.length === 0) formatNames.push("pergunta/resposta");
   if (total === 1) { parts.push(`\nIMPORTANTE: Use EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões.`); }
-  else { parts.push(`\nIMPORTANTE: Use APENAS os ${total} formatos listados acima (${formatNames.join(", ")}). Distribua uniformemente entre eles.`); }
+  else { parts.push(`\nIMPORTANTE: Use APENAS os ${total} formatos listados acima (${formatNames.join(", ")}). Distribua uniformemente entre eles.\nNUNCA referencie 'anexo', 'figura', 'imagem', 'tabela' ou qualquer elemento externo nos cartões.`); }
   return parts.join("\n");
 }
 
@@ -65,7 +69,7 @@ Deno.serve(async (req) => {
 
     const trimmedContent = (textContent || "").slice(0, 15000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0; // 0 = auto
-    const formats = cardFormats?.length ? cardFormats : ["definition", "qa"];
+    const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
