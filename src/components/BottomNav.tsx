@@ -1,20 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Brain, Home, User, Trophy } from 'lucide-react';
+import { Brain, Home, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useMissions } from '@/hooks/useMissions';
 
 const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { missions } = useMissions();
-
-  const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   const items = [
     { icon: Home, label: 'Início', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: Trophy, label: 'Missões', onClick: () => navigate('/missoes'), active: isActive('/missoes'), badge: claimableCount },
     { icon: Brain, label: 'IA', onClick: () => navigate('/ia'), active: isActive('/ia') },
     { icon: User, label: 'Perfil', onClick: () => navigate('/profile'), active: isActive('/profile') },
   ];
@@ -29,18 +24,11 @@ const BottomNav = () => {
               key={item.label}
               onClick={item.onClick}
               className={cn(
-                'relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors',
+                'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors',
                 item.active ? 'text-primary' : 'text-muted-foreground'
               )}
             >
-              <div className="relative">
-                <Icon className="h-5 w-5" />
-                {item.badge && item.badge > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground shadow-sm">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
+              <Icon className="h-5 w-5" />
               <span className="text-[10px] font-semibold">{item.label}</span>
             </button>
           );

@@ -20,6 +20,7 @@ import PremiumModal from '@/components/dashboard/PremiumModal';
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
+import { useMissions } from '@/hooks/useMissions';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -27,8 +28,10 @@ const Dashboard = () => {
   const { toast } = useToast();
   const state = useDashboardState();
   const { isPremium } = usePremium();
+  const { missions } = useMissions();
 
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
+  const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -195,12 +198,19 @@ const Dashboard = () => {
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
           {[
-            { label: 'Comunidade', icon: Users, path: '/turmas' },
-            { label: 'Missões', icon: GraduationCap, path: '/missoes' },
-            { label: 'Provas', icon: BookOpen, path: '/exam/new' },
+            { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
+            { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
+            { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
           ].map(item => (
-            <button key={item.path} onClick={() => navigate(item.path)} className="flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
-              <item.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
+              <div className="relative">
+                <item.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                {item.badge > 0 && (
+                  <span className="absolute -top-2 -right-3 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground shadow-sm animate-in zoom-in-50">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
               <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">{item.label}</span>
             </button>
           ))}
