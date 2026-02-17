@@ -5,7 +5,7 @@ import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTo
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const DEFAULT_SYSTEM_PROMPT = "Você é um gerador de flashcards educacionais de alta qualidade.";
+const DEFAULT_SYSTEM_PROMPT = "Você é um gerador de flashcards educacionais de alta qualidade. Quando imagens de páginas forem fornecidas, analise TODO o conteúdo visual: texto, diagramas, gráficos, fórmulas, tabelas e imagens. Use as imagens como fonte PRINCIPAL de informação. Responda APENAS com o JSON solicitado, sem texto adicional.";
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
     const { textContent, cardCount, detailLevel, cardFormats, customInstructions, action, existingCards, aiModel, energyCost, pageImages } = await req.json();
 
     if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
-    if (!textContent) return jsonResponse({ error: "textContent é obrigatório" }, 400);
+    const hasPageImages = Array.isArray(pageImages) && pageImages.length > 0;
+    if (!textContent?.trim() && !hasPageImages) return jsonResponse({ error: "textContent ou pageImages é obrigatório" }, 400);
 
     const cost = energyCost || 0;
     if (cost > 0) {
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.4;
 
-    const trimmedContent = textContent.slice(0, 15000);
+    const trimmedContent = (textContent || "").slice(0, 15000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0; // 0 = auto
     const formats = cardFormats?.length ? cardFormats : ["definition", "qa"];
     const detail = detailLevel || "standard";
@@ -88,20 +89,21 @@ Deno.serve(async (req) => {
           .replace("{{formatInstructions}}", getFormatInstructions(formats))
           .replace("{{material}}", trimmedContent);
       } else {
-        prompt = `REGRAS:\n- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade de cartões que você julgar ideal para cobrir o conteúdo de forma completa.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n- Cubra conceitos-chave, definições, fatos e relações.\n- Evite perguntas triviais ou vagas.\n${customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : ""}\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}\n\nMATERIAL:\n${trimmedContent}\n\nFORMATO DE SAÍDA (apenas JSON array, sem texto extra):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice", use:\n{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
+        const materialSection = hasPageImages
+          ? (trimmedContent ? `\nTEXTO EXTRAÍDO (complementar às imagens):\n${trimmedContent}` : "\nAs imagens das páginas estão anexadas. Analise TODO o conteúdo visual.")
+          : `\nMATERIAL:\n${trimmedContent}`;
+        prompt = `REGRAS:\n- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade de cartões que você julgar ideal para cobrir o conteúdo de forma completa.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n- Cubra conceitos-chave, definições, fatos e relações.\n- Evite perguntas triviais ou vagas.\n${hasPageImages ? "- ANALISE as imagens das páginas fornecidas. Elas são a fonte PRINCIPAL. Extraia informações de diagramas, gráficos, fórmulas, tabelas e todo conteúdo visual.\n" : ""}${customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : ""}\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}${materialSection}\n\nFORMATO DE SAÍDA (apenas JSON array, sem texto extra):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice", use:\n{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
       }
     }
 
     // Build user message content: multimodal if pageImages exist, plain text otherwise
-    const hasImages = Array.isArray(pageImages) && pageImages.length > 0;
-    let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
-
+    let userContent: any;
     if (hasImages) {
       userContent = [
         { type: "text", text: prompt },
         ...pageImages.map((img: string) => ({
-          type: "image_url" as const,
-          image_url: { url: `data:image/jpeg;base64,${img}`, detail: "low" as const },
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${img}`, detail: "low" },
         })),
       ];
     } else {
