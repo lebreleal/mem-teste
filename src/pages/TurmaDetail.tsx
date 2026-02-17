@@ -74,26 +74,7 @@ const TurmaDetailInner = () => {
           </TabsList>
 
           <TabsContent value="content">
-            <ContentTab
-              turmaId={turmaId}
-              contentFolderId={contentFolderId}
-              setContentFolderId={setContentFolderId}
-              breadcrumb={contentBreadcrumb}
-              subjects={subjects}
-              lessons={lessons}
-              turmaDecks={turmaDecks}
-              lessonFiles={lessonFiles}
-              canEdit={canEdit}
-              canCreateSubject={isAdmin || isMod}
-              canCreateLesson={isAdmin || isMod}
-              isAdmin={isAdmin}
-              mutations={mutations}
-              onShowAddSubject={() => { setShowAddSubject(true); setNewName(''); setNewDesc(''); }}
-              onShowAddLesson={() => { setShowAddLesson('current'); setNewName(''); setNewDesc(''); setNewLessonDate(''); setNewLessonPublished(true); }}
-              onEditSubject={(s) => { setEditingSubject(s); setEditItemName(s.name); }}
-              onEditLesson={(l) => { setEditingLesson(l); setEditItemName(l.name); setEditLessonDate(l.lesson_date || ''); }}
-              toast={toast}
-            />
+            <ContentTab />
           </TabsContent>
 
           <TabsContent value="members">
