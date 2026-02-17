@@ -1,11 +1,10 @@
 /**
- * Elegant loading animation with rotating status phases + tips.
+ * Clean, minimal loading animation during AI deck generation.
  */
 
 import { useEffect, useState } from 'react';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Sparkles, BookOpen, Brain, Lightbulb, Zap, X } from 'lucide-react';
+import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle } from 'lucide-react';
 import type { GenProgress } from './types';
 
 interface GenerationProgressProps {
@@ -15,11 +14,11 @@ interface GenerationProgressProps {
 }
 
 const PHASES = [
-  { icon: BookOpen, text: 'Extraindo conteúdo do material...', color: 'text-primary' },
-  { icon: Brain, text: 'Analisando conceitos-chave...', color: 'text-primary' },
-  { icon: Lightbulb, text: 'Criando perguntas inteligentes...', color: 'text-primary' },
-  { icon: Sparkles, text: 'Gerando flashcards de alta qualidade...', color: 'text-primary' },
-  { icon: Zap, text: 'Finalizando seus cartões...', color: 'text-primary' },
+  { icon: BookOpen, text: 'Extraindo conteúdo...' },
+  { icon: Brain, text: 'Analisando conceitos...' },
+  { icon: Lightbulb, text: 'Criando perguntas...' },
+  { icon: Sparkles, text: 'Gerando flashcards...' },
+  { icon: Zap, text: 'Finalizando cartões...' },
 ];
 
 const TIPS = [
@@ -29,8 +28,6 @@ const TIPS = [
   '🎯 Testar a si mesmo > reler o material',
   '⚡ 20 min de revisão ativa > 2h de leitura',
   '🏆 Consistência diária é o segredo',
-  '🔄 Espaçar revisões consolida a memória',
-  '✨ Cartões próprios são mais eficazes que prontos',
 ];
 
 const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
@@ -38,19 +35,16 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
   const [tipIdx, setTipIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
-  // Cycle phases every 3s
   useEffect(() => {
     const iv = setInterval(() => setPhaseIdx(p => (p + 1) % PHASES.length), 3000);
     return () => clearInterval(iv);
   }, []);
 
-  // Cycle tips every 5s
   useEffect(() => {
     const iv = setInterval(() => setTipIdx(p => (p + 1) % TIPS.length), 5000);
     return () => clearInterval(iv);
   }, []);
 
-  // Track elapsed time
   useEffect(() => {
     const iv = setInterval(() => setElapsed(p => p + 1), 1000);
     return () => clearInterval(iv);
@@ -62,58 +56,73 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
   const PhaseIcon = phase.icon;
 
   return (
-    <div className="flex flex-col items-center justify-center py-8 sm:py-12 gap-6 animate-fade-in">
-      {/* Animated orb */}
-      <div className="relative flex items-center justify-center">
-        {/* Outer ring - slow spin */}
-        <div className="absolute h-24 w-24 rounded-full border-2 border-primary/20 animate-[spin_8s_linear_infinite]" />
-        {/* Middle ring - medium spin */}
-        <div className="absolute h-20 w-20 rounded-full border-2 border-dashed border-primary/30 animate-[spin_4s_linear_infinite_reverse]" />
-        {/* Inner glow */}
-        <div className="absolute h-16 w-16 rounded-full bg-primary/10 animate-pulse" />
-        {/* Icon */}
-        <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 border border-primary/25 backdrop-blur-sm">
-          <PhaseIcon className={`h-6 w-6 ${phase.color} transition-all duration-500`} />
-        </div>
+    <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-8 animate-fade-in">
+      {/* Pulsing icon */}
+      <div className="relative flex items-center justify-center h-20 w-20">
+        <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2s' }} />
+        <div className="absolute inset-1 rounded-full bg-primary/5" />
+        <PhaseIcon className="relative z-10 h-8 w-8 text-primary transition-all duration-500" key={phaseIdx} />
       </div>
 
-      {/* Phase status */}
-      <div className="text-center space-y-2 min-h-[3.5rem]">
-        <p className="text-sm font-semibold text-foreground transition-all duration-500 animate-fade-in" key={phaseIdx}>
-          {hasBatches && genProgress.current > 0 && genProgress.current <= genProgress.total
-            ? `Lote ${genProgress.current} de ${genProgress.total} — ${phase.text}`
-            : phase.text
-          }
+      {/* Status text */}
+      <div className="text-center space-y-1.5 min-h-[3rem]">
+        <p className="text-sm font-semibold text-foreground animate-fade-in" key={phaseIdx}>
+          {phase.text}
         </p>
-        <p className="text-xs text-muted-foreground/80 transition-all duration-700" key={`tip-${tipIdx}`}>
-          {TIPS[tipIdx]}
-        </p>
+        {hasBatches && genProgress.current > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Lote {genProgress.current} de {genProgress.total}
+          </p>
+        )}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress dots */}
       {hasBatches && (
-        <div className="w-64 space-y-2">
-          <Progress value={progressValue} className="h-2" />
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{Math.round(progressValue)}%</span>
-            <span>
-              <span className="font-bold" style={{ color: 'hsl(var(--energy-purple))' }}>{genProgress.creditsUsed}</span> créditos
-            </span>
-          </div>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: genProgress.total }, (_, i) => (
+            <div
+              key={i}
+              className={`h-2 rounded-full transition-all duration-500 ${
+                i < genProgress.current
+                  ? 'w-6 bg-primary'
+                  : i === genProgress.current
+                    ? 'w-4 bg-primary/50 animate-pulse'
+                    : 'w-2 bg-muted-foreground/20'
+              }`}
+            />
+          ))}
         </div>
       )}
 
-      {/* Dismiss button — appears after 10s */}
+      {/* Credits used */}
+      {hasBatches && (
+        <p className="text-[11px] text-muted-foreground">
+          <span className="font-bold" style={{ color: 'hsl(var(--energy-purple))' }}>{genProgress.creditsUsed}</span> créditos usados
+        </p>
+      )}
+
+      {/* Tip */}
+      <p className="text-xs text-muted-foreground/70 animate-fade-in max-w-xs text-center" key={`tip-${tipIdx}`}>
+        {TIPS[tipIdx]}
+      </p>
+
+      {/* Dismiss button */}
       {canDismiss && elapsed >= 10 && onDismiss && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground gap-1.5 animate-fade-in"
-          onClick={onDismiss}
-        >
-          <X className="h-3.5 w-3.5" />
-          Fechar e continuar em segundo plano
-        </Button>
+        <div className="space-y-2 animate-fade-in">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground gap-1.5"
+            onClick={onDismiss}
+          >
+            <X className="h-3.5 w-3.5" />
+            Continuar em segundo plano
+          </Button>
+          <p className="text-[10px] text-muted-foreground/60 text-center flex items-center gap-1 justify-center">
+            <AlertTriangle className="h-3 w-3" />
+            Não feche o app enquanto gera
+          </p>
+        </div>
       )}
     </div>
   );
