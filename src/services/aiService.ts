@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { GeneratedCard, CoverageAnalysis, DetailLevel, CardFormat } from '@/types/ai';
+import type { GeneratedCard, DetailLevel, CardFormat } from '@/types/ai';
 
 export interface GenerateDeckParams {
   textContent: string;
@@ -12,23 +12,6 @@ export interface GenerateDeckParams {
   detailLevel: DetailLevel;
   cardFormats: CardFormat[];
   customInstructions?: string;
-  aiModel: string;
-  energyCost: number;
-  pageImages?: string[];
-}
-
-export interface AnalyzeCoverageParams {
-  textContent: string;
-  existingCards: GeneratedCard[];
-  aiModel: string;
-}
-
-export interface FillGapsParams {
-  textContent: string;
-  cardCount: number;
-  detailLevel: DetailLevel;
-  cardFormats: CardFormat[];
-  existingCards: GeneratedCard[];
   aiModel: string;
   energyCost: number;
 }
@@ -74,7 +57,6 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       action: 'generate',
       aiModel: params.aiModel,
       energyCost: params.energyCost,
-      ...(params.pageImages?.length ? { pageImages: params.pageImages } : {}),
     },
   });
   if (error) throw error;
@@ -82,37 +64,6 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
   return data?.cards ?? [];
 }
 
-/** Analyze coverage of existing cards against source text. */
-export async function analyzeCoverage(params: AnalyzeCoverageParams): Promise<CoverageAnalysis> {
-  const { data, error } = await supabase.functions.invoke('generate-deck', {
-    body: {
-      textContent: params.textContent.slice(0, 15000),
-      existingCards: params.existingCards,
-      action: 'analyze',
-      aiModel: params.aiModel,
-    },
-  });
-  if (error) throw error;
-  return data.analysis;
-}
-
-/** Generate cards to fill coverage gaps. */
-export async function fillGaps(params: FillGapsParams): Promise<GeneratedCard[]> {
-  const { data, error } = await supabase.functions.invoke('generate-deck', {
-    body: {
-      textContent: params.textContent.slice(0, 15000),
-      cardCount: params.cardCount,
-      detailLevel: params.detailLevel,
-      cardFormats: params.cardFormats,
-      existingCards: params.existingCards,
-      action: 'fill-gaps',
-      aiModel: params.aiModel,
-      energyCost: params.energyCost,
-    },
-  });
-  if (error) throw error;
-  return data?.cards ?? [];
-}
 
 /** Grade a written exam answer via edge function. */
 export async function gradeExamAnswer(params: GradeExamParams) {

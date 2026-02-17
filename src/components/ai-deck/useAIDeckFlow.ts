@@ -15,7 +15,7 @@ import { CREDITS_PER_PAGE } from '@/types/ai';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
-import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, CoverageAnalysis, PageItem } from './types';
+import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, PageItem } from './types';
 
 interface UseAIDeckFlowParams {
   onOpenChange: (open: boolean) => void;
@@ -49,7 +49,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
   const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze', 'multiple_choice']);
   const [customInstructions, setCustomInstructions] = useState('');
-  const [targetCardCount, setTargetCardCount] = useState(0); // 0 = auto (AI decides)
+  const [targetCardCount, setTargetCardCount] = useState(0);
 
   // Generation
   const [genProgress, setGenProgress] = useState<GenProgress>({ current: 0, total: 0, creditsUsed: 0 });
@@ -60,8 +60,6 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const [editFront, setEditFront] = useState('');
   const [editBack, setEditBack] = useState('');
 
-  // Analysis
-  const [analysis, setAnalysis] = useState<CoverageAnalysis | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -76,7 +74,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     setPages([]); setLoadProgress({ current: 0, total: 0 });
     setDetailLevel('standard'); setCardFormats(['qa', 'cloze', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
     setGenProgress({ current: 0, total: 0, creditsUsed: 0 });
-    setCards([]); setEditingIdx(null); setAnalysis(null);
+    setCards([]); setEditingIdx(null);
     setIsLoading(false); setIsSaving(false);
   }, []);
 
@@ -152,7 +150,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   // === Generation (batch of 4 pages) ===
   const handleGenerate = useCallback(async () => {
-    const selected = pages.filter(p => p.selected && (p.textContent.trim().length > 0 || p.imageBase64));
+    const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
     if (selected.length === 0) {
       toast({ title: 'Nenhuma página selecionada', description: 'As páginas selecionadas não possuem conteúdo extraível.', variant: 'destructive' });
       return;
@@ -167,7 +165,6 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     for (let b = 0; b < totalBatches; b++) {
       const batch = selected.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
       const batchText = batch.map(p => p.textContent).join('\n\n');
-      const batchImages = batch.map(p => p.imageBase64).filter(Boolean) as string[];
       const batchCost = batch.length * getCost(CREDITS_PER_PAGE);
       const batchCardCount = targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / totalBatches)) : 0;
 
@@ -179,7 +176,6 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           detailLevel, cardFormats,
           customInstructions: customInstructions.trim() || undefined,
           aiModel: model, energyCost: batchCost,
-          pageImages: batchImages.length > 0 ? batchImages : undefined,
         });
         allCards.push(...newCards);
       } catch (err) { console.error(`Batch ${b + 1} failed:`, err); }
@@ -194,34 +190,6 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     queryClient.invalidateQueries({ queryKey: ['energy'] });
     setIsLoading(false);
   }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient]);
-
-  // === Analysis ===
-  const handleAnalyze = useCallback(async () => {
-    const allText = pages.filter(p => p.selected).map(p => p.textContent).join('\n\n');
-    setStep('analyzing'); setIsLoading(true);
-    try {
-      const result = await aiService.analyzeCoverage({ textContent: allText, existingCards: cards, aiModel: model });
-      setAnalysis(result); setStep('analysis');
-    } catch { toast({ title: 'Erro na análise', variant: 'destructive' }); setStep('review'); }
-    finally { setIsLoading(false); }
-  }, [pages, cards, model, toast]);
-
-  const handleFillGaps = useCallback(async () => {
-    const allText = pages.filter(p => p.selected).map(p => p.textContent).join('\n\n');
-    setStep('generating'); setIsLoading(true);
-    const gapCount = Math.min(Math.max(Math.ceil((100 - (analysis?.coveragePercent || 0)) / 10), 3), 15);
-    setGenProgress({ current: 0, total: 1, creditsUsed: getCost(CREDITS_PER_PAGE) });
-    try {
-      const newCards = await aiService.fillGaps({
-        textContent: allText, cardCount: gapCount,
-        detailLevel, cardFormats, existingCards: cards,
-        aiModel: model, energyCost: getCost(CREDITS_PER_PAGE),
-      });
-      if (newCards.length > 0) { setCards(prev => [...prev, ...newCards]); toast({ title: `+${newCards.length} cartões adicionados!` }); }
-      setAnalysis(null); setStep('review');
-    } catch { toast({ title: 'Erro ao gerar', variant: 'destructive' }); setStep('analysis'); }
-    finally { queryClient.invalidateQueries({ queryKey: ['energy'] }); setIsLoading(false); }
-  }, [pages, analysis, detailLevel, cardFormats, cards, model, getCost, toast, queryClient]);
 
   // === Save ===
   const handleSave = useCallback(async () => {
@@ -280,11 +248,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     pages, loadProgress, detailLevel, setDetailLevel, cardFormats, toggleFormat,
     customInstructions, setCustomInstructions, targetCardCount, setTargetCardCount,
     genProgress, cards, editingIdx, editFront, setEditFront, editBack, setEditBack,
-    analysis, isSaving, isLoading, busy, fileInputRef,
+    isSaving, isLoading, busy, fileInputRef,
     selectedPages, totalCredits, energy, model, setModel,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
-    handleGenerate, handleAnalyze, handleFillGaps, handleSave,
+    handleGenerate, handleSave,
     startEdit, saveEdit, deleteCard, toggleType,
     getCost,
   };

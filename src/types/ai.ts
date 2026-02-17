@@ -14,16 +14,7 @@ export interface PageItem {
   pageNumber: number;
   thumbnailUrl?: string;
   textContent: string;
-  imageBase64?: string;
   selected: boolean;
-}
-
-export interface CoverageAnalysis {
-  coveragePercent: number;
-  missingTopics: string[];
-  coveredTopics?: string[];
-  summary: string;
-  recommendation?: string;
 }
 
 export type DetailLevel = 'essential' | 'standard' | 'comprehensive';

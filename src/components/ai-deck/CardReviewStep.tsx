@@ -5,7 +5,7 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Brain, ChevronLeft, Check, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { ChevronLeft, Check, Pencil, Trash2, Loader2 } from 'lucide-react';
 import type { GeneratedCard } from './types';
 
 interface CardReviewStepProps {
@@ -20,7 +20,6 @@ interface CardReviewStepProps {
   onCancelEdit: () => void;
   onDeleteCard: (i: number) => void;
   onToggleType: (i: number) => void;
-  onAnalyze: () => void;
   onSave: () => void;
   onBack: () => void;
   isSaving: boolean;
@@ -29,16 +28,13 @@ interface CardReviewStepProps {
 const CardReviewStep = ({
   cards, editingIdx, editFront, editBack,
   onEditFrontChange, onEditBackChange, onStartEdit, onSaveEdit, onCancelEdit,
-  onDeleteCard, onToggleType, onAnalyze, onSave, onBack, isSaving,
+  onDeleteCard, onToggleType, onSave, onBack, isSaving,
 }: CardReviewStepProps) => (
   <div className="flex flex-col gap-3 flex-1 min-h-0">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <p className="text-sm text-muted-foreground">
         <span className="font-bold text-foreground">{cards.length}</span> cartões gerados
       </p>
-      <Button variant="outline" size="sm" className="gap-1.5" onClick={onAnalyze}>
-        <Brain className="h-3.5 w-3.5" /> Analisar cobertura
-      </Button>
     </div>
 
     <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide max-h-[60dvh] sm:max-h-[65vh]">
