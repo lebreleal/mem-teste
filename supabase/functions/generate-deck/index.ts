@@ -14,7 +14,8 @@ PRINCÍPIOS:
 2. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
 3. PRÁTICO: Inclua perguntas de aplicação clínica/prática quando relevante.
 4. CONEXÕES: Faça perguntas que conectem conceitos entre si.
-5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados.
+5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas. Se o material não contém informação suficiente para criar uma pergunta, NÃO crie essa pergunta.
+6. FIDELIDADE: Todas as perguntas e respostas devem ser diretamente deriváveis do texto fornecido. Não extrapole.
 
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
@@ -83,15 +84,14 @@ function getOutputExamples(formats: string[]): string {
 }
 
 function mapCardType(type: string, allowedFormats: string[]): string {
-  // Direct matches
   if (type === "cloze" && allowedFormats.includes("cloze")) return "cloze";
   if (type === "multiple_choice" && allowedFormats.includes("multiple_choice")) return "multiple_choice";
   if ((type === "basic" || type === "qa" || type === "definition") && (allowedFormats.includes("qa") || allowedFormats.includes("definition"))) return "basic";
 
   // Type not allowed — map to first allowed format
+  if (allowedFormats.includes("qa") || allowedFormats.includes("definition")) return "basic";
   if (allowedFormats.includes("cloze")) return "cloze";
   if (allowedFormats.includes("multiple_choice")) return "multiple_choice";
-  if (allowedFormats.includes("qa") || allowedFormats.includes("definition")) return "basic";
   return "basic";
 }
 
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     const userId = user.id;
 
-    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
+    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost, skipLog } = await req.json();
 
     if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
     if (!textContent?.trim()) return jsonResponse({ error: "textContent é obrigatório" }, 400);
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = textContent.slice(0, 8000);
+    const trimmedContent = textContent.slice(0, 12000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
@@ -138,24 +138,27 @@ Deno.serve(async (req) => {
 
     const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
-REGRAS:
+REGRAS OBRIGATÓRIAS:
 - ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade ideal para cobrir o conteúdo de forma completa.'}
 - ${getDetailInstruction(detail)}
 - TUDO em PORTUGUÊS (ou na língua do material).
 - Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
-${customInstructions ? `\nINSTRUÇÕES DO USUÁRIO:\n${customInstructions}` : ""}
+- CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
+${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
-FORMATOS PERMITIDOS:
+FORMATOS PERMITIDOS (use SOMENTE estes):
 ${getFormatInstructions(formats)}
 
-MATERIAL:
+MATERIAL DO ESTUDANTE (base ÚNICA para os cartões):
+---
 ${trimmedContent}
+---
 
-FORMATO DE SAÍDA (apenas JSON array, sem texto extra):
+FORMATO DE SAÍDA (apenas JSON array, sem texto extra, sem markdown):
 ${getOutputExamples(formats)}`;
 
-    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}`);
+    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
@@ -174,9 +177,11 @@ ${getOutputExamples(formats)}`;
     const rawContent = aiData.choices?.[0]?.message?.content ?? "";
     console.log("AI response length:", rawContent.length, "first 200 chars:", rawContent.substring(0, 200));
 
-    const totalPromptTokens = aiData.usage?.prompt_tokens || 0;
-    const totalCompletionTokens = aiData.usage?.completion_tokens || 0;
-    const totalTokensSum = aiData.usage?.total_tokens || 0;
+    const usage = {
+      prompt_tokens: aiData.usage?.prompt_tokens || 0,
+      completion_tokens: aiData.usage?.completion_tokens || 0,
+      total_tokens: aiData.usage?.total_tokens || 0,
+    };
 
     let jsonStr = rawContent;
     const m = rawContent.match(/\[[\s\S]*\]/);
@@ -185,13 +190,13 @@ ${getOutputExamples(formats)}`;
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
       console.error("Parse failed, raw:", rawContent.substring(0, 500));
-      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
-      return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo." }, 500);
+      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
-      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
-      return jsonResponse({ error: "Nenhum cartão gerado." }, 400);
+      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
     // Map card types respecting user-selected formats
@@ -201,9 +206,12 @@ ${getOutputExamples(formats)}`;
       ...(c.type === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
     }));
 
-    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokensSum }, cost);
+    // Only log if not skipped (client will aggregate and log once)
+    if (!skipLog) {
+      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+    }
 
-    return jsonResponse({ cards });
+    return jsonResponse({ cards, usage });
   } catch (err) {
     console.error("Error:", err);
     return jsonResponse({ error: "Erro interno do servidor" }, 500);
