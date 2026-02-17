@@ -49,6 +49,9 @@ Deno.serve(async (req) => {
     const hasPageImages = Array.isArray(pageImages) && pageImages.length > 0;
     if (!textContent?.trim() && !hasPageImages) return jsonResponse({ error: "textContent ou pageImages é obrigatório" }, 400);
 
+    // For vision requests, always use gpt-4o (not mini) for better image understanding
+    const visionModel = "gpt-4o";
+
     const cost = energyCost || 0;
     if (cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
@@ -110,10 +113,14 @@ Deno.serve(async (req) => {
       userContent = prompt;
     }
 
+    // Use gpt-4o for vision requests (better image understanding), selectedModel for text-only
+    const modelToUse = hasPageImages ? visionModel : selectedModel;
+    console.log(`Using model: ${modelToUse}, hasImages: ${hasPageImages}, textLen: ${trimmedContent.length}, imageCount: ${hasPageImages ? pageImages.length : 0}`);
+
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], temperature }),
+      body: JSON.stringify({ model: modelToUse, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], temperature, max_tokens: 4096 }),
     });
 
     if (!aiResponse.ok) {
@@ -125,7 +132,8 @@ Deno.serve(async (req) => {
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? "";
-    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, aiData.usage, cost);
+    console.log("AI response length:", rawContent.length, "first 200 chars:", rawContent.substring(0, 200));
+    await logTokenUsage(supabase, userId, "generate_deck", modelToUse, aiData.usage, cost);
 
     if (action === "analyze") {
       let analysis;
@@ -140,35 +148,38 @@ Deno.serve(async (req) => {
     let cards: { front: string; back: string; type: string }[];
     try { cards = JSON.parse(jsonStr); } catch {
       console.error("Parse failed, raw:", rawContent.substring(0, 500));
-      // If AI refused or returned non-JSON, retry with text-only (no images) as fallback
-      if (hasPageImages && trimmedContent.trim()) {
-        console.log("Retrying without images (text-only fallback)...");
+      // If AI refused or returned non-JSON with images, retry text-only BUT only if we have enough text
+      if (hasPageImages && trimmedContent.trim().length > 100) {
+        console.log("Retrying without images (text-only fallback), text length:", trimmedContent.length);
         const fallbackResponse = await fetch(OPENAI_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-          body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature }),
+          body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 4096 }),
         });
         if (fallbackResponse.ok) {
           const fallbackData = await fallbackResponse.json();
           const fallbackRaw = fallbackData.choices?.[0]?.message?.content ?? "";
+          console.log("Fallback response length:", fallbackRaw.length, "first 200:", fallbackRaw.substring(0, 200));
           const fm = fallbackRaw.match(/\[[\s\S]*\]/);
           if (fm) {
             try {
               cards = JSON.parse(fm[0]);
               await logTokenUsage(supabase, userId, "generate_deck_fallback", selectedModel, fallbackData.usage, 0);
-              // Skip to card processing below
             } catch {
               console.error("Fallback parse also failed:", fallbackRaw.substring(0, 300));
-              return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas ou um conteúdo diferente." }, 500);
+              return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas." }, 500);
             }
           } else {
-            return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas." }, 500);
+            return jsonResponse({ error: "A IA não conseguiu gerar cards. O conteúdo pode ser muito visual — tente páginas com mais texto." }, 500);
           }
         } else {
+          const errText = await fallbackResponse.text();
+          console.error("Fallback API error:", fallbackResponse.status, errText);
           return jsonResponse({ error: "Falha ao processar conteúdo. Tente novamente." }, 500);
         }
       } else {
-        return jsonResponse({ error: "A IA retornou um formato inválido. Tente novamente." }, 500);
+        // No fallback possible — not enough text content
+        return jsonResponse({ error: "A IA não conseguiu interpretar as imagens. Verifique se o PDF tem conteúdo legível e tente novamente." }, 500);
       }
     }
 
