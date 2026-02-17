@@ -83,7 +83,27 @@ Deno.serve(async (req) => {
 
     if (action === "analyze") {
       const existingJson = JSON.stringify(existingCards || []);
-      prompt = `Você é um analisador de cobertura educacional. Analise o material e os cartões já criados.\n\nMATERIAL:\n${trimmedContent}\n\nCARTÕES EXISTENTES:\n${existingJson}\n\nResponda APENAS com JSON válido:\n{\n  "coveragePercent": <0-100>,\n  "missingTopics": ["tópico 1", "tópico 2"],\n  "summary": "Resumo da cobertura em português"\n}`;
+      prompt = `Você é um especialista em educação analisando a cobertura de um conjunto de flashcards em relação ao material de estudo original.
+
+MATERIAL ORIGINAL DO ALUNO:
+${trimmedContent}
+
+CARTÕES JÁ CRIADOS PELO ALUNO:
+${existingJson}
+
+TAREFA:
+1. Compare CADA tópico, conceito, definição e informação importante do material com os cartões existentes.
+2. Identifique quais tópicos do material NÃO estão cobertos pelos cartões.
+3. Avalie a profundidade: os cartões cobrem superficialmente ou em profundidade?
+
+Responda APENAS com JSON válido:
+{
+  "coveragePercent": <0-100 representando quanto do material está coberto pelos cartões>,
+  "missingTopics": ["tópico específico 1 que falta", "tópico específico 2 que falta"],
+  "coveredTopics": ["tópico 1 coberto", "tópico 2 coberto"],
+  "summary": "Resumo detalhado em português da análise de cobertura, mencionando pontos fortes e fracos",
+  "recommendation": "Recomendação prática para o aluno melhorar seus estudos"
+}`;
     } else if (action === "fill-gaps") {
       const existingJson = JSON.stringify(existingCards || []);
       prompt = `Você é um gerador de flashcards. Crie cartões para tópicos AINDA NÃO cobertos.\n\nMATERIAL:\n${trimmedContent}\n\nCARTÕES EXISTENTES (NÃO repita):\n${existingJson}\n\nREGRAS:\n- ${requestedCount > 0 ? `Crie ${requestedCount} cartões novos.` : 'Crie a quantidade de cartões necessária para cobrir os tópicos faltantes.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}\n\nFORMATO DE SAÍDA (apenas JSON array):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice": {"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
