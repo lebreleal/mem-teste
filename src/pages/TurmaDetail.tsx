@@ -4,12 +4,11 @@
 
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, FileText, Users } from 'lucide-react';
+import { Layers, Users } from 'lucide-react';
 import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
 import TurmaHeader from '@/components/turma-detail/TurmaHeader';
 import TurmaSubHeader from '@/components/turma-detail/TurmaSubHeader';
 import ContentTab from '@/components/turma-detail/ContentTab';
-import ExamsTab from '@/components/turma-detail/ExamsTab';
 import MembersTab from '@/components/turma-detail/MembersTab';
 import {
   CreateSubjectDialog, CreateLessonDialog,
@@ -22,16 +21,16 @@ const TurmaDetailInner = () => {
     turmaId, turma, members, subjects, lessons, turmaDecks, lessonFiles,
     isAdmin, isMod, canEdit, user,
     hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
-    contentFolderId, setContentFolderId, examFolderId, setExamFolderId,
-    contentBreadcrumb, examBreadcrumb, lessonDates, lessonDateMap,
-    mutations, examMutations, updateTurma, turmaExams,
+    contentFolderId, setContentFolderId,
+    contentBreadcrumb, lessonDates, lessonDateMap,
+    mutations, updateTurma,
     showSettings, setShowSettings,
     showAddSubject, setShowAddSubject, showAddLesson, setShowAddLesson,
     newName, setNewName, newDesc, setNewDesc,
     newLessonDate, setNewLessonDate, newLessonPublished, setNewLessonPublished,
     editingSubject, setEditingSubject, editingLesson, setEditingLesson,
     editItemName, setEditItemName, editLessonDate, setEditLessonDate,
-    handleCreateSubject, handleCreateLesson, handleImportExam,
+    handleCreateSubject, handleCreateLesson,
     toast,
   } = ctx;
 
@@ -65,12 +64,9 @@ const TurmaDetailInner = () => {
 
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         <Tabs defaultValue="content" className="space-y-4">
-          <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+          <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
             <TabsTrigger value="content" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
               <Layers className="h-3.5 w-3.5" /> Conteúdo
-            </TabsTrigger>
-            <TabsTrigger value="exams" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <FileText className="h-3.5 w-3.5" /> Provas
             </TabsTrigger>
             <TabsTrigger value="members" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
               <Users className="h-3.5 w-3.5" /> Membros
@@ -96,25 +92,6 @@ const TurmaDetailInner = () => {
               onShowAddLesson={() => { setShowAddLesson('current'); setNewName(''); setNewDesc(''); setNewLessonDate(''); setNewLessonPublished(true); }}
               onEditSubject={(s) => { setEditingSubject(s); setEditItemName(s.name); }}
               onEditLesson={(l) => { setEditingLesson(l); setEditItemName(l.name); setEditLessonDate(l.lesson_date || ''); }}
-              toast={toast}
-            />
-          </TabsContent>
-
-          <TabsContent value="exams">
-            <ExamsTab
-              turmaId={turmaId}
-              examFolderId={examFolderId}
-              setExamFolderId={setExamFolderId}
-              breadcrumb={examBreadcrumb}
-              subjects={subjects}
-              turmaExams={turmaExams}
-              isAdmin={isAdmin}
-              isMod={isMod}
-              isSubscriber={isSubscriber || !!activeSubscription}
-              userId={user?.id}
-              mutations={mutations}
-              examMutations={examMutations}
-              onImportExam={handleImportExam}
               toast={toast}
             />
           </TabsContent>

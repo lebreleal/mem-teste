@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Calendar } from 'lucide-react';
+import { useTurmaExams, useTurmaExamMutations } from '@/hooks/useTurmaExams';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -39,10 +40,13 @@ const LessonDetail = () => {
   const { data: turmaDecks = [] } = useTurmaDecks(turmaId!);
   const { decks: userDecks } = useDecks();
   const mutations = useTurmaHierarchyMutations(turmaId!);
+  const { data: turmaExams = [] } = useTurmaExams(turmaId!);
+  const examMutations = useTurmaExamMutations(turmaId!);
 
   const lesson = lessons.find(l => l.id === lessonId);
   const subject = subjects.find(s => s.id === lesson?.subject_id);
   const lessonDecks = turmaDecks.filter(d => d.lesson_id === lessonId);
+  const lessonExams = turmaExams.filter((e: any) => e.lesson_id === lessonId);
 
   const isAdmin = myRole === 'admin';
   const isMod = myRole === 'moderator';
@@ -182,7 +186,60 @@ const LessonDetail = () => {
     },
   });
 
-  // Sharer profiles
+  // Import personal exam into turma
+  const handleImportExamToTurma = async (exam: any) => {
+    if (!user || !turmaId || !lessonId) return;
+    const { data: questions, error } = await supabase.from('exam_questions').select('*')
+      .eq('exam_id', exam.id).order('sort_order', { ascending: true });
+    if (error) throw error;
+    if (!questions?.length) { toast({ title: 'Prova sem questões', variant: 'destructive' }); return; }
+    const { data: turmaExam, error: examError } = await supabase
+      .from('turma_exams')
+      .insert({
+        turma_id: turmaId, created_by: user.id, title: exam.title || 'Prova Importada',
+        time_limit_seconds: exam.time_limit_seconds || null, is_published: true,
+        total_questions: questions.length, lesson_id: lessonId,
+        subject_id: lesson?.subject_id || null,
+      } as any)
+      .select().single();
+    if (examError) throw examError;
+    const questionsToInsert = questions.map((q: any, idx: number) => ({
+      exam_id: (turmaExam as any).id, question_type: q.question_type, question_text: q.question_text,
+      options: q.options ?? null, correct_answer: q.correct_answer,
+      correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
+    }));
+    const { error: qError } = await supabase.from('turma_exam_questions').insert(questionsToInsert as any);
+    if (qError) throw qError;
+    queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
+    toast({ title: 'Prova importada!' });
+  };
+
+  // Open exam (import to personal and navigate)
+  const handleOpenExam = async (exam: any) => {
+    try {
+      const { data: existing } = await supabase.from('exams').select('id').eq('user_id', user!.id).eq('source_turma_exam_id', exam.id).limit(1);
+      if (existing && existing.length > 0) { navigate(`/exam/${existing[0].id}`); return; }
+      const { data: questions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
+      const { data: userDecksList } = await supabase.from('decks').select('id').eq('user_id', user!.id).limit(1);
+      let deckId = userDecksList?.[0]?.id;
+      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user!.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
+      if (!deckId) throw new Error('Sem baralho disponível');
+      const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
+      const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
+        .insert({ user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })
+        .select().single();
+      if (examError) throw examError;
+      const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
+        exam_id: newExam.id, question_type: q.question_type, question_text: q.question_text,
+        options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
+      }));
+      await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
+      queryClient.invalidateQueries({ queryKey: ['exams'] });
+      toast({ title: 'Prova importada!' });
+      navigate(`/exam/${newExam.id}`);
+    } catch (err: any) { toast({ title: 'Erro ao abrir prova', description: err.message, variant: 'destructive' }); }
+  };
+
   const sharerIds = [...new Set(lessonDecks.map(d => d.shared_by))];
   const { data: sharerProfiles = [] } = useQuery({
     queryKey: ['sharer-profiles', ...sharerIds],
@@ -451,6 +508,7 @@ const LessonDetail = () => {
         <LessonContent
           lessonFiles={lessonFiles}
           lessonDecks={lessonDecks}
+          lessonExams={lessonExams}
           contentFolders={contentFolders}
           userDecks={userDecks}
           canEdit={canEdit}
@@ -473,13 +531,17 @@ const LessonDetail = () => {
           isAddingToCollection={addToCollection.isPending}
           isDownloading={downloadDeck.isPending}
           turmaId={turmaId!}
+          turmaName={turma.name}
           lessonId={lessonId}
+          subjectId={lesson?.subject_id}
           subscriptionPrice={turma.subscription_price}
           onCreateFolder={(name, parentId) => createContentFolder.mutate({ name, parentId })}
           onRenameFolder={(folderId, newName) => renameContentFolder.mutate({ folderId, newName })}
           onDeleteFolder={(folderId) => deleteContentFolder.mutate(folderId)}
           onMoveItem={(itemType, itemId, targetFolderId) => moveItem.mutate({ itemType, itemId, targetFolderId })}
-          onNavigateToExamCreate={() => navigate(`/turmas/${turmaId}/exams/create?lessonId=${lessonId}&subjectId=${lesson?.subject_id || ''}`)}
+          onImportExam={handleImportExamToTurma}
+          onDeleteExam={(examId) => examMutations.deleteExam.mutate(examId, { onSuccess: () => toast({ title: 'Prova excluída' }) })}
+          onOpenExam={handleOpenExam}
         />
       </main>
 
