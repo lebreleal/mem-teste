@@ -1,0 +1,367 @@
+// ============= Refactored Dashboard.tsx =============
+
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+import ImportCardsDialog from '@/components/ImportCardsDialog';
+import AICreateDeckDialog from '@/components/AICreateDeckDialog';
+import CreditsDialog from '@/components/CreditsDialog';
+
+import { useDashboardState } from '@/components/dashboard/useDashboardState';
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import DashboardActions from '@/components/dashboard/DashboardActions';
+import DeckList from '@/components/dashboard/DeckList';
+import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
+import PremiumModal from '@/components/dashboard/PremiumModal';
+
+import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, getTurmaDeckNavInfo } from '@/services/deckService';
+import { supabase } from '@/integrations/supabase/client';
+
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const state = useDashboardState();
+
+  // Handlers that perform side effects or complex logic
+  const doCreate = (name: string) => {
+    if (state.createType === 'deck') {
+      state.createDeck.mutate(
+        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId },
+        {
+          onSuccess: () => {
+            state.setCreateType(null); state.setCreateName('');
+            toast({ title: 'Baralho criado!' });
+            if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+            state.setCreateParentDeckId(null);
+          },
+          onError: () => toast({ title: 'Erro ao criar baralho', variant: 'destructive' }),
+        }
+      );
+    } else {
+      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
+      });
+    }
+  };
+
+  const handleCreateSubmit = () => {
+    if (!state.createName.trim()) return;
+    const trimmed = state.createName.trim();
+    let hasDuplicate = false;
+    if (state.createType === 'deck') {
+      const siblings = state.createParentDeckId
+        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
+        : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
+      hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
+    } else {
+      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
+      hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
+    }
+
+    if (hasDuplicate) {
+      state.setDuplicateWarning({
+        name: trimmed,
+        type: state.createType!,
+        action: () => { doCreate(trimmed); state.setDuplicateWarning(null); },
+      });
+      return;
+    }
+    doCreate(trimmed);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!state.renameTarget || !state.renameName.trim()) return;
+    if (state.renameTarget.type === 'folder') {
+      state.updateFolder.mutate({ id: state.renameTarget.id, name: state.renameName.trim() }, {
+        onSuccess: () => { state.setRenameTarget(null); toast({ title: 'Renomeado!' }); },
+      });
+    } else {
+      try {
+        await renameDeck(state.renameTarget.id, state.renameName.trim());
+        state.setRenameTarget(null);
+        toast({ title: 'Renomeado!' });
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+      } catch {
+        toast({ title: 'Erro ao renomear', variant: 'destructive' });
+      }
+    }
+  };
+
+  const handleDeleteSubmit = async () => {
+    if (!state.deleteTarget) return;
+    try {
+      if (state.deleteTarget.type === 'folder') {
+        await deleteFolderCascade(state.deleteTarget.id);
+        toast({ title: 'Pasta e conteúdo excluídos' });
+      } else {
+        // Check if deck is shared in a community — detach first
+        const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', state.deleteTarget.id);
+        if (turmaRefs && turmaRefs.length > 0) {
+          // Remove all turma_decks references before deleting
+          await supabase.from('turma_decks').delete().eq('deck_id', state.deleteTarget.id);
+        }
+        await deleteDeckCascade(state.deleteTarget.id);
+        toast({ title: 'Baralho excluído' });
+      }
+      state.setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
+    }
+  };
+
+  const handleMoveSubmit = () => {
+    if (!state.moveTarget) return;
+    if (state.moveTarget.type === 'deck') {
+      state.moveDeck.mutate({ id: state.moveTarget.id, folderId: state.moveBrowseFolderId }, {
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Baralho movido!' }); },
+        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+      });
+    } else {
+      state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Pasta movida!' }); },
+        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+      });
+    }
+  };
+
+  const handleBulkMoveSubmit = async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    try {
+      await bulkMoveDecks(ids, state.bulkMoveTargetFolder);
+      toast({ title: `${ids.length} baralho(s) movido(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao mover', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+    state.setBulkMoveDeckOpen(false);
+    state.setBulkMoveTargetFolder(null);
+  };
+
+  const handleBulkArchive = async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    try {
+      await bulkArchiveDecks(ids);
+      toast({ title: `${ids.length} baralho(s) arquivado(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao arquivar', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    try {
+      await bulkDeleteDecks(ids);
+      toast({ title: `${ids.length} baralho(s) excluído(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+  };
+
+  const handleNavigateCommunity = async (sourceTurmaDeckId: string) => {
+    const info = await getTurmaDeckNavInfo(sourceTurmaDeckId);
+    if (info) {
+      if (info.lesson_id) navigate(`/turmas/${info.turma_id}/lessons/${info.lesson_id}`);
+      else navigate(`/turmas/${info.turma_id}`);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <DashboardHeader 
+        onCreditsOpen={() => state.setCreditsOpen(true)}
+        onPremiumOpen={() => state.setPremiumOpen(true)}
+      />
+
+      <main className="container mx-auto px-4 py-6">
+        {/* Quick Nav */}
+        <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
+          {[
+            { label: 'Comunidade', icon: Users, path: '/turmas' },
+            { label: 'Missões', icon: GraduationCap, path: '/missoes' },
+            { label: 'Provas', icon: BookOpen, path: '/exam/new' },
+          ].map(item => (
+            <button key={item.path} onClick={() => navigate(item.path)} className="flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
+              <item.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">{item.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <DashboardActions
+          currentFolderId={state.currentFolderId}
+          breadcrumb={state.breadcrumb}
+          onNavigateFolder={state.setCurrentFolderId}
+          onNavigateUp={() => {
+            const current = state.folders.find(f => f.id === state.currentFolderId);
+            state.setCurrentFolderId(current?.parent_id ?? null);
+          }}
+          hasDecks={state.currentDecks.length > 0}
+          deckSelectionMode={state.deckSelectionMode}
+          selectedCount={state.selectedDeckIds.size}
+          isAllSelected={state.selectedDeckIds.size === state.currentDecks.length}
+          toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
+          toggleSelectAll={() => {
+            if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
+            else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
+          }}
+          onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+          onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+          onCreateAI={() => state.setAiDeckOpen(true)}
+          onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+          onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setBulkMoveTargetFolder(null); }}
+          onBulkArchive={handleBulkArchive}
+          onBulkDelete={handleBulkDelete}
+        />
+
+        <DeckList
+          isLoading={state.isLoading}
+          currentFolders={state.currentFolders}
+          currentDecks={state.currentDecks}
+          
+          deckSelectionMode={state.deckSelectionMode}
+          selectedDeckIds={state.selectedDeckIds}
+          expandedDecks={state.expandedDecks}
+          toggleExpand={state.toggleExpand}
+          toggleDeckSelection={state.toggleDeckSelection}
+          getSubDecks={state.getSubDecks}
+          getAggregateStats={state.getAggregateStats}
+          getCommunityLinkId={state.getCommunityLinkId}
+          getFolderDueCount={state.getFolderDueCount}
+          getFolderCommunityLinkId={state.getFolderCommunityLinkId}
+          navigateToCommunity={handleNavigateCommunity}
+          
+          onFolderClick={state.setCurrentFolderId}
+          onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
+          onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
+          onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
+          onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
+          
+          onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); }}
+          onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+          onDeleteDeck={(d) => state.setDeleteTarget({ type: 'deck', id: d.id, name: d.name })}
+        />
+
+        {/* Archived section */}
+        {state.totalArchived > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => state.setShowArchived(!state.showArchived)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
+            >
+              <Archive className="h-4 w-4" />
+              <span>Arquivados ({state.totalArchived})</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${state.showArchived ? 'rotate-180' : ''}`} />
+            </button>
+            {state.showArchived && (
+              <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
+                {state.archivedFolders.map(folder => (
+                  <div key={folder.id} className="flex items-center gap-3 px-5 py-4">
+                    <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-muted-foreground truncate">{folder.name}</h3>
+                      <p className="text-xs text-muted-foreground">Pasta arquivada</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveFolder.mutate(folder.id)}>
+                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {state.archivedDecks.map(deck => (
+                  <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
+                      <p className="text-xs text-muted-foreground">Baralho arquivado</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
+                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name })}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <DashboardDialogs
+        createType={state.createType} setCreateType={state.setCreateType}
+        createName={state.createName} setCreateName={state.setCreateName}
+        createParentDeckId={state.createParentDeckId} setCreateParentDeckId={state.setCreateParentDeckId}
+        onCreateSubmit={handleCreateSubmit}
+        isCreating={state.createDeck.isPending || state.createFolder.isPending}
+
+        renameTarget={state.renameTarget} setRenameTarget={state.setRenameTarget}
+        renameName={state.renameName} setRenameName={state.setRenameName}
+        onRenameSubmit={handleRenameSubmit}
+
+        moveTarget={state.moveTarget} setMoveTarget={state.setMoveTarget}
+        moveBrowseFolderId={state.moveBrowseFolderId} setMoveBrowseFolderId={state.setMoveBrowseFolderId}
+        moveBreadcrumb={state.moveBreadcrumb} movableFolders={state.movableFolders} folders={state.folders}
+        onMoveSubmit={handleMoveSubmit}
+        onCreateFolderInMove={() => { state.setCreateType('folder'); state.setCreateName(''); }}
+
+        deleteTarget={state.deleteTarget} setDeleteTarget={state.setDeleteTarget}
+        onDeleteSubmit={handleDeleteSubmit}
+
+        duplicateWarning={state.duplicateWarning} setDuplicateWarning={state.setDuplicateWarning}
+        setCreateNameFromDuplicate={state.setCreateName}
+
+        bulkMoveDeckOpen={state.bulkMoveDeckOpen} setBulkMoveDeckOpen={state.setBulkMoveDeckOpen}
+        bulkMoveTargetFolder={state.bulkMoveTargetFolder} setBulkMoveTargetFolder={state.setBulkMoveTargetFolder}
+        selectedDeckCount={state.selectedDeckIds.size}
+        onBulkMoveSubmit={handleBulkMoveSubmit}
+      />
+
+      <ImportCardsDialog
+        open={state.importOpen} onOpenChange={state.setImportOpen}
+        onImport={async (deckName, cards) => {
+          try {
+            const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+            await importDeck(
+              user!.id,
+              deckName,
+              state.currentFolderId,
+              cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType }))
+            );
+            toast({ title: `${cards.length} cartões importados!` });
+            state.setImportOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['decks'] });
+          } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
+        }}
+      />
+
+      <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />
+      <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />
+      <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />
+    </div>
+  );
+};
+
+export default Dashboard;

@@ -1,1 +1,22 @@
-project_id = "sansumuehxdnmvnswygr"
+project_id = "paqlevwlsedkthdswiyy"
+
+[functions.generate-deck]
+verify_jwt = false
+
+[functions.grade-exam]
+verify_jwt = false
+
+[functions.enhance-import]
+verify_jwt = false
+
+[functions.enhance-card]
+verify_jwt = false
+
+[functions.ai-study-plan]
+verify_jwt = false
+
+[functions.generate-onboarding]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
