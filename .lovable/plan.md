@@ -1,175 +1,96 @@
 
+# Enviar Paginas como Imagens para a IA (Vision API)
 
-# Analise Arquitetural do Memo Cards
+## Problema Atual
 
-## Resumo Geral
+O sistema so extrai **texto** dos PDFs/documentos. Paginas com diagramas, graficos, formulas, tabelas visuais ou imagens sao tratadas como "sem conteudo" e geram cards ruins ou nenhum card. Isso e muito comum em materiais de faculdade (slides com imagens, esquemas, fotos de experimentos, etc).
 
-O projeto tem uma base arquitetural **solida e bem pensada**. A separacao em camadas (pages, hooks, services, types, lib) e clara, o README documenta bem as convencoes, e ha consistencia na maioria dos padroes. Dito isso, existem areas com oportunidades claras de melhoria. Vou classificar por severidade.
+## Solucao
 
----
+Enviar cada pagina como **imagem** (base64) para a API da OpenAI usando o recurso de **Vision**. Os modelos GPT-4o e GPT-4o-mini ja suportam receber imagens e "ler" tudo: texto, diagramas, graficos, formulas, tabelas.
 
-## PONTOS POSITIVOS (o que esta bom)
+O texto extraido continua sendo enviado junto como complemento, mas a imagem passa a ser a fonte principal de informacao.
 
-1. **Separacao em camadas bem definida** -- pages > hooks > services > types segue um padrao limpo e previsivel
-2. **Barrel exports** em `types/index.ts` e `services/index.ts` facilitam imports
-3. **README arquitetural** -- excelente para onboarding de novos devs
-4. **Context API bem aplicado** -- `TurmaDetailContext` centraliza estado complexo corretamente
-5. **Custom hooks de estado** -- `useDashboardState` extrai logica do componente
-6. **Services puros** -- `cardService`, `deckService` nao tem dependencia de React
-7. **Algoritmos isolados** -- SM-2 e FSRS em `lib/` com testes unitarios
-8. **Edge functions com utils compartilhados** -- `_shared/utils.ts` centraliza CORS, auth, energia
+## Como vai funcionar para o usuario
 
----
+Nada muda na interface. O usuario continua fazendo upload do arquivo, selecionando paginas e gerando cards. A diferenca e que a IA agora "enxerga" as paginas em vez de apenas ler o texto, gerando cards muito melhores para conteudo visual.
 
-## PROBLEMAS ENCONTRADOS
+## Mudancas Tecnicas
 
-### Severidade ALTA
+### 1. `src/lib/pdfUtils.ts` -- Renderizar paginas em resolucao maior
 
-#### 1. DeckDetail.tsx e um "God Component" (1491 linhas)
+Atualmente as paginas sao renderizadas em `scale: 0.4` (so para thumbnail). Vamos adicionar um segundo render em `scale: 1.0` para gerar uma imagem de qualidade suficiente para a IA interpretar.
 
-Este e o maior problema arquitetural do projeto. Um unico arquivo contem:
-- 30+ estados locais (`useState`)
-- Logica de CRUD de cards
-- Upload de imagens
-- Integracao com IA
-- 6+ modais/dialogs inline
-- Filtros, busca, selecao em lote
+- Novo campo `imageBase64` no tipo `PDFPageData` -- contem a imagem da pagina em base64 (JPEG, qualidade 0.6)
+- A thumbnail continua em `scale: 0.4` para a UI
+- A imagem para IA usa `scale: 1.0` (boa qualidade sem ser excessivamente grande)
 
-**Impacto**: Qualquer dev novo levara muito tempo para entender e modificar. Alto risco de bugs ao alterar qualquer parte.
-
-**Solucao**: Decompor seguindo o padrao ja usado em Dashboard e TurmaDetail:
-- Criar `src/components/deck-detail/DeckDetailContext.tsx` ou `useDeckDetailState.ts`
-- Extrair dialogs para `DeckDetailDialogs.tsx`
-- Extrair a lista de cards para `CardList.tsx`
-- Extrair o editor de cards para `CardEditorDialog.tsx`
-- Extrair stats para `DeckStatsCard.tsx`
-
----
-
-#### 2. Supabase direto em componentes de pagina
-
-A regra do README diz "Sem Supabase direto em componentes", mas `DeckDetail.tsx` faz chamadas diretas ao Supabase:
-- `supabase.from('cards').update(...)` nas linhas 355, 388
-- `supabase.from('cards').delete()` na linha 407
-- `supabase.storage.from('card-images').upload(...)` na linha 425
-- `supabase.functions.invoke('enhance-card', ...)` na linha 484
-
-O mesmo acontece em `TurmaDetailContext.tsx`:
-- `supabase.from('turma_lesson_files')` direto no contexto
-- `supabase.from('turma_exam_questions')` no `handleImportExam`
-
-**Impacto**: Viola a separacao de camadas, dificulta testes e reutilizacao.
-
-**Solucao**: Mover todas as chamadas Supabase para os respectivos services.
-
----
-
-#### 3. Uso excessivo de `any` em types
-
-O projeto desativa `noImplicitAny` no tsconfig e usa `any` extensivamente:
-- `TurmaDetailContext` -- quase todos os campos sao `any` (turma, members, user, mutations...)
-- `studyService.ts` -- `card: any`, `deckConfig: any`, `result: any`
-- `deckService.ts` -- castings `as any` em quase toda operacao Supabase
-
-**Impacto**: Perde-se toda a seguranca de tipos. Bugs de runtime que o TypeScript deveria pegar passam despercebidos.
-
-**Solucao**: Criar interfaces proprias para cada entidade (TurmaSubject, TurmaLesson, TurmaMember, etc.) e tipar progressivamente.
-
----
-
-### Severidade MEDIA
-
-#### 4. Queries duplicadas entre DeckDetail e useStudySession
-
-`DeckDetail.tsx` tem sua propria query `cards-aggregated` e `deck-stats` com logica de coleta de descendentes. O `useStudySession` tem logica similar. Nao ha um servico centralizado para "agregar stats de deck + descendentes".
-
-**Solucao**: Criar um `useDeckAggregatedStats(deckId)` hook reutilizavel.
-
----
-
-#### 5. Invalidacao de cache inconsistente
-
-Diferentes mutations invalidam queries de formas diferentes:
-- `useCards.deleteCard` invalida `['cards', deckId]` e `['decks']` mas NAO `['deck-stats']` ou `['cards-aggregated']`
-- `useStudySession.submitReview` invalida `['decks']`, `['deck-stats']`, `['cards-aggregated']`
-- `DeckDetail.handleDelete` invalida `['cards-aggregated']` e `['deck-stats']` manualmente
-
-**Impacto**: Dados desatualizados em certas telas apos operacoes.
-
-**Solucao**: Centralizar a lista de query keys relacionadas e criar um helper `invalidateDeckRelatedQueries(queryClient, deckId)`.
-
----
-
-#### 6. FlashCard.tsx tambem e muito grande (681 linhas)
-
-Contem `MultipleChoiceCard` como componente interno, alem de funcoes utilitarias (`renderCloze`, `renderOcclusion`, `formatMarkdown`).
-
-**Solucao**: Extrair `MultipleChoiceCard`, `ClozeCard`, `OcclusionCard` como componentes separados. Mover utils para `lib/cardRenderUtils.ts`.
-
----
-
-#### 7. Operacoes em lote sem batching
-
-`bulkMoveDecks`, `bulkArchiveDecks`, `bulkDeleteDecks` e `handleBulkDelete` (cards) fazem loops com `await` sequencial:
+### 2. `src/types/ai.ts` -- Adicionar campo `imageBase64` ao `PageItem`
 
 ```text
-for (const id of ids) {
-  await supabase.from('cards').delete().eq('id', id);
+export interface PageItem {
+  pageNumber: number;
+  thumbnailUrl?: string;
+  textContent: string;
+  imageBase64?: string;   // <-- novo: imagem da pagina para enviar a IA
+  selected: boolean;
 }
 ```
 
-**Impacto**: Lento para muitos itens; se um falha no meio, fica em estado inconsistente.
+### 3. `src/lib/docUtils.ts` -- Para PPTX/DOCX
 
-**Solucao**: Usar `.in('id', ids)` para operacoes em lote quando possivel, ou `Promise.all` com tratamento de erro.
+Documentos Office nao podem ser renderizados como imagem no browser facilmente. Para esses formatos, o comportamento atual (so texto) sera mantido. Apenas PDFs enviarao imagens.
 
----
+### 4. `src/components/ai-deck/useAIDeckFlow.ts` -- Enviar imagens junto com texto
 
-### Severidade BAIXA
+Na funcao `handleGenerate`, ao montar os batches (de 4 paginas):
+- Se a pagina tem `imageBase64`, inclui na chamada
+- O campo `pageImages` (array de strings base64) e enviado junto com `textContent`
 
-#### 8. Imports duplicados de tipos
+### 5. `src/services/aiService.ts` -- Novo campo `pageImages`
 
-`CardRow` e re-exportado em 3 lugares: `types/deck.ts`, `services/cardService.ts`, `hooks/useCards.ts`. Funciona, mas adiciona confusao sobre a "fonte da verdade".
+Adicionar campo opcional `pageImages?: string[]` ao `GenerateDeckParams` e passa-lo para a edge function.
 
----
+### 6. `supabase/functions/generate-deck/index.ts` -- Usar Vision API
 
-#### 9. Mistura de extensoes `.ts` e `.tsx` em hooks
+Esta e a mudanca principal. Quando `pageImages` estiver presente:
 
-`useAuth.tsx`, `useExamNotifications.tsx`, `use-mobile.tsx` usam `.tsx` (porque retornam JSX via Provider), enquanto os demais usam `.ts`. Isso e tecnicamente correto, mas nao ha documentacao explicando a convencao.
+- Montar o campo `content` da mensagem do usuario como um array (formato multimodal da OpenAI):
+  - Primeiro item: texto (o prompt com instrucoes + texto extraido)
+  - Itens seguintes: cada imagem como `{ type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }`
+- O modelo GPT-4o e GPT-4o-mini ja aceitam esse formato nativamente
+- Quando nao tem imagens, continua funcionando exatamente como hoje (so texto)
 
----
+Exemplo do formato multimodal:
+```text
+messages: [
+  { role: "system", content: "..." },
+  { role: "user", content: [
+    { type: "text", text: "prompt com instrucoes..." },
+    { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/..." } },
+    { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/..." } },
+  ]}
+]
+```
 
-#### 10. Ausencia de Error Boundaries granulares
+### 7. Batch de 4 paginas (conforme ja aprovado)
 
-Existe um `ErrorBoundary.tsx` generico, mas nao e usado em sub-arvores criticas (Study, DeckDetail). Um erro em qualquer sub-componente derruba a pagina inteira.
+O batching de 4 paginas continua valendo. Cada batch envia ate 4 imagens + texto combinado. Isso mantem o tamanho da requisicao gerenciavel (~200-400KB por batch com JPEG comprimido).
 
----
+## Limites e protecoes
 
-## FACILIDADE PARA OUTRO PROGRAMADOR (Nota: 7/10)
+- Imagens renderizadas em JPEG qualidade 0.6 e `scale: 1.0` -- cada pagina fica ~50-100KB
+- Maximo de 4 imagens por chamada (batch de 4)
+- Texto continua sendo enviado como complemento (ajuda a IA quando o OCR dela falhar em algo)
+- Para DOCX/PPTX: continua so texto (sem imagem) -- limitacao tecnica do browser
+- Custo de energia nao muda para o usuario
 
-| Aspecto | Nota | Comentario |
-|---------|------|------------|
-| Estrutura de diretorios | 9/10 | Clara e bem documentada |
-| README | 9/10 | Excelente guia arquitetural |
-| Consistencia de padroes | 6/10 | Dashboard e Turma seguem o padrao; DeckDetail nao |
-| Tipagem | 4/10 | Muito `any`, dificulta entendimento de contratos |
-| Tamanho dos arquivos | 5/10 | DeckDetail e FlashCard sao muito grandes |
-| Naming conventions | 8/10 | Consistente (useX, xService, etc.) |
-| Separacao de concerns | 6/10 | Boa na teoria, quebrada na pratica em alguns lugares |
+## Resumo das alteracoes
 
----
-
-## PLANO DE ACAO RECOMENDADO (por prioridade)
-
-1. **Decompor DeckDetail.tsx** -- maior ganho imediato de legibilidade
-2. **Eliminar Supabase direto em paginas** -- respeitar a camada de services
-3. **Tipar TurmaDetailContext** -- substituir `any` por interfaces reais
-4. **Centralizar invalidacao de cache** -- um helper para queries relacionadas a decks
-5. **Extrair sub-componentes do FlashCard** -- por tipo de card
-6. **Usar batch operations** -- `.in()` ao inves de loops sequenciais
-
----
-
-## CONCLUSAO
-
-O projeto tem uma **fundacao arquitetural boa** com convencoes claras documentadas. Os problemas existentes sao principalmente de **disciplina de execucao** -- o padrao correto ja esta estabelecido (veja Dashboard e TurmaDetail), mas nem todas as partes do codigo o seguem. O maior ofensor e o `DeckDetail.tsx` que concentra demais. Com as melhorias sugeridas, a base de codigo ficaria significativamente mais facil de manter e entender por qualquer programador.
-
+| Arquivo | O que muda |
+|---|---|
+| `src/types/ai.ts` | Novo campo `imageBase64` em `PageItem` |
+| `src/lib/pdfUtils.ts` | Render em `scale:1.0` e exportar base64 |
+| `src/services/aiService.ts` | Novo campo `pageImages` no `GenerateDeckParams` |
+| `src/components/ai-deck/useAIDeckFlow.ts` | Batch de 4 + enviar imagens |
+| `supabase/functions/generate-deck/index.ts` | Formato multimodal (vision) na chamada OpenAI |
