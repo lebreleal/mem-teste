@@ -34,6 +34,17 @@ export interface TokenUsageSummary {
   total_energy_cost: number;
 }
 
+export interface TokenUsageEntry {
+  id: string;
+  created_at: string;
+  feature_key: string;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  energy_cost: number;
+}
+
 export interface StudyDay {
   study_date: string;
   cards_reviewed: number;
@@ -95,11 +106,17 @@ export const useAdminUsers = () => {
     return (data as any[]) || [];
   };
 
+  const getUserTokenUsageDetailed = async (userId: string, days = 30): Promise<TokenUsageEntry[]> => {
+    const { data, error } = await supabase.rpc('admin_get_user_token_usage_detailed' as any, { p_user_id: userId, p_days: days });
+    if (error) { toast({ title: 'Erro', description: 'Falha ao carregar consumo detalhado.', variant: 'destructive' }); return []; }
+    return (data as any[]) || [];
+  };
+
   const getUserStudyHistory = async (userId: string, days = 90): Promise<StudyDay[]> => {
     const { data, error } = await supabase.rpc('admin_get_user_study_history', { p_user_id: userId, p_days: days });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar histórico.', variant: 'destructive' }); return []; }
     return (data as any[]) || [];
   };
 
-  return { users, loading, search, setSearch, fetchUsers, updateProfile, getUserDecks, getUserTokenUsage, getUserStudyHistory };
+  return { users, loading, search, setSearch, fetchUsers, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory };
 };

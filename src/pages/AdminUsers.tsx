@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
-import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type StudyDay } from '@/hooks/useAdminUsers';
+import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay } from '@/hooks/useAdminUsers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -29,12 +29,13 @@ const calcCostUSD = (model: string, promptTokens: number, completionTokens: numb
 const AdminUsers = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
-  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserStudyHistory } = useAdminUsers();
+  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory } = useAdminUsers();
   
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
   const [editState, setEditState] = useState<Partial<AdminProfile>>({});
   const [decks, setDecks] = useState<UserDeck[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageSummary[]>([]);
+  const [tokenUsageDetailed, setTokenUsageDetailed] = useState<TokenUsageEntry[]>([]);
   const [studyHistory, setStudyHistory] = useState<StudyDay[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,8 +55,8 @@ const AdminUsers = () => {
     setSelectedUser(user);
     setEditState({ name: user.name, energy: user.energy, memocoins: user.memocoins, is_banned: user.is_banned });
     setLoadingDetail(true);
-    const [d, t, s] = await Promise.all([getUserDecks(user.id), getUserTokenUsage(user.id), getUserStudyHistory(user.id)]);
-    setDecks(d); setTokenUsage(t); setStudyHistory(s);
+    const [d, t, td, s] = await Promise.all([getUserDecks(user.id), getUserTokenUsage(user.id), getUserTokenUsageDetailed(user.id), getUserStudyHistory(user.id)]);
+    setDecks(d); setTokenUsage(t); setTokenUsageDetailed(td); setStudyHistory(s);
     setLoadingDetail(false);
   };
 
@@ -216,6 +217,20 @@ const AdminUsers = () => {
                             </p>
                           </div>
                         </div>
+                        <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-muted-foreground">
+                          <div>
+                            <p>Total chamadas</p>
+                            <p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_calls), 0)}</p>
+                          </div>
+                          <div>
+                            <p>Total tokens</p>
+                            <p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_tokens_sum), 0).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p>Créditos IA</p>
+                            <p className="font-mono font-medium text-foreground">⚡ {tokenUsage.reduce((s, t) => s + Number(t.total_energy_cost), 0)}</p>
+                          </div>
+                        </div>
                         {usdToBrl && (
                           <p className="text-[10px] text-muted-foreground mt-2">
                             Câmbio: 1 USD = {usdToBrl.toFixed(2)} BRL (tempo real)
@@ -225,42 +240,44 @@ const AdminUsers = () => {
                     </Card>
                   )}
 
-                  {tokenUsage.map((t, i) => {
-                    const costUSD = calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens));
+                  {/* Detailed chronological log */}
+                  <h3 className="font-semibold text-sm text-muted-foreground pt-2">Histórico Detalhado</h3>
+                  {tokenUsageDetailed.map((entry) => {
+                    const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens));
                     const costBRL = usdToBrl ? costUSD * usdToBrl : null;
                     return (
-                      <Card key={i}>
+                      <Card key={entry.id}>
                         <CardContent className="py-3 px-4">
                           <div className="flex items-center justify-between">
-                           <div>
-                              <p className="font-medium text-sm">{t.feature_key}</p>
-                              <p className="text-xs text-muted-foreground">Modelo: {t.model}</p>
+                            <div>
+                              <p className="font-medium text-sm">{entry.feature_key}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
+                              </p>
                             </div>
                             <div className="text-right">
-                              <p className="font-mono text-sm font-semibold">{Number(t.total_tokens_sum).toLocaleString()} tokens</p>
-                              <p className="text-xs text-muted-foreground">{Number(t.total_calls)} chamadas</p>
+                              <Badge variant="secondary" className="text-xs font-mono">{entry.model}</Badge>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                            <span>Prompt: {Number(t.total_prompt_tokens).toLocaleString()}</span>
-                            <span>Completion: {Number(t.total_completion_tokens).toLocaleString()}</span>
-                            <span className="text-primary font-medium">⚡ {Number(t.total_energy_cost)} créditos</span>
+                            <span>Prompt: {Number(entry.prompt_tokens).toLocaleString()}</span>
+                            <span>Completion: {Number(entry.completion_tokens).toLocaleString()}</span>
+                            <span>Total: {Number(entry.total_tokens).toLocaleString()}</span>
+                            <span className="text-primary font-medium">⚡ {Number(entry.energy_cost)}</span>
                           </div>
-                          <div className="flex gap-4 mt-1.5 text-xs">
-                            <span className="font-mono text-primary font-medium">
-                              ${costUSD.toFixed(4)}
-                            </span>
+                          <div className="flex gap-4 mt-1 text-xs">
+                            <span className="font-mono text-primary font-medium">${costUSD.toFixed(4)}</span>
                             {costBRL !== null && (
-                              <span className="font-mono text-primary font-medium">
-                                R$ {costBRL.toFixed(4)}
-                              </span>
+                              <span className="font-mono text-primary font-medium">R$ {costBRL.toFixed(4)}</span>
                             )}
                           </div>
                         </CardContent>
                       </Card>
                     );
                   })}
-                  {tokenUsage.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhum consumo registrado.</p>}
+                  {tokenUsageDetailed.length === 0 && tokenUsage.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">Nenhum consumo registrado.</p>
+                  )}
                 </>
               )}
             </TabsContent>
