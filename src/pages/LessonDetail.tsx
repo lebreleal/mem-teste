@@ -169,6 +169,19 @@ const LessonDetail = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['lesson-content-folders', lessonId] }); toast({ title: 'Pasta removida!' }); },
   });
 
+  const moveItem = useMutation({
+    mutationFn: async ({ itemType, itemId, targetFolderId }: { itemType: 'file' | 'deck'; itemId: string; targetFolderId: string | null }) => {
+      const table = itemType === 'file' ? 'turma_lesson_files' : 'turma_decks';
+      const { error } = await supabase.from(table as any).update({ content_folder_id: targetFolderId } as any).eq('id', itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lesson-files', lessonId] });
+      queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] });
+      toast({ title: 'Item movido!' });
+    },
+  });
+
   // Sharer profiles
   const sharerIds = [...new Set(lessonDecks.map(d => d.shared_by))];
   const { data: sharerProfiles = [] } = useQuery({
@@ -460,10 +473,13 @@ const LessonDetail = () => {
           isAddingToCollection={addToCollection.isPending}
           isDownloading={downloadDeck.isPending}
           turmaId={turmaId!}
+          lessonId={lessonId}
           subscriptionPrice={turma.subscription_price}
           onCreateFolder={(name, parentId) => createContentFolder.mutate({ name, parentId })}
           onRenameFolder={(folderId, newName) => renameContentFolder.mutate({ folderId, newName })}
           onDeleteFolder={(folderId) => deleteContentFolder.mutate(folderId)}
+          onMoveItem={(itemType, itemId, targetFolderId) => moveItem.mutate({ itemType, itemId, targetFolderId })}
+          onNavigateToExamCreate={() => navigate(`/turmas/${turmaId}/exams/create?lessonId=${lessonId}&subjectId=${lesson?.subject_id || ''}`)}
         />
       </main>
 
