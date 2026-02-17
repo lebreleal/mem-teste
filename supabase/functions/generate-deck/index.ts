@@ -5,7 +5,7 @@ import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTo
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const DEFAULT_SYSTEM_PROMPT = "Você é um gerador de flashcards educacionais de alta qualidade. Quando imagens de páginas forem fornecidas, analise TODO o conteúdo visual: texto, diagramas, gráficos, fórmulas, tabelas e imagens. Use as imagens como fonte PRINCIPAL de informação. Responda APENAS com o JSON solicitado, sem texto adicional.";
+const DEFAULT_SYSTEM_PROMPT = "Você é um gerador de flashcards educacionais. REGRA ABSOLUTA: Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido pelo usuário (texto e/ou imagens). NUNCA invente, complemente ou use conhecimento externo. Se o material é sobre medicina, gere cards de medicina. Se é sobre direito, gere cards de direito. Responda APENAS com o JSON solicitado, sem texto adicional. Se não conseguir extrair informação suficiente, gere poucos cards mas SEMPRE sobre o tema do material fornecido.";
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -90,9 +90,9 @@ Deno.serve(async (req) => {
           .replace("{{material}}", trimmedContent);
       } else {
         const materialSection = hasPageImages
-          ? (trimmedContent ? `\nTEXTO EXTRAÍDO (complementar às imagens):\n${trimmedContent}` : "\nAs imagens das páginas estão anexadas. Analise TODO o conteúdo visual.")
+          ? (trimmedContent ? `\nTEXTO EXTRAÍDO (complementar às imagens):\n${trimmedContent}` : "\nAs imagens das páginas estão anexadas abaixo.")
           : `\nMATERIAL:\n${trimmedContent}`;
-        prompt = `REGRAS:\n- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade de cartões que você julgar ideal para cobrir o conteúdo de forma completa.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n- Cubra conceitos-chave, definições, fatos e relações.\n- Evite perguntas triviais ou vagas.\n${hasPageImages ? "- ANALISE as imagens das páginas fornecidas. Elas são a fonte PRINCIPAL. Extraia informações de diagramas, gráficos, fórmulas, tabelas e todo conteúdo visual.\n" : ""}${customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : ""}\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}${materialSection}\n\nFORMATO DE SAÍDA (apenas JSON array, sem texto extra):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice", use:\n{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
+        prompt = `REGRA CRÍTICA: Gere cards EXCLUSIVAMENTE sobre o conteúdo fornecido abaixo (texto e/ou imagens). NÃO use conhecimento externo. NÃO invente informações que não estejam no material.\n\nREGRAS:\n- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade de cartões que você julgar ideal para cobrir o conteúdo de forma completa.'}\n- ${getDetailInstruction(detail)}\n- TUDO em PORTUGUÊS (ou na língua do material).\n- Cubra conceitos-chave, definições, fatos e relações PRESENTES NO MATERIAL.\n- Evite perguntas triviais ou vagas.\n${hasPageImages ? "- ANALISE as imagens das páginas fornecidas. Extraia informações de diagramas, gráficos, fórmulas, tabelas e todo conteúdo visual. Use SOMENTE o que está nas imagens.\n" : ""}${customInstructions ? `\nINSTRUÇÕES ADICIONAIS DO USUÁRIO:\n${customInstructions}` : ""}\n\nFORMATOS PERMITIDOS:\n${getFormatInstructions(formats)}${materialSection}\n\nFORMATO DE SAÍDA (apenas JSON array, sem texto extra):\n[{"front":"...","back":"...","type":"basic ou cloze"},...]\nPara type "multiple_choice", use:\n{"front":"pergunta","back":"","type":"multiple_choice","options":["A","B","C","D"],"correctIndex":0}`;
       }
     }
 

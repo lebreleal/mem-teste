@@ -1874,6 +1874,19 @@ export type Database = {
           total_tokens_sum: number
         }[]
       }
+      admin_get_user_token_usage_detailed: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          completion_tokens: number
+          created_at: string
+          energy_cost: number
+          feature_key: string
+          id: string
+          model: string
+          prompt_tokens: number
+          total_tokens: number
+        }[]
+      }
       admin_update_profile: {
         Args: {
           p_energy?: number
