@@ -232,6 +232,7 @@ const Dashboard = () => {
           isLoading={state.isLoading}
           currentFolders={state.currentFolders}
           currentDecks={state.currentDecks}
+          currentFolderId={state.currentFolderId}
           
           deckSelectionMode={state.deckSelectionMode}
           selectedDeckIds={state.selectedDeckIds}

@@ -12,6 +12,7 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { CREDITS_PER_PAGE } from '@/types/ai';
+import { usePendingDecks } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
@@ -31,6 +32,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { addPending, updatePending, removePending } = usePendingDecks();
 
   // Step
   const [step, setStep] = useState<Step>('upload');
@@ -63,6 +65,10 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Background generation tracking
+  const isBackgroundRef = useRef(false);
+  const pendingIdRef = useRef<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPages = pages.filter(p => p.selected);
@@ -76,6 +82,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     setGenProgress({ current: 0, total: 0, creditsUsed: 0 });
     setCards([]); setEditingIdx(null);
     setIsLoading(false); setIsSaving(false);
+    isBackgroundRef.current = false;
+    pendingIdRef.current = null;
   }, []);
 
   const toggleFormat = useCallback((f: CardFormat) => {
@@ -148,6 +156,38 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const selectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: true }))), []);
   const deselectAll = useCallback(() => setPages(prev => prev.map(p => ({ ...p, selected: false }))), []);
 
+  // === Save cards to DB (reusable for both foreground and background) ===
+  const saveCardsToDeck = useCallback(async (generatedCards: GeneratedCard[], name: string) => {
+    if (!user || generatedCards.length === 0) return;
+
+    let targetDeckId: string;
+    if (existingDeckId) {
+      targetDeckId = existingDeckId;
+    } else {
+      const deck = await deckService.createDeck(user.id, name.trim(), folderId ?? null);
+      targetDeckId = (deck as any).id;
+    }
+
+    const rows = generatedCards.map(c => {
+      let backContent = c.back;
+      if (c.type === 'multiple_choice' && c.options) {
+        backContent = JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 });
+      }
+      return { frontContent: c.front, backContent, cardType: c.type || 'basic' };
+    });
+
+    try {
+      await cardService.createCards(targetDeckId, rows);
+    } catch (cErr: any) {
+      if (!existingDeckId) await deckService.deleteDeck(targetDeckId);
+      throw cErr;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['decks'] });
+    queryClient.invalidateQueries({ queryKey: ['cards', targetDeckId] });
+    return targetDeckId;
+  }, [user, existingDeckId, folderId, queryClient]);
+
   // === Generation (batch of 4 pages) ===
   const handleGenerate = useCallback(async () => {
     const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
@@ -155,6 +195,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       toast({ title: 'Nenhuma página selecionada', description: 'As páginas selecionadas não possuem conteúdo extraível.', variant: 'destructive' });
       return;
     }
+
+    const pendingId = `pending-${Date.now()}`;
+    pendingIdRef.current = pendingId;
 
     setStep('generating'); setIsLoading(true);
     const BATCH_SIZE = 4;
@@ -168,7 +211,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       const batchCost = batch.length * getCost(CREDITS_PER_PAGE);
       const batchCardCount = targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / totalBatches)) : 0;
 
-      setGenProgress({ current: b + 1, total: totalBatches, creditsUsed: (b + 1) * batch.length * getCost(CREDITS_PER_PAGE) });
+      const progress = { current: b + 1, total: totalBatches, creditsUsed: (b + 1) * batch.length * getCost(CREDITS_PER_PAGE) };
+      setGenProgress(progress);
+
+      // Update pending store if running in background
+      if (isBackgroundRef.current && pendingIdRef.current) {
+        updatePending(pendingIdRef.current, { progress: { current: b + 1, total: totalBatches } });
+      }
+
       try {
         const newCards = await aiService.generateDeckCards({
           textContent: batchText,
@@ -181,53 +231,65 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       } catch (err) { console.error(`Batch ${b + 1} failed:`, err); }
     }
 
+    queryClient.invalidateQueries({ queryKey: ['energy'] });
+
+    // If running in background, auto-save
+    if (isBackgroundRef.current && pendingIdRef.current) {
+      if (allCards.length > 0) {
+        updatePending(pendingIdRef.current, { status: 'saving' });
+        try {
+          await saveCardsToDeck(allCards, deckName);
+          toast({ title: '🧠 Baralho criado!', description: `${allCards.length} cartões salvos em "${deckName}"` });
+        } catch (err: any) {
+          toast({ title: 'Erro ao salvar baralho', description: err?.message, variant: 'destructive' });
+        }
+      } else {
+        toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
+      }
+      removePending(pendingIdRef.current);
+      resetState();
+      return;
+    }
+
+    // Foreground flow
     if (allCards.length === 0) {
       toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
       setStep('config');
     } else {
       setCards(allCards); setStep('review');
     }
-    queryClient.invalidateQueries({ queryKey: ['energy'] });
     setIsLoading(false);
-  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient]);
+  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState]);
 
-  // === Save ===
+  // === Dismiss to background ===
+  const handleDismissToBackground = useCallback(() => {
+    if (!pendingIdRef.current) return;
+
+    isBackgroundRef.current = true;
+    addPending({
+      id: pendingIdRef.current,
+      name: deckName || 'Baralho IA',
+      folderId: folderId ?? null,
+      status: 'generating',
+      progress: { current: genProgress.current, total: genProgress.total },
+    });
+
+    onOpenChange(false);
+    toast({ title: '⏳ Gerando em segundo plano', description: 'O baralho aparecerá no dashboard quando estiver pronto.' });
+  }, [deckName, folderId, genProgress, addPending, onOpenChange, toast]);
+
+  // === Save (foreground) ===
   const handleSave = useCallback(async () => {
     if (!user || cards.length === 0) return;
     setIsSaving(true);
     try {
-      let targetDeckId: string;
-
-      if (existingDeckId) {
-        targetDeckId = existingDeckId;
-      } else {
-        const deck = await deckService.createDeck(user.id, deckName.trim(), folderId ?? null);
-        targetDeckId = (deck as any).id;
-      }
-
-      const rows = cards.map(c => {
-        let backContent = c.back;
-        if (c.type === 'multiple_choice' && c.options) {
-          backContent = JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 });
-        }
-        return { frontContent: c.front, backContent, cardType: c.type || 'basic' };
-      });
-
-      try {
-        await cardService.createCards(targetDeckId, rows);
-      } catch (cErr: any) {
-        if (!existingDeckId) await deckService.deleteDeck(targetDeckId);
-        throw cErr;
-      }
-
+      const targetDeckId = await saveCardsToDeck(cards, deckName);
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['cards', targetDeckId] });
       resetState(); onOpenChange(false);
-      if (!existingDeckId) navigate(`/decks/${targetDeckId}`);
+      if (!existingDeckId && targetDeckId) navigate(`/decks/${targetDeckId}`);
     } catch (err: any) { toast({ title: 'Erro ao salvar', description: err?.message, variant: 'destructive' }); }
     finally { setIsSaving(false); }
-  }, [user, cards, existingDeckId, deckName, folderId, toast, queryClient, resetState, onOpenChange, navigate]);
+  }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck]);
 
   // === Edit helpers ===
   const startEdit = useCallback((i: number) => { setEditingIdx(i); setEditFront(cards[i].front); setEditBack(cards[i].back); }, [cards]);
@@ -252,7 +314,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     selectedPages, totalCredits, energy, model, setModel,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
-    handleGenerate, handleSave,
+    handleGenerate, handleSave, handleDismissToBackground,
     startEdit, saveEdit, deleteCard, toggleType,
     getCost,
   };

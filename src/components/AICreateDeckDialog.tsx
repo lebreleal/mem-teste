@@ -32,8 +32,20 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
     review: 'Revisar Cartões',
   };
 
+  // During generation, allow dismiss to background instead of blocking close
+  const handleDialogChange = (v: boolean) => {
+    if (!v && flow.step === 'generating') {
+      // Don't close — the dismiss button handles background generation
+      return;
+    }
+    if (!flow.busy) {
+      onOpenChange(v);
+      if (!v) flow.resetState();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!flow.busy) { onOpenChange(v); if (!v) flow.resetState(); } }}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90dvh] sm:max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
@@ -97,7 +109,11 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
         )}
 
         {flow.step === 'generating' && (
-          <GenerationProgress genProgress={flow.genProgress} />
+          <GenerationProgress
+            genProgress={flow.genProgress}
+            onDismiss={flow.handleDismissToBackground}
+            canDismiss={!existingDeckId}
+          />
         )}
 
         {flow.step === 'review' && (
