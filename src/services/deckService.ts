@@ -90,10 +90,10 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
 }
 
 /** Create a new deck. */
-export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null) {
+export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null, algorithmMode?: string) {
   const { data, error } = await supabase
     .from('decks')
-    .insert({ name, user_id: userId, folder_id: folderId ?? null, parent_deck_id: parentDeckId ?? null } as any)
+    .insert({ name, user_id: userId, folder_id: folderId ?? null, parent_deck_id: parentDeckId ?? null, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
     .select()
     .single();
   if (error) throw error;
@@ -207,10 +207,10 @@ export async function createAlgorithmCopy(userId: string, deckId: string, algori
 }
 
 /** Import a deck with cards. Returns the new deck. */
-export async function importDeck(userId: string, name: string, folderId: string | null, cards: { frontContent: string; backContent: string; cardType: string }[]) {
+export async function importDeck(userId: string, name: string, folderId: string | null, cards: { frontContent: string; backContent: string; cardType: string }[], algorithmMode?: string) {
   const { data: newDeck, error: deckErr } = await supabase
     .from('decks')
-    .insert({ name, user_id: userId, folder_id: folderId } as any)
+    .insert({ name, user_id: userId, folder_id: folderId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
     .select()
     .single();
   if (deckErr || !newDeck) throw deckErr;

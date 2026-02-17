@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
+import { usePremium } from '@/hooks/usePremium';
 import { useAIModel } from '@/hooks/useAIModel';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { CREDITS_PER_PAGE } from '@/types/ai';
@@ -28,6 +29,7 @@ interface UseAIDeckFlowParams {
 export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
+  const { isPremium } = usePremium();
   const { model, setModel, getCost, MODEL_CONFIG } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -178,7 +180,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     } else {
       // Resolve unique name to avoid duplicates
       const uniqueName = await deckService.resolveUniqueDeckName(user.id, name.trim());
-      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null);
+      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, null, isPremium ? 'fsrs' : 'sm2');
       targetDeckId = (deck as any).id;
     }
 
