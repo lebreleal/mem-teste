@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
 
     // Build user message content: multimodal if pageImages exist, plain text otherwise
     let userContent: any;
-    if (hasImages) {
+    if (hasPageImages) {
       userContent = [
         { type: "text", text: prompt },
         ...pageImages.map((img: string) => ({
