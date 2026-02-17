@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     const userId = user.id;
 
-    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, action, existingCards, aiModel, energyCost } = await req.json();
+    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, action, existingCards, aiModel, energyCost, pageImages } = await req.json();
 
     if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
     if (!textContent) return jsonResponse({ error: "textContent é obrigatório" }, 400);
@@ -92,10 +92,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Build user message content: multimodal if pageImages exist, plain text otherwise
+    const hasImages = Array.isArray(pageImages) && pageImages.length > 0;
+    let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
+
+    if (hasImages) {
+      userContent = [
+        { type: "text", text: prompt },
+        ...pageImages.map((img: string) => ({
+          type: "image_url" as const,
+          image_url: { url: `data:image/jpeg;base64,${img}`, detail: "low" as const },
+        })),
+      ];
+    } else {
+      userContent = prompt;
+    }
+
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], temperature }),
     });
 
     if (!aiResponse.ok) {

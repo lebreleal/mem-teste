@@ -8,6 +8,7 @@ export interface PDFPageData {
   pageNumber: number;
   thumbnailUrl: string; // data URL
   textContent: string;
+  imageBase64?: string; // base64 image for AI vision
 }
 
 /**
@@ -26,14 +27,23 @@ export async function extractPDFPages(
     onProgress?.(i, totalPages);
     const page = await pdf.getPage(i);
 
-    // Render thumbnail
-    const viewport = page.getViewport({ scale: 0.4 }); // small for thumbnail
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d')!;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
+    // Render thumbnail (small for UI)
+    const thumbViewport = page.getViewport({ scale: 0.4 });
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = thumbViewport.width;
+    thumbCanvas.height = thumbViewport.height;
+    const thumbCtx = thumbCanvas.getContext('2d')!;
+    await page.render({ canvasContext: thumbCtx, viewport: thumbViewport }).promise;
+    const thumbnailUrl = thumbCanvas.toDataURL('image/jpeg', 0.7);
+
+    // Render full-res image for AI vision
+    const aiViewport = page.getViewport({ scale: 1.0 });
+    const aiCanvas = document.createElement('canvas');
+    aiCanvas.width = aiViewport.width;
+    aiCanvas.height = aiViewport.height;
+    const aiCtx = aiCanvas.getContext('2d')!;
+    await page.render({ canvasContext: aiCtx, viewport: aiViewport }).promise;
+    const imageBase64 = aiCanvas.toDataURL('image/jpeg', 0.6).split(',')[1]; // raw base64
 
     // Extract text
     const textData = await page.getTextContent();
@@ -43,7 +53,7 @@ export async function extractPDFPages(
       .replace(/\s+/g, ' ')
       .trim();
 
-    pages.push({ pageNumber: i, thumbnailUrl, textContent });
+    pages.push({ pageNumber: i, thumbnailUrl, textContent, imageBase64 });
   }
 
   return pages;
