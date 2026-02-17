@@ -5,7 +5,7 @@ import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTo
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const DEFAULT_SYSTEM_PROMPT = "Você é um gerador de flashcards educacionais. REGRA ABSOLUTA: Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido pelo usuário (texto e/ou imagens). NUNCA invente, complemente ou use conhecimento externo. Se o material é sobre medicina, gere cards de medicina. Se é sobre direito, gere cards de direito. Responda APENAS com o JSON solicitado, sem texto adicional. Se não conseguir extrair informação suficiente, gere poucos cards mas SEMPRE sobre o tema do material fornecido.";
+const DEFAULT_SYSTEM_PROMPT = "Você é um assistente educacional especializado em criar flashcards de estudo a partir de materiais acadêmicos. Sua tarefa é analisar o conteúdo educacional fornecido (texto e/ou imagens de páginas de documentos acadêmicos como PDFs, slides e apostilas) e gerar flashcards de alta qualidade. Gere cartões EXCLUSIVAMENTE sobre o conteúdo fornecido. NUNCA invente ou use conhecimento externo. Responda APENAS com o JSON solicitado, sem texto adicional.";
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
         { type: "text", text: prompt },
         ...pageImages.map((img: string) => ({
           type: "image_url",
-          image_url: { url: `data:image/jpeg;base64,${img}`, detail: "low" },
+          image_url: { url: img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`, detail: "auto" },
         })),
       ];
     } else {
@@ -139,8 +139,37 @@ Deno.serve(async (req) => {
 
     let cards: { front: string; back: string; type: string }[];
     try { cards = JSON.parse(jsonStr); } catch {
-      console.error("Parse failed:", rawContent);
-      return jsonResponse({ error: "Formato inválido. Tente novamente." }, 500);
+      console.error("Parse failed, raw:", rawContent.substring(0, 500));
+      // If AI refused or returned non-JSON, retry with text-only (no images) as fallback
+      if (hasPageImages && trimmedContent.trim()) {
+        console.log("Retrying without images (text-only fallback)...");
+        const fallbackResponse = await fetch(OPENAI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+          body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature }),
+        });
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const fallbackRaw = fallbackData.choices?.[0]?.message?.content ?? "";
+          const fm = fallbackRaw.match(/\[[\s\S]*\]/);
+          if (fm) {
+            try {
+              cards = JSON.parse(fm[0]);
+              await logTokenUsage(supabase, userId, "generate_deck_fallback", selectedModel, fallbackData.usage, 0);
+              // Skip to card processing below
+            } catch {
+              console.error("Fallback parse also failed:", fallbackRaw.substring(0, 300));
+              return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas ou um conteúdo diferente." }, 500);
+            }
+          } else {
+            return jsonResponse({ error: "A IA não conseguiu processar este conteúdo. Tente selecionar menos páginas." }, 500);
+          }
+        } else {
+          return jsonResponse({ error: "Falha ao processar conteúdo. Tente novamente." }, 500);
+        }
+      } else {
+        return jsonResponse({ error: "A IA retornou um formato inválido. Tente novamente." }, 500);
+      }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) return jsonResponse({ error: "Nenhum cartão gerado." }, 400);
