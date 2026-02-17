@@ -131,7 +131,6 @@ const TurmaDetailInner = () => {
       <CreateLessonDialog
         open={!!showAddLesson} onOpenChange={open => !open && setShowAddLesson(null)}
         name={newName} onNameChange={setNewName}
-        date={newLessonDate} onDateChange={setNewLessonDate}
         isPublished={newLessonPublished} onPublishedChange={setNewLessonPublished}
         onSubmit={handleCreateLesson} isPending={mutations.createLesson.isPending}
       />
@@ -149,7 +148,6 @@ const TurmaDetailInner = () => {
       <EditLessonDialog
         open={!!editingLesson} onOpenChange={open => !open && setEditingLesson(null)}
         name={editItemName} onNameChange={setEditItemName}
-        date={editLessonDate} onDateChange={setEditLessonDate}
         onSubmit={() => {
           mutations.updateLesson.mutate({ id: editingLesson!.id, name: editItemName.trim(), lessonDate: editLessonDate || null }, {
             onSuccess: () => { setEditingLesson(null); toast({ title: 'Atualizado!' }); },
