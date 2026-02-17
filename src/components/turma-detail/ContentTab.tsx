@@ -9,10 +9,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   ArrowLeft, Plus, FolderOpen, FolderPlus, ChevronRight, MoreVertical,
-  Layers, Pencil, Trash2, Paperclip, Calendar as CalendarIcon, Eye, EyeOff, BookOpen,
+  Layers, Pencil, Trash2, Paperclip, Eye, EyeOff, BookOpen,
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+
+
 import type { BreadcrumbItem } from './constants';
 
 interface ContentTabProps {
@@ -184,15 +184,9 @@ const ContentTab = ({
                     )}
                   </div>
                   <div className="flex items-center gap-2.5 mt-1 text-xs text-muted-foreground">
-                    {lesson.lesson_date && (
-                      <span className="inline-flex items-center gap-1 tabular-nums shrink-0">
-                        <CalendarIcon className="h-3 w-3" />
-                        {format(new Date(lesson.lesson_date + 'T00:00:00'), "dd MMM", { locale: ptBR })}
-                      </span>
-                    )}
                     {lessonCardCount > 0 && <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {lessonCardCount}</span>}
                     {lessonFileCount > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" /> {lessonFileCount}</span>}
-                    {!lesson.lesson_date && lessonCardCount === 0 && lessonFileCount === 0 && <span>Vazio</span>}
+                    {lessonCardCount === 0 && lessonFileCount === 0 && <span>Vazio</span>}
                   </div>
                 </div>
                 {canEdit && (

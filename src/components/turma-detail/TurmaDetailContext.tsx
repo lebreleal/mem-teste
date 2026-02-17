@@ -251,7 +251,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const handleCreateLesson = () => {
-    if (!newName.trim() || !newLessonDate) return;
+    if (!newName.trim()) return;
     const trimmed = newName.trim().slice(0, 60);
     mutations.createLesson.mutate({ subjectId: contentFolderId, name: trimmed, description: newDesc.trim(), lessonDate: newLessonDate || null, isPublished: newLessonPublished }, {
       onSuccess: () => { setShowAddLesson(null); setNewName(''); setNewDesc(''); setNewLessonDate(''); setNewLessonPublished(true); toast({ title: 'Conteúdo criado!' }); },

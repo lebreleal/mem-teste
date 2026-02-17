@@ -38,27 +38,18 @@ interface CreateLessonDialogProps {
   onOpenChange: (v: boolean) => void;
   name: string;
   onNameChange: (v: string) => void;
-  date: string;
-  onDateChange: (v: string) => void;
   isPublished: boolean;
   onPublishedChange: (v: boolean) => void;
   onSubmit: () => void;
   isPending: boolean;
 }
 
-export const CreateLessonDialog = ({ open, onOpenChange, name, onNameChange, date, onDateChange, isPublished, onPublishedChange, onSubmit, isPending }: CreateLessonDialogProps) => (
+export const CreateLessonDialog = ({ open, onOpenChange, name, onNameChange, isPublished, onPublishedChange, onSubmit, isPending }: CreateLessonDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader><DialogTitle>Novo Conteúdo</DialogTitle></DialogHeader>
       <div className="space-y-3">
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-foreground">Data *</label>
-          <Input type="date" value={date} onChange={e => onDateChange(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-foreground">Título *</label>
-          <Input placeholder="Ex: Introdução ao React" maxLength={60} value={name} onChange={e => onNameChange(e.target.value)} />
-        </div>
+        <Input placeholder="Nome do conteúdo" maxLength={60} value={name} onChange={e => onNameChange(e.target.value)} autoFocus />
         <button type="button"
           className="flex items-center justify-between w-full rounded-lg border border-border/50 px-3 py-2.5 text-sm transition-colors hover:bg-muted/30"
           onClick={() => onPublishedChange(!isPublished)}>
@@ -70,7 +61,7 @@ export const CreateLessonDialog = ({ open, onOpenChange, name, onNameChange, dat
             <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${isPublished ? 'translate-x-4' : 'translate-x-0.5'}`} />
           </div>
         </button>
-        <Button onClick={onSubmit} disabled={!name.trim() || !date || isPending} className="w-full">
+        <Button onClick={onSubmit} disabled={!name.trim() || isPending} className="w-full">
           {isPending ? 'Criando...' : 'Criar'}
         </Button>
       </div>
@@ -106,25 +97,16 @@ interface EditLessonDialogProps {
   onOpenChange: (v: boolean) => void;
   name: string;
   onNameChange: (v: string) => void;
-  date: string;
-  onDateChange: (v: string) => void;
   onSubmit: () => void;
   isPending: boolean;
 }
 
-export const EditLessonDialog = ({ open, onOpenChange, name, onNameChange, date, onDateChange, onSubmit, isPending }: EditLessonDialogProps) => (
+export const EditLessonDialog = ({ open, onOpenChange, name, onNameChange, onSubmit, isPending }: EditLessonDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="sm:max-w-sm">
       <DialogHeader><DialogTitle>Editar Conteúdo</DialogTitle></DialogHeader>
       <div className="space-y-3">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Nome</label>
-          <Input placeholder="Nome" value={name} onChange={e => onNameChange(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Data</label>
-          <Input type="date" value={date} onChange={e => onDateChange(e.target.value)} />
-        </div>
+        <Input placeholder="Nome" value={name} onChange={e => onNameChange(e.target.value)} autoFocus />
         <Button className="w-full" disabled={!name.trim() || isPending} onClick={onSubmit}>
           {isPending ? 'Salvando...' : 'Salvar'}
         </Button>
