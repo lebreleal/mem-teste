@@ -1,109 +1,132 @@
+## Plano: Sistema de Vinculo Inteligente para Provas + Sincronizacao com Deteccao de Alteracoes
 
+### Resumo
 
-## Plano de Refatoracao: Sistema de Vinculo, Coroa e Provas
-
-### Problemas Identificados
-
-1. **Coroa nao aparece no header da comunidade**: O componente `TurmaSubHeader` so mostra a coroa quando `hasSubscription` e `true` (ou seja, `subscription_price > 0`). Se a comunidade tem preco 0 mas tem conteudo marcado como "so assinantes", a coroa nao aparece. Alem disso, membros comuns nao veem indicacao de que existe conteudo exclusivo.
-
-2. **Vinculo de deck quebra ao deletar card**: Quando o usuario deleta o deck vinculado no "Inicio", o campo `source_turma_deck_id` se perde, quebrando o link com a pasta/comunidade.
-
-3. **Provas nao tem sistema de vinculo**: Ao importar uma prova da comunidade, ela vai para um deck generico sem pasta vinculada, diferente do comportamento dos decks.
-
-4. **ContentTab.tsx e um monolito de 1184 linhas**: Mistura logica de negocio com UI, dificultando manutencao.
+Atualmente, ao clicar no olho de uma prova na comunidade, o sistema importa silenciosamente e navega direto. O usuario perde controle. Vamos alinhar o comportamento com o dos baralhos (deck) e adicionar deteccao de alteracoes do dono.
 
 ---
 
-### Solucao Proposta
+### 1. Exams: Mesmo padrao de vinculo dos Decks
 
-#### 1. Coroa sempre visivel no header (para comunidades com conteudo exclusivo)
+**Problema atual**: `handleOpenExam` importa e navega automaticamente. O usuario nao tem opcao de "Adicionar a minha colecao" vs "Abrir".
 
-**Logica atual** (TurmaSubHeader.tsx, linhas 56-65):
-- Coroa so aparece se `hasSubscription` (preco > 0)
+**Solucao**: Trocar o botao de olho (Eye) por dois botoes, identico ao que decks fazem:
 
-**Nova logica**:
-- Mostrar coroa se `hasSubscription` e `true` OU se existir qualquer conteudo marcado como `subscribers_only` / `price_type !== 'free'`
-- Passar nova prop `hasExclusiveContent` para o SubHeader
-- Calcular no Context: verificar se algum deck, arquivo ou prova tem restricao de assinante
+- **Copy** (adicionar a colecao) -- se ainda nao importou
+- **Download/Sync** (atualizar) -- se ja tem vinculado
+- Ao clicar em Copy, importa para pasta vinculada com icone Link2, sem navegar
+- Ao clicar em Sync, abre dialog de confirmacao identico ao `confirmResync` dos decks
 
-#### 2. Proteger vinculo ao deletar deck no Dashboard
+**Arquivo**: `src/components/turma-detail/ContentTab.tsx` (secao exams, linhas 537-603)
+**Arquivo**: `src/components/turma-detail/content/useContentImport.ts` (refatorar `handleOpenExam`)
 
-**Problema**: Deletar o deck local (com `source_turma_deck_id`) remove o deck mas a pasta pai fica orfao.
+### 2. Deteccao de Alteracoes (Sync Inteligente)
 
-**Solucao**:
-- Ao deletar um deck que tem `source_turma_deck_id`, mostrar aviso: "Este baralho esta vinculado a uma comunidade. Ao excluir, o vinculo sera perdido."
-- No `DeckRow.tsx`, verificar `deck.source_turma_deck_id` antes de deletar e mostrar confirmacao
-- Alternativa: ao re-importar, verificar se a pasta (folder) da comunidade ja existe e reutiliza-la, mesmo sem deck vinculado dentro
+**Nova coluna no banco**: Adicionar `content_hash` (text) nas tabelas `turma_exams` e `turma_decks` (ou usar `updated_at` que ja existe).
 
-#### 3. Sistema de vinculo para provas (exams)
+**Logica**: Comparar `turma_exams.updated_at` com a data de importacao do exam local. Se o dono editou depois, mostrar badge "Atualizado" no item vinculado.
 
 **Implementacao**:
-- Ao importar prova da comunidade (`handleOpenExam`), criar ou reutilizar pasta de exams vinculada a comunidade (similar ao que decks fazem com `folders`)
-- Usar campo `source_turma_exam_id` (ja existe na tabela `exams`) para rastrear o vinculo
-- Criar pasta de exam (`exam_folders`) com nome da comunidade, similar ao que `addToCollection` faz para decks
-- Mostrar icone `Link2` ao lado do titulo da prova no Dashboard quando `source_turma_exam_id` existir
 
-#### 4. Refatorar ContentTab em modulos menores
+- Adicionar coluna `synced_at` (timestamptz) na tabela `exams` -- data da ultima sincronizacao
+- Adicionar coluna `synced_at` (timestamptz) na tabela `decks` -- mesma logica
+- Na comunidade: comparar `turma_exam.updated_at > exam_local.synced_at` para mostrar badge
+- No dashboard (ExamSetup / Dashboard): mostrar badge "Atualizacao disponivel" em pastas vinculadas
 
-Extrair em componentes dedicados:
-- `ContentHeader.tsx` -- breadcrumb + botoes de acao
-- `ContentFolderRow.tsx` -- render de cada pasta/subject  
-- `ContentFileRow.tsx` -- render de cada arquivo
-- `ContentDeckRow.tsx` -- render de cada deck da comunidade
-- `ContentExamRow.tsx` -- render de cada prova
-- `useContentMutations.ts` -- todas as mutations (upload, delete, move, reorder)
-- `useContentImport.ts` -- logica de importacao (addToCollection, downloadDeck, handleImportExam)
+**Migracao SQL**:
+
+```sql
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS synced_at timestamptz DEFAULT now();
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS synced_at timestamptz DEFAULT now();
+```
+
+### 3. Tela de Revisao de Alteracoes
+
+Quando o usuario clica em "Sincronizar", em vez de aplicar tudo cegamente, mostrar um Dialog com:
+
+- Lista de questoes adicionadas (novas)
+- Lista de questoes removidas (existem no local mas nao no original)
+- Lista de questoes modificadas (texto diferente)
+- Checkboxes para o usuario escolher quais alteracoes aplicar
+- Botao "Aplicar selecionadas" e "Aplicar todas"
+
+**Cards pessoais extras NAO sao afetados**: Se o usuario adicionou cards/questoes proprias ao deck/exam local, essas nao aparecem na comparacao (pois nao existem no original).  
+  
+isso ira acontece pra aquivos de prova e para decks
+
+**Arquivo novo**: `src/components/SyncReviewDialog.tsx`
+
+### 4. Fluxo Completo
+
+```text
+COMUNIDADE:
+  Prova X [Copy] [Sync se ja importou]
+    |
+    v (Copy)
+  Cria exam_folder "NomeComunidade" (se nao existe)
+  Cria exam com source_turma_exam_id + synced_at = now()
+  Toast: "Prova adicionada na pasta NomeComunidade"
+    |
+    v (Sync -- quando dono editou)
+  Abre SyncReviewDialog
+    - Questoes novas: Q5, Q6
+    - Questoes removidas: Q2
+    - Questoes editadas: Q3 (texto mudou)
+  Usuario escolhe o que aplicar
+  Atualiza synced_at = now()
+
+DASHBOARD (ExamSetup):
+  Pasta "NomeComunidade" [Link2 icon]
+    - Prova X [Link2 icon] [badge "Atualizacao disponivel" se desatualizado]
+```
+
+### 5. Protecao ao Deletar
+
+Ja implementado para decks. Replicar para exams:
+
+- Ao deletar exam com `source_turma_exam_id`, mostrar aviso: "Esta prova esta vinculada a uma comunidade. O vinculo sera perdido."
+
+**Arquivo**: `src/pages/ExamSetup.tsx` (secao de delete)
 
 ---
 
 ### Detalhes Tecnicos
 
-#### Alteracoes no banco de dados
-- Nenhuma migracao necessaria: `source_turma_exam_id` ja existe em `exams`, `folder_id` ja existe em `exams`
+#### Migracao de banco
+
+```sql
+ALTER TABLE exams ADD COLUMN IF NOT EXISTS synced_at timestamptz DEFAULT now();
+ALTER TABLE decks ADD COLUMN IF NOT EXISTS synced_at timestamptz DEFAULT now();
+```
 
 #### Arquivos a criar
-- `src/components/turma-detail/content/ContentHeader.tsx`
-- `src/components/turma-detail/content/ContentFolderRow.tsx`
-- `src/components/turma-detail/content/ContentFileRow.tsx`
-- `src/components/turma-detail/content/ContentDeckRow.tsx`
-- `src/components/turma-detail/content/ContentExamRow.tsx`
-- `src/components/turma-detail/content/useContentMutations.ts`
-- `src/components/turma-detail/content/useContentImport.ts`
+
+- `src/components/SyncReviewDialog.tsx` -- Dialog generico de revisao de alteracoes
 
 #### Arquivos a modificar
-- `src/components/turma-detail/ContentTab.tsx` -- reduzir para orquestrador fino (~200 linhas)
-- `src/components/turma-detail/TurmaSubHeader.tsx` -- adicionar prop `hasExclusiveContent`
-- `src/components/turma-detail/TurmaDetailContext.tsx` -- calcular `hasExclusiveContent`
-- `src/components/dashboard/DeckRow.tsx` -- aviso ao deletar deck vinculado
-- `src/pages/ExamSetup.tsx` ou pagina de provas -- icone Link2 para provas importadas
 
-#### Logica de importacao de provas (novo fluxo)
+- `src/components/turma-detail/ContentTab.tsx` -- botoes Copy/Sync para exams
+- `src/components/turma-detail/content/useContentImport.ts` -- refatorar handleOpenExam para addExamToCollection + syncExam
+- `src/pages/ExamSetup.tsx` -- badge de atualizacao + aviso ao deletar vinculado
+- `src/services/examService.ts` -- funcao de sync (comparar questoes)
+- `src/types/exam.ts` -- adicionar synced_at
+
+#### Logica de comparacao de questoes
+
 ```text
-1. Usuario clica em "abrir prova" na comunidade
-2. Sistema verifica se ja existe exam com source_turma_exam_id
-3. Se existe -> navega direto
-4. Se nao existe:
-   a. Busca/cria exam_folder com nome da comunidade
-   b. Cria exam com folder_id = pasta da comunidade
-   c. Copia questoes
-   d. Navega para a prova
+Para cada questao do original (turma_exam_questions):
+  - Se nao existe no local (por question_text match) -> "Nova"
+  - Se existe mas texto/opcoes diferem -> "Modificada"
+Para cada questao local que NAO existe no original:
+  - Se tem card_id ou foi criada pelo usuario -> ignorar (e pessoal)
+  - Se veio da importacao original -> "Removida pelo dono"
 ```
 
-#### Logica da coroa no header
-```text
-hasExclusiveContent = 
-  turmaDecks.some(d => d.price_type !== 'free') ||
-  turmaExams.some(e => e.subscribers_only) ||
-  lessonFiles.some(f => f.price_type !== 'free')
-  
-showCrown = hasSubscription || hasExclusiveContent
-```
+#### Ordem de implementacao
 
-### Ordem de implementacao
-
-1. Refatorar ContentTab em modulos (base para tudo)
-2. Corrigir logica da coroa no header
-3. Implementar vinculo de provas ao importar
-4. Adicionar aviso ao deletar deck vinculado
-5. Testar fluxo completo end-to-end
-
+1. Migracao SQL (synced_at)
+2. Refatorar useContentImport (separar addExamToCollection de handleOpenExam)
+3. Atualizar ContentTab (botoes Copy/Sync para exams)
+4. Criar SyncReviewDialog
+5. Atualizar ExamSetup (badge + aviso delete)
+6. Testar end-to-end
