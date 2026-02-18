@@ -1,119 +1,111 @@
 
+# Corrigir Editor de Cloze no Estudo
 
-# Corrigir Geracao de Cloze e Equilibrar Distribuicao
+## Problemas Identificados
 
-## Problema Real
+### 1. Logica de edicao ignora cards irmaos (c1, c2)
+Quando um texto cloze tem `{{c1::O2}}` e `{{c2::alveolos pulmonares}}`, o sistema cria **2 registros separados no banco** com o mesmo `front_content` mas `back_content` diferente (`{"clozeTarget":1}` e `{"clozeTarget":2}`).
 
-A IA recebe uma instrucao vaga ("distribua uniformemente") e ignora -- gera 78% basic porque e o formato mais facil. Alem disso, quando tenta gerar cloze, frequentemente gera perguntas sem a sintaxe `{{c1::...}}` porque a instrucao nao e suficientemente estruturada.
+O editor no estudo (`StudyCardActions`) faz `UPDATE` em **apenas 1 card** (o que esta sendo estudado), sem tocar nos irmaos. Se o usuario editar o texto frontal, os irmaos ficam dessincronizados.
 
-A solucao anterior (reclassificar cloze invalido para basic no servidor) so mascara o problema -- o usuario pediu cloze e recebe basic.
+A pagina de gerenciamento do deck (`DeckDetailContext`) ja tem toda a logica correta: encontra irmaos, atualiza todos, cria novos se adicionar cloze numbers, deleta se remover.
 
-## Nova Abordagem: Geracoes Separadas por Formato
+### 2. `back_content` nao e parseado corretamente
+No `openEdit`, o `back_content` de um cloze e JSON (`{"clozeTarget":1,"extra":""}`) mas o editor coloca esse JSON inteiro no campo `back`, em vez de extrair apenas o `extra`.
 
-Em vez de pedir para a IA gerar todos os formatos de uma vez (e ela priorizar basic), fazer **uma chamada separada por formato**, cada uma com contagem exata e prompt especializado.
+### 3. Visual da caixa "Como usar" fora do padrao
+A caixa de instrucoes de cloze no estudo (imagem 1) usa estilo cinza apagado. O padrao correto (imagem 2 - "Novo Card") usa borda amarela com icone de lapis e texto mais informativo.
 
-### Como funciona
+## Solucao
 
-1. O frontend calcula o total de cards para o batch (baseado em chars/densityFactor)
-2. Divide o total igualmente entre os formatos selecionados (ex: 30 cards, 3 formatos = 10 cada)
-3. Faz uma requisicao por formato, passando `cardFormats: ["cloze"]` com `cardCount: 10`
-4. Concatena os resultados de todas as chamadas
-
-### Vantagens
-
-- A IA recebe instrucao de UM UNICO formato por chamada -- nao pode "fugir" para basic
-- O prompt de cloze pode ser ultra-especializado sem confundir com instrucoes de basic
-- Distribuicao exata garantida por design (nao depende da IA respeitar porcentagens)
-- Se um formato falhar, os outros continuam funcionando
+Replicar a logica de edicao de cloze do `DeckDetailContext` no `StudyCardActions`, e alinhar o visual.
 
 ## Mudancas
 
-### 1. Frontend: useAIDeckFlow.ts
+### 1. `StudyCardActions.tsx` - Corrigir `openEdit` para parsear `back_content` do cloze
 
-Dentro do loop de batches, adicionar um loop interno por formato:
-
-```text
-Para cada batch de texto:
-  Para cada formato selecionado (ex: qa, cloze, multiple_choice):
-    batchCardCount = total_do_batch / num_formatos
-    chamar generate-deck com cardFormats=[formato_unico] e cardCount=batchCardCount
-    acumular cards
-```
-
-O progresso mostrara: "Requisicao X de Y" (batches * formatos).
-
-### 2. Edge Function: generate-deck/index.ts
-
-- Manter validacao de cloze como **rede de seguranca** (se mesmo com formato unico a IA gerar cloze invalido, reclassificar)
-- Quando `formats.length === 1` e o formato e cloze, usar um prompt ainda mais enfatico com exemplos positivos e negativos
-- Aumentar exemplos de output para cloze
-
-### 3. Prompt de Cloze Especializado
-
-Quando a chamada e exclusivamente para cloze, o prompt incluira:
-
-- "TODOS os cartoes DEVEM ser do tipo cloze com a sintaxe {{c1::resposta}}"
-- "CADA cartao e uma AFIRMACAO COMPLETA com uma ou mais lacunas"
-- "NUNCA gere uma pergunta -- cloze e SEMPRE uma afirmacao declarativa"
-- Multiplos exemplos corretos e incorretos
-- "Se o front NAO contiver {{c1::, o cartao sera DESCARTADO automaticamente"
-
-## Detalhes Tecnicos
-
-### useAIDeckFlow.ts - Novo loop de geracao
-
-O loop principal muda de:
+Quando `card_type === 'cloze'`, extrair `extra` do JSON em vez de usar o JSON inteiro:
 
 ```text
-for batch in textBatches:
-  chamar API com todos os formatos
-```
-
-Para:
-
-```text
-for batch in textBatches:
-  for format in cardFormats:
-    formatCardCount = ceil(batchCardCount / cardFormats.length)
-    chamar API com cardFormats=[format], cardCount=formatCardCount
-    acumular cards
-```
-
-Total de requisicoes = textBatches.length * cardFormats.length. O custo de energia e dividido proporcionalmente.
-
-### generate-deck/index.ts - Validacao de seguranca
-
-Apos o parse, manter a validacao de cloze:
-
-```text
-const CLOZE_REGEX = /\{\{c\d+::/;
-
-// Para cards que deveriam ser cloze mas nao tem a sintaxe:
-if (mappedType === "cloze" && !CLOZE_REGEX.test(c.front)) {
-  // Converter para basic como fallback de seguranca
-  return {
-    front: c.front.replace(/[:\.]+$/, "?"),
-    back: c.back || "Informacao nao fornecida",
-    type: "basic"
-  };
+} else if (card.card_type === 'cloze') {
+  setEditorType('cloze');
+  try {
+    const parsed = JSON.parse(card.back_content);
+    if (typeof parsed.clozeTarget === 'number') {
+      setBack(parsed.extra || '');
+    } else {
+      setBack(card.back_content);
+    }
+  } catch {
+    setBack(card.back_content);
+  }
 }
 ```
 
-### Calculo de energia
+### 2. `StudyCardActions.tsx` - Corrigir `handleSave` para cloze com logica de irmaos
 
-O custo total nao muda -- continua sendo `selectedPages.length * CREDITS_PER_PAGE * modelMultiplier`. A divisao por formato dentro de cada batch distribui o custo proporcionalmente:
+O save precisa:
+1. Buscar TODOS os cards cloze irmaos (mesmo `front_content` do card original)
+2. Detectar cloze numbers no texto editado (c1, c2, etc.)
+3. Atualizar irmaos existentes com o novo `front_content`
+4. Criar novos cards se o usuario adicionou um cloze number
+5. Deletar cards de cloze numbers removidos
+
+Para isso, adicionar uma query para buscar os irmaos do card no `handleSave`. A logica sera identica a do `DeckDetailContext` (linhas 490-557).
+
+### 3. `StudyCardActions.tsx` - Atualizar `onCardUpdated` apos edicao de cloze
+
+Apos salvar irmaos, invalidar as queries de estudo e atualizar o card na fila local com o novo `front_content`.
+
+### 4. `StudyCardActions.tsx` - Alinhar visual da caixa "Como usar Cloze"
+
+Trocar o estilo cinza atual pelo padrao amarelo do "Novo Card":
 
 ```text
-batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE)
-costPerFormat = ceil(batchCost / cardFormats.length)
+<div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-1.5">
+  <p className="text-xs font-bold text-warning flex items-center gap-1.5">
+    <Pencil className="h-3 w-3" /> Como usar Cloze
+  </p>
+  <p className="text-[11px] text-muted-foreground">
+    Selecione o texto e clique para criar um <strong>cloze</strong>.
+    Clozes com mesmo numero viram o <strong>mesmo card</strong>.
+  </p>
+  <p className="text-[11px] text-muted-foreground">
+    Cria um cloze com <strong>numero novo</strong>, gerando um <strong>card separado</strong>.
+  </p>
+</div>
 ```
 
-Para evitar cobrar a mais, deduzir energia apenas na primeira chamada do batch e passar `energyCost: 0` nas demais.
+## Detalhes Tecnicos
 
-## Ordem de Implementacao
+### Busca de irmaos no estudo
 
-1. Alterar loop de geracao no `useAIDeckFlow.ts` (loop por formato dentro de cada batch)
-2. Atualizar progresso para refletir total de requisicoes (batches * formatos)
-3. Adicionar validacao de cloze como rede de seguranca no `generate-deck/index.ts`
-4. Deploy da edge function
+O `StudyCardActions` nao tem acesso a lista completa de cards do deck (diferente do `DeckDetailContext`). Para encontrar irmaos, sera necessario fazer uma query direta ao Supabase:
 
+```text
+const { data: siblings } = await supabase
+  .from('cards')
+  .select('id, front_content, back_content, card_type')
+  .eq('deck_id', card.deck_id)
+  .eq('card_type', 'cloze')
+  .eq('front_content', card.front_content);
+```
+
+### Fluxo do save para cloze
+
+1. Extrair cloze numbers do `front` editado (`{{c1::...}}`, `{{c2::...}}`)
+2. Buscar irmaos no banco
+3. Mapear `clozeTarget` existente para card IDs
+4. Comparar cloze numbers novos vs existentes
+5. Atualizar todos os irmaos com o novo `front_content`
+6. Criar cards para numbers novos
+7. Deletar cards para numbers removidos
+8. Invalidar queries e atualizar a fila local
+
+### Impacto na fila de estudo
+
+Ao salvar, se o `front_content` mudou, todos os irmaos (que podem estar na fila) precisam ser atualizados. O `onCardUpdated` ja atualiza o card atual na `localQueue`. Para irmaos que tambem estao na fila, sera necessario atualizar seus `front_content` tambem. Isso sera feito passando uma callback mais robusta ou invalidando a query de estudo.
+
+## Arquivos Modificados
+
+- `src/components/StudyCardActions.tsx` - Toda a logica de edicao e visual
