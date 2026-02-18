@@ -28,7 +28,7 @@ import {
   ArrowLeft, Plus, FolderOpen, FolderPlus, ChevronRight, MoreVertical,
   Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
   Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
-  Copy, Link2, ClipboardList, Users, Clock, Import,
+  Copy, Link2, ClipboardList, Users, Clock, Import, LogIn,
   CheckCheck, X, ArrowUpRight, Search, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -512,6 +512,7 @@ const ContentTab = () => {
             const subscriberOnly = !importLogic.isDeckFree(td);
             const canImport = importLogic.canAccessDeck(td);
             const inCollection = alreadyOwns || alreadyLinked;
+            const personalDeckId = importLogic.getPersonalDeckId(td.id);
             return (
               <div key={td.id}
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
@@ -532,11 +533,14 @@ const ContentTab = () => {
                 </div>
                 {!selectionMode && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setPreviewDeck(td)}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                    {!inCollection && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; setConfirmImportItem({ type: 'deck', data: td }); }}
+                    {inCollection ? (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir baralho"
+                        onClick={() => { if (personalDeckId) navigate(`/decks/${personalDeckId}`); else if (alreadyOwns) navigate(`/decks/${td.deck_id}`); }}>
+                        <LogIn className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
+                        onClick={() => { if (subscriberOnly && !canImport) return; setConfirmImportItem({ type: 'deck', data: td }); }}
                         disabled={importLogic.addToCollection.isPending || (subscriberOnly && !canImport)}>
                         {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
@@ -574,6 +578,8 @@ const ContentTab = () => {
           {/* Exams */}
           {examDrag.displayItems.map((exam: any) => {
             const ehExam = canEdit ? examDrag.getHandlers(exam) : null;
+            const examImported = importLogic.userHasImportedExam(exam.id);
+            const personalExamId = importLogic.getPersonalExamId(exam.id);
             return (
               <div key={exam.id}
                 {...(ehExam ? { draggable: ehExam.draggable, onDragStart: ehExam.onDragStart, onDragOver: ehExam.onDragOver, onDragEnter: ehExam.onDragEnter, onDragLeave: ehExam.onDragLeave, onDrop: ehExam.onDrop, onDragEnd: ehExam.onDragEnd } : {})}
@@ -588,6 +594,7 @@ const ContentTab = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
+                    {examImported && <Link2 className="h-3 w-3 text-info shrink-0" />}
                     {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
@@ -599,13 +606,18 @@ const ContentTab = () => {
                 </div>
                 {!selectionMode && (
                   <div className="flex items-center gap-1 shrink-0">
-                    {exam.total_questions > 0 && (
+                    {examImported ? (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir prova"
+                        onClick={() => { if (personalExamId) navigate(`/exam/${personalExamId}`); }}>
+                        <LogIn className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : exam.total_questions > 0 ? (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
                         onClick={() => setConfirmImportItem({ type: 'exam', data: exam })}
                         disabled={importLogic.addExamToCollection.isPending}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                    )}
+                    ) : null}
                     {(isAdmin || exam.created_by === user?.id) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -653,8 +665,15 @@ const ContentTab = () => {
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
-              if (confirmImportItem?.type === 'deck') importLogic.addToCollection.mutate(confirmImportItem.data);
-              else if (confirmImportItem?.type === 'exam') importLogic.addExamToCollection.mutate(confirmImportItem.data);
+              if (confirmImportItem?.type === 'deck') {
+                importLogic.addToCollection.mutate(confirmImportItem.data, {
+                  onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`); },
+                });
+              } else if (confirmImportItem?.type === 'exam') {
+                importLogic.addExamToCollection.mutate(confirmImportItem.data, {
+                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`); },
+                });
+              }
               setConfirmImportItem(null);
             }}>
               <Copy className="h-3.5 w-3.5 mr-1.5" /> Adicionar
