@@ -48,9 +48,8 @@ Deno.serve(async (req) => {
 
     let userId = "";
     if (authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data } = await supabase.auth.getClaims(token);
-      if (data?.claims?.sub) userId = data.claims.sub as string;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) userId = user.id;
     }
 
     const cost = energyCost || 0;

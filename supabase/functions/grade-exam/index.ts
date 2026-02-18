@@ -18,10 +18,9 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !data?.claims?.sub) return jsonResponse({ error: "Token inválido" }, 401);
-    const userId = data.claims.sub as string;
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
+    const userId = user.id;
 
     const { questionId, userAnswer, correctAnswer, questionText, aiModel, energyCost } = await req.json();
     if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
