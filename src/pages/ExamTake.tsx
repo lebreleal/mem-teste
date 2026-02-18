@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useExamDetail, useExams } from '@/hooks/useExams';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
@@ -17,11 +17,15 @@ import {
 const ExamTake = () => {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { exam, questions, isLoading, submitAnswer, completeExam } = useExamDetail(examId ?? '');
   const { startExam } = useExams();
   const { decks } = useDecks();
   const { theme, toggleTheme } = useTheme();
+  const fromCommunity = (location.state as any)?.from === 'community';
+  const communityTurmaId = (location.state as any)?.turmaId;
+  const backPath = fromCommunity && communityTurmaId ? `/turmas/${communityTurmaId}` : '/exam/new';
 
   const { restartExam } = useExams();
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -112,7 +116,7 @@ const ExamTake = () => {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
         <h1 className="font-display text-2xl font-bold">Prova não encontrada</h1>
-        <Button variant="outline" onClick={() => navigate('/exam/new')} className="mt-4 gap-2">
+        <Button variant="outline" onClick={() => navigate(backPath)} className="mt-4 gap-2">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
       </div>
@@ -183,7 +187,7 @@ const ExamTake = () => {
             {startExam.isPending ? 'Iniciando...' : 'Iniciar Prova'}
           </Button>
 
-          <Button variant="ghost" className="gap-2" onClick={() => navigate('/exam/new')}>
+          <Button variant="ghost" className="gap-2" onClick={() => navigate(backPath)}>
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>
@@ -196,7 +200,7 @@ const ExamTake = () => {
       <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/exam/new')} className="gap-1 text-muted-foreground px-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate(backPath)} className="gap-1 text-muted-foreground px-2 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h1 className="font-display text-sm font-bold text-foreground truncate">{exam.title}</h1>

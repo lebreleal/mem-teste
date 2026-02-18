@@ -535,7 +535,7 @@ const ContentTab = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     {inCollection ? (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir baralho"
-                        onClick={() => { if (personalDeckId) navigate(`/decks/${personalDeckId}`); else if (alreadyOwns) navigate(`/decks/${td.deck_id}`); }}>
+                        onClick={() => { const id = personalDeckId || (alreadyOwns ? td.deck_id : null); if (id) navigate(`/decks/${id}`, { state: { from: 'community', turmaId } }); }}>
                         <LogIn className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
@@ -608,7 +608,7 @@ const ContentTab = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     {examImported ? (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir prova"
-                        onClick={() => { if (personalExamId) navigate(`/exam/${personalExamId}`); }}>
+                        onClick={() => { if (personalExamId) navigate(`/exam/${personalExamId}`, { state: { from: 'community', turmaId } }); }}>
                         <LogIn className="h-3.5 w-3.5" />
                       </Button>
                     ) : exam.total_questions > 0 ? (
@@ -667,11 +667,11 @@ const ContentTab = () => {
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
                 importLogic.addToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`); },
+                  onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); },
                 });
               } else if (confirmImportItem?.type === 'exam') {
                 importLogic.addExamToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`); },
+                  onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
                 });
               }
               setConfirmImportItem(null);
