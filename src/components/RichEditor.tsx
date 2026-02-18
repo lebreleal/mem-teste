@@ -74,6 +74,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [colorOpen, setColorOpen] = useState(false);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeCounter, setClozeCounter] = useState(1);
+  const [clozeActive, setClozeActive] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -118,22 +119,20 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [content, editor]);
 
-  const isClozeActive = editor?.isActive('clozeMark') ?? false;
-
   // Deactivate cloze mark on Enter or Escape
   useEffect(() => {
     if (!editor) return;
     const handleKey = (e: KeyboardEvent) => {
-      if ((e.key === 'Enter' || e.key === 'Escape') && editor.isActive('clozeMark')) {
-        // On Enter: let ProseMirror handle the newline, then unset mark after
+      if ((e.key === 'Enter' || e.key === 'Escape') && clozeActive) {
         setTimeout(() => {
           editor.chain().unsetMark('clozeMark').run();
+          setClozeActive(false);
         }, 0);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [editor]);
+  }, [editor, clozeActive]);
 
   const uploadImageFile = async (file: File) => {
     if (!user || !editor) return;
@@ -208,29 +207,28 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   /** Toggle cloze mark — if text selected, wrap it; otherwise toggle stored mark */
   const handleCloze = useCallback(() => {
     if (!editor) return;
-    if (editor.isActive('clozeMark')) {
-      // Deactivate
+    if (clozeActive) {
       editor.chain().focus().unsetMark('clozeMark').run();
+      setClozeActive(false);
     } else {
-      // Activate with current counter
       editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
+      setClozeActive(true);
     }
-  }, [editor, clozeCounter]);
+  }, [editor, clozeCounter, clozeActive]);
 
   /** Increment counter and start new cloze mark */
   const handleClozeNext = useCallback(() => {
     if (!editor) return;
-    // Deactivate current mark if active
-    if (editor.isActive('clozeMark')) {
+    if (clozeActive) {
       editor.chain().focus().unsetMark('clozeMark').run();
     }
     const nextNum = clozeCounter + 1;
     setClozeCounter(nextNum);
-    // Use setTimeout to ensure unset is processed first
     setTimeout(() => {
       editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
+      setClozeActive(true);
     }, 10);
-  }, [editor, clozeCounter]);
+  }, [editor, clozeCounter, clozeActive]);
 
   const handleSetColor = (color: string) => {
     if (!editor) return;
@@ -276,7 +274,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         </DropdownMenu>
 
         {/* Cloze same number button - dashed square */}
-        <ToolBtn onClick={handleCloze} active={isClozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
+        <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
           </svg>
