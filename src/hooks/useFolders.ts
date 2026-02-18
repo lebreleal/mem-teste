@@ -49,7 +49,20 @@ export const useFolders = () => {
 
   const reorderFolders = useMutation({
     mutationFn: (orderedIds: string[]) => folderService.reorderFolders(orderedIds),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ['folders', user?.id] });
+      const previous = queryClient.getQueryData<Folder[]>(['folders', user?.id]);
+      if (previous) {
+        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+        const updated = previous.map(f => orderMap.has(f.id) ? { ...f, sort_order: orderMap.get(f.id)! } : f);
+        queryClient.setQueryData(['folders', user?.id], updated);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(['folders', user?.id], context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
   });
 
   return {

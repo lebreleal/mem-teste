@@ -58,7 +58,20 @@ export const useDecks = () => {
 
   const reorderDecks = useMutation({
     mutationFn: (orderedIds: string[]) => deckService.reorderDecks(orderedIds),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['decks'] }),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ['decks', user?.id] });
+      const previous = queryClient.getQueryData<DeckWithStats[]>(['decks', user?.id]);
+      if (previous) {
+        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+        const updated = previous.map(d => orderMap.has(d.id) ? { ...d, sort_order: orderMap.get(d.id)! } : d);
+        queryClient.setQueryData(['decks', user?.id], updated);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(['decks', user?.id], context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['decks'] }),
   });
 
   return {

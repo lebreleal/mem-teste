@@ -75,9 +75,8 @@ const DashboardActions = ({
         </div>
         <div className="flex items-center gap-2">
           {hasDecks && !deckSelectionMode && (
-            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleReorderMode}>
+            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={toggleReorderMode} title={reorderMode ? 'Pronto' : 'Ordenar'}>
               <GripVertical className="h-4 w-4" />
-              <span>{reorderMode ? 'Pronto' : 'Ordenar'}</span>
             </Button>
           )}
           {hasDecks && !reorderMode && (
