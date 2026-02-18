@@ -23,11 +23,22 @@ const CardList = () => {
     setBulkMoveOpen, setMoveTargetDeck, handleBulkDelete,
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
-    isQuickReview, deck,
+    isQuickReview, deck, decks,
     getStateInfo, stripHtml, otherDecks,
   } = useDeckDetail();
 
-  const isLinkedDeck = !!(deck as any)?.source_turma_deck_id;
+  // Check if this deck or any ancestor is linked to a community
+  const isLinkedDeck = (() => {
+    if ((deck as any)?.source_turma_deck_id) return true;
+    let parentId = (deck as any)?.parent_deck_id;
+    while (parentId) {
+      const parent = decks.find((d: any) => d.id === parentId);
+      if (!parent) break;
+      if ((parent as any).source_turma_deck_id) return true;
+      parentId = (parent as any).parent_deck_id;
+    }
+    return false;
+  })();
 
   const [showFilters, setShowFilters] = useState(false);
   const hasActiveFilter = typeFilter !== 'all' || stateFilter !== 'all';
