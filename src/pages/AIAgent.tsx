@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
 import AIModelSelector from '@/components/AIModelSelector';
+import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import {
@@ -36,7 +37,7 @@ interface Conversation {
 const AIAgent = () => {
   const { toast } = useToast();
   const { energy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
+  const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -481,6 +482,8 @@ const AIAgent = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_COST} />
     </div>
   );
 };

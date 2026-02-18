@@ -14,6 +14,7 @@ import StudyCardActions from '@/components/StudyCardActions';
 import { invokeTutor } from '@/services/aiService';
 import { useToast } from '@/hooks/use-toast';
 import type { Rating } from '@/lib/fsrs';
+import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
@@ -26,7 +27,7 @@ const Study = () => {
   const { queue, isLoading, submitReview, algorithmMode } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
+  const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     // Invalidate study queue so deck detail reloads fresh stats
     invalidateStudyQueries(queryClient);
@@ -259,6 +260,7 @@ const Study = () => {
           />
         </div>
       </main>
+      <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
     </div>
   );
 };

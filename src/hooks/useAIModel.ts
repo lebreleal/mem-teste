@@ -2,8 +2,6 @@ import { useState, useCallback } from 'react';
 
 export type AIModel = 'flash' | 'pro';
 
-const STORAGE_KEY = 'memo-ai-model';
-
 const MODEL_CONFIG = {
   flash: {
     label: 'Flash',
@@ -20,18 +18,27 @@ const MODEL_CONFIG = {
 } as const;
 
 export const useAIModel = () => {
-  const [model, setModelState] = useState<AIModel>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored === 'pro' ? 'pro' : 'flash';
-    } catch {
-      return 'flash';
-    }
-  });
+  // Always start as flash — never persist across sessions
+  const [model, setModelState] = useState<AIModel>('flash');
+  const [pendingPro, setPendingPro] = useState(false);
 
-  const setModel = useCallback((m: AIModel) => {
-    setModelState(m);
-    try { localStorage.setItem(STORAGE_KEY, m); } catch {}
+  const requestModelChange = useCallback((m: AIModel) => {
+    if (m === 'pro') {
+      // Don't switch immediately — request confirmation
+      setPendingPro(true);
+    } else {
+      setModelState('flash');
+      setPendingPro(false);
+    }
+  }, []);
+
+  const confirmPro = useCallback(() => {
+    setModelState('pro');
+    setPendingPro(false);
+  }, []);
+
+  const cancelPro = useCallback(() => {
+    setPendingPro(false);
   }, []);
 
   const config = MODEL_CONFIG[model];
@@ -39,7 +46,7 @@ export const useAIModel = () => {
   /** Calculate real cost given a base cost */
   const getCost = useCallback((baseCost: number) => baseCost * MODEL_CONFIG[model].costMultiplier, [model]);
 
-  return { model, setModel, config, getCost, MODEL_CONFIG };
+  return { model, setModel: requestModelChange, config, getCost, MODEL_CONFIG, pendingPro, confirmPro, cancelPro };
 };
 
 export { MODEL_CONFIG };
