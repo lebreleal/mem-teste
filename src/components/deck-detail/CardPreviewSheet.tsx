@@ -1,10 +1,7 @@
 /**
  * CardPreviewSheet – full-screen card browser opened when clicking a card in the list.
- * Shows front content; tap to reveal back. Navigate with arrows.
+ * Shows front content; tap to reveal back. Navigate with arrows (desktop) or swipe (mobile).
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
- *
- * Mobile: 3-slot carousel with real slide transitions.
- * Desktop/Tablet: centered card with arrow buttons.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -130,25 +127,12 @@ function CardContent({
 
   return (
     <div className={`bg-card rounded-2xl border border-border/30 shadow-lg overflow-hidden cursor-pointer select-none ${className}`} onClick={onClick}>
-      <div className="p-6 sm:p-8 min-h-[40vh] sm:min-h-[50vh] max-h-[70vh] overflow-y-auto flex flex-col justify-center">
-        {frontContent}
-        {backContent}
+      <div className="p-6 sm:p-8 min-h-[40vh] sm:min-h-[50vh] max-h-[70vh] overflow-y-auto flex flex-col items-center justify-center">
+        <div className="w-full">
+          {frontContent}
+          {backContent}
+        </div>
       </div>
-    </div>
-  );
-}
-
-/* ─── Slot card (lightweight preview for peek slots) ─── */
-
-function SlotPreview({ vc }: { vc: VirtualCard | null }) {
-  if (!vc) return <div />;
-  const text = vc.card.front_content
-    .replace(/<[^>]*>/g, '')
-    .replace(/\{\{c\d+::(.+?)\}\}/g, '[...]')
-    .slice(0, 80);
-  return (
-    <div className="bg-card rounded-2xl border border-border/30 shadow p-5 min-h-[30vh] flex items-center justify-center">
-      <p className="text-sm text-muted-foreground line-clamp-4 text-center leading-relaxed">{text}</p>
     </div>
   );
 }
@@ -211,116 +195,38 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
     return () => window.removeEventListener('keydown', handler);
   }, [open, goPrev, goNext, onClose]);
 
-  /* ─── Mobile carousel: 3-slot approach ─── */
-  const trackRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const isDraggingRef = useRef(false);
-  const dragXRef = useRef(0);
-  const isSnappingRef = useRef(false);
+  /* ─── Mobile swipe gesture ─── */
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
 
   useEffect(() => {
     if (!open || !isMobile) return;
-    const track = trackRef.current;
-    if (!track) return;
-
-    // Reset track to center slot (slot 1 = current card)
-    track.style.transition = 'none';
-    track.style.transform = 'translateX(-100%)';
 
     const onTouchStart = (e: TouchEvent) => {
-      if (isSnappingRef.current) return;
-      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      isDraggingRef.current = false;
-      dragXRef.current = 0;
-      track.style.transition = 'none';
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      swipedRef.current = false;
     };
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (!dragStartRef.current || isSnappingRef.current) return;
-      const dx = e.touches[0].clientX - dragStartRef.current.x;
-      const dy = e.touches[0].clientY - dragStartRef.current.y;
-
-      if (!isDraggingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-        isDraggingRef.current = true;
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStartRef.current || swipedRef.current) return;
+      const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+      const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+      const threshold = 60;
+      if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        swipedRef.current = true;
+        if (dx > 0) goPrev();
+        else goNext();
       }
-
-      if (isDraggingRef.current) {
-        e.preventDefault();
-        dragXRef.current = dx;
-        // Track: -100% centers on slot 1, plus drag offset in px
-        track.style.transform = `translateX(calc(-100% + ${dx}px))`;
-      }
-    };
-
-    const onTouchEnd = () => {
-      if (!dragStartRef.current || isSnappingRef.current) return;
-      const dx = dragXRef.current;
-      const threshold = window.innerWidth * 0.2;
-      const canGoPrev = safeIndex > 0;
-      const canGoNext = safeIndex < virtualCards.length - 1;
-
-      if (dx > threshold && canGoPrev) {
-        // Snap to slot 0 (prev card)
-        isSnappingRef.current = true;
-        track.style.transition = 'transform 0.28s ease-out';
-        track.style.transform = 'translateX(0%)';
-
-        const onEnd = () => {
-          track.removeEventListener('transitionend', onEnd);
-          isSnappingRef.current = false;
-          setIndex(i => i - 1);
-          setRevealed(false);
-          // After index change, React re-renders slots; reset to center instantly
-          requestAnimationFrame(() => {
-            track.style.transition = 'none';
-            track.style.transform = 'translateX(-100%)';
-          });
-        };
-        track.addEventListener('transitionend', onEnd);
-      } else if (dx < -threshold && canGoNext) {
-        // Snap to slot 2 (next card)
-        isSnappingRef.current = true;
-        track.style.transition = 'transform 0.28s ease-out';
-        track.style.transform = 'translateX(-200%)';
-
-        const onEnd = () => {
-          track.removeEventListener('transitionend', onEnd);
-          isSnappingRef.current = false;
-          setIndex(i => i + 1);
-          setRevealed(false);
-          requestAnimationFrame(() => {
-            track.style.transition = 'none';
-            track.style.transform = 'translateX(-100%)';
-          });
-        };
-        track.addEventListener('transitionend', onEnd);
-      } else {
-        // Snap back to center
-        track.style.transition = 'transform 0.25s ease-out';
-        track.style.transform = 'translateX(-100%)';
-      }
-
-      dragStartRef.current = null;
-      isDraggingRef.current = false;
-      dragXRef.current = 0;
+      touchStartRef.current = null;
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
       window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [open, isMobile, safeIndex, virtualCards.length]);
-
-  // Reset track position when index changes (e.g. from keyboard)
-  useEffect(() => {
-    if (!isMobile || !trackRef.current) return;
-    trackRef.current.style.transition = 'none';
-    trackRef.current.style.transform = 'translateX(-100%)';
-  }, [index, isMobile]);
+  }, [open, isMobile, goPrev, goNext]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -335,14 +241,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const isCloze = card?.card_type === 'cloze';
   const clozeTarget = vc?.clozeTarget;
 
-  const prevVc = safeIndex > 0 ? virtualCards[safeIndex - 1] : null;
-  const nextVc = safeIndex < virtualCards.length - 1 ? virtualCards[safeIndex + 1] : null;
 
   return (
     <div
       className="fixed inset-0 z-50 bg-background flex flex-col"
       onPointerDown={(e) => e.stopPropagation()}
-      onTouchMove={(e) => { if (!isDraggingRef.current) e.stopPropagation(); }}
     >
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-5 py-3 shrink-0">
@@ -384,87 +287,45 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
         </div>
       </header>
 
-      {/* Card area */}
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
-        {isMobile ? (
-          /* ── Mobile: 3-slot carousel ── */
-          <div className="w-full h-full overflow-hidden">
-            <div
-              ref={trackRef}
-              className="flex h-full items-center"
-              style={{ width: '300%', transform: 'translateX(-100%)' }}
-            >
-              {/* Slot 0: Previous card */}
-              <div className="w-1/3 h-full flex items-center justify-center px-4">
-                <div className="w-full max-w-lg opacity-60 scale-[0.92]">
-                  <SlotPreview vc={prevVc} />
-                </div>
-              </div>
+      {/* Card area — single centered card for both mobile & desktop */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-4 sm:px-6">
+        {/* Left arrow (desktop only) */}
+        {!isMobile && (
+          <Button
+            variant="ghost" size="icon"
+            className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
+            disabled={safeIndex === 0} onClick={goPrev}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
 
-              {/* Slot 1: Current card */}
-              <div className="w-1/3 h-full flex flex-col items-center justify-center px-4">
-                <div className="w-full max-w-lg">
-                  {vc ? (
-                    <>
-                      <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
-                      {!revealed && (
-                        <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
-                          Toque para revelar
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-8 text-center text-muted-foreground">
-                      Cartão não disponível
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Slot 2: Next card */}
-              <div className="w-1/3 h-full flex items-center justify-center px-4">
-                <div className="w-full max-w-lg opacity-60 scale-[0.92]">
-                  <SlotPreview vc={nextVc} />
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* ── Desktop/Tablet: centered card with arrows ── */
-          <>
-            <Button
-              variant="ghost" size="icon"
-              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
-              disabled={safeIndex === 0} onClick={goPrev}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-
-            <div className="w-full max-w-2xl mx-auto px-14">
-              {vc ? (
-                <>
-                  <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
-                  {!revealed && (
-                    <p className="text-center text-xs text-muted-foreground mt-4 animate-pulse">
-                      Toque para revelar
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-8 text-center text-muted-foreground">
-                  Cartão não disponível
-                </div>
+        <div className="w-full max-w-2xl mx-auto">
+          {vc ? (
+            <>
+              <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+              {!revealed && (
+                <p className="text-center text-xs text-muted-foreground mt-3 sm:mt-4 animate-pulse">
+                  {isMobile ? 'Toque para revelar · Deslize para navegar' : 'Toque para revelar'}
+                </p>
               )}
+            </>
+          ) : (
+            <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-8 text-center text-muted-foreground">
+              Cartão não disponível
             </div>
+          )}
+        </div>
 
-            <Button
-              variant="ghost" size="icon"
-              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
-              disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </>
+        {/* Right arrow (desktop only) */}
+        {!isMobile && (
+          <Button
+            variant="ghost" size="icon"
+            className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
+            disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
         )}
       </div>
     </div>
