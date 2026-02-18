@@ -224,14 +224,15 @@ export function useDashboardState() {
     return total;
   }
 
-  /** Returns true if folder contains any community-linked deck (source_turma_deck_id). */
+  /** Returns true if folder contains any community-linked deck (direct or via sub-decks). */
   function folderHasCommunityLink(folderId: string): boolean {
     const folderDecksHere = decks.filter(d => d.folder_id === folderId);
     for (const d of folderDecksHere) {
-      if (d.source_turma_deck_id) return true;
+      // Check this deck and all its sub-decks recursively
+      if (getCommunityLinkId(d)) return true;
     }
-    // Check sub-folders recursively
-    const childFolders = folders.filter(f => f.parent_id === folderId && !f.is_archived);
+    // Check sub-folders recursively (including non-archived ones)
+    const childFolders = folders.filter(f => f.parent_id === folderId);
     for (const cf of childFolders) {
       if (folderHasCommunityLink(cf.id)) return true;
     }

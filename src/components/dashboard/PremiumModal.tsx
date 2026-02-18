@@ -52,7 +52,7 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
           <div className="p-5 sm:p-6">
             {/* Header */}
             <div className="text-center mb-5">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3" style={{ background: 'linear-gradient(135deg, hsl(270 60% 55%), hsl(270 60% 45%))' }}>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3" style={{ background: 'linear-gradient(135deg, hsl(var(--warning)), hsl(45 100% 40%))' }}>
                 <Crown className="h-7 w-7 text-white" fill={isPremium ? 'white' : 'none'} />
               </div>
               {isPremium ? (
@@ -101,9 +101,9 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
 
             {/* Info */}
             {!isPremium && (
-              <div className="rounded-xl border border-[hsl(270,60%,55%)]/30 bg-[hsl(270,60%,55%)]/5 px-4 py-3 text-center">
+              <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center">
                 <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-1.5">
-                  <Crown className="h-4 w-4 shrink-0" style={{ color: 'hsl(270, 60%, 55%)' }} fill="hsl(270, 60%, 55%)" /> 14 dias grátis para novas contas
+                  <Crown className="h-4 w-4 shrink-0" style={{ color: 'hsl(var(--warning))' }} fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">Aproveite todos os benefícios Premium automaticamente</p>
               </div>
