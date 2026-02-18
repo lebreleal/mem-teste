@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useExamDetail, useExams } from '@/hooks/useExams';
 import { useToast } from '@/hooks/use-toast';
@@ -138,7 +139,7 @@ const ExamResults = () => {
                           {q.question_type === 'written' ? 'Dissertativa' : 'Múltipla escolha'}
                         </span>
                       </div>
-                      <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: q.question_text }} />
+                      <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.question_text) }} />
                     </div>
                   </div>
                   <span className={`text-xs font-bold rounded-lg px-2 py-1 ${

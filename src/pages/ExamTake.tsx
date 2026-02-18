@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useExamDetail, useExams } from '@/hooks/useExams';
 import { useDecks } from '@/hooks/useDecks';
@@ -270,7 +271,7 @@ const ExamTake = () => {
                       </span>
                       <span className="text-[10px] text-muted-foreground">{q.points} pts</span>
                     </div>
-                    <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: q.question_text }} />
+                    <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.question_text) }} />
                   </div>
                 </div>
 

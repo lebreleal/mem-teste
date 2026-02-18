@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
@@ -254,7 +255,7 @@ const MultipleChoiceCard = ({
             <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 block">Múltipla escolha</span>
             <div
               className="prose prose-sm max-w-none text-card-foreground"
-              dangerouslySetInnerHTML={{ __html: frontContent }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(frontContent) }}
             />
           </div>
 
@@ -306,7 +307,7 @@ const MultipleChoiceCard = ({
                 <Lightbulb className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
-              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: formatMarkdown(tutorResponse) }} />
+              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
             </div>
           )}
 
@@ -317,7 +318,7 @@ const MultipleChoiceCard = ({
                 <Sparkles className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
               </div>
-              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: formatMarkdown(tutorResponse) }} />
+              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
             </div>
           )}
         </div>
@@ -571,7 +572,7 @@ const FlashCard = ({
           >
             <div
               className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-              dangerouslySetInnerHTML={{ __html: displayFront }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
             />
           </div>
         )}
@@ -584,7 +585,7 @@ const FlashCard = ({
           >
             <div
               className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-              dangerouslySetInnerHTML={{ __html: displayBack }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayBack) }}
             />
           </div>
         )}
@@ -597,7 +598,7 @@ const FlashCard = ({
             <Lightbulb className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
           </div>
-          <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: formatMarkdown(tutorResponse) }} />
+          <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
         </div>
       )}
 

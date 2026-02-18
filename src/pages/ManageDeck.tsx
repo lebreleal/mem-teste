@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
@@ -525,7 +526,7 @@ const ManageDeck = () => {
         <div className="space-y-4">
           <div>
             <Label className="mb-1.5 block text-xs text-muted-foreground">Pergunta melhorada</Label>
-            <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: improvePreview.front }} />
+            <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.front) }} />
           </div>
           {mcData && (
             <div>
@@ -552,12 +553,12 @@ const ManageDeck = () => {
           <Label className="mb-1.5 block text-xs text-muted-foreground">
             {editorType === 'cloze' ? 'Texto melhorado' : 'Frente melhorada'}
           </Label>
-          <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: improvePreview.front }} />
+          <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.front) }} />
         </div>
         {editorType !== 'cloze' && (
           <div>
             <Label className="mb-1.5 block text-xs text-muted-foreground">Verso melhorado</Label>
-            <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: improvePreview.back }} />
+            <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.back) }} />
           </div>
         )}
       </div>
@@ -602,9 +603,9 @@ const ManageDeck = () => {
                   <div className="flex items-center gap-2 mb-1">
                     {getCardTypeBadge(card.card_type)}
                   </div>
-                  <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                  <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
                   {card.card_type !== 'multiple_choice' && (
-                    <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: card.back_content }} />
+                    <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
                   )}
                   {card.card_type === 'multiple_choice' && (() => {
                     try {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
 import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -389,11 +390,11 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
             <div className="space-y-4">
               <div>
                 <Label className="mb-1.5 block text-xs text-muted-foreground">Frente melhorada</Label>
-                <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: improvePreview.front }} />
+                <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.front) }} />
               </div>
               <div>
                 <Label className="mb-1.5 block text-xs text-muted-foreground">Verso melhorado</Label>
-                <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: improvePreview.back }} />
+                <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.back) }} />
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => { setImproveModalOpen(false); setImprovePreview(null); }}>Descartar</Button>

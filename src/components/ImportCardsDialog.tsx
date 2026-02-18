@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -497,10 +498,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                           )}
                         </div>
                         <p className="font-medium text-card-foreground text-xs line-clamp-2"
-                           dangerouslySetInnerHTML={{ __html: card.front.replace(/<img[^>]*>/g, '[imagem]') }} />
+                           dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front.replace(/<img[^>]*>/g, '[imagem]')) }} />
                         {card.cardType !== 'cloze' && card.back && (
                           <p className="mt-1 text-muted-foreground text-xs line-clamp-2"
-                             dangerouslySetInnerHTML={{ __html: card.back.replace(/<img[^>]*>/g, '[imagem]') }} />
+                             dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back.replace(/<img[^>]*>/g, '[imagem]')) }} />
                         )}
                       </div>
                     ))}
