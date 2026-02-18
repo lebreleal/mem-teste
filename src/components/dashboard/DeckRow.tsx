@@ -110,9 +110,16 @@ const DeckRow = ({
                   <CirclePlus className="mr-2 h-4 w-4" /> Adicionar sub-deck
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => onMove(deck)}>
-                <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-              </DropdownMenuItem>
+              {!deck.source_turma_deck_id ? (
+                <DropdownMenuItem onClick={() => onMove(deck)}>
+                  <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem className="opacity-40 pointer-events-none" disabled>
+                  <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                  <span className="ml-1 text-[10px]">(vinculado)</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => onArchive(deck.id)}>
                 <Archive className="mr-2 h-4 w-4" /> Arquivar
               </DropdownMenuItem>

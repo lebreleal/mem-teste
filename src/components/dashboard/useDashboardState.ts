@@ -207,7 +207,7 @@ export function useDashboardState() {
 
     // Helpers
     getSubDecks, getAggregateStats, getCommunityLinkId, getFolderCommunityLinkId,
-    getFolderDueCount,
+    getFolderDueCount, folderHasCommunityLink,
   };
 
   function getFolderDueCount(folderId: string): number {
@@ -222,5 +222,19 @@ export function useDashboardState() {
       total += getFolderDueCount(cfId);
     }
     return total;
+  }
+
+  /** Returns true if folder contains any community-linked deck (source_turma_deck_id). */
+  function folderHasCommunityLink(folderId: string): boolean {
+    const folderDecksHere = decks.filter(d => d.folder_id === folderId);
+    for (const d of folderDecksHere) {
+      if (d.source_turma_deck_id) return true;
+    }
+    // Check sub-folders recursively
+    const childFolders = folders.filter(f => f.parent_id === folderId && !f.is_archived);
+    for (const cf of childFolders) {
+      if (folderHasCommunityLink(cf.id)) return true;
+    }
+    return false;
   }
 }

@@ -277,8 +277,13 @@ const ExamSetup = () => {
                           <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
+                        <DropdownMenuItem
+                          className={hasLinkedExam ? 'opacity-40 pointer-events-none' : 'text-destructive focus:text-destructive'}
+                          disabled={hasLinkedExam}
+                          onClick={() => !hasLinkedExam && setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}
+                        >
                           <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          {hasLinkedExam && <span className="ml-1 text-[10px]">(remova provas vinculadas)</span>}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -375,9 +380,16 @@ const ExamSetup = () => {
                         <DropdownMenuItem onClick={() => navigate(`/exam/${exam.id}/edit`)}>
                           <Pencil className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { setMoveTarget({ type: 'exam', id: exam.id, name: exam.title }); setMoveBrowseFolderId(null); }}>
-                          <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                        </DropdownMenuItem>
+                        {!exam.source_turma_exam_id ? (
+                          <DropdownMenuItem onClick={() => { setMoveTarget({ type: 'exam', id: exam.id, name: exam.title }); setMoveBrowseFolderId(null); }}>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem className="opacity-40 pointer-events-none" disabled>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                            <span className="ml-1 text-[10px]">(vinculado)</span>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => {
                           restartExam.mutate(exam.id, {
                             onSuccess: () => { toast({ title: 'Prova reiniciada!' }); },
