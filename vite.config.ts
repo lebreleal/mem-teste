@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => ({
           'vendor-tiptap': [
             '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-image',
             '@tiptap/extension-underline', '@tiptap/extension-color',
-            '@tiptap/extension-text-style', '@tiptap/core', '@tiptap/pm',
+            '@tiptap/extension-text-style',
           ],
           'vendor-pdf': ['pdfjs-dist'],
           'vendor-supabase': ['@supabase/supabase-js'],

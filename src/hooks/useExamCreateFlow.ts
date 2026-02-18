@@ -14,7 +14,7 @@ import { useStudyStats } from '@/hooks/useStudyStats';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { extractDocumentText } from '@/lib/docUtils';
+
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { fetchCards } from '@/services/cardService';
 import { invokeGenerateExamQuestions } from '@/services/aiService';
@@ -218,6 +218,7 @@ Baseie-se APENAS no material fornecido. Varie a dificuldade.${getExampleInstruct
         setFilePages(textPages.map(p => ({ ...p, selected: true })));
         setFileStep('pages');
       } else {
+        const { extractDocumentText } = await import('@/lib/docUtils');
         const text = await extractDocumentText(file);
         const cleaned = text.trim();
         if (cleaned.length > 50) {
