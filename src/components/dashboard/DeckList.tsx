@@ -143,14 +143,14 @@ const DeckList = ({
       })}
 
       {/* Folders */}
-      {currentFolders.map(folder => {
+      {folderDrag.displayItems.map(folder => {
         const dragHandlers = reorderMode ? folderDrag.getHandlers(folder) : null;
         return (
           <div
             key={folder.id}
             {...(dragHandlers ? { draggable: dragHandlers.draggable, onDragStart: dragHandlers.onDragStart, onDragOver: dragHandlers.onDragOver, onDragEnter: dragHandlers.onDragEnter, onDragLeave: dragHandlers.onDragLeave, onDrop: dragHandlers.onDrop, onDragEnd: dragHandlers.onDragEnd } : {})}
             {...(!dragHandlers && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
-            className={`group flex items-center gap-3 px-2 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers?.className ?? ''}`}
+            className={`group flex items-center gap-3 px-3 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers?.className ?? ''}`}
             onClick={() => onFolderClick(folder.id)}
           >
             {reorderMode && (
@@ -211,7 +211,7 @@ const DeckList = ({
       })}
 
       {/* Decks */}
-      {currentDecks.map(deck => {
+      {deckDrag.displayItems.map(deck => {
         const dragHandlers = reorderMode ? deckDrag.getHandlers(deck) : undefined;
         return (
           <DeckRow

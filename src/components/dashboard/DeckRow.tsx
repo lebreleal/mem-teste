@@ -63,7 +63,7 @@ const DeckRow = ({
           onDrop: dragHandlers.onDrop,
           onDragEnd: dragHandlers.onDragEnd,
         } : {})}
-        className={`group flex items-center gap-3 px-2 sm:px-5 py-4 cursor-pointer transition-all ${isDeckSelected ? 'bg-primary/10' : 'hover:bg-muted/50'} ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
+        className={`group flex items-center gap-3 px-3 sm:px-5 py-4 cursor-pointer transition-all ${isDeckSelected ? 'bg-primary/10' : 'hover:bg-muted/50'} ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
         style={{ paddingLeft: `${basePadding}px` }}
         onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(`/decks/${deck.id}`)}
       >
