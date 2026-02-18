@@ -626,9 +626,7 @@ const ContentTab = () => {
                     <Checkbox checked={selectedItems.has(`subject::${subject.id}`)} onCheckedChange={() => toggleItem(`subject::${subject.id}`)} />
                   </div>
                 )}
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <FolderOpen className="h-5 w-5 text-primary" />
-                </div>
+                <FolderOpen className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-card-foreground truncate">{subject.name}</h3>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
@@ -689,9 +687,7 @@ const ContentTab = () => {
                     <Checkbox checked={selectedItems.has(`file::${file.id}`)} onCheckedChange={() => toggleItem(`file::${file.id}`)} />
                   </div>
                 )}
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                </div>
+                <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
@@ -827,9 +823,7 @@ const ContentTab = () => {
                   <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
                 </div>
               )}
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <ClipboardList className="h-4 w-4 text-primary" />
-              </div>
+              <ClipboardList className="h-4 w-4 text-primary shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
