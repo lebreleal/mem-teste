@@ -207,18 +207,33 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   /** Toggle cloze mark — if text selected, wrap it; otherwise toggle stored mark */
   const handleCloze = useCallback(() => {
     if (!editor) return;
-    if (clozeActive) {
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+
+    if (clozeActive && !hasSelection) {
+      // Deactivate: unset the stored mark so new text won't be cloze
       editor.chain().focus().unsetMark('clozeMark').run();
       setClozeActive(false);
     } else {
+      // Activate or wrap selection
       editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
-      setClozeActive(true);
+      // If there was a selection, the mark is applied inline — deactivate stored mark after
+      if (hasSelection) {
+        // Move cursor to end of selection and unset stored mark
+        editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
+        setClozeActive(false);
+      } else {
+        setClozeActive(true);
+      }
     }
   }, [editor, clozeCounter, clozeActive]);
 
   /** Increment counter and start new cloze mark */
   const handleClozeNext = useCallback(() => {
     if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const hasSelection = from !== to;
+
     if (clozeActive) {
       editor.chain().focus().unsetMark('clozeMark').run();
     }
@@ -226,7 +241,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     setClozeCounter(nextNum);
     setTimeout(() => {
       editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
-      setClozeActive(true);
+      if (hasSelection) {
+        editor.chain().setTextSelection(to).unsetMark('clozeMark').run();
+        setClozeActive(false);
+      } else {
+        setClozeActive(true);
+      }
     }, 10);
   }, [editor, clozeCounter, clozeActive]);
 

@@ -129,33 +129,35 @@ const DeckDetailDialogs = () => {
               )}
 
               {ctx.cardType === 'cloze' && (
-                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como criar lacunas</p>
-                  <div className="flex items-start gap-2.5">
-                    <span className="shrink-0 mt-0.5 flex items-center justify-center h-6 w-6 rounded-md border border-border bg-card">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-                      </svg>
-                    </span>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong className="text-foreground">Criar lacuna</strong> — Ative o modo lacuna e tudo que digitar ficará marcado como cloze. Clique novamente para desativar. Lacunas com o mesmo número geram o <strong>mesmo</strong> cartão de estudo.
-                    </p>
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <PenLine className="h-3.5 w-3.5 text-primary" />
+                    <p className="text-[11px] font-bold text-primary">Como usar Cloze</p>
                   </div>
-                  <div className="flex items-start gap-2.5">
-                    <span className="shrink-0 mt-0.5 flex items-center justify-center h-6 w-6 rounded-md border border-border bg-card">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-                        <path d="M12 9v6" />
-                        <path d="M9 12h6" />
-                      </svg>
-                    </span>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong className="text-foreground">Nova lacuna (+)</strong> — Avança o contador e cria um <strong>novo cartão</strong> vinculado. Use para ocultar partes diferentes em cartões separados.
-                    </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 flex items-center justify-center h-5 w-5 rounded border border-primary/30 bg-card">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+                        </svg>
+                      </span>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Selecione o texto e clique para criar um <strong className="text-foreground">cloze</strong>. Clozes com mesmo número viram o <strong className="text-foreground">mesmo card</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 flex items-center justify-center h-5 w-5 rounded border border-primary/30 bg-card">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+                          <path d="M12 9v6" />
+                          <path d="M9 12h6" />
+                        </svg>
+                      </span>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Cria um cloze com <strong className="text-foreground">número novo</strong>, gerando um <strong className="text-foreground">card separado</strong>.
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground border-t border-border/50 pt-2">
-                    💡 Você também pode selecionar um trecho de texto e clicar no botão para transformá-lo em lacuna diretamente.
-                  </p>
                 </div>
               )}
 
