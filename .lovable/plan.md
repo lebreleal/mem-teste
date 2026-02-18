@@ -1,57 +1,77 @@
 
 
-# Correcao do Build + Mais Otimizacoes de Performance
+# Otimizacao de Performance - Round 3 (Queries Paralelas)
 
-## 1. Corrigir erro de build: `@tiptap/pm` no manualChunks
+## Risco de bugs: MUITO BAIXO
 
-O pacote `@tiptap/pm` nao tem um export "." valido no package.json, entao o Vite/Rollup nao consegue resolve-lo como entry no `manualChunks`. A solucao e simplesmente remover `@tiptap/pm` e `@tiptap/core` da lista de manualChunks.
+As mudancas sao puramente sobre **ordem de execucao** de queries que ja existem. Nenhuma logica de negocio muda. Os mesmos dados sao buscados, as mesmas variaveis sao preenchidas - so que em paralelo em vez de sequencial. Se uma query falhar, o comportamento de erro continua identico.
 
-**Arquivo:** `vite.config.ts`
-- Remover `'@tiptap/core'` e `'@tiptap/pm'` do array `vendor-tiptap`
+## O que NAO vai mudar
 
-## 2. Lazy load do `PremiumModal` no Dashboard
+- Nenhuma funcionalidade e alterada
+- Nenhum componente visual muda
+- Nenhuma query e removida ou adicionada
+- Os mesmos dados continuam sendo retornados
+- O tratamento de erros continua identico
 
-Esse componente importa `ScrollArea`, `usePremium` e varios icones, mas so aparece quando o usuario clica "Seja Premium". Pode ser lazy loaded.
+---
 
-**Arquivo:** `src/pages/Dashboard.tsx`
-- Trocar import estatico por `lazy(() => import(...))`
-- Envolver em `<Suspense>`
+## Mudanca 1: Paralelizar queries no `fetchStudyQueue`
 
-## 3. Lazy load do `CommunityDeleteBlockDialog` no Dashboard
+**Arquivo:** `src/services/studyService.ts`
 
-So aparece em caso raro (quando tenta deletar deck compartilhado). Nao precisa carregar sempre.
+Atualmente, apos calcular os `deckIds` e `limitScopeIds`, o codigo faz 2 queries sequenciais (cards + scopeCards) que sao completamente independentes. Vamos roda-las em paralelo com `Promise.all`.
 
-**Arquivo:** `src/pages/Dashboard.tsx`
-- Trocar import estatico por `lazy(() => import(...))`
-- Envolver em `<Suspense>`
+Antes:
+```text
+cards query -> scopeCards query -> RPC (sequencial)
+```
 
-## 4. Dynamic import do `docUtils` no `useExamCreateFlow`
+Depois:
+```text
+[cards query + scopeCards query] -> RPC (paralelo + sequencial)
+```
 
-Atualmente importa `extractDocumentText` (que puxa JSZip ~90KB) estaticamente. Pode ser dynamic import como ja e feito no `useAIDeckFlow.ts`.
+Economia estimada: ~100-300ms
 
-**Arquivo:** `src/hooks/useExamCreateFlow.ts`
-- Trocar `import { extractDocumentText } from '@/lib/docUtils'` por dynamic import no ponto de uso
+## Mudanca 2: Paralelizar queries no `fetchMissions`
 
-## 5. Dynamic import do `ankiParser` no `ImportCardsDialog`
+**Arquivo:** `src/services/missionService.ts`
 
-O `ankiParser` puxa `jszip` (~90KB) e `sql.js` (~400KB). So e usado quando o usuario importa um arquivo .apkg. Pode ser dynamic import.
+Atualmente faz 5 queries sequenciais. Vamos agrupar:
+- Fase 1: `definitions` + `userMissions` em paralelo
+- Fase 2: `profile` + `deckCount` + `weeklyCards` em paralelo
 
-**Arquivo:** `src/components/ImportCardsDialog.tsx`
-- Trocar import estatico de `parseApkgFile` por dynamic import no handler de arquivo Anki
+Antes:
+```text
+definitions -> userMissions -> profile -> deckCount -> weeklyCards
+```
 
-## Resumo das mudancas
+Depois:
+```text
+[definitions + userMissions] -> [profile + deckCount + weeklyCards]
+```
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `vite.config.ts` | Remover `@tiptap/core` e `@tiptap/pm` do manualChunks |
-| `src/pages/Dashboard.tsx` | Lazy load PremiumModal e CommunityDeleteBlockDialog |
-| `src/hooks/useExamCreateFlow.ts` | Dynamic import de docUtils |
-| `src/components/ImportCardsDialog.tsx` | Dynamic import de ankiParser |
+Economia estimada: ~300-500ms
 
-## Impacto estimado adicional
+## Mudanca 3: Lazy load do `ProModelConfirmDialog` no Study
 
-- **Corrige o erro de build** imediatamente
-- **-90KB** de JSZip removido do bundle do ExamCreate
-- **-490KB** de sql.js + jszip removido do bundle do ImportCardsDialog (carrega so quando usuario importa .apkg)
-- Dashboard fica ainda mais leve com PremiumModal e CommunityDeleteBlockDialog lazy
+**Arquivo:** `src/pages/Study.tsx`
+
+Esse dialog so aparece quando o usuario tenta trocar para modelo Pro (rarissimo). Pode ser `React.lazy()`.
+
+- Trocar `import ProModelConfirmDialog from ...` por `const ProModelConfirmDialog = lazy(() => import(...))`
+- Envolver em `<Suspense fallback={null}>`
+
+Economia: ~5KB removidos do bundle da pagina Study
+
+## Resumo
+
+| Arquivo | Mudanca | Risco |
+|---------|---------|-------|
+| `src/services/studyService.ts` | `Promise.all` para cards + scopeCards | Zero - mesmas queries, mesmos dados |
+| `src/services/missionService.ts` | `Promise.all` em 2 fases | Zero - mesmas queries, mesmos dados |
+| `src/pages/Study.tsx` | Lazy load ProModelConfirmDialog | Zero - padrao ja usado no Dashboard |
+
+Nenhuma dessas mudancas altera logica de negocio. Sao puramente otimizacoes de I/O e bundle.
 
