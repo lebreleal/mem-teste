@@ -244,7 +244,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 min-w-0">
               <ArrowUpRight className="h-5 w-5 shrink-0" />
@@ -305,40 +305,30 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk move decks dialog — uses same navigation browser */}
-      <Dialog open={props.bulkMoveDeckOpen} onOpenChange={open => { if (!open) { props.setBulkMoveDeckOpen(false); props.setBulkMoveTargetFolder(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
+      {/* Bulk move decks dialog — uses same navigation browser as single move */}
+      <Dialog open={props.bulkMoveDeckOpen} onOpenChange={open => { if (!open) { props.setBulkMoveDeckOpen(false); props.setMoveBrowseFolderId(null); props.setMoveParentDeckId(null); } }}>
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-display">
               Mover {props.selectedDeckCount} baralho{props.selectedDeckCount > 1 ? 's' : ''}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Items list — reuse folder navigation for bulk move */}
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
-              <button
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === null ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
-                onClick={() => props.setBulkMoveTargetFolder(null)}
-              >
-                <FolderOpen className="h-4 w-4 shrink-0" />
-                <span className="flex-1 truncate">Início (raiz)</span>
-              </button>
-              {props.folders.filter(f => !f.is_archived).map(f => (
-                <button
-                  key={f.id}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === f.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
-                  onClick={() => props.setBulkMoveTargetFolder(f.id)}
-                >
-                  <FolderOpen className="h-4 w-4 text-primary shrink-0" />
-                  <span className="flex-1 truncate">{f.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => props.setBulkMoveDeckOpen(false)}>Cancelar</Button>
-              <Button size="sm" onClick={props.onBulkMoveSubmit}>Mover</Button>
-            </div>
-          </div>
+          <MoveBrowser
+            folders={props.folders}
+            decks={props.decks}
+            movableFolders={props.movableFolders}
+            movableDecks={props.movableDecks}
+            moveBreadcrumb={props.moveBreadcrumb}
+            moveBrowseFolderId={props.moveBrowseFolderId}
+            setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+            moveParentDeckId={props.moveParentDeckId}
+            setMoveParentDeckId={props.setMoveParentDeckId}
+            showDecks={true}
+            onCreateFolderInMove={props.onCreateFolderInMove}
+            onMoveSubmit={props.onBulkMoveSubmit}
+            onCancel={() => { props.setBulkMoveDeckOpen(false); props.setMoveBrowseFolderId(null); props.setMoveParentDeckId(null); }}
+            submitLabel={props.moveParentDeckId ? 'Mover como sub-deck' : 'Mover aqui'}
+          />
         </DialogContent>
       </Dialog>
     </>

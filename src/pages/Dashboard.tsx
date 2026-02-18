@@ -160,7 +160,7 @@ const Dashboard = () => {
   const handleBulkMoveSubmit = async () => {
     const ids = Array.from(state.selectedDeckIds);
     try {
-      await bulkMoveDecks(ids, state.bulkMoveTargetFolder);
+      await bulkMoveDecks(ids, state.moveBrowseFolderId);
       toast({ title: `${ids.length} baralho(s) movido(s)!` });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
     } catch {
@@ -169,7 +169,8 @@ const Dashboard = () => {
     state.setSelectedDeckIds(new Set());
     state.setDeckSelectionMode(false);
     state.setBulkMoveDeckOpen(false);
-    state.setBulkMoveTargetFolder(null);
+    state.setMoveBrowseFolderId(null);
+    state.setMoveParentDeckId(null);
   };
 
   const handleBulkArchive = async () => {
@@ -256,7 +257,7 @@ const Dashboard = () => {
           onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
           onCreateAI={() => state.setAiDeckOpen(true)}
           onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
-          onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setBulkMoveTargetFolder(null); }}
+          onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
           onBulkArchive={handleBulkArchive}
           onBulkDelete={handleBulkDelete}
           searchQuery={searchQuery}
