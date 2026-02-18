@@ -31,6 +31,7 @@ export function useDashboardState() {
   const [renameName, setRenameName] = useState('');
   const [moveTarget, setMoveTarget] = useState<{ type: 'deck' | 'folder'; id: string; name: string } | null>(null);
   const [moveBrowseFolderId, setMoveBrowseFolderId] = useState<string | null>(null);
+  const [moveParentDeckId, setMoveParentDeckId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importDeckId, setImportDeckId] = useState<string | null>(null);
   const [importDeckName, setImportDeckName] = useState('');
@@ -124,26 +125,58 @@ export function useDashboardState() {
     return [folderId, ...children.flatMap(c => getDescendantIds(c.id))];
   };
 
+  const getDescendantDeckIds = (deckId: string): string[] => {
+    const children = decks.filter(d => d.parent_deck_id === deckId);
+    return [deckId, ...children.flatMap(c => getDescendantDeckIds(c.id))];
+  };
+
   const movableFolders = useMemo(() => {
     if (!moveTarget) return [];
+    if (moveParentDeckId) return []; // browsing inside a deck — no folders to show
     const excludeIds = moveTarget.type === 'folder' ? getDescendantIds(moveTarget.id) : [];
     return folders.filter(f =>
       f.parent_id === moveBrowseFolderId && !f.is_archived && !excludeIds.includes(f.id)
     );
-  }, [moveTarget, moveBrowseFolderId, folders]);
+  }, [moveTarget, moveBrowseFolderId, moveParentDeckId, folders]);
+
+  /** Decks available as move targets (potential parents) in current browse context */
+  const movableDecks = useMemo(() => {
+    if (!moveTarget || moveTarget.type === 'folder') return [];
+    const excludeIds = getDescendantDeckIds(moveTarget.id);
+    if (moveParentDeckId) {
+      // Show sub-decks of the currently browsed deck
+      return decks.filter(d =>
+        d.parent_deck_id === moveParentDeckId && !d.is_archived && !excludeIds.includes(d.id)
+      );
+    }
+    // Show root decks in the current browsed folder
+    return decks.filter(d =>
+      d.folder_id === moveBrowseFolderId && !d.parent_deck_id && !d.is_archived && !excludeIds.includes(d.id)
+    );
+  }, [moveTarget, moveBrowseFolderId, moveParentDeckId, decks]);
 
   const moveBreadcrumb = useMemo(() => {
     const path: BreadcrumbItem[] = [{ id: null, name: 'Início' }];
-    if (!moveBrowseFolderId) return path;
-    const buildPath = (fId: string) => {
-      const folder = folders.find(f => f.id === fId);
-      if (!folder) return;
-      if (folder.parent_id) buildPath(folder.parent_id);
-      path.push({ id: folder.id, name: folder.name });
-    };
-    buildPath(moveBrowseFolderId);
+    if (moveBrowseFolderId) {
+      const buildFolderPath = (fId: string) => {
+        const folder = folders.find(f => f.id === fId);
+        if (!folder) return;
+        if (folder.parent_id) buildFolderPath(folder.parent_id);
+        path.push({ id: folder.id, name: folder.name });
+      };
+      buildFolderPath(moveBrowseFolderId);
+    }
+    if (moveParentDeckId) {
+      const buildDeckPath = (dId: string) => {
+        const deck = decks.find(d => d.id === dId);
+        if (!deck) return;
+        if (deck.parent_deck_id) buildDeckPath(deck.parent_deck_id);
+        path.push({ id: `deck:${deck.id}`, name: `📦 ${deck.name}` });
+      };
+      buildDeckPath(moveParentDeckId);
+    }
     return path;
-  }, [moveBrowseFolderId, folders]);
+  }, [moveBrowseFolderId, moveParentDeckId, folders, decks]);
 
   const getCommunityLinkId = (deck: DeckWithStats): string | null => {
     if (deck.source_turma_deck_id) return deck.source_turma_deck_id;
@@ -192,6 +225,7 @@ export function useDashboardState() {
     deleteTarget, setDeleteTarget,
     renameTarget, setRenameTarget, renameName, setRenameName,
     moveTarget, setMoveTarget, moveBrowseFolderId, setMoveBrowseFolderId,
+    moveParentDeckId, setMoveParentDeckId,
     importOpen, setImportOpen, importDeckId, setImportDeckId,
     importDeckName, setImportDeckName,
     aiDeckOpen, setAiDeckOpen,
@@ -208,6 +242,7 @@ export function useDashboardState() {
     // Helpers
     getSubDecks, getAggregateStats, getCommunityLinkId, getFolderCommunityLinkId,
     getFolderDueCount, folderHasCommunityLink,
+    movableDecks,
   };
 
   function getFolderDueCount(folderId: string): number {

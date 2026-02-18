@@ -125,9 +125,12 @@ export async function renameDeck(id: string, name: string) {
   if (error) throw error;
 }
 
-/** Move a deck to a different folder. */
-export async function moveDeck(id: string, folderId: string | null) {
-  const { error } = await supabase.from('decks').update({ folder_id: folderId } as any).eq('id', id);
+/** Move a deck to a different folder and/or parent deck. */
+export async function moveDeck(id: string, folderId: string | null, parentDeckId?: string | null) {
+  const { error } = await supabase.from('decks').update({
+    folder_id: folderId,
+    parent_deck_id: parentDeckId ?? null,
+  } as any).eq('id', id);
   if (error) throw error;
 }
 

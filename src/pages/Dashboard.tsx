@@ -135,10 +135,20 @@ const Dashboard = () => {
   const handleMoveSubmit = () => {
     if (!state.moveTarget) return;
     if (state.moveTarget.type === 'deck') {
-      state.moveDeck.mutate({ id: state.moveTarget.id, folderId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Baralho movido!' }); },
-        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
-      });
+      const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
+      // If moving into a parent deck, find that deck's folder_id
+      let folderId = targetFolderId;
+      if (state.moveParentDeckId) {
+        const parentDeck = state.decks.find(d => d.id === state.moveParentDeckId);
+        folderId = parentDeck?.folder_id ?? null;
+      }
+      state.moveDeck.mutate(
+        { id: state.moveTarget.id, folderId: folderId, parentDeckId: state.moveParentDeckId ?? null },
+        {
+          onSuccess: () => { state.setMoveTarget(null); state.setMoveParentDeckId(null); toast({ title: 'Baralho movido!' }); },
+          onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+        }
+      );
     } else {
       state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
         onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Pasta movida!' }); },
@@ -280,7 +290,8 @@ const Dashboard = () => {
           onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
           
           onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); }}
+          onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
           onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
           onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
           onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
@@ -353,7 +364,11 @@ const Dashboard = () => {
 
         moveTarget={state.moveTarget} setMoveTarget={state.setMoveTarget}
         moveBrowseFolderId={state.moveBrowseFolderId} setMoveBrowseFolderId={state.setMoveBrowseFolderId}
-        moveBreadcrumb={state.moveBreadcrumb} movableFolders={state.movableFolders} folders={state.folders}
+        moveParentDeckId={state.moveParentDeckId} setMoveParentDeckId={state.setMoveParentDeckId}
+        moveBreadcrumb={state.moveBreadcrumb} movableFolders={state.movableFolders}
+        movableDecks={state.movableDecks}
+        folders={state.folders}
+        decks={state.decks}
         onMoveSubmit={handleMoveSubmit}
         onCreateFolderInMove={() => { state.setCreateType('folder'); state.setCreateName(''); }}
 

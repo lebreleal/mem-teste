@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2,
+  ChevronRight, Link2, Pencil,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -28,6 +28,7 @@ interface DeckRowProps {
   getCommunityLinkId: (deck: DeckWithStats) => string | null;
   navigateToCommunity: (id: string) => void;
   onCreateSubDeck: (deckId: string) => void;
+  onRename: (deck: DeckWithStats) => void;
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
@@ -38,7 +39,7 @@ const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers,
+  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -101,6 +102,11 @@ const DeckRow = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {!deck.source_turma_deck_id && (
+                <DropdownMenuItem onClick={() => onRename(deck)}>
+                  <Pencil className="mr-2 h-4 w-4" /> Renomear
+                </DropdownMenuItem>
+              )}
+              {!deck.source_turma_deck_id && (
                 <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
                   <Settings className="mr-2 h-4 w-4" /> Configurações
                 </DropdownMenuItem>
@@ -138,7 +144,7 @@ const DeckRow = ({
           deck: sub, depth: depth + 1, deckSelectionMode, selectedDeckIds, expandedDecks,
           toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
           getCommunityLinkId, navigateToCommunity,
-          onCreateSubDeck, onMove, onArchive, onDelete,
+          onCreateSubDeck, onRename, onMove, onArchive, onDelete,
         }} />
       ))}
     </>
