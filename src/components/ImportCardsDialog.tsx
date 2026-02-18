@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -7,20 +7,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, Brain, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, Brain, AlertTriangle, Package, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import AIModelSelector from '@/components/AIModelSelector';
 import { useToast } from '@/hooks/use-toast';
+import { parseApkgFile, type AnkiParseResult } from '@/lib/ankiParser';
 
-type ImportSource = null | 'csv';
+type ImportSource = null | 'csv' | 'anki';
 type FieldSep = 'tab' | 'comma' | 'custom';
 type CardSep = 'newline' | 'semicolon' | 'custom';
 
 interface ParsedCard {
   front: string;
   back: string;
+  cardType?: string;
 }
 
 interface ImportCardsDialogProps {
@@ -31,75 +33,37 @@ interface ImportCardsDialogProps {
 }
 
 /**
- * RFC 4180 compliant CSV parser that handles:
- * - Quoted fields with embedded newlines
- * - Escaped quotes ("" inside quoted fields)
- * - Mixed quoted and unquoted fields
+ * RFC 4180 compliant CSV parser
  */
 function parseCSV(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let i = 0;
   const len = text.length;
-
   while (i < len) {
     const row: string[] = [];
-    
     while (i < len) {
       let field = '';
-      
-      // Skip leading whitespace before a potential quote
-      const startI = i;
-      
       if (i < len && text[i] === '"') {
-        // Quoted field
-        i++; // skip opening quote
+        i++;
         while (i < len) {
           if (text[i] === '"') {
-            if (i + 1 < len && text[i + 1] === '"') {
-              field += '"';
-              i += 2; // skip escaped quote
-            } else {
-              i++; // skip closing quote
-              break;
-            }
-          } else {
-            field += text[i];
-            i++;
-          }
+            if (i + 1 < len && text[i + 1] === '"') { field += '"'; i += 2; }
+            else { i++; break; }
+          } else { field += text[i]; i++; }
         }
-        // Skip to delimiter or end of line
-        while (i < len && text[i] !== delimiter.charAt(0) && text[i] !== '\n' && text[i] !== '\r') {
-          i++;
-        }
+        while (i < len && text[i] !== delimiter.charAt(0) && text[i] !== '\n' && text[i] !== '\r') i++;
       } else {
-        // Unquoted field
-        while (i < len && text[i] !== delimiter.charAt(0) && text[i] !== '\n' && text[i] !== '\r') {
-          field += text[i];
-          i++;
-        }
+        while (i < len && text[i] !== delimiter.charAt(0) && text[i] !== '\n' && text[i] !== '\r') { field += text[i]; i++; }
       }
-      
       row.push(field.trim());
-      
-      if (i < len && text.substring(i, i + delimiter.length) === delimiter) {
-        i += delimiter.length; // skip delimiter
-        continue; // next field in same row
-      }
-      
-      // End of row
+      if (i < len && text.substring(i, i + delimiter.length) === delimiter) { i += delimiter.length; continue; }
       if (i < len && text[i] === '\r') i++;
       if (i < len && text[i] === '\n') i++;
       break;
     }
-    
-    // Skip completely empty rows
-    if (row.length === 1 && row[0] === '' && i <= len) {
-      continue;
-    }
-    
+    if (row.length === 1 && row[0] === '' && i <= len) continue;
     rows.push(row);
   }
-  
   return rows;
 }
 
@@ -117,12 +81,23 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [fieldSepCustom, setFieldSepCustom] = useState('-');
   const [cardSep, setCardSep] = useState<CardSep>('newline');
   const [cardSepCustom, setCardSepCustom] = useState('\\n\\n');
-  const [useRFC, setUseRFC] = useState(true); // RFC 4180 mode for proper CSV
+  const [useRFC, setUseRFC] = useState(true);
 
   // AI enhancement state
   const [enhancing, setEnhancing] = useState(false);
   const [enhanced, setEnhanced] = useState(false);
   const [enhancedCards, setEnhancedCards] = useState<ParsedCard[]>([]);
+
+  // AI auto-detect state
+  const [autoDetecting, setAutoDetecting] = useState(false);
+  const [autoDetected, setAutoDetected] = useState(false);
+
+  // Anki state
+  const [ankiLoading, setAnkiLoading] = useState(false);
+  const [ankiResult, setAnkiResult] = useState<AnkiParseResult | null>(null);
+
+  const csvFileRef = useRef<HTMLInputElement>(null);
+  const ankiFileRef = useRef<HTMLInputElement>(null);
 
   const AI_COST = 2;
 
@@ -135,6 +110,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setUseRFC(true);
     setEnhanced(false);
     setEnhancedCards([]);
+    setAutoDetected(false);
+    setAnkiResult(null);
   };
 
   const handleClose = (v: boolean) => {
@@ -157,32 +134,108 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const parsedCards: ParsedCard[] = useMemo(() => {
     if (enhanced && enhancedCards.length > 0) return enhancedCards;
     if (!rawText.trim()) return [];
-
     const fieldDelimiter = getFieldSepChar();
-
-    // Use RFC 4180 parser for CSV with quoted fields
     if (useRFC && (fieldSep === 'comma' || fieldSep === 'tab')) {
       const rows = parseCSV(rawText, fieldDelimiter);
-      return rows
-        .filter(row => row.length >= 1 && row[0].trim())
-        .map(row => ({
-          front: row[0] || '',
-          back: row.slice(1).join(' | ').trim(),
-        }))
-        .filter(c => c.front);
+      return rows.filter(row => row.length >= 1 && row[0].trim()).map(row => ({
+        front: row[0] || '', back: row.slice(1).join(' | ').trim(),
+      })).filter(c => c.front);
     }
-
-    // Legacy simple split mode
     const cardDelimiter = getCardSepPattern();
     const entries = rawText.split(cardDelimiter).filter(s => s.trim());
     return entries.map(entry => {
       const parts = entry.split(fieldDelimiter);
-      return {
-        front: (parts[0] || '').trim(),
-        back: (parts.slice(1).join(fieldDelimiter) || '').trim(),
-      };
+      return { front: (parts[0] || '').trim(), back: (parts.slice(1).join(fieldDelimiter) || '').trim() };
     }).filter(c => c.front);
   }, [rawText, fieldSep, fieldSepCustom, cardSep, cardSepCustom, useRFC, enhanced, enhancedCards]);
+
+  // AI auto-detect format
+  const autoDetectFormat = useCallback(async (text: string) => {
+    if (!text.trim() || text.length < 10) return;
+    setAutoDetecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('detect-import-format', {
+        body: { sample: text.slice(0, 2000) },
+      });
+      if (error) throw error;
+      if (data?.fieldSep) {
+        if (data.fieldSep === 'tab') { setFieldSep('tab'); setUseRFC(true); }
+        else if (data.fieldSep === 'comma') { setFieldSep('comma'); setUseRFC(true); }
+        else { setFieldSep('custom'); setFieldSepCustom(data.fieldSep); setUseRFC(false); }
+      }
+      if (data?.cardSep) {
+        if (data.cardSep === 'newline' || data.cardSep === 'double_newline') setCardSep('newline');
+        else if (data.cardSep === 'semicolon') setCardSep('semicolon');
+        else { setCardSep('custom'); setCardSepCustom(data.cardSep); }
+      }
+      setAutoDetected(true);
+    } catch (err) {
+      console.error('Auto-detect failed:', err);
+      // Fall back to simple heuristic
+      const firstLine = text.split('\n')[0] || '';
+      if (firstLine.includes('\t')) { setFieldSep('tab'); setUseRFC(true); }
+      else { setFieldSep('comma'); setUseRFC(true); }
+    } finally {
+      setAutoDetecting(false);
+    }
+  }, []);
+
+  // CSV file upload - click format button → immediately open file picker
+  const handleCsvFormatClick = () => {
+    setSource('csv');
+    // Small delay to let state settle
+    setTimeout(() => csvFileRef.current?.click(), 100);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target?.result as string;
+      if (text) {
+        setRawText(text);
+        setEnhanced(false);
+        setEnhancedCards([]);
+        if (!deckName) {
+          const name = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
+          setDeckName(name.charAt(0).toUpperCase() + name.slice(1));
+        }
+        // AI auto-detect separators
+        await autoDetectFormat(text);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Anki format
+  const handleAnkiFormatClick = () => {
+    setSource('anki');
+    setTimeout(() => ankiFileRef.current?.click(), 100);
+  };
+
+  const handleAnkiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setAnkiLoading(true);
+    try {
+      const result = await parseApkgFile(file);
+      setAnkiResult(result);
+      if (!deckName) setDeckName(result.deckName);
+      toast({
+        title: `${result.cards.length} cartões encontrados`,
+        description: result.mediaCount > 0 ? `${result.mediaCount} arquivos de mídia extraídos` : undefined,
+      });
+    } catch (err: any) {
+      console.error('Anki parse error:', err);
+      toast({ title: 'Erro ao ler arquivo Anki', description: err.message, variant: 'destructive' });
+      setSource(null);
+    } finally {
+      setAnkiLoading(false);
+    }
+  };
 
   // AI enhance
   const handleEnhance = async () => {
@@ -191,16 +244,13 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       toast({ title: 'Créditos IA insuficientes', description: `Necessário: ${AI_COST} créditos`, variant: 'destructive' });
       return;
     }
-
     setEnhancing(true);
     try {
       const { data, error } = await supabase.functions.invoke('enhance-import', {
         body: { cards: parsedCards.map(c => ({ front: c.front, back: c.back })), aiModel: model, energyCost: AI_COST },
       });
-
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
       const corrected = data.cards as ParsedCard[];
       setEnhancedCards(corrected);
       setEnhanced(true);
@@ -215,43 +265,23 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   };
 
   const handleImport = () => {
+    if (source === 'anki' && ankiResult) {
+      if (!deckName.trim()) return;
+      onImport(deckName.trim(), ankiResult.cards.map(c => ({
+        frontContent: c.front,
+        backContent: c.back,
+        cardType: c.cardType,
+      })));
+      reset();
+      return;
+    }
     if (parsedCards.length === 0 || !deckName.trim()) return;
     onImport(deckName.trim(), parsedCards.map(c => ({
       frontContent: c.front,
       backContent: c.back,
-      cardType: 'basic',
+      cardType: c.cardType || 'basic',
     })));
     reset();
-  };
-
-  // File upload handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      if (text) {
-        setRawText(text);
-        setEnhanced(false);
-        setEnhancedCards([]);
-        // Auto-detect separator
-        const firstLine = text.split('\n')[0] || '';
-        if (firstLine.includes('\t')) {
-          setFieldSep('tab');
-        } else {
-          setFieldSep('comma');
-        }
-        setUseRFC(true);
-        // Auto-set deck name from filename
-        if (!deckName) {
-          const name = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
-          setDeckName(name.charAt(0).toUpperCase() + name.slice(1));
-        }
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
   };
 
   // Detect potential issues
@@ -262,18 +292,32 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     return emptyBacks > parsedCards.length * 0.1 || veryShortFronts > 5;
   }, [parsedCards]);
 
+  const activeCards = source === 'anki' ? (ankiResult?.cards || []) : parsedCards;
+  const cardCount = activeCards.length;
+
+  // Hidden file inputs
+  const fileInputs = (
+    <>
+      <input ref={csvFileRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleFileUpload} />
+      <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc" className="hidden" onChange={handleAnkiUpload} />
+    </>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        {fileInputs}
+
         {!source ? (
           <>
             <DialogHeader>
               <DialogTitle className="font-display">Importar cartões</DialogTitle>
-              <DialogDescription>Você pode importar cartões de:</DialogDescription>
+              <DialogDescription>Escolha o formato do arquivo:</DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
+              {/* CSV / TSV / TXT */}
               <button
-                onClick={() => setSource('csv')}
+                onClick={handleCsvFormatClick}
                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
@@ -281,13 +325,108 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-card-foreground">CSV / TSV / TXT</p>
-                  <p className="text-xs text-muted-foreground">Importar de qualquer documento separado por vírgula ou tab</p>
+                  <p className="text-xs text-muted-foreground">Separado por vírgula, tab ou personalizado</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </button>
+
+              {/* Anki */}
+              <button
+                onClick={handleAnkiFormatClick}
+                className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
+                  <Package className="h-5 w-5 text-accent-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-card-foreground">Anki</p>
+                  <p className="text-xs text-muted-foreground">Formatos .apkg, .colpkg, .ofc</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             </div>
           </>
+        ) : source === 'anki' ? (
+          /* ── Anki import flow ── */
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-display flex items-center gap-2">
+                <button onClick={() => { setSource(null); setAnkiResult(null); }} className="rounded-full p-1 hover:bg-muted transition-colors">
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                Importar do Anki
+              </DialogTitle>
+            </DialogHeader>
+
+            {ankiLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Analisando arquivo Anki...</p>
+              </div>
+            ) : ankiResult ? (
+              <div className="space-y-4">
+                <div>
+                  <Label className="mb-1.5 block">Nome do baralho</Label>
+                  <Input value={deckName} onChange={e => setDeckName(e.target.value)} placeholder="Nome do baralho" maxLength={100} />
+                </div>
+
+                {ankiResult.mediaCount > 0 && (
+                  <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    <span className="text-xs text-foreground">{ankiResult.mediaCount} arquivos de mídia incluídos</span>
+                  </div>
+                )}
+
+                {/* Preview */}
+                <div>
+                  <Label className="mb-2 block text-sm font-semibold">
+                    Prévia ({ankiResult.cards.length} cartões)
+                  </Label>
+                  <div className="max-h-48 overflow-y-auto space-y-2">
+                    {ankiResult.cards.slice(0, 20).map((card, i) => (
+                      <div key={i} className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                            card.cardType === 'cloze' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {card.cardType === 'cloze' ? 'Cloze' : 'Básico'}
+                          </span>
+                          {card.tags.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground">{card.tags.slice(0, 3).join(', ')}</span>
+                          )}
+                        </div>
+                        <p className="font-medium text-card-foreground text-xs line-clamp-2"
+                           dangerouslySetInnerHTML={{ __html: card.front.replace(/<img[^>]*>/g, '[imagem]') }} />
+                        {card.cardType !== 'cloze' && card.back && (
+                          <p className="mt-1 text-muted-foreground text-xs line-clamp-2"
+                             dangerouslySetInnerHTML={{ __html: card.back.replace(/<img[^>]*>/g, '[imagem]') }} />
+                        )}
+                      </div>
+                    ))}
+                    {ankiResult.cards.length > 20 && (
+                      <p className="text-center text-xs text-muted-foreground">...e mais {ankiResult.cards.length - 20} cartões</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
+                  <Button onClick={handleImport} disabled={!deckName.trim() || loading}>
+                    {loading ? 'Importando...' : `Importar (${ankiResult.cards.length})`}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <p className="text-sm text-muted-foreground">Selecione um arquivo .apkg, .colpkg ou .ofc</p>
+                <Button variant="outline" onClick={() => ankiFileRef.current?.click()}>
+                  <Download className="h-4 w-4 mr-2" /> Selecionar arquivo
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
+          /* ── CSV import flow ── */
           <>
             <DialogHeader>
               <DialogTitle className="font-display flex items-center gap-2">
@@ -299,15 +438,9 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Deck name */}
               <div>
                 <Label className="mb-1.5 block">Nome do baralho</Label>
-                <Input
-                  value={deckName}
-                  onChange={e => setDeckName(e.target.value)}
-                  placeholder="Ex: Ginecologia"
-                  maxLength={100}
-                />
+                <Input value={deckName} onChange={e => setDeckName(e.target.value)} placeholder="Ex: Ginecologia" maxLength={100} />
               </div>
 
               {/* File upload + text */}
@@ -322,33 +455,71 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
                 <Textarea
                   value={rawText}
-                  onChange={e => { setRawText(e.target.value); setEnhanced(false); setEnhancedCards([]); }}
+                  onChange={e => { setRawText(e.target.value); setEnhanced(false); setEnhancedCards([]); setAutoDetected(false); }}
                   placeholder={"Pergunta,Resposta\nPergunta 2,Resposta 2"}
                   rows={5}
                   className="font-mono text-xs"
                 />
               </div>
 
+              {/* AI auto-detect indicator */}
+              {autoDetecting && (
+                <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-xs text-foreground">IA analisando formato...</span>
+                </div>
+              )}
+
+              {autoDetected && !autoDetecting && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Formato detectado pela IA ✓</span>
+                </div>
+              )}
+
               {/* Separators */}
-              <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="mb-2 block text-sm font-semibold">Separador de campos</Label>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="radio" name="fieldSep" checked={fieldSep === 'comma'} onChange={() => { setFieldSep('comma'); setUseRFC(true); }} className="accent-primary" />
-                      Vírgula
-                    </label>
+                  <Label className="mb-2 block text-xs font-semibold text-muted-foreground">Entre a frente e o verso</Label>
+                  <div className="space-y-1.5">
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                       <input type="radio" name="fieldSep" checked={fieldSep === 'tab'} onChange={() => { setFieldSep('tab'); setUseRFC(true); }} className="accent-primary" />
                       Tab
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" name="fieldSep" checked={fieldSep === 'comma'} onChange={() => { setFieldSep('comma'); setUseRFC(true); }} className="accent-primary" />
+                      Vírgula
                     </label>
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                       <input type="radio" name="fieldSep" checked={fieldSep === 'custom'} onChange={() => { setFieldSep('custom'); setUseRFC(false); }} className="accent-primary" />
                       <Input
                         value={fieldSepCustom}
                         onChange={e => { setFieldSepCustom(e.target.value); setFieldSep('custom'); setUseRFC(false); }}
-                        className="h-7 w-20 text-xs"
-                        placeholder="Outro"
+                        className="h-7 w-24 text-xs"
+                        placeholder="Personalizado: -"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="mb-2 block text-xs font-semibold text-muted-foreground">Entre cartões</Label>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" name="cardSep" checked={cardSep === 'newline'} onChange={() => setCardSep('newline')} className="accent-primary" />
+                      Nova linha
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" name="cardSep" checked={cardSep === 'semicolon'} onChange={() => setCardSep('semicolon')} className="accent-primary" />
+                      Ponto e vírgula
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" name="cardSep" checked={cardSep === 'custom'} onChange={() => setCardSep('custom')} className="accent-primary" />
+                      <Input
+                        value={cardSepCustom}
+                        onChange={e => { setCardSepCustom(e.target.value); setCardSep('custom'); }}
+                        className="h-7 w-24 text-xs"
+                        placeholder="Personalizado"
                       />
                     </label>
                   </div>
@@ -361,29 +532,18 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-xs font-medium text-foreground">Possíveis erros de parsing detectados</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Alguns cards podem estar quebrados. Use a IA para corrigir automaticamente.
-                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Use a IA para corrigir automaticamente.</p>
                   </div>
                 </div>
               )}
 
               {parsedCards.length > 0 && !enhanced && (
-                <Button
-                  variant="outline"
-                  className="w-full gap-2 border-primary/30 hover:bg-primary/5"
-                  onClick={handleEnhance}
-                  disabled={enhancing || energy < AI_COST}
-                >
+                <Button variant="outline" className="w-full gap-2 border-primary/30 hover:bg-primary/5" onClick={handleEnhance} disabled={enhancing || energy < AI_COST}>
                   {enhancing ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      Aprimorando com IA...
-                    </>
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Aprimorando com IA...</>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      Aprimorar com IA
+                      <Sparkles className="h-4 w-4 text-primary" /> Aprimorar com IA
                       <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
                         <Brain className="h-3 w-3" style={{ color: 'hsl(var(--energy-purple))' }} /> {AI_COST}
                       </span>
@@ -401,14 +561,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
               {/* Preview */}
               <div>
-                <Label className="mb-2 block text-sm font-semibold">
-                  Prévia dos cartões ({parsedCards.length})
-                </Label>
+                <Label className="mb-2 block text-sm font-semibold">Prévia dos cartões ({parsedCards.length})</Label>
                 {parsedCards.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto space-y-2">
                     {parsedCards.slice(0, 20).map((card, i) => (
                       <div key={i} className={`rounded-lg border p-3 text-sm ${
-                        !card.back.trim() ? 'border-warning/50 bg-warning/5' : 'border-border bg-muted/30'
+                        !card.back?.trim() ? 'border-warning/50 bg-warning/5' : 'border-border bg-muted/30'
                       }`}>
                         <p className="font-medium text-card-foreground text-xs">{card.front}</p>
                         {card.back ? (
@@ -419,9 +577,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                       </div>
                     ))}
                     {parsedCards.length > 20 && (
-                      <p className="text-center text-xs text-muted-foreground">
-                        ...e mais {parsedCards.length - 20} cartões
-                      </p>
+                      <p className="text-center text-xs text-muted-foreground">...e mais {parsedCards.length - 20} cartões</p>
                     )}
                   </div>
                 ) : (
