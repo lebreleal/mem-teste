@@ -253,9 +253,8 @@ const ContentTab = () => {
         </div>
         <div className="flex items-center gap-2">
           {hasContent && canEdit && !selectionMode && (
-            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => setReorderMode(!reorderMode)}>
-              <GripVertical className="h-4 w-4" />
-              <span>{reorderMode ? 'Pronto' : 'Ordenar'}</span>
+            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setReorderMode(!reorderMode)} title={reorderMode ? 'Pronto' : 'Ordenar'}>
+              {reorderMode ? <X className="h-4 w-4" /> : <GripVertical className="h-4 w-4" />}
             </Button>
           )}
           {hasContent && (isAdmin || isMod) && (
@@ -324,7 +323,7 @@ const ContentTab = () => {
       ) : (
         <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
           {/* Subject folders */}
-          {currentFolders.map(subject => {
+          {folderDrag.displayItems.map(subject => {
             const fHandlers = canEdit ? folderDrag.getHandlers(subject) : null;
             const childFolders = subjects.filter((s: any) => s.parent_id === subject.id);
             const childLessons = lessons.filter(l => l.subject_id === subject.id);
@@ -337,7 +336,7 @@ const ContentTab = () => {
             return (
               <div key={subject.id}
                 {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
-                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
+                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
                 {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
@@ -396,7 +395,7 @@ const ContentTab = () => {
           })}
 
           {/* Files */}
-          {currentFiles.map((file: any) => {
+          {fileDrag.displayItems.map((file: any) => {
             const fhFile = canEdit ? fileDrag.getHandlers(file) : null;
             const Icon = getFileIcon(file.file_type);
             const isImage = file.file_type?.startsWith('image/');
@@ -479,7 +478,7 @@ const ContentTab = () => {
           })}
 
           {/* Decks */}
-          {currentDecks.map((td: any) => {
+          {deckDrag.displayItems.map((td: any) => {
             const dhDeck = canEdit ? deckDrag.getHandlers(td) : null;
             const isOwner = td.shared_by === user?.id;
             const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
