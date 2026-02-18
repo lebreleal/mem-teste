@@ -84,9 +84,9 @@ export function useDragReorder<T>({ items, getId, onReorder }: UseDragReorderOpt
           setOverId(null);
         },
         className: [
-          'transition-all duration-200',
-          isDragged ? 'opacity-50 scale-[0.98] shadow-lg' : '',
-          isOver ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.02]' : '',
+          'transition-opacity duration-150',
+          isDragged ? 'opacity-40' : '',
+          isOver ? 'border-t-2 border-t-primary' : '',
         ].filter(Boolean).join(' '),
       };
     },

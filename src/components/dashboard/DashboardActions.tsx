@@ -77,7 +77,7 @@ const DashboardActions = ({
           {hasDecks && !deckSelectionMode && (
             <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleReorderMode}>
               <GripVertical className="h-4 w-4" />
-              {reorderMode ? 'Pronto' : 'Ordenar'}
+              <span>{reorderMode ? 'Pronto' : 'Ordenar'}</span>
             </Button>
           )}
           {hasDecks && !reorderMode && (
