@@ -7,8 +7,8 @@ import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
-  List, ListOrdered, Code, Volume2, Palette, ImagePlus, Braces, ScanEye,
-  ClipboardPaste, Paperclip, Plus,
+  List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
+  ClipboardPaste, Paperclip,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -193,10 +193,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     }
   }, [editor, clozeCounter, clozeActive]);
 
-  /** Deactivate cloze by inserting closing braces */
+  /** Deactivate cloze by inserting closing braces and keeping cursor after */
   const closeClozeMarker = useCallback(() => {
     if (!editor || !clozeActive) return;
-    editor.chain().focus().insertContent('}}').run();
+    editor.chain().focus().insertContent('}}&nbsp;').run();
     setClozeActive(false);
   }, [editor, clozeActive]);
 
@@ -276,22 +276,23 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Cloze same number button */}
+        {/* Cloze same number button - dashed square */}
         <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
-          <Braces className="h-3.5 w-3.5" />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+          </svg>
         </ToolBtn>
 
-        {/* Cloze next number button {+} */}
+        {/* Cloze next number button - dashed square with + */}
         <Button type="button" variant="ghost" size="icon"
           className="h-7 w-7"
           onClick={handleClozeNext}
           title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 3H7a2 2 0 0 0-2 2v5m0 4v5a2 2 0 0 0 2 2h1" />
-            <path d="M16 3h1a2 2 0 0 1 2 2v5m0 4v5a2 2 0 0 1-2 2h-1" />
-            <path d="M12 8v8" />
-            <path d="M8 12h8" />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+            <path d="M12 9v6" />
+            <path d="M9 12h6" />
           </svg>
         </Button>
 

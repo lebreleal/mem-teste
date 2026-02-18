@@ -19,7 +19,7 @@ function renderClozePreview(html: string, revealed: boolean, targetNum?: number)
     const n = parseInt(num);
     if (targetNum !== undefined && n !== targetNum) return answer;
     if (revealed) return `<span style="color:hsl(var(--primary));font-weight:600">${answer}</span>`;
-    return `<span style="display:inline-block;border:1.5px solid hsl(var(--primary));border-radius:6px;padding:2px 8px;color:hsl(var(--primary));font-size:0.85em;font-weight:500">[...]</span>`;
+    return `<span style="display:inline-block;border:2px dashed hsl(var(--primary));border-radius:6px;padding:2px 10px;color:hsl(var(--primary));font-size:0.85em;font-weight:600">[...]</span>`;
   });
 }
 
