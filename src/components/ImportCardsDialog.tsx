@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { parseApkgFile, type AnkiParseResult } from '@/lib/ankiParser';
+import type { AnkiParseResult } from '@/lib/ankiParser';
 
 type ImportSource = null | 'csv' | 'anki';
 type FieldSep = 'tab' | 'comma' | 'custom';
@@ -243,6 +243,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     e.target.value = '';
     setAnkiLoading(true);
     try {
+      const { parseApkgFile } = await import('@/lib/ankiParser');
       const result = await parseApkgFile(file);
       setAnkiResult(result);
       setSubdecks(null);

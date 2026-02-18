@@ -16,13 +16,13 @@ import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DashboardActions from '@/components/dashboard/DashboardActions';
 import DeckList from '@/components/dashboard/DeckList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
-import PremiumModal from '@/components/dashboard/PremiumModal';
+const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
+const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
 import { useMissions } from '@/hooks/useMissions';
-import CommunityDeleteBlockDialog from '@/components/CommunityDeleteBlockDialog';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -428,22 +428,28 @@ const Dashboard = () => {
       <Suspense fallback={null}>
         {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
       </Suspense>
-      <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />
+      <Suspense fallback={null}>
+        {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />}
+      </Suspense>
       <Suspense fallback={null}>
         {state.creditsOpen && <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />}
       </Suspense>
 
-      <CommunityDeleteBlockDialog
-        open={!!communityBlockTarget}
-        onOpenChange={(open) => !open && setCommunityBlockTarget(null)}
-        itemName={communityBlockTarget?.name ?? ''}
-        itemType="deck"
-        onArchive={communityBlockTarget ? () => {
-          state.archiveDeck.mutate(communityBlockTarget.id);
-          setCommunityBlockTarget(null);
-          toast({ title: 'Baralho arquivado!' });
-        } : undefined}
-      />
+      <Suspense fallback={null}>
+        {!!communityBlockTarget && (
+          <CommunityDeleteBlockDialog
+            open={!!communityBlockTarget}
+            onOpenChange={(open) => !open && setCommunityBlockTarget(null)}
+            itemName={communityBlockTarget?.name ?? ''}
+            itemType="deck"
+            onArchive={() => {
+              state.archiveDeck.mutate(communityBlockTarget.id);
+              setCommunityBlockTarget(null);
+              toast({ title: 'Baralho arquivado!' });
+            }}
+          />
+        )}
+      </Suspense>
     </div>
   );
 };
