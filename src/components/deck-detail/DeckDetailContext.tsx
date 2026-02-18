@@ -468,8 +468,14 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         allSiblingCards.forEach(c => {
           try {
             const parsed = JSON.parse(c.back_content);
-            if (typeof parsed.clozeTarget === 'number') existingTargets.set(parsed.clozeTarget, c.id);
+            if (typeof parsed.clozeTarget === 'number') {
+              existingTargets.set(parsed.clozeTarget, c.id);
+              return;
+            }
           } catch {}
+          // Old-format cloze card: assign first available cloze number
+          const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
+          existingTargets.set(assignedNum, c.id);
         });
 
         const existingNums = [...existingTargets.keys()];
