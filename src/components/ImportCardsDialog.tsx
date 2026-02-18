@@ -24,6 +24,7 @@ interface ParsedCard {
 export interface SubdeckOrganization {
   name: string;
   card_indices: number[];
+  children?: SubdeckOrganization[];
 }
 
 interface ImportCardsDialogProps {
@@ -299,31 +300,68 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     </>
   );
 
+  // Count total leaf cards in a subdeck tree
+  const countLeafCards = (sd: SubdeckOrganization): number => {
+    if (sd.children && sd.children.length > 0) {
+      return sd.children.reduce((sum, c) => sum + countLeafCards(c), 0);
+    }
+    return sd.card_indices.length;
+  };
+
+  const hasHierarchy = subdecks?.some(sd => sd.children && sd.children.length > 0);
+
   // Subdeck organization preview component
   const SubdeckPreview = () => {
     if (!subdecks || subdecks.length === 0) return null;
+
+    const totalLeafGroups = subdecks.reduce((sum, sd) => {
+      if (sd.children && sd.children.length > 0) return sum + sd.children.length;
+      return sum + 1;
+    }, 0);
+
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold flex items-center gap-1.5">
             <FolderTree className="h-4 w-4 text-primary" />
-            Organização em subdecks ({subdecks.length})
+            Organização ({subdecks.length} {hasHierarchy ? 'decks' : 'subdecks'})
           </Label>
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
             <X className="h-3 w-3 mr-1" />
             Remover
           </Button>
         </div>
-        <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-2">
+        <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2">
           {subdecks.map((sd, i) => (
-            <div key={i} className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
-              <span className="text-xs font-medium text-foreground">{sd.name}</span>
-              <span className="text-[10px] text-muted-foreground">{sd.card_indices.length} cartões</span>
+            <div key={i}>
+              <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
+                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  {sd.children && sd.children.length > 0 && <FolderTree className="h-3 w-3 text-primary/70" />}
+                  {sd.name}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {sd.children && sd.children.length > 0
+                    ? `${sd.children.length} subdecks · ${countLeafCards(sd)} cartões`
+                    : `${sd.card_indices.length} cartões`}
+                </span>
+              </div>
+              {sd.children && sd.children.length > 0 && (
+                <div className="ml-4 mt-0.5 space-y-0.5">
+                  {sd.children.map((child, j) => (
+                    <div key={j} className="flex items-center justify-between rounded-md bg-background/50 px-3 py-1">
+                      <span className="text-[11px] text-muted-foreground">{child.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{child.card_indices.length}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Será criado o deck pai "{deckName}" com {subdecks.length} subdecks.
+          {hasHierarchy
+            ? `Serão criados ${subdecks.length} deck(s) com ${totalLeafGroups} subdecks no total.`
+            : `Será criado o deck pai "${deckName}" com ${subdecks.length} subdecks.`}
         </p>
       </div>
     );
