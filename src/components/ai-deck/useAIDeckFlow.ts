@@ -233,17 +233,22 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       currentSize += text.length;
     }
 
+    // Total requests = batches * formats (one API call per format per batch)
     const totalBatches = textBatches.length;
-    setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
+    const formats = cardFormats.length > 0 ? cardFormats : ['qa' as CardFormat];
+    const totalRequests = totalBatches * formats.length;
+    setGenProgress({ current: 0, total: totalRequests, creditsUsed: 0 });
     const allCards: GeneratedCard[] = [];
 
-    // Accumulate token usage across all batches for a single aggregated log
+    // Accumulate token usage across all requests for a single aggregated log
     const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     let totalEnergyCost = 0;
     let usedModel = '';
 
     // Density factor for auto card count (chars per card)
     const densityFactor = detailLevel === 'comprehensive' ? 150 : detailLevel === 'essential' ? 500 : 300;
+
+    let requestIdx = 0;
 
     for (let b = 0; b < totalBatches; b++) {
       const batch = textBatches[b];
@@ -254,36 +259,47 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         ? Math.max(2, Math.ceil(targetCardCount / totalBatches))
         : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
-      const progress = { current: b + 1, total: totalBatches, creditsUsed: totalEnergyCost };
-      setGenProgress(progress);
+      // Loop per format: each format gets its own dedicated API call
+      for (let f = 0; f < formats.length; f++) {
+        requestIdx++;
+        const format = formats[f];
+        const formatCardCount = Math.max(2, Math.ceil(batchCardCount / formats.length));
+        // Only charge energy on the first format call of each batch
+        const formatEnergyCost = f === 0 ? batchCost : 0;
 
-      // Update pending store if running in background
-      if (isBackgroundRef.current && pendingIdRef.current) {
-        updatePending(pendingIdRef.current, { progress: { current: b + 1, total: totalBatches } });
-      }
+        const progress = { current: requestIdx, total: totalRequests, creditsUsed: totalEnergyCost };
+        setGenProgress(progress);
 
-      try {
-        const result = await aiService.generateDeckCards({
-          textContent: batchText,
-          cardCount: batchCardCount,
-          detailLevel, cardFormats,
-          customInstructions: customInstructions.trim() || undefined,
-          aiModel: model, energyCost: batchCost,
-          skipLog: true, // Don't log per-batch; we'll log once at the end
-        });
-        allCards.push(...result.cards);
-
-        // Accumulate usage
-        if (result.usage) {
-          aggregatedUsage.prompt_tokens += result.usage.prompt_tokens;
-          aggregatedUsage.completion_tokens += result.usage.completion_tokens;
-          aggregatedUsage.total_tokens += result.usage.total_tokens;
+        // Update pending store if running in background
+        if (isBackgroundRef.current && pendingIdRef.current) {
+          updatePending(pendingIdRef.current, { progress: { current: requestIdx, total: totalRequests } });
         }
 
-        // Resolve actual model name for logging
-        const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
-        if (modelConfig) usedModel = modelConfig.backendModel as string;
-      } catch (err) { console.error(`Batch ${b + 1} failed:`, err); }
+        try {
+          const result = await aiService.generateDeckCards({
+            textContent: batchText,
+            cardCount: formatCardCount,
+            detailLevel,
+            cardFormats: [format], // Single format per call
+            customInstructions: customInstructions.trim() || undefined,
+            aiModel: model,
+            energyCost: formatEnergyCost,
+            skipLog: true,
+          });
+          allCards.push(...result.cards);
+
+          // Accumulate usage
+          if (result.usage) {
+            aggregatedUsage.prompt_tokens += result.usage.prompt_tokens;
+            aggregatedUsage.completion_tokens += result.usage.completion_tokens;
+            aggregatedUsage.total_tokens += result.usage.total_tokens;
+          }
+
+          // Resolve actual model name for logging
+          const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
+          if (modelConfig) usedModel = modelConfig.backendModel as string;
+        } catch (err) { console.error(`Batch ${b + 1}, format ${format} failed:`, err); }
+      }
     }
 
     // Log aggregated token usage once for the entire deck generation

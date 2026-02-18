@@ -32,9 +32,35 @@ function getFormatInstructions(formats: string[]): string {
   const formatNames: string[] = [];
   const forbiddenNames: string[] = [];
 
-  const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.', name: "pergunta/resposta", typeName: "basic" },
-    { key: "cloze", aliases: ["cloze"], instruction: `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
+  const isSingleCloze = formats.length === 1 && formats[0] === "cloze";
+
+  const clozeInstruction = isSingleCloze
+    ? `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
+
+  REGRA ABSOLUTA: TODOS os cartões gerados DEVEM ser do tipo "cloze" com a sintaxe {{c1::resposta}}.
+  Se o campo "front" NÃO contiver {{c1::, o cartão será DESCARTADO automaticamente.
+
+  COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
+  A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta.
+
+  REGRAS CLOZE:
+    • A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número, local anatômico), nunca uma palavra trivial.
+    • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes na mesma frase quando relevante.
+    • Cloze é SEMPRE uma AFIRMAÇÃO DECLARATIVA, NUNCA uma pergunta.
+    • O front DEVE conter pelo menos um {{c1::...}} — sem exceção.
+
+  EXEMPLOS CORRETOS:
+    ✅ "O principal músculo responsável pela inspiração em repouso é o {{c1::diafragma}}."
+    ✅ "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."
+    ✅ "O volume de ar que permanece nos pulmões após expiração máxima é o {{c1::Volume Residual (VR)}}."
+    ✅ "A pressão intrapleural é normalmente {{c1::negativa}} em relação à pressão atmosférica."
+
+  EXEMPLOS INCORRETOS (serão DESCARTADOS):
+    ❌ "Qual é o principal motor da inspiração?" → REJEITADO (pergunta sem lacuna)
+    ❌ "A Ventilação Alveolar é crucial porque:" → REJEITADO (incompleto, sem lacuna)
+    ❌ "O que é o VRE?" → REJEITADO (pergunta, não afirmação com lacuna)
+    ❌ "Qual é o principal motor da inspiração? O {{c1::diafragma}}." → REJEITADO (mistura pergunta com cloze)`
+    : `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
   COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
   A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta (o aluno precisa ter contexto suficiente para deduzir a resposta).
   REGRAS CLOZE:
@@ -42,9 +68,12 @@ function getFormatInstructions(formats: string[]): string {
     • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes DENTRO DA MESMA frase quando relevante.
     • NUNCA coloque a lacuna na PERGUNTA — cloze é uma AFIRMAÇÃO com lacuna, não uma pergunta com lacuna.
     • ERRADO: "Qual é o principal motor da inspiração? O {{c1::diafragma}}." (mistura pergunta com cloze)
-    • ERRADO: "A {{c1::hematose}} é o processo que ocorre onde?" (pergunta com cloze)
     • CERTO: "O principal músculo responsável pela inspiração em repouso é o {{c1::diafragma}}."
-    • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`, name: "cloze", typeName: "cloze" },
+    • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
+
+  const allFormats = [
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction, name: "cloze", typeName: "cloze" },
     { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis (não absurdas). "correctIndex" com o índice correto (0-based). As alternativas incorretas devem ser distratores realistas.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
@@ -64,7 +93,7 @@ function getFormatInstructions(formats: string[]): string {
 
   const count = formatNames.length;
   if (count === 1) {
-    parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões.`);
+    parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
     parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA: Distribua os cartões UNIFORMEMENTE entre: ${formatNames.join(", ")}. Cada formato deve ter aproximadamente ${Math.round(100/count)}% dos cartões.`);
   }
@@ -223,9 +252,23 @@ ${getOutputExamples(formats)}`;
       return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
-    // Map card types respecting user-selected formats
+    // Map card types respecting user-selected formats + cloze safety validation
+    const CLOZE_REGEX = /\{\{c\d+::/;
     cards = cards.map(c => {
       const mappedType = mapCardType(c.type, formats);
+
+      // Safety net: if card should be cloze but lacks {{c1::...}} syntax, reclassify to basic
+      if (mappedType === "cloze" && !CLOZE_REGEX.test(c.front || "")) {
+        console.warn("Cloze card missing syntax, reclassifying to basic:", (c.front || "").substring(0, 80));
+        const front = (c.front || "").trim();
+        const needsQuestionMark = front.endsWith(":") || front.endsWith("...");
+        return {
+          front: needsQuestionMark ? front.replace(/[:\.]+$/, "?") : front,
+          back: c.back || "Informação não fornecida",
+          type: "basic" as string,
+        };
+      }
+
       return {
         front: c.front || "",
         back: mappedType === "cloze" ? "" : (c.back || ""),
