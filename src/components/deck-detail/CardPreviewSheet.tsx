@@ -142,9 +142,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const [index, setIndex] = useState(initialVirtualIndex);
   const [revealed, setRevealed] = useState(false);
 
-  // Mobile swipe state
-  const [dragX, setDragX] = useState(0);
-  const dragStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  // Mobile swipe state — use refs for drag position to avoid re-renders during drag
+  const dragXRef = useRef(0);
+  const [snapDirection, setSnapDirection] = useState<'none' | 'left' | 'right'>('none');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
   useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
@@ -173,13 +175,20 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
     return () => window.removeEventListener('keydown', handler);
   }, [open, goPrev, goNext, onClose]);
 
-  // Mobile touch-drag for carousel
+  // Mobile touch-drag — manipulate DOM directly for fluid 60fps dragging
   useEffect(() => {
     if (!open || !isMobile) return;
+    const container = containerRef.current;
+    if (!container) return;
+
     const onTouchStart = (e: TouchEvent) => {
-      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       isDraggingRef.current = false;
+      dragXRef.current = 0;
+      // Remove transition during drag for instant response
+      container.style.transition = 'none';
     };
+
     const onTouchMove = (e: TouchEvent) => {
       if (!dragStartRef.current) return;
       const dx = e.touches[0].clientX - dragStartRef.current.x;
@@ -189,18 +198,32 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       }
       if (isDraggingRef.current) {
         e.preventDefault();
-        setDragX(dx);
+        dragXRef.current = dx;
+        // Direct DOM manipulation — no React re-render
+        container.style.transform = `translateX(${dx}px)`;
       }
     };
+
     const onTouchEnd = () => {
       if (!dragStartRef.current) return;
+      const dx = dragXRef.current;
       const threshold = window.innerWidth * 0.2;
-      if (dragX > threshold) goPrev();
-      else if (dragX < -threshold) goNext();
-      setDragX(0);
+
+      // Snap back with transition
+      container.style.transition = 'transform 0.25s ease-out';
+      container.style.transform = 'translateX(0px)';
+
+      if (dx > threshold) {
+        goPrev();
+      } else if (dx < -threshold) {
+        goNext();
+      }
+
       dragStartRef.current = null;
       isDraggingRef.current = false;
+      dragXRef.current = 0;
     };
+
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
@@ -209,7 +232,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [open, isMobile, goPrev, goNext, dragX]);
+  }, [open, isMobile, goPrev, goNext]);
 
   if (!open || !card) return null;
 
@@ -266,11 +289,8 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
         {isMobile ? (
           /* ── Mobile: carousel with peek ── */
           <div
+            ref={containerRef}
             className="flex items-center w-full h-full px-3"
-            style={{
-              transform: `translateX(${dragX}px)`,
-              transition: dragX === 0 ? 'transform 0.3s ease-out' : 'none',
-            }}
           >
             {/* Prev peek */}
             <div className="w-10 shrink-0 -mr-2 opacity-40 scale-[0.85] pointer-events-none">

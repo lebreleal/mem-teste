@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -7,11 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, Brain, AlertTriangle, Package, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useEnergy } from '@/hooks/useEnergy';
-import { useAIModel } from '@/hooks/useAIModel';
-import AIModelSelector from '@/components/AIModelSelector';
 import { useToast } from '@/hooks/use-toast';
 import { parseApkgFile, type AnkiParseResult } from '@/lib/ankiParser';
 
@@ -71,9 +67,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [source, setSource] = useState<ImportSource>(null);
   const [deckName, setDeckName] = useState('');
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { energy, spendEnergy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
 
   // CSV state
   const [rawText, setRawText] = useState('');
@@ -82,11 +75,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [cardSep, setCardSep] = useState<CardSep>('newline');
   const [cardSepCustom, setCardSepCustom] = useState('\\n\\n');
   const [useRFC, setUseRFC] = useState(true);
-
-  // AI enhancement state
-  const [enhancing, setEnhancing] = useState(false);
-  const [enhanced, setEnhanced] = useState(false);
-  const [enhancedCards, setEnhancedCards] = useState<ParsedCard[]>([]);
 
   // AI auto-detect state
   const [autoDetecting, setAutoDetecting] = useState(false);
@@ -99,8 +87,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const csvFileRef = useRef<HTMLInputElement>(null);
   const ankiFileRef = useRef<HTMLInputElement>(null);
 
-  const AI_COST = 2;
-
   const reset = () => {
     setSource(null);
     setRawText('');
@@ -108,8 +94,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setFieldSep('comma');
     setCardSep('newline');
     setUseRFC(true);
-    setEnhanced(false);
-    setEnhancedCards([]);
     setAutoDetected(false);
     setAnkiResult(null);
   };
@@ -132,7 +116,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   };
 
   const parsedCards: ParsedCard[] = useMemo(() => {
-    if (enhanced && enhancedCards.length > 0) return enhancedCards;
     if (!rawText.trim()) return [];
     const fieldDelimiter = getFieldSepChar();
     if (useRFC && (fieldSep === 'comma' || fieldSep === 'tab')) {
@@ -147,7 +130,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const parts = entry.split(fieldDelimiter);
       return { front: (parts[0] || '').trim(), back: (parts.slice(1).join(fieldDelimiter) || '').trim() };
     }).filter(c => c.front);
-  }, [rawText, fieldSep, fieldSepCustom, cardSep, cardSepCustom, useRFC, enhanced, enhancedCards]);
+  }, [rawText, fieldSep, fieldSepCustom, cardSep, cardSepCustom, useRFC]);
 
   // AI auto-detect format
   const autoDetectFormat = useCallback(async (text: string) => {
@@ -195,8 +178,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const text = ev.target?.result as string;
       if (text) {
         setRawText(text);
-        setEnhanced(false);
-        setEnhancedCards([]);
         if (!deckName) {
           const name = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
           setDeckName(name.charAt(0).toUpperCase() + name.slice(1));
@@ -237,32 +218,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     }
   };
 
-  // AI enhance
-  const handleEnhance = async () => {
-    if (parsedCards.length === 0) return;
-    if (energy < AI_COST) {
-      toast({ title: 'Créditos IA insuficientes', description: `Necessário: ${AI_COST} créditos`, variant: 'destructive' });
-      return;
-    }
-    setEnhancing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('enhance-import', {
-        body: { cards: parsedCards.map(c => ({ front: c.front, back: c.back })), aiModel: model, energyCost: AI_COST },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      const corrected = data.cards as ParsedCard[];
-      setEnhancedCards(corrected);
-      setEnhanced(true);
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
-      toast({ title: '✨ Cards aprimorados pela IA!', description: `${parsedCards.length} → ${corrected.length} cards` });
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: 'Erro ao aprimorar', description: err.message, variant: 'destructive' });
-    } finally {
-      setEnhancing(false);
-    }
-  };
 
   const handleImport = () => {
     if (source === 'anki' && ankiResult) {
@@ -455,7 +410,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
                 <Textarea
                   value={rawText}
-                  onChange={e => { setRawText(e.target.value); setEnhanced(false); setEnhancedCards([]); setAutoDetected(false); }}
+                  onChange={e => { setRawText(e.target.value); setAutoDetected(false); }}
                   placeholder={"Pergunta,Resposta\nPergunta 2,Resposta 2"}
                   rows={5}
                   className="font-mono text-xs"
@@ -526,36 +481,14 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
               </div>
 
-              {/* Issue warning + AI enhance */}
-              {parsedCards.length > 0 && hasIssues && !enhanced && (
+              {/* Issue warning */}
+              {parsedCards.length > 0 && hasIssues && (
                 <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 p-3">
                   <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-xs font-medium text-foreground">Possíveis erros de parsing detectados</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Use a IA para corrigir automaticamente.</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Ajuste os separadores acima ou edite o texto.</p>
                   </div>
-                </div>
-              )}
-
-              {parsedCards.length > 0 && !enhanced && (
-                <Button variant="outline" className="w-full gap-2 border-primary/30 hover:bg-primary/5" onClick={handleEnhance} disabled={enhancing || energy < AI_COST}>
-                  {enhancing ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Aprimorando com IA...</>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 text-primary" /> Aprimorar com IA
-                      <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                        <Brain className="h-3 w-3" style={{ color: 'hsl(var(--energy-purple))' }} /> {AI_COST}
-                      </span>
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {enhanced && (
-                <div className="flex items-center gap-2 rounded-xl bg-success/10 px-3 py-2">
-                  <Sparkles className="h-4 w-4 text-success" />
-                  <span className="text-xs font-medium text-success">Cards aprimorados pela IA ✓</span>
                 </div>
               )}
 
