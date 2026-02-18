@@ -384,19 +384,12 @@ const Dashboard = () => {
                 subdecks,
                 defaultAlgorithm
               );
-              const totalLeafGroups = subdecks.reduce((sum, sd) => {
-                if (sd.children && sd.children.length > 0) return sum + sd.children.length;
-                return sum + 1;
-              }, 0);
-              const totalCards = subdecks.reduce((sum, sd) => {
-                if (sd.children && sd.children.length > 0) {
-                  return sum + sd.children.reduce((s, c) => s + c.card_indices.length, 0);
-                }
-                return sum + sd.card_indices.length;
-              }, 0);
+              const countAll = (nodes: typeof subdecks): number =>
+                nodes.reduce((s, n) => s + (n.children?.length ? countAll(n.children) : n.card_indices.length), 0);
+              const totalCards = countAll(subdecks);
               toast({
                 title: hasHierarchy
-                  ? `${totalCards} cartões importados em ${subdecks.length} decks e ${totalLeafGroups} subdecks!`
+                  ? `${totalCards} cartões importados em ${subdecks.length} decks hierárquicos!`
                   : `${totalCards} cartões importados em ${subdecks.length} subdecks!`,
               });
             } else {

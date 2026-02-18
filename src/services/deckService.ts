@@ -228,13 +228,20 @@ export async function importDeck(userId: string, name: string, folderId: string 
   return newDeck;
 }
 
-/** Import a deck organized into subdecks. Supports up to 2 levels of hierarchy. */
+/** Recursive subdeck type for N-level hierarchy */
+interface SubdeckNode {
+  name: string;
+  card_indices: number[];
+  children?: SubdeckNode[];
+}
+
+/** Import a deck organized into subdecks. Supports recursive hierarchy (up to N levels). */
 export async function importDeckWithSubdecks(
   userId: string,
   parentName: string,
   folderId: string | null,
   cards: { frontContent: string; backContent: string; cardType: string }[],
-  subdecks: { name: string; card_indices: number[]; children?: { name: string; card_indices: number[] }[] }[],
+  subdecks: SubdeckNode[],
   algorithmMode?: string,
 ) {
   const hasHierarchy = subdecks.some(sd => sd.children && sd.children.length > 0);
@@ -256,9 +263,9 @@ export async function importDeckWithSubdecks(
     }
   };
 
-  // Helper to create a deck and its children
+  // Recursive helper to create a deck tree
   const createDeckTree = async (
-    node: { name: string; card_indices: number[]; children?: { name: string; card_indices: number[] }[] },
+    node: SubdeckNode,
     parentDeckId: string | null,
     nodeFolderId: string | null,
   ) => {
@@ -277,25 +284,12 @@ export async function importDeckWithSubdecks(
 
     const deckId = (deck as any).id;
 
-    // Insert direct cards (only if no children)
     if (!node.children || node.children.length === 0) {
       await insertCards(deckId, node.card_indices);
     } else {
-      // Create children subdecks
+      // Recursively create children
       for (const child of node.children) {
-        const { data: childDeck, error: childErr } = await supabase
-          .from('decks')
-          .insert({
-            name: child.name,
-            user_id: userId,
-            folder_id: nodeFolderId,
-            parent_deck_id: deckId,
-            ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-          } as any)
-          .select()
-          .single();
-        if (childErr || !childDeck) throw childErr;
-        await insertCards((childDeck as any).id, child.card_indices);
+        await createDeckTree(child, deckId, nodeFolderId);
       }
     }
 
@@ -303,15 +297,13 @@ export async function importDeckWithSubdecks(
   };
 
   if (multipleTopLevel) {
-    // Multiple top-level decks with hierarchy — create each as independent deck
     const createdDecks = [];
     for (const sd of subdecks) {
       const deck = await createDeckTree(sd, null, folderId);
       createdDecks.push(deck);
     }
-    return createdDecks[0]; // Return first for compatibility
+    return createdDecks[0];
   } else {
-    // Single parent deck with subdecks (original behavior or single hierarchical deck)
     const { data: parentDeck, error: parentErr } = await supabase
       .from('decks')
       .insert({

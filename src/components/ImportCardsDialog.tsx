@@ -310,14 +310,35 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
   const hasHierarchy = subdecks?.some(sd => sd.children && sd.children.length > 0);
 
+  // Recursive node renderer for subdeck preview
+  const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
+    const hasChildren = node.children && node.children.length > 0;
+    const leafCount = countLeafCards(node);
+    return (
+      <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
+        <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
+          <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
+            {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
+            {node.name}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {hasChildren ? `${leafCount} cartões` : `${node.card_indices.length} cartões`}
+          </span>
+        </div>
+        {hasChildren && (
+          <div className="mt-0.5 space-y-0.5">
+            {node.children!.map((child, j) => (
+              <SubdeckNode key={j} node={child} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Subdeck organization preview component
   const SubdeckPreview = () => {
     if (!subdecks || subdecks.length === 0) return null;
-
-    const totalLeafGroups = subdecks.reduce((sum, sd) => {
-      if (sd.children && sd.children.length > 0) return sum + sd.children.length;
-      return sum + 1;
-    }, 0);
 
     return (
       <div className="space-y-2">
@@ -333,34 +354,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         </div>
         <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2">
           {subdecks.map((sd, i) => (
-            <div key={i}>
-              <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
-                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                  {sd.children && sd.children.length > 0 && <FolderTree className="h-3 w-3 text-primary/70" />}
-                  {sd.name}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {sd.children && sd.children.length > 0
-                    ? `${sd.children.length} subdecks · ${countLeafCards(sd)} cartões`
-                    : `${sd.card_indices.length} cartões`}
-                </span>
-              </div>
-              {sd.children && sd.children.length > 0 && (
-                <div className="ml-4 mt-0.5 space-y-0.5">
-                  {sd.children.map((child, j) => (
-                    <div key={j} className="flex items-center justify-between rounded-md bg-background/50 px-3 py-1">
-                      <span className="text-[11px] text-muted-foreground">{child.name}</span>
-                      <span className="text-[10px] text-muted-foreground">{child.card_indices.length}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SubdeckNode key={i} node={sd} />
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
           {hasHierarchy
-            ? `Serão criados ${subdecks.length} deck(s) com ${totalLeafGroups} subdecks no total.`
+            ? `Serão criados ${subdecks.length} deck(s) organizados hierarquicamente.`
             : `Será criado o deck pai "${deckName}" com ${subdecks.length} subdecks.`}
         </p>
       </div>
