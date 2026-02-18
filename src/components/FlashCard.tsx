@@ -135,6 +135,10 @@ const MultipleChoiceCard = ({
   recallData,
   algorithmMode,
   actions,
+  stability,
+  difficulty,
+  state,
+  scheduledDate,
 }: {
   frontContent: string;
   backContent: string;
@@ -147,12 +151,25 @@ const MultipleChoiceCard = ({
   recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
   algorithmMode?: string;
   actions?: React.ReactNode;
+  stability: number;
+  difficulty: number;
+  state: number;
+  scheduledDate: string;
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= 2;
+
+  const intervals = (() => {
+    if (algorithmMode === 'fsrs') {
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
+      return fsrsPreviewIntervals(fsrsCard);
+    }
+    const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
+    return sm2PreviewIntervals(sm2Card);
+  })();
 
   useEffect(() => {
     if (feedbackType) {
@@ -373,6 +390,7 @@ const MultipleChoiceCard = ({
                   style={{ borderRadius: 'var(--radius)' }}
                 >
                   <span className="text-sm font-bold">{label}</span>
+                  <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
                 </button>
               ))}
             </div>
@@ -431,6 +449,10 @@ const FlashCard = ({
         recallData={recallData}
         algorithmMode={algorithmMode}
         actions={actions}
+        stability={stability}
+        difficulty={difficulty}
+        state={state}
+        scheduledDate={scheduledDate}
       />
     );
   }
