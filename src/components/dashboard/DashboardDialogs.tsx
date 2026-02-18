@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, FolderOpen, Package } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, FolderOpen } from 'lucide-react';
 import type { BreadcrumbItem } from './useDashboardState';
 
 interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
@@ -70,38 +70,140 @@ interface DashboardDialogsProps {
   onBulkMoveSubmit: () => void;
 }
 
-const DashboardDialogs = (props: DashboardDialogsProps) => {
-  const handleMoveBreadcrumbClick = (itemId: string | null) => {
+/** Shared move browser used by both single and bulk move dialogs */
+const MoveBrowser = ({
+  folders,
+  decks,
+  movableFolders,
+  movableDecks,
+  moveBreadcrumb,
+  moveBrowseFolderId,
+  setMoveBrowseFolderId,
+  moveParentDeckId,
+  setMoveParentDeckId,
+  showDecks,
+  onCreateFolderInMove,
+  onMoveSubmit,
+  onCancel,
+  submitLabel,
+}: {
+  folders: Folder[];
+  decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
+  movableFolders: Folder[];
+  movableDecks: MovableDeck[];
+  moveBreadcrumb: BreadcrumbItem[];
+  moveBrowseFolderId: string | null;
+  setMoveBrowseFolderId: (v: string | null) => void;
+  moveParentDeckId: string | null;
+  setMoveParentDeckId: (v: string | null) => void;
+  showDecks: boolean;
+  onCreateFolderInMove?: () => void;
+  onMoveSubmit: () => void;
+  onCancel: () => void;
+  submitLabel: string;
+}) => {
+  const isInsideDeck = !!moveParentDeckId;
+  const canGoBack = !!moveBrowseFolderId || !!moveParentDeckId;
+
+  const handleBreadcrumbClick = (itemId: string | null) => {
     if (itemId === null) {
-      props.setMoveBrowseFolderId(null);
-      props.setMoveParentDeckId(null);
+      setMoveBrowseFolderId(null);
+      setMoveParentDeckId(null);
       return;
     }
     if (itemId.startsWith('deck:')) {
-      props.setMoveParentDeckId(itemId.replace('deck:', ''));
+      setMoveParentDeckId(itemId.replace('deck:', ''));
     } else {
-      props.setMoveBrowseFolderId(itemId);
-      props.setMoveParentDeckId(null);
+      setMoveBrowseFolderId(itemId);
+      setMoveParentDeckId(null);
     }
   };
 
-  const handleMoveBack = () => {
-    if (props.moveParentDeckId) {
-      // Go back from deck: find its parent
-      const currentDeck = props.decks.find(d => d.id === props.moveParentDeckId);
-      if (currentDeck?.parent_deck_id) {
-        props.setMoveParentDeckId(currentDeck.parent_deck_id);
-      } else {
-        props.setMoveParentDeckId(null);
-      }
-    } else if (props.moveBrowseFolderId) {
-      const parent = props.folders.find(f => f.id === props.moveBrowseFolderId);
-      props.setMoveBrowseFolderId(parent?.parent_id ?? null);
+  const handleBack = () => {
+    if (moveParentDeckId) {
+      const currentDeck = decks.find(d => d.id === moveParentDeckId);
+      setMoveParentDeckId(currentDeck?.parent_deck_id ?? null);
+    } else if (moveBrowseFolderId) {
+      const parent = folders.find(f => f.id === moveBrowseFolderId);
+      setMoveBrowseFolderId(parent?.parent_id ?? null);
     }
   };
 
+  /** Check if a deck has sub-decks */
+  const deckHasChildren = (deckId: string) => decks.some(d => d.parent_deck_id === deckId);
+
+  return (
+    <div className="space-y-3">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1 text-sm flex-wrap min-w-0">
+        {moveBreadcrumb.map((item, i) => (
+          <span key={item.id ?? 'root'} className="flex items-center gap-1 min-w-0">
+            {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+            <button
+              onClick={() => handleBreadcrumbClick(item.id)}
+              className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted truncate max-w-[120px] ${i === moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+            >
+              {item.name}
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {/* Items list */}
+      <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+        {canGoBack && (
+          <button onClick={handleBack} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+            <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">Voltar</span>
+          </button>
+        )}
+
+        {/* Folders (only when not inside a deck) */}
+        {!isInsideDeck && movableFolders.map(f => (
+          <button key={f.id} onClick={() => { setMoveBrowseFolderId(f.id); setMoveParentDeckId(null); }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+            <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+            <span className="flex-1 text-left font-medium truncate">{f.name}</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </button>
+        ))}
+
+        {/* Decks as potential parents */}
+        {showDecks && movableDecks.map(d => {
+          const hasChildren = deckHasChildren(d.id);
+          return (
+            <button
+              key={d.id}
+              onClick={() => hasChildren ? setMoveParentDeckId(d.id) : setMoveParentDeckId(d.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+            >
+              <span className="flex-1 text-left font-medium truncate">{d.name}</span>
+              {hasChildren && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+            </button>
+          );
+        })}
+
+        {!canGoBack && movableFolders.length === 0 && (!showDecks || movableDecks.length === 0) && (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum item aqui</div>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:justify-between gap-2 pt-1">
+        {!isInsideDeck && onCreateFolderInMove ? (
+          <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 w-full sm:w-auto">
+            <CirclePlus className="h-4 w-4" /> Nova pasta aqui
+          </Button>
+        ) : <div />}
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+          <Button size="sm" onClick={onMoveSubmit}>{submitLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DashboardDialogs = (props: DashboardDialogsProps) => {
   const isInsideDeck = !!props.moveParentDeckId;
-  const canGoBack = !!props.moveBrowseFolderId || !!props.moveParentDeckId;
 
   return (
     <>
@@ -140,70 +242,31 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* Move Dialog */}
+      {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2">
-              <ArrowUpRight className="h-5 w-5" /> Mover "{props.moveTarget?.name}"
+            <DialogTitle className="font-display flex items-center gap-2 min-w-0">
+              <ArrowUpRight className="h-5 w-5 shrink-0" />
+              <span className="truncate">Mover "{props.moveTarget?.name}"</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1 text-sm flex-wrap">
-              {props.moveBreadcrumb.map((item, i) => (
-                <span key={item.id ?? 'root'} className="flex items-center gap-1">
-                  {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                  <button onClick={() => handleMoveBreadcrumbClick(item.id)} className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted ${i === props.moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                    {item.name}
-                  </button>
-                </span>
-              ))}
-            </div>
-
-            {/* Items list */}
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
-              {canGoBack && (
-                <button onClick={handleMoveBack} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
-                  <ArrowLeft className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">Voltar</span>
-                </button>
-              )}
-
-              {/* Folders (only when not inside a deck) */}
-              {!isInsideDeck && props.movableFolders.map(f => (
-                <button key={f.id} onClick={() => { props.setMoveBrowseFolderId(f.id); props.setMoveParentDeckId(null); }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
-                  <FolderOpen className="h-4 w-4 text-primary" />
-                  <span className="flex-1 text-left font-medium truncate">{f.name}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))}
-
-              {/* Decks as potential parents (when moving a deck) */}
-              {props.moveTarget?.type === 'deck' && props.movableDecks.map(d => (
-                <button key={d.id} onClick={() => props.setMoveParentDeckId(d.id)} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
-                  <Package className="h-4 w-4 text-accent-foreground" />
-                  <span className="flex-1 text-left font-medium truncate">{d.name}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))}
-
-              {!canGoBack && props.movableFolders.length === 0 && props.movableDecks.length === 0 && (
-                <div className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum item aqui</div>
-              )}
-            </div>
-
-            <div className="flex justify-between gap-2 pt-1">
-              {!isInsideDeck ? (
-                <Button variant="outline" size="sm" onClick={props.onCreateFolderInMove} className="gap-1.5"><CirclePlus className="h-4 w-4" /> Nova pasta aqui</Button>
-              ) : <div />}
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}>Cancelar</Button>
-                <Button size="sm" onClick={props.onMoveSubmit}>
-                  {isInsideDeck ? 'Mover como sub-deck' : 'Mover aqui'}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <MoveBrowser
+            folders={props.folders}
+            decks={props.decks}
+            movableFolders={props.movableFolders}
+            movableDecks={props.movableDecks}
+            moveBreadcrumb={props.moveBreadcrumb}
+            moveBrowseFolderId={props.moveBrowseFolderId}
+            setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+            moveParentDeckId={props.moveParentDeckId}
+            setMoveParentDeckId={props.setMoveParentDeckId}
+            showDecks={props.moveTarget?.type === 'deck'}
+            onCreateFolderInMove={props.onCreateFolderInMove}
+            onMoveSubmit={props.onMoveSubmit}
+            onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
+            submitLabel={isInsideDeck ? 'Mover como sub-deck' : 'Mover aqui'}
+          />
         </DialogContent>
       </Dialog>
 
@@ -242,31 +305,38 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk move decks dialog */}
+      {/* Bulk move decks dialog — uses same navigation browser */}
       <Dialog open={props.bulkMoveDeckOpen} onOpenChange={open => { if (!open) { props.setBulkMoveDeckOpen(false); props.setBulkMoveTargetFolder(null); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle className="font-display">Mover {props.selectedDeckCount} baralho{props.selectedDeckCount > 1 ? 's' : ''}</DialogTitle>
+            <DialogTitle className="font-display">
+              Mover {props.selectedDeckCount} baralho{props.selectedDeckCount > 1 ? 's' : ''}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Mover para:</Label>
-              <div className="rounded-lg border border-border/50 divide-y divide-border/50 max-h-48 overflow-y-auto">
-                <button className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === null ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
-                  onClick={() => props.setBulkMoveTargetFolder(null)}>
-                  <FolderOpen className="h-4 w-4" /> Início (raiz)
+          <div className="space-y-3">
+            {/* Items list — reuse folder navigation for bulk move */}
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+              <button
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === null ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
+                onClick={() => props.setBulkMoveTargetFolder(null)}
+              >
+                <FolderOpen className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate">Início (raiz)</span>
+              </button>
+              {props.folders.filter(f => !f.is_archived).map(f => (
+                <button
+                  key={f.id}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === f.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
+                  onClick={() => props.setBulkMoveTargetFolder(f.id)}
+                >
+                  <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+                  <span className="flex-1 truncate">{f.name}</span>
                 </button>
-                {props.folders.filter(f => !f.is_archived).map(f => (
-                  <button key={f.id} className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${props.bulkMoveTargetFolder === f.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50'}`}
-                    onClick={() => props.setBulkMoveTargetFolder(f.id)}>
-                    <FolderOpen className="h-4 w-4" /> {f.name}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => props.setBulkMoveDeckOpen(false)}>Cancelar</Button>
-              <Button onClick={props.onBulkMoveSubmit}>Mover</Button>
+              <Button variant="outline" size="sm" onClick={() => props.setBulkMoveDeckOpen(false)}>Cancelar</Button>
+              <Button size="sm" onClick={props.onBulkMoveSubmit}>Mover</Button>
             </div>
           </div>
         </DialogContent>
