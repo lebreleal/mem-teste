@@ -1283,6 +1283,7 @@ export type Database = {
           lesson_id: string | null
           price: number
           rating_count: number
+          sort_order: number
           subject_id: string | null
           subscribers_only: boolean
           time_limit_seconds: number | null
@@ -1303,6 +1304,7 @@ export type Database = {
           lesson_id?: string | null
           price?: number
           rating_count?: number
+          sort_order?: number
           subject_id?: string | null
           subscribers_only?: boolean
           time_limit_seconds?: number | null
@@ -1323,6 +1325,7 @@ export type Database = {
           lesson_id?: string | null
           price?: number
           rating_count?: number
+          sort_order?: number
           subject_id?: string | null
           subscribers_only?: boolean
           time_limit_seconds?: number | null

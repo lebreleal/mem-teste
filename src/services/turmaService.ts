@@ -233,6 +233,14 @@ export async function reorderTurmaFiles(orderedIds: string[]) {
     if (error) throw error;
   }
 }
+
+/** Batch-update sort_order for turma exams. */
+export async function reorderTurmaExams(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('turma_exams').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
 export async function changeMemberRole(turmaId: string, userId: string, role: TurmaRole) {
   const { error } = await supabase.from('turma_members').update({ role } as any).eq('turma_id', turmaId).eq('user_id', userId); if (error) throw error;
 }

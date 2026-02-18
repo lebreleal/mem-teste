@@ -162,6 +162,10 @@ export const useContentMutations = () => {
     mutationFn: (ids: string[]) => turmaService.reorderTurmaDecks(ids),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] }),
   });
+  const reorderExamsMut = useMutation({
+    mutationFn: (ids: string[]) => turmaService.reorderTurmaExams(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] }),
+  });
 
   // ── Bulk operations ──
   const handleBulkDelete = async (selectedItems: Set<string>, exitSelectionMode: () => void) => {
@@ -192,6 +196,7 @@ export const useContentMutations = () => {
     reorderSubjectsMut,
     reorderFilesMut,
     reorderDecksMut,
+    reorderExamsMut,
     handleBulkDelete,
   };
 };
