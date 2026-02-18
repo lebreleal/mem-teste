@@ -386,11 +386,30 @@ export async function reorderDecks(orderedIds: string[]) {
   }
 }
 
-/** Reset all card progress in a deck. */
+/** Reset all card progress in a deck and all its descendants. */
 export async function resetDeckProgress(deckId: string) {
+  // 1. Collect all descendant deck IDs
+  const { data: allDecks, error: decksError } = await supabase
+    .from('decks')
+    .select('id, parent_deck_id')
+    .eq('user_id', (await supabase.auth.getUser()).data.user!.id);
+  if (decksError) throw decksError;
+
+  const deckIds = [deckId];
+  const queue = [deckId];
+  while (queue.length > 0) {
+    const current = queue.pop()!;
+    const children = (allDecks || []).filter(d => d.parent_deck_id === current);
+    for (const child of children) {
+      deckIds.push(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  // 2. Reset cards in all collected decks
   const { error } = await supabase
     .from('cards')
     .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
-    .eq('deck_id', deckId);
+    .in('deck_id', deckIds);
   if (error) throw error;
 }
