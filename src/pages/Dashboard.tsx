@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 
 import ImportCardsDialog from '@/components/ImportCardsDialog';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
@@ -32,6 +33,7 @@ const Dashboard = () => {
 
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
+  const [reorderMode, setReorderMode] = useState(false);
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -240,6 +242,8 @@ const Dashboard = () => {
           onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setBulkMoveTargetFolder(null); }}
           onBulkArchive={handleBulkArchive}
           onBulkDelete={handleBulkDelete}
+          reorderMode={reorderMode}
+          toggleReorderMode={() => setReorderMode(!reorderMode)}
         />
 
         <DeckList
@@ -272,6 +276,7 @@ const Dashboard = () => {
           onDeleteDeck={(d) => state.setDeleteTarget({ type: 'deck', id: d.id, name: d.name })}
           onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
           onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+          reorderMode={reorderMode}
         />
 
         {/* Archived section */}

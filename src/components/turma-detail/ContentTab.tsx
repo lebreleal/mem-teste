@@ -232,7 +232,7 @@ const ContentTab = () => {
           {hasContent && canEdit && !selectionMode && (
             <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => setReorderMode(!reorderMode)}>
               <GripVertical className="h-4 w-4" />
-              <span className="hidden sm:inline">{reorderMode ? 'Pronto' : 'Ordenar'}</span>
+              {reorderMode ? 'Pronto' : 'Ordenar'}
             </Button>
           )}
           {hasContent && (isAdmin || isMod) && (

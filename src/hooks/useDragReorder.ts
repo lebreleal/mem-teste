@@ -83,11 +83,11 @@ export function useDragReorder<T>({ items, getId, onReorder }: UseDragReorderOpt
           setDraggedId(null);
           setOverId(null);
         },
-        className: isDragged
-          ? 'opacity-50 scale-[0.98]'
-          : isOver
-          ? 'ring-2 ring-primary/40 bg-primary/5'
-          : '',
+        className: [
+          'transition-all duration-200',
+          isDragged ? 'opacity-50 scale-[0.98] shadow-lg' : '',
+          isOver ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.02]' : '',
+        ].filter(Boolean).join(' '),
       };
     },
     [items, getId, onReorder, draggedId, overId]
