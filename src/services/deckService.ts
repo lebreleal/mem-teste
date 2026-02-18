@@ -228,6 +228,53 @@ export async function importDeck(userId: string, name: string, folderId: string 
   return newDeck;
 }
 
+/** Import a deck organized into subdecks. Creates parent deck + child decks with cards. */
+export async function importDeckWithSubdecks(
+  userId: string,
+  parentName: string,
+  folderId: string | null,
+  cards: { frontContent: string; backContent: string; cardType: string }[],
+  subdecks: { name: string; card_indices: number[] }[],
+  algorithmMode?: string,
+) {
+  // Create parent deck (no cards directly)
+  const { data: parentDeck, error: parentErr } = await supabase
+    .from('decks')
+    .insert({ name: parentName, user_id: userId, folder_id: folderId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
+    .select()
+    .single();
+  if (parentErr || !parentDeck) throw parentErr;
+
+  const parentId = (parentDeck as any).id;
+
+  // Create each subdeck with its cards
+  for (const sd of subdecks) {
+    const { data: childDeck, error: childErr } = await supabase
+      .from('decks')
+      .insert({ name: sd.name, user_id: userId, folder_id: folderId, parent_deck_id: parentId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
+      .select()
+      .single();
+    if (childErr || !childDeck) throw childErr;
+
+    const childId = (childDeck as any).id;
+    const childCards = sd.card_indices
+      .filter(idx => idx >= 0 && idx < cards.length)
+      .map(idx => ({
+        deck_id: childId,
+        front_content: cards[idx].frontContent,
+        back_content: cards[idx].backContent,
+        card_type: cards[idx].cardType,
+      }));
+
+    if (childCards.length > 0) {
+      const { error: cardsErr } = await supabase.from('cards').insert(childCards as any);
+      if (cardsErr) throw cardsErr;
+    }
+  }
+
+  return parentDeck;
+}
+
 /** Get turma navigation info for a turma deck. */
 export async function getTurmaDeckNavInfo(turmaDeckId: string): Promise<{ turma_id: string; lesson_id: string | null } | null> {
   const { data } = await supabase.from('turma_decks').select('turma_id, lesson_id').eq('id', turmaDeckId).single();

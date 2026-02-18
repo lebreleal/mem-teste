@@ -18,7 +18,7 @@ import DeckList from '@/components/dashboard/DeckList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 import PremiumModal from '@/components/dashboard/PremiumModal';
 
-import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, getTurmaDeckNavInfo } from '@/services/deckService';
+import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
 import { useMissions } from '@/hooks/useMissions';
@@ -371,17 +371,30 @@ const Dashboard = () => {
 
       <ImportCardsDialog
         open={state.importOpen} onOpenChange={state.setImportOpen}
-        onImport={async (deckName, cards) => {
+        onImport={async (deckName, cards, subdecks) => {
           try {
             const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
-            await importDeck(
-              user!.id,
-              deckName,
-              state.currentFolderId,
-              cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
-              defaultAlgorithm
-            );
-            toast({ title: `${cards.length} cartões importados!` });
+            if (subdecks && subdecks.length > 0) {
+              await importDeckWithSubdecks(
+                user!.id,
+                deckName,
+                state.currentFolderId,
+                cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                subdecks,
+                defaultAlgorithm
+              );
+              const totalCards = subdecks.reduce((sum, sd) => sum + sd.card_indices.length, 0);
+              toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks!` });
+            } else {
+              await importDeck(
+                user!.id,
+                deckName,
+                state.currentFolderId,
+                cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                defaultAlgorithm
+              );
+              toast({ title: `${cards.length} cartões importados!` });
+            }
             state.setImportOpen(false);
             queryClient.invalidateQueries({ queryKey: ['decks'] });
           } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
