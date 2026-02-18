@@ -1,68 +1,114 @@
 
-# Impersonar Usuario (Admin)
+# Organizacao Hierarquica Inteligente na Importacao
 
-## Resumo
+## Problema Atual
 
-Criar um sistema seguro de impersonacao onde o admin pode "entrar" na conta de qualquer usuario, ver e interagir com tudo como se fosse ele, e depois voltar para a sessao admin.
+Quando a IA organiza 400+ cartoes, pode criar um subdeck com 200 cartoes porque o tema e amplo. Isso acontece porque:
+- O prompt atual so permite uma camada de subdecks (flat)
+- Nao ha limite maximo por subdeck
+- Nao ha instrucao para subdividir temas grandes
 
-## Como Funciona
+## Solucao
 
-1. Na tela de AdminUsers, ao abrir um usuario, aparece um botao "Entrar como este usuario"
-2. Uma edge function (com service role) gera um magic link para o email do usuario alvo
-3. O frontend salva a sessao admin atual no sessionStorage
-4. O frontend usa o token do magic link para autenticar como o usuario alvo
-5. Um banner fixo aparece no topo da tela indicando "Voce esta como [nome] - Voltar para Admin"
-6. Ao clicar "Voltar", restaura a sessao admin original
+Implementar organizacao em ate 2 niveis de hierarquia, seguindo boas praticas do Anki:
+- Cada subdeck deve ter idealmente entre 10-50 cartoes
+- Se um tema tiver mais de 60 cartoes, ele deve virar um **deck independente com seus proprios subdecks**
+- A IA decide a estrutura: subdecks simples OU decks separados com filhos
 
-## Seguranca
+## Mudancas
 
-- A edge function valida que quem esta chamando e admin (via `has_role`)
-- O service role key ja esta configurado como secret
-- A sessao admin original fica apenas em sessionStorage (nao persiste entre abas)
-- Se fechar o navegador, a sessao de impersonacao expira normalmente
+### 1. Edge Function `organize-import` - Novo prompt hierarquico
 
-## Detalhes Tecnicos
+Alterar o prompt e o schema da tool call para suportar estrutura hierarquica:
 
-### 1. Edge Function `admin-impersonate`
+```text
+Estrutura de retorno:
+- decks[] (array de decks de nivel superior)
+  - name: nome do deck
+  - card_indices: cartoes diretamente neste deck (pode ser vazio se tiver subdecks)
+  - children[]: subdecks opcionais
+    - name: nome do subdeck
+    - card_indices: cartoes do subdeck
+```
 
-- Recebe `target_user_id`
-- Valida que o caller e admin usando `getClaims` + checagem no banco
-- Busca o email do usuario alvo via `auth.admin.getUserById`
-- Gera link via `auth.admin.generateLink({ type: 'magiclink', email })`
-- Retorna o `hashed_token` extraido da URL
+Regras no prompt:
+- Cada grupo final (folha) deve ter entre 10 e 50 cartoes
+- Se um tema tiver mais de 60 cartoes, criar subdecks dentro dele
+- Se houver poucos temas (menos de 3), pode retornar um unico deck pai com subdecks
+- Se houver muitos temas distintos, criar decks separados no nivel superior
 
-### 2. Frontend - Fluxo de Impersonacao
+### 2. Pos-processamento na edge function
 
-No `AdminUsers.tsx`:
-- Botao "Entrar como usuario" no perfil do usuario selecionado
-- Ao clicar:
-  - Salva sessao atual em `sessionStorage.setItem('admin_session', JSON.stringify(session))`
-  - Chama a edge function
-  - Usa `supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })` para autenticar
-  - Redireciona para `/dashboard`
+Apos receber a resposta da IA, validar:
+- Se algum grupo folha tiver mais de 80 cartoes, logar aviso
+- Garantir que todos os indices estao atribuidos
+- Remover grupos vazios
 
-### 3. Banner de Impersonacao
+### 3. Frontend - `ImportCardsDialog.tsx`
 
-Novo componente `ImpersonationBanner.tsx`:
-- Fica fixo no topo da tela quando `sessionStorage.getItem('admin_session')` existe
-- Mostra nome do usuario sendo impersonado
-- Botao "Voltar para Admin" que:
-  - Faz `signOut`
-  - Restaura a sessao admin via `supabase.auth.setSession(adminSession)`
-  - Remove do sessionStorage
-  - Redireciona para `/admin/users`
+Atualizar o `SubdeckPreview` para mostrar a hierarquia de 2 niveis:
+- Decks de nivel superior com icone de pasta
+- Subdecks identados abaixo de cada deck pai
+- Contagem de cartoes em cada nivel
 
-### 4. Integracao
+### 4. Interface `SubdeckOrganization`
 
-- `ProtectedRoute.tsx`: renderiza o `ImpersonationBanner` quando ativo
-- `supabase/config.toml`: adiciona config da nova function com `verify_jwt = false`
+Estender para suportar filhos:
 
-### Arquivos
+```typescript
+export interface SubdeckOrganization {
+  name: string;
+  card_indices: number[];
+  children?: SubdeckOrganization[];
+}
+```
+
+### 5. `deckService.ts` - `importDeckWithSubdecks`
+
+Atualizar para suportar a criacao hierarquica:
+- Se a resposta tiver apenas 1 deck no nivel superior: criar como deck pai com subdecks (comportamento atual)
+- Se tiver multiplos decks no nivel superior: criar cada um como deck independente, com seus subdecks como filhos
+- Suporte a 2 niveis de `parent_deck_id`
+
+### 6. `Dashboard.tsx`
+
+Atualizar o handler de import para lidar com a nova estrutura:
+- Se `subdecks` tiver filhos (`children`), chamar a versao atualizada que cria a arvore completa
+- Mensagem de sucesso mostrando quantos decks e subdecks foram criados
+
+## Arquivos Afetados
 
 | Acao | Arquivo |
 |------|---------|
-| Criar | `supabase/functions/admin-impersonate/index.ts` |
-| Criar | `src/components/ImpersonationBanner.tsx` |
-| Editar | `src/pages/AdminUsers.tsx` - botao de impersonar |
-| Editar | `src/components/ProtectedRoute.tsx` - renderizar banner |
-| Editar | `supabase/config.toml` - config da function |
+| Editar | `supabase/functions/organize-import/index.ts` - prompt + schema hierarquico |
+| Editar | `src/components/ImportCardsDialog.tsx` - preview hierarquico + tipo atualizado |
+| Editar | `src/services/deckService.ts` - importacao hierarquica |
+| Editar | `src/pages/Dashboard.tsx` - handler atualizado |
+
+## Exemplo Pratico
+
+Importacao de 400 cartoes de Ginecologia:
+
+**Antes (problema):**
+```
+Ginecologia (deck pai)
+  ├── Leiomioma (15 cartoes)
+  ├── Amenorreia (12 cartoes)
+  ├── Obstetrica (200 cartoes)  <-- problema!
+  └── PCOS (18 cartoes)
+```
+
+**Depois (solucao):**
+```
+Ginecologia (deck pai)
+  ├── Leiomioma (15 cartoes)
+  ├── Amenorreia (12 cartoes)
+  └── PCOS (18 cartoes)
+
+Obstetrica (deck separado)
+  ├── Pre-natal (35 cartoes)
+  ├── Parto Normal (42 cartoes)
+  ├── Cesarea (38 cartoes)
+  ├── Complicacoes (45 cartoes)
+  └── Puerpero (40 cartoes)
+```
