@@ -1,11 +1,13 @@
 /**
  * Card review step: edit, delete, toggle type, and save generated cards.
+ * Uses RichEditor for editing (with cloze support for cloze cards).
  */
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import RichEditor from '@/components/RichEditor';
 import { ChevronLeft, Check, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import type { GeneratedCard } from './types';
 
 interface CardReviewStepProps {
@@ -45,12 +47,24 @@ const CardReviewStep = ({
               <>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Frente</Label>
-                  <Textarea value={editFront} onChange={e => onEditFrontChange(e.target.value)} rows={2} className="resize-none text-sm" />
+                  <RichEditor
+                    content={editFront}
+                    onChange={onEditFrontChange}
+                    placeholder="Frente do cartão"
+                    hideCloze={card.type !== 'cloze'}
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Verso</Label>
-                  <Textarea value={editBack} onChange={e => onEditBackChange(e.target.value)} rows={2} className="resize-none text-sm" />
-                </div>
+                {card.type !== 'multiple_choice' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Verso</Label>
+                    <RichEditor
+                      content={editBack}
+                      onChange={onEditBackChange}
+                      placeholder="Verso do cartão"
+                      hideCloze
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2 justify-end">
                   <Button variant="ghost" size="sm" onClick={onCancelEdit}>Cancelar</Button>
                   <Button size="sm" onClick={onSaveEdit} className="gap-1"><Check className="h-3 w-3" /> Salvar</Button>
@@ -59,17 +73,24 @@ const CardReviewStep = ({
             ) : (
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-foreground leading-snug">{card.front}</p>
+                  <div
+                    className="text-xs font-bold text-foreground leading-snug [&_img]:max-h-20 [&_img]:rounded"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front) }}
+                  />
                   {card.type === 'multiple_choice' && card.options ? (
                     <div className="mt-1 space-y-0.5">
                       {card.options.map((opt, oi) => (
-                        <p key={oi} className={`text-[10px] leading-snug ${oi === card.correctIndex ? 'text-success font-bold' : 'text-muted-foreground'}`}>
-                          {oi === card.correctIndex ? '✓ ' : '  '}{opt}
-                        </p>
+                        <div key={oi} className={`text-[10px] leading-snug ${oi === card.correctIndex ? 'text-success font-bold' : 'text-muted-foreground'}`}>
+                          {oi === card.correctIndex ? '✓ ' : '  '}
+                          <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt) }} />
+                        </div>
                       ))}
                     </div>
                   ) : card.back ? (
-                    <p className="text-xs text-muted-foreground mt-1 leading-snug">{card.back}</p>
+                    <div
+                      className="text-xs text-muted-foreground mt-1 leading-snug [&_img]:max-h-20 [&_img]:rounded"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}
+                    />
                   ) : null}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
