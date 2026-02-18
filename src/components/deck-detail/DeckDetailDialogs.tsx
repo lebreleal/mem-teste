@@ -129,74 +129,33 @@ const DeckDetailDialogs = () => {
               )}
 
               {ctx.cardType === 'cloze' && (
-                <div className="space-y-3">
-                  {/* Visual cloze preview */}
-                  {(() => {
-                    const plainText = ctx.front.replace(/<[^>]*>/g, '');
-                    const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
-                    const clozeNumbers = new Set<number>();
-                    let match;
-                    while ((match = clozeRegex.exec(plainText)) !== null) {
-                      clozeNumbers.add(parseInt(match[1]));
-                    }
-                    const sortedNumbers = Array.from(clozeNumbers).sort((a, b) => a - b);
-
-                    if (sortedNumbers.length > 0) {
-                      const BADGE_STYLE = 'border border-primary/40 text-primary rounded-md';
-
-                      const renderHighlighted = () => {
-                        const parts: React.ReactNode[] = [];
-                        let lastIndex = 0;
-                        const regex2 = /\{\{c(\d+)::([^}]*)\}\}/g;
-                        let m;
-                        let key = 0;
-                        while ((m = regex2.exec(plainText)) !== null) {
-                          if (m.index > lastIndex) {
-                            parts.push(<span key={key++}>{plainText.slice(lastIndex, m.index)}</span>);
-                          }
-                          const num = parseInt(m[1]);
-                          parts.push(
-                            <span key={key++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-medium ${BADGE_STYLE}`}>
-                              <span className="text-[9px] font-bold opacity-70">{num}</span>
-                              {m[2]}
-                            </span>
-                          );
-                          lastIndex = m.index + m[0].length;
-                        }
-                        if (lastIndex < plainText.length) {
-                          parts.push(<span key={key++}>{plainText.slice(lastIndex)}</span>);
-                        }
-                        return parts;
-                      };
-
-                      return (
-                        <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                          <div className="p-3 text-sm leading-relaxed">{renderHighlighted()}</div>
-                          {sortedNumbers.length > 1 && (
-                            <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center justify-end">
-                              <span className="text-[10px] text-muted-foreground">
-                                {sortedNumbers.length} cards vinculados
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
-                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1.5">
-                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
-                    <p className="text-xs text-muted-foreground">
-                      Clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> para ativar o modo lacuna — tudo que digitar vira cloze. Clique novamente para desativar.
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{+}'}</code> para avançar o contador e iniciar um <strong>novo card</strong> vinculado (c2, c3...).
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      💡 Você também pode selecionar um texto antes de clicar nos botões para envolvê-lo diretamente.
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como criar lacunas</p>
+                  <div className="flex items-start gap-2.5">
+                    <span className="shrink-0 mt-0.5 flex items-center justify-center h-6 w-6 rounded-md border border-border bg-card">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+                      </svg>
+                    </span>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong className="text-foreground">Criar lacuna</strong> — Ative o modo lacuna e tudo que digitar ficará marcado como cloze. Clique novamente para desativar. Lacunas com o mesmo número geram o <strong>mesmo</strong> cartão de estudo.
                     </p>
                   </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="shrink-0 mt-0.5 flex items-center justify-center h-6 w-6 rounded-md border border-border bg-card">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+                        <path d="M12 9v6" />
+                        <path d="M9 12h6" />
+                      </svg>
+                    </span>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong className="text-foreground">Nova lacuna (+)</strong> — Avança o contador e cria um <strong>novo cartão</strong> vinculado. Use para ocultar partes diferentes em cartões separados.
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground border-t border-border/50 pt-2">
+                    💡 Você também pode selecionar um trecho de texto e clicar no botão para transformá-lo em lacuna diretamente.
+                  </p>
                 </div>
               )}
 
