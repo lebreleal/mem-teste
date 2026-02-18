@@ -68,33 +68,63 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig };
   }
 
-  // Fetch today's review stats to match deck detail limits
+  // Fetch ALL cards in scope (new, learning, due reviews)
+  const { data, error } = await supabase
+    .from('cards')
+    .select('*')
+    .in('deck_id', deckIds)
+    .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+
+  const cards = data ?? [];
+  const allCardIds = cards.map(c => c.id);
+
+  // Single query: count today's reviews across ALL descendant cards
   let newReviewedToday = 0;
   let reviewReviewedToday = 0;
-  for (const id of deckIds) {
-    const { data: statsData } = await supabase.rpc('get_deck_stats', { p_deck_id: id });
-    const s = statsData?.[0];
-    if (s) {
-      newReviewedToday += Number((s as any).new_reviewed_today ?? 0);
-      const newGrad = Number((s as any).new_graduated_today ?? 0);
-      const reviewed = Number(s.reviewed_today ?? 0);
-      reviewReviewedToday += Math.max(0, reviewed - newGrad);
+
+  if (allCardIds.length > 0) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: todayLogs } = await supabase
+      .from('review_logs')
+      .select('card_id')
+      .in('card_id', allCardIds)
+      .gte('reviewed_at', todayStart.toISOString());
+
+    if (todayLogs && todayLogs.length > 0) {
+      const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
+
+      // Check which reviewed cards were "new" (no reviews before today)
+      const { data: priorLogs } = await supabase
+        .from('review_logs')
+        .select('card_id')
+        .in('card_id', [...reviewedCardIds])
+        .lt('reviewed_at', todayStart.toISOString())
+        .limit(1000);
+
+      const hadPriorReview = new Set((priorLogs ?? []).map(l => l.card_id));
+
+      for (const cardId of reviewedCardIds) {
+        if (!hadPriorReview.has(cardId)) {
+          newReviewedToday++;
+        } else {
+          // Card had prior reviews = it was a review card
+          const card = cards.find(c => c.id === cardId);
+          // Only count if it graduated (state=2 and scheduled in future = already reviewed today)
+          if (card && card.state === 2 && new Date(card.scheduled_date) > new Date()) {
+            reviewReviewedToday++;
+          }
+        }
+      }
     }
   }
 
   const effectiveNewLimit = Math.max(0, newLimit - newReviewedToday);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
-  const { data, error } = await supabase
-    .from('cards')
-    .select('*')
-    .in('deck_id', deckIds)
-    .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
-    .order('state', { ascending: true })
-    .order('scheduled_date', { ascending: true });
-  if (error) throw error;
-
-  const cards = data ?? [];
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
   const learningCards = cards.filter(c => c.state === 1);
   const reviewCards = cards.filter(c => c.state === 2).slice(0, effectiveReviewLimit);

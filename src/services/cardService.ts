@@ -118,20 +118,64 @@ export async function fetchAggregatedCards(deckIds: string[]) {
   return data ?? [];
 }
 
-/** Fetch aggregated stats for multiple decks. */
+/** Fetch aggregated stats for multiple decks in a single efficient query. */
 export async function fetchAggregatedStats(deckIds: string[]) {
   const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
-  for (const id of deckIds) {
-    const { data } = await supabase.rpc('get_deck_stats', { p_deck_id: id });
-    const s = data?.[0];
-    if (s) {
-      totals.new_count += Number(s.new_count);
-      totals.learning_count += Number(s.learning_count);
-      totals.review_count += Number(s.review_count);
-      totals.reviewed_today += Number(s.reviewed_today ?? 0);
-      totals.new_reviewed_today += Number((s as any).new_reviewed_today ?? 0);
-      totals.new_graduated_today += Number((s as any).new_graduated_today ?? 0);
+
+  // Single query: get all cards across all descendant decks
+  const { data: allCards } = await supabase
+    .from('cards')
+    .select('id, state, scheduled_date')
+    .in('deck_id', deckIds);
+
+  if (!allCards || allCards.length === 0) return totals;
+
+  const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  for (const c of allCards) {
+    if (c.state === 0) totals.new_count++;
+    else if (c.state === 1) totals.learning_count++;
+    else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
+  }
+
+  // Single query: get today's review logs for these cards
+  const cardIds = allCards.map(c => c.id);
+  const { data: todayLogs } = await supabase
+    .from('review_logs')
+    .select('card_id')
+    .in('card_id', cardIds)
+    .gte('reviewed_at', todayStart.toISOString());
+
+  if (!todayLogs || todayLogs.length === 0) return totals;
+
+  const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
+
+  // Check which reviewed cards had prior reviews (before today)
+  const { data: priorLogs } = await supabase
+    .from('review_logs')
+    .select('card_id')
+    .in('card_id', [...reviewedCardIds])
+    .lt('reviewed_at', todayStart.toISOString())
+    .limit(1000);
+
+  const hadPriorReview = new Set((priorLogs ?? []).map(l => l.card_id));
+
+  for (const cardId of reviewedCardIds) {
+    if (!hadPriorReview.has(cardId)) {
+      // New card studied today
+      totals.new_reviewed_today++;
+      const card = allCards.find(c => c.id === cardId);
+      if (card && card.state === 2) totals.new_graduated_today++;
+    } else {
+      // Review card: count if it's state=2 and scheduled in future (already reviewed)
+      const card = allCards.find(c => c.id === cardId);
+      if (card && card.state === 2 && new Date(card.scheduled_date) > now) {
+        totals.reviewed_today++;
+      }
     }
   }
+
   return totals;
 }
