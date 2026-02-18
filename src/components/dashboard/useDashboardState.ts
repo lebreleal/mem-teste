@@ -113,11 +113,24 @@ export function useDashboardState() {
   const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const subs = getSubDecks(deck.id);
     let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+    let newReviewed = deck.new_reviewed_today ?? 0;
+    let newGraduated = deck.new_graduated_today ?? 0;
+    let reviewed = deck.reviewed_today ?? 0;
     for (const sub of subs) {
       const s = getAggregateStats(sub);
       n += s.new_count; l += s.learning_count; r += s.review_count;
+      // Sum raw reviewed counts from children (before capping)
+      newReviewed += sub.new_reviewed_today ?? 0;
+      newGraduated += sub.new_graduated_today ?? 0;
+      reviewed += sub.reviewed_today ?? 0;
     }
-    return { new_count: n, learning_count: l, review_count: r, reviewed_today: 0 };
+    // Apply the PARENT deck's limits as cap
+    const dailyNewLimit = deck.daily_new_limit ?? 20;
+    const dailyReviewLimit = deck.daily_review_limit ?? 100;
+    const effectiveNew = Math.max(0, Math.min(n, dailyNewLimit - newReviewed));
+    const reviewReviewedToday = Math.max(0, reviewed - newGraduated);
+    const effectiveReview = Math.max(0, Math.min(r, dailyReviewLimit - reviewReviewedToday));
+    return { new_count: effectiveNew, learning_count: l, review_count: effectiveReview, reviewed_today: reviewed };
   };
 
   const getDescendantIds = (folderId: string): string[] => {
