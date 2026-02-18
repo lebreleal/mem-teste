@@ -406,7 +406,29 @@ export async function resetDeckProgress(deckId: string) {
     }
   }
 
-  // 2. Reset cards in all collected decks
+  // 2. Get all card IDs in these decks
+  const { data: cards, error: cardsError } = await supabase
+    .from('cards')
+    .select('id')
+    .in('deck_id', deckIds);
+  if (cardsError) throw cardsError;
+
+  const cardIds = (cards || []).map(c => c.id);
+
+  // 3. Delete review logs for these cards (so stats reset properly)
+  if (cardIds.length > 0) {
+    // Delete in batches of 500 to avoid query limits
+    for (let i = 0; i < cardIds.length; i += 500) {
+      const batch = cardIds.slice(i, i + 500);
+      const { error: logError } = await supabase
+        .from('review_logs')
+        .delete()
+        .in('card_id', batch);
+      if (logError) throw logError;
+    }
+  }
+
+  // 4. Reset card states
   const { error } = await supabase
     .from('cards')
     .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
