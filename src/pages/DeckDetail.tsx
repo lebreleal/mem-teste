@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
@@ -7,6 +8,9 @@ import { ArrowLeft, Settings, Crown } from 'lucide-react';
 
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen } = useDeckDetail();
+  const location = useLocation();
+  const fromCommunity = (location.state as any)?.from === 'community';
+  const communityTurmaId = (location.state as any)?.turmaId;
 
   if (deckLoading || allCardsLoading) {
     return (
@@ -21,7 +25,7 @@ const DeckDetailContent = () => {
       <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard', { replace: true })}>
+            <Button variant="ghost" size="icon" onClick={() => fromCommunity && communityTurmaId ? navigate(`/turmas/${communityTurmaId}`, { replace: true }) : navigate('/dashboard', { replace: true })}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0 flex-1">
