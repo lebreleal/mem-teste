@@ -32,6 +32,20 @@ export const useContentImport = () => {
   const [showImportExam, setShowImportExam] = useState(false);
   const [importingExamId, setImportingExamId] = useState<string | null>(null);
 
+  // ── Fetch user's imported exams (to know which turma exams are already imported) ──
+  const { data: userImportedExams = [] } = useQuery({
+    queryKey: ['user-imported-exams', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase.from('exams')
+        .select('id, source_turma_exam_id')
+        .eq('user_id', user.id)
+        .not('source_turma_exam_id', 'is', null);
+      return (data ?? []) as { id: string; source_turma_exam_id: string }[];
+    },
+    enabled: !!user,
+  });
+
   // ── Deck helpers ──
   const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
   const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
@@ -41,6 +55,20 @@ export const useContentImport = () => {
     if (td.shared_by === user?.id || userOwnsDeck(td.deck_id)) return true;
     if (isAdmin || isMod || isSubscriber) return true;
     return false;
+  };
+
+  // ── Exam helpers ──
+  const userHasImportedExam = (turmaExamId: string) =>
+    userImportedExams.some(e => e.source_turma_exam_id === turmaExamId);
+
+  const getPersonalDeckId = (turmaDeckId: string): string | null => {
+    const d = userDecks.find(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
+    return d?.id ?? null;
+  };
+
+  const getPersonalExamId = (turmaExamId: string): string | null => {
+    const e = userImportedExams.find(e => e.source_turma_exam_id === turmaExamId);
+    return e?.id ?? null;
   };
 
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
@@ -80,6 +108,7 @@ export const useContentImport = () => {
         name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
         parent_deck_id: parentDeckId, algorithm_mode: od.algorithm_mode,
         daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
+        source_turma_deck_id: td.id,
       } as any).select().single();
       if (newDeck) {
         const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
@@ -87,7 +116,7 @@ export const useContentImport = () => {
       }
       return newDeck;
     },
-    onSuccess: () => {
+    onSuccess: (newDeck: any) => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       toast({ title: '✅ Baralho adicionado à sua coleção!', description: `Na pasta "${turma?.name}".` });
@@ -113,6 +142,7 @@ export const useContentImport = () => {
       const { data: newDeck } = await supabase.from('decks').insert({
         name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
         algorithm_mode: od.algorithm_mode, daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
+        source_turma_deck_id: td.id,
       } as any).select().single();
       if (newDeck) {
         const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
@@ -202,6 +232,7 @@ export const useContentImport = () => {
           user_id: user.id, deck_id: deckId, title: exam.title, status: 'pending',
           total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null,
           folder_id: examFolder?.id || null,
+          source_turma_exam_id: exam.id,
         })
         .select().single();
       if (examError) throw examError;
@@ -210,11 +241,12 @@ export const useContentImport = () => {
         options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
       }));
       await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
-      return { examId: newExam.id, folderName: communityFolderName };
+      return { examId: newExam.id, folderName: communityFolderName, turmaExamId: exam.id };
     },
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       queryClient.invalidateQueries({ queryKey: ['exam-folders'] });
+      queryClient.invalidateQueries({ queryKey: ['user-imported-exams'] });
       toast({ title: '✅ Prova adicionada à coleção!', description: `Na pasta "${result.folderName}".` });
     },
     onError: (err: any) => toast({ title: 'Erro ao importar prova', description: err.message, variant: 'destructive' }),
@@ -223,6 +255,9 @@ export const useContentImport = () => {
   return {
     userOwnsDeck,
     userHasLinkedDeck,
+    userHasImportedExam,
+    getPersonalDeckId,
+    getPersonalExamId,
     isDeckFree,
     canAccessDeck,
     availableDecks,
