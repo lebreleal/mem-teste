@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/select';
 import { Globe, Lock } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
-import PdfCanvasViewer from './PdfCanvasViewer';
+import { lazy, Suspense } from 'react';
+const PdfCanvasViewer = lazy(() => import('./PdfCanvasViewer'));
 
 interface LessonDialogsProps {
   // Add deck dialog
@@ -191,7 +192,7 @@ const LessonDialogs = ({
             )}
           </DialogTitle>
         </DialogHeader>
-        {pdfPreviewUrl && <PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} />}
+        {pdfPreviewUrl && <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} /></Suspense>}
       </DialogContent>
     </Dialog>
   </>

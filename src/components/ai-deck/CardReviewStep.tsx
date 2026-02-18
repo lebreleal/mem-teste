@@ -5,7 +5,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import RichEditor from '@/components/RichEditor';
+import LazyRichEditor from '@/components/LazyRichEditor';
 import { ChevronLeft, Check, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import type { GeneratedCard } from './types';
@@ -47,7 +47,7 @@ const CardReviewStep = ({
               <>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Frente</Label>
-                  <RichEditor
+                  <LazyRichEditor
                     content={editFront}
                     onChange={onEditFrontChange}
                     placeholder="Frente do cartão"
@@ -57,7 +57,7 @@ const CardReviewStep = ({
                 {card.type !== 'multiple_choice' && card.type !== 'cloze' && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Verso</Label>
-                    <RichEditor
+                    <LazyRichEditor
                       content={editBack}
                       onChange={onEditBackChange}
                       placeholder="Verso do cartão"

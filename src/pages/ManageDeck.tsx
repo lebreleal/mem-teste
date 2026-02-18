@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight } from 'lucide-react';
-import RichEditor from '@/components/RichEditor';
+import LazyRichEditor from '@/components/LazyRichEditor';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -335,7 +335,7 @@ const ManageDeck = () => {
             <Label className="mb-1.5 block">
               {editorType === 'multiple_choice' ? 'Pergunta' : editorType === 'cloze' ? 'Texto com lacunas' : 'Frente (Pergunta)'}
             </Label>
-            <RichEditor
+            <LazyRichEditor
               content={front}
               onChange={setFront}
               placeholder={
@@ -477,7 +477,7 @@ const ManageDeck = () => {
           ) : (
             <div>
               <Label className="mb-1.5 block">Verso (Resposta)</Label>
-              <RichEditor content={back} onChange={setBack} placeholder="Paris" hideCloze />
+              <LazyRichEditor content={back} onChange={setBack} placeholder="Paris" hideCloze />
             </div>
           )}
 

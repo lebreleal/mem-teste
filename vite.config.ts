@@ -20,6 +20,20 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-tiptap': [
+            '@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-image',
+            '@tiptap/extension-underline', '@tiptap/extension-color',
+            '@tiptap/extension-text-style', '@tiptap/core', '@tiptap/pm',
+          ],
+          'vendor-pdf': ['pdfjs-dist'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+        },
+      },
+    },
   },
   optimizeDeps: {
     esbuildOptions: {

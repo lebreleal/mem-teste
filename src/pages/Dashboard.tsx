@@ -5,11 +5,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 
-import ImportCardsDialog from '@/components/ImportCardsDialog';
-import AICreateDeckDialog from '@/components/AICreateDeckDialog';
-import CreditsDialog from '@/components/CreditsDialog';
+const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
+const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
+const CreditsDialog = lazy(() => import('@/components/CreditsDialog'));
 
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
@@ -385,45 +385,53 @@ const Dashboard = () => {
         onBulkMoveSubmit={handleBulkMoveSubmit}
       />
 
-      <ImportCardsDialog
-        open={state.importOpen} onOpenChange={state.setImportOpen}
-        onImport={async (deckName, cards, subdecks) => {
-          try {
-            const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
-            if (subdecks && subdecks.length > 0) {
-              await importDeckWithSubdecks(
-                user!.id,
-                deckName,
-                state.currentFolderId,
-                cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
-                subdecks,
-                defaultAlgorithm
-              );
-              const countAll = (nodes: typeof subdecks): number =>
-                nodes.reduce((s, n) => s + (n.children?.length ? countAll(n.children) : n.card_indices.length), 0);
-              const totalCards = countAll(subdecks);
-              toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks dentro de "${deckName}"!` });
-            } else {
-              await importDeck(
-                user!.id,
-                deckName,
-                state.currentFolderId,
-                cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
-                defaultAlgorithm
-              );
-              toast({ title: `${cards.length} cartões importados!` });
-            }
-            state.setImportOpen(false);
-            await queryClient.invalidateQueries({ queryKey: ['decks'] });
-            await queryClient.invalidateQueries({ queryKey: ['folders'] });
-            await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
-          } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
-        }}
-      />
+      <Suspense fallback={null}>
+        {state.importOpen && (
+          <ImportCardsDialog
+            open={state.importOpen} onOpenChange={state.setImportOpen}
+            onImport={async (deckName, cards, subdecks) => {
+              try {
+                const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+                if (subdecks && subdecks.length > 0) {
+                  await importDeckWithSubdecks(
+                    user!.id,
+                    deckName,
+                    state.currentFolderId,
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                    subdecks,
+                    defaultAlgorithm
+                  );
+                  const countAll = (nodes: typeof subdecks): number =>
+                    nodes.reduce((s, n) => s + (n.children?.length ? countAll(n.children) : n.card_indices.length), 0);
+                  const totalCards = countAll(subdecks);
+                  toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks dentro de "${deckName}"!` });
+                } else {
+                  await importDeck(
+                    user!.id,
+                    deckName,
+                    state.currentFolderId,
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                    defaultAlgorithm
+                  );
+                  toast({ title: `${cards.length} cartões importados!` });
+                }
+                state.setImportOpen(false);
+                await queryClient.invalidateQueries({ queryKey: ['decks'] });
+                await queryClient.invalidateQueries({ queryKey: ['folders'] });
+                await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
+              } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
+            }}
+          />
+        )}
+      </Suspense>
 
-      <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />
+      <Suspense fallback={null}>
+        {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
+      </Suspense>
       <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />
-      <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />
+      <Suspense fallback={null}>
+        {state.creditsOpen && <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />}
+      </Suspense>
 
       <CommunityDeleteBlockDialog
         open={!!communityBlockTarget}
