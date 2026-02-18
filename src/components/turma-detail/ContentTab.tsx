@@ -67,6 +67,7 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [uploading, setUploading] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [selectedDeckId, setSelectedDeckId] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
@@ -600,6 +601,12 @@ const ContentTab = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {hasContent && canEdit && !selectionMode && (
+            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => setReorderMode(!reorderMode)}>
+              <GripVertical className="h-4 w-4" />
+              <span className="hidden sm:inline">{reorderMode ? 'Pronto' : 'Ordenar'}</span>
+            </Button>
+          )}
           {hasContent && (isAdmin || isMod) && (
             <Button variant={selectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}>
               {selectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
@@ -648,6 +655,14 @@ const ContentTab = () => {
         </div>
       )}
 
+      {/* Upload indicator */}
+      {uploading && (
+        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <span className="text-sm font-medium text-foreground">Enviando arquivo(s)...</span>
+        </div>
+      )}
+
       {/* Unified content list */}
       {!hasContent ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
@@ -673,7 +688,7 @@ const ContentTab = () => {
                 {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
                 className={`group flex items-center gap-3 px-2 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
-                {canEdit && !selectionMode && (
+                {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
                     onMouseDown={(e) => e.stopPropagation()}>
                     <GripVertical className="h-4 w-4" />
@@ -743,7 +758,7 @@ const ContentTab = () => {
                 {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
                 className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
-                {canEdit && !selectionMode && (
+                {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
                     onMouseDown={(e) => e.stopPropagation()}>
                     <GripVertical className="h-4 w-4" />
@@ -826,7 +841,7 @@ const ContentTab = () => {
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
                 className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
-                {canEdit && !selectionMode && (
+                {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
                     onMouseDown={(e) => e.stopPropagation()}>
                     <GripVertical className="h-4 w-4" />
@@ -894,7 +909,7 @@ const ContentTab = () => {
           {currentExams.map((exam: any) => (
             <div key={exam.id} className="group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50"
               onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
-              {canEdit && !selectionMode && (
+              {reorderMode && !selectionMode && (
                 <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
                   onMouseDown={(e) => e.stopPropagation()}>
                   <GripVertical className="h-4 w-4" />
@@ -933,6 +948,15 @@ const ContentTab = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => {
+                          examMutations.toggleSubscribersOnly.mutate(
+                            { examId: exam.id, subscribersOnly: !exam.subscribers_only },
+                            { onSuccess: () => toast({ title: exam.subscribers_only ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
+                          );
+                        }}>
+                          {exam.subscribers_only ? <Globe className="mr-2 h-4 w-4" /> : <Crown className="mr-2 h-4 w-4" />}
+                          {exam.subscribers_only ? 'Liberar para todos' : 'Só assinantes'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { setMovingItem({ type: 'exam', id: exam.id, name: exam.title }); setMoveTargetId(null); }}>
                           <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                         </DropdownMenuItem>
