@@ -65,9 +65,9 @@ const ratingConfig = [
 function renderCloze(html: string, revealed: boolean, targetNum?: number): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
     const n = parseInt(num);
-    // If targetNum is set, only blank that number; reveal others
+    // If targetNum is set, non-target clozes always show as blank (they're separate cards)
     if (targetNum !== undefined && n !== targetNum) {
-      return `<span class="cloze-revealed">${answer}</span>`;
+      return `<span class="cloze-blank">[...]</span>`;
     }
     if (revealed) {
       return `<span class="cloze-revealed">${answer}</span>`;
