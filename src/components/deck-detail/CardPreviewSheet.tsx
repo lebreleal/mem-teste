@@ -2,6 +2,9 @@
  * CardPreviewSheet – full-screen card browser opened when clicking a card in the list.
  * Shows front content; tap to reveal back. Navigate with arrows.
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
+ *
+ * Mobile: 3-slot carousel with real slide transitions.
+ * Desktop/Tablet: centered card with arrow buttons.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -14,7 +17,8 @@ import {
 import { useDeckDetail } from './DeckDetailContext';
 import type { CardRow } from '@/types/deck';
 
-/** Render cloze for preview: hide target cloze, show others as plain text */
+/* ─── Cloze helpers ─── */
+
 function renderClozePreview(html: string, revealed: boolean, targetNum?: number): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
     const n = parseInt(num);
@@ -24,12 +28,13 @@ function renderClozePreview(html: string, revealed: boolean, targetNum?: number)
   });
 }
 
+/* ─── Virtual card types ─── */
+
 interface VirtualCard {
   card: CardRow;
   clozeTarget?: number;
 }
 
-/** Build virtual card list: each cloze number becomes a separate entry */
 function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
@@ -57,14 +62,8 @@ function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   return result;
 }
 
-interface Props {
-  cards: CardRow[];
-  initialIndex: number;
-  open: boolean;
-  onClose: () => void;
-}
+/* ─── Card content renderer ─── */
 
-/** Render a single card's content (extracted for reuse in peek cards) */
 function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
@@ -127,6 +126,30 @@ function CardContent({
   );
 }
 
+/* ─── Slot card (lightweight preview for peek slots) ─── */
+
+function SlotPreview({ vc }: { vc: VirtualCard | null }) {
+  if (!vc) return <div />;
+  const text = vc.card.front_content
+    .replace(/<[^>]*>/g, '')
+    .replace(/\{\{c\d+::(.+?)\}\}/g, '[...]')
+    .slice(0, 80);
+  return (
+    <div className="bg-card rounded-2xl border border-border/30 shadow p-5 min-h-[30vh] flex items-center justify-center">
+      <p className="text-sm text-muted-foreground line-clamp-4 text-center leading-relaxed">{text}</p>
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
+
+interface Props {
+  cards: CardRow[];
+  initialIndex: number;
+  open: boolean;
+  onClose: () => void;
+}
+
 const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const { openEdit, setDeleteId, setMoveCardId } = useDeckDetail();
   const isMobile = useIsMobile();
@@ -141,13 +164,6 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   const [index, setIndex] = useState(initialVirtualIndex);
   const [revealed, setRevealed] = useState(false);
-
-  // Mobile swipe state — use refs for drag position to avoid re-renders during drag
-  const dragXRef = useRef(0);
-  const [snapDirection, setSnapDirection] = useState<'none' | 'left' | 'right'>('none');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const isDraggingRef = useRef(false);
 
   useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
 
@@ -175,48 +191,93 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
     return () => window.removeEventListener('keydown', handler);
   }, [open, goPrev, goNext, onClose]);
 
-  // Mobile touch-drag — manipulate DOM directly for fluid 60fps dragging
+  /* ─── Mobile carousel: 3-slot approach ─── */
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragXRef = useRef(0);
+  const isSnappingRef = useRef(false);
+
   useEffect(() => {
     if (!open || !isMobile) return;
-    const container = containerRef.current;
-    if (!container) return;
+    const track = trackRef.current;
+    if (!track) return;
+
+    // Reset track to center slot (slot 1 = current card)
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(-100%)';
 
     const onTouchStart = (e: TouchEvent) => {
+      if (isSnappingRef.current) return;
       dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       isDraggingRef.current = false;
       dragXRef.current = 0;
-      // Remove transition during drag for instant response
-      container.style.transition = 'none';
+      track.style.transition = 'none';
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!dragStartRef.current) return;
+      if (!dragStartRef.current || isSnappingRef.current) return;
       const dx = e.touches[0].clientX - dragStartRef.current.x;
       const dy = e.touches[0].clientY - dragStartRef.current.y;
+
       if (!isDraggingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
         isDraggingRef.current = true;
       }
+
       if (isDraggingRef.current) {
         e.preventDefault();
         dragXRef.current = dx;
-        // Direct DOM manipulation — no React re-render
-        container.style.transform = `translateX(${dx}px)`;
+        // Track: -100% centers on slot 1, plus drag offset in px
+        track.style.transform = `translateX(calc(-100% + ${dx}px))`;
       }
     };
 
     const onTouchEnd = () => {
-      if (!dragStartRef.current) return;
+      if (!dragStartRef.current || isSnappingRef.current) return;
       const dx = dragXRef.current;
       const threshold = window.innerWidth * 0.2;
+      const canGoPrev = index > 0;
+      const canGoNext = index < virtualCards.length - 1;
 
-      // Snap back with transition
-      container.style.transition = 'transform 0.25s ease-out';
-      container.style.transform = 'translateX(0px)';
+      if (dx > threshold && canGoPrev) {
+        // Snap to slot 0 (prev card)
+        isSnappingRef.current = true;
+        track.style.transition = 'transform 0.28s ease-out';
+        track.style.transform = 'translateX(0%)';
 
-      if (dx > threshold) {
-        goPrev();
-      } else if (dx < -threshold) {
-        goNext();
+        const onEnd = () => {
+          track.removeEventListener('transitionend', onEnd);
+          isSnappingRef.current = false;
+          setIndex(i => i - 1);
+          setRevealed(false);
+          // After index change, React re-renders slots; reset to center instantly
+          requestAnimationFrame(() => {
+            track.style.transition = 'none';
+            track.style.transform = 'translateX(-100%)';
+          });
+        };
+        track.addEventListener('transitionend', onEnd);
+      } else if (dx < -threshold && canGoNext) {
+        // Snap to slot 2 (next card)
+        isSnappingRef.current = true;
+        track.style.transition = 'transform 0.28s ease-out';
+        track.style.transform = 'translateX(-200%)';
+
+        const onEnd = () => {
+          track.removeEventListener('transitionend', onEnd);
+          isSnappingRef.current = false;
+          setIndex(i => i + 1);
+          setRevealed(false);
+          requestAnimationFrame(() => {
+            track.style.transition = 'none';
+            track.style.transform = 'translateX(-100%)';
+          });
+        };
+        track.addEventListener('transitionend', onEnd);
+      } else {
+        // Snap back to center
+        track.style.transition = 'transform 0.25s ease-out';
+        track.style.transform = 'translateX(-100%)';
       }
 
       dragStartRef.current = null;
@@ -232,7 +293,14 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [open, isMobile, goPrev, goNext]);
+  }, [open, isMobile, index, virtualCards.length]);
+
+  // Reset track position when index changes (e.g. from keyboard)
+  useEffect(() => {
+    if (!isMobile || !trackRef.current) return;
+    trackRef.current.style.transition = 'none';
+    trackRef.current.style.transform = 'translateX(-100%)';
+  }, [index, isMobile]);
 
   if (!open || !card) return null;
 
@@ -287,41 +355,40 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       {/* Card area */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
         {isMobile ? (
-          /* ── Mobile: carousel with peek ── */
-          <div
-            ref={containerRef}
-            className="flex items-center w-full h-full px-3"
-          >
-            {/* Prev peek */}
-            <div className="w-10 shrink-0 -mr-2 opacity-40 scale-[0.85] pointer-events-none">
-              {prevVc && (
-                <div className="bg-card rounded-2xl border border-border/30 shadow p-4 min-h-[30vh] flex items-center justify-center overflow-hidden">
-                  <p className="text-xs text-muted-foreground line-clamp-3 text-center">
-                    {prevVc.card.front_content.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.+?)\}\}/g, '[...]').slice(0, 60)}
-                  </p>
+          /* ── Mobile: 3-slot carousel ──
+             Track has 3 slots each 100% wide. translateX(-100%) centers on slot 1 (current).
+             Drag offsets the track. On swipe, snap to slot 0 or 2, then reset after index change. */
+          <div className="w-full h-full overflow-hidden">
+            <div
+              ref={trackRef}
+              className="flex h-full items-center"
+              style={{ width: '300%', transform: 'translateX(-100%)' }}
+            >
+              {/* Slot 0: Previous card */}
+              <div className="w-1/3 h-full flex items-center justify-center px-4">
+                <div className="w-full max-w-lg opacity-60 scale-[0.92]">
+                  <SlotPreview vc={prevVc} />
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Current card */}
-            <div className="flex-1 min-w-0 mx-1">
-              <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
-              {!revealed && (
-                <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
-                  Toque para revelar
-                </p>
-              )}
-            </div>
-
-            {/* Next peek */}
-            <div className="w-10 shrink-0 -ml-2 opacity-40 scale-[0.85] pointer-events-none">
-              {nextVc && (
-                <div className="bg-card rounded-2xl border border-border/30 shadow p-4 min-h-[30vh] flex items-center justify-center overflow-hidden">
-                  <p className="text-xs text-muted-foreground line-clamp-3 text-center">
-                    {nextVc.card.front_content.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.+?)\}\}/g, '[...]').slice(0, 60)}
-                  </p>
+              {/* Slot 1: Current card */}
+              <div className="w-1/3 h-full flex flex-col items-center justify-center px-4">
+                <div className="w-full max-w-lg">
+                  <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+                  {!revealed && (
+                    <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
+                      Toque para revelar
+                    </p>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* Slot 2: Next card */}
+              <div className="w-1/3 h-full flex items-center justify-center px-4">
+                <div className="w-full max-w-lg opacity-60 scale-[0.92]">
+                  <SlotPreview vc={nextVc} />
+                </div>
+              </div>
             </div>
           </div>
         ) : (

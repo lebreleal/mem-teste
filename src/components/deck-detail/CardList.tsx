@@ -126,8 +126,9 @@ const CardList = () => {
           {!selectionMode && !isLinkedDeck && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon" className="h-8 w-8" title="Adicionar">
+                <Button className="h-8 gap-1.5 px-3 text-xs" title="Adicionar">
                   <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Adicionar</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
