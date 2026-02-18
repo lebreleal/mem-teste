@@ -210,7 +210,7 @@ const MultipleChoiceCard = ({
     : '';
 
   return (
-    <div className="flex flex-col h-full w-full max-w-lg mx-auto px-1 relative">
+    <div className="flex flex-col h-[calc(100dvh-7rem)] w-full max-w-lg mx-auto px-1 relative">
       {/* Card border flash only — no confetti */}
 
       {/* Top bar: recall + actions */}
@@ -319,9 +319,9 @@ const MultipleChoiceCard = ({
       </div>
 
       {/* Fixed bottom buttons */}
-      <div className="flex-shrink-0 pt-3 space-y-2">
+      <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
         {!answered ? (
-          <div className="flex w-full gap-2">
+          <div className="flex w-full">
             {onTutorRequest && (
               <Tooltip>
                 <TooltipTrigger asChild>
