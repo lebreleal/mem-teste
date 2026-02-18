@@ -229,7 +229,7 @@ const Study = () => {
         />
       </div>
 
-      <main className="flex flex-1 min-h-0 justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
+      <main className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className="w-full h-full animate-fade-in">
           <FlashCard
             frontContent={currentCard.front_content}
