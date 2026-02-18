@@ -7,7 +7,7 @@ import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
-  List, ListOrdered, Code, Volume2, Palette,
+  List, ListOrdered, Code, Volume2, Palette, ImagePlus, Braces, ScanEye,
   ClipboardPaste, Paperclip,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import iconClozeOcclusion from '@/assets/icon-cloze-occlusion.png';
-import iconAttachImage from '@/assets/icon-attach-image.png';
 
 interface RichEditorProps {
   content: string;
@@ -182,7 +180,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         <DropdownMenu open={imageMenuOpen} onOpenChange={setImageMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Inserir imagem">
-              <img src={iconAttachImage} alt="Imagem" className="h-3.5 w-3.5 dark:invert" />
+              <ImagePlus className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -195,13 +193,13 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           </DropdownMenuContent>
         </DropdownMenu>
         <ToolBtn onClick={handleCloze} title="Cloze (selecione texto)">
-          <img src={iconClozeOcclusion} alt="Cloze" className="h-3.5 w-3.5 dark:invert" />
+          <Braces className="h-3.5 w-3.5" />
         </ToolBtn>
         {onOcclusionPaste && onOcclusionAttach && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Oclusão de imagem">
-                <img src={iconClozeOcclusion} alt="Oclusão" className="h-3.5 w-3.5 dark:invert" />
+                <ScanEye className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
