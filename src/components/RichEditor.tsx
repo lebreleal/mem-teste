@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Underline from '@tiptap/extension-underline';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
+import { Mark, mergeAttributes } from '@tiptap/core';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, ScanEye,
@@ -16,6 +17,37 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+
+/* ─── Cloze Mark Extension ─── */
+const ClozeMark = Mark.create({
+  name: 'clozeMark',
+  addAttributes() {
+    return {
+      num: {
+        default: '1',
+        parseHTML: (el) => el.getAttribute('data-cloze') || '1',
+        renderHTML: (attrs) => ({ 'data-cloze': attrs.num }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-cloze]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, { class: 'cloze-editor-mark' }), 0];
+  },
+});
+
+/* ─── Converters: DB format ↔ Editor format ─── */
+/** Convert {{c1::text}} → <span data-cloze="1" class="cloze-editor-mark">text</span> */
+function clozeToEditor(html: string): string {
+  return html.replace(/\{\{c(\d+)::(.+?)\}\}/g,
+    '<span data-cloze="$1" class="cloze-editor-mark">$2</span>');
+}
+/** Convert <span data-cloze="1" ...>text</span> → {{c1::text}} */
+function editorToCloze(html: string): string {
+  return html.replace(/<span[^>]*data-cloze="(\d+)"[^>]*>(.*?)<\/span>/g, '{{c$1::$2}}');
+}
 
 interface RichEditorProps {
   content: string;
@@ -42,13 +74,6 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [colorOpen, setColorOpen] = useState(false);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeCounter, setClozeCounter] = useState(1);
-  const [clozeActive, setClozeActive] = useState(false);
-  const clozeActiveRef = useRef(false);
-  const clozeCounterRef = useRef(1);
-
-  // Keep refs in sync
-  useEffect(() => { clozeActiveRef.current = clozeActive; }, [clozeActive]);
-  useEffect(() => { clozeCounterRef.current = clozeCounter; }, [clozeCounter]);
 
   const editor = useEditor({
     extensions: [
@@ -57,49 +82,58 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       Underline,
       TextStyle,
       Color,
+      ClozeMark,
     ],
-    content,
+    content: clozeToEditor(content),
     onUpdate: ({ editor: ed }) => {
-      const html = ed.getHTML();
+      const html = editorToCloze(ed.getHTML());
       onChange(html);
     },
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[120px] outline-none p-3 text-card-foreground',
       },
-      handleTextInput: (view, from, to, text) => {
-        if (!clozeActiveRef.current) return false;
-        // Don't wrap if we're already inside a cloze marker
-        const docText = view.state.doc.textContent;
-        const beforeCursor = docText.slice(0, from);
-        const openBraces = (beforeCursor.match(/\{\{c\d+::/g) || []).length;
-        const closeBraces = (beforeCursor.match(/\}\}/g) || []).length;
-        if (openBraces > closeBraces) return false; // already inside cloze
-        return false; // let normal typing happen, we handle wrapping on space/enter
-      },
     },
   });
 
   // Sync editor content when prop changes externally
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, { emitUpdate: false });
+    if (!editor) return;
+    const editorHtml = editorToCloze(editor.getHTML());
+    if (content !== editorHtml) {
+      editor.commands.setContent(clozeToEditor(content), { emitUpdate: false });
     }
   }, [content, editor]);
 
   // Sync cloze counter from content
   useEffect(() => {
     if (!editor) return;
-    const plainText = editor.state.doc.textContent;
-    const matches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    const html = editor.getHTML();
+    const matches = [...html.matchAll(/data-cloze="(\d+)"/g)];
     if (matches.length > 0) {
       const maxNum = Math.max(...matches.map(m => parseInt(m[1])));
       setClozeCounter(maxNum);
     } else {
       setClozeCounter(1);
-      setClozeActive(false);
     }
   }, [content, editor]);
+
+  const isClozeActive = editor?.isActive('clozeMark') ?? false;
+
+  // Deactivate cloze mark on Enter or Escape
+  useEffect(() => {
+    if (!editor) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.key === 'Enter' || e.key === 'Escape') && editor.isActive('clozeMark')) {
+        // On Enter: let ProseMirror handle the newline, then unset mark after
+        setTimeout(() => {
+          editor.chain().unsetMark('clozeMark').run();
+        }, 0);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [editor]);
 
   const uploadImageFile = async (file: File) => {
     if (!user || !editor) return;
@@ -171,67 +205,32 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Toggle cloze mode with current counter — if text selected, wrap it; otherwise toggle mode */
+  /** Toggle cloze mark — if text selected, wrap it; otherwise toggle stored mark */
   const handleCloze = useCallback(() => {
     if (!editor) return;
-    const { from, to } = editor.state.selection;
-    if (from !== to) {
-      // Text selected: wrap it
-      const selectedText = editor.state.doc.textBetween(from, to);
-      editor.chain().focus().deleteSelection().insertContent(`{{c${clozeCounter}::${selectedText}}}`).run();
-      setClozeActive(true);
+    if (editor.isActive('clozeMark')) {
+      // Deactivate
+      editor.chain().focus().unsetMark('clozeMark').run();
     } else {
-      // No selection: toggle mode. When activating, insert opening marker; user types; on deactivate close it
-      if (clozeActive) {
-        // Deactivate
-        setClozeActive(false);
-      } else {
-        // Activate: insert opening cloze marker
-        editor.chain().focus().insertContent(`{{c${clozeCounter}::`).run();
-        setClozeActive(true);
-      }
+      // Activate with current counter
+      editor.chain().focus().setMark('clozeMark', { num: String(clozeCounter) }).run();
     }
-  }, [editor, clozeCounter, clozeActive]);
+  }, [editor, clozeCounter]);
 
-  /** Deactivate cloze by inserting closing braces and keeping cursor after */
-  const closeClozeMarker = useCallback(() => {
-    if (!editor || !clozeActive) return;
-    editor.chain().focus().insertContent('}}&nbsp;').run();
-    setClozeActive(false);
-  }, [editor, clozeActive]);
-
-  // Close cloze marker when pressing Enter or when clicking outside
-  useEffect(() => {
-    if (!editor || !clozeActive) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === 'Escape') {
-        e.preventDefault();
-        closeClozeMarker();
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [editor, clozeActive, closeClozeMarker]);
-
-  /** Increment counter, close current cloze if active, then start new one */
+  /** Increment counter and start new cloze mark */
   const handleClozeNext = useCallback(() => {
     if (!editor) return;
-    // Close current cloze if active
-    if (clozeActive) {
-      editor.chain().focus().insertContent('}}').run();
+    // Deactivate current mark if active
+    if (editor.isActive('clozeMark')) {
+      editor.chain().focus().unsetMark('clozeMark').run();
     }
-    const { from, to } = editor.state.selection;
     const nextNum = clozeCounter + 1;
-    if (from !== to) {
-      const selectedText = editor.state.doc.textBetween(from, to);
-      editor.chain().focus().deleteSelection().insertContent(`{{c${nextNum}::${selectedText}}}`).run();
-    } else {
-      // Start new cloze with incremented number
-      editor.chain().focus().insertContent(`{{c${nextNum}::`).run();
-    }
     setClozeCounter(nextNum);
-    setClozeActive(true);
-  }, [editor, clozeCounter, clozeActive]);
+    // Use setTimeout to ensure unset is processed first
+    setTimeout(() => {
+      editor.chain().focus().setMark('clozeMark', { num: String(nextNum) }).run();
+    }, 10);
+  }, [editor, clozeCounter]);
 
   const handleSetColor = (color: string) => {
     if (!editor) return;
@@ -277,7 +276,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         </DropdownMenu>
 
         {/* Cloze same number button - dashed square */}
-        <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
+        <ToolBtn onClick={handleCloze} active={isClozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
           </svg>

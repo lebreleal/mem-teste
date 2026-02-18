@@ -142,7 +142,7 @@ const DeckDetailDialogs = () => {
                     const sortedNumbers = Array.from(clozeNumbers).sort((a, b) => a - b);
 
                     if (sortedNumbers.length > 0) {
-                      const BADGE_STYLE = 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 border border-sky-200 dark:border-sky-700/50';
+                      const BADGE_STYLE = 'border border-primary/40 text-primary rounded-md';
 
                       const renderHighlighted = () => {
                         const parts: React.ReactNode[] = [];
