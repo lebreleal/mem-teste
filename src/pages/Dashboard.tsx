@@ -228,7 +228,7 @@ const Dashboard = () => {
             const current = state.folders.find(f => f.id === state.currentFolderId);
             state.setCurrentFolderId(current?.parent_id ?? null);
           }}
-          hasDecks={state.currentDecks.length > 0 || state.currentFolders.length > 0}
+          hasDecks={state.currentDecks.length > 0}
           deckSelectionMode={state.deckSelectionMode}
           selectedCount={state.selectedDeckIds.size}
           isAllSelected={state.selectedDeckIds.size === state.currentDecks.length}
