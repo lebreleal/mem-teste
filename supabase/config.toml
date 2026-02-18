@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.organize-import]
 verify_jwt = false
+
+[functions.admin-impersonate]
+verify_jwt = false

@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
+import ImpersonationBanner from '@/components/ImpersonationBanner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Timer, Play } from 'lucide-react';
@@ -78,9 +79,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  const isImpersonating = !!sessionStorage.getItem('admin_session');
+
   return (
     <>
-      <div className={showNav ? 'pb-20' : ''}>
+      {isImpersonating && <ImpersonationBanner />}
+      <div className={`${showNav ? 'pb-20' : ''} ${isImpersonating ? 'pt-10' : ''}`}>
         {children}
       </div>
 

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { useAuth } from '@/hooks/useAuth';
 import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay } from '@/hooks/useAdminUsers';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 // OpenAI pricing per 1M tokens (USD)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -29,7 +32,9 @@ const calcCostUSD = (model: string, promptTokens: number, completionTokens: numb
 const AdminUsers = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
+  const { session } = useAuth();
   const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory } = useAdminUsers();
+  const { toast } = useToast();
   
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
   const [editState, setEditState] = useState<Partial<AdminProfile>>({});
@@ -40,6 +45,54 @@ const AdminUsers = () => {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null);
+  const [impersonating, setImpersonating] = useState(false);
+
+  const handleImpersonate = async (user: AdminProfile) => {
+    if (!session) return;
+    setImpersonating(true);
+    try {
+      // Save current admin session
+      sessionStorage.setItem('admin_session', JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      }));
+      sessionStorage.setItem('impersonated_name', user.name || user.email);
+
+      // Call edge function
+      const { data, error } = await supabase.functions.invoke('admin-impersonate', {
+        body: { target_user_id: user.id },
+      });
+
+      if (error || !data?.token) {
+        sessionStorage.removeItem('admin_session');
+        sessionStorage.removeItem('impersonated_name');
+        toast({ title: 'Erro', description: 'Falha ao impersonar usuário.', variant: 'destructive' });
+        setImpersonating(false);
+        return;
+      }
+
+      // Authenticate as target user
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        token_hash: data.token,
+        type: 'magiclink',
+      });
+
+      if (otpError) {
+        sessionStorage.removeItem('admin_session');
+        sessionStorage.removeItem('impersonated_name');
+        toast({ title: 'Erro', description: 'Falha na autenticação.', variant: 'destructive' });
+        setImpersonating(false);
+        return;
+      }
+
+      navigate('/dashboard');
+    } catch (err) {
+      sessionStorage.removeItem('admin_session');
+      sessionStorage.removeItem('impersonated_name');
+      toast({ title: 'Erro', description: 'Erro inesperado.', variant: 'destructive' });
+      setImpersonating(false);
+    }
+  };
 
   // Fetch USD→BRL exchange rate
   useEffect(() => {
@@ -165,6 +218,15 @@ const AdminUsers = () => {
                   <Button onClick={handleSave} disabled={saving} className="w-full">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                     Salvar Alterações
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleImpersonate(selectedUser)}
+                    disabled={impersonating}
+                    className="w-full gap-2"
+                  >
+                    {impersonating ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                    {impersonating ? 'Entrando...' : 'Entrar como este usuário'}
                   </Button>
                 </CardContent>
               </Card>
