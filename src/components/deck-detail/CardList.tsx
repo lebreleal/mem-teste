@@ -383,13 +383,13 @@ const CardList = () => {
                               let lastIdx = 0;
                               let m;
                               let k = 0;
-                              const BADGE_STYLE = 'border border-primary/40 text-primary rounded-md';
+                              const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
                               while ((m = regex.exec(plain)) !== null) {
                                 if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
                                 const n = parseInt(m[1]);
                                 parts.push(
-                                  <span key={k++} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-semibold ${BADGE_STYLE}`}>
-                                    <span className="text-[9px] font-bold opacity-60">{n}</span>
+                                  <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
+                                    <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
                                     {m[2]}
                                   </span>
                                 );
