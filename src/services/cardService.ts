@@ -28,7 +28,7 @@ export async function createCard(deckId: string, input: { frontContent: string; 
   return data;
 }
 
-/** Create multiple cards at once (batch insert). */
+/** Create multiple cards at once (batch insert). Splits into batches of 200 to avoid payload limits. */
 export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[]) {
   const rows = cards.map(c => ({
     deck_id: deckId,
@@ -36,9 +36,15 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     back_content: c.backContent,
     card_type: c.cardType,
   }));
-  const { data, error } = await supabase.from('cards').insert(rows).select();
-  if (error) throw error;
-  return data;
+  const BATCH_SIZE = 200;
+  const allData: any[] = [];
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase.from('cards').insert(batch).select();
+    if (error) throw error;
+    if (data) allData.push(...data);
+  }
+  return allData;
 }
 
 /** Update a card's content. */

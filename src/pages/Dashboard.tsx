@@ -413,7 +413,9 @@ const Dashboard = () => {
               toast({ title: `${cards.length} cartões importados!` });
             }
             state.setImportOpen(false);
-            queryClient.invalidateQueries({ queryKey: ['decks'] });
+            await queryClient.invalidateQueries({ queryKey: ['decks'] });
+            await queryClient.invalidateQueries({ queryKey: ['folders'] });
+            await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
           } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
         }}
       />

@@ -227,8 +227,13 @@ export async function importDeck(userId: string, name: string, folderId: string 
     back_content: c.backContent,
     card_type: c.cardType,
   }));
-  const { error: cardsErr } = await supabase.from('cards').insert(rows as any);
-  if (cardsErr) throw cardsErr;
+  // Batch insert to avoid payload limits
+  const BATCH_SIZE = 200;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error: cardsErr } = await supabase.from('cards').insert(batch as any);
+    if (cardsErr) throw cardsErr;
+  }
   
   return newDeck;
 }
@@ -251,7 +256,7 @@ export async function importDeckWithSubdecks(
 ) {
   // Helper to insert cards for a deck
 
-  // Helper to insert cards for a deck
+  // Helper to insert cards for a deck (batched)
   const insertCards = async (deckId: string, indices: number[]) => {
     const validCards = indices
       .filter(idx => idx >= 0 && idx < cards.length)
@@ -261,8 +266,10 @@ export async function importDeckWithSubdecks(
         back_content: cards[idx].backContent,
         card_type: cards[idx].cardType,
       }));
-    if (validCards.length > 0) {
-      const { error } = await supabase.from('cards').insert(validCards as any);
+    const BATCH_SIZE = 200;
+    for (let i = 0; i < validCards.length; i += BATCH_SIZE) {
+      const batch = validCards.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('cards').insert(batch as any);
       if (error) throw error;
     }
   };
