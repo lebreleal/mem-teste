@@ -1,9 +1,10 @@
 /**
  * CardPreviewSheet – full-screen card browser opened when clicking a card in the list.
  * Shows front content; tap to reveal back. Navigate with arrows.
+ * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +23,43 @@ function renderClozePreview(html: string, revealed: boolean, targetNum?: number)
   });
 }
 
+interface VirtualCard {
+  card: CardRow;
+  clozeTarget?: number;
+}
+
+/** Build virtual card list: each cloze number becomes a separate entry */
+function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
+  const result: VirtualCard[] = [];
+  const processedClozeGroups = new Set<string>();
+
+  cards.forEach(card => {
+    if (card.card_type === 'cloze') {
+      // Group key is front_content for cloze cards
+      const groupKey = card.front_content;
+      if (processedClozeGroups.has(groupKey)) return;
+      processedClozeGroups.add(groupKey);
+
+      // Find all siblings with same front_content
+      const siblings = cards.filter(c => c.card_type === 'cloze' && c.front_content === groupKey);
+      
+      // Extract cloze targets from each sibling and create virtual cards
+      siblings.forEach(sibling => {
+        let clozeTarget = 1;
+        try {
+          const parsed = JSON.parse(sibling.back_content);
+          if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
+        } catch {}
+        result.push({ card: sibling, clozeTarget });
+      });
+    } else {
+      result.push({ card });
+    }
+  });
+
+  return result;
+}
+
 interface Props {
   cards: CardRow[];
   initialIndex: number;
@@ -31,20 +69,31 @@ interface Props {
 
 const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const { openEdit, setDeleteId, setMoveCardId, deck } = useDeckDetail();
-  const [index, setIndex] = useState(initialIndex);
+
+  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+
+  // Map initial flat index to virtual index
+  const initialVirtualIndex = useMemo(() => {
+    if (initialIndex < 0 || initialIndex >= cards.length) return 0;
+    const targetCard = cards[initialIndex];
+    return virtualCards.findIndex(vc => vc.card.id === targetCard.id) || 0;
+  }, [initialIndex, cards, virtualCards]);
+
+  const [index, setIndex] = useState(initialVirtualIndex);
   const [revealed, setRevealed] = useState(false);
 
-  useEffect(() => { setIndex(initialIndex); setRevealed(false); }, [initialIndex]);
+  useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
 
-  const card = cards[index];
+  const vc = virtualCards[index];
+  const card = vc?.card;
 
   const goPrev = useCallback(() => {
     if (index > 0) { setIndex(i => i - 1); setRevealed(false); }
   }, [index]);
 
   const goNext = useCallback(() => {
-    if (index < cards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
-  }, [index, cards.length]);
+    if (index < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
+  }, [index, virtualCards.length]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -65,14 +114,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const isMultiple = card.card_type === 'multiple_choice';
   const isOcclusion = card.card_type === 'image_occlusion';
 
-  // Parse cloze target
-  let clozeTarget: number | undefined;
-  if (isCloze) {
-    try {
-      const parsed = JSON.parse(card.back_content);
-      if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
-    } catch {}
-  }
+  const clozeTarget = vc.clozeTarget;
 
   // Parse occlusion
   let occlusionData: { imageUrl?: string } | null = null;
@@ -100,7 +142,6 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       const html = renderClozePreview(card.front_content, revealed, clozeTarget);
       return <div className="text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
     }
-    // Check if HTML
     if (/<[a-z][\s\S]*>/i.test(card.front_content)) {
       return <div className="text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
     }
@@ -142,7 +183,10 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
           <X className="h-5 w-5" />
         </Button>
         <span className="text-sm font-medium text-muted-foreground">
-          {index + 1}/{cards.length} cartões
+          {index + 1}/{virtualCards.length} cartões
+          {isCloze && clozeTarget && (
+            <span className="ml-1 text-primary font-semibold">· c{clozeTarget}</span>
+          )}
         </span>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { onClose(); openEdit(card); }}>
@@ -173,10 +217,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
             {renderFront()}
             {renderBack()}
           </div>
-          {!revealed && !isCloze && (
-            <p className="text-center text-xs text-muted-foreground mt-4">Toque para revelar</p>
-          )}
-          {!revealed && isCloze && (
+          {!revealed && (
             <p className="text-center text-xs text-muted-foreground mt-4">Toque para revelar</p>
           )}
         </div>
@@ -188,7 +229,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <span className="text-xs text-muted-foreground">{deck?.name}</span>
-        <Button variant="outline" size="icon" className="h-10 w-10 rounded-full" disabled={index === cards.length - 1} onClick={goNext}>
+        <Button variant="outline" size="icon" className="h-10 w-10 rounded-full" disabled={index === virtualCards.length - 1} onClick={goNext}>
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>

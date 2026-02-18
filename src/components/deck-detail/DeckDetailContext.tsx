@@ -401,7 +401,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     setEditorOpen(true);
   }, []);
 
-  const handleSave = useCallback((addAnother: boolean) => {
+  const handleSave = useCallback(async (addAnother: boolean) => {
     if (!front.trim() && !occlusionImageUrl) {
       toast({ title: 'Preencha o campo Frente', variant: 'destructive' });
       return;
@@ -456,8 +456,57 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
       if (editingId) {
-        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
-        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, { onSuccess });
+        // Find all sibling cloze cards (same front_content as the card being edited)
+        const editingCard = allCards.find(c => c.id === editingId);
+        const siblings = editingCard
+          ? allCards.filter(c => c.card_type === 'cloze' && c.front_content === editingCard.front_content && c.id !== editingId)
+          : [];
+        const allSiblingCards = editingCard ? [editingCard, ...siblings] : [];
+
+        // Map existing cloze targets to card IDs
+        const existingTargets = new Map<number, string>();
+        allSiblingCards.forEach(c => {
+          try {
+            const parsed = JSON.parse(c.back_content);
+            if (typeof parsed.clozeTarget === 'number') existingTargets.set(parsed.clozeTarget, c.id);
+          } catch {}
+        });
+
+        const existingNums = [...existingTargets.keys()];
+        const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
+        const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
+        const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+
+        // Update all existing siblings with new front_content
+        const updatePromises = numsToKeep.map(n => {
+          const cardId = existingTargets.get(n)!;
+          const backJson = JSON.stringify({ clozeTarget: n, extra: back });
+          return cardService.updateCard(cardId, front, backJson);
+        });
+
+        // Create new cards for added cloze numbers
+        const newCards = numsToAdd.map(n => ({
+          frontContent: front,
+          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+          cardType: 'cloze',
+        }));
+
+        // Delete cards for removed cloze numbers
+        const deletePromises = numsToRemove.map(n => {
+          const cardId = existingTargets.get(n)!;
+          return cardService.deleteCard(cardId);
+        });
+
+        try {
+          await Promise.all([...updatePromises, ...deletePromises]);
+          if (newCards.length > 0) {
+            await cardService.createCards(deckId, newCards);
+          }
+          invalidateDeckRelatedQueries(queryClient, deckId);
+          onSuccess();
+        } catch {
+          toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
+        }
       } else if (uniqueNums.length <= 1) {
         const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
         createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, { onSuccess });
@@ -473,12 +522,27 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
       else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
     }
-  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm]);
+  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, deckId, queryClient]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!deleteId) return;
-    deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
-  }, [deleteId, deleteCard, toast]);
+    // For cloze cards, delete all siblings with same front_content
+    const card = allCards.find(c => c.id === deleteId);
+    if (card?.card_type === 'cloze') {
+      const siblings = allCards.filter(c => c.card_type === 'cloze' && c.front_content === card.front_content);
+      const ids = siblings.map(c => c.id);
+      try {
+        await cardService.bulkDeleteCards(ids);
+        invalidateDeckRelatedQueries(queryClient, deckId);
+        toast({ title: `${ids.length} card${ids.length > 1 ? 's' : ''} cloze excluído${ids.length > 1 ? 's' : ''}` });
+      } catch {
+        toast({ title: 'Erro ao excluir', variant: 'destructive' });
+      }
+      setDeleteId(null);
+    } else {
+      deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
+    }
+  }, [deleteId, deleteCard, toast, allCards, deckId, queryClient]);
 
   const handleMoveCard = useCallback(async () => {
     if (!moveCardId || !moveTargetDeck) return;
