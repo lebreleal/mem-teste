@@ -271,10 +271,8 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
 
       const { data: questions, error } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
       if (error) throw error;
-      const { data: userDecks } = await supabase.from('decks').select('id').eq('user_id', user!.id).limit(1);
-      let deckId = userDecks?.[0]?.id;
-      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user!.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
-      if (!deckId) throw new Error('Sem baralho disponível');
+      // Community-imported exams don't need a deck_id
+      const deckId = null;
       const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
       const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
         .insert({ user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })

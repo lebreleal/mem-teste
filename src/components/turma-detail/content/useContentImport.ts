@@ -222,10 +222,8 @@ export const useContentImport = () => {
       }
 
       const { data: questions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      const { data: userDecksList } = await supabase.from('decks').select('id').eq('user_id', user.id).limit(1);
-      let deckId = userDecksList?.[0]?.id;
-      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
-      if (!deckId) throw new Error('Sem baralho disponível');
+      // Community-imported exams don't need a deck_id
+      const deckId = null;
       const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
       const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
         .insert({

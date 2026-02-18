@@ -499,7 +499,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
-          deck_id: string
+          deck_id: string | null
           folder_id: string | null
           id: string
           scored_points: number
@@ -515,7 +515,7 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
-          deck_id: string
+          deck_id?: string | null
           folder_id?: string | null
           id?: string
           scored_points?: number
@@ -531,7 +531,7 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
-          deck_id?: string
+          deck_id?: string | null
           folder_id?: string | null
           id?: string
           scored_points?: number

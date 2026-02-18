@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Plus, Trash2, MoreVertical, RotateCcw, Play, Brain, Pencil,
   FolderOpen, FolderPlus, ChevronRight, ArrowUpRight, Eye, BookOpen, Flame, Loader2, Link2,
+  Search, X, CheckCheck,
 } from 'lucide-react';
 import BuyCreditsDialog from '@/components/BuyCreditsDialog';
 import {
@@ -25,6 +26,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 const ExamSetup = () => {
@@ -49,6 +51,10 @@ const ExamSetup = () => {
   const [renameName, setRenameName] = useState('');
   const [moveTarget, setMoveTarget] = useState<{ type: 'exam' | 'folder'; id: string; name: string } | null>(null);
   const [moveBrowseFolderId, setMoveBrowseFolderId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
 
   const activeDecks = decks.filter(d => !d.is_archived);
 
@@ -71,10 +77,39 @@ const ExamSetup = () => {
     [folders, currentFolderId]
   );
 
-  const currentExams = useMemo(
+  const allCurrentExams = useMemo(
     () => exams.filter(e => (e.folder_id ?? null) === currentFolderId),
     [exams, currentFolderId]
   );
+
+  const q = searchQuery.toLowerCase();
+  const currentExams = q
+    ? allCurrentExams.filter(e => e.title.toLowerCase().includes(q))
+    : allCurrentExams;
+
+  const filteredFolders = q
+    ? currentFolders.filter(f => f.name.toLowerCase().includes(q))
+    : currentFolders;
+
+  const hasContent = allCurrentExams.length > 0 || currentFolders.length > 0;
+
+  const toggleExamSelection = (id: string) => {
+    setSelectedExamIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedExamIds);
+    for (const id of ids) {
+      deleteExam.mutate(id);
+    }
+    setSelectedExamIds(new Set());
+    setSelectionMode(false);
+    toast({ title: `${ids.length} prova(s) excluída(s)!` });
+  };
 
   // Move dialog helpers
   const getDescendantIds = (folderId: string): string[] => {
@@ -188,7 +223,7 @@ const ExamSetup = () => {
         </div>
 
         {/* Title + Actions */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {currentFolderId && (
               <Button variant="ghost" size="icon" onClick={() => {
@@ -203,42 +238,99 @@ const ExamSetup = () => {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => { setCreateFolderOpen(true); setCreateFolderName(''); }} className="gap-2">
-              <FolderPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Nova Pasta</span>
-            </Button>
-            <Button onClick={() => navigate('/exam/new/create')} className="gap-2">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Nova Prova</span>
-            </Button>
+            {hasContent && (
+              <Button variant={searchOpen ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearchQuery(''); }}>
+                {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+              </Button>
+            )}
+            {hasContent && !selectionMode && (
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectionMode(true)}>
+                <CheckCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">Selecionar</span>
+              </Button>
+            )}
+            {selectionMode && (
+              <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => { setSelectionMode(false); setSelectedExamIds(new Set()); }}>
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline">Cancelar</span>
+              </Button>
+            )}
+            {!selectionMode && (
+              <>
+                <Button variant="outline" onClick={() => { setCreateFolderOpen(true); setCreateFolderName(''); }} className="gap-2">
+                  <FolderPlus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Nova Pasta</span>
+                </Button>
+                <Button onClick={() => navigate('/exam/new/create')} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Nova Prova</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Content */}
-        {currentFolders.length === 0 && currentExams.length === 0 && notifications.filter(n => n.status === 'generating').length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 sm:py-16 text-center px-4">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">
-              <BookOpen className="h-8 w-8 text-accent-foreground" />
-            </div>
-            <h3 className="font-display text-lg font-semibold text-foreground">
-              {currentFolderId ? 'Pasta vazia' : 'Nenhuma prova ainda'}
-            </h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              Crie sua primeira prova ou pasta para organizar suas avaliações.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => { setCreateFolderOpen(true); setCreateFolderName(''); }} className="gap-2">
-                <FolderPlus className="h-4 w-4" /> Nova Pasta
-              </Button>
-              <Button size="sm" onClick={() => navigate('/exam/new/create')} className="gap-2">
-                <Plus className="h-4 w-4" /> Nova Prova
-              </Button>
-            </div>
+        {/* Search bar */}
+        {searchOpen && (
+          <div className="mb-3">
+            <Input
+              placeholder="Buscar por nome..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              autoFocus
+              className="h-9"
+            />
           </div>
+        )}
+
+        {/* Bulk selection bar */}
+        {selectionMode && selectedExamIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 mb-3">
+            <span className="text-sm font-medium text-foreground mr-auto">{selectedExamIds.size} selecionada{selectedExamIds.size > 1 ? 's' : ''}</span>
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => {
+              if (selectedExamIds.size === currentExams.length) setSelectedExamIds(new Set());
+              else setSelectedExamIds(new Set(currentExams.map(e => e.id)));
+            }}>
+              <CheckCheck className="h-3.5 w-3.5" /><span className="hidden sm:inline">{selectedExamIds.size === currentExams.length ? 'Desmarcar' : 'Todos'}</span>
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+              <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Excluir</span>
+            </Button>
+          </div>
+        )}
+
+        {/* Content */}
+        {filteredFolders.length === 0 && currentExams.length === 0 && notifications.filter(n => n.status === 'generating').length === 0 ? (
+          q ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
+              <Search className="h-7 w-7 text-muted-foreground/40 mb-2" />
+              <p className="text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 sm:py-16 text-center px-4">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">
+                <BookOpen className="h-8 w-8 text-accent-foreground" />
+              </div>
+              <h3 className="font-display text-lg font-semibold text-foreground">
+                {currentFolderId ? 'Pasta vazia' : 'Nenhuma prova ainda'}
+              </h3>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                Crie sua primeira prova ou pasta para organizar suas avaliações.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setCreateFolderOpen(true); setCreateFolderName(''); }} className="gap-2">
+                  <FolderPlus className="h-4 w-4" /> Nova Pasta
+                </Button>
+                <Button size="sm" onClick={() => navigate('/exam/new/create')} className="gap-2">
+                  <Plus className="h-4 w-4" /> Nova Prova
+                </Button>
+              </div>
+            </div>
+          )
         ) : (
           <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
             {/* Folders */}
-            {currentFolders.map(folder => {
+            {filteredFolders.map(folder => {
               const folderExams = exams.filter(e => e.folder_id === folder.id);
               const folderExamCount = folderExams.length;
               const folderTotalQuestions = folderExams.reduce((sum, e) => sum + (e.total_points || 0), 0);
@@ -322,9 +414,14 @@ const ExamSetup = () => {
               return (
                 <div
                   key={exam.id}
-                  className="group flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-muted/50"
-                  onClick={() => navigate(isCompleted ? `/exam/${exam.id}/results` : `/exam/${exam.id}`)}
+                  className={`group flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors ${selectionMode && selectedExamIds.has(exam.id) ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                  onClick={() => selectionMode ? toggleExamSelection(exam.id) : navigate(isCompleted ? `/exam/${exam.id}/results` : `/exam/${exam.id}`)}
                 >
+                  {selectionMode && (
+                    <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                      <Checkbox checked={selectedExamIds.has(exam.id)} onCheckedChange={() => toggleExamSelection(exam.id)} />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <h3 className="font-display font-semibold text-card-foreground truncate">{exam.title}</h3>
