@@ -182,7 +182,10 @@ export async function createLesson(turmaId: string, userId: string, params: { su
   const { data, error } = await supabase.from('turma_lessons').insert({ turma_id: turmaId, subject_id: params.subjectId ?? null, name: params.name, description: params.description ?? '', created_by: userId, lesson_date: params.lessonDate ?? null, is_published: params.isPublished ?? true } as any).select().single();
   if (error) throw error; return data;
 }
-export async function deleteLesson(id: string) { const { error } = await supabase.from('turma_lessons').delete().eq('id', id); if (error) throw error; }
+export async function deleteLesson(id: string) {
+  const { error } = await supabase.rpc('delete_lesson_cascade', { p_lesson_id: id } as any);
+  if (error) throw error;
+}
 export async function updateLesson(id: string, params: { name?: string; lessonDate?: string | null; isPublished?: boolean }) {
   const updateData: any = {};
   if (params.name !== undefined) updateData.name = params.name;
@@ -280,7 +283,8 @@ export async function publishTurmaExam(examId: string, params: { isMarketplace?:
 }
 
 export async function deleteTurmaExam(examId: string) {
-  const { error } = await supabase.from('turma_exams').delete().eq('id', examId); if (error) throw error;
+  const { error } = await supabase.rpc('delete_turma_exam_cascade', { p_exam_id: examId } as any);
+  if (error) throw error;
 }
 
 export async function toggleExamSubscribersOnly(examId: string, subscribersOnly: boolean) {

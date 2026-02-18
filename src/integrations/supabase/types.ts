@@ -1981,8 +1981,16 @@ export type Database = {
         Args: { p_folder_id: string }
         Returns: undefined
       }
+      delete_lesson_cascade: {
+        Args: { p_lesson_id: string }
+        Returns: undefined
+      }
       delete_subject_cascade: {
         Args: { p_subject_id: string }
+        Returns: undefined
+      }
+      delete_turma_exam_cascade: {
+        Args: { p_exam_id: string }
         Returns: undefined
       }
       find_turma_by_invite_code: {
