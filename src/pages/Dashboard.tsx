@@ -105,8 +105,10 @@ const Dashboard = () => {
     if (!state.deleteTarget) return;
     try {
       if (state.deleteTarget.type === 'folder') {
-        await deleteFolderCascade(state.deleteTarget.id);
-        toast({ title: 'Pasta e conteúdo excluídos' });
+        // Simple delete — ON DELETE SET NULL moves child decks to root
+        const { error: folderErr } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
+        if (folderErr) throw folderErr;
+        toast({ title: 'Pasta excluída' });
       } else {
         // Check if deck is shared in a community — detach first
         const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', state.deleteTarget.id);
@@ -226,7 +228,7 @@ const Dashboard = () => {
             const current = state.folders.find(f => f.id === state.currentFolderId);
             state.setCurrentFolderId(current?.parent_id ?? null);
           }}
-          hasDecks={state.currentDecks.length > 0}
+          hasDecks={state.currentDecks.length > 0 || state.currentFolders.length > 0}
           deckSelectionMode={state.deckSelectionMode}
           selectedCount={state.selectedDeckIds.size}
           isAllSelected={state.selectedDeckIds.size === state.currentDecks.length}
