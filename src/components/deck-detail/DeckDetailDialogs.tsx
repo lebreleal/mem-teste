@@ -188,13 +188,13 @@ const DeckDetailDialogs = () => {
                   <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1.5">
                     <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
                     <p className="text-xs text-muted-foreground">
-                      Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> para criar uma lacuna.
+                      Clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> para ativar o modo lacuna — tudo que digitar vira cloze. Clique novamente para desativar.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Use <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{+}'}</code> para avançar o contador e criar um <strong>novo card</strong> vinculado (c2, c3...).
+                      Clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{+}'}</code> para avançar o contador e iniciar um <strong>novo card</strong> vinculado (c2, c3...).
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Exemplo: selecione "mitocôndria" → <code className="font-mono text-[10px]">{'{ }'}</code> = c1. Selecione "ATP" → <code className="font-mono text-[10px]">{'{+}'}</code> = c2 (novo card).
+                      💡 Você também pode selecionar um texto antes de clicar nos botões para envolvê-lo diretamente.
                     </p>
                   </div>
                 </div>

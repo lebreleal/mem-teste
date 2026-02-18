@@ -43,6 +43,12 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const [clozeCounter, setClozeCounter] = useState(1);
   const [clozeActive, setClozeActive] = useState(false);
+  const clozeActiveRef = useRef(false);
+  const clozeCounterRef = useRef(1);
+
+  // Keep refs in sync
+  useEffect(() => { clozeActiveRef.current = clozeActive; }, [clozeActive]);
+  useEffect(() => { clozeCounterRef.current = clozeCounter; }, [clozeCounter]);
 
   const editor = useEditor({
     extensions: [
@@ -53,10 +59,23 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       Color,
     ],
     content,
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      onChange(html);
+    },
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[120px] outline-none p-3 text-card-foreground',
+      },
+      handleTextInput: (view, from, to, text) => {
+        if (!clozeActiveRef.current) return false;
+        // Don't wrap if we're already inside a cloze marker
+        const docText = view.state.doc.textContent;
+        const beforeCursor = docText.slice(0, from);
+        const openBraces = (beforeCursor.match(/\{\{c\d+::/g) || []).length;
+        const closeBraces = (beforeCursor.match(/\}\}/g) || []).length;
+        if (openBraces > closeBraces) return false; // already inside cloze
+        return false; // let normal typing happen, we handle wrapping on space/enter
       },
     },
   });
@@ -152,31 +171,67 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  /** Insert cloze with current counter number */
+  /** Toggle cloze mode with current counter — if text selected, wrap it; otherwise toggle mode */
   const handleCloze = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
-    if (from === to) {
-      toast({ title: 'Selecione um texto para criar a lacuna', variant: 'destructive' }); return;
+    if (from !== to) {
+      // Text selected: wrap it
+      const selectedText = editor.state.doc.textBetween(from, to);
+      editor.chain().focus().deleteSelection().insertContent(`{{c${clozeCounter}::${selectedText}}}`).run();
+      setClozeActive(true);
+    } else {
+      // No selection: toggle mode. When activating, insert opening marker; user types; on deactivate close it
+      if (clozeActive) {
+        // Deactivate
+        setClozeActive(false);
+      } else {
+        // Activate: insert opening cloze marker
+        editor.chain().focus().insertContent(`{{c${clozeCounter}::`).run();
+        setClozeActive(true);
+      }
     }
-    const selectedText = editor.state.doc.textBetween(from, to);
-    editor.chain().focus().deleteSelection().insertContent(`{{c${clozeCounter}::${selectedText}}}`).run();
-    setClozeActive(true);
-  }, [editor, clozeCounter, toast]);
+  }, [editor, clozeCounter, clozeActive]);
 
-  /** Increment counter and insert cloze with new number */
+  /** Deactivate cloze by inserting closing braces */
+  const closeClozeMarker = useCallback(() => {
+    if (!editor || !clozeActive) return;
+    editor.chain().focus().insertContent('}}').run();
+    setClozeActive(false);
+  }, [editor, clozeActive]);
+
+  // Close cloze marker when pressing Enter or when clicking outside
+  useEffect(() => {
+    if (!editor || !clozeActive) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault();
+        closeClozeMarker();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [editor, clozeActive, closeClozeMarker]);
+
+  /** Increment counter, close current cloze if active, then start new one */
   const handleClozeNext = useCallback(() => {
     if (!editor) return;
-    const { from, to } = editor.state.selection;
-    if (from === to) {
-      toast({ title: 'Selecione um texto para criar a lacuna', variant: 'destructive' }); return;
+    // Close current cloze if active
+    if (clozeActive) {
+      editor.chain().focus().insertContent('}}').run();
     }
-    const selectedText = editor.state.doc.textBetween(from, to);
+    const { from, to } = editor.state.selection;
     const nextNum = clozeCounter + 1;
-    editor.chain().focus().deleteSelection().insertContent(`{{c${nextNum}::${selectedText}}}`).run();
+    if (from !== to) {
+      const selectedText = editor.state.doc.textBetween(from, to);
+      editor.chain().focus().deleteSelection().insertContent(`{{c${nextNum}::${selectedText}}}`).run();
+    } else {
+      // Start new cloze with incremented number
+      editor.chain().focus().insertContent(`{{c${nextNum}::`).run();
+    }
     setClozeCounter(nextNum);
     setClozeActive(true);
-  }, [editor, clozeCounter, toast]);
+  }, [editor, clozeCounter, clozeActive]);
 
   const handleSetColor = (color: string) => {
     if (!editor) return;
@@ -226,13 +281,19 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
           <Braces className="h-3.5 w-3.5" />
         </ToolBtn>
 
-        {/* Cloze next number button */}
-        <ToolBtn onClick={handleClozeNext} title={`Novo cloze c${clozeCounter + 1} (próximo número)`}>
-          <span className="relative flex items-center justify-center">
-            <Braces className="h-3.5 w-3.5" />
-            <Plus className="h-2 w-2 absolute -top-0.5 -right-1 text-primary" strokeWidth={3} />
-          </span>
-        </ToolBtn>
+        {/* Cloze next number button {+} */}
+        <Button type="button" variant="ghost" size="icon"
+          className="h-7 w-7"
+          onClick={handleClozeNext}
+          title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 3H7a2 2 0 0 0-2 2v5m0 4v5a2 2 0 0 0 2 2h1" />
+            <path d="M16 3h1a2 2 0 0 1 2 2v5m0 4v5a2 2 0 0 1-2 2h-1" />
+            <path d="M12 8v8" />
+            <path d="M8 12h8" />
+          </svg>
+        </Button>
 
         {onOcclusionPaste && onOcclusionAttach && (
           <DropdownMenu>
