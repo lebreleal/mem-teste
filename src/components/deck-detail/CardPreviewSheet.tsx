@@ -18,8 +18,8 @@ function renderClozePreview(html: string, revealed: boolean, targetNum?: number)
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
     const n = parseInt(num);
     if (targetNum !== undefined && n !== targetNum) return answer;
-    if (revealed) return `<span style="color:hsl(var(--primary));font-weight:600">${answer}</span>`;
-    return `<span style="display:inline-block;background:hsl(var(--primary) / 0.15);border:1.5px solid hsl(var(--primary) / 0.4);border-radius:6px;padding:2px 10px;color:hsl(var(--primary));font-size:0.85em;font-weight:600">[...]</span>`;
+    if (revealed) return `<span class="cloze-revealed">${answer}</span>`;
+    return `<span class="cloze-blank">[...]</span>`;
   });
 }
 
