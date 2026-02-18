@@ -68,6 +68,8 @@ function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
+  if (!card) return <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-6 text-center text-muted-foreground">Cartão não encontrado</div>;
+
   const isCloze = card.card_type === 'cloze';
   const isMultiple = card.card_type === 'multiple_choice';
   const isOcclusion = card.card_type === 'image_occlusion';
@@ -82,45 +84,55 @@ function CardContent({
     try { const p = JSON.parse(card.back_content); mcOptions = p.options || []; mcCorrectIdx = p.correctIndex ?? -1; } catch {}
   }
 
-  const front = () => {
-    if (isOcclusion && occlusionData?.imageUrl)
-      return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
-    if (isCloze) {
-      const html = renderClozePreview(card.front_content, revealed, clozeTarget);
-      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+  const frontContent = (() => {
+    try {
+      if (isOcclusion && occlusionData?.imageUrl)
+        return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
+      if (isCloze) {
+        const html = renderClozePreview(card.front_content, revealed, clozeTarget);
+        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+      }
+      if (/<[a-z][\s\S]*>/i.test(card.front_content))
+        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
+      return <p className="text-lg sm:text-xl leading-relaxed whitespace-pre-wrap">{card.front_content}</p>;
+    } catch (e) {
+      console.error('Error rendering front:', e);
+      return <p className="text-lg text-destructive">Erro ao renderizar cartão</p>;
     }
-    if (/<[a-z][\s\S]*>/i.test(card.front_content))
-      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
-    return <p className="text-lg sm:text-xl leading-relaxed whitespace-pre-wrap">{card.front_content}</p>;
-  };
+  })();
 
-  const back = () => {
-    if (isCloze) return null;
-    if (isMultiple) {
-      return (
-        <div className="space-y-2.5 mt-6">
-          {mcOptions.map((opt, i) => (
-            <div key={i} className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
-              revealed && i === mcCorrectIdx ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
-              : revealed ? 'border-border/30 text-muted-foreground' : 'border-border/60 text-foreground'
-            }`}>
-              <span className="font-medium mr-2">{String.fromCharCode(65 + i)})</span> {opt}
-            </div>
-          ))}
-        </div>
-      );
+  const backContent = (() => {
+    try {
+      if (isCloze) return null;
+      if (isMultiple) {
+        return (
+          <div className="space-y-2.5 mt-6">
+            {mcOptions.map((opt, i) => (
+              <div key={i} className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
+                revealed && i === mcCorrectIdx ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
+                : revealed ? 'border-border/30 text-muted-foreground' : 'border-border/60 text-foreground'
+              }`}>
+                <span className="font-medium mr-2">{String.fromCharCode(65 + i)})</span> {opt}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      if (!revealed) return null;
+      if (/<[a-z][\s\S]*>/i.test(card.back_content))
+        return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: card.back_content }} />;
+      return <p className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">{card.back_content}</p>;
+    } catch (e) {
+      console.error('Error rendering back:', e);
+      return <p className="text-sm text-destructive mt-4">Erro ao renderizar resposta</p>;
     }
-    if (!revealed) return null;
-    if (/<[a-z][\s\S]*>/i.test(card.back_content))
-      return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: card.back_content }} />;
-    return <p className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">{card.back_content}</p>;
-  };
+  })();
 
   return (
     <div className={`bg-card rounded-2xl border border-border/30 shadow-lg overflow-hidden cursor-pointer select-none ${className}`} onClick={onClick}>
       <div className="p-6 sm:p-8 min-h-[40vh] sm:min-h-[50vh] max-h-[70vh] overflow-y-auto flex flex-col justify-center">
-        {front()}
-        {back()}
+        {frontContent}
+        {backContent}
       </div>
     </div>
   );
@@ -154,12 +166,18 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const { openEdit, setDeleteId, setMoveCardId } = useDeckDetail();
   const isMobile = useIsMobile();
 
-  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  const virtualCards = useMemo(() => {
+    if (!cards || cards.length === 0) return [];
+    return buildVirtualCards(cards);
+  }, [cards]);
 
   const initialVirtualIndex = useMemo(() => {
+    if (virtualCards.length === 0) return 0;
     if (initialIndex < 0 || initialIndex >= cards.length) return 0;
     const targetCard = cards[initialIndex];
-    return virtualCards.findIndex(vc => vc.card.id === targetCard.id) || 0;
+    if (!targetCard) return 0;
+    const found = virtualCards.findIndex(vc => vc.card.id === targetCard.id);
+    return found >= 0 ? found : 0;
   }, [initialIndex, cards, virtualCards]);
 
   const [index, setIndex] = useState(initialVirtualIndex);
@@ -167,16 +185,18 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
 
-  const vc = virtualCards[index];
-  const card = vc?.card;
+  // Clamp index to valid range
+  const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
+  const vc = virtualCards.length > 0 ? virtualCards[safeIndex] : null;
+  const card = vc?.card ?? null;
 
   const goPrev = useCallback(() => {
-    if (index > 0) { setIndex(i => i - 1); setRevealed(false); }
-  }, [index]);
+    if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); }
+  }, [safeIndex]);
 
   const goNext = useCallback(() => {
-    if (index < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
-  }, [index, virtualCards.length]);
+    if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
+  }, [safeIndex, virtualCards.length]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -236,8 +256,8 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       if (!dragStartRef.current || isSnappingRef.current) return;
       const dx = dragXRef.current;
       const threshold = window.innerWidth * 0.2;
-      const canGoPrev = index > 0;
-      const canGoNext = index < virtualCards.length - 1;
+      const canGoPrev = safeIndex > 0;
+      const canGoNext = safeIndex < virtualCards.length - 1;
 
       if (dx > threshold && canGoPrev) {
         // Snap to slot 0 (prev card)
@@ -293,7 +313,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [open, isMobile, index, virtualCards.length]);
+  }, [open, isMobile, safeIndex, virtualCards.length]);
 
   // Reset track position when index changes (e.g. from keyboard)
   useEffect(() => {
@@ -312,11 +332,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   if (!open || !card) return null;
 
-  const isCloze = card.card_type === 'cloze';
-  const clozeTarget = vc.clozeTarget;
+  const isCloze = card?.card_type === 'cloze';
+  const clozeTarget = vc?.clozeTarget;
 
-  const prevVc = index > 0 ? virtualCards[index - 1] : null;
-  const nextVc = index < virtualCards.length - 1 ? virtualCards[index + 1] : null;
+  const prevVc = safeIndex > 0 ? virtualCards[safeIndex - 1] : null;
+  const nextVc = safeIndex < virtualCards.length - 1 ? virtualCards[safeIndex + 1] : null;
 
   return (
     <div
@@ -332,7 +352,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
-            <span className="text-primary">{index + 1}</span>/{virtualCards.length}
+            <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
           </span>
           {isCloze && clozeTarget && (
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
@@ -367,9 +387,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       {/* Card area */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
         {isMobile ? (
-          /* ── Mobile: 3-slot carousel ──
-             Track has 3 slots each 100% wide. translateX(-100%) centers on slot 1 (current).
-             Drag offsets the track. On swipe, snap to slot 0 or 2, then reset after index change. */
+          /* ── Mobile: 3-slot carousel ── */
           <div className="w-full h-full overflow-hidden">
             <div
               ref={trackRef}
@@ -386,11 +404,19 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
               {/* Slot 1: Current card */}
               <div className="w-1/3 h-full flex flex-col items-center justify-center px-4">
                 <div className="w-full max-w-lg">
-                  <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
-                  {!revealed && (
-                    <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
-                      Toque para revelar
-                    </p>
+                  {vc ? (
+                    <>
+                      <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+                      {!revealed && (
+                        <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
+                          Toque para revelar
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-8 text-center text-muted-foreground">
+                      Cartão não disponível
+                    </div>
                   )}
                 </div>
               </div>
@@ -409,24 +435,32 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
             <Button
               variant="ghost" size="icon"
               className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
-              disabled={index === 0} onClick={goPrev}
+              disabled={safeIndex === 0} onClick={goPrev}
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
 
             <div className="w-full max-w-2xl mx-14">
-              <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
-              {!revealed && (
-                <p className="text-center text-xs text-muted-foreground mt-4 animate-pulse">
-                  Toque para revelar
-                </p>
+              {vc ? (
+                <>
+                  <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+                  {!revealed && (
+                    <p className="text-center text-xs text-muted-foreground mt-4 animate-pulse">
+                      Toque para revelar
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-8 text-center text-muted-foreground">
+                  Cartão não disponível
+                </div>
               )}
             </div>
 
             <Button
               variant="ghost" size="icon"
               className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
-              disabled={index === virtualCards.length - 1} onClick={goNext}
+              disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
             >
               <ChevronRight className="h-5 w-5" />
             </Button>
