@@ -58,7 +58,7 @@ interface MultipleChoiceData {
 const ratingConfig = [
   { rating: 1 as Rating, label: 'Errei', colorClass: 'bg-destructive hover:bg-destructive/90 text-destructive-foreground', flashClass: 'animate-wrong-flash' },
   { rating: 2 as Rating, label: 'Difícil', colorClass: 'bg-warning hover:bg-warning/90 text-warning-foreground', flashClass: '' },
-  { rating: 3 as Rating, label: 'Bom', colorClass: 'bg-primary hover:bg-primary/90 text-primary-foreground', flashClass: 'animate-correct-flash' },
+  { rating: 3 as Rating, label: 'Bom', colorClass: 'bg-success hover:bg-success/90 text-success-foreground', flashClass: 'animate-correct-flash' },
   { rating: 4 as Rating, label: 'Fácil', colorClass: 'bg-info hover:bg-info/90 text-info-foreground', flashClass: 'animate-correct-flash' },
 ];
 

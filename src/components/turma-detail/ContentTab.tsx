@@ -534,11 +534,6 @@ const ContentTab = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-          {contentFolderId && (
-            <h2 className="font-display text-lg font-bold text-foreground truncate">
-              {contentBreadcrumb[contentBreadcrumb.length - 1]?.name}
-            </h2>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {hasContent && (isAdmin || isMod) && (
