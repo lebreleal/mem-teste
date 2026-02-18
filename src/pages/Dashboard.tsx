@@ -263,6 +263,7 @@ const Dashboard = () => {
           getSubDecks={state.getSubDecks}
           getAggregateStats={state.getAggregateStats}
           getCommunityLinkId={state.getCommunityLinkId}
+          folderHasCommunityLink={state.folderHasCommunityLink}
           getFolderDueCount={state.getFolderDueCount}
           getFolderCommunityLinkId={state.getFolderCommunityLinkId}
           navigateToCommunity={handleNavigateCommunity}

@@ -39,6 +39,7 @@ interface DeckListProps {
   navigateToCommunity: (id: string) => void;
   getFolderDueCount: (folderId: string) => number;
   getFolderCommunityLinkId: (folderId: string) => string | null;
+  folderHasCommunityLink: (folderId: string) => boolean;
   
   // Actions
   onFolderClick: (id: string) => void;
@@ -61,7 +62,7 @@ const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
-  navigateToCommunity, onReorderFolders, onReorderDecks,
+  folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
@@ -157,6 +158,7 @@ const DeckList = ({
       {/* Folders */}
       {folderDrag.displayItems.map(folder => {
         const dragHandlers = folderDrag.getHandlers(folder);
+        const hasCommunityItems = folderHasCommunityLink(folder.id);
         return (
           <div
             key={folder.id}
@@ -208,8 +210,13 @@ const DeckList = ({
                     <Archive className="mr-2 h-4 w-4" /> Arquivar
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDeleteFolder(folder)}>
+                  <DropdownMenuItem
+                    className={hasCommunityItems ? 'opacity-40 pointer-events-none' : 'text-destructive focus:text-destructive'}
+                    disabled={hasCommunityItems}
+                    onClick={() => !hasCommunityItems && onDeleteFolder(folder)}
+                  >
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                    {hasCommunityItems && <span className="ml-1 text-[10px]">(remova itens vinculados)</span>}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
