@@ -142,14 +142,7 @@ const DeckDetailDialogs = () => {
                     const sortedNumbers = Array.from(clozeNumbers).sort((a, b) => a - b);
 
                     if (sortedNumbers.length > 0) {
-                      const CLOZE_COLORS = [
-                        'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40',
-                        'bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40',
-                        'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40',
-                        'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40',
-                        'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40',
-                      ];
-                      const DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+                      const BADGE_STYLE = 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 border border-sky-200 dark:border-sky-700/50';
 
                       const renderHighlighted = () => {
                         const parts: React.ReactNode[] = [];
@@ -162,9 +155,8 @@ const DeckDetailDialogs = () => {
                             parts.push(<span key={key++}>{plainText.slice(lastIndex, m.index)}</span>);
                           }
                           const num = parseInt(m[1]);
-                          const colorIdx = sortedNumbers.indexOf(num) % CLOZE_COLORS.length;
                           parts.push(
-                            <span key={key++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 border font-medium ${CLOZE_COLORS[colorIdx]}`}>
+                            <span key={key++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-medium ${BADGE_STYLE}`}>
                               <span className="text-[9px] font-bold opacity-70">{num}</span>
                               {m[2]}
                             </span>
@@ -180,32 +172,29 @@ const DeckDetailDialogs = () => {
                       return (
                         <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
                           <div className="p-3 text-sm leading-relaxed">{renderHighlighted()}</div>
-                          <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center gap-2 flex-wrap">
-                            {sortedNumbers.map((n, i) => (
-                              <span key={n} className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                <span className={`h-2 w-2 rounded-full ${DOT_COLORS[i % DOT_COLORS.length]}`} />
-                                Cloze {n}
-                              </span>
-                            ))}
-                            {sortedNumbers.length > 1 && (
-                              <span className="text-[10px] text-muted-foreground ml-auto">
+                          {sortedNumbers.length > 1 && (
+                            <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center justify-end">
+                              <span className="text-[10px] text-muted-foreground">
                                 {sortedNumbers.length} cards vinculados
                               </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       );
                     }
                     return null;
                   })()}
 
-                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
+                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1.5">
                     <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
                     <p className="text-xs text-muted-foreground">
-                      Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
+                      Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> para criar uma lacuna.
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
+                    <p className="text-xs text-muted-foreground">
+                      Use <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{+}'}</code> para avançar o contador e criar um <strong>novo card</strong> vinculado (c2, c3...).
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Exemplo: selecione "mitocôndria" → <code className="font-mono text-[10px]">{'{ }'}</code> = c1. Selecione "ATP" → <code className="font-mono text-[10px]">{'{+}'}</code> = c2 (novo card).
                     </p>
                   </div>
                 </div>
