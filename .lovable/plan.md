@@ -1,22 +1,22 @@
 
-# Corrigir Falha no Deploy - Lock File Desatualizado
+
+# Corrigir Lock File Desatualizado (Tentativa 2)
 
 ## Problema
 
-O deploy falhou porque o `package-lock.json` esta dessincronizado com o `package.json`. O comando `npm ci` exige sincronia perfeita e esta reclamando de dependencias transitivas ausentes no lock file (como `@testing-library/dom`, `pretty-format`, `aria-query`, etc.).
-
-Isso acontece quando pacotes sao adicionados/atualizados no `package.json` mas o lock file nao e regenerado.
+O `package-lock.json` continua dessincronizado. A tentativa anterior de adicionar `@testing-library/jest-dom` nao regenerou o lock file completamente -- as dependencias transitivas (`@testing-library/dom`, `pretty-format`, `aria-query`, etc.) ainda estao ausentes.
 
 ## Solucao
 
-Regenerar o `package-lock.json` removendo o arquivo atual e deixando o sistema recria-lo automaticamente. Isso garante que todas as dependencias transitivas sejam resolvidas corretamente.
+Reescrever o `package-lock.json` com conteudo minimo (apenas `{}`) para forcar o sistema de build a regenera-lo do zero. Isso garante que todas as dependencias transitivas sejam resolvidas.
 
 ## Mudancas
 
-### 1. Deletar e regenerar `package-lock.json`
+### 1. Reescrever `package-lock.json` com conteudo vazio
 
-Remover o arquivo `package-lock.json` existente para forcar a regeneracao completa. O sistema de build do Lovable ira gerar um novo lock file sincronizado automaticamente.
+Substituir todo o conteudo do arquivo por um JSON minimo (`{}`). Na proxima instalacao, o npm ira gerar um lock file completo e sincronizado.
 
 ## Arquivos Modificados
 
-- `package-lock.json` - Deletar e regenerar
+- `package-lock.json` - Reescrever com conteudo minimo para forcar regeneracao
+
