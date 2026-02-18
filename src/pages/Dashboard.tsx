@@ -22,6 +22,7 @@ import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulk
 import { supabase } from '@/integrations/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
 import { useMissions } from '@/hooks/useMissions';
+import CommunityDeleteBlockDialog from '@/components/CommunityDeleteBlockDialog';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ const Dashboard = () => {
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
+  const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -101,21 +103,24 @@ const Dashboard = () => {
     }
   };
 
+  /** Check if deck is shared in a community before allowing deletion. */
+  const handleDeleteDeckRequest = async (deck: { id: string; name: string }) => {
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', deck.id).limit(1);
+    if (turmaRefs && turmaRefs.length > 0) {
+      setCommunityBlockTarget({ id: deck.id, name: deck.name, type: 'deck' });
+      return;
+    }
+    state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
+  };
+
   const handleDeleteSubmit = async () => {
     if (!state.deleteTarget) return;
     try {
       if (state.deleteTarget.type === 'folder') {
-        // Simple delete — ON DELETE SET NULL moves child decks to root
         const { error: folderErr } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
         if (folderErr) throw folderErr;
         toast({ title: 'Pasta excluída' });
       } else {
-        // Check if deck is shared in a community — detach first
-        const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', state.deleteTarget.id);
-        if (turmaRefs && turmaRefs.length > 0) {
-          // Remove all turma_decks references before deleting
-          await supabase.from('turma_decks').delete().eq('deck_id', state.deleteTarget.id);
-        }
         await deleteDeckCascade(state.deleteTarget.id);
         toast({ title: 'Baralho excluído' });
       }
@@ -277,7 +282,7 @@ const Dashboard = () => {
           onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
           onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); }}
           onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-          onDeleteDeck={(d) => state.setDeleteTarget({ type: 'deck', id: d.id, name: d.name })}
+          onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
           onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
           onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
         />
@@ -323,7 +328,7 @@ const Dashboard = () => {
                       <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
                         <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
                       </Button>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name })}>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => handleDeleteDeckRequest(deck)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -386,6 +391,18 @@ const Dashboard = () => {
       <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />
       <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />
       <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />
+
+      <CommunityDeleteBlockDialog
+        open={!!communityBlockTarget}
+        onOpenChange={(open) => !open && setCommunityBlockTarget(null)}
+        itemName={communityBlockTarget?.name ?? ''}
+        itemType="deck"
+        onArchive={communityBlockTarget ? () => {
+          state.archiveDeck.mutate(communityBlockTarget.id);
+          setCommunityBlockTarget(null);
+          toast({ title: 'Baralho arquivado!' });
+        } : undefined}
+      />
     </div>
   );
 };
