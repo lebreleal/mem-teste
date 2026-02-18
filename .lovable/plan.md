@@ -1,98 +1,109 @@
 
-## Plano: Mini-Game no Loading, Somente Texto (sem imagens), Formatos Respeitados, Remover Analise de Cobertura
 
-### Resumo das Mudancas
+## Plano de Refatoracao: Sistema de Vinculo, Coroa e Provas
 
-Tres grandes melhorias + uma remocao:
+### Problemas Identificados
 
-1. **Loading interativo com mini-game do dinossauro** durante a geracao
-2. **Remover processamento de imagens** - usar apenas texto extraido do PDF (mais rapido, mais barato)
-3. **Forcar formatos selecionados pelo usuario** no backend
-4. **Remover funcionalidade de analise de cobertura** (analyze + fill-gaps)
+1. **Coroa nao aparece no header da comunidade**: O componente `TurmaSubHeader` so mostra a coroa quando `hasSubscription` e `true` (ou seja, `subscription_price > 0`). Se a comunidade tem preco 0 mas tem conteudo marcado como "so assinantes", a coroa nao aparece. Alem disso, membros comuns nao veem indicacao de que existe conteudo exclusivo.
 
----
+2. **Vinculo de deck quebra ao deletar card**: Quando o usuario deleta o deck vinculado no "Inicio", o campo `source_turma_deck_id` se perde, quebrando o link com a pasta/comunidade.
 
-### 1. Mini-Game do Dinossauro no Loading
+3. **Provas nao tem sistema de vinculo**: Ao importar uma prova da comunidade, ela vai para um deck generico sem pasta vinculada, diferente do comportamento dos decks.
 
-**Arquivo:** `src/components/ai-deck/GenerationProgress.tsx`
-
-Reescrever completamente com:
-
-- Canvas com mini-game estilo dino do Chrome: personagem pula (click/touch/space) sobre obstaculos
-- Score visivel enquanto joga
-- Status de progresso real abaixo do game: "Lote 2 de 5 - Criando seus flashcards..."
-- Barra de progresso com percentual e creditos
-- Dicas motivacionais rotativas ("Flashcards aumentam retencao em 50%!")
-- Funciona em mobile (touch) e desktop (click/space)
-
-Logica do game:
-- Canvas ~280x120
-- Dino: retangulo/emoji na esquerda, gravidade simula pulo
-- Cactos: obstaculos movendo da direita pra esquerda
-- Colisao reseta score
-- requestAnimationFrame loop
-- Cleanup no unmount
+4. **ContentTab.tsx e um monolito de 1184 linhas**: Mistura logica de negocio com UI, dificultando manutencao.
 
 ---
 
-### 2. Remover Processamento de Imagens (Somente Texto)
+### Solucao Proposta
 
-A decisao e usar **apenas texto extraido** do PDF. Motivos:
-- Enviar imagens para GPT-4o custa ~10x mais tokens
-- A maioria dos PDFs academicos tem texto rico que o pdf.js ja extrai bem
-- Elimina a necessidade de usar gpt-4o (vision), pode usar modelo mais barato
-- Geracao fica ~50% mais rapida
+#### 1. Coroa sempre visivel no header (para comunidades com conteudo exclusivo)
 
-**Arquivos afetados:**
+**Logica atual** (TurmaSubHeader.tsx, linhas 56-65):
+- Coroa so aparece se `hasSubscription` (preco > 0)
 
-| Arquivo | Mudanca |
-|---|---|
-| `src/lib/pdfUtils.ts` | Remover geracao de `imageBase64` e `aiCanvas`. Manter apenas thumbnail + texto |
-| `src/components/ai-deck/useAIDeckFlow.ts` | Remover envio de `pageImages` no batch. Filtrar pages apenas por `textContent.trim().length > 0` |
-| `supabase/functions/generate-deck/index.ts` | Remover toda logica de `hasPageImages`, `visionModel`, `pageImages`, content multimodal. Sempre usar modelo texto (`selectedModel`) |
-| `src/services/aiService.ts` | Remover `pageImages` do `GenerateDeckParams` |
-| `src/types/ai.ts` | Remover `imageBase64` do `PageItem` |
+**Nova logica**:
+- Mostrar coroa se `hasSubscription` e `true` OU se existir qualquer conteudo marcado como `subscribers_only` / `price_type !== 'free'`
+- Passar nova prop `hasExclusiveContent` para o SubHeader
+- Calcular no Context: verificar se algum deck, arquivo ou prova tem restricao de assinante
 
----
+#### 2. Proteger vinculo ao deletar deck no Dashboard
 
-### 3. Forcar Formatos do Usuario no Backend
+**Problema**: Deletar o deck local (com `source_turma_deck_id`) remove o deck mas a pasta pai fica orfao.
 
-**Arquivo:** `supabase/functions/generate-deck/index.ts`
+**Solucao**:
+- Ao deletar um deck que tem `source_turma_deck_id`, mostrar aviso: "Este baralho esta vinculado a uma comunidade. Ao excluir, o vinculo sera perdido."
+- No `DeckRow.tsx`, verificar `deck.source_turma_deck_id` antes de deletar e mostrar confirmacao
+- Alternativa: ao re-importar, verificar se a pasta (folder) da comunidade ja existe e reutiliza-la, mesmo sem deck vinculado dentro
 
-Problema atual: linha 253-255 mapeia qualquer tipo desconhecido para "basic", mesmo que o usuario nao tenha selecionado "qa".
+#### 3. Sistema de vinculo para provas (exams)
 
-Mudancas:
-- No mapeamento final de tipos (linha 253-257), se o tipo retornado pela IA nao esta nos `formats` permitidos, converter para o **primeiro formato permitido** (ex: se usuario escolheu `['cloze', 'multiple_choice']`, converter "basic" para "cloze")
-- Adicionar instrucao explicita no prompt: "PROIBIDO gerar cartoes do tipo X" para formatos nao selecionados
-- Gerar exemplos de saida APENAS com os formatos selecionados
+**Implementacao**:
+- Ao importar prova da comunidade (`handleOpenExam`), criar ou reutilizar pasta de exams vinculada a comunidade (similar ao que decks fazem com `folders`)
+- Usar campo `source_turma_exam_id` (ja existe na tabela `exams`) para rastrear o vinculo
+- Criar pasta de exam (`exam_folders`) com nome da comunidade, similar ao que `addToCollection` faz para decks
+- Mostrar icone `Link2` ao lado do titulo da prova no Dashboard quando `source_turma_exam_id` existir
 
----
+#### 4. Refatorar ContentTab em modulos menores
 
-### 4. Remover Analise de Cobertura
-
-Remover completamente as funcionalidades "Analisar Cobertura" e "Preencher Lacunas".
-
-**Arquivos afetados:**
-
-| Arquivo | Mudanca |
-|---|---|
-| `src/components/ai-deck/AnalysisStep.tsx` | Deletar arquivo |
-| `src/components/ai-deck/types.ts` | Remover steps `'analyzing'` e `'analysis'` do tipo `Step` |
-| `src/components/ai-deck/useAIDeckFlow.ts` | Remover `handleAnalyze`, `handleFillGaps`, state `analysis`, e exportacoes relacionadas |
-| `src/components/ai-deck/CardReviewStep.tsx` | Remover botao "Analisar cobertura" e prop `onAnalyze` |
-| `src/components/AICreateDeckDialog.tsx` | Remover import do `AnalysisStep`, remover bloco de render do step `analysis`, remover props `onAnalyze`/`onFillGaps` |
-| `src/services/aiService.ts` | Remover `analyzeCoverage()`, `fillGaps()`, e interfaces `AnalyzeCoverageParams`, `FillGapsParams` |
-| `src/types/ai.ts` | Remover interface `CoverageAnalysis` |
-| `supabase/functions/generate-deck/index.ts` | Remover blocos `action === "analyze"` e `action === "fill-gaps"` |
+Extrair em componentes dedicados:
+- `ContentHeader.tsx` -- breadcrumb + botoes de acao
+- `ContentFolderRow.tsx` -- render de cada pasta/subject  
+- `ContentFileRow.tsx` -- render de cada arquivo
+- `ContentDeckRow.tsx` -- render de cada deck da comunidade
+- `ContentExamRow.tsx` -- render de cada prova
+- `useContentMutations.ts` -- todas as mutations (upload, delete, move, reorder)
+- `useContentImport.ts` -- logica de importacao (addToCollection, downloadDeck, handleImportExam)
 
 ---
 
 ### Detalhes Tecnicos
 
-**Ordem de implementacao:**
-1. Remover analise de cobertura (limpar codigo morto primeiro)
-2. Remover processamento de imagens (simplificar pipeline)
-3. Forcar formatos no backend
-4. Implementar mini-game no loading
+#### Alteracoes no banco de dados
+- Nenhuma migracao necessaria: `source_turma_exam_id` ja existe em `exams`, `folder_id` ja existe em `exams`
 
-**Deploy:** Edge function `generate-deck` sera redeployada apos as mudancas.
+#### Arquivos a criar
+- `src/components/turma-detail/content/ContentHeader.tsx`
+- `src/components/turma-detail/content/ContentFolderRow.tsx`
+- `src/components/turma-detail/content/ContentFileRow.tsx`
+- `src/components/turma-detail/content/ContentDeckRow.tsx`
+- `src/components/turma-detail/content/ContentExamRow.tsx`
+- `src/components/turma-detail/content/useContentMutations.ts`
+- `src/components/turma-detail/content/useContentImport.ts`
+
+#### Arquivos a modificar
+- `src/components/turma-detail/ContentTab.tsx` -- reduzir para orquestrador fino (~200 linhas)
+- `src/components/turma-detail/TurmaSubHeader.tsx` -- adicionar prop `hasExclusiveContent`
+- `src/components/turma-detail/TurmaDetailContext.tsx` -- calcular `hasExclusiveContent`
+- `src/components/dashboard/DeckRow.tsx` -- aviso ao deletar deck vinculado
+- `src/pages/ExamSetup.tsx` ou pagina de provas -- icone Link2 para provas importadas
+
+#### Logica de importacao de provas (novo fluxo)
+```text
+1. Usuario clica em "abrir prova" na comunidade
+2. Sistema verifica se ja existe exam com source_turma_exam_id
+3. Se existe -> navega direto
+4. Se nao existe:
+   a. Busca/cria exam_folder com nome da comunidade
+   b. Cria exam com folder_id = pasta da comunidade
+   c. Copia questoes
+   d. Navega para a prova
+```
+
+#### Logica da coroa no header
+```text
+hasExclusiveContent = 
+  turmaDecks.some(d => d.price_type !== 'free') ||
+  turmaExams.some(e => e.subscribers_only) ||
+  lessonFiles.some(f => f.price_type !== 'free')
+  
+showCrown = hasSubscription || hasExclusiveContent
+```
+
+### Ordem de implementacao
+
+1. Refatorar ContentTab em modulos (base para tudo)
+2. Corrigir logica da coroa no header
+3. Implementar vinculo de provas ao importar
+4. Adicionar aviso ao deletar deck vinculado
+5. Testar fluxo completo end-to-end
+
