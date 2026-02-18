@@ -19,10 +19,8 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   });
 
   const submitReview = useMutation({
-    mutationFn: async ({ cardId, rating }: { cardId: string; rating: Rating }) => {
+    mutationFn: async ({ card, rating }: { card: any; rating: Rating }) => {
       if (!user) throw new Error('Not authenticated');
-      const card = studyQueue.data?.cards.find(c => c.id === cardId);
-      if (!card) throw new Error('Card not found');
       return studyService.submitCardReview(
         user.id,
         card,

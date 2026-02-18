@@ -159,22 +159,21 @@ const Study = () => {
       );
     }
 
-    const cardId = currentCard.id;
     setIsTransitioning(true);
 
     submitReview.mutate(
-      { cardId, rating },
+      { card: currentCard, rating },
       {
         onSuccess: (result) => {
           setTimeout(() => {
             setReviewCount(prev => prev + 1);
             if (rating > 2) {
               // Success: remove card from queue
-              setLocalQueue(prev => prev.filter(c => c.id !== cardId));
+              setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id));
             } else {
               // Fail: update card with new scheduled_date/state and move to end
               setLocalQueue(prev => {
-                const idx = prev.findIndex(c => c.id === cardId);
+                const idx = prev.findIndex(c => c.id === currentCard.id);
                 if (idx < 0) return prev;
                 const updatedCard = {
                   ...prev[idx],
