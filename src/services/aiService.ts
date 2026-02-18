@@ -57,6 +57,22 @@ export interface GenerateExamQuestionsParams {
   energyCost: number;
 }
 
+/**
+ * Convert inline markdown formatting to HTML.
+ * Handles **bold**, *italic*, __underline__, ~~strikethrough~~, `code`.
+ */
+function markdownToHtml(text: string): string {
+  if (!text) return text;
+  // Skip if already contains HTML tags (already formatted)
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<u>$1</u>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/~~(.+?)~~/g, '<s>$1</s>')
+    .replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
 /** Generate flashcards from text content via edge function. */
 export async function generateDeckCards(params: GenerateDeckParams): Promise<GenerateDeckResult> {
   const { data, error } = await supabase.functions.invoke('generate-deck', {
@@ -73,7 +89,16 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
   });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-  return { cards: data?.cards ?? [], usage: data?.usage };
+
+  // Convert markdown formatting in AI-generated cards to HTML
+  const cards = (data?.cards ?? []).map((c: any) => ({
+    ...c,
+    front: markdownToHtml(c.front),
+    back: markdownToHtml(c.back),
+    options: c.options?.map((o: string) => markdownToHtml(o)),
+  }));
+
+  return { cards, usage: data?.usage };
 }
 
 /** Log aggregated token usage for a complete deck generation session. */

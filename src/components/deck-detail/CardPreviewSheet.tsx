@@ -287,26 +287,24 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
         </div>
       </header>
 
-      {/* Card area — single centered card for both mobile & desktop */}
+      {/* Card area */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-4 sm:px-6">
-        {/* Left arrow (desktop only) */}
-        {!isMobile && (
-          <Button
-            variant="ghost" size="icon"
-            className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
-            disabled={safeIndex === 0} onClick={goPrev}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        )}
+        {/* Left arrow */}
+        <Button
+          variant="ghost" size="icon"
+          className={`rounded-full bg-card/80 shadow-sm shrink-0 absolute left-2 sm:left-3 z-10 disabled:opacity-30 ${isMobile ? 'h-8 w-8' : 'h-10 w-10'}`}
+          disabled={safeIndex === 0} onClick={goPrev}
+        >
+          <ChevronLeft className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
+        </Button>
 
-        <div className="w-full max-w-2xl mx-auto">
+        <div className="w-full max-w-2xl mx-auto px-10 sm:px-14">
           {vc ? (
             <>
               <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
               {!revealed && (
                 <p className="text-center text-xs text-muted-foreground mt-3 sm:mt-4 animate-pulse">
-                  {isMobile ? 'Toque para revelar · Deslize para navegar' : 'Toque para revelar'}
+                  Toque para revelar
                 </p>
               )}
             </>
@@ -317,16 +315,14 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
           )}
         </div>
 
-        {/* Right arrow (desktop only) */}
-        {!isMobile && (
-          <Button
-            variant="ghost" size="icon"
-            className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
-            disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        )}
+        {/* Right arrow */}
+        <Button
+          variant="ghost" size="icon"
+          className={`rounded-full bg-card/80 shadow-sm shrink-0 absolute right-2 sm:right-3 z-10 disabled:opacity-30 ${isMobile ? 'h-8 w-8' : 'h-10 w-10'}`}
+          disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
+        >
+          <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
+        </Button>
       </div>
     </div>
   );
