@@ -30,7 +30,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const { user } = useAuth();
   const { energy } = useEnergy();
   const { isPremium } = usePremium();
-  const { model, setModel, getCost, MODEL_CONFIG } = useAIModel();
+  const { model, setModel, getCost, MODEL_CONFIG, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -204,7 +204,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     return targetDeckId;
   }, [user, existingDeckId, folderId, queryClient]);
 
-  // === Generation (batch of 6 pages) ===
+  // === Generation (character-based batching) ===
   const handleGenerate = useCallback(async () => {
     const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
     if (selected.length === 0) {
@@ -216,8 +216,24 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     pendingIdRef.current = pendingId;
 
     setStep('generating'); setIsLoading(true);
-    const BATCH_SIZE = 6;
-    const totalBatches = Math.ceil(selected.length / BATCH_SIZE);
+
+    // Character-based batching instead of fixed page count
+    const MAX_CHARS = 6000;
+    const textBatches: { texts: string[]; pageCount: number }[] = [{ texts: [], pageCount: 0 }];
+    let currentSize = 0;
+
+    for (const page of selected) {
+      const text = page.textContent.trim();
+      if (currentSize + text.length > MAX_CHARS && textBatches[textBatches.length - 1].texts.length > 0) {
+        textBatches.push({ texts: [], pageCount: 0 });
+        currentSize = 0;
+      }
+      textBatches[textBatches.length - 1].texts.push(text);
+      textBatches[textBatches.length - 1].pageCount++;
+      currentSize += text.length;
+    }
+
+    const totalBatches = textBatches.length;
     setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
     const allCards: GeneratedCard[] = [];
 
@@ -226,12 +242,17 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     let totalEnergyCost = 0;
     let usedModel = '';
 
+    // Density factor for auto card count (chars per card)
+    const densityFactor = detailLevel === 'comprehensive' ? 150 : detailLevel === 'essential' ? 500 : 300;
+
     for (let b = 0; b < totalBatches; b++) {
-      const batch = selected.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-      const batchText = batch.map(p => p.textContent).join('\n\n');
-      const batchCost = batch.length * getCost(CREDITS_PER_PAGE);
+      const batch = textBatches[b];
+      const batchText = batch.texts.join('\n\n');
+      const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE);
       totalEnergyCost += batchCost;
-      const batchCardCount = targetCardCount > 0 ? Math.max(2, Math.ceil(targetCardCount / totalBatches)) : 0;
+      const batchCardCount = targetCardCount > 0
+        ? Math.max(2, Math.ceil(targetCardCount / totalBatches))
+        : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
       const progress = { current: b + 1, total: totalBatches, creditsUsed: totalEnergyCost };
       setGenProgress(progress);
@@ -351,6 +372,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     genProgress, cards, editingIdx, editFront, setEditFront, editBack, setEditBack,
     isSaving, isLoading, busy, fileInputRef,
     selectedPages, totalCredits, energy, model, setModel,
+    pendingPro, confirmPro, cancelPro,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
     handleGenerate, handleSave, handleDismissToBackground,
