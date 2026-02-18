@@ -29,7 +29,7 @@ import {
   Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
   Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
   Copy, Link2, ClipboardList, Users, Clock, Import,
-  CheckCheck, X, ArrowUpRight, GripVertical,
+  CheckCheck, X, ArrowUpRight, Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -65,7 +65,8 @@ const ContentTab = () => {
   const importLogic = useContentImport();
 
   // ── Local state ──
-  const [reorderMode, setReorderMode] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [selectedDeckId, setSelectedDeckId] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
@@ -145,26 +146,33 @@ const ContentTab = () => {
     return map;
   }, [linkedExams]);
 
+  const q = searchQuery.toLowerCase();
+  const filteredFolders = q ? currentFolders.filter((s: any) => s.name.toLowerCase().includes(q)) : currentFolders;
+  const filteredFiles = q ? currentFiles.filter((f: any) => f.file_name.toLowerCase().includes(q)) : currentFiles;
+  const filteredDecks = q ? currentDecks.filter((d: any) => (d.deck_name || '').toLowerCase().includes(q)) : currentDecks;
+  const filteredExams = q ? currentExams.filter((e: any) => (e.title || '').toLowerCase().includes(q)) : currentExams;
+
   const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0 || currentExams.length > 0;
+  const hasFilteredContent = filteredFolders.length > 0 || filteredFiles.length > 0 || filteredDecks.length > 0 || filteredExams.length > 0;
 
   // ── Drag-to-reorder ──
   const folderDrag = useDragReorder({
-    items: currentFolders,
+    items: filteredFolders,
     getId: (s: any) => s.id,
     onReorder: (reordered) => contentMut.reorderSubjectsMut.mutate(reordered.map((s: any) => s.id)),
   });
   const fileDrag = useDragReorder({
-    items: currentFiles,
+    items: filteredFiles,
     getId: (f: any) => f.id,
     onReorder: (reordered) => contentMut.reorderFilesMut.mutate(reordered.map((f: any) => f.id)),
   });
   const deckDrag = useDragReorder({
-    items: currentDecks,
+    items: filteredDecks,
     getId: (d: any) => d.id,
     onReorder: (reordered) => contentMut.reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
   });
   const examDrag = useDragReorder({
-    items: currentExams,
+    items: filteredExams,
     getId: (e: any) => e.id,
     onReorder: (reordered) => contentMut.reorderExamsMut.mutate(reordered.map((e: any) => e.id)),
   });
@@ -258,9 +266,9 @@ const ContentTab = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {hasContent && canEdit && !selectionMode && (
-            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => setReorderMode(!reorderMode)} title={reorderMode ? 'Pronto' : 'Ordenar'}>
-              {reorderMode ? <X className="h-4 w-4" /> : <GripVertical className="h-4 w-4" />}
+          {hasContent && (
+            <Button variant={searchOpen ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearchQuery(''); }}>
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </Button>
           )}
           {hasContent && (isAdmin || isMod) && (
@@ -298,6 +306,18 @@ const ContentTab = () => {
         </div>
       </div>
 
+      {/* Search bar */}
+      {searchOpen && (
+        <div className="mb-1">
+          <Input
+            placeholder="Buscar por nome..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            autoFocus
+            className="h-9"
+          />
+        </div>
+      )}
       {/* Bulk selection bar */}
       {selectionMode && selectedItems.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
@@ -326,6 +346,11 @@ const ContentTab = () => {
           <h3 className="font-display text-lg font-bold text-foreground">Nenhum conteúdo ainda</h3>
           <p className="mt-1 max-w-xs text-sm text-muted-foreground">Crie uma pasta ou adicione conteúdo.</p>
         </div>
+      ) : !hasFilteredContent ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
+          <Search className="h-7 w-7 text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</p>
+        </div>
       ) : (
         <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
           {/* Subject folders */}
@@ -344,12 +369,6 @@ const ContentTab = () => {
                 {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
                 className={`group flex items-center gap-3 px-3 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
-                {reorderMode && !selectionMode && (
-                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                    onMouseDown={(e) => e.stopPropagation()}>
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`subject::${subject.id}`)} onCheckedChange={() => toggleItem(`subject::${subject.id}`)} />
@@ -412,15 +431,8 @@ const ContentTab = () => {
             return (
               <div key={file.id}
                 {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
-                {...(!fhFile && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
                 className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
-                {reorderMode && !selectionMode && (
-                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                    onMouseDown={(e) => e.stopPropagation()}>
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`file::${file.id}`)} onCheckedChange={() => toggleItem(`file::${file.id}`)} />
@@ -495,15 +507,8 @@ const ContentTab = () => {
             return (
               <div key={td.id}
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
-                {...(!dhDeck && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
                 className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
-                {reorderMode && !selectionMode && (
-                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                    onMouseDown={(e) => e.stopPropagation()}>
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`deck::${td.id}`)} onCheckedChange={() => toggleItem(`deck::${td.id}`)} />
@@ -571,15 +576,8 @@ const ContentTab = () => {
             return (
               <div key={exam.id}
                 {...(ehExam ? { draggable: ehExam.draggable, onDragStart: ehExam.onDragStart, onDragOver: ehExam.onDragOver, onDragEnter: ehExam.onDragEnter, onDragLeave: ehExam.onDragLeave, onDrop: ehExam.onDrop, onDragEnd: ehExam.onDragEnd } : {})}
-                {...(!ehExam && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
                 className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${ehExam?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
-                {reorderMode && !selectionMode && (
-                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                    onMouseDown={(e) => e.stopPropagation()}>
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />

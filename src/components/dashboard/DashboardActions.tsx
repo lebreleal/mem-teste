@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import {
   ArrowLeft, ChevronRight, Plus, FolderPlus, BookOpen, Brain, Download,
-  CheckCheck, X, ArrowUpRight, Archive, Trash2, GripVertical
+  CheckCheck, X, ArrowUpRight, Archive, Trash2, Search,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -31,8 +33,8 @@ interface DashboardActionsProps {
   onBulkMove: () => void;
   onBulkArchive: () => void;
   onBulkDelete: () => void;
-  reorderMode: boolean;
-  toggleReorderMode: () => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
 }
 
 const DashboardActions = ({
@@ -41,8 +43,10 @@ const DashboardActions = ({
   toggleSelectionMode, toggleSelectAll,
   onCreateFolder, onCreateDeck, onCreateAI, onImport,
   onBulkMove, onBulkArchive, onBulkDelete,
-  reorderMode, toggleReorderMode,
+  searchQuery, onSearchChange,
 }: DashboardActionsProps) => {
+  const [searchOpen, setSearchOpen] = useState(false);
+
   return (
     <>
       {/* Breadcrumb */}
@@ -74,12 +78,12 @@ const DashboardActions = ({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {hasDecks && !deckSelectionMode && (
-            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={toggleReorderMode} title={reorderMode ? 'Pronto' : 'Ordenar'}>
-              {reorderMode ? <X className="h-4 w-4" /> : <GripVertical className="h-4 w-4" />}
+          {hasDecks && (
+            <Button variant={searchOpen ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) onSearchChange(''); }}>
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </Button>
           )}
-          {hasDecks && !reorderMode && (
+          {hasDecks && (
             <Button variant={deckSelectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleSelectionMode}>
               {deckSelectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
               <span className="hidden sm:inline">{deckSelectionMode ? 'Cancelar' : 'Selecionar'}</span>
@@ -104,6 +108,19 @@ const DashboardActions = ({
           )}
         </div>
       </div>
+
+      {/* Search bar */}
+      {searchOpen && (
+        <div className="mb-3">
+          <Input
+            placeholder="Buscar por nome..."
+            value={searchQuery}
+            onChange={e => onSearchChange(e.target.value)}
+            autoFocus
+            className="h-9"
+          />
+        </div>
+      )}
 
       {/* Bulk selection bar */}
       {deckSelectionMode && selectedCount > 0 && (

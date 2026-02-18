@@ -6,7 +6,7 @@
 
 import {
   FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2, Loader2, GripVertical
+  ChevronRight, GraduationCap, Link2, Loader2, Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +25,7 @@ interface DeckListProps {
   currentFolders: Folder[];
   currentDecks: DeckWithStats[];
   currentFolderId?: string | null;
+  searchQuery?: string;
   
   // DeckRow props
   deckSelectionMode: boolean;
@@ -54,32 +55,35 @@ interface DeckListProps {
   // Reorder callbacks
   onReorderFolders?: (reordered: Folder[]) => void;
   onReorderDecks?: (reordered: DeckWithStats[]) => void;
-  reorderMode?: boolean;
 }
 
 const DeckList = ({
-  isLoading, currentFolders, currentDecks, currentFolderId,
+  isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
-  navigateToCommunity, onReorderFolders, onReorderDecks, reorderMode = false,
+  navigateToCommunity, onReorderFolders, onReorderDecks,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
 
+  const q = searchQuery.toLowerCase();
+  const filteredFolders = q ? currentFolders.filter(f => f.name.toLowerCase().includes(q)) : currentFolders;
+  const filteredDecks = q ? currentDecks.filter(d => d.name.toLowerCase().includes(q)) : currentDecks;
+
   const folderDrag = useDragReorder({
-    items: currentFolders,
+    items: filteredFolders,
     getId: (f) => f.id,
     onReorder: (reordered) => onReorderFolders?.(reordered),
   });
 
   const deckDrag = useDragReorder({
-    items: currentDecks,
+    items: filteredDecks,
     getId: (d) => d.id,
     onReorder: (reordered) => onReorderDecks?.(reordered),
   });
 
   // Filter pending decks for current folder
-  const visiblePending = pendingDecks.filter(p => p.folderId === (currentFolderId ?? null));
+  const visiblePending = q ? [] : pendingDecks.filter(p => p.folderId === (currentFolderId ?? null));
 
   if (isLoading) {
     return (
@@ -102,7 +106,15 @@ const DeckList = ({
     );
   }
 
-  if (currentFolders.length === 0 && currentDecks.length === 0 && visiblePending.length === 0) {
+  if (filteredFolders.length === 0 && filteredDecks.length === 0 && visiblePending.length === 0) {
+    if (q) {
+      return (
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
+          <Search className="h-7 w-7 text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -144,23 +156,20 @@ const DeckList = ({
 
       {/* Folders */}
       {folderDrag.displayItems.map(folder => {
-        const dragHandlers = reorderMode ? folderDrag.getHandlers(folder) : null;
+        const dragHandlers = folderDrag.getHandlers(folder);
         return (
           <div
             key={folder.id}
-            {...(dragHandlers ? { draggable: dragHandlers.draggable, onDragStart: dragHandlers.onDragStart, onDragOver: dragHandlers.onDragOver, onDragEnter: dragHandlers.onDragEnter, onDragLeave: dragHandlers.onDragLeave, onDrop: dragHandlers.onDrop, onDragEnd: dragHandlers.onDragEnd } : {})}
-            {...(!dragHandlers && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
-            className={`group flex items-center gap-3 px-3 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers?.className ?? ''}`}
+            draggable={dragHandlers.draggable}
+            onDragStart={dragHandlers.onDragStart}
+            onDragOver={dragHandlers.onDragOver}
+            onDragEnter={dragHandlers.onDragEnter}
+            onDragLeave={dragHandlers.onDragLeave}
+            onDrop={dragHandlers.onDrop}
+            onDragEnd={dragHandlers.onDragEnd}
+            className={`group flex items-center gap-3 px-3 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers.className}`}
             onClick={() => onFolderClick(folder.id)}
           >
-            {reorderMode && (
-              <div
-                className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <GripVertical className="h-4 w-4" />
-              </div>
-            )}
             <FolderOpen className="h-6 w-6 text-primary fill-primary/10 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -212,7 +221,7 @@ const DeckList = ({
 
       {/* Decks */}
       {deckDrag.displayItems.map(deck => {
-        const dragHandlers = reorderMode ? deckDrag.getHandlers(deck) : undefined;
+        const dragHandlers = deckDrag.getHandlers(deck);
         return (
           <DeckRow
             key={deck.id}
@@ -222,7 +231,6 @@ const DeckList = ({
             onDelete={onDeleteDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
-            reorderMode={reorderMode}
             {...deckRowProps}
           />
         );
