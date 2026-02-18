@@ -184,13 +184,26 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       targetDeckId = (deck as any).id;
     }
 
-    const rows = generatedCards.map(c => {
-      let backContent = c.back;
+    const rows: { frontContent: string; backContent: string; cardType: string }[] = [];
+    for (const c of generatedCards) {
       if (c.type === 'multiple_choice' && c.options) {
-        backContent = JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 });
+        rows.push({ frontContent: c.front, backContent: JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 }), cardType: 'multiple_choice' });
+      } else if (c.type === 'cloze') {
+        // Expand cloze card into one DB row per unique cloze number
+        const plain = c.front.replace(/<[^>]*>/g, '');
+        const matches = [...plain.matchAll(/\{\{c(\d+)::/g)];
+        const uniqueNums = [...new Set(matches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+        if (uniqueNums.length === 0) {
+          rows.push({ frontContent: c.front, backContent: JSON.stringify({ clozeTarget: 1, extra: c.back || '' }), cardType: 'cloze' });
+        } else {
+          for (const n of uniqueNums) {
+            rows.push({ frontContent: c.front, backContent: JSON.stringify({ clozeTarget: n, extra: c.back || '' }), cardType: 'cloze' });
+          }
+        }
+      } else {
+        rows.push({ frontContent: c.front, backContent: c.back, cardType: c.type || 'basic' });
       }
-      return { frontContent: c.front, backContent, cardType: c.type || 'basic' };
-    });
+    }
 
     try {
       await cardService.createCards(targetDeckId, rows);
