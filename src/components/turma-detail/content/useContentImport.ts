@@ -88,19 +88,27 @@ export const useContentImport = () => {
         const folderName = resolveNameConflict(turma.name, existingFolderNames);
         turmaFolder = await createFolder.mutateAsync({ name: folderName }) as any;
       }
-      const subjectName = contentFolderId ? subjects.find(s => s.id === contentFolderId)?.name || 'Sem Matéria' : 'Sem Matéria';
+
+      // Resolve subject name from the turma deck's subject_id
+      const subjectId = td.subject_id || contentFolderId;
+      const subjectName = subjectId ? subjects.find(s => s.id === subjectId)?.name : null;
+
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
 
-      let parentDeck = latestDecks.find((d: any) => d.name === subjectName && d.folder_id === (turmaFolder as any).id && !d.parent_deck_id);
       let parentDeckId: string | null = null;
-      if (!parentDeck) {
-        const existingParentNames = latestDecks.filter((d: any) => d.folder_id === (turmaFolder as any).id && !d.parent_deck_id).map((d: any) => d.name);
-        const parentName = resolveNameConflict(subjectName, existingParentNames);
-        const { data: newParent } = await supabase.from('decks').insert({ name: parentName, user_id: user.id, folder_id: (turmaFolder as any).id } as any).select().single();
-        parentDeckId = (newParent as any)?.id ?? null;
-      } else { parentDeckId = parentDeck.id; }
+
+      // Only create intermediate parent deck if there's a valid subject name
+      if (subjectName) {
+        let parentDeck = latestDecks.find((d: any) => d.name === subjectName && d.folder_id === (turmaFolder as any).id && !d.parent_deck_id);
+        if (!parentDeck) {
+          const existingParentNames = latestDecks.filter((d: any) => d.folder_id === (turmaFolder as any).id && !d.parent_deck_id).map((d: any) => d.name);
+          const parentName = resolveNameConflict(subjectName, existingParentNames);
+          const { data: newParent } = await supabase.from('decks').insert({ name: parentName, user_id: user.id, folder_id: (turmaFolder as any).id } as any).select().single();
+          parentDeckId = (newParent as any)?.id ?? null;
+        } else { parentDeckId = parentDeck.id; }
+      }
 
       const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === parentDeckId).map((d: any) => d.name);
       const childName = resolveNameConflict(od.name, existingChildNames);
