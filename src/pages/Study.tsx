@@ -325,6 +325,18 @@ const Study = () => {
                   setCardKey(prev => prev + 1);
                 }}
                 onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
+                onSiblingsUpdated={(updates, deletedIds) => {
+                  setLocalQueue(prev => {
+                    let q = prev.map(c => {
+                      const upd = updates.find(u => u.id === c.id);
+                      return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
+                    });
+                    if (deletedIds.length > 0) {
+                      q = q.filter(c => !deletedIds.includes(c.id));
+                    }
+                    return q;
+                  });
+                }}
               />
             }
           />

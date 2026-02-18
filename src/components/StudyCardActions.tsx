@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
 import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
+import * as cardService from '@/services/cardService';
 
 interface StudyCardActionsProps {
   card: {
@@ -29,11 +30,13 @@ interface StudyCardActionsProps {
   };
   onCardUpdated: (updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: () => void;
+  /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
+  onSiblingsUpdated?: (updates: { id: string; front_content: string; back_content: string }[], deletedIds: string[]) => void;
 }
 
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice';
 
-const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -48,6 +51,9 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
   const [mcCorrectIndex, setMcCorrectIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Store original front_content to find siblings
+  const originalFrontRef = useRef<string>('');
+
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
@@ -55,6 +61,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
 
   const openEdit = () => {
     setFront(card.front_content);
+    originalFrontRef.current = card.front_content;
     if (card.card_type === 'multiple_choice') {
       setEditorType('multiple_choice');
       try {
@@ -66,7 +73,17 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
       }
     } else if (card.card_type === 'cloze') {
       setEditorType('cloze');
-      setBack(card.back_content);
+      // Parse JSON back_content to extract only the extra field
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(card.back_content);
+        }
+      } catch {
+        setBack(card.back_content);
+      }
     } else {
       setEditorType('basic');
       setBack(card.back_content);
@@ -76,7 +93,6 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
 
   const handleFreeze = async () => {
     try {
-      // Set scheduled_date 100 years in the future to "freeze" the card
       const farFuture = new Date();
       farFuture.setFullYear(farFuture.getFullYear() + 100);
       const { error } = await supabase
@@ -111,30 +127,147 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
       return;
     }
 
-    let backContent: string;
+    // Multiple choice save
     if (editorType === 'multiple_choice') {
       const filledOptions = mcOptions.filter(o => o.trim());
       if (filledOptions.length < 2) {
         toast({ title: 'Adicione pelo menos 2 opções', variant: 'destructive' });
         return;
       }
-      backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-    } else {
-      backContent = back;
+      const backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
+      setIsSaving(true);
+      try {
+        const { error } = await supabase
+          .from('cards')
+          .update({ front_content: front, back_content: backContent })
+          .eq('id', card.id);
+        if (error) throw error;
+        toast({ title: 'Card atualizado!' });
+        setEditOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
+        queryClient.invalidateQueries({ queryKey: ['cards'] });
+        onCardUpdated({ front_content: front, back_content: backContent });
+      } catch {
+        toast({ title: 'Erro ao salvar', variant: 'destructive' });
+      } finally {
+        setIsSaving(false);
+      }
+      return;
     }
 
+    // Cloze save with sibling logic
+    if (editorType === 'cloze') {
+      setIsSaving(true);
+      try {
+        // Extract unique cloze numbers from edited front
+        const plainForNumbers = front.replace(/<[^>]*>/g, '');
+        const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
+        const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+        // Fetch all cloze siblings from DB (same front_content as original)
+        const { data: siblings } = await supabase
+          .from('cards')
+          .select('id, front_content, back_content, card_type')
+          .eq('deck_id', card.deck_id)
+          .eq('card_type', 'cloze')
+          .eq('front_content', originalFrontRef.current);
+
+        const allSiblingCards = siblings || [];
+
+        // Map existing cloze targets to card IDs
+        const existingTargets = new Map<number, string>();
+        allSiblingCards.forEach(c => {
+          try {
+            const parsed = JSON.parse(c.back_content);
+            if (typeof parsed.clozeTarget === 'number') {
+              existingTargets.set(parsed.clozeTarget, c.id);
+              return;
+            }
+          } catch {}
+          const assignedNum = uniqueNums.find(n => !existingTargets.has(n)) ?? 1;
+          existingTargets.set(assignedNum, c.id);
+        });
+
+        const existingNums = [...existingTargets.keys()];
+        const numsToKeep = uniqueNums.filter(n => existingTargets.has(n));
+        const numsToAdd = uniqueNums.filter(n => !existingTargets.has(n));
+        const numsToRemove = existingNums.filter(n => !uniqueNums.includes(n));
+
+        // Update all existing siblings with new front_content
+        const updatePromises = numsToKeep.map(n => {
+          const cardId = existingTargets.get(n)!;
+          const backJson = JSON.stringify({ clozeTarget: n, extra: back });
+          return cardService.updateCard(cardId, front, backJson);
+        });
+
+        // Create new cards for added cloze numbers
+        const newCards = numsToAdd.map(n => ({
+          frontContent: front,
+          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+          cardType: 'cloze',
+        }));
+
+        // Delete cards for removed cloze numbers
+        const deletePromises = numsToRemove.map(n => {
+          const cardId = existingTargets.get(n)!;
+          return cardService.deleteCard(cardId);
+        });
+
+        await Promise.all([...updatePromises, ...deletePromises]);
+        if (newCards.length > 0) {
+          await cardService.createCards(card.deck_id, newCards);
+        }
+
+        // Build updates for the study queue
+        const updatedSiblings = numsToKeep.map(n => ({
+          id: existingTargets.get(n)!,
+          front_content: front,
+          back_content: JSON.stringify({ clozeTarget: n, extra: back }),
+        }));
+        const deletedIds = numsToRemove.map(n => existingTargets.get(n)!);
+
+        // Update current card in study queue
+        const currentBackJson = (() => {
+          try {
+            const parsed = JSON.parse(card.back_content);
+            if (typeof parsed.clozeTarget === 'number') {
+              return JSON.stringify({ clozeTarget: parsed.clozeTarget, extra: back });
+            }
+          } catch {}
+          return JSON.stringify({ clozeTarget: 1, extra: back });
+        })();
+        onCardUpdated({ front_content: front, back_content: currentBackJson });
+
+        // Notify parent about sibling updates
+        if (onSiblingsUpdated) {
+          onSiblingsUpdated(updatedSiblings, deletedIds);
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
+        queryClient.invalidateQueries({ queryKey: ['cards'] });
+        toast({ title: 'Card atualizado!' });
+        setEditOpen(false);
+      } catch {
+        toast({ title: 'Erro ao salvar cloze', variant: 'destructive' });
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
+    // Basic save
     setIsSaving(true);
     try {
       const { error } = await supabase
         .from('cards')
-        .update({ front_content: front, back_content: backContent })
+        .update({ front_content: front, back_content: back })
         .eq('id', card.id);
       if (error) throw error;
       toast({ title: 'Card atualizado!' });
       setEditOpen(false);
       queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
-      onCardUpdated({ front_content: front, back_content: backContent });
+      onCardUpdated({ front_content: front, back_content: back });
     } catch {
       toast({ title: 'Erro ao salvar', variant: 'destructive' });
     } finally {
@@ -337,10 +470,16 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
                 <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
               </div>
             ) : editorType === 'cloze' ? (
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
-                <p className="text-xs text-muted-foreground">
-                  Envolva a resposta com <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{{c1::resposta}}'}</code>
+              <div className="rounded-xl border border-warning/40 bg-warning/5 p-3 space-y-1.5">
+                <p className="text-xs font-bold text-warning flex items-center gap-1.5">
+                  <Pencil className="h-3 w-3" /> Como usar Cloze
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Selecione o texto e clique para criar um <strong>cloze</strong>.
+                  Clozes com mesmo número viram o <strong>mesmo card</strong>.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Cria um cloze com <strong>número novo</strong>, gerando um <strong>card separado</strong>.
                 </p>
               </div>
             ) : (
