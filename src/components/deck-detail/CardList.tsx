@@ -24,7 +24,7 @@ const CardList = () => {
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
-    getStateInfo, stripHtml, otherDecks,
+    stripHtml, otherDecks,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
@@ -268,21 +268,46 @@ const CardList = () => {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+        <div className="space-y-2.5">
           {filteredCards.map(card => {
-            const stateInfo = getStateInfo(card);
             const isCloze = card.card_type === 'cloze';
+            const isMultiple = card.card_type === 'multiple_choice';
             const isOcclusion = card.card_type === 'image_occlusion';
             const isSelected = selectedCards.has(card.id);
+
+            const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
+            const typeBadgeClass = isCloze
+              ? 'bg-primary/15 text-primary border-primary/30'
+              : isMultiple
+              ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
+              : isOcclusion
+              ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
+              : 'bg-muted text-muted-foreground border-border';
+
+            // Parse multiple choice options from back_content
+            let mcOptions: string[] = [];
+            let mcCorrectIdx = -1;
+            if (isMultiple && card.back_content) {
+              try {
+                const parsed = JSON.parse(card.back_content);
+                if (parsed.options) mcOptions = parsed.options;
+                if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
+              } catch {
+                // not JSON, just show as text
+              }
+            }
+
             return (
               <div
                 key={card.id}
-                className={`group px-4 py-3 transition-colors cursor-pointer ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/30'}`}
+                className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer ${
+                  isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                }`}
                 onClick={() => selectionMode ? toggleCardSelection(card.id) : openEdit(card)}
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
                   {selectionMode && (
-                    <div className="pt-1 shrink-0">
+                    <div className="pt-0.5 shrink-0">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleCardSelection(card.id)}
@@ -291,23 +316,41 @@ const CardList = () => {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateInfo.color}`}>
-                        {stateInfo.label}
-                      </span>
-                      {isCloze && <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">Cloze</span>}
-                      {isOcclusion && <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">Oclusão</span>}
-                    </div>
-                    <p className="text-sm font-medium text-card-foreground line-clamp-1">{stripHtml(card.front_content)}</p>
-                    {!isOcclusion && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{stripHtml(card.back_content)}</p>}
+                    <p className="text-sm font-semibold text-foreground leading-snug">
+                      {stripHtml(card.front_content)}
+                    </p>
+
+                    {/* Multiple choice options */}
+                    {isMultiple && mcOptions.length > 0 ? (
+                      <div className="mt-2 space-y-0.5">
+                        {mcOptions.map((opt, oi) => (
+                          <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                            {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                          </p>
+                        ))}
+                      </div>
+                    ) : !isOcclusion && card.back_content ? (
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
+                        {stripHtml(card.back_content)}
+                      </p>
+                    ) : null}
                   </div>
-                  {!selectionMode && (
-                    <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); setDeleteId(card.id); }}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
+                      {typeLabel}
+                    </span>
+                    {!selectionMode && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEdit(card); }}>
+                          <PenLine className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteId(card.id); }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );
