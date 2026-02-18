@@ -1,51 +1,68 @@
 
+# Impersonar Usuario (Admin)
 
-## Problema Identificado
+## Resumo
 
-O bug principal esta na linha 24 do `useStudySession.ts`:
+Criar um sistema seguro de impersonacao onde o admin pode "entrar" na conta de qualquer usuario, ver e interagir com tudo como se fosse ele, e depois voltar para a sessao admin.
 
-```text
-const card = studyQueue.data?.cards.find(c => c.id === cardId);
-```
+## Como Funciona
 
-Quando voce erra um card (rating 1 ou 2), o Study.tsx atualiza o card no `localQueue` com os novos valores (state, stability, difficulty, scheduled_date). Porem, quando voce revisa esse card novamente, o `submitReview` busca os dados **originais** do card no cache da query (que nunca muda, pois tem `staleTime: Infinity`).
+1. Na tela de AdminUsers, ao abrir um usuario, aparece um botao "Entrar como este usuario"
+2. Uma edge function (com service role) gera um magic link para o email do usuario alvo
+3. O frontend salva a sessao admin atual no sessionStorage
+4. O frontend usa o token do magic link para autenticar como o usuario alvo
+5. Um banner fixo aparece no topo da tela indicando "Voce esta como [nome] - Voltar para Admin"
+6. Ao clicar "Voltar", restaura a sessao admin original
 
-Resultado: o algoritmo recebe dados antigos (estado original, scheduled_date original) e calcula um intervalo completamente errado -- por isso aparece "1 segundo" ao inves dos 10 minutos esperados.
+## Seguranca
 
-## Solucao
+- A edge function valida que quem esta chamando e admin (via `has_role`)
+- O service role key ja esta configurado como secret
+- A sessao admin original fica apenas em sessionStorage (nao persiste entre abas)
+- Se fechar o navegador, a sessao de impersonacao expira normalmente
 
-Modificar o `useStudySession` para aceitar o card atualizado diretamente, em vez de buscar do cache stale.
+## Detalhes Tecnicos
 
-### Alteracoes
+### 1. Edge Function `admin-impersonate`
 
-**1. `src/hooks/useStudySession.ts`**
-- Mudar o `mutationFn` do `submitReview` para receber o objeto `card` completo (com dados atualizados) ao inves de apenas `cardId`
-- Remover o `find` que busca do cache stale
+- Recebe `target_user_id`
+- Valida que o caller e admin usando `getClaims` + checagem no banco
+- Busca o email do usuario alvo via `auth.admin.getUserById`
+- Gera link via `auth.admin.generateLink({ type: 'magiclink', email })`
+- Retorna o `hashed_token` extraido da URL
 
-**2. `src/pages/Study.tsx`**
-- No `handleRate`, passar o `currentCard` completo (que ja tem os dados atualizados do `localQueue`) para o `submitReview.mutate`
+### 2. Frontend - Fluxo de Impersonacao
 
-### Detalhes Tecnicos
+No `AdminUsers.tsx`:
+- Botao "Entrar como usuario" no perfil do usuario selecionado
+- Ao clicar:
+  - Salva sessao atual em `sessionStorage.setItem('admin_session', JSON.stringify(session))`
+  - Chama a edge function
+  - Usa `supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })` para autenticar
+  - Redireciona para `/dashboard`
 
-Antes:
-```text
-submitReview.mutate({ cardId: currentCard.id, rating })
-// dentro do hook: busca card antigo do cache
-```
+### 3. Banner de Impersonacao
 
-Depois:
-```text
-submitReview.mutate({ card: currentCard, rating })
-// dentro do hook: usa o card diretamente, com dados frescos
-```
+Novo componente `ImpersonationBanner.tsx`:
+- Fica fixo no topo da tela quando `sessionStorage.getItem('admin_session')` existe
+- Mostra nome do usuario sendo impersonado
+- Botao "Voltar para Admin" que:
+  - Faz `signOut`
+  - Restaura a sessao admin via `supabase.auth.setSession(adminSession)`
+  - Remove do sessionStorage
+  - Redireciona para `/admin/users`
 
-Isso garante que quando um card em aprendizado e revisado pela segunda vez, o algoritmo recebe o state=1, a stability atualizada, e o scheduled_date correto -- produzindo intervalos consistentes com o que os botoes mostram.
+### 4. Integracao
 
-### Sobre os algoritmos FSRS e SM2
+- `ProtectedRoute.tsx`: renderiza o `ImpersonationBanner` quando ativo
+- `supabase/config.toml`: adiciona config da nova function com `verify_jwt = false`
 
-Comparei ambos com as implementacoes de referencia open-source (ts-fsrs, femto-fsrs) e as formulas estao corretas:
-- FSRS: init_stability, init_difficulty, retrievability, next_recall_stability, next_forget_stability, stability_to_interval -- todos batem com o FSRS-4.5
-- SM2: calculo do EFactor, progressao de intervalos, graduacao -- corretos
+### Arquivos
 
-O problema nao esta nos algoritmos em si, mas nos dados stale sendo passados para eles.
-
+| Acao | Arquivo |
+|------|---------|
+| Criar | `supabase/functions/admin-impersonate/index.ts` |
+| Criar | `src/components/ImpersonationBanner.tsx` |
+| Editar | `src/pages/AdminUsers.tsx` - botao de impersonar |
+| Editar | `src/components/ProtectedRoute.tsx` - renderizar banner |
+| Editar | `supabase/config.toml` - config da function |
