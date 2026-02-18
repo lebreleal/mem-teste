@@ -326,10 +326,25 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       return { label: 'Entendi', color: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40' };
     }
     if (card.state === 0) return { label: 'Novo', color: 'text-muted-foreground bg-muted' };
-    if (card.state === 1) return { label: 'Aprendendo', color: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40' };
+    if (card.state === 1) {
+      const due = new Date(card.scheduled_date);
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfTomorrow = new Date(startOfToday);
+      startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+      const startOfDayAfter = new Date(startOfTomorrow);
+      startOfDayAfter.setDate(startOfDayAfter.getDate() + 1);
+      if (due <= startOfTomorrow) return { label: 'Hoje', color: 'text-primary bg-primary/10' };
+      if (due <= startOfDayAfter) return { label: 'Amanhã', color: 'text-primary bg-primary/10' };
+      const days = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { label: `${days}d`, color: 'text-primary bg-primary/10' };
+    }
     const due = new Date(card.scheduled_date);
     const now = new Date();
     if (due <= now) return { label: 'Hoje', color: 'text-primary bg-primary/10' };
+    const startOfTomorrow2 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const startOfDayAfter2 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
+    if (due <= startOfDayAfter2) return { label: 'Amanhã', color: 'text-primary bg-primary/10' };
     const days = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return { label: `${days}d`, color: 'text-primary bg-primary/10' };
   }, [isQuickReview]);
