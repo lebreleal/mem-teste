@@ -14,6 +14,8 @@ import PageSelectionStep from '@/components/ai-deck/PageSelectionStep';
 import ConfigStep from '@/components/ai-deck/ConfigStep';
 import GenerationProgress from '@/components/ai-deck/GenerationProgress';
 import CardReviewStep from '@/components/ai-deck/CardReviewStep';
+import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
+import { CREDITS_PER_PAGE } from '@/types/ai';
 
 interface AICreateDeckDialogProps {
   open: boolean;
@@ -135,6 +137,13 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
           />
         )}
       </DialogContent>
+
+      <ProModelConfirmDialog
+        open={flow.pendingPro}
+        onConfirm={flow.confirmPro}
+        onCancel={flow.cancelPro}
+        baseCost={CREDITS_PER_PAGE * flow.selectedPages.length}
+      />
     </Dialog>
   );
 };

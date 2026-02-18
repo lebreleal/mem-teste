@@ -21,9 +21,9 @@ Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
-    case "essential": return "Crie poucos cartões focados nos conceitos mais fundamentais. Priorize o que cairia numa prova.";
-    case "comprehensive": return "Crie cartões com cobertura ampla e detalhada. Inclua conceitos principais, secundários, mecanismos, exemplos clínicos, exceções e relações entre tópicos.";
-    default: return "Crie um bom equilíbrio cobrindo conceitos-chave, mecanismos importantes e aplicações práticas.";
+    case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
+    case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado.";
+    default: return "Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Não pule nenhum tema mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
 
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = textContent.slice(0, 12000);
+    const trimmedContent = textContent.slice(0, 10000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
