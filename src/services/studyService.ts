@@ -6,7 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
-import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds } from '@/lib/studyUtils';
+import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
@@ -28,6 +28,7 @@ export async function fetchStudyQueue(
 
   let deckIds: string[];
   let deckConfig: any;
+  let limitScopeIds: string[];
 
   if (folderId) {
     const { data: allFolders } = await supabase
@@ -40,16 +41,18 @@ export async function fetchStudyQueue(
     deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
     const firstDeck = (allDecks ?? []).find(d => deckIds.includes(d.id));
     deckConfig = firstDeck ?? {};
+    limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(allDecks ?? [], deckId);
     deckIds = [deckId, ...descendantIds];
 
-    const { data: deck } = await supabase
-      .from('decks')
-      .select('*')
-      .eq('id', deckId)
-      .single();
-    deckConfig = deck;
+    // Root ancestor's config governs ALL descendants
+    const rootId = findRootAncestorId(allDecks ?? [], deckId);
+    deckConfig = (allDecks ?? []).find(d => d.id === rootId) ?? {};
+
+    // Count limits across the ENTIRE root hierarchy
+    const rootDescendants = collectDescendantIds(allDecks ?? [], rootId);
+    limitScopeIds = [rootId, ...rootDescendants];
   }
 
   const newLimit = deckConfig?.daily_new_limit ?? 20;
@@ -68,7 +71,7 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig };
   }
 
-  // Fetch ALL cards in scope (new, learning, due reviews)
+  // Fetch cards for the queue (from clicked deck + its descendants)
   const { data, error } = await supabase
     .from('cards')
     .select('*')
@@ -76,28 +79,32 @@ export async function fetchStudyQueue(
     .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
     .order('created_at', { ascending: true });
   if (error) throw error;
-
   const cards = data ?? [];
-  const allCardIds = cards.map(c => c.id);
 
-  // Single query: count today's reviews across ALL descendant cards
+  // Count today's reviews across the ENTIRE root hierarchy (limitScopeIds)
   let newReviewedToday = 0;
   let reviewReviewedToday = 0;
 
-  if (allCardIds.length > 0) {
+  // Get all card IDs in the limit scope
+  const { data: scopeCards } = await supabase
+    .from('cards')
+    .select('id')
+    .in('deck_id', limitScopeIds);
+  const limitCardIds = (scopeCards ?? []).map((c: any) => c.id);
+
+  if (limitCardIds.length > 0) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     const { data: todayLogs } = await supabase
       .from('review_logs')
       .select('card_id')
-      .in('card_id', allCardIds)
+      .in('card_id', limitCardIds)
       .gte('reviewed_at', todayStart.toISOString());
 
     if (todayLogs && todayLogs.length > 0) {
       const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
 
-      // Check which reviewed cards were "new" (no reviews before today)
       const { data: priorLogs } = await supabase
         .from('review_logs')
         .select('card_id')
@@ -111,12 +118,7 @@ export async function fetchStudyQueue(
         if (!hadPriorReview.has(cardId)) {
           newReviewedToday++;
         } else {
-          // Card had prior reviews = it was a review card
-          const card = cards.find(c => c.id === cardId);
-          // Only count if it graduated (state=2 and scheduled in future = already reviewed today)
-          if (card && card.state === 2 && new Date(card.scheduled_date) > new Date()) {
-            reviewReviewedToday++;
-          }
+          reviewReviewedToday++;
         }
       }
     }
