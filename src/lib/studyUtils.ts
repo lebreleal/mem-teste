@@ -58,3 +58,19 @@ export function collectFolderDeckIds(
   );
   return [...directDecks, ...subDeckIds];
 }
+
+/**
+ * Find the root ancestor deck ID by traversing parent_deck_id up.
+ * If the deck has no parent, returns itself.
+ */
+export function findRootAncestorId(
+  allDecks: { id: string; parent_deck_id: string | null }[],
+  deckId: string,
+): string {
+  let currentId = deckId;
+  while (true) {
+    const deck = allDecks.find(d => d.id === currentId);
+    if (!deck?.parent_deck_id) return currentId;
+    currentId = deck.parent_deck_id;
+  }
+}
