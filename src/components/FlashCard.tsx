@@ -210,7 +210,7 @@ const MultipleChoiceCard = ({
     : '';
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-8rem)] w-full max-w-lg mx-auto px-1 relative">
+    <div className="flex flex-col h-full w-full max-w-lg mx-auto px-1 relative">
       {/* Card border flash only — no confetti */}
 
       {/* Top bar: recall + actions */}
