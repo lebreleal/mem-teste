@@ -306,8 +306,8 @@ const DeckSettings = () => {
           <SettingsRow
             icon={<BookOpen className="h-5 w-5" />}
             label="Configurações de estudo"
-            subtitle={`${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
-            onClick={() => setStudySettingsModal(true)}
+            subtitle={parentDeckId ? 'Herdado do baralho pai' : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
+            onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
           />
           <SettingsRow
             icon={<Volume2 className="h-5 w-5" />}
@@ -332,28 +332,8 @@ const DeckSettings = () => {
           />
         </SettingsGroup>
 
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Store className="h-5 w-5" />}
-            label="Marketplace"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
-          />
-        </SettingsGroup>
-
         {/* ── Section: IA ─────────────────────────────────── */}
         <SettingsGroup>
-          <SettingsRow
-            icon={<Sparkles className="h-5 w-5" />}
-            label="Geração de cartões por IA"
-            rightContent={
-              <div className="flex items-center gap-2">
-                <Badge className="bg-primary/10 text-primary border-0 text-xs">Beta</Badge>
-                <Badge variant="secondary" className="text-xs">Em breve</Badge>
-              </div>
-            }
-            disabled
-          />
           <SettingsRow
             icon={<Download className="h-5 w-5" />}
             label="Importar cartões"
