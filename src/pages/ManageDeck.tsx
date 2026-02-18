@@ -76,7 +76,17 @@ const ManageDeck = () => {
       }
     } else if (card.card_type === 'cloze') {
       setEditorType('cloze');
-      setBack(card.back_content);
+      // Parse JSON back_content with clozeTarget
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(card.back_content);
+        }
+      } catch {
+        setBack(card.back_content);
+      }
     } else if (card.card_type === 'image_occlusion') {
       setEditorType('image_occlusion');
       setBack(card.back_content);
@@ -125,8 +135,48 @@ const ManageDeck = () => {
         toast({ title: 'Use a sintaxe {{c1::resposta}} para criar lacunas', variant: 'destructive' });
         return;
       }
-      cardType = 'cloze';
-      backContent = back;
+      // Extract unique cloze numbers
+      const plainForNumbers = front.replace(/<[^>]*>/g, '');
+      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
+      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+      if (editingId) {
+        // When editing, update the single card (keep simple for edits)
+        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, {
+          onSuccess: () => {
+            toast({ title: 'Card atualizado!' });
+            if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
+            else { setEditorOpen(false); resetForm(); }
+          },
+        });
+      } else {
+        // Create one card per cloze number
+        if (uniqueNums.length <= 1) {
+          const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+          createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, {
+            onSuccess: () => {
+              toast({ title: 'Card criado!' });
+              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
+              else { setEditorOpen(false); resetForm(); }
+            },
+          });
+        } else {
+          const cards = uniqueNums.map(n => ({
+            frontContent: front,
+            backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+            cardType: 'cloze',
+          }));
+          createCard.mutate({ cards }, {
+            onSuccess: () => {
+              toast({ title: `${uniqueNums.length} cards criados!` });
+              if (addAnother) { setFront(''); setBack(''); setEditingId(null); setMcOptions(['', '', '', '']); setMcCorrectIndex(0); }
+              else { setEditorOpen(false); resetForm(); }
+            },
+          });
+        }
+      }
+      return;
     } else {
       cardType = editorType === 'image_occlusion' ? 'image_occlusion' : 'basic';
       backContent = back;

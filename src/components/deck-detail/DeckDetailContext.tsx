@@ -366,6 +366,19 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         setMcOptions(data.options || ['', '', '', '']);
         setMcCorrectIndex(data.correctIndex ?? 0);
       } catch { setBack(card.back_content); }
+    } else if (card.card_type === 'cloze') {
+      setFront(card.front_content);
+      // Parse JSON back_content with clozeTarget
+      try {
+        const parsed = JSON.parse(card.back_content);
+        if (typeof parsed.clozeTarget === 'number') {
+          setBack(parsed.extra || '');
+        } else {
+          setBack(card.back_content);
+        }
+      } catch {
+        setBack(card.back_content);
+      }
     } else {
       setFront(card.front_content);
       setBack(card.back_content);
@@ -421,8 +434,30 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const detectedType = cardType === 'cloze' || front.includes('{{c') ? 'cloze' : 'basic';
-    if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
-    else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
+    if (detectedType === 'cloze') {
+      // Extract unique cloze numbers
+      const plainForNumbers = front.replace(/<[^>]*>/g, '');
+      const clozeNumMatches = [...plainForNumbers.matchAll(/\{\{c(\d+)::/g)];
+      const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
+
+      if (editingId) {
+        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        updateCard.mutate({ id: editingId, frontContent: front, backContent: backJson }, { onSuccess });
+      } else if (uniqueNums.length <= 1) {
+        const backJson = JSON.stringify({ clozeTarget: uniqueNums[0] || 1, extra: back });
+        createCard.mutate({ frontContent: front, backContent: backJson, cardType: 'cloze' }, { onSuccess });
+      } else {
+        const cards = uniqueNums.map(n => ({
+          frontContent: front,
+          backContent: JSON.stringify({ clozeTarget: n, extra: back }),
+          cardType: 'cloze',
+        }));
+        createCard.mutate({ cards } as any, { onSuccess });
+      }
+    } else {
+      if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
+      else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
+    }
   }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm]);
 
   const handleDelete = useCallback(() => {
