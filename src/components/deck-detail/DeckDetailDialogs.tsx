@@ -164,7 +164,7 @@ const DeckDetailDialogs = () => {
               {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
                 <div>
                   <Label className="mb-1.5 block">Verso</Label>
-                  <RichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." />
+                  <RichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}
 

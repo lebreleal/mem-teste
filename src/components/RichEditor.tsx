@@ -58,6 +58,7 @@ interface RichEditorProps {
   placeholder?: string;
   onOcclusionPaste?: () => void;
   onOcclusionAttach?: () => void;
+  hideCloze?: boolean;
 }
 
 const TEXT_COLORS = [
@@ -71,7 +72,7 @@ const TEXT_COLORS = [
   { label: 'Rosa', value: '#ec4899' },
 ];
 
-const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach }: RichEditorProps) => {
+const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclusionAttach, hideCloze }: RichEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [colorOpen, setColorOpen] = useState(false);
@@ -297,24 +298,28 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
         </DropdownMenu>
 
         {/* Cloze same number button - dashed square */}
-        <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-          </svg>
-        </ToolBtn>
+        {!hideCloze && (
+          <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+            </svg>
+          </ToolBtn>
+        )}
 
         {/* Cloze next number button - dashed square with + */}
-        <Button type="button" variant="ghost" size="icon"
-          className="h-7 w-7"
-          onClick={handleClozeNext}
-          title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
-            <path d="M12 9v6" />
-            <path d="M9 12h6" />
-          </svg>
-        </Button>
+        {!hideCloze && (
+          <Button type="button" variant="ghost" size="icon"
+            className="h-7 w-7"
+            onClick={handleClozeNext}
+            title={`Novo cloze c${clozeCounter + 1} (próximo número)`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 3" />
+              <path d="M12 9v6" />
+              <path d="M9 12h6" />
+            </svg>
+          </Button>
+        )}
 
         {onOcclusionPaste && onOcclusionAttach && (
           <DropdownMenu>
