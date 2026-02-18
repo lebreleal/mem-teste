@@ -652,15 +652,47 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     toast({ title: 'Melhoria aplicada!' });
   }, [improvePreview, cardType, mcOptions, mcCorrectIndex, toast]);
 
-  const handleImportCards = useCallback(async (_name: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[]) => {
+  const handleImportCards = useCallback(async (subDeckName: string, importedCards: { frontContent: string; backContent: string; cardType?: string }[], subdecks?: any[]) => {
     if (!deckId) return;
     try {
-      await cardService.createCards(deckId, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
-      toast({ title: `${importedCards.length} cartões importados!` });
+      const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      if (subdecks && subdecks.length > 0) {
+        // Create organized subdecks under this deck
+        await deckService.importDeckWithSubdecks(
+          user.id,
+          subDeckName,
+          deck?.folder_id ?? null,
+          importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })),
+          subdecks,
+          deck?.algorithm_mode,
+        );
+        toast({ title: `${importedCards.length} cartões importados em subdecks!` });
+      } else {
+        // Create a single subdeck under this deck
+        const newName = subDeckName || 'Importado';
+        const { data: newDeck, error } = await (await import('@/integrations/supabase/client')).supabase
+          .from('decks')
+          .insert({
+            name: newName,
+            user_id: user.id,
+            folder_id: deck?.folder_id ?? null,
+            parent_deck_id: deckId,
+            algorithm_mode: deck?.algorithm_mode || 'sm2',
+          } as any)
+          .select()
+          .single();
+        if (error || !newDeck) throw error;
+
+        await cardService.createCards((newDeck as any).id, importedCards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType || 'basic' })));
+        toast({ title: `${importedCards.length} cartões importados como subdeck "${newName}"!` });
+      }
+
       invalidateDeckRelatedQueries(queryClient, deckId);
       setImportOpen(false);
     } catch { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
-  }, [deckId, queryClient, toast]);
+  }, [deckId, deck, queryClient, toast]);
 
   const handleAlgorithmChange = useCallback(async (forceReset = true) => {
     if (!algorithmConfirm || !deckId) return;
