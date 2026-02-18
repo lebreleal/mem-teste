@@ -36,6 +36,7 @@ const AIAgent = lazy(() => import("./pages/AIAgent"));
 const AdminIA = lazy(() => import("./pages/AdminIA"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const AdminLogs = lazy(() => import("./pages/AdminLogs"));
+const Install = lazy(() => import("./pages/Install"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -89,6 +90,7 @@ const App = () => (
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
+                <Route path="/install" element={<Install />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
