@@ -143,9 +143,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
       toast({ title: 'Selecione um texto para criar a lacuna', variant: 'destructive' }); return;
     }
     const selectedText = editor.state.doc.textBetween(from, to);
-    const currentContent = editor.getHTML();
-    const clozeMatches = currentContent.match(/\{\{c(\d+)::/g) || [];
-    const existingNumbers = clozeMatches.map(m => parseInt(m.match(/\d+/)![0]));
+    // Use plain text content to reliably detect existing cloze numbers (HTML tags can break regex)
+    const plainText = editor.state.doc.textContent;
+    const clozeMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    const existingNumbers = clozeMatches.map(m => parseInt(m[1]));
     const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
     editor.chain().focus().deleteSelection().insertContent(`{{c${nextNum}::${selectedText}}}`).run();
   };
