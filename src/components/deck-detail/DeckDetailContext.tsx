@@ -267,15 +267,47 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     enabled: !!deckId,
   });
 
+  // ─── Root ancestor governance ─────────
+  // Find the root ancestor — its config (limits, shuffle, algorithm) governs all descendants
+  const rootId = useMemo(() => {
+    let currentId = deckId;
+    while (true) {
+      const d = decks.find(dk => dk.id === currentId);
+      if (!d?.parent_deck_id) return currentId;
+      currentId = d.parent_deck_id;
+    }
+  }, [decks, deckId]);
+
+  const rootDeck = decks.find(d => d.id === rootId);
+
+  // Sum new_reviewed_today across the ENTIRE root hierarchy
+  const rootTotals = useMemo(() => {
+    const collectAll = (id: string): { newReviewed: number; reviewed: number; newGraduated: number } => {
+      const d = decks.find(dk => dk.id === id);
+      let newReviewed = d?.new_reviewed_today ?? 0;
+      let reviewed = d?.reviewed_today ?? 0;
+      let newGraduated = d?.new_graduated_today ?? 0;
+      const children = decks.filter(dk => dk.parent_deck_id === id && !dk.is_archived);
+      for (const child of children) {
+        const c = collectAll(child.id);
+        newReviewed += c.newReviewed;
+        reviewed += c.reviewed;
+        newGraduated += c.newGraduated;
+      }
+      return { newReviewed, reviewed, newGraduated };
+    };
+    return collectAll(rootId);
+  }, [decks, rootId]);
+
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
   const totalCards = allCards.length;
-  const dailyNewLimit = (deck as any)?.daily_new_limit ?? 20;
-  const dailyReviewLimit = (deck as any)?.daily_review_limit ?? 100;
+  const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
+  const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
   const learningCount = stats?.learning_count ?? 0;
-  const newReviewedToday = stats?.new_reviewed_today ?? 0;
-  const newGraduatedToday = (stats as any)?.new_graduated_today ?? 0;
-  const reviewedToday = stats?.reviewed_today ?? 0;
+  const newReviewedToday = rootTotals.newReviewed;
+  const newGraduatedToday = rootTotals.newGraduated;
+  const reviewedToday = rootTotals.reviewed;
   const reviewReviewedToday = Math.max(0, reviewedToday - newGraduatedToday);
 
   // Quick review: no daily limits, show all cards by state
