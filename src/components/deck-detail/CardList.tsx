@@ -3,6 +3,7 @@
  */
 
 import { useDeckDetail } from './DeckDetailContext';
+import CardPreviewSheet from './CardPreviewSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -48,6 +49,7 @@ const CardList = () => {
   })();
 
   const [showFilters, setShowFilters] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const hasActiveFilter = typeFilter !== 'all' || stateFilter !== 'all';
 
   const stateOptions = isQuickReview
@@ -88,6 +90,7 @@ const CardList = () => {
   };
 
   return (
+    <>
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">
@@ -338,7 +341,12 @@ const CardList = () => {
                     className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative z-10 ${
                       isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
                     }`}
-                    onClick={() => selectionMode ? toggleCardSelection(card.id) : openEdit(card)}
+                    onClick={() => {
+                      if (selectionMode) { toggleCardSelection(card.id); return; }
+                      // Find the flat index of this card in filteredCards
+                      const flatIdx = filteredCards.findIndex(c => c.id === card.id);
+                      setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
+                    }}
                   >
                     <div className="flex items-start gap-3">
                       {selectionMode && (
@@ -450,6 +458,14 @@ const CardList = () => {
         </div>
       )}
     </div>
+
+    <CardPreviewSheet
+      cards={filteredCards}
+      initialIndex={previewIndex ?? 0}
+      open={previewIndex !== null}
+      onClose={() => setPreviewIndex(null)}
+    />
+  </>
   );
 };
 
