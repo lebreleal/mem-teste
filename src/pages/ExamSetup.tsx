@@ -404,7 +404,11 @@ const ExamSetup = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Deletar prova?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogDescription>
+              {exams.find(e => e.id === deleteExamId)?.source_turma_exam_id
+                ? 'Esta prova está vinculada a uma comunidade. O vínculo será perdido e esta ação não pode ser desfeita.'
+                : 'Esta ação não pode ser desfeita.'}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

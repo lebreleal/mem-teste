@@ -3,7 +3,7 @@
  * Orchestrator component that delegates to sub-components and hooks.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
@@ -35,6 +35,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import PdfCanvasViewer from '@/components/lesson-detail/PdfCanvasViewer';
+import SyncReviewDialog from '@/components/SyncReviewDialog';
+import { Badge } from '@/components/ui/badge';
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -120,6 +122,27 @@ const ContentTab = () => {
     },
     enabled: !!turmaId,
   });
+
+  // ── Linked exams query (check which turma exams user already imported) ──
+  const turmaExamIds = currentExams.map((e: any) => e.id);
+  const { data: linkedExams = [] } = useQuery({
+    queryKey: ['linked-exams', user?.id, turmaExamIds],
+    queryFn: async () => {
+      if (!user || turmaExamIds.length === 0) return [];
+      const { data } = await supabase.from('exams')
+        .select('id, source_turma_exam_id, synced_at')
+        .eq('user_id', user.id)
+        .in('source_turma_exam_id', turmaExamIds);
+      return (data ?? []) as any[];
+    },
+    enabled: !!user && turmaExamIds.length > 0,
+  });
+
+  const linkedExamMap = useMemo(() => {
+    const map = new Map<string, any>();
+    linkedExams.forEach((e: any) => map.set(e.source_turma_exam_id, e));
+    return map;
+  }, [linkedExams]);
 
   const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0 || currentExams.length > 0;
 
@@ -563,42 +586,59 @@ const ContentTab = () => {
                   )}
                 </div>
               </div>
-              {!selectionMode && (
-                <div className="flex items-center gap-1 shrink-0">
-                  {exam.total_questions > 0 && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.handleOpenExam(exam)}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {(isAdmin || exam.created_by === user?.id) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          examMutations.toggleSubscribersOnly.mutate(
-                            { examId: exam.id, subscribersOnly: !exam.subscribers_only },
-                            { onSuccess: () => toast({ title: exam.subscribers_only ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
-                          );
-                        }}>
-                          {exam.subscribers_only ? <Globe className="mr-2 h-4 w-4" /> : <Crown className="mr-2 h-4 w-4" />}
-                          {exam.subscribers_only ? 'Liberar para todos' : 'Só assinantes'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { setMovingItem({ type: 'exam', id: exam.id, name: exam.title }); setMoveTargetId(null); }}>
-                          <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir prova', description: e.message, variant: 'destructive' }) })}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              )}
+              {!selectionMode && (() => {
+                const linked = linkedExamMap.get(exam.id);
+                const hasUpdate = linked && exam.updated_at && linked.synced_at && new Date(exam.updated_at) > new Date(linked.synced_at);
+                return (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {hasUpdate && <Badge variant="outline" className="text-[10px] text-primary border-primary/30">Atualização</Badge>}
+                    {exam.total_questions > 0 && !linked && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
+                        onClick={() => importLogic.addExamToCollection.mutate(exam)}
+                        disabled={importLogic.addExamToCollection.isPending}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {exam.total_questions > 0 && linked && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Sincronizar"
+                        onClick={() => importLogic.openSyncReview(exam.id, linked.id, exam.title)}
+                        disabled={importLogic.loadingSyncChanges}>
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {linked && (
+                      <Link2 className="h-3 w-3 text-primary shrink-0" />
+                    )}
+                    {(isAdmin || exam.created_by === user?.id) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
+                            examMutations.toggleSubscribersOnly.mutate(
+                              { examId: exam.id, subscribersOnly: !exam.subscribers_only },
+                              { onSuccess: () => toast({ title: exam.subscribers_only ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
+                            );
+                          }}>
+                            {exam.subscribers_only ? <Globe className="mr-2 h-4 w-4" /> : <Crown className="mr-2 h-4 w-4" />}
+                            {exam.subscribers_only ? 'Liberar para todos' : 'Só assinantes'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'exam', id: exam.id, name: exam.title }); setMoveTargetId(null); }}>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir prova', description: e.message, variant: 'destructive' }) })}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -807,6 +847,20 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sync Review Dialog */}
+      <SyncReviewDialog
+        open={!!importLogic.syncReviewExam && !importLogic.loadingSyncChanges}
+        onOpenChange={(v) => { if (!v) importLogic.setSyncReviewExam(null); }}
+        changes={importLogic.syncChanges}
+        onApply={async (selected) => {
+          if (importLogic.syncReviewExam) {
+            await importLogic.applySyncChanges(importLogic.syncReviewExam.localExamId, selected);
+            toast({ title: '✅ Prova sincronizada!' });
+          }
+        }}
+        title={importLogic.syncReviewExam?.title}
+      />
     </div>
   );
 };
