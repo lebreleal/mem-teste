@@ -366,9 +366,37 @@ const CardList = () => {
                             </div>
                           );
                         })()}
-                        <p className="text-sm font-semibold text-foreground leading-snug">
-                          {stripHtml(card.front_content)}
-                        </p>
+                        {isCloze ? (
+                          <p className="text-sm font-semibold text-foreground leading-snug">
+                            {(() => {
+                              const plain = stripHtml(card.front_content);
+                              const parts: React.ReactNode[] = [];
+                              const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                              let lastIdx = 0;
+                              let m;
+                              let k = 0;
+                              const DOT_BG = ['bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/40', 'bg-violet-500/20 text-violet-600 dark:text-violet-400 border-violet-500/40', 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40', 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40', 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/40'];
+                              while ((m = regex.exec(plain)) !== null) {
+                                if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                                const n = parseInt(m[1]);
+                                const ci = (n - 1) % DOT_BG.length;
+                                parts.push(
+                                  <span key={k++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 border text-xs font-semibold ${DOT_BG[ci]}`}>
+                                    <span className="text-[9px] font-bold opacity-70">{n}</span>
+                                    {m[2]}
+                                  </span>
+                                );
+                                lastIdx = m.index + m[0].length;
+                              }
+                              if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                              return parts;
+                            })()}
+                          </p>
+                        ) : (
+                          <p className="text-sm font-semibold text-foreground leading-snug">
+                            {stripHtml(card.front_content)}
+                          </p>
+                        )}
 
                         {/* Cloze tabs */}
                         {isCloze && clozeNums.length > 0 && (
