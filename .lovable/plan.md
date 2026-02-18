@@ -1,114 +1,86 @@
 
-# Organizacao Hierarquica Inteligente na Importacao
 
-## Problema Atual
+# Correcao da Organizacao Hierarquica de Importacao
 
-Quando a IA organiza 400+ cartoes, pode criar um subdeck com 200 cartoes porque o tema e amplo. Isso acontece porque:
-- O prompt atual so permite uma camada de subdecks (flat)
-- Nao ha limite maximo por subdeck
-- Nao ha instrucao para subdividir temas grandes
+## Diagnostico dos Problemas
+
+Analisei a funcao `organize-import` e identifiquei 3 causas raiz:
+
+### 1. Modelo fraco (gpt-4o-mini)
+O modelo mini nao tem capacidade de raciocinio suficiente para analisar 400+ cards e criar categorias inteligentes. Ele tende a "simplificar" jogando muitos cards num unico grupo.
+
+### 2. Prompt sobre-engenheirado
+O prompt atual tem 10 regras rigidas com numeros especificos (10-50 cards, 60 limite, max 40 chars, etc). Isso confunde o modelo em vez de ajudar. A melhor pratica e dar diretrizes simples e deixar o modelo raciocinar.
+
+### 3. Output truncado
+Com 500 cards x 120 chars = ~60K caracteres de input, mais a resposta contendo todos os indices, o gpt-4o-mini pode atingir o limite de output tokens e truncar o JSON. Resultado: cards nao atribuidos caem todos no ultimo grupo (os 241 cards de "Acompanhamento Pre-natal").
 
 ## Solucao
 
-Implementar organizacao em ate 2 niveis de hierarquia, seguindo boas praticas do Anki:
-- Cada subdeck deve ter idealmente entre 10-50 cartoes
-- Se um tema tiver mais de 60 cartoes, ele deve virar um **deck independente com seus proprios subdecks**
-- A IA decide a estrutura: subdecks simples OU decks separados com filhos
+### Mudanca 1: Modelo gpt-4o
+Trocar para `gpt-4o` que tem raciocinio superior e output de ate 16K tokens (vs 4K do mini em tool calls).
 
-## Mudancas
-
-### 1. Edge Function `organize-import` - Novo prompt hierarquico
-
-Alterar o prompt e o schema da tool call para suportar estrutura hierarquica:
+### Mudanca 2: Prompt simplificado e natural
+Em vez de 10 regras rigidas, usar um prompt curto e claro:
 
 ```text
-Estrutura de retorno:
-- decks[] (array de decks de nivel superior)
-  - name: nome do deck
-  - card_indices: cartoes diretamente neste deck (pode ser vazio se tiver subdecks)
-  - children[]: subdecks opcionais
-    - name: nome do subdeck
-    - card_indices: cartoes do subdeck
+Organize os flashcards em uma arvore tematica.
+- Agrupe por tema/assunto real do conteudo
+- Se um grupo ficar grande demais, subdivida-o
+- A hierarquia pode ter ate 3 niveis
+- Cada grupo final deve ser estudavel isoladamente
 ```
 
-Regras no prompt:
-- Cada grupo final (folha) deve ter entre 10 e 50 cartoes
-- Se um tema tiver mais de 60 cartoes, criar subdecks dentro dele
-- Se houver poucos temas (menos de 3), pode retornar um unico deck pai com subdecks
-- Se houver muitos temas distintos, criar decks separados no nivel superior
+Sem numeros rigidos. O modelo decide naturalmente quantos cards cabem em cada grupo.
 
-### 2. Pos-processamento na edge function
+### Mudanca 3: Schema recursivo (3 niveis)
+Permitir children dentro de children. Isso permite estruturas como:
 
-Apos receber a resposta da IA, validar:
-- Se algum grupo folha tiver mais de 80 cartoes, logar aviso
-- Garantir que todos os indices estao atribuidos
-- Remover grupos vazios
-
-### 3. Frontend - `ImportCardsDialog.tsx`
-
-Atualizar o `SubdeckPreview` para mostrar a hierarquia de 2 niveis:
-- Decks de nivel superior com icone de pasta
-- Subdecks identados abaixo de cada deck pai
-- Contagem de cartoes em cada nivel
-
-### 4. Interface `SubdeckOrganization`
-
-Estender para suportar filhos:
-
-```typescript
-export interface SubdeckOrganization {
-  name: string;
-  card_indices: number[];
-  children?: SubdeckOrganization[];
-}
+```text
+Obstetricia
+  Pre-natal
+    Consultas de rotina (20 cards)
+    Exames (15 cards)
+  Parto
+    Normal (22 cards)
+    Cesarea (18 cards)
 ```
 
-### 5. `deckService.ts` - `importDeckWithSubdecks`
+### Mudanca 4: Auto-split como fallback
+Apos receber a resposta da IA, se algum grupo folha ainda tiver mais de 60 cards, dividir automaticamente em chunks menores. Isso garante que mesmo se o modelo falhar, nenhum grupo fica gigante.
 
-Atualizar para suportar a criacao hierarquica:
-- Se a resposta tiver apenas 1 deck no nivel superior: criar como deck pai com subdecks (comportamento atual)
-- Se tiver multiplos decks no nivel superior: criar cada um como deck independente, com seus subdecks como filhos
-- Suporte a 2 niveis de `parent_deck_id`
+### Mudanca 5: Resumo mais compacto
+Reduzir de 120 para 80 caracteres por card, cabendo mais cards no contexto sem perder informacao util.
 
-### 6. `Dashboard.tsx`
+## Detalhes Tecnicos
 
-Atualizar o handler de import para lidar com a nova estrutura:
-- Se `subdecks` tiver filhos (`children`), chamar a versao atualizada que cria a arvore completa
-- Mensagem de sucesso mostrando quantos decks e subdecks foram criados
+### Edge Function `organize-import/index.ts`
+
+- Trocar `model: "gpt-4o-mini"` por `model: "gpt-4o"`
+- Reduzir slice de 120 para 80 chars por card
+- Simplificar system prompt (remover regras numericas rigidas)
+- Schema da tool call: children recursivo (children podem ter children)
+- Pos-processamento: auto-split de grupos folha com >60 cards em chunks de ~25
+
+### Frontend `ImportCardsDialog.tsx`
+
+- `SubdeckPreview`: renderizacao recursiva que suporta qualquer profundidade
+- `countLeafCards`: ja e recursivo, funciona sem mudancas
+
+### `deckService.ts`
+
+- `createDeckTree`: tornar genuinamente recursivo (children com children)
+- Tipo do parametro aceitar children aninhados recursivamente
+
+### `Dashboard.tsx`
+
+- Sem mudancas estruturais, apenas garantir que o tipo SubdeckOrganization com children recursivos e aceito
 
 ## Arquivos Afetados
 
-| Acao | Arquivo |
-|------|---------|
-| Editar | `supabase/functions/organize-import/index.ts` - prompt + schema hierarquico |
-| Editar | `src/components/ImportCardsDialog.tsx` - preview hierarquico + tipo atualizado |
-| Editar | `src/services/deckService.ts` - importacao hierarquica |
-| Editar | `src/pages/Dashboard.tsx` - handler atualizado |
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/organize-import/index.ts` | Modelo gpt-4o, prompt simples, schema recursivo, auto-split |
+| `src/components/ImportCardsDialog.tsx` | Preview recursivo para N niveis |
+| `src/services/deckService.ts` | createDeckTree recursivo |
 
-## Exemplo Pratico
-
-Importacao de 400 cartoes de Ginecologia:
-
-**Antes (problema):**
-```
-Ginecologia (deck pai)
-  ├── Leiomioma (15 cartoes)
-  ├── Amenorreia (12 cartoes)
-  ├── Obstetrica (200 cartoes)  <-- problema!
-  └── PCOS (18 cartoes)
-```
-
-**Depois (solucao):**
-```
-Ginecologia (deck pai)
-  ├── Leiomioma (15 cartoes)
-  ├── Amenorreia (12 cartoes)
-  └── PCOS (18 cartoes)
-
-Obstetrica (deck separado)
-  ├── Pre-natal (35 cartoes)
-  ├── Parto Normal (42 cartoes)
-  ├── Cesarea (38 cartoes)
-  ├── Complicacoes (45 cartoes)
-  └── Puerpero (40 cartoes)
-```
