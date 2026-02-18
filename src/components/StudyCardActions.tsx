@@ -345,7 +345,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen }: StudyCardAction
             ) : (
               <div>
                 <Label className="mb-1.5 block">Verso (Resposta)</Label>
-                <RichEditor content={back} onChange={setBack} placeholder="Resposta..." />
+                <RichEditor content={back} onChange={setBack} placeholder="Resposta..." hideCloze />
               </div>
             )}
 

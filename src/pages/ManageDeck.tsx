@@ -476,7 +476,7 @@ const ManageDeck = () => {
           ) : (
             <div>
               <Label className="mb-1.5 block">Verso (Resposta)</Label>
-              <RichEditor content={back} onChange={setBack} placeholder="Paris" />
+              <RichEditor content={back} onChange={setBack} placeholder="Paris" hideCloze />
             </div>
           )}
 
