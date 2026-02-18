@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -85,7 +86,7 @@ const ClozeCardPreview = ({ front }: { front: string }) => {
       <div className="p-4">
         <p
           className="text-sm text-foreground leading-relaxed whitespace-pre-wrap"
-          dangerouslySetInnerHTML={{ __html: renderContent() }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderContent()) }}
         />
       </div>
       <div className="px-4 py-1.5 border-t border-border/30">

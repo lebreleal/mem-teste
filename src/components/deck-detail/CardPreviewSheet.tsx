@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
@@ -87,10 +88,10 @@ function CardContent({
         return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
       if (isCloze) {
         const html = renderClozePreview(card.front_content, revealed, clozeTarget);
-        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
       }
       if (/<[a-z][\s\S]*>/i.test(card.front_content))
-        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
+        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />;
       return <p className="text-lg sm:text-xl leading-relaxed whitespace-pre-wrap">{card.front_content}</p>;
     } catch (e) {
       console.error('Error rendering front:', e);
@@ -117,7 +118,7 @@ function CardContent({
       }
       if (!revealed) return null;
       if (/<[a-z][\s\S]*>/i.test(card.back_content))
-        return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: card.back_content }} />;
+        return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />;
       return <p className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">{card.back_content}</p>;
     } catch (e) {
       console.error('Error rendering back:', e);

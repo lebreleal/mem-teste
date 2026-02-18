@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTurmaExamQuestions, useTurmaExamAttempt } from '@/hooks/useTurmaExams';
@@ -342,7 +343,7 @@ const TurmaExamTake = () => {
                       </span>
                       <span className="text-[10px] text-muted-foreground">{q.points} pts</span>
                     </div>
-                    <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: q.question_text }} />
+                    <div className="prose prose-sm max-w-none text-card-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.question_text) }} />
                   </div>
                 </div>
 
