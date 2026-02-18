@@ -54,7 +54,7 @@ const CardReviewStep = ({
                     hideCloze={card.type !== 'cloze'}
                   />
                 </div>
-                {card.type !== 'multiple_choice' && (
+                {card.type !== 'multiple_choice' && card.type !== 'cloze' && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Verso</Label>
                     <RichEditor
@@ -86,7 +86,7 @@ const CardReviewStep = ({
                         </div>
                       ))}
                     </div>
-                  ) : card.back ? (
+                  ) : (card.type !== 'cloze' && card.back) ? (
                     <div
                       className="text-xs text-muted-foreground mt-1 leading-snug [&_img]:max-h-20 [&_img]:rounded"
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}

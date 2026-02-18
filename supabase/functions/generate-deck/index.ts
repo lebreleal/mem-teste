@@ -200,11 +200,15 @@ ${getOutputExamples(formats)}`;
     }
 
     // Map card types respecting user-selected formats
-    cards = cards.map(c => ({
-      front: c.front || "", back: c.back || "",
-      type: mapCardType(c.type, formats),
-      ...(c.type === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
-    }));
+    cards = cards.map(c => {
+      const mappedType = mapCardType(c.type, formats);
+      return {
+        front: c.front || "",
+        back: mappedType === "cloze" ? "" : (c.back || ""),
+        type: mappedType,
+        ...(mappedType === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
+      };
+    });
 
     // Only log if not skipped (client will aggregate and log once)
     if (!skipLog) {
