@@ -24,7 +24,7 @@ const CardList = () => {
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
-    stripHtml, otherDecks,
+    getStateInfo, stripHtml, otherDecks,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
@@ -316,6 +316,21 @@ const CardList = () => {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
+                    {(() => {
+                      const stateInfo = getStateInfo(card);
+                      return (
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
+                            {stateInfo.label}
+                          </span>
+                          {card.state >= 2 && card.scheduled_date && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <p className="text-sm font-semibold text-foreground leading-snug">
                       {stripHtml(card.front_content)}
                     </p>
