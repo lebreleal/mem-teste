@@ -243,7 +243,7 @@ const ExamSetup = () => {
                 {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
               </Button>
             )}
-            {hasContent && !selectionMode && (
+            {allCurrentExams.length > 0 && !selectionMode && (
               <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectionMode(true)}>
                 <CheckCheck className="h-4 w-4" />
                 <span className="hidden sm:inline">Selecionar</span>
