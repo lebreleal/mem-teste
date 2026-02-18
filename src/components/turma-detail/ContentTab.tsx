@@ -29,14 +29,12 @@ import {
   Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
   Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
   Copy, Link2, ClipboardList, Users, Clock, Import,
-  CheckCheck, X, ArrowUpRight, Search,
+  CheckCheck, X, ArrowUpRight, Search, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import PdfCanvasViewer from '@/components/lesson-detail/PdfCanvasViewer';
-import SyncReviewDialog from '@/components/SyncReviewDialog';
-import { Badge } from '@/components/ui/badge';
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -59,6 +57,7 @@ const ContentTab = () => {
     mutations, examMutations, toast, navigate,
     setShowAddSubject, setNewName, setNewDesc,
     setEditingSubject, setEditItemName,
+    subscriptionPrice,
   } = ctx;
 
   const contentMut = useContentMutations();
@@ -125,27 +124,6 @@ const ContentTab = () => {
     enabled: !!turmaId,
   });
 
-  // ── Linked exams query (check which turma exams user already imported) ──
-  const turmaExamIds = currentExams.map((e: any) => e.id);
-  const { data: linkedExams = [] } = useQuery({
-    queryKey: ['linked-exams', user?.id, turmaExamIds],
-    queryFn: async () => {
-      if (!user || turmaExamIds.length === 0) return [];
-      const { data } = await supabase.from('exams')
-        .select('id, source_turma_exam_id, synced_at')
-        .eq('user_id', user.id)
-        .in('source_turma_exam_id', turmaExamIds);
-      return (data ?? []) as any[];
-    },
-    enabled: !!user && turmaExamIds.length > 0,
-  });
-
-  const linkedExamMap = useMemo(() => {
-    const map = new Map<string, any>();
-    linkedExams.forEach((e: any) => map.set(e.source_turma_exam_id, e));
-    return map;
-  }, [linkedExams]);
-
   const q = searchQuery.toLowerCase();
   const filteredFolders = q ? currentFolders.filter((s: any) => s.name.toLowerCase().includes(q)) : currentFolders;
   const filteredFiles = q ? currentFiles.filter((f: any) => f.file_name.toLowerCase().includes(q)) : currentFiles;
@@ -182,6 +160,36 @@ const ContentTab = () => {
     setSelectedItems(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   };
   const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
+
+  // ── Subscriber-only validation ──
+  const canSetSubscribersOnly = subscriptionPrice > 0;
+
+  const handleToggleSubscribersOnly = (examId: string, currentValue: boolean) => {
+    if (!currentValue && !canSetSubscribersOnly) {
+      toast({
+        title: 'Defina um preço de assinatura primeiro',
+        description: 'Vá em Configurações → Assinatura para definir o preço antes de restringir conteúdo a assinantes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    examMutations.toggleSubscribersOnly.mutate(
+      { examId, subscribersOnly: !currentValue },
+      { onSuccess: () => toast({ title: currentValue ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
+    );
+  };
+
+  const handleSetDeckPriceType = (newPriceType: string, setter: (v: any) => void) => {
+    if (newPriceType === 'members_only' && !canSetSubscribersOnly) {
+      toast({
+        title: 'Defina um preço de assinatura primeiro',
+        description: 'Vá em Configurações → Assinatura para definir o preço antes de restringir conteúdo a assinantes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setter(newPriceType);
+  };
 
   // ── Deck handlers ──
   const handleAddDeck = () => {
@@ -533,11 +541,6 @@ const ContentTab = () => {
                         {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
                     )}
-                    {inCollection && !alreadyOwns && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.setConfirmResync(td)} disabled={importLogic.addToCollection.isPending}>
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
                     {td.allow_download && !inCollection && canImport && (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.downloadDeck.mutate(td)} disabled={importLogic.downloadDeck.isPending}>
                         <Download className="h-3.5 w-3.5" />
@@ -571,8 +574,6 @@ const ContentTab = () => {
           {/* Exams */}
           {examDrag.displayItems.map((exam: any) => {
             const ehExam = canEdit ? examDrag.getHandlers(exam) : null;
-            const linked = linkedExamMap.get(exam.id);
-            const hasUpdate = linked && exam.updated_at && linked.synced_at && new Date(exam.updated_at) > new Date(linked.synced_at);
             return (
               <div key={exam.id}
                 {...(ehExam ? { draggable: ehExam.draggable, onDragStart: ehExam.onDragStart, onDragOver: ehExam.onDragOver, onDragEnter: ehExam.onDragEnter, onDragLeave: ehExam.onDragLeave, onDrop: ehExam.onDrop, onDragEnd: ehExam.onDragEnd } : {})}
@@ -583,12 +584,10 @@ const ContentTab = () => {
                     <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
                   </div>
                 )}
-                <ClipboardList className="h-4 w-4 text-primary shrink-0" />
+                <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
-                    {linked && <Link2 className="h-3 w-3 text-info shrink-0" />}
-                    {hasUpdate && <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary border-primary/30">Atualização</Badge>}
                     {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
@@ -600,18 +599,11 @@ const ContentTab = () => {
                 </div>
                 {!selectionMode && (
                   <div className="flex items-center gap-1 shrink-0">
-                    {exam.total_questions > 0 && !linked && (
+                    {exam.total_questions > 0 && (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
                         onClick={() => setConfirmImportItem({ type: 'exam', data: exam })}
                         disabled={importLogic.addExamToCollection.isPending}>
                         <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {exam.total_questions > 0 && linked && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Sincronizar"
-                        onClick={() => importLogic.openSyncReview(exam.id, linked.id, exam.title)}
-                        disabled={importLogic.loadingSyncChanges}>
-                        <Download className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {(isAdmin || exam.created_by === user?.id) && (
@@ -622,12 +614,7 @@ const ContentTab = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            examMutations.toggleSubscribersOnly.mutate(
-                              { examId: exam.id, subscribersOnly: !exam.subscribers_only },
-                              { onSuccess: () => toast({ title: exam.subscribers_only ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
-                            );
-                          }}>
+                          <DropdownMenuItem onClick={() => handleToggleSubscribersOnly(exam.id, exam.subscribers_only)}>
                             {exam.subscribers_only ? <Globe className="mr-2 h-4 w-4" /> : <Crown className="mr-2 h-4 w-4" />}
                             {exam.subscribers_only ? 'Liberar para todos' : 'Só assinantes'}
                           </DropdownMenuItem>
@@ -660,6 +647,9 @@ const ContentTab = () => {
               ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
               : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            A cópia é independente — alterações no original não afetam a sua versão.
+          </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
@@ -690,7 +680,7 @@ const ContentTab = () => {
               <p className="text-sm font-medium text-foreground">Visibilidade</p>
               <div className="flex gap-2">
                 {([{ value: 'free', label: 'Liberado', icon: Globe }, { value: 'members_only', label: 'Assinantes', icon: Lock }] as const).map(opt => (
-                  <Button key={opt.value} variant={priceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setPriceType(opt.value as any)} className="gap-1.5 flex-1">
+                  <Button key={opt.value} variant={priceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => handleSetDeckPriceType(opt.value, setPriceType)} className="gap-1.5 flex-1">
                     <opt.icon className="h-3.5 w-3.5" /> {opt.label}
                   </Button>
                 ))}
@@ -716,7 +706,7 @@ const ContentTab = () => {
               <p className="text-sm font-medium text-foreground">Visibilidade</p>
               <div className="flex gap-2">
                 {([{ value: 'free', label: 'Liberado', icon: Globe }, { value: 'members_only', label: 'Assinantes', icon: Lock }] as const).map(opt => (
-                  <Button key={opt.value} variant={editPriceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setEditPriceType(opt.value as any)} className="gap-1.5 flex-1">
+                  <Button key={opt.value} variant={editPriceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => handleSetDeckPriceType(opt.value, setEditPriceType)} className="gap-1.5 flex-1">
                     <opt.icon className="h-3.5 w-3.5" /> {opt.label}
                   </Button>
                 ))}
@@ -744,7 +734,7 @@ const ContentTab = () => {
                 <p className="text-xs font-medium text-foreground">Visibilidade</p>
                 <div className="flex gap-2">
                   {([{ value: 'free', label: 'Liberado', icon: Globe }, { value: 'members_only', label: 'Assinantes', icon: Lock }] as const).map(opt => (
-                    <Button key={opt.value} variant={editFilePriceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setEditFilePriceType(opt.value)} className="gap-1.5 flex-1">
+                    <Button key={opt.value} variant={editFilePriceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => handleSetDeckPriceType(opt.value, setEditFilePriceType)} className="gap-1.5 flex-1">
                       <opt.icon className="h-3.5 w-3.5" /> {opt.label}
                     </Button>
                   ))}
@@ -777,8 +767,8 @@ const ContentTab = () => {
               const qCount = (importLogic.personalQuestionCounts as any)[exam.id] || 0;
               return (
                 <div key={exam.id} className="flex items-center gap-3 rounded-lg border border-border/50 p-3 hover:bg-muted/50 transition-colors">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <ClipboardList className="h-4 w-4 text-primary" />
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <ClipboardList className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-semibold text-card-foreground truncate">{exam.title}</h4>
@@ -828,20 +818,6 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Resync Confirmation Dialog */}
-      <Dialog open={!!importLogic.confirmResync} onOpenChange={open => !open && importLogic.setConfirmResync(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="font-display">Atualizar coleção</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Este baralho já está na sua coleção. Deseja sincronizar? Cards novos serão adicionados sem perder seu progresso.
-          </p>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" size="sm" onClick={() => importLogic.setConfirmResync(null)}>Cancelar</Button>
-            <Button size="sm" onClick={() => { importLogic.addToCollection.mutate(importLogic.confirmResync); importLogic.setConfirmResync(null); }}>Atualizar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Move Dialog */}
       <Dialog open={!!movingItem} onOpenChange={open => !open && setMovingItem(null)}>
         <DialogContent className="sm:max-w-sm">
@@ -876,20 +852,6 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Sync Review Dialog */}
-      <SyncReviewDialog
-        open={!!importLogic.syncReviewExam && !importLogic.loadingSyncChanges}
-        onOpenChange={(v) => { if (!v) importLogic.setSyncReviewExam(null); }}
-        changes={importLogic.syncChanges}
-        onApply={async (selected) => {
-          if (importLogic.syncReviewExam) {
-            await importLogic.applySyncChanges(importLogic.syncReviewExam.localExamId, selected);
-            toast({ title: '✅ Prova sincronizada!' });
-          }
-        }}
-        title={importLogic.syncReviewExam?.title}
-      />
     </div>
   );
 };
