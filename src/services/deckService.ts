@@ -8,16 +8,19 @@ import type { DeckWithStats } from '@/types/deck';
 
 /** Fetch all user decks with computed stats using batch RPC (single query). */
 export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
-  const { data: decks, error } = await supabase
-    .from('decks')
-    .select('*')
-    .eq('user_id', userId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-
-  // Batch stats: single RPC call instead of N+1
-  const { data: allStats } = await supabase.rpc('get_all_user_deck_stats', { p_user_id: userId });
+  // Parallel fetch: decks + stats run concurrently
+  const [decksResult, statsResult] = await Promise.all([
+    supabase
+      .from('decks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false }),
+    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId }),
+  ]);
+  if (decksResult.error) throw decksResult.error;
+  const decks = decksResult.data;
+  const allStats = statsResult.data;
   const statsMap = new Map<string, { new_count: number; learning_count: number; review_count: number; reviewed_today: number; new_reviewed_today: number; new_graduated_today: number }>();
   if (allStats) {
     for (const s of allStats as any[]) {
@@ -379,10 +382,8 @@ export async function duplicateDeck(userId: string, id: string) {
 
 /** Batch-update sort_order for a list of deck IDs. */
 export async function reorderDecks(orderedIds: string[]) {
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase.from('decks').update({ sort_order: i } as any).eq('id', orderedIds[i]);
-    if (error) throw error;
-  }
+  const { error } = await supabase.rpc('batch_reorder_decks', { p_deck_ids: orderedIds });
+  if (error) throw error;
 }
 
 /** Reset all card progress in a deck and all its descendants. */

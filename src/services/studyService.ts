@@ -81,7 +81,7 @@ export async function fetchStudyQueue(
   if (error) throw error;
   const cards = data ?? [];
 
-  // Count today's reviews across the ENTIRE root hierarchy (limitScopeIds)
+  // Count today's reviews across the ENTIRE root hierarchy using single RPC
   let newReviewedToday = 0;
   let reviewReviewedToday = 0;
 
@@ -93,34 +93,14 @@ export async function fetchStudyQueue(
   const limitCardIds = (scopeCards ?? []).map((c: any) => c.id);
 
   if (limitCardIds.length > 0) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const { data: todayLogs } = await supabase
-      .from('review_logs')
-      .select('card_id')
-      .in('card_id', limitCardIds)
-      .gte('reviewed_at', todayStart.toISOString());
-
-    if (todayLogs && todayLogs.length > 0) {
-      const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
-
-      const { data: priorLogs } = await supabase
-        .from('review_logs')
-        .select('card_id')
-        .in('card_id', [...reviewedCardIds])
-        .lt('reviewed_at', todayStart.toISOString())
-        .limit(1000);
-
-      const hadPriorReview = new Set((priorLogs ?? []).map(l => l.card_id));
-
-      for (const cardId of reviewedCardIds) {
-        if (!hadPriorReview.has(cardId)) {
-          newReviewedToday++;
-        } else {
-          reviewReviewedToday++;
-        }
-      }
+    const { data: limits } = await supabase.rpc('get_study_queue_limits', {
+      p_user_id: userId,
+      p_card_ids: limitCardIds,
+    });
+    if (limits && (limits as any[]).length > 0) {
+      const row = (limits as any[])[0];
+      newReviewedToday = row.new_reviewed_today ?? 0;
+      reviewReviewedToday = row.review_reviewed_today ?? 0;
     }
   }
 
