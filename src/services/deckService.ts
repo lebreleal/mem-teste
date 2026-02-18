@@ -143,10 +143,12 @@ export async function bulkArchiveDecks(ids: string[]) {
   if (error) throw error;
 }
 
-/** Bulk delete decks (simple, no cascade). */
+/** Bulk delete decks using cascade RPC to handle FK constraints. */
 export async function bulkDeleteDecks(ids: string[]) {
-  const { error } = await supabase.from('decks').delete().in('id', ids);
-  if (error) throw error;
+  for (const id of ids) {
+    const { error } = await supabase.rpc('delete_deck_cascade', { p_deck_id: id });
+    if (error) throw error;
+  }
 }
 
 /** Fetch a single deck by ID. */
