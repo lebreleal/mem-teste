@@ -435,7 +435,12 @@ const CardList = () => {
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
+                        <span className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
+                          {isCloze && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                              <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
+                            </svg>
+                          )}
                           {typeLabel}
                         </span>
                         {!selectionMode && (
