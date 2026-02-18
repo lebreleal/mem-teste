@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
@@ -41,11 +41,12 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  // Local queue: cards that failed go back to end, successful ones are removed
+  // Local queue: cards that failed go back to end with updated scheduled_date
   const [localQueue, setLocalQueue] = useState<any[]>([]);
   const [queueInitialized, setQueueInitialized] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [cardKey, setCardKey] = useState(0);
+  const [waitingSeconds, setWaitingSeconds] = useState(0);
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,7 +62,43 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
-  const currentCard = localQueue[0];
+  // Find the first card that is ready (learning cards must wait for scheduled_date)
+  const getNextReadyIndex = useCallback((q: any[]): number => {
+    const now = Date.now();
+    for (let i = 0; i < q.length; i++) {
+      const card = q[i];
+      // New cards (state 0) and review cards (state 2) are always ready
+      if (card.state === 0 || card.state === 2) return i;
+      // Learning cards (state 1): check if scheduled_date has passed
+      const scheduledTime = new Date(card.scheduled_date).getTime();
+      if (scheduledTime <= now) return i;
+    }
+    return -1; // All remaining cards are waiting
+  }, []);
+
+  // Determine current card considering learning step timing
+  const readyIndex = useMemo(() => getNextReadyIndex(localQueue),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localQueue, getNextReadyIndex, waitingSeconds]);
+  const currentCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
+  const allWaiting = localQueue.length > 0 && readyIndex < 0;
+
+  // Countdown timer when all remaining cards are in learning steps
+  useEffect(() => {
+    if (!allWaiting) { setWaitingSeconds(0); return; }
+    const now = Date.now();
+    const soonest = Math.min(...localQueue.map(c => new Date(c.scheduled_date).getTime()));
+    const remaining = Math.max(0, Math.ceil((soonest - now) / 1000));
+    setWaitingSeconds(remaining);
+
+    const interval = setInterval(() => {
+      const r = Math.max(0, Math.ceil((soonest - Date.now()) / 1000));
+      setWaitingSeconds(r);
+      if (r <= 0) { clearInterval(interval); setCardKey(prev => prev + 1); }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [allWaiting, localQueue]);
+
   const totalCards = localQueue.length + reviewCount;
   const progressPercent = totalCards > 0 ? (reviewCount / totalCards) * 100 : 0;
 
@@ -128,17 +165,26 @@ const Study = () => {
     submitReview.mutate(
       { cardId, rating },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setTimeout(() => {
             setReviewCount(prev => prev + 1);
             if (rating > 2) {
               // Success: remove card from queue
               setLocalQueue(prev => prev.filter(c => c.id !== cardId));
             } else {
-              // Fail: move card to end of queue
+              // Fail: update card with new scheduled_date/state and move to end
               setLocalQueue(prev => {
-                const [first, ...rest] = prev;
-                return [...rest, first];
+                const idx = prev.findIndex(c => c.id === cardId);
+                if (idx < 0) return prev;
+                const updatedCard = {
+                  ...prev[idx],
+                  state: result.state,
+                  stability: result.stability,
+                  difficulty: result.difficulty,
+                  scheduled_date: result.scheduled_date,
+                };
+                const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+                return [...without, updatedCard];
               });
             }
             setCardKey(prev => prev + 1);
@@ -160,7 +206,7 @@ const Study = () => {
     );
   }
 
-  if (!currentCard && reviewCount > 0) {
+  if (!currentCard && !allWaiting && reviewCount > 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
         <div className="animate-fade-in text-center">
@@ -173,6 +219,31 @@ const Study = () => {
           </p>
            <Button onClick={goBack} className="mt-8 gap-2">
              <ArrowLeft className="h-4 w-4" /> Voltar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // All remaining cards are learning and waiting for their step timer
+  if (allWaiting) {
+    const mins = Math.floor(waitingSeconds / 60);
+    const secs = waitingSeconds % 60;
+    const timeStr = mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <div className="animate-fade-in text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+            <Brain className="h-10 w-10 text-primary animate-pulse" />
+          </div>
+          <h1 className="font-display text-2xl font-bold text-foreground">Aguardando repetição</h1>
+          <p className="mt-2 text-muted-foreground">
+            {localQueue.length} {localQueue.length === 1 ? 'card está' : 'cards estão'} em aprendizado.
+          </p>
+          <p className="mt-4 text-4xl font-bold text-primary tabular-nums">{timeStr}</p>
+          <p className="mt-1 text-xs text-muted-foreground">até o próximo card</p>
+          <Button variant="outline" onClick={goBack} className="mt-8 gap-2">
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>
       </div>
