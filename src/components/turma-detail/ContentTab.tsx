@@ -80,6 +80,7 @@ const ContentTab = () => {
   const [editingFile, setEditingFile] = useState<any>(null);
   const [editFileName, setEditFileName] = useState('');
   const [editFilePriceType, setEditFilePriceType] = useState('free');
+  const [confirmResync, setConfirmResync] = useState<any>(null);
 
   // ── Data derivation ──
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId);
@@ -213,7 +214,7 @@ const ContentTab = () => {
   };
 
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
-  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived);
+  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
 
   const resolveNameConflict = (baseName: string, existingNames: string[]): string => {
     if (!existingNames.includes(baseName)) return baseName;
@@ -626,14 +627,6 @@ const ContentTab = () => {
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{td.deck_name}</h3>
                     {subscriberOnly && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
-                    {inCollection && (
-                      <button
-                        className="inline-flex items-center gap-0.5 text-[10px] font-medium text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 hover:bg-info/20 transition-colors"
-                        onClick={e => { e.stopPropagation(); navigate(`/decks/${linkedDeck?.id || td.deck_id}`); }}
-                      >
-                        <Link2 className="h-2.5 w-2.5" /> Na coleção
-                      </button>
-                    )}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{td.card_count ?? 0} cards</p>
                 </div>
@@ -648,7 +641,7 @@ const ContentTab = () => {
                     </Button>
                   )}
                   {inCollection && !alreadyOwns && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => addToCollection.mutate(td)} disabled={addToCollection.isPending}>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setConfirmResync(td)} disabled={addToCollection.isPending}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   )}
@@ -685,8 +678,8 @@ const ContentTab = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
+                  {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
                   <span>{exam.total_questions} questões</span>
@@ -697,8 +690,8 @@ const ContentTab = () => {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {exam.total_questions > 0 && (
-                  <Button size="sm" variant="ghost" className="h-7 gap-1" onClick={() => handleOpenExam(exam)}>
-                    <Eye className="h-3.5 w-3.5" /> Abrir
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleOpenExam(exam)}>
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {(isAdmin || exam.created_by === user?.id) && (
@@ -873,6 +866,20 @@ const ContentTab = () => {
             </DialogTitle>
           </DialogHeader>
           {pdfPreviewUrl && <PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Resync Confirmation Dialog */}
+      <Dialog open={!!confirmResync} onOpenChange={open => !open && setConfirmResync(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle className="font-display">Atualizar coleção</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Este baralho já está na sua coleção. Deseja sincronizar? Cards novos serão adicionados sem perder seu progresso.
+          </p>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmResync(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => { addToCollection.mutate(confirmResync); setConfirmResync(null); }}>Atualizar</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
