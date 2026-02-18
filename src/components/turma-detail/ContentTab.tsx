@@ -85,6 +85,7 @@ const ContentTab = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
+  const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
 
   // ── Data derivation ──
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
@@ -161,6 +162,11 @@ const ContentTab = () => {
     items: currentDecks,
     getId: (d: any) => d.id,
     onReorder: (reordered) => contentMut.reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
+  });
+  const examDrag = useDragReorder({
+    items: currentExams,
+    getId: (e: any) => e.id,
+    onReorder: (reordered) => contentMut.reorderExamsMut.mutate(reordered.map((e: any) => e.id)),
   });
 
   // ── Selection helpers ──
@@ -407,7 +413,7 @@ const ContentTab = () => {
               <div key={file.id}
                 {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
                 {...(!fhFile && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
-                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
+                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
                 {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
@@ -490,7 +496,7 @@ const ContentTab = () => {
               <div key={td.id}
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
                 {...(!dhDeck && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
-                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
+                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
                 {reorderMode && !selectionMode && (
                   <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
@@ -506,6 +512,7 @@ const ContentTab = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{td.deck_name}</h3>
+                    {inCollection && <Link2 className="h-3 w-3 text-info shrink-0" />}
                     {subscriberOnly && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{td.card_count ?? 0} cards</p>
@@ -516,7 +523,7 @@ const ContentTab = () => {
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                     {!inCollection && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; importLogic.addToCollection.mutate(td); }}
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; setConfirmImportItem({ type: 'deck', data: td }); }}
                         disabled={importLogic.addToCollection.isPending || (subscriberOnly && !canImport)}>
                         {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
@@ -557,43 +564,47 @@ const ContentTab = () => {
           })}
 
           {/* Exams */}
-          {currentExams.map((exam: any) => (
-            <div key={exam.id} className="group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50"
-              {...(reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
-              onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
-              {reorderMode && !selectionMode && (
-                <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-                  onMouseDown={(e) => e.stopPropagation()}>
-                  <GripVertical className="h-4 w-4" />
+          {examDrag.displayItems.map((exam: any) => {
+            const ehExam = canEdit ? examDrag.getHandlers(exam) : null;
+            const linked = linkedExamMap.get(exam.id);
+            const hasUpdate = linked && exam.updated_at && linked.synced_at && new Date(exam.updated_at) > new Date(linked.synced_at);
+            return (
+              <div key={exam.id}
+                {...(ehExam ? { draggable: ehExam.draggable, onDragStart: ehExam.onDragStart, onDragOver: ehExam.onDragOver, onDragEnter: ehExam.onDragEnter, onDragLeave: ehExam.onDragLeave, onDrop: ehExam.onDrop, onDragEnd: ehExam.onDragEnd } : {})}
+                {...(!ehExam && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
+                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${ehExam?.className ?? ''}`}
+                onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
+                {reorderMode && !selectionMode && (
+                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                    onMouseDown={(e) => e.stopPropagation()}>
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
+                {selectionMode && (
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
+                  </div>
+                )}
+                <ClipboardList className="h-4 w-4 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
+                    {linked && <Link2 className="h-3 w-3 text-info shrink-0" />}
+                    {hasUpdate && <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary border-primary/30">Atualização</Badge>}
+                    {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                    <span>{exam.total_questions} questões</span>
+                    {exam.time_limit_seconds && (
+                      <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>
+                    )}
+                  </div>
                 </div>
-              )}
-              {selectionMode && (
-                <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                  <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
-                </div>
-              )}
-              <ClipboardList className="h-4 w-4 text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
-                  {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
-                  <span>{exam.total_questions} questões</span>
-                  {exam.time_limit_seconds && (
-                    <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>
-                  )}
-                </div>
-              </div>
-              {!selectionMode && (() => {
-                const linked = linkedExamMap.get(exam.id);
-                const hasUpdate = linked && exam.updated_at && linked.synced_at && new Date(exam.updated_at) > new Date(linked.synced_at);
-                return (
+                {!selectionMode && (
                   <div className="flex items-center gap-1 shrink-0">
-                    {hasUpdate && <Badge variant="outline" className="text-[10px] text-primary border-primary/30">Atualização</Badge>}
                     {exam.total_questions > 0 && !linked && (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
-                        onClick={() => importLogic.addExamToCollection.mutate(exam)}
+                        onClick={() => setConfirmImportItem({ type: 'exam', data: exam })}
                         disabled={importLogic.addExamToCollection.isPending}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
@@ -604,9 +615,6 @@ const ContentTab = () => {
                         disabled={importLogic.loadingSyncChanges}>
                         <Download className="h-3.5 w-3.5" />
                       </Button>
-                    )}
-                    {linked && (
-                      <Link2 className="h-3 w-3 text-primary shrink-0" />
                     )}
                     {(isAdmin || exam.created_by === user?.id) && (
                       <DropdownMenu>
@@ -636,12 +644,36 @@ const ContentTab = () => {
                       </DropdownMenu>
                     )}
                   </div>
-                );
-              })()}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
+
+      {/* ── Confirm Import Dialog ── */}
+      <Dialog open={!!confirmImportItem} onOpenChange={(open) => !open && setConfirmImportItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar à coleção?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmImportItem?.type === 'deck'
+              ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
+              : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
+          </p>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => {
+              if (confirmImportItem?.type === 'deck') importLogic.addToCollection.mutate(confirmImportItem.data);
+              else if (confirmImportItem?.type === 'exam') importLogic.addExamToCollection.mutate(confirmImportItem.data);
+              setConfirmImportItem(null);
+            }}>
+              <Copy className="h-3.5 w-3.5 mr-1.5" /> Adicionar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialogs ── */}
 
