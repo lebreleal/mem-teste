@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { parseApkgFile, type AnkiParseResult } from '@/lib/ankiParser';
@@ -21,10 +21,15 @@ interface ParsedCard {
   cardType?: string;
 }
 
+export interface SubdeckOrganization {
+  name: string;
+  card_indices: number[];
+}
+
 interface ImportCardsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (deckName: string, cards: { frontContent: string; backContent: string; cardType: string }[]) => void;
+  onImport: (deckName: string, cards: { frontContent: string; backContent: string; cardType: string }[], subdecks?: SubdeckOrganization[]) => void;
   loading?: boolean;
 }
 
@@ -80,6 +85,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
 
+  // AI organize subdecks state
+  const [organizing, setOrganizing] = useState(false);
+  const [subdecks, setSubdecks] = useState<SubdeckOrganization[] | null>(null);
+
   // Anki state
   const [ankiLoading, setAnkiLoading] = useState(false);
   const [ankiResult, setAnkiResult] = useState<AnkiParseResult | null>(null);
@@ -96,6 +105,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setUseRFC(true);
     setAutoDetected(false);
     setAnkiResult(null);
+    setSubdecks(null);
+    setOrganizing(false);
   };
 
   const handleClose = (v: boolean) => {
@@ -154,7 +165,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       setAutoDetected(true);
     } catch (err) {
       console.error('Auto-detect failed:', err);
-      // Fall back to simple heuristic
       const firstLine = text.split('\n')[0] || '';
       if (firstLine.includes('\t')) { setFieldSep('tab'); setUseRFC(true); }
       else { setFieldSep('comma'); setUseRFC(true); }
@@ -163,10 +173,38 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     }
   }, []);
 
-  // CSV file upload - click format button → immediately open file picker
+  // AI organize into subdecks
+  const organizeWithAI = useCallback(async (cards: ParsedCard[]) => {
+    if (cards.length < 5) {
+      toast({ title: 'Poucos cartões para organizar', description: 'São necessários pelo menos 5 cartões.', variant: 'destructive' });
+      return;
+    }
+    setOrganizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('organize-import', {
+        body: {
+          cards: cards.map(c => ({ front: c.front, back: c.back })),
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.subdecks && data.subdecks.length > 0) {
+        setSubdecks(data.subdecks);
+        toast({ title: `${data.subdecks.length} subdecks identificados pela IA!` });
+      } else {
+        toast({ title: 'Não foi possível identificar temas distintos', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      console.error('Organize failed:', err);
+      toast({ title: 'Erro ao organizar', description: err.message, variant: 'destructive' });
+    } finally {
+      setOrganizing(false);
+    }
+  }, [toast]);
+
+  // CSV file upload
   const handleCsvFormatClick = () => {
     setSource('csv');
-    // Small delay to let state settle
     setTimeout(() => csvFileRef.current?.click(), 100);
   };
 
@@ -178,11 +216,11 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const text = ev.target?.result as string;
       if (text) {
         setRawText(text);
+        setSubdecks(null);
         if (!deckName) {
           const name = file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
           setDeckName(name.charAt(0).toUpperCase() + name.slice(1));
         }
-        // AI auto-detect separators
         await autoDetectFormat(text);
       }
     };
@@ -204,6 +242,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     try {
       const result = await parseApkgFile(file);
       setAnkiResult(result);
+      setSubdecks(null);
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
@@ -222,20 +261,22 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const handleImport = () => {
     if (source === 'anki' && ankiResult) {
       if (!deckName.trim()) return;
-      onImport(deckName.trim(), ankiResult.cards.map(c => ({
+      const cards = ankiResult.cards.map(c => ({
         frontContent: c.front,
         backContent: c.back,
         cardType: c.cardType,
-      })));
+      }));
+      onImport(deckName.trim(), cards, subdecks ?? undefined);
       reset();
       return;
     }
     if (parsedCards.length === 0 || !deckName.trim()) return;
-    onImport(deckName.trim(), parsedCards.map(c => ({
+    const cards = parsedCards.map(c => ({
       frontContent: c.front,
       backContent: c.back,
       cardType: c.cardType || 'basic',
-    })));
+    }));
+    onImport(deckName.trim(), cards, subdecks ?? undefined);
     reset();
   };
 
@@ -257,6 +298,67 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc" className="hidden" onChange={handleAnkiUpload} />
     </>
   );
+
+  // Subdeck organization preview component
+  const SubdeckPreview = () => {
+    if (!subdecks || subdecks.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold flex items-center gap-1.5">
+            <FolderTree className="h-4 w-4 text-primary" />
+            Organização em subdecks ({subdecks.length})
+          </Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
+            <X className="h-3 w-3 mr-1" />
+            Remover
+          </Button>
+        </div>
+        <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-2">
+          {subdecks.map((sd, i) => (
+            <div key={i} className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
+              <span className="text-xs font-medium text-foreground">{sd.name}</span>
+              <span className="text-[10px] text-muted-foreground">{sd.card_indices.length} cartões</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Será criado o deck pai "{deckName}" com {subdecks.length} subdecks.
+        </p>
+      </div>
+    );
+  };
+
+  // AI organize button
+  const OrganizeButton = ({ cards }: { cards: ParsedCard[] | { front: string; back: string }[] }) => {
+    if (cards.length < 5) return null;
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
+        onClick={() => organizeWithAI(cards.map(c => ({ front: c.front, back: c.back })))}
+        disabled={organizing}
+      >
+        {organizing ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Organizando...
+          </>
+        ) : subdecks ? (
+          <>
+            <Check className="h-3.5 w-3.5" />
+            Reorganizar com IA
+          </>
+        ) : (
+          <>
+            <FolderTree className="h-3.5 w-3.5" />
+            Organizar em subdecks com IA
+          </>
+        )}
+      </Button>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -306,7 +408,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
           <>
             <DialogHeader>
               <DialogTitle className="font-display flex items-center gap-2">
-                <button onClick={() => { setSource(null); setAnkiResult(null); }} className="rounded-full p-1 hover:bg-muted transition-colors">
+                <button onClick={() => { setSource(null); setAnkiResult(null); setSubdecks(null); }} className="rounded-full p-1 hover:bg-muted transition-colors">
                   <ArrowLeft className="h-4 w-4" />
                 </button>
                 Importar do Anki
@@ -331,6 +433,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                     <span className="text-xs text-foreground">{ankiResult.mediaCount} arquivos de mídia incluídos</span>
                   </div>
                 )}
+
+                {/* AI organize button */}
+                <OrganizeButton cards={ankiResult.cards} />
+
+                {/* Subdeck preview */}
+                <SubdeckPreview />
 
                 {/* Preview */}
                 <div>
@@ -367,7 +475,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                   <Button onClick={handleImport} disabled={!deckName.trim() || loading}>
-                    {loading ? 'Importando...' : `Importar (${ankiResult.cards.length})`}
+                    {loading ? 'Importando...' : subdecks
+                      ? `Importar (${subdecks.length} subdecks)`
+                      : `Importar (${ankiResult.cards.length})`
+                    }
                   </Button>
                 </div>
               </div>
@@ -410,7 +521,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
                 <Textarea
                   value={rawText}
-                  onChange={e => { setRawText(e.target.value); setAutoDetected(false); }}
+                  onChange={e => { setRawText(e.target.value); setAutoDetected(false); setSubdecks(null); }}
                   placeholder={"Pergunta,Resposta\nPergunta 2,Resposta 2"}
                   rows={5}
                   className="font-mono text-xs"
@@ -492,6 +603,14 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
               )}
 
+              {/* AI Organize button */}
+              {parsedCards.length >= 5 && (
+                <OrganizeButton cards={parsedCards} />
+              )}
+
+              {/* Subdeck preview */}
+              <SubdeckPreview />
+
               {/* Preview */}
               <div>
                 <Label className="mb-2 block text-sm font-semibold">Prévia dos cartões ({parsedCards.length})</Label>
@@ -524,7 +643,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                 <Button onClick={handleImport} disabled={parsedCards.length === 0 || !deckName.trim() || loading}>
-                  {loading ? 'Importando...' : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`}
+                  {loading ? 'Importando...' : subdecks
+                    ? `Importar (${subdecks.length} subdecks)`
+                    : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`
+                  }
                 </Button>
               </div>
             </div>
