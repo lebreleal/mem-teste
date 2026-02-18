@@ -71,26 +71,27 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig };
   }
 
-  // Fetch cards for the queue (from clicked deck + its descendants)
-  const { data, error } = await supabase
-    .from('cards')
-    .select('*')
-    .in('deck_id', deckIds)
-    .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  const cards = data ?? [];
+  // Fetch cards + scope card IDs in parallel (independent queries)
+  const [cardsResult, scopeResult] = await Promise.all([
+    supabase
+      .from('cards')
+      .select('*')
+      .in('deck_id', deckIds)
+      .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', limitScopeIds),
+  ]);
+  if (cardsResult.error) throw cardsResult.error;
+  const cards = cardsResult.data ?? [];
 
   // Count today's reviews across the ENTIRE root hierarchy using single RPC
   let newReviewedToday = 0;
   let reviewReviewedToday = 0;
 
-  // Get all card IDs in the limit scope
-  const { data: scopeCards } = await supabase
-    .from('cards')
-    .select('id')
-    .in('deck_id', limitScopeIds);
-  const limitCardIds = (scopeCards ?? []).map((c: any) => c.id);
+  const limitCardIds = (scopeResult.data ?? []).map((c: any) => c.id);
 
   if (limitCardIds.length > 0) {
     const { data: limits } = await supabase.rpc('get_study_queue_limits', {
