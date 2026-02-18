@@ -375,7 +375,6 @@ const Dashboard = () => {
           try {
             const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
             if (subdecks && subdecks.length > 0) {
-              const hasHierarchy = subdecks.some(sd => sd.children && sd.children.length > 0);
               await importDeckWithSubdecks(
                 user!.id,
                 deckName,
@@ -387,11 +386,7 @@ const Dashboard = () => {
               const countAll = (nodes: typeof subdecks): number =>
                 nodes.reduce((s, n) => s + (n.children?.length ? countAll(n.children) : n.card_indices.length), 0);
               const totalCards = countAll(subdecks);
-              toast({
-                title: hasHierarchy
-                  ? `${totalCards} cartões importados em ${subdecks.length} decks hierárquicos!`
-                  : `${totalCards} cartões importados em ${subdecks.length} subdecks!`,
-              });
+              toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks dentro de "${deckName}"!` });
             } else {
               await importDeck(
                 user!.id,

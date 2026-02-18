@@ -246,8 +246,7 @@ export async function importDeckWithSubdecks(
   subdecks: SubdeckNode[],
   algorithmMode?: string,
 ) {
-  const hasHierarchy = subdecks.some(sd => sd.children && sd.children.length > 0);
-  const multipleTopLevel = subdecks.length > 1 && hasHierarchy;
+  // Helper to insert cards for a deck
 
   // Helper to insert cards for a deck
   const insertCards = async (deckId: string, indices: number[]) => {
@@ -298,34 +297,31 @@ export async function importDeckWithSubdecks(
     return deck;
   };
 
-  if (multipleTopLevel) {
-    const createdDecks = [];
-    for (const sd of subdecks) {
-      const deck = await createDeckTree(sd, null, folderId);
-      createdDecks.push(deck);
-    }
-    return createdDecks[0];
-  } else {
-    const { data: parentDeck, error: parentErr } = await supabase
-      .from('decks')
-      .insert({
-        name: parentName,
-        user_id: userId,
-        folder_id: folderId,
-        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-      } as any)
-      .select()
-      .single();
-    if (parentErr || !parentDeck) throw parentErr;
+  // Always create a parent deck and nest subdecks under it
+  const { data: parentDeck, error: parentErr } = await supabase
+    .from('decks')
+    .insert({
+      name: parentName,
+      user_id: userId,
+      folder_id: folderId,
+      ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+    } as any)
+    .select()
+    .single();
+  if (parentErr || !parentDeck) throw parentErr;
 
-    const parentId = (parentDeck as any).id;
+  const parentId = (parentDeck as any).id;
 
-    for (const sd of subdecks) {
+  for (const sd of subdecks) {
+    // If AI marked a subdeck as unrelated (standalone), create it at root level (no parent)
+    if ((sd as any).standalone) {
+      await createDeckTree(sd, null, folderId);
+    } else {
       await createDeckTree(sd, parentId, folderId);
     }
-
-    return parentDeck;
   }
+
+  return parentDeck;
 }
 
 /** Get turma navigation info for a turma deck. */

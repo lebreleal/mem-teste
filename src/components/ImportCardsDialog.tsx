@@ -185,6 +185,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const { data, error } = await supabase.functions.invoke('organize-import', {
         body: {
           cards: cards.map(c => ({ front: c.front, back: c.back })),
+          deckName: deckName || undefined,
         },
       });
       if (error) throw error;
@@ -201,7 +202,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     } finally {
       setOrganizing(false);
     }
-  }, [toast]);
+  }, [toast, deckName]);
 
   // CSV file upload
   const handleCsvFormatClick = () => {
