@@ -18,5 +18,8 @@ verify_jwt = false
 [functions.generate-onboarding]
 verify_jwt = false
 
+[functions.ai-tutor]
+verify_jwt = false
+
 [functions.ai-chat]
 verify_jwt = false
