@@ -269,107 +269,156 @@ const CardList = () => {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filteredCards.map(card => {
-            const isCloze = card.card_type === 'cloze';
-            const isMultiple = card.card_type === 'multiple_choice';
-            const isOcclusion = card.card_type === 'image_occlusion';
-            const isSelected = selectedCards.has(card.id);
+          {(() => {
+            // Group cloze cards by front_content to show as stacked
+            const groups: { cards: typeof filteredCards; isClozeGroup: boolean }[] = [];
+            const usedIds = new Set<string>();
 
-            const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
-            const typeBadgeClass = isCloze
-              ? 'bg-primary/15 text-primary border-primary/30'
-              : isMultiple
-              ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
-              : isOcclusion
-              ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
-              : 'bg-muted text-muted-foreground border-border';
-
-            // Parse multiple choice options from back_content
-            let mcOptions: string[] = [];
-            let mcCorrectIdx = -1;
-            if (isMultiple && card.back_content) {
-              try {
-                const parsed = JSON.parse(card.back_content);
-                if (parsed.options) mcOptions = parsed.options;
-                if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
-              } catch {
-                // not JSON, just show as text
+            filteredCards.forEach(card => {
+              if (usedIds.has(card.id)) return;
+              if (card.card_type === 'cloze') {
+                // Find all cloze cards with same front_content
+                const siblings = filteredCards.filter(
+                  c => c.card_type === 'cloze' && c.front_content === card.front_content && !usedIds.has(c.id)
+                );
+                siblings.forEach(s => usedIds.add(s.id));
+                groups.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
+              } else {
+                usedIds.add(card.id);
+                groups.push({ cards: [card], isClozeGroup: false });
               }
-            }
+            });
 
-            return (
-              <div
-                key={card.id}
-                className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer ${
-                  isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
-                }`}
-                onClick={() => selectionMode ? toggleCardSelection(card.id) : openEdit(card)}
-              >
-                <div className="flex items-start gap-3">
-                  {selectionMode && (
-                    <div className="pt-0.5 shrink-0">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleCardSelection(card.id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    </div>
+            // Extract cloze numbers from front content
+            const getClozeNumbers = (frontContent: string): number[] => {
+              const plain = frontContent.replace(/<[^>]*>/g, '');
+              const matches = plain.match(/\{\{c(\d+)::/g) || [];
+              const nums = new Set(matches.map(m => parseInt(m.match(/\d+/)![0])));
+              return Array.from(nums).sort((a, b) => a - b);
+            };
+
+            const CLOZE_DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+
+            return groups.map((group, gi) => {
+              const card = group.cards[0];
+              const isCloze = card.card_type === 'cloze';
+              const isMultiple = card.card_type === 'multiple_choice';
+              const isOcclusion = card.card_type === 'image_occlusion';
+              const isSelected = selectedCards.has(card.id);
+
+              const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
+              const typeBadgeClass = isCloze
+                ? 'bg-primary/15 text-primary border-primary/30'
+                : isMultiple
+                ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
+                : isOcclusion
+                ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
+                : 'bg-muted text-muted-foreground border-border';
+
+              // Parse multiple choice options
+              let mcOptions: string[] = [];
+              let mcCorrectIdx = -1;
+              if (isMultiple && card.back_content) {
+                try {
+                  const parsed = JSON.parse(card.back_content);
+                  if (parsed.options) mcOptions = parsed.options;
+                  if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
+                } catch {}
+              }
+
+              const clozeNums = isCloze ? getClozeNumbers(card.front_content) : [];
+
+              return (
+                <div key={card.id} className="relative">
+                  {/* Stacked card effect for multi-cloze */}
+                  {group.isClozeGroup && (
+                    <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
                   )}
-                  <div className="flex-1 min-w-0">
-                    {(() => {
-                      const stateInfo = getStateInfo(card);
-                      return (
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
-                            {stateInfo.label}
-                          </span>
-                          {card.state >= 2 && card.scheduled_date && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
-                            </span>
-                          )}
+                  <div
+                    className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative z-10 ${
+                      isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                    }`}
+                    onClick={() => selectionMode ? toggleCardSelection(card.id) : openEdit(card)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {selectionMode && (
+                        <div className="pt-0.5 shrink-0">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleCardSelection(card.id)}
+                            onClick={e => e.stopPropagation()}
+                          />
                         </div>
-                      );
-                    })()}
-                    <p className="text-sm font-semibold text-foreground leading-snug">
-                      {stripHtml(card.front_content)}
-                    </p>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {(() => {
+                          const stateInfo = getStateInfo(card);
+                          return (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
+                                {stateInfo.label}
+                              </span>
+                              {card.state >= 2 && card.scheduled_date && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(card.scheduled_date) <= new Date() ? 'Revisão agora' : `Próx: ${new Date(card.scheduled_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <p className="text-sm font-semibold text-foreground leading-snug">
+                          {stripHtml(card.front_content)}
+                        </p>
 
-                    {/* Multiple choice options */}
-                    {isMultiple && mcOptions.length > 0 ? (
-                      <div className="mt-2 space-y-0.5">
-                        {mcOptions.map((opt, oi) => (
-                          <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
-                            {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                        {/* Cloze tabs */}
+                        {isCloze && clozeNums.length > 0 && (
+                          <div className="flex items-center gap-1.5 mt-2">
+                            {clozeNums.map((n, i) => (
+                              <span key={n} className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
+                                <span className={`h-1.5 w-1.5 rounded-full ${CLOZE_DOT_COLORS[i % CLOZE_DOT_COLORS.length]}`} />
+                                cloze {n}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Multiple choice options */}
+                        {isMultiple && mcOptions.length > 0 ? (
+                          <div className="mt-2 space-y-0.5">
+                            {mcOptions.map((opt, oi) => (
+                              <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                                {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                              </p>
+                            ))}
+                          </div>
+                        ) : !isOcclusion && !isCloze && card.back_content ? (
+                          <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
+                            {stripHtml(card.back_content)}
                           </p>
-                        ))}
+                        ) : null}
                       </div>
-                    ) : !isOcclusion && card.back_content ? (
-                      <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
-                        {stripHtml(card.back_content)}
-                      </p>
-                    ) : null}
-                  </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
-                      {typeLabel}
-                    </span>
-                    {!selectionMode && (
-                      <>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEdit(card); }}>
-                          <PenLine className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteId(card.id); }}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
+                          {typeLabel}
+                        </span>
+                        {!selectionMode && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEdit(card); }}>
+                              <PenLine className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setDeleteId(card.id); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       )}
     </div>
