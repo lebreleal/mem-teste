@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import * as deckService from '@/services/deckService';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
@@ -156,19 +157,16 @@ const DeckSettings = () => {
 
   const handleResetProgress = async () => {
     if (!deckId) return;
-    const { error } = await supabase
-      .from('cards')
-      .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
-      .eq('deck_id', deckId);
-    if (error) {
-      toast({ title: 'Erro', variant: 'destructive' });
-    } else {
+    try {
+      await deckService.resetDeckProgress(deckId);
       toast({ title: 'Progresso redefinido!' });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
       queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' });
     }
     setResetConfirm(false);
   };
