@@ -62,12 +62,17 @@ const ratingConfig = [
   { rating: 4 as Rating, label: 'Fácil', colorClass: 'bg-info hover:bg-info/90 text-info-foreground', flashClass: 'animate-correct-flash' },
 ];
 
-function renderCloze(html: string, revealed: boolean): string {
+function renderCloze(html: string, revealed: boolean, targetNum?: number): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
+    const n = parseInt(num);
+    // If targetNum is set, only blank that number; reveal others
+    if (targetNum !== undefined && n !== targetNum) {
+      return `<span class="cloze-revealed">${answer}</span>`;
+    }
     if (revealed) {
       return `<span class="cloze-revealed">${answer}</span>`;
     }
-    return `<span class="cloze-blank"><span style="font-size:10px;font-weight:700;margin-right:2px">c${num}</span>[...]</span>`;
+    return `<span class="cloze-blank">[...]</span>`;
   });
 }
 
@@ -480,14 +485,27 @@ const FlashCard = ({
     const userText = backContent ? `<div style="margin-top:1rem">${backContent}</div>` : '';
     displayBack = revealedImage + userText;
   } else if (isCloze) {
-    // For cloze: front shows blanks, back shows revealed answers + optional backContent
-    const processedFront = looksLikeHtml(frontContent) ? frontContent : formatMarkdown(frontContent);
-    const processedClozeRevealed = looksLikeHtml(frontContent) ? frontContent : formatMarkdown(frontContent);
-    displayFront = renderCloze(processedFront, false);
-    const revealedCloze = renderCloze(processedClozeRevealed, true);
-    // If there's separate back content, show it below the revealed cloze
+    // Parse cloze target number from backContent (JSON with clozeTarget)
+    let clozeTarget: number | undefined;
+    let extraBack = '';
     if (backContent && backContent.trim()) {
-      const processedBack = looksLikeHtml(backContent) ? backContent : formatMarkdown(backContent);
+      try {
+        const parsed = JSON.parse(backContent);
+        if (typeof parsed.clozeTarget === 'number') {
+          clozeTarget = parsed.clozeTarget;
+          extraBack = parsed.extra || '';
+        } else {
+          extraBack = backContent;
+        }
+      } catch {
+        extraBack = backContent;
+      }
+    }
+    const processedFront = looksLikeHtml(frontContent) ? frontContent : formatMarkdown(frontContent);
+    displayFront = renderCloze(processedFront, false, clozeTarget);
+    const revealedCloze = renderCloze(processedFront, true, clozeTarget);
+    if (extraBack && extraBack.trim()) {
+      const processedBack = looksLikeHtml(extraBack) ? extraBack : formatMarkdown(extraBack);
       displayBack = revealedCloze + '<hr style="margin:1rem 0;border-color:hsl(var(--border))" />' + processedBack;
     } else {
       displayBack = revealedCloze;
