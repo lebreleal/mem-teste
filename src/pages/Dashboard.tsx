@@ -375,6 +375,7 @@ const Dashboard = () => {
           try {
             const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
             if (subdecks && subdecks.length > 0) {
+              const hasHierarchy = subdecks.some(sd => sd.children && sd.children.length > 0);
               await importDeckWithSubdecks(
                 user!.id,
                 deckName,
@@ -383,8 +384,21 @@ const Dashboard = () => {
                 subdecks,
                 defaultAlgorithm
               );
-              const totalCards = subdecks.reduce((sum, sd) => sum + sd.card_indices.length, 0);
-              toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks!` });
+              const totalLeafGroups = subdecks.reduce((sum, sd) => {
+                if (sd.children && sd.children.length > 0) return sum + sd.children.length;
+                return sum + 1;
+              }, 0);
+              const totalCards = subdecks.reduce((sum, sd) => {
+                if (sd.children && sd.children.length > 0) {
+                  return sum + sd.children.reduce((s, c) => s + c.card_indices.length, 0);
+                }
+                return sum + sd.card_indices.length;
+              }, 0);
+              toast({
+                title: hasHierarchy
+                  ? `${totalCards} cartões importados em ${subdecks.length} decks e ${totalLeafGroups} subdecks!`
+                  : `${totalCards} cartões importados em ${subdecks.length} subdecks!`,
+              });
             } else {
               await importDeck(
                 user!.id,

@@ -228,51 +228,110 @@ export async function importDeck(userId: string, name: string, folderId: string 
   return newDeck;
 }
 
-/** Import a deck organized into subdecks. Creates parent deck + child decks with cards. */
+/** Import a deck organized into subdecks. Supports up to 2 levels of hierarchy. */
 export async function importDeckWithSubdecks(
   userId: string,
   parentName: string,
   folderId: string | null,
   cards: { frontContent: string; backContent: string; cardType: string }[],
-  subdecks: { name: string; card_indices: number[] }[],
+  subdecks: { name: string; card_indices: number[]; children?: { name: string; card_indices: number[] }[] }[],
   algorithmMode?: string,
 ) {
-  // Create parent deck (no cards directly)
-  const { data: parentDeck, error: parentErr } = await supabase
-    .from('decks')
-    .insert({ name: parentName, user_id: userId, folder_id: folderId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
-    .select()
-    .single();
-  if (parentErr || !parentDeck) throw parentErr;
+  const hasHierarchy = subdecks.some(sd => sd.children && sd.children.length > 0);
+  const multipleTopLevel = subdecks.length > 1 && hasHierarchy;
 
-  const parentId = (parentDeck as any).id;
-
-  // Create each subdeck with its cards
-  for (const sd of subdecks) {
-    const { data: childDeck, error: childErr } = await supabase
-      .from('decks')
-      .insert({ name: sd.name, user_id: userId, folder_id: folderId, parent_deck_id: parentId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
-      .select()
-      .single();
-    if (childErr || !childDeck) throw childErr;
-
-    const childId = (childDeck as any).id;
-    const childCards = sd.card_indices
+  // Helper to insert cards for a deck
+  const insertCards = async (deckId: string, indices: number[]) => {
+    const validCards = indices
       .filter(idx => idx >= 0 && idx < cards.length)
       .map(idx => ({
-        deck_id: childId,
+        deck_id: deckId,
         front_content: cards[idx].frontContent,
         back_content: cards[idx].backContent,
         card_type: cards[idx].cardType,
       }));
-
-    if (childCards.length > 0) {
-      const { error: cardsErr } = await supabase.from('cards').insert(childCards as any);
-      if (cardsErr) throw cardsErr;
+    if (validCards.length > 0) {
+      const { error } = await supabase.from('cards').insert(validCards as any);
+      if (error) throw error;
     }
-  }
+  };
 
-  return parentDeck;
+  // Helper to create a deck and its children
+  const createDeckTree = async (
+    node: { name: string; card_indices: number[]; children?: { name: string; card_indices: number[] }[] },
+    parentDeckId: string | null,
+    nodeFolderId: string | null,
+  ) => {
+    const { data: deck, error } = await supabase
+      .from('decks')
+      .insert({
+        name: node.name,
+        user_id: userId,
+        folder_id: nodeFolderId,
+        parent_deck_id: parentDeckId,
+        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+      } as any)
+      .select()
+      .single();
+    if (error || !deck) throw error;
+
+    const deckId = (deck as any).id;
+
+    // Insert direct cards (only if no children)
+    if (!node.children || node.children.length === 0) {
+      await insertCards(deckId, node.card_indices);
+    } else {
+      // Create children subdecks
+      for (const child of node.children) {
+        const { data: childDeck, error: childErr } = await supabase
+          .from('decks')
+          .insert({
+            name: child.name,
+            user_id: userId,
+            folder_id: nodeFolderId,
+            parent_deck_id: deckId,
+            ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+          } as any)
+          .select()
+          .single();
+        if (childErr || !childDeck) throw childErr;
+        await insertCards((childDeck as any).id, child.card_indices);
+      }
+    }
+
+    return deck;
+  };
+
+  if (multipleTopLevel) {
+    // Multiple top-level decks with hierarchy — create each as independent deck
+    const createdDecks = [];
+    for (const sd of subdecks) {
+      const deck = await createDeckTree(sd, null, folderId);
+      createdDecks.push(deck);
+    }
+    return createdDecks[0]; // Return first for compatibility
+  } else {
+    // Single parent deck with subdecks (original behavior or single hierarchical deck)
+    const { data: parentDeck, error: parentErr } = await supabase
+      .from('decks')
+      .insert({
+        name: parentName,
+        user_id: userId,
+        folder_id: folderId,
+        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+      } as any)
+      .select()
+      .single();
+    if (parentErr || !parentDeck) throw parentErr;
+
+    const parentId = (parentDeck as any).id;
+
+    for (const sd of subdecks) {
+      await createDeckTree(sd, parentId, folderId);
+    }
+
+    return parentDeck;
+  }
 }
 
 /** Get turma navigation info for a turma deck. */
