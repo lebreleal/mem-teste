@@ -1,77 +1,70 @@
 
 
-# Otimizacao de Performance - Round 3 (Queries Paralelas)
+# Configurar PWA com Icones para Desktop, iOS e Android
 
-## Risco de bugs: MUITO BAIXO
+## O que sera feito
 
-As mudancas sao puramente sobre **ordem de execucao** de queries que ja existem. Nenhuma logica de negocio muda. Os mesmos dados sao buscados, as mesmas variaveis sao preenchidas - so que em paralelo em vez de sequencial. Se uma query falhar, o comportamento de erro continua identico.
+Transformar o app MemoCards em um PWA (Progressive Web App) instalavel em qualquer dispositivo - desktop, iPhone e Android - usando o logo do elefante azul que ja existe no projeto.
 
-## O que NAO vai mudar
+## Mudancas
 
-- Nenhuma funcionalidade e alterada
-- Nenhum componente visual muda
-- Nenhuma query e removida ou adicionada
-- Os mesmos dados continuam sendo retornados
-- O tratamento de erros continua identico
+### 1. Instalar `vite-plugin-pwa`
 
----
+Adicionar o plugin que gera automaticamente o service worker, manifest.json e icones.
 
-## Mudanca 1: Paralelizar queries no `fetchStudyQueue`
+### 2. Gerar icones PWA a partir do logo existente
 
-**Arquivo:** `src/services/studyService.ts`
+Criar versoes do logo (`src/assets/logo.png`) nos tamanhos necessarios e colocar em `public/`:
 
-Atualmente, apos calcular os `deckIds` e `limitScopeIds`, o codigo faz 2 queries sequenciais (cards + scopeCards) que sao completamente independentes. Vamos roda-las em paralelo com `Promise.all`.
+- `pwa-192x192.png` - Android e geral
+- `pwa-512x512.png` - Android splash e geral
+- `apple-touch-icon-180x180.png` - iOS (obrigatorio para "Add to Home Screen")
+- `maskable-icon-512x512.png` - Android adaptive icon (com padding)
+- `favicon.svg` - Favicon vetorial moderno
 
-Antes:
-```text
-cards query -> scopeCards query -> RPC (sequencial)
-```
+Como o Lovable nao tem ferramentas de redimensionamento de imagem, os icones serao criados como copias do logo original e o manifest referenciara eles nos tamanhos corretos. O navegador faz o resize automaticamente.
 
-Depois:
-```text
-[cards query + scopeCards query] -> RPC (paralelo + sequencial)
-```
+### 3. Configurar `vite-plugin-pwa` no `vite.config.ts`
 
-Economia estimada: ~100-300ms
+Adicionar o plugin com:
+- Nome do app: "MemoCards"
+- Cores do tema: azul (#2563eb) matching o logo
+- Display: "standalone" (parece app nativo)
+- Registro automatico do service worker
+- Lista de icones para cada plataforma
+- `navigateFallbackDenylist: [/^\/~oauth/]` para nao cachear OAuth
 
-## Mudanca 2: Paralelizar queries no `fetchMissions`
+### 4. Atualizar `index.html`
 
-**Arquivo:** `src/services/missionService.ts`
+Adicionar meta tags para PWA:
+- `<meta name="theme-color">` - cor da barra de status
+- `<link rel="apple-touch-icon">` - icone iOS
+- `<meta name="apple-mobile-web-app-capable">` - fullscreen no iOS
+- `<meta name="apple-mobile-web-app-status-bar-style">` - estilo da barra iOS
 
-Atualmente faz 5 queries sequenciais. Vamos agrupar:
-- Fase 1: `definitions` + `userMissions` em paralelo
-- Fase 2: `profile` + `deckCount` + `weeklyCards` em paralelo
+### 5. Criar pagina `/install` (opcional mas util)
 
-Antes:
-```text
-definitions -> userMissions -> profile -> deckCount -> weeklyCards
-```
+Uma pagina simples que instrui o usuario a instalar o app e dispara o prompt de instalacao nativo do navegador (`beforeinstallprompt`).
 
-Depois:
-```text
-[definitions + userMissions] -> [profile + deckCount + weeklyCards]
-```
+## Resultado final
 
-Economia estimada: ~300-500ms
+- No **Android**: o usuario vera "Adicionar a tela inicial" automaticamente no Chrome
+- No **iOS**: o usuario pode usar "Compartilhar > Adicionar a Tela de Inicio" no Safari
+- No **Desktop**: o usuario vera o icone de instalar na barra de endereco do Chrome/Edge
+- O app funciona **offline** com cache automatico dos assets
+- O icone do elefante azul aparece em todos os dispositivos
 
-## Mudanca 3: Lazy load do `ProModelConfirmDialog` no Study
+## Arquivos modificados/criados
 
-**Arquivo:** `src/pages/Study.tsx`
-
-Esse dialog so aparece quando o usuario tenta trocar para modelo Pro (rarissimo). Pode ser `React.lazy()`.
-
-- Trocar `import ProModelConfirmDialog from ...` por `const ProModelConfirmDialog = lazy(() => import(...))`
-- Envolver em `<Suspense fallback={null}>`
-
-Economia: ~5KB removidos do bundle da pagina Study
-
-## Resumo
-
-| Arquivo | Mudanca | Risco |
-|---------|---------|-------|
-| `src/services/studyService.ts` | `Promise.all` para cards + scopeCards | Zero - mesmas queries, mesmos dados |
-| `src/services/missionService.ts` | `Promise.all` em 2 fases | Zero - mesmas queries, mesmos dados |
-| `src/pages/Study.tsx` | Lazy load ProModelConfirmDialog | Zero - padrao ja usado no Dashboard |
-
-Nenhuma dessas mudancas altera logica de negocio. Sao puramente otimizacoes de I/O e bundle.
+| Arquivo | Acao |
+|---------|------|
+| `package.json` | Adicionar `vite-plugin-pwa` |
+| `vite.config.ts` | Configurar plugin PWA |
+| `index.html` | Meta tags para iOS e PWA |
+| `public/pwa-192x192.png` | Icone 192x192 (copia do logo) |
+| `public/pwa-512x512.png` | Icone 512x512 (copia do logo) |
+| `public/apple-touch-icon-180x180.png` | Icone iOS |
+| `public/maskable-icon-512x512.png` | Icone adaptativo Android |
+| `src/pages/Install.tsx` | Pagina de instalacao |
+| `src/App.tsx` | Adicionar rota `/install` |
 
