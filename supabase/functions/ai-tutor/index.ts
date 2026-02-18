@@ -19,10 +19,9 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !data?.claims?.sub) return jsonResponse({ error: "Token inválido" }, 401);
-    const userId = data.claims.sub as string;
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
+    const userId = user.id;
 
     const cost = energyCost || 0;
     if (cost > 0) {
@@ -61,10 +60,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "AI service unavailable" }, 502);
     }
 
-    const data = await response.json();
-    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, data.usage, cost);
+    const aiData = await response.json();
+    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, aiData.usage, cost);
 
-    const hint = data.choices?.[0]?.message?.content ?? "Não foi possível gerar uma explicação.";
+    const hint = aiData.choices?.[0]?.message?.content ?? "Não foi possível gerar uma explicação.";
     return jsonResponse({ hint });
   } catch (err) {
     console.error("Error:", err);
