@@ -3,6 +3,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { markdownToHtml } from '@/lib/markdownToHtml';
 import type { CardRow } from '@/types/deck';
 export type { CardRow } from '@/types/deck';
 
@@ -104,6 +105,11 @@ export async function enhanceCard(params: {
 }) {
   const { data, error } = await supabase.functions.invoke('enhance-card', { body: params });
   if (error) throw error;
+
+  // Convert markdown formatting from AI response to HTML
+  if (data?.front) data.front = markdownToHtml(data.front);
+  if (data?.back && typeof data.back === 'string') data.back = markdownToHtml(data.back);
+
   return data;
 }
 

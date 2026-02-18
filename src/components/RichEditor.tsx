@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { markdownToHtml } from '@/lib/markdownToHtml';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Underline from '@tiptap/extension-underline';
@@ -41,7 +42,9 @@ const ClozeMark = Mark.create({
 /* ─── Converters: DB format ↔ Editor format ─── */
 /** Convert {{c1::text}} → <span data-cloze="1" class="cloze-editor-mark">text</span> */
 function clozeToEditor(html: string): string {
-  return html.replace(/\{\{c(\d+)::(.+?)\}\}/g,
+  // First convert any remaining markdown to HTML
+  let result = markdownToHtml(html);
+  return result.replace(/\{\{c(\d+)::(.+?)\}\}/g,
     '<span data-cloze="$1" class="cloze-editor-mark">$2</span>');
 }
 /** Convert <span data-cloze="1" ...>text</span> → {{c1::text}} */
