@@ -7,8 +7,10 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, Sparkles, Loader2, ArrowRight } from 'lucide-react';
 import RichEditor from '@/components/RichEditor';
+import iconClozeOcclusion from '@/assets/icon-cloze-occlusion.png';
+import iconAttachImage from '@/assets/icon-attach-image.png';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -24,8 +26,8 @@ type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 const CARD_TYPES: { value: EditorCardType; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'basic', label: 'Texto', icon: <MessageSquareText className="h-5 w-5 text-primary" />, desc: 'Pergunta na frente, resposta no verso' },
   { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-warning" />, desc: 'Pergunta com alternativas' },
-  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
+  { value: 'cloze', label: 'Cloze', icon: <img src={iconClozeOcclusion} alt="Cloze" className="h-5 w-5 dark:invert" />, desc: 'Texto com lacunas para preencher' },
+  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <img src={iconAttachImage} alt="Oclusão" className="h-5 w-5 dark:invert" />, desc: 'Oculte partes de uma imagem' },
 ];
 
 const ManageDeck = () => {
