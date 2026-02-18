@@ -301,6 +301,7 @@ export type Database = {
           parent_deck_id: string | null
           requested_retention: number
           shuffle_cards: boolean
+          sort_order: number
           source_listing_id: string | null
           source_turma_deck_id: string | null
           updated_at: string
@@ -322,6 +323,7 @@ export type Database = {
           parent_deck_id?: string | null
           requested_retention?: number
           shuffle_cards?: boolean
+          sort_order?: number
           source_listing_id?: string | null
           source_turma_deck_id?: string | null
           updated_at?: string
@@ -343,6 +345,7 @@ export type Database = {
           parent_deck_id?: string | null
           requested_retention?: number
           shuffle_cards?: boolean
+          sort_order?: number
           source_listing_id?: string | null
           source_turma_deck_id?: string | null
           updated_at?: string
@@ -663,6 +666,7 @@ export type Database = {
           is_archived: boolean
           name: string
           parent_id: string | null
+          sort_order: number
           updated_at: string
           user_id: string
         }
@@ -672,6 +676,7 @@ export type Database = {
           is_archived?: boolean
           name: string
           parent_id?: string | null
+          sort_order?: number
           updated_at?: string
           user_id: string
         }
@@ -681,6 +686,7 @@ export type Database = {
           is_archived?: boolean
           name?: string
           parent_id?: string | null
+          sort_order?: number
           updated_at?: string
           user_id?: string
         }
@@ -1036,6 +1042,7 @@ export type Database = {
           price: number
           price_type: string
           shared_by: string
+          sort_order: number
           subject_id: string | null
           turma_id: string
         }
@@ -1049,6 +1056,7 @@ export type Database = {
           price?: number
           price_type?: string
           shared_by: string
+          sort_order?: number
           subject_id?: string | null
           turma_id: string
         }
@@ -1062,6 +1070,7 @@ export type Database = {
           price?: number
           price_type?: string
           shared_by?: string
+          sort_order?: number
           subject_id?: string | null
           turma_id?: string
         }
@@ -1351,6 +1360,7 @@ export type Database = {
           id: string
           lesson_id: string
           price_type: string
+          sort_order: number
           turma_id: string
           uploaded_by: string
         }
@@ -1364,6 +1374,7 @@ export type Database = {
           id?: string
           lesson_id: string
           price_type?: string
+          sort_order?: number
           turma_id: string
           uploaded_by: string
         }
@@ -1377,6 +1388,7 @@ export type Database = {
           id?: string
           lesson_id?: string
           price_type?: string
+          sort_order?: number
           turma_id?: string
           uploaded_by?: string
         }

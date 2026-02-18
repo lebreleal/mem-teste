@@ -47,6 +47,11 @@ export const useFolders = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
   });
 
+  const reorderFolders = useMutation({
+    mutationFn: (orderedIds: string[]) => folderService.reorderFolders(orderedIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
+  });
+
   return {
     folders: foldersQuery.data ?? [],
     isLoading: foldersQuery.isLoading,
@@ -55,5 +60,6 @@ export const useFolders = () => {
     deleteFolder,
     archiveFolder,
     moveFolder,
+    reorderFolders,
   };
 };

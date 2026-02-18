@@ -28,12 +28,14 @@ import {
   Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
   Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
   Copy, Link2, ClipboardList, Users, Clock, Import,
-  CheckCheck, X, ArrowUpRight,
+  CheckCheck, X, ArrowUpRight, GripVertical,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import PdfCanvasViewer from '@/components/lesson-detail/PdfCanvasViewer';
+import { useDragReorder } from '@/hooks/useDragReorder';
+import * as turmaService from '@/services/turmaService';
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -89,7 +91,8 @@ const ContentTab = () => {
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
 
   // ── Data derivation ──
-  const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId);
+  const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
   // All lessons for the current subject (used for fetching files)
   const lessonsForSubject = contentFolderId === null
@@ -122,13 +125,43 @@ const ContentTab = () => {
         : lessons.filter(l => l.subject_id === contentFolderId).map(l => l.id);
       if (ids.length === 0) return [];
       const { data } = await supabase.from('turma_lesson_files' as any)
-        .select('*').in('lesson_id', ids).order('created_at', { ascending: false });
+        .select('*').in('lesson_id', ids).order('sort_order', { ascending: true });
       return (data ?? []) as any[];
     },
     enabled: !!turmaId,
   });
 
   const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0 || currentExams.length > 0;
+
+  // ── Drag-to-reorder ──
+  const reorderSubjectsMut = useMutation({
+    mutationFn: (ids: string[]) => turmaService.reorderSubjects(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-subjects', turmaId] }),
+  });
+  const reorderFilesMut = useMutation({
+    mutationFn: (ids: string[]) => turmaService.reorderTurmaFiles(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }),
+  });
+  const reorderDecksMut = useMutation({
+    mutationFn: (ids: string[]) => turmaService.reorderTurmaDecks(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] }),
+  });
+
+  const folderDrag = useDragReorder({
+    items: currentFolders,
+    getId: (s: any) => s.id,
+    onReorder: (reordered) => reorderSubjectsMut.mutate(reordered.map((s: any) => s.id)),
+  });
+  const fileDrag = useDragReorder({
+    items: currentFiles,
+    getId: (f: any) => f.id,
+    onReorder: (reordered) => reorderFilesMut.mutate(reordered.map((f: any) => f.id)),
+  });
+  const deckDrag = useDragReorder({
+    items: currentDecks,
+    getId: (d: any) => d.id,
+    onReorder: (reordered) => reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
+  });
 
   // ── Auto-create default lesson for file uploads ──
   const getOrCreateDefaultLesson = async (): Promise<string> => {
@@ -626,6 +659,7 @@ const ContentTab = () => {
         <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
           {/* Subject folders */}
           {currentFolders.map(subject => {
+            const fHandlers = canEdit ? folderDrag.getHandlers(subject) : null;
             const childFolders = subjects.filter((s: any) => s.parent_id === subject.id);
             const childLessons = lessons.filter(l => l.subject_id === subject.id);
             const totalItems = childFolders.length;
@@ -635,8 +669,16 @@ const ContentTab = () => {
             const totalAttachments = (ctx.lessonFiles as any[]).filter(f => childLessonIds.includes(f.lesson_id)).length;
             const relatedExams = turmaExams.filter((e: any) => e.subject_id === subject.id || (e.lesson_id && childLessonIds.includes(e.lesson_id)));
             return (
-              <div key={subject.id} className="group flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-muted/50"
+              <div key={subject.id}
+                {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
+                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
+                {canEdit && !selectionMode && (
+                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                    onMouseDown={(e) => e.stopPropagation()}>
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`subject::${subject.id}`)} onCheckedChange={() => toggleItem(`subject::${subject.id}`)} />
@@ -689,6 +731,7 @@ const ContentTab = () => {
 
           {/* Files */}
           {currentFiles.map((file: any) => {
+            const fhFile = canEdit ? fileDrag.getHandlers(file) : null;
             const Icon = getFileIcon(file.file_type);
             const isImage = file.file_type?.startsWith('image/');
             const isPdf = file.file_type?.includes('pdf');
@@ -696,8 +739,16 @@ const ContentTab = () => {
             const filePriceType = file.price_type || 'free';
             const fileRestricted = filePriceType !== 'free' && !isSubscriber && !isAdmin && !isMod;
             return (
-              <div key={file.id} className="group flex items-center gap-3 px-5 py-4"
+              <div key={file.id}
+                {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
+                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
+                {canEdit && !selectionMode && (
+                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                    onMouseDown={(e) => e.stopPropagation()}>
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`file::${file.id}`)} onCheckedChange={() => toggleItem(`file::${file.id}`)} />
@@ -762,6 +813,7 @@ const ContentTab = () => {
 
           {/* Decks */}
           {currentDecks.map((td: any) => {
+            const dhDeck = canEdit ? deckDrag.getHandlers(td) : null;
             const isOwner = td.shared_by === user?.id;
             const alreadyLinked = userHasLinkedDeck(td.id);
             const alreadyOwns = userOwnsDeck(td.deck_id);
@@ -770,8 +822,16 @@ const ContentTab = () => {
             const inCollection = alreadyOwns || alreadyLinked;
             const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
             return (
-              <div key={td.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50"
+              <div key={td.id}
+                {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
+                className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
+                {canEdit && !selectionMode && (
+                  <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                    onMouseDown={(e) => e.stopPropagation()}>
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                )}
                 {selectionMode && (
                   <div className="shrink-0" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedItems.has(`deck::${td.id}`)} onCheckedChange={() => toggleItem(`deck::${td.id}`)} />
@@ -832,8 +892,14 @@ const ContentTab = () => {
 
           {/* Exams */}
           {currentExams.map((exam: any) => (
-            <div key={exam.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50"
+            <div key={exam.id} className="group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50"
               onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
+              {canEdit && !selectionMode && (
+                <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                  onMouseDown={(e) => e.stopPropagation()}>
+                  <GripVertical className="h-4 w-4" />
+                </div>
+              )}
               {selectionMode && (
                 <div className="shrink-0" onClick={e => e.stopPropagation()}>
                   <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />

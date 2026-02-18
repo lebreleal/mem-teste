@@ -1,5 +1,5 @@
 /**
- * DeckRow — a single deck item in the dashboard list with context menu.
+ * DeckRow — a single deck item in the dashboard list with context menu and drag handle.
  */
 
 import { useNavigate } from 'react-router-dom';
@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2,
+  ChevronRight, Link2, GripVertical,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
+import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 
 interface DeckRowProps {
   deck: DeckWithStats;
@@ -30,13 +31,14 @@ interface DeckRowProps {
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
+  dragHandlers?: DragReorderHandlers;
 }
 
 const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onMove, onArchive, onDelete,
+  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -46,13 +48,32 @@ const DeckRow = ({
   const totalDue = stats.new_count + stats.learning_count + stats.review_count;
   const isDeckSelected = selectedDeckIds.has(deck.id);
 
+  const basePadding = depth === 0 ? 8 : 20 + depth * 24;
+
   return (
     <>
       <div
-        className={`group flex items-center gap-3 px-5 py-4 cursor-pointer transition-colors ${isDeckSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
-        style={{ paddingLeft: `${20 + depth * 24}px` }}
+        {...(depth === 0 && dragHandlers ? {
+          draggable: dragHandlers.draggable,
+          onDragStart: dragHandlers.onDragStart,
+          onDragOver: dragHandlers.onDragOver,
+          onDragEnter: dragHandlers.onDragEnter,
+          onDragLeave: dragHandlers.onDragLeave,
+          onDrop: dragHandlers.onDrop,
+          onDragEnd: dragHandlers.onDragEnd,
+        } : {})}
+        className={`group flex items-center gap-3 px-2 sm:px-5 py-4 cursor-pointer transition-all ${isDeckSelected ? 'bg-primary/10' : 'hover:bg-muted/50'} ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
+        style={{ paddingLeft: `${basePadding}px` }}
         onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(`/decks/${deck.id}`)}
       >
+        {depth === 0 && (
+          <div
+            className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        )}
         {deckSelectionMode && (
           <div className="shrink-0" onClick={e => e.stopPropagation()}>
             <Checkbox checked={isDeckSelected} onCheckedChange={() => toggleDeckSelection(deck.id)} />
