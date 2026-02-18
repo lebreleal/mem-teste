@@ -270,6 +270,8 @@ const Dashboard = () => {
           onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); }}
           onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
           onDeleteDeck={(d) => state.setDeleteTarget({ type: 'deck', id: d.id, name: d.name })}
+          onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
+          onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
         />
 
         {/* Archived section */}

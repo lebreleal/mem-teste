@@ -12,6 +12,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     .from('decks')
     .select('*')
     .eq('user_id', userId)
+    .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false });
   if (error) throw error;
 
@@ -269,6 +270,14 @@ export async function duplicateDeck(userId: string, id: string) {
     await supabase.from('cards').insert(newCards as any);
   }
   return newDeck;
+}
+
+/** Batch-update sort_order for a list of deck IDs. */
+export async function reorderDecks(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('decks').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
 }
 
 /** Reset all card progress in a deck. */

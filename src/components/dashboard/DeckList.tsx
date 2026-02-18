@@ -1,11 +1,12 @@
 /**
  * Renders the list of folders and decks in the current view.
  * Includes pending (background-generating) decks as ghost items.
+ * Supports drag-to-reorder via grip handles.
  */
 
 import {
   FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2, Loader2
+  ChevronRight, GraduationCap, Link2, Loader2, GripVertical
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +15,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks } from '@/stores/usePendingDecks';
+import { useDragReorder } from '@/hooks/useDragReorder';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
 interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
@@ -48,16 +50,32 @@ interface DeckListProps {
   onMoveDeck: (deck: DeckWithStats) => void;
   onArchiveDeck: (id: string) => void;
   onDeleteDeck: (deck: DeckWithStats) => void;
+
+  // Reorder callbacks
+  onReorderFolders?: (reordered: Folder[]) => void;
+  onReorderDecks?: (reordered: DeckWithStats[]) => void;
 }
 
 const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId,
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
-  navigateToCommunity,
+  navigateToCommunity, onReorderFolders, onReorderDecks,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
+
+  const folderDrag = useDragReorder({
+    items: currentFolders,
+    getId: (f) => f.id,
+    onReorder: (reordered) => onReorderFolders?.(reordered),
+  });
+
+  const deckDrag = useDragReorder({
+    items: currentDecks,
+    getId: (d) => d.id,
+    onReorder: (reordered) => onReorderDecks?.(reordered),
+  });
 
   // Filter pending decks for current folder
   const visiblePending = pendingDecks.filter(p => p.folderId === (currentFolderId ?? null));
@@ -124,72 +142,86 @@ const DeckList = ({
       })}
 
       {/* Folders */}
-      {currentFolders.map(folder => (
-        <div
-          key={folder.id}
-          className="group flex items-center gap-3 px-5 py-4 hover:bg-muted/50 transition-colors cursor-pointer"
-          onClick={() => onFolderClick(folder.id)}
-        >
-          <FolderOpen className="h-6 w-6 text-primary fill-primary/10 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h3 className="font-display font-semibold text-foreground truncate">{folder.name}</h3>
+      {currentFolders.map(folder => {
+        const dragHandlers = folderDrag.getHandlers(folder);
+        return (
+          <div
+            key={folder.id}
+            {...dragHandlers}
+            className={`group flex items-center gap-3 px-2 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers.className}`}
+            onClick={() => onFolderClick(folder.id)}
+          >
+            <div
+              className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+            <FolderOpen className="h-6 w-6 text-primary fill-primary/10 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-display font-semibold text-foreground truncate">{folder.name}</h3>
+                {(() => {
+                  const linkId = getFolderCommunityLinkId(folder.id);
+                  return linkId ? (
+                    <button className="shrink-0 text-info hover:text-info/70 transition-colors" onClick={(e) => { e.stopPropagation(); navigateToCommunity(linkId); }} title="Ver na comunidade">
+                      <Link2 className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null;
+                })()}
+              </div>
               {(() => {
-                const linkId = getFolderCommunityLinkId(folder.id);
-                return linkId ? (
-                  <button className="shrink-0 text-info hover:text-info/70 transition-colors" onClick={(e) => { e.stopPropagation(); navigateToCommunity(linkId); }} title="Ver na comunidade">
-                    <Link2 className="h-3.5 w-3.5" />
-                  </button>
-                ) : null;
+                const due = getFolderDueCount(folder.id);
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    {due > 0 ? `Cartões para hoje: ${due}` : 'Pasta'}
+                  </p>
+                );
               })()}
             </div>
-            {(() => {
-              const due = getFolderDueCount(folder.id);
-              return (
-                <p className="text-xs text-muted-foreground">
-                  {due > 0 ? `Cartões para hoje: ${due}` : 'Pasta'}
-                </p>
-              );
-            })()}
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onRenameFolder(folder)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Renomear
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMoveFolder(folder)}>
+                    <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onArchiveFolder(folder.id)}>
+                    <Archive className="mr-2 h-4 w-4" /> Arquivar
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDeleteFolder(folder)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </div>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onRenameFolder(folder)}>
-                  <Pencil className="mr-2 h-4 w-4" /> Renomear
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onMoveFolder(folder)}>
-                  <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onArchiveFolder(folder.id)}>
-                  <Archive className="mr-2 h-4 w-4" /> Arquivar
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDeleteFolder(folder)}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        </div>
-      ))}
+        );
+      })}
 
       {/* Decks */}
-      {currentDecks.map(deck => (
-        <DeckRow
-          key={deck.id}
-          deck={deck}
-          onMove={onMoveDeck}
-          onArchive={onArchiveDeck}
-          onDelete={onDeleteDeck}
-          navigateToCommunity={navigateToCommunity}
-          {...deckRowProps}
-        />
-      ))}
+      {currentDecks.map(deck => {
+        const dragHandlers = deckDrag.getHandlers(deck);
+        return (
+          <DeckRow
+            key={deck.id}
+            deck={deck}
+            onMove={onMoveDeck}
+            onArchive={onArchiveDeck}
+            onDelete={onDeleteDeck}
+            navigateToCommunity={navigateToCommunity}
+            dragHandlers={dragHandlers}
+            {...deckRowProps}
+          />
+        );
+      })}
     </div>
   );
 };

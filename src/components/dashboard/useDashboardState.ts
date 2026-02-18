@@ -10,8 +10,8 @@ import { useFolders } from '@/hooks/useFolders';
 export interface BreadcrumbItem { id: string | null; name: string }
 
 export function useDashboardState() {
-  const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck } = useDecks();
-  const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder } = useFolders();
+  const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
+  const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const currentFolderId = searchParams.get('folder') || null;
@@ -69,12 +69,14 @@ export function useDashboardState() {
   }, [currentFolderId, folders]);
 
   const currentFolders = useMemo(
-    () => folders.filter(f => f.parent_id === currentFolderId && !f.is_archived),
+    () => folders.filter(f => f.parent_id === currentFolderId && !f.is_archived)
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [folders, currentFolderId]
   );
 
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived),
+    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [decks, currentFolderId]
   );
 
@@ -181,8 +183,8 @@ export function useDashboardState() {
     expandedDecks, toggleExpand,
 
     // Mutations
-    createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck,
-    createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder,
+    createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks,
+    createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders,
 
     // Dialog states
     createType, setCreateType, createName, setCreateName,

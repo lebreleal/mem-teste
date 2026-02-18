@@ -209,6 +209,30 @@ export async function updateDeckPricing(id: string, params: { price: number; pri
   const { error } = await supabase.from('turma_decks').update(updateData).eq('id', id); if (error) throw error;
 }
 export async function unshareDeck(id: string) { const { error } = await supabase.from('turma_decks').delete().eq('id', id); if (error) throw error; }
+
+/** Batch-update sort_order for turma subjects. */
+export async function reorderSubjects(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('turma_subjects').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
+/** Batch-update sort_order for turma decks. */
+export async function reorderTurmaDecks(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('turma_decks').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
+/** Batch-update sort_order for turma lesson files. */
+export async function reorderTurmaFiles(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('turma_lesson_files').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
 export async function changeMemberRole(turmaId: string, userId: string, role: TurmaRole) {
   const { error } = await supabase.from('turma_members').update({ role } as any).eq('turma_id', turmaId).eq('user_id', userId); if (error) throw error;
 }

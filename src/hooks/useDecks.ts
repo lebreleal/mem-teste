@@ -56,6 +56,11 @@ export const useDecks = () => {
     },
   });
 
+  const reorderDecks = useMutation({
+    mutationFn: (orderedIds: string[]) => deckService.reorderDecks(orderedIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['decks'] }),
+  });
+
   return {
     decks: decksQuery.data ?? [],
     isLoading: decksQuery.isLoading,
@@ -65,5 +70,6 @@ export const useDecks = () => {
     archiveDeck,
     duplicateDeck,
     resetProgress,
+    reorderDecks,
   };
 };

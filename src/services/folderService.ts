@@ -9,6 +9,7 @@ export async function fetchFolders(userId: string): Promise<Folder[]> {
   const { data, error } = await supabase
     .from('folders')
     .select('*')
+    .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
   if (error) throw error;
   return (data ?? []) as Folder[];
@@ -43,4 +44,12 @@ export async function archiveFolder(id: string) {
 export async function moveFolder(id: string, parentId: string | null) {
   const { error } = await supabase.from('folders').update({ parent_id: parentId } as any).eq('id', id);
   if (error) throw error;
+}
+
+/** Batch-update sort_order for a list of folder IDs. */
+export async function reorderFolders(orderedIds: string[]) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('folders').update({ sort_order: i } as any).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
 }
