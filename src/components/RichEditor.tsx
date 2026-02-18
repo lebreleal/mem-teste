@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -8,7 +8,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Heading2,
   List, ListOrdered, Code, Volume2, Palette, ImagePlus, Braces, ScanEye,
-  ClipboardPaste, Paperclip,
+  ClipboardPaste, Paperclip, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -41,6 +41,8 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   const { toast } = useToast();
   const [colorOpen, setColorOpen] = useState(false);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
+  const [clozeCounter, setClozeCounter] = useState(1);
+  const [clozeActive, setClozeActive] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -59,10 +61,24 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     },
   });
 
-  // Sync editor content when prop changes externally (e.g. AI improve apply)
+  // Sync editor content when prop changes externally
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });
+    }
+  }, [content, editor]);
+
+  // Sync cloze counter from content
+  useEffect(() => {
+    if (!editor) return;
+    const plainText = editor.state.doc.textContent;
+    const matches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
+    if (matches.length > 0) {
+      const maxNum = Math.max(...matches.map(m => parseInt(m[1])));
+      setClozeCounter(maxNum);
+    } else {
+      setClozeCounter(1);
+      setClozeActive(false);
     }
   }, [content, editor]);
 
@@ -136,20 +152,31 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     input.click();
   };
 
-  const handleCloze = () => {
+  /** Insert cloze with current counter number */
+  const handleCloze = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     if (from === to) {
       toast({ title: 'Selecione um texto para criar a lacuna', variant: 'destructive' }); return;
     }
     const selectedText = editor.state.doc.textBetween(from, to);
-    // Use plain text content to reliably detect existing cloze numbers (HTML tags can break regex)
-    const plainText = editor.state.doc.textContent;
-    const clozeMatches = [...plainText.matchAll(/\{\{c(\d+)::/g)];
-    const existingNumbers = clozeMatches.map(m => parseInt(m[1]));
-    const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    editor.chain().focus().deleteSelection().insertContent(`{{c${clozeCounter}::${selectedText}}}`).run();
+    setClozeActive(true);
+  }, [editor, clozeCounter, toast]);
+
+  /** Increment counter and insert cloze with new number */
+  const handleClozeNext = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      toast({ title: 'Selecione um texto para criar a lacuna', variant: 'destructive' }); return;
+    }
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const nextNum = clozeCounter + 1;
     editor.chain().focus().deleteSelection().insertContent(`{{c${nextNum}::${selectedText}}}`).run();
-  };
+    setClozeCounter(nextNum);
+    setClozeActive(true);
+  }, [editor, clozeCounter, toast]);
 
   const handleSetColor = (color: string) => {
     if (!editor) return;
@@ -165,7 +192,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
 
   const ToolBtn = ({ onClick, active, children, title }: { onClick: () => void; active?: boolean; children: React.ReactNode; title?: string }) => (
     <Button type="button" variant="ghost" size="icon"
-      className={`h-7 w-7 ${active ? 'bg-accent text-accent-foreground' : ''}`}
+      className={`h-7 w-7 transition-all ${active ? 'bg-primary/15 text-primary ring-1 ring-primary/40' : ''}`}
       onClick={onClick} title={title}
     >
       {children}
@@ -177,7 +204,7 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
   return (
     <div className="rounded-lg border border-input bg-card">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-2 py-1">
-        {/* Special tools first - matching reference image order */}
+        {/* Special tools first */}
         <DropdownMenu open={imageMenuOpen} onOpenChange={setImageMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Inserir imagem">
@@ -193,9 +220,20 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <ToolBtn onClick={handleCloze} title="Cloze (selecione texto)">
+
+        {/* Cloze same number button */}
+        <ToolBtn onClick={handleCloze} active={clozeActive} title={`Cloze c${clozeCounter} (mesmo número)`}>
           <Braces className="h-3.5 w-3.5" />
         </ToolBtn>
+
+        {/* Cloze next number button */}
+        <ToolBtn onClick={handleClozeNext} title={`Novo cloze c${clozeCounter + 1} (próximo número)`}>
+          <span className="relative flex items-center justify-center">
+            <Braces className="h-3.5 w-3.5" />
+            <Plus className="h-2 w-2 absolute -top-0.5 -right-1 text-primary" strokeWidth={3} />
+          </span>
+        </ToolBtn>
+
         {onOcclusionPaste && onOcclusionAttach && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
