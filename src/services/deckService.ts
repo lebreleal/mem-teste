@@ -53,21 +53,20 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
 
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
-    const dailyNewLimit = deck.daily_new_limit ?? 20;
-    const dailyReviewLimit = deck.daily_review_limit ?? 100;
     return {
       ...deck,
       folder_id: deck.folder_id ?? null,
       parent_deck_id: deck.parent_deck_id ?? null,
       is_archived: deck.is_archived ?? false,
-      new_count: Math.max(0, Math.min(s.new_count, dailyNewLimit - s.new_reviewed_today)),
+      // Return RAW stats — capping happens in the dashboard with root-aware logic
+      new_count: s.new_count,
       learning_count: s.learning_count,
-      review_count: Math.min(s.review_count, Math.max(0, dailyReviewLimit - (s.reviewed_today - s.new_graduated_today))),
+      review_count: s.review_count,
       reviewed_today: s.reviewed_today,
       new_reviewed_today: s.new_reviewed_today,
       new_graduated_today: s.new_graduated_today,
-      daily_new_limit: dailyNewLimit,
-      daily_review_limit: dailyReviewLimit,
+      daily_new_limit: deck.daily_new_limit ?? 20,
+      daily_review_limit: deck.daily_review_limit ?? 100,
       source_listing_id: deck.source_listing_id ?? null,
       source_author: deck.source_listing_id ? (authorMap.get(deck.source_listing_id) ?? null) : null,
       source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,

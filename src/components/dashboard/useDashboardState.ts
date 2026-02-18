@@ -127,13 +127,26 @@ export function useDashboardState() {
     return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
   };
 
-  /** Aggregates descendant counts then caps using THIS deck's limits */
+  /** Aggregates descendant counts then caps using ROOT ancestor's limits */
   const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const raw = getRawAggregateStats(deck);
-    const dailyNewLimit = deck.daily_new_limit ?? 20;
-    const dailyReviewLimit = deck.daily_review_limit ?? 100;
-    const effectiveNew = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
-    const reviewReviewedToday = Math.max(0, raw.reviewed - raw.newGraduated);
+
+    // Find root ancestor — its config governs the entire hierarchy
+    let rootDeck = deck;
+    while (rootDeck.parent_deck_id) {
+      const parent = decks.find(d => d.id === rootDeck.parent_deck_id);
+      if (!parent) break;
+      rootDeck = parent;
+    }
+
+    const dailyNewLimit = rootDeck.daily_new_limit ?? 20;
+    const dailyReviewLimit = rootDeck.daily_review_limit ?? 100;
+
+    // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
+    const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
+
+    const effectiveNew = Math.max(0, Math.min(raw.new_count, dailyNewLimit - rootRaw.newReviewed));
+    const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
     const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
     return { new_count: effectiveNew, learning_count: raw.learning_count, review_count: effectiveReview, reviewed_today: raw.reviewed };
   };
