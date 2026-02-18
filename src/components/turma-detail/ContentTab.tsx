@@ -1,17 +1,18 @@
 /**
  * ContentTab – unified content view: subject folders + files + decks + exams.
- * No more intermediate "lesson" step – content shows directly.
+ * Orchestrator component that delegates to sub-components and hooks.
  */
 
-import { useState, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
-import { useDecks } from '@/hooks/useDecks';
-import { useFolders } from '@/hooks/useFolders';
+import { useContentMutations } from './content/useContentMutations';
+import { useContentImport } from './content/useContentImport';
+import { useDragReorder } from '@/hooks/useDragReorder';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -34,8 +35,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import PdfCanvasViewer from '@/components/lesson-detail/PdfCanvasViewer';
-import { useDragReorder } from '@/hooks/useDragReorder';
-import * as turmaService from '@/services/turmaService';
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -60,13 +59,10 @@ const ContentTab = () => {
     setEditingSubject, setEditItemName,
   } = ctx;
 
-  const queryClient = useQueryClient();
-  const { decks: userDecks } = useDecks();
-  const { folders, createFolder } = useFolders();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const contentMut = useContentMutations();
+  const importLogic = useContentImport();
 
   // ── Local state ──
-  const [uploading, setUploading] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [selectedDeckId, setSelectedDeckId] = useState('');
@@ -80,12 +76,9 @@ const ContentTab = () => {
   const [previewDeck, setPreviewDeck] = useState<any>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewRestricted, setPdfPreviewRestricted] = useState(false);
-  const [showImportExam, setShowImportExam] = useState(false);
-  const [importingExamId, setImportingExamId] = useState<string | null>(null);
   const [editingFile, setEditingFile] = useState<any>(null);
   const [editFileName, setEditFileName] = useState('');
   const [editFilePriceType, setEditFilePriceType] = useState('free');
-  const [confirmResync, setConfirmResync] = useState<any>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
@@ -95,13 +88,11 @@ const ContentTab = () => {
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
     .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  // All lessons for the current subject (used for fetching files)
   const lessonsForSubject = contentFolderId === null
     ? lessons.filter(l => !l.subject_id)
     : lessons.filter(l => l.subject_id === contentFolderId);
   const lessonIdsForSubject = lessonsForSubject.map(l => l.id);
 
-  // Decks at current level (directly shared + via lessons)
   const currentDecks = contentFolderId === null
     ? turmaDecks.filter(d => !d.lesson_id && !d.subject_id)
     : turmaDecks.filter(d =>
@@ -109,7 +100,6 @@ const ContentTab = () => {
         (d.lesson_id && lessonIdsForSubject.includes(d.lesson_id))
       );
 
-  // Exams at current level
   const currentExams = contentFolderId === null
     ? turmaExams.filter((e: any) => !e.lesson_id && !e.subject_id)
     : turmaExams.filter((e: any) =>
@@ -117,7 +107,6 @@ const ContentTab = () => {
         (e.lesson_id && lessonIdsForSubject.includes(e.lesson_id))
       );
 
-  // Files from lessons in current subject
   const { data: currentFiles = [] } = useQuery({
     queryKey: ['turma-content-files', turmaId, contentFolderId],
     queryFn: async () => {
@@ -135,242 +124,29 @@ const ContentTab = () => {
   const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0 || currentExams.length > 0;
 
   // ── Drag-to-reorder ──
-  const reorderSubjectsMut = useMutation({
-    mutationFn: (ids: string[]) => turmaService.reorderSubjects(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-subjects', turmaId] }),
-  });
-  const reorderFilesMut = useMutation({
-    mutationFn: (ids: string[]) => turmaService.reorderTurmaFiles(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }),
-  });
-  const reorderDecksMut = useMutation({
-    mutationFn: (ids: string[]) => turmaService.reorderTurmaDecks(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] }),
-  });
-
   const folderDrag = useDragReorder({
     items: currentFolders,
     getId: (s: any) => s.id,
-    onReorder: (reordered) => reorderSubjectsMut.mutate(reordered.map((s: any) => s.id)),
+    onReorder: (reordered) => contentMut.reorderSubjectsMut.mutate(reordered.map((s: any) => s.id)),
   });
   const fileDrag = useDragReorder({
     items: currentFiles,
     getId: (f: any) => f.id,
-    onReorder: (reordered) => reorderFilesMut.mutate(reordered.map((f: any) => f.id)),
+    onReorder: (reordered) => contentMut.reorderFilesMut.mutate(reordered.map((f: any) => f.id)),
   });
   const deckDrag = useDragReorder({
     items: currentDecks,
     getId: (d: any) => d.id,
-    onReorder: (reordered) => reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
+    onReorder: (reordered) => contentMut.reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
   });
 
-  // ── Auto-create default lesson for file uploads ──
-  const getOrCreateDefaultLesson = async (): Promise<string> => {
-    const existing = contentFolderId === null
-      ? lessons.find(l => !l.subject_id)
-      : lessons.find(l => l.subject_id === contentFolderId);
-    if (existing) return existing.id;
-    const name = contentFolderId
-      ? subjects.find(s => s.id === contentFolderId)?.name || 'Conteúdo'
-      : 'Geral';
-    const { data, error } = await supabase.from('turma_lessons' as any).insert({
-      turma_id: turmaId, subject_id: contentFolderId, name, created_by: user!.id, is_published: true,
-    } as any).select().single();
-    if (error) throw error;
-    queryClient.invalidateQueries({ queryKey: ['turma-lessons', turmaId] });
-    return (data as any).id;
+  // ── Selection helpers ──
+  const toggleItem = (key: string) => {
+    setSelectedItems(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   };
+  const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
 
-  // ── File mutations ──
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList?.length || !user || !turmaId) return;
-    setUploading(true);
-    try {
-      const lessonId = await getOrCreateDefaultLesson();
-      for (const file of Array.from(fileList)) {
-        if (file.size > 20 * 1024 * 1024) {
-          toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
-          continue;
-        }
-        const filePath = `${user.id}/${turmaId}/${lessonId}/${Date.now()}_${file.name}`;
-        const { error: uploadError } = await supabase.storage.from('lesson-files').upload(filePath, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
-        await supabase.from('turma_lesson_files' as any).insert({
-          lesson_id: lessonId, turma_id: turmaId, file_name: file.name,
-          file_url: urlData.publicUrl, file_size: file.size, file_type: file.type, uploaded_by: user.id,
-        } as any);
-      }
-      queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
-      toast({ title: 'Arquivo(s) enviado(s)!' });
-    } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const deleteFile = useMutation({
-    mutationFn: async (fileId: string) => {
-      const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Arquivo removido' }); },
-    onError: (err: any) => toast({ title: 'Erro ao remover arquivo', description: err.message, variant: 'destructive' }),
-  });
-
-  const updateFileVisibility = useMutation({
-    mutationFn: async ({ fileId, pt }: { fileId: string; pt: string }) => {
-      const { error } = await supabase.from('turma_lesson_files' as any).update({ price_type: pt } as any).eq('id', fileId);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Visibilidade atualizada!' }); },
-    onError: (err: any) => toast({ title: 'Erro ao atualizar', description: err.message, variant: 'destructive' }),
-  });
-
-  const renameFileMut = useMutation({
-    mutationFn: async ({ fileId, newName }: { fileId: string; newName: string }) => {
-      const { error } = await supabase.from('turma_lesson_files' as any).update({ file_name: newName } as any).eq('id', fileId);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Nome atualizado!' }); },
-    onError: (err: any) => toast({ title: 'Erro ao renomear', description: err.message, variant: 'destructive' }),
-  });
-
-  const handleSaveFile = () => {
-    if (!editingFile) return;
-    const nameChanged = editFileName.trim() && editFileName.trim() !== editingFile.file_name;
-    const visChanged = editFilePriceType !== (editingFile.price_type || 'free');
-    if (nameChanged) renameFileMut.mutate({ fileId: editingFile.id, newName: editFileName.trim() });
-    if (visChanged) updateFileVisibility.mutate({ fileId: editingFile.id, pt: editFilePriceType });
-    setEditingFile(null);
-  };
-
-  // ── Deck helpers ──
-  const userOwnsDeck = (deckId: string) => userDecks.some(d => d.id === deckId);
-  const userHasLinkedDeck = (turmaDeckId: string) => userDecks.some(d => (d as any).source_turma_deck_id === turmaDeckId && !d.is_archived);
-  const isDeckFree = (td: any) => !td.price_type || td.price_type === 'free';
-  const canAccessDeck = (td: any) => {
-    if (isDeckFree(td)) return true;
-    if (td.shared_by === user?.id || userOwnsDeck(td.deck_id)) return true;
-    if (isAdmin || isMod || isSubscriber) return true;
-    return false;
-  };
-
-  const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
-  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
-
-  const resolveNameConflict = (baseName: string, existingNames: string[]): string => {
-    if (!existingNames.includes(baseName)) return baseName;
-    let suffix = 1;
-    let candidate = `${baseName} (cópia)`;
-    while (existingNames.includes(candidate)) { suffix++; candidate = `${baseName} (cópia ${suffix})`; }
-    return candidate;
-  };
-
-  const addToCollection = useMutation({
-    mutationFn: async (td: any) => {
-      if (!user || !turma) throw new Error('Not authenticated');
-      if (!isDeckFree(td) && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) throw new Error('SUBSCRIBER_ONLY');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
-      const latestDecks = (freshDecks || []) as any[];
-      let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
-      if (turmaFolder && turmaFolder.is_archived) await supabase.from('folders').update({ is_archived: false } as any).eq('id', turmaFolder.id);
-      if (!turmaFolder) {
-        const existingFolderNames = folders.filter(f => !f.parent_id).map(f => f.name);
-        const folderName = resolveNameConflict(turma.name, existingFolderNames);
-        turmaFolder = await createFolder.mutateAsync({ name: folderName }) as any;
-      }
-      const subjectName = contentFolderId ? subjects.find(s => s.id === contentFolderId)?.name || 'Sem Matéria' : 'Sem Matéria';
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
-      if (!originalDeck) throw new Error('Deck não encontrado');
-      const od = originalDeck as any;
-
-      let parentDeck = latestDecks.find((d: any) => d.name === subjectName && d.folder_id === (turmaFolder as any).id && !d.parent_deck_id);
-      let parentDeckId: string | null = null;
-      if (!parentDeck) {
-        const existingParentNames = latestDecks.filter((d: any) => d.folder_id === (turmaFolder as any).id && !d.parent_deck_id).map((d: any) => d.name);
-        const parentName = resolveNameConflict(subjectName, existingParentNames);
-        const { data: newParent } = await supabase.from('decks').insert({ name: parentName, user_id: user.id, folder_id: (turmaFolder as any).id } as any).select().single();
-        parentDeckId = (newParent as any)?.id ?? null;
-      } else { parentDeckId = parentDeck.id; }
-
-      const existingLinked = latestDecks.find((d: any) => d.source_turma_deck_id === td.id);
-      if (existingLinked) {
-        if (existingLinked.is_archived) await supabase.from('decks').update({ is_archived: false } as any).eq('id', existingLinked.id);
-        if (existingLinked.parent_deck_id) {
-          const parent = latestDecks.find((d: any) => d.id === existingLinked.parent_deck_id);
-          if (parent?.is_archived) await supabase.from('decks').update({ is_archived: false } as any).eq('id', parent.id);
-        }
-        const { data: sourceCards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        const { data: userCards } = await supabase.from('cards').select('front_content, back_content').eq('deck_id', existingLinked.id);
-        const userCardKeys = new Set((userCards || []).map((c: any) => `${c.front_content}|||${c.back_content}`));
-        const missingCards = (sourceCards || []).filter((c: any) => !userCardKeys.has(`${c.front_content}|||${c.back_content}`));
-        if (missingCards.length > 0) {
-          await supabase.from('cards').insert(missingCards.map((c: any) => ({ deck_id: existingLinked.id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any);
-        }
-        if (!existingLinked.source_turma_deck_id) await supabase.from('decks').update({ source_turma_deck_id: td.id } as any).eq('id', existingLinked.id);
-        return { synced: true, count: missingCards.length, deckId: existingLinked.id, wasArchived: existingLinked.is_archived };
-      }
-
-      const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === parentDeckId).map((d: any) => d.name);
-      const childName = resolveNameConflict(od.name, existingChildNames);
-      const { data: newDeck } = await supabase.from('decks').insert({
-        name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
-        parent_deck_id: parentDeckId, algorithm_mode: od.algorithm_mode,
-        daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit, source_turma_deck_id: td.id,
-      } as any).select().single();
-      if (newDeck) {
-        const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any);
-      }
-      return newDeck;
-    },
-    onSuccess: (result: any) => {
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-      if (result?.synced) {
-        if (result.wasArchived) toast({ title: '✅ Baralho restaurado!', description: result.count > 0 ? `${result.count} cards novos adicionados.` : 'Desarquivado.' });
-        else if (result.count > 0) toast({ title: `✅ ${result.count} cards adicionados!` });
-        else toast({ title: 'Todos os cards já estão na sua coleção!' });
-      } else {
-        toast({ title: '✅ Baralho adicionado à sua coleção!', description: `Na pasta "${turma?.name}".` });
-      }
-    },
-    onError: (err: any) => {
-      if (err?.message === 'SUBSCRIBER_ONLY') toast({ title: 'Conteúdo exclusivo para assinantes', variant: 'destructive' });
-      else toast({ title: 'Erro ao adicionar baralho', variant: 'destructive' });
-    },
-  });
-
-  const downloadDeck = useMutation({
-    mutationFn: async (td: any) => {
-      if (!user || !turma) throw new Error('Not authenticated');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
-      const latestDecks = (freshDecks || []) as any[];
-      let turmaFolder = folders.find(f => f.name === turma.name && !f.parent_id);
-      if (!turmaFolder) { turmaFolder = await createFolder.mutateAsync({ name: turma.name }) as any; }
-      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
-      if (!originalDeck) throw new Error('Deck não encontrado');
-      const od = originalDeck as any;
-      const existingChildNames = latestDecks.filter((d: any) => d.folder_id === (turmaFolder as any).id).map((d: any) => d.name);
-      const childName = resolveNameConflict(od.name, existingChildNames);
-      const { data: newDeck } = await supabase.from('decks').insert({
-        name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
-        algorithm_mode: od.algorithm_mode, daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
-      } as any).select().single();
-      if (newDeck) {
-        const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any);
-      }
-      return newDeck;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['decks'] }); queryClient.invalidateQueries({ queryKey: ['folders'] }); toast({ title: 'Baralho baixado!' }); },
-    onError: () => toast({ title: 'Erro ao baixar', variant: 'destructive' }),
-  });
-
+  // ── Deck handlers ──
   const handleAddDeck = () => {
     if (!selectedDeckId) return;
     const finalPrice = priceType === 'free' ? 0 : Number(price) || 0;
@@ -390,167 +166,18 @@ const ContentTab = () => {
     });
   };
 
-  // ── Exam import (personal → turma) ──
-  const { data: personalExams = [], isLoading: loadingExams } = useQuery({
-    queryKey: ['personal-exams-for-import', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data } = await supabase.from('exams').select('id, title, total_points, time_limit_seconds, created_at')
-        .eq('user_id', user.id).order('created_at', { ascending: false });
-      return data ?? [];
-    },
-    enabled: showImportExam && !!user,
-  });
-
-  const personalExamIds = personalExams.map((e: any) => e.id);
-  const { data: personalQuestionCounts = {} } = useQuery({
-    queryKey: ['personal-exam-qcounts', personalExamIds],
-    queryFn: async () => {
-      if (personalExamIds.length === 0) return {};
-      const { data } = await supabase.from('exam_questions').select('exam_id').in('exam_id', personalExamIds);
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((q: any) => { counts[q.exam_id] = (counts[q.exam_id] || 0) + 1; });
-      return counts;
-    },
-    enabled: personalExamIds.length > 0,
-  });
-
-  const handleImportExamToTurma = async (exam: any) => {
-    setImportingExamId(exam.id);
-    try {
-      if (!user || !turmaId) return;
-      const { data: questions, error } = await supabase.from('exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      if (error) throw error;
-      if (!questions?.length) { toast({ title: 'Prova sem questões', variant: 'destructive' }); return; }
-      const { data: turmaExam, error: examError } = await supabase.from('turma_exams').insert({
-        turma_id: turmaId, created_by: user.id, title: exam.title || 'Prova Importada',
-        time_limit_seconds: exam.time_limit_seconds || null, is_published: true,
-        total_questions: questions.length, subject_id: contentFolderId,
-      } as any).select().single();
-      if (examError) throw examError;
-      const questionsToInsert = questions.map((q: any, idx: number) => ({
-        exam_id: (turmaExam as any).id, question_type: q.question_type, question_text: q.question_text,
-        options: q.options ?? null, correct_answer: q.correct_answer,
-        correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
-      }));
-      await supabase.from('turma_exam_questions').insert(questionsToInsert as any);
-      queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
-      toast({ title: 'Prova importada!' });
-      setShowImportExam(false);
-    } catch (err: any) {
-      toast({ title: 'Erro ao importar', description: err.message, variant: 'destructive' });
-    } finally { setImportingExamId(null); }
+  const handleSaveFile = () => {
+    if (!editingFile) return;
+    const nameChanged = editFileName.trim() && editFileName.trim() !== editingFile.file_name;
+    const visChanged = editFilePriceType !== (editingFile.price_type || 'free');
+    if (nameChanged) contentMut.renameFileMut.mutate({ fileId: editingFile.id, newName: editFileName.trim() });
+    if (visChanged) contentMut.updateFileVisibility.mutate({ fileId: editingFile.id, pt: editFilePriceType });
+    setEditingFile(null);
   };
-
-  // Open turma exam (import to personal)
-  const handleOpenExam = async (exam: any) => {
-    try {
-      const { data: existing } = await supabase.from('exams').select('id').eq('user_id', user!.id).eq('source_turma_exam_id', exam.id).limit(1);
-      if (existing?.length) { navigate(`/exam/${existing[0].id}`); return; }
-      const { data: questions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      const { data: userDecksList } = await supabase.from('decks').select('id').eq('user_id', user!.id).limit(1);
-      let deckId = userDecksList?.[0]?.id;
-      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user!.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
-      if (!deckId) throw new Error('Sem baralho disponível');
-      const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
-      const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
-        .insert({ user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending', total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null, source_turma_exam_id: exam.id })
-        .select().single();
-      if (examError) throw examError;
-      const questionsToInsert = (questions ?? []).map((q: any, idx: number) => ({
-        exam_id: newExam.id, question_type: q.question_type, question_text: q.question_text,
-        options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
-      }));
-      await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
-      queryClient.invalidateQueries({ queryKey: ['exams'] });
-      toast({ title: 'Prova importada!' });
-      navigate(`/exam/${newExam.id}`);
-    } catch (err: any) { toast({ title: 'Erro ao abrir prova', description: err.message, variant: 'destructive' }); }
-  };
-
-  // ── Selection / Organize helpers ──
-  const toggleItem = (key: string) => {
-    setSelectedItems(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
-  };
-  const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
-
-  const handleBulkDelete = async () => {
-    try {
-      for (const key of selectedItems) {
-        const [type, id] = key.split('::');
-        if (type === 'subject') await new Promise<void>((resolve, reject) => mutations.deleteSubject.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
-        else if (type === 'file') await new Promise<void>((resolve, reject) => deleteFile.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
-        else if (type === 'deck') await new Promise<void>((resolve, reject) => mutations.unshareDeck.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
-        else if (type === 'exam') await new Promise<void>((resolve, reject) => examMutations.deleteExam.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
-      }
-      toast({ title: 'Itens excluídos!' });
-    } catch (err: any) {
-      toast({ title: 'Erro ao excluir alguns itens', description: err.message, variant: 'destructive' });
-    }
-    exitSelectionMode();
-  };
-
-  // Helper: get all descendant subject IDs to prevent circular moves
-  const getDescendantIds = (parentId: string): Set<string> => {
-    const result = new Set<string>();
-    const children = subjects.filter((s: any) => s.parent_id === parentId);
-    for (const child of children) {
-      result.add(child.id);
-      for (const desc of getDescendantIds(child.id)) result.add(desc);
-    }
-    return result;
-  };
-
-  const moveItemMut = useMutation({
-    mutationFn: async ({ type, id, targetSubjectId }: { type: string; id: string; targetSubjectId: string | null }) => {
-      if (type === 'subject') {
-        if (targetSubjectId === id) throw new Error('Não é possível mover para si mesmo');
-        const descendants = getDescendantIds(id);
-        if (targetSubjectId && descendants.has(targetSubjectId)) throw new Error('Não é possível mover para uma subpasta');
-        const { error } = await supabase.from('turma_subjects' as any).update({ parent_id: targetSubjectId } as any).eq('id', id);
-        if (error) throw error;
-      } else if (type === 'deck') {
-        const { error } = await supabase.from('turma_decks' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
-        if (error) throw error;
-      } else if (type === 'exam') {
-        const { error } = await supabase.from('turma_exams' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
-        if (error) throw error;
-      } else if (type === 'file') {
-        const targetLessons = targetSubjectId === null
-          ? lessons.filter(l => !l.subject_id)
-          : lessons.filter(l => l.subject_id === targetSubjectId);
-        let lessonId = targetLessons[0]?.id;
-        if (!lessonId) {
-          const name = targetSubjectId ? subjects.find(s => s.id === targetSubjectId)?.name || 'Conteúdo' : 'Geral';
-          const { data, error } = await supabase.from('turma_lessons' as any).insert({
-            turma_id: turmaId, subject_id: targetSubjectId, name, created_by: user!.id, is_published: true,
-          } as any).select().single();
-          if (error) throw error;
-          lessonId = (data as any)?.id;
-        }
-        if (lessonId) {
-          const { error } = await supabase.from('turma_lesson_files' as any).update({ lesson_id: lessonId } as any).eq('id', id);
-          if (error) throw error;
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turma-subjects', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
-      queryClient.invalidateQueries({ queryKey: ['turma-lessons', turmaId] });
-      setMovingItem(null);
-      toast({ title: 'Item movido!' });
-    },
-    onError: (err: any) => toast({ title: err?.message || 'Erro ao mover', variant: 'destructive' }),
-  });
 
   const handleBulkMove = () => {
-    // Use first selected item to open move dialog
     const first = Array.from(selectedItems)[0];
     if (!first) return;
-    const [type, id] = first.split('::');
     setMovingItem({ type: 'bulk', id: '', name: `${selectedItems.size} itens` });
     setMoveTargetId(null);
   };
@@ -560,12 +187,13 @@ const ContentTab = () => {
     if (movingItem.type === 'bulk') {
       for (const key of selectedItems) {
         const [type, id] = key.split('::');
-        moveItemMut.mutate({ type, id, targetSubjectId: moveTargetId });
+        contentMut.moveItemMut.mutate({ type, id, targetSubjectId: moveTargetId });
       }
       exitSelectionMode();
     } else {
-      moveItemMut.mutate({ type: movingItem.type, id: movingItem.id, targetSubjectId: moveTargetId });
+      contentMut.moveItemMut.mutate({ type: movingItem.type, id: movingItem.id, targetSubjectId: moveTargetId });
     }
+    setMovingItem(null);
   };
 
   const allSubjectsFlat = subjects.filter((s: any) => s.turma_id === turmaId);
@@ -626,19 +254,19 @@ const ContentTab = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                <DropdownMenuItem onClick={() => contentMut.fileInputRef.current?.click()}>
                   <Upload className="mr-2 h-4 w-4" /> Anexo
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { setShowAddDeck(true); setAllowDownload(false); }}>
                   <Copy className="mr-2 h-4 w-4" /> Baralho
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowImportExam(true)}>
+                <DropdownMenuItem onClick={() => importLogic.setShowImportExam(true)}>
                   <ClipboardList className="mr-2 h-4 w-4" /> Prova
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileUpload} />
+          <input ref={contentMut.fileInputRef} type="file" multiple className="hidden" onChange={contentMut.handleFileUpload} />
         </div>
       </div>
 
@@ -649,14 +277,14 @@ const ContentTab = () => {
           <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={handleBulkMove}>
             <ArrowUpRight className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Mover</span>
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={() => contentMut.handleBulkDelete(selectedItems, exitSelectionMode)}>
             <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Excluir</span>
           </Button>
         </div>
       )}
 
       {/* Upload indicator */}
-      {uploading && (
+      {contentMut.uploading && (
         <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           <span className="text-sm font-medium text-foreground">Enviando arquivo(s)...</span>
@@ -730,7 +358,7 @@ const ContentTab = () => {
                         {isAdmin && (
                           <>
                             <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir pasta', description: e.message, variant: 'destructive' }) })}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir pasta', description: e.message, variant: 'destructive' }) })}>
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </DropdownMenuItem>
                           </>
@@ -814,7 +442,7 @@ const ContentTab = () => {
                             <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteFile.mutate(file.id)}>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => contentMut.deleteFile.mutate(file.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Remover
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -830,12 +458,11 @@ const ContentTab = () => {
           {currentDecks.map((td: any) => {
             const dhDeck = canEdit ? deckDrag.getHandlers(td) : null;
             const isOwner = td.shared_by === user?.id;
-            const alreadyLinked = userHasLinkedDeck(td.id);
-            const alreadyOwns = userOwnsDeck(td.deck_id);
-            const subscriberOnly = !isDeckFree(td);
-            const canImport = canAccessDeck(td);
+            const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
+            const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
+            const subscriberOnly = !importLogic.isDeckFree(td);
+            const canImport = importLogic.canAccessDeck(td);
             const inCollection = alreadyOwns || alreadyLinked;
-            const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
             return (
               <div key={td.id}
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
@@ -865,18 +492,18 @@ const ContentTab = () => {
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                     {!inCollection && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; addToCollection.mutate(td); }}
-                        disabled={addToCollection.isPending || (subscriberOnly && !canImport)}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; importLogic.addToCollection.mutate(td); }}
+                        disabled={importLogic.addToCollection.isPending || (subscriberOnly && !canImport)}>
                         {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
                     )}
                     {inCollection && !alreadyOwns && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setConfirmResync(td)} disabled={addToCollection.isPending}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.setConfirmResync(td)} disabled={importLogic.addToCollection.isPending}>
                         <Download className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {td.allow_download && !inCollection && canImport && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => downloadDeck.mutate(td)} disabled={downloadDeck.isPending}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.downloadDeck.mutate(td)} disabled={importLogic.downloadDeck.isPending}>
                         <Download className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -936,7 +563,7 @@ const ContentTab = () => {
               {!selectionMode && (
                 <div className="flex items-center gap-1 shrink-0">
                   {exam.total_questions > 0 && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleOpenExam(exam)}>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.handleOpenExam(exam)}>
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   )}
@@ -984,7 +611,7 @@ const ContentTab = () => {
             <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
               <SelectTrigger><SelectValue placeholder="Selecione um baralho" /></SelectTrigger>
               <SelectContent>
-                {availableDecks.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                {importLogic.availableDecks.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <div className="space-y-2">
@@ -1058,7 +685,7 @@ const ContentTab = () => {
       )}
 
       {/* Import Exam Dialog */}
-      <Dialog open={showImportExam} onOpenChange={setShowImportExam}>
+      <Dialog open={importLogic.showImportExam} onOpenChange={importLogic.setShowImportExam}>
         <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1067,15 +694,15 @@ const ContentTab = () => {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">Selecione uma prova pessoal para importar.</p>
           <div className="flex-1 overflow-y-auto space-y-1 mt-2">
-            {loadingExams ? (
+            {importLogic.loadingExams ? (
               <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
-            ) : personalExams.length === 0 ? (
+            ) : importLogic.personalExams.length === 0 ? (
               <div className="text-center py-6">
                 <ClipboardList className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Nenhuma prova pessoal encontrada.</p>
               </div>
-            ) : personalExams.map((exam: any) => {
-              const qCount = (personalQuestionCounts as any)[exam.id] || 0;
+            ) : importLogic.personalExams.map((exam: any) => {
+              const qCount = (importLogic.personalQuestionCounts as any)[exam.id] || 0;
               return (
                 <div key={exam.id} className="flex items-center gap-3 rounded-lg border border-border/50 p-3 hover:bg-muted/50 transition-colors">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -1088,8 +715,8 @@ const ContentTab = () => {
                       {exam.time_limit_seconds && <span>· {Math.round(exam.time_limit_seconds / 60)}min</span>}
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" disabled={importingExamId === exam.id} onClick={() => handleImportExamToTurma(exam)} className="gap-1.5 shrink-0">
-                    {importingExamId === exam.id ? 'Importando...' : 'Importar'}
+                  <Button size="sm" variant="outline" disabled={importLogic.importingExamId === exam.id} onClick={() => importLogic.handleImportExamToTurma(exam)} className="gap-1.5 shrink-0">
+                    {importLogic.importingExamId === exam.id ? 'Importando...' : 'Importar'}
                   </Button>
                 </div>
               );
@@ -1104,11 +731,11 @@ const ContentTab = () => {
           open={!!previewDeck} onOpenChange={open => !open && setPreviewDeck(null)}
           deckId={previewDeck.deck_id} deckName={previewDeck.deck_name || 'Baralho'}
           cardCount={previewDeck.card_count ?? 0}
-          alreadyLinked={userHasLinkedDeck(previewDeck.id)} alreadyOwns={userOwnsDeck(previewDeck.deck_id)}
+          alreadyLinked={importLogic.userHasLinkedDeck(previewDeck.id)} alreadyOwns={importLogic.userOwnsDeck(previewDeck.deck_id)}
           allowDownload={previewDeck.allow_download ?? false}
-          onAddToCollection={() => addToCollection.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
-          onDownload={() => downloadDeck.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
-          isAdding={addToCollection.isPending} isDownloading={downloadDeck.isPending}
+          onAddToCollection={() => importLogic.addToCollection.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
+          onDownload={() => importLogic.downloadDeck.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
+          isAdding={importLogic.addToCollection.isPending} isDownloading={importLogic.downloadDeck.isPending}
         />
       )}
 
@@ -1130,15 +757,15 @@ const ContentTab = () => {
       </Dialog>
 
       {/* Resync Confirmation Dialog */}
-      <Dialog open={!!confirmResync} onOpenChange={open => !open && setConfirmResync(null)}>
+      <Dialog open={!!importLogic.confirmResync} onOpenChange={open => !open && importLogic.setConfirmResync(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader><DialogTitle className="font-display">Atualizar coleção</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Este baralho já está na sua coleção. Deseja sincronizar? Cards novos serão adicionados sem perder seu progresso.
           </p>
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" size="sm" onClick={() => setConfirmResync(null)}>Cancelar</Button>
-            <Button size="sm" onClick={() => { addToCollection.mutate(confirmResync); setConfirmResync(null); }}>Atualizar</Button>
+            <Button variant="outline" size="sm" onClick={() => importLogic.setConfirmResync(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => { importLogic.addToCollection.mutate(importLogic.confirmResync); importLogic.setConfirmResync(null); }}>Atualizar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1157,7 +784,7 @@ const ContentTab = () => {
                   .filter(s => {
                     if (movingItem?.type === 'subject' && s.id === movingItem?.id) return false;
                     if (movingItem?.type === 'subject' && movingItem?.id) {
-                      const descendants = getDescendantIds(movingItem.id);
+                      const descendants = contentMut.getDescendantIds(movingItem.id);
                       if (descendants.has(s.id)) return false;
                     }
                     return true;
@@ -1170,8 +797,8 @@ const ContentTab = () => {
             </Select>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setMovingItem(null)}>Cancelar</Button>
-              <Button size="sm" onClick={confirmMove} disabled={moveItemMut.isPending}>
-                {moveItemMut.isPending ? 'Movendo...' : 'Mover'}
+              <Button size="sm" onClick={confirmMove} disabled={contentMut.moveItemMut.isPending}>
+                {contentMut.moveItemMut.isPending ? 'Movendo...' : 'Mover'}
               </Button>
             </div>
           </div>

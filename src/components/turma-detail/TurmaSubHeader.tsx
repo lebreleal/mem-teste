@@ -20,6 +20,7 @@ interface TurmaSubHeaderProps {
   inviteCode: string;
   isAdmin: boolean;
   hasSubscription: boolean;
+  hasExclusiveContent: boolean;
   isSubscriber: boolean;
   activeSubscription: any;
   subscriptionPrice: number;
@@ -33,9 +34,10 @@ interface TurmaSubHeaderProps {
 
 const TurmaSubHeader = ({
   turmaId, turmaName, inviteCode, isAdmin,
-  hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing,
+  hasSubscription, hasExclusiveContent, isSubscriber, activeSubscription, subscriptionPrice, subscribing,
   onSubscribe, onShowSettings, members, userId, mutations,
 }: TurmaSubHeaderProps) => {
+  const showCrown = hasSubscription || hasExclusiveContent;
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showMembers, setShowMembers] = useState(false);
@@ -53,12 +55,12 @@ const TurmaSubHeader = ({
               <h1 className="font-display text-lg font-bold text-foreground truncate">{turmaName}</h1>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {hasSubscription && !isSubscriber && !isAdmin && (
+              {showCrown && !isSubscriber && !isAdmin && (
                 <button onClick={() => setShowSubscribeModal(true)} className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" title="Seja assinante">
                   <Crown className="h-4 w-4 text-[hsl(270,70%,55%)]" />
                 </button>
               )}
-              {hasSubscription && isSubscriber && (
+              {showCrown && isSubscriber && (
                 <button onClick={() => setShowSubscribeModal(true)} className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" title="Assinatura ativa">
                   <Crown className="h-4 w-4 fill-[hsl(270,70%,55%)]" style={{ color: 'hsl(270, 70%, 55%)' }} />
                 </button>
