@@ -15,7 +15,7 @@ import {
 const TurmaDetailInner = () => {
   const ctx = useTurmaDetail();
   const {
-    turmaId, turma, members, subjects, lessons, turmaDecks, lessonFiles,
+    turmaId, turma, members, subjects, lessons, turmaDecks, turmaExams, lessonFiles,
     isAdmin, isMod, canEdit, user,
     hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
     contentFolderId, setContentFolderId,
@@ -49,6 +49,11 @@ const TurmaDetailInner = () => {
         inviteCode={turma.invite_code}
         isAdmin={isAdmin}
         hasSubscription={hasSubscription}
+        hasExclusiveContent={
+          turmaDecks.some((d: any) => d.price_type && d.price_type !== 'free') ||
+          turmaExams.some((e: any) => e.subscribers_only) ||
+          (lessonFiles as any[]).some((f: any) => f.price_type && f.price_type !== 'free')
+        }
         isSubscriber={isSubscriber}
         activeSubscription={activeSubscription}
         subscriptionPrice={subscriptionPrice}
