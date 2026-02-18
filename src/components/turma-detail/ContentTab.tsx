@@ -460,15 +460,17 @@ const ContentTab = () => {
   const moveItemMut = useMutation({
     mutationFn: async ({ type, id, targetSubjectId }: { type: string; id: string; targetSubjectId: string | null }) => {
       if (type === 'subject') {
-        // Prevent moving into self or descendants
         if (targetSubjectId === id) throw new Error('Não é possível mover para si mesmo');
         const descendants = getDescendantIds(id);
         if (targetSubjectId && descendants.has(targetSubjectId)) throw new Error('Não é possível mover para uma subpasta');
-        await supabase.from('turma_subjects' as any).update({ parent_id: targetSubjectId } as any).eq('id', id);
+        const { error } = await supabase.from('turma_subjects' as any).update({ parent_id: targetSubjectId } as any).eq('id', id);
+        if (error) throw error;
       } else if (type === 'deck') {
-        await supabase.from('turma_decks' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+        const { error } = await supabase.from('turma_decks' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+        if (error) throw error;
       } else if (type === 'exam') {
-        await supabase.from('turma_exams' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+        const { error } = await supabase.from('turma_exams' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+        if (error) throw error;
       } else if (type === 'file') {
         const targetLessons = targetSubjectId === null
           ? lessons.filter(l => !l.subject_id)
@@ -476,12 +478,16 @@ const ContentTab = () => {
         let lessonId = targetLessons[0]?.id;
         if (!lessonId) {
           const name = targetSubjectId ? subjects.find(s => s.id === targetSubjectId)?.name || 'Conteúdo' : 'Geral';
-          const { data } = await supabase.from('turma_lessons' as any).insert({
+          const { data, error } = await supabase.from('turma_lessons' as any).insert({
             turma_id: turmaId, subject_id: targetSubjectId, name, created_by: user!.id, is_published: true,
           } as any).select().single();
+          if (error) throw error;
           lessonId = (data as any)?.id;
         }
-        if (lessonId) await supabase.from('turma_lesson_files' as any).update({ lesson_id: lessonId } as any).eq('id', id);
+        if (lessonId) {
+          const { error } = await supabase.from('turma_lesson_files' as any).update({ lesson_id: lessonId } as any).eq('id', id);
+          if (error) throw error;
+        }
       }
     },
     onSuccess: () => {

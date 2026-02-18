@@ -174,7 +174,10 @@ export async function createSubject(turmaId: string, userId: string, params: { n
   if (error) throw error; return data;
 }
 export async function updateSubject(id: string, name: string) { const { error } = await supabase.from('turma_subjects').update({ name } as any).eq('id', id); if (error) throw error; }
-export async function deleteSubject(id: string) { const { error } = await supabase.from('turma_subjects').delete().eq('id', id); if (error) throw error; }
+export async function deleteSubject(id: string) {
+  const { error } = await supabase.rpc('delete_subject_cascade', { p_subject_id: id } as any);
+  if (error) throw error;
+}
 export async function createLesson(turmaId: string, userId: string, params: { subjectId?: string | null; name: string; description?: string; lessonDate?: string | null; isPublished?: boolean }) {
   const { data, error } = await supabase.from('turma_lessons').insert({ turma_id: turmaId, subject_id: params.subjectId ?? null, name: params.name, description: params.description ?? '', created_by: userId, lesson_date: params.lessonDate ?? null, is_published: params.isPublished ?? true } as any).select().single();
   if (error) throw error; return data;

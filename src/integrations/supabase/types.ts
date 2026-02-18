@@ -1981,6 +1981,10 @@ export type Database = {
         Args: { p_folder_id: string }
         Returns: undefined
       }
+      delete_subject_cascade: {
+        Args: { p_subject_id: string }
+        Returns: undefined
+      }
       find_turma_by_invite_code: {
         Args: { p_invite_code: string }
         Returns: {
