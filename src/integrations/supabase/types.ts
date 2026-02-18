@@ -1993,6 +1993,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      batch_reorder_decks: {
+        Args: { p_deck_ids: string[] }
+        Returns: undefined
+      }
       deduct_energy: {
         Args: { p_cost: number; p_user_id: string }
         Returns: number
@@ -2066,6 +2070,13 @@ export type Database = {
           creator_tier: number
           id: string
           name: string
+        }[]
+      }
+      get_study_queue_limits: {
+        Args: { p_card_ids: string[]; p_user_id: string }
+        Returns: {
+          new_reviewed_today: number
+          review_reviewed_today: number
         }[]
       }
       get_turma_role: {
