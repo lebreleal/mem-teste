@@ -118,7 +118,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
             <X className="h-3.5 w-3.5" />
             Continuar em segundo plano
           </Button>
-          <p className="text-[10px] text-muted-foreground/60 text-center flex items-center gap-1 justify-center">
+          <p className="text-[10px] text-destructive text-center flex items-center gap-1 justify-center">
             <AlertTriangle className="h-3 w-3" />
             Não feche o app enquanto gera
           </p>
