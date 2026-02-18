@@ -446,9 +446,24 @@ const ContentTab = () => {
     toast({ title: 'Itens excluídos!' });
   };
 
+  // Helper: get all descendant subject IDs to prevent circular moves
+  const getDescendantIds = (parentId: string): Set<string> => {
+    const result = new Set<string>();
+    const children = subjects.filter((s: any) => s.parent_id === parentId);
+    for (const child of children) {
+      result.add(child.id);
+      for (const desc of getDescendantIds(child.id)) result.add(desc);
+    }
+    return result;
+  };
+
   const moveItemMut = useMutation({
     mutationFn: async ({ type, id, targetSubjectId }: { type: string; id: string; targetSubjectId: string | null }) => {
       if (type === 'subject') {
+        // Prevent moving into self or descendants
+        if (targetSubjectId === id) throw new Error('Não é possível mover para si mesmo');
+        const descendants = getDescendantIds(id);
+        if (targetSubjectId && descendants.has(targetSubjectId)) throw new Error('Não é possível mover para uma subpasta');
         await supabase.from('turma_subjects' as any).update({ parent_id: targetSubjectId } as any).eq('id', id);
       } else if (type === 'deck') {
         await supabase.from('turma_decks' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
@@ -478,7 +493,7 @@ const ContentTab = () => {
       setMovingItem(null);
       toast({ title: 'Item movido!' });
     },
-    onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+    onError: (err: any) => toast({ title: err?.message || 'Erro ao mover', variant: 'destructive' }),
   });
 
   const handleBulkMove = () => {
@@ -1039,7 +1054,14 @@ const ContentTab = () => {
               <SelectContent>
                 <SelectItem value="__root__">Raiz (sem pasta)</SelectItem>
                 {allSubjectsFlat
-                  .filter(s => movingItem?.type !== 'subject' || s.id !== movingItem?.id)
+                  .filter(s => {
+                    if (movingItem?.type === 'subject' && s.id === movingItem?.id) return false;
+                    if (movingItem?.type === 'subject' && movingItem?.id) {
+                      const descendants = getDescendantIds(movingItem.id);
+                      if (descendants.has(s.id)) return false;
+                    }
+                    return true;
+                  })
                   .map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))
