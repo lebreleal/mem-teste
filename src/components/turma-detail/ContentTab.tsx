@@ -232,7 +232,7 @@ const ContentTab = () => {
           {hasContent && canEdit && !selectionMode && (
             <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => setReorderMode(!reorderMode)}>
               <GripVertical className="h-4 w-4" />
-              {reorderMode ? 'Pronto' : 'Ordenar'}
+              <span>{reorderMode ? 'Pronto' : 'Ordenar'}</span>
             </Button>
           )}
           {hasContent && (isAdmin || isMod) && (
@@ -384,6 +384,7 @@ const ContentTab = () => {
             return (
               <div key={file.id}
                 {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
+                {...(!fhFile && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
                 className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
                 {reorderMode && !selectionMode && (
@@ -466,6 +467,7 @@ const ContentTab = () => {
             return (
               <div key={td.id}
                 {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
+                {...(!dhDeck && reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
                 className={`group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
                 onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
                 {reorderMode && !selectionMode && (
@@ -535,6 +537,7 @@ const ContentTab = () => {
           {/* Exams */}
           {currentExams.map((exam: any) => (
             <div key={exam.id} className="group flex items-center gap-3 px-2 sm:px-5 py-4 transition-all hover:bg-muted/50"
+              {...(reorderMode ? { onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } } : {})}
               onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
               {reorderMode && !selectionMode && (
                 <div className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
