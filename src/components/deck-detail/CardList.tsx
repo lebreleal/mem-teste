@@ -172,7 +172,7 @@ const CardList = () => {
         <div>
           <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div className="bg-muted-foreground/30 transition-all" style={{ width: `${newPct}%` }} />
-            <div className="bg-green-500 transition-all" style={{ width: `${learningPct}%` }} />
+            <div className="transition-all" style={{ width: `${learningPct}%`, backgroundColor: '#47c700' }} />
             <div className="bg-primary transition-all" style={{ width: `${masteredPct}%` }} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -180,7 +180,7 @@ const CardList = () => {
               <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{actualNewCount}</strong> Não estudados
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-green-500" /> <strong className="text-foreground">{learningCount}</strong> Em andamento
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#47c700' }} /> <strong className="text-foreground">{learningCount}</strong> Em andamento
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-primary" /> <strong className="text-foreground">{totalReviewStateCards}</strong> Dominados
@@ -300,7 +300,7 @@ const CardList = () => {
               return Array.from(nums).sort((a, b) => a - b);
             };
 
-            const CLOZE_DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+            
 
             return groups.map((group, gi) => {
               const card = group.cards[0];
@@ -383,13 +383,12 @@ const CardList = () => {
                               let lastIdx = 0;
                               let m;
                               let k = 0;
-                              const DOT_BG = ['bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/40', 'bg-violet-500/20 text-violet-600 dark:text-violet-400 border-violet-500/40', 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40', 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40', 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/40'];
+                              const BADGE_STYLE = 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 border border-sky-200 dark:border-sky-700/50';
                               while ((m = regex.exec(plain)) !== null) {
                                 if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
                                 const n = parseInt(m[1]);
-                                const ci = (n - 1) % DOT_BG.length;
                                 parts.push(
-                                  <span key={k++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 border text-xs font-semibold ${DOT_BG[ci]}`}>
+                                  <span key={k++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-semibold ${BADGE_STYLE}`}>
                                     <span className="text-[9px] font-bold opacity-70">{n}</span>
                                     {m[2]}
                                   </span>
@@ -406,17 +405,6 @@ const CardList = () => {
                           </p>
                         )}
 
-                        {/* Cloze tabs */}
-                        {isCloze && clozeNums.length > 0 && (
-                          <div className="flex items-center gap-1.5 mt-2">
-                            {clozeNums.map((n, i) => (
-                              <span key={n} className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
-                                <span className={`h-1.5 w-1.5 rounded-full ${CLOZE_DOT_COLORS[i % CLOZE_DOT_COLORS.length]}`} />
-                                cloze {n}
-                              </span>
-                            ))}
-                          </div>
-                        )}
 
                         {/* Multiple choice options */}
                         {isMultiple && mcOptions.length > 0 ? (
