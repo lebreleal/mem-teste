@@ -1,6 +1,6 @@
 import {
   ArrowLeft, ChevronRight, Plus, FolderPlus, BookOpen, Brain, Download,
-  CheckCheck, X, ArrowUpRight, Archive, Trash2
+  CheckCheck, X, ArrowUpRight, Archive, Trash2, GripVertical
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -31,6 +31,8 @@ interface DashboardActionsProps {
   onBulkMove: () => void;
   onBulkArchive: () => void;
   onBulkDelete: () => void;
+  reorderMode: boolean;
+  toggleReorderMode: () => void;
 }
 
 const DashboardActions = ({
@@ -38,7 +40,8 @@ const DashboardActions = ({
   hasDecks, deckSelectionMode, selectedCount, isAllSelected,
   toggleSelectionMode, toggleSelectAll,
   onCreateFolder, onCreateDeck, onCreateAI, onImport,
-  onBulkMove, onBulkArchive, onBulkDelete
+  onBulkMove, onBulkArchive, onBulkDelete,
+  reorderMode, toggleReorderMode,
 }: DashboardActionsProps) => {
   return (
     <>
@@ -71,7 +74,13 @@ const DashboardActions = ({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {hasDecks && (
+          {hasDecks && !deckSelectionMode && (
+            <Button variant={reorderMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleReorderMode}>
+              <GripVertical className="h-4 w-4" />
+              {reorderMode ? 'Pronto' : 'Ordenar'}
+            </Button>
+          )}
+          {hasDecks && !reorderMode && (
             <Button variant={deckSelectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleSelectionMode}>
               {deckSelectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
               <span className="hidden sm:inline">{deckSelectionMode ? 'Cancelar' : 'Selecionar'}</span>

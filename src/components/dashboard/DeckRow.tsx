@@ -32,13 +32,14 @@ interface DeckRowProps {
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
+  reorderMode?: boolean;
 }
 
 const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers,
+  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers, reorderMode = false,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -66,7 +67,7 @@ const DeckRow = ({
         style={{ paddingLeft: `${basePadding}px` }}
         onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(`/decks/${deck.id}`)}
       >
-        {depth === 0 && (
+        {depth === 0 && reorderMode && (
           <div
             className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
             onMouseDown={(e) => e.stopPropagation()}

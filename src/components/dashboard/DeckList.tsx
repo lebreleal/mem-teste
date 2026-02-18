@@ -54,13 +54,14 @@ interface DeckListProps {
   // Reorder callbacks
   onReorderFolders?: (reordered: Folder[]) => void;
   onReorderDecks?: (reordered: DeckWithStats[]) => void;
+  reorderMode?: boolean;
 }
 
 const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId,
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
-  navigateToCommunity, onReorderFolders, onReorderDecks,
+  navigateToCommunity, onReorderFolders, onReorderDecks, reorderMode = false,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
@@ -143,20 +144,22 @@ const DeckList = ({
 
       {/* Folders */}
       {currentFolders.map(folder => {
-        const dragHandlers = folderDrag.getHandlers(folder);
+        const dragHandlers = reorderMode ? folderDrag.getHandlers(folder) : null;
         return (
           <div
             key={folder.id}
-            {...dragHandlers}
-            className={`group flex items-center gap-3 px-2 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers.className}`}
+            {...(dragHandlers ? { draggable: dragHandlers.draggable, onDragStart: dragHandlers.onDragStart, onDragOver: dragHandlers.onDragOver, onDragEnter: dragHandlers.onDragEnter, onDragLeave: dragHandlers.onDragLeave, onDrop: dragHandlers.onDrop, onDragEnd: dragHandlers.onDragEnd } : {})}
+            className={`group flex items-center gap-3 px-2 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers?.className ?? ''}`}
             onClick={() => onFolderClick(folder.id)}
           >
-            <div
-              className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <GripVertical className="h-4 w-4" />
-            </div>
+            {reorderMode && (
+              <div
+                className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="h-4 w-4" />
+              </div>
+            )}
             <FolderOpen className="h-6 w-6 text-primary fill-primary/10 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -208,7 +211,7 @@ const DeckList = ({
 
       {/* Decks */}
       {currentDecks.map(deck => {
-        const dragHandlers = deckDrag.getHandlers(deck);
+        const dragHandlers = reorderMode ? deckDrag.getHandlers(deck) : undefined;
         return (
           <DeckRow
             key={deck.id}
@@ -218,6 +221,7 @@ const DeckList = ({
             onDelete={onDeleteDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
+            reorderMode={reorderMode}
             {...deckRowProps}
           />
         );
