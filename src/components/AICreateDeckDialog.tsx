@@ -37,7 +37,8 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
   // During generation, allow dismiss to background instead of blocking close
   const handleDialogChange = (v: boolean) => {
     if (!v && flow.step === 'generating') {
-      // Don't close — the dismiss button handles background generation
+      // X button during generation → dismiss to background
+      flow.handleDismissToBackground();
       return;
     }
     if (!flow.busy) {
