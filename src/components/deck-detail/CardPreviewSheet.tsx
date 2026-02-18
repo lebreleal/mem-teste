@@ -302,6 +302,14 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
     trackRef.current.style.transform = 'translateX(-100%)';
   }, [index, isMobile]);
 
+  // Lock body scroll when open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   if (!open || !card) return null;
 
   const isCloze = card.card_type === 'cloze';
@@ -311,7 +319,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
   const nextVc = index < virtualCards.length - 1 ? virtualCards[index + 1] : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-muted/95 backdrop-blur-sm flex flex-col">
+    <div
+      className="fixed inset-0 z-50 bg-background flex flex-col"
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchMove={(e) => { if (!isDraggingRef.current) e.stopPropagation(); }}
+    >
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-5 py-3 shrink-0">
         <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={onClose}>
