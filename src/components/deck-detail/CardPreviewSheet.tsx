@@ -385,7 +385,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       </header>
 
       {/* Card area */}
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-2 sm:px-0">
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
         {isMobile ? (
           /* ── Mobile: 3-slot carousel ── */
           <div className="w-full h-full overflow-hidden">
@@ -430,17 +430,17 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
             </div>
           </div>
         ) : (
-          /* ── Desktop/Tablet: arrows ── */
+          /* ── Desktop/Tablet: centered card with arrows ── */
           <>
             <Button
               variant="ghost" size="icon"
-              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-2 sm:left-3 z-10 disabled:opacity-30"
+              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
               disabled={safeIndex === 0} onClick={goPrev}
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
 
-            <div className="w-full max-w-2xl mx-auto px-12 sm:px-14">
+            <div className="w-full max-w-2xl mx-auto px-14">
               {vc ? (
                 <>
                   <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
@@ -459,7 +459,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
             <Button
               variant="ghost" size="icon"
-              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-2 sm:right-3 z-10 disabled:opacity-30"
+              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
               disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
             >
               <ChevronRight className="h-5 w-5" />
