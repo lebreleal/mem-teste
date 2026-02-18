@@ -215,25 +215,29 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const anonClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+    const userId: string = claimsData.claims.sub as string;
+
     const { cards, deckName } = await req.json();
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       return jsonResponse({ error: "No cards provided" }, 400);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    let userId: string | null = null;
-    if (authHeader.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "");
-      try {
-        const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || supabaseKey);
-        const { data: { user } } = await anonClient.auth.getUser(token);
-        userId = user?.id || null;
-      } catch { /* ignore */ }
-    }
 
     const totalCards = cards.length;
     const parentDeckName = deckName || null;
