@@ -4,8 +4,9 @@
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -63,8 +64,72 @@ interface Props {
   onClose: () => void;
 }
 
+/** Render a single card's content (extracted for reuse in peek cards) */
+function CardContent({
+  vc, revealed, onClick, className = '',
+}: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
+  const card = vc.card;
+  const isCloze = card.card_type === 'cloze';
+  const isMultiple = card.card_type === 'multiple_choice';
+  const isOcclusion = card.card_type === 'image_occlusion';
+  const clozeTarget = vc.clozeTarget;
+
+  let occlusionData: { imageUrl?: string } | null = null;
+  if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
+
+  let mcOptions: string[] = [];
+  let mcCorrectIdx = -1;
+  if (isMultiple) {
+    try { const p = JSON.parse(card.back_content); mcOptions = p.options || []; mcCorrectIdx = p.correctIndex ?? -1; } catch {}
+  }
+
+  const front = () => {
+    if (isOcclusion && occlusionData?.imageUrl)
+      return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
+    if (isCloze) {
+      const html = renderClozePreview(card.front_content, revealed, clozeTarget);
+      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    if (/<[a-z][\s\S]*>/i.test(card.front_content))
+      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
+    return <p className="text-lg sm:text-xl leading-relaxed whitespace-pre-wrap">{card.front_content}</p>;
+  };
+
+  const back = () => {
+    if (isCloze) return null;
+    if (isMultiple) {
+      return (
+        <div className="space-y-2.5 mt-6">
+          {mcOptions.map((opt, i) => (
+            <div key={i} className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
+              revealed && i === mcCorrectIdx ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
+              : revealed ? 'border-border/30 text-muted-foreground' : 'border-border/60 text-foreground'
+            }`}>
+              <span className="font-medium mr-2">{String.fromCharCode(65 + i)})</span> {opt}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (!revealed) return null;
+    if (/<[a-z][\s\S]*>/i.test(card.back_content))
+      return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: card.back_content }} />;
+    return <p className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">{card.back_content}</p>;
+  };
+
+  return (
+    <div className={`bg-card rounded-2xl border border-border/30 shadow-lg overflow-hidden cursor-pointer select-none ${className}`} onClick={onClick}>
+      <div className="p-6 sm:p-8 min-h-[40vh] sm:min-h-[50vh] max-h-[70vh] overflow-y-auto flex flex-col justify-center">
+        {front()}
+        {back()}
+      </div>
+    </div>
+  );
+}
+
 const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
-  const { openEdit, setDeleteId, setMoveCardId, deck } = useDeckDetail();
+  const { openEdit, setDeleteId, setMoveCardId } = useDeckDetail();
+  const isMobile = useIsMobile();
 
   const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
 
@@ -76,6 +141,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   const [index, setIndex] = useState(initialVirtualIndex);
   const [revealed, setRevealed] = useState(false);
+
+  // Mobile swipe state
+  const [dragX, setDragX] = useState(0);
+  const dragStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isDraggingRef = useRef(false);
 
   useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
 
@@ -103,89 +173,51 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
     return () => window.removeEventListener('keydown', handler);
   }, [open, goPrev, goNext, onClose]);
 
-  // Swipe support for mobile
+  // Mobile touch-drag for carousel
   useEffect(() => {
-    if (!open) return;
-    let startX = 0;
-    let startY = 0;
-    const onTouchStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; };
-    const onTouchEnd = (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      const dy = e.changedTouches[0].clientY - startY;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        if (dx > 0) goPrev(); else goNext();
+    if (!open || !isMobile) return;
+    const onTouchStart = (e: TouchEvent) => {
+      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+      isDraggingRef.current = false;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragStartRef.current) return;
+      const dx = e.touches[0].clientX - dragStartRef.current.x;
+      const dy = e.touches[0].clientY - dragStartRef.current.y;
+      if (!isDraggingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        isDraggingRef.current = true;
+      }
+      if (isDraggingRef.current) {
+        e.preventDefault();
+        setDragX(dx);
       }
     };
+    const onTouchEnd = () => {
+      if (!dragStartRef.current) return;
+      const threshold = window.innerWidth * 0.2;
+      if (dragX > threshold) goPrev();
+      else if (dragX < -threshold) goNext();
+      setDragX(0);
+      dragStartRef.current = null;
+      isDraggingRef.current = false;
+    };
     window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => { window.removeEventListener('touchstart', onTouchStart); window.removeEventListener('touchend', onTouchEnd); };
-  }, [open, goPrev, goNext]);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [open, isMobile, goPrev, goNext, dragX]);
 
   if (!open || !card) return null;
 
   const isCloze = card.card_type === 'cloze';
-  const isMultiple = card.card_type === 'multiple_choice';
-  const isOcclusion = card.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
 
-  // Parse occlusion
-  let occlusionData: { imageUrl?: string } | null = null;
-  if (isOcclusion) {
-    try { occlusionData = JSON.parse(card.front_content); } catch {}
-  }
-
-  // Parse multiple choice
-  let mcOptions: string[] = [];
-  let mcCorrectIdx = -1;
-  if (isMultiple) {
-    try {
-      const parsed = JSON.parse(card.back_content);
-      mcOptions = parsed.options || [];
-      mcCorrectIdx = parsed.correctIndex ?? -1;
-    } catch {}
-  }
-
-  // Render front content
-  const renderFront = () => {
-    if (isOcclusion && occlusionData?.imageUrl) {
-      return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
-    }
-    if (isCloze) {
-      const html = renderClozePreview(card.front_content, revealed, clozeTarget);
-      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
-    }
-    if (/<[a-z][\s\S]*>/i.test(card.front_content)) {
-      return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: card.front_content }} />;
-    }
-    return <p className="text-lg sm:text-xl leading-relaxed whitespace-pre-wrap">{card.front_content}</p>;
-  };
-
-  // Render back content
-  const renderBack = () => {
-    if (isCloze) return null;
-    if (isMultiple) {
-      return (
-        <div className="space-y-2.5 mt-6">
-          {mcOptions.map((opt, i) => (
-            <div key={i} className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
-              revealed && i === mcCorrectIdx
-                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
-                : revealed
-                ? 'border-border/30 text-muted-foreground'
-                : 'border-border/60 text-foreground'
-            }`}>
-              <span className="font-medium mr-2">{String.fromCharCode(65 + i)})</span> {opt}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    if (!revealed) return null;
-    if (/<[a-z][\s\S]*>/i.test(card.back_content)) {
-      return <div className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: card.back_content }} />;
-    }
-    return <p className="mt-6 pt-6 border-t border-border/30 text-base leading-relaxed text-muted-foreground whitespace-pre-wrap">{card.back_content}</p>;
-  };
+  const prevVc = index > 0 ? virtualCards[index - 1] : null;
+  const nextVc = index < virtualCards.length - 1 ? virtualCards[index + 1] : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-muted/95 backdrop-blur-sm flex flex-col">
@@ -197,7 +229,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
-            <span className="text-primary">{index + 1}</span>/{virtualCards.length} cartões
+            <span className="text-primary">{index + 1}</span>/{virtualCards.length}
           </span>
           {isCloze && clozeTarget && (
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
@@ -229,58 +261,78 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
         </div>
       </header>
 
-      {/* Card area with side arrows */}
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-2 sm:px-4">
-        {/* Left arrow */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden sm:flex h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
-          disabled={index === 0}
-          onClick={goPrev}
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
+      {/* Card area */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
+        {isMobile ? (
+          /* ── Mobile: carousel with peek ── */
+          <div
+            className="flex items-center w-full h-full px-3"
+            style={{
+              transform: `translateX(${dragX}px)`,
+              transition: dragX === 0 ? 'transform 0.3s ease-out' : 'none',
+            }}
+          >
+            {/* Prev peek */}
+            <div className="w-10 shrink-0 -mr-2 opacity-40 scale-[0.85] pointer-events-none">
+              {prevVc && (
+                <div className="bg-card rounded-2xl border border-border/30 shadow p-4 min-h-[30vh] flex items-center justify-center overflow-hidden">
+                  <p className="text-xs text-muted-foreground line-clamp-3 text-center">
+                    {prevVc.card.front_content.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.+?)\}\}/g, '[...]').slice(0, 60)}
+                  </p>
+                </div>
+              )}
+            </div>
 
-        {/* Card */}
-        <div
-          className="w-full max-w-2xl mx-auto cursor-pointer select-none"
-          onClick={() => setRevealed(r => !r)}
-        >
-          <div className="bg-card rounded-2xl border border-border/30 shadow-lg mx-2 sm:mx-14 overflow-hidden">
-            <div className="p-6 sm:p-8 min-h-[40vh] sm:min-h-[50vh] max-h-[70vh] overflow-y-auto flex flex-col justify-center">
-              {renderFront()}
-              {renderBack()}
+            {/* Current card */}
+            <div className="flex-1 min-w-0 mx-1">
+              <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+              {!revealed && (
+                <p className="text-center text-xs text-muted-foreground mt-3 animate-pulse">
+                  Toque para revelar
+                </p>
+              )}
+            </div>
+
+            {/* Next peek */}
+            <div className="w-10 shrink-0 -ml-2 opacity-40 scale-[0.85] pointer-events-none">
+              {nextVc && (
+                <div className="bg-card rounded-2xl border border-border/30 shadow p-4 min-h-[30vh] flex items-center justify-center overflow-hidden">
+                  <p className="text-xs text-muted-foreground line-clamp-3 text-center">
+                    {nextVc.card.front_content.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.+?)\}\}/g, '[...]').slice(0, 60)}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-          {!revealed && (
-            <p className="text-center text-xs text-muted-foreground mt-4 animate-pulse">
-              Toque para revelar
-            </p>
-          )}
-        </div>
+        ) : (
+          /* ── Desktop/Tablet: arrows ── */
+          <>
+            <Button
+              variant="ghost" size="icon"
+              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute left-3 z-10 disabled:opacity-30"
+              disabled={index === 0} onClick={goPrev}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
 
-        {/* Right arrow */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden sm:flex h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
-          disabled={index === virtualCards.length - 1}
-          onClick={goNext}
-        >
-          <ChevronRight className="h-5 w-5" />
-        </Button>
-      </div>
+            <div className="w-full max-w-2xl mx-14">
+              <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+              {!revealed && (
+                <p className="text-center text-xs text-muted-foreground mt-4 animate-pulse">
+                  Toque para revelar
+                </p>
+              )}
+            </div>
 
-      {/* Mobile bottom nav */}
-      <div className="sm:hidden flex items-center justify-between px-6 py-4 shrink-0">
-        <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" disabled={index === 0} onClick={goPrev}>
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-        <span className="text-xs text-muted-foreground font-medium">{deck?.name}</span>
-        <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" disabled={index === virtualCards.length - 1} onClick={goNext}>
-          <ChevronRight className="h-5 w-5" />
-        </Button>
+            <Button
+              variant="ghost" size="icon"
+              className="h-10 w-10 rounded-full bg-card/80 shadow-sm shrink-0 absolute right-3 z-10 disabled:opacity-30"
+              disabled={index === virtualCards.length - 1} onClick={goNext}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
