@@ -3,13 +3,10 @@
  */
 
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, Users } from 'lucide-react';
 import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
 import TurmaHeader from '@/components/turma-detail/TurmaHeader';
 import TurmaSubHeader from '@/components/turma-detail/TurmaSubHeader';
 import ContentTab from '@/components/turma-detail/ContentTab';
-import MembersTab from '@/components/turma-detail/MembersTab';
 import {
   CreateSubjectDialog, CreateLessonDialog,
   EditSubjectDialog, EditLessonDialog,
@@ -58,35 +55,13 @@ const TurmaDetailInner = () => {
         subscribing={subscribing}
         onSubscribe={handleSubscribe}
         onShowSettings={() => setShowSettings(true)}
-        lessonDates={lessonDates}
-        lessonDateMap={lessonDateMap}
+        members={members}
+        userId={user?.id}
+        mutations={mutations}
       />
 
       <main className="container mx-auto px-4 py-6 max-w-2xl">
-        <Tabs defaultValue="content" className="space-y-4">
-          <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-            <TabsTrigger value="content" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Layers className="h-3.5 w-3.5" /> Conteúdo
-            </TabsTrigger>
-            <TabsTrigger value="members" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Users className="h-3.5 w-3.5" /> Membros
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="content">
-            <ContentTab />
-          </TabsContent>
-
-          <TabsContent value="members">
-            <MembersTab
-              members={members}
-              userId={user?.id}
-              isAdmin={isAdmin}
-              mutations={mutations}
-              toast={toast}
-            />
-          </TabsContent>
-        </Tabs>
+        <ContentTab />
       </main>
 
       <CommunitySettingsDialog

@@ -1,18 +1,18 @@
 /**
- * Community info sub-header: turma name, settings, calendar, invite, subscribe.
+ * Community info sub-header: turma name, settings, members, invite, subscribe.
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Calendar as CalendarIcon, UserPlus, BookOpen, Check, X,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check,
 } from 'lucide-react';
+import MembersTab from '@/components/turma-detail/MembersTab';
 
 interface TurmaSubHeaderProps {
   turmaId: string;
@@ -26,33 +26,20 @@ interface TurmaSubHeaderProps {
   subscribing: boolean;
   onSubscribe: () => void;
   onShowSettings: () => void;
-  lessonDates: Date[];
-  lessonDateMap: Map<string, any[]>;
+  members: any[];
+  userId?: string;
+  mutations: any;
 }
 
 const TurmaSubHeader = ({
   turmaId, turmaName, inviteCode, isAdmin,
   hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing,
-  onSubscribe, onShowSettings, lessonDates, lessonDateMap,
+  onSubscribe, onShowSettings, members, userId, mutations,
 }: TurmaSubHeaderProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [calendarOpen, setCalendarOpen] = useState(() => {
-    try { return localStorage.getItem(`turma-cal-${turmaId}`) === 'visible'; } catch { return false; }
-  });
-  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const [showMembers, setShowMembers] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
-
-  const toggleCalendar = () => {
-    setCalendarOpen(prev => {
-      const next = !prev;
-      try { localStorage.setItem(`turma-cal-${turmaId}`, next ? 'visible' : 'hidden'); } catch {}
-      return next;
-    });
-  };
-
-  const selectedDateKey = format(calendarDate, 'yyyy-MM-dd');
-  const selectedDayLessons = lessonDateMap.get(selectedDateKey) ?? [];
 
   return (
     <>
@@ -81,8 +68,8 @@ const TurmaSubHeader = ({
                   <Settings className="h-4 w-4 text-muted-foreground" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleCalendar} title="Calendário">
-                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
+                <Users className="h-4 w-4 text-muted-foreground" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8"
                 onClick={() => { navigator.clipboard.writeText(inviteCode); toast({ title: 'Código copiado!', description: inviteCode }); }}>
@@ -93,35 +80,19 @@ const TurmaSubHeader = ({
         </div>
       </div>
 
-      {/* Calendar Modal */}
-      <Dialog open={calendarOpen} onOpenChange={(open) => { setCalendarOpen(open); try { localStorage.setItem(`turma-cal-${turmaId}`, open ? 'visible' : 'hidden'); } catch {} }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Calendário</DialogTitle></DialogHeader>
-          <div className="flex justify-center">
-            <Calendar
-              mode="single"
-              selected={calendarDate}
-              onSelect={(d) => d && setCalendarDate(d)}
-              locale={ptBR}
-              className="p-0 pointer-events-auto"
-              modifiers={{ hasLesson: lessonDates }}
-              modifiersClassNames={{ hasLesson: 'bg-primary/20 font-bold text-primary' }}
+      {/* Members Dialog */}
+      <Dialog open={showMembers} onOpenChange={setShowMembers}>
+        <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Membros</DialogTitle></DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            <MembersTab
+              members={members}
+              userId={userId}
+              isAdmin={isAdmin}
+              mutations={mutations}
+              toast={toast}
             />
           </div>
-          {selectedDayLessons.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">{format(calendarDate, "dd 'de' MMMM", { locale: ptBR })}</p>
-              {selectedDayLessons.map((l: any) => (
-                <div key={l.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors"
-                  onClick={() => { setCalendarOpen(false); navigate(`/turmas/${turmaId}/lessons/${l.id}`); }}>
-                  <BookOpen className="h-4 w-4 text-primary shrink-0" />
-                  <span className="text-sm text-foreground truncate">{l.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-xs text-muted-foreground/60">Nenhum conteúdo neste dia</p>
-          )}
         </DialogContent>
       </Dialog>
 
