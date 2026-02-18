@@ -129,10 +129,85 @@ const DeckDetailDialogs = () => {
               )}
 
               {ctx.cardType === 'cloze' && (
-                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
-                  <p className="text-xs text-muted-foreground">Envolva a resposta com <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{{c1::resposta}}'}</code></p>
-                  <p className="text-[11px] text-muted-foreground">O texto dentro da lacuna será ocultado durante o estudo.</p>
+                <div className="space-y-3">
+                  {/* Visual cloze preview */}
+                  {(() => {
+                    const plainText = ctx.front.replace(/<[^>]*>/g, '');
+                    const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                    const clozeNumbers = new Set<number>();
+                    let match;
+                    while ((match = clozeRegex.exec(plainText)) !== null) {
+                      clozeNumbers.add(parseInt(match[1]));
+                    }
+                    const sortedNumbers = Array.from(clozeNumbers).sort((a, b) => a - b);
+
+                    if (sortedNumbers.length > 0) {
+                      const CLOZE_COLORS = [
+                        'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40',
+                        'bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40',
+                        'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40',
+                        'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40',
+                        'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40',
+                      ];
+                      const DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+
+                      const renderHighlighted = () => {
+                        const parts: React.ReactNode[] = [];
+                        let lastIndex = 0;
+                        const regex2 = /\{\{c(\d+)::([^}]*)\}\}/g;
+                        let m;
+                        let key = 0;
+                        while ((m = regex2.exec(plainText)) !== null) {
+                          if (m.index > lastIndex) {
+                            parts.push(<span key={key++}>{plainText.slice(lastIndex, m.index)}</span>);
+                          }
+                          const num = parseInt(m[1]);
+                          const colorIdx = sortedNumbers.indexOf(num) % CLOZE_COLORS.length;
+                          parts.push(
+                            <span key={key++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 border font-medium ${CLOZE_COLORS[colorIdx]}`}>
+                              <span className="text-[9px] font-bold opacity-70">{num}</span>
+                              {m[2]}
+                            </span>
+                          );
+                          lastIndex = m.index + m[0].length;
+                        }
+                        if (lastIndex < plainText.length) {
+                          parts.push(<span key={key++}>{plainText.slice(lastIndex)}</span>);
+                        }
+                        return parts;
+                      };
+
+                      return (
+                        <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                          <div className="p-3 text-sm leading-relaxed">{renderHighlighted()}</div>
+                          <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center gap-2 flex-wrap">
+                            {sortedNumbers.map((n, i) => (
+                              <span key={n} className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                                <span className={`h-2 w-2 rounded-full ${DOT_COLORS[i % DOT_COLORS.length]}`} />
+                                Cloze {n}
+                              </span>
+                            ))}
+                            {sortedNumbers.length > 1 && (
+                              <span className="text-[10px] text-muted-foreground ml-auto">
+                                {sortedNumbers.length} cards vinculados
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
+                    </p>
+                  </div>
                 </div>
               )}
 
