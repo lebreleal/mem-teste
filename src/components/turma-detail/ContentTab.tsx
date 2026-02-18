@@ -11,6 +11,7 @@ import { useDecks } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -27,6 +28,7 @@ import {
   Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
   Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
   Copy, Link2, ClipboardList, Users, Clock, Import,
+  CheckCheck, X, ArrowUpRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -81,6 +83,10 @@ const ContentTab = () => {
   const [editFileName, setEditFileName] = useState('');
   const [editFilePriceType, setEditFilePriceType] = useState('free');
   const [confirmResync, setConfirmResync] = useState<any>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
 
   // ── Data derivation ──
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId);
@@ -422,6 +428,83 @@ const ContentTab = () => {
     } catch (err: any) { toast({ title: 'Erro ao abrir prova', description: err.message, variant: 'destructive' }); }
   };
 
+  // ── Selection / Organize helpers ──
+  const toggleItem = (key: string) => {
+    setSelectedItems(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
+  };
+  const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
+
+  const handleBulkDelete = () => {
+    for (const key of selectedItems) {
+      const [type, id] = key.split('::');
+      if (type === 'subject') mutations.deleteSubject.mutate(id);
+      else if (type === 'file') deleteFile.mutate(id);
+      else if (type === 'deck') mutations.unshareDeck.mutate(id);
+      else if (type === 'exam') examMutations.deleteExam.mutate(id);
+    }
+    exitSelectionMode();
+    toast({ title: 'Itens excluídos!' });
+  };
+
+  const moveItemMut = useMutation({
+    mutationFn: async ({ type, id, targetSubjectId }: { type: string; id: string; targetSubjectId: string | null }) => {
+      if (type === 'subject') {
+        await supabase.from('turma_subjects' as any).update({ parent_id: targetSubjectId } as any).eq('id', id);
+      } else if (type === 'deck') {
+        await supabase.from('turma_decks' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+      } else if (type === 'exam') {
+        await supabase.from('turma_exams' as any).update({ subject_id: targetSubjectId } as any).eq('id', id);
+      } else if (type === 'file') {
+        const targetLessons = targetSubjectId === null
+          ? lessons.filter(l => !l.subject_id)
+          : lessons.filter(l => l.subject_id === targetSubjectId);
+        let lessonId = targetLessons[0]?.id;
+        if (!lessonId) {
+          const name = targetSubjectId ? subjects.find(s => s.id === targetSubjectId)?.name || 'Conteúdo' : 'Geral';
+          const { data } = await supabase.from('turma_lessons' as any).insert({
+            turma_id: turmaId, subject_id: targetSubjectId, name, created_by: user!.id, is_published: true,
+          } as any).select().single();
+          lessonId = (data as any)?.id;
+        }
+        if (lessonId) await supabase.from('turma_lesson_files' as any).update({ lesson_id: lessonId } as any).eq('id', id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['turma-subjects', turmaId] });
+      queryClient.invalidateQueries({ queryKey: ['turma-decks', turmaId] });
+      queryClient.invalidateQueries({ queryKey: ['turma-exams', turmaId] });
+      queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-lessons', turmaId] });
+      setMovingItem(null);
+      toast({ title: 'Item movido!' });
+    },
+    onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+  });
+
+  const handleBulkMove = () => {
+    // Use first selected item to open move dialog
+    const first = Array.from(selectedItems)[0];
+    if (!first) return;
+    const [type, id] = first.split('::');
+    setMovingItem({ type: 'bulk', id: '', name: `${selectedItems.size} itens` });
+    setMoveTargetId(null);
+  };
+
+  const confirmMove = () => {
+    if (!movingItem) return;
+    if (movingItem.type === 'bulk') {
+      for (const key of selectedItems) {
+        const [type, id] = key.split('::');
+        moveItemMut.mutate({ type, id, targetSubjectId: moveTargetId });
+      }
+      exitSelectionMode();
+    } else {
+      moveItemMut.mutate({ type: movingItem.type, id: movingItem.id, targetSubjectId: moveTargetId });
+    }
+  };
+
+  const allSubjectsFlat = subjects.filter((s: any) => s.turma_id === turmaId);
+
   // ── Render ──
   return (
     <div className="space-y-3">
@@ -458,12 +541,18 @@ const ContentTab = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {(isAdmin || isMod) && (
+          {hasContent && (isAdmin || isMod) && (
+            <Button variant={selectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}>
+              {selectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
+              <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Organizar'}</span>
+            </Button>
+          )}
+          {!selectionMode && (isAdmin || isMod) && (
             <Button variant="outline" size="sm" onClick={() => { setShowAddSubject(true); setNewName(''); setNewDesc(''); }} className="gap-2">
               <FolderPlus className="h-4 w-4" /><span className="hidden sm:inline">Nova Pasta</span>
             </Button>
           )}
-          {canEdit && (
+          {!selectionMode && canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="gap-2">
@@ -487,6 +576,19 @@ const ContentTab = () => {
         </div>
       </div>
 
+      {/* Bulk selection bar */}
+      {selectionMode && selectedItems.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-sm font-medium text-foreground mr-auto">{selectedItems.size} selecionado{selectedItems.size > 1 ? 's' : ''}</span>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={handleBulkMove}>
+            <ArrowUpRight className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Mover</span>
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+            <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Excluir</span>
+          </Button>
+        </div>
+      )}
+
       {/* Unified content list */}
       {!hasContent ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
@@ -508,7 +610,12 @@ const ContentTab = () => {
             const relatedExams = turmaExams.filter((e: any) => e.subject_id === subject.id || (e.lesson_id && childLessonIds.includes(e.lesson_id)));
             return (
               <div key={subject.id} className="group flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors hover:bg-muted/50"
-                onClick={() => setContentFolderId(subject.id)}>
+                onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
+                {selectionMode && (
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedItems.has(`subject::${subject.id}`)} onCheckedChange={() => toggleItem(`subject::${subject.id}`)} />
+                  </div>
+                )}
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <FolderOpen className="h-5 w-5 text-primary" />
                 </div>
@@ -522,28 +629,35 @@ const ContentTab = () => {
                     {totalItems === 0 && totalAttachments === 0 && totalCards === 0 && relatedExams.length === 0 && <span>Vazio</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canEdit && (
-                        <DropdownMenuItem onClick={() => { setEditingSubject({ id: subject.id, name: subject.name }); setEditItemName(subject.name); }}>
-                          <Pencil className="mr-2 h-4 w-4" /> Editar Nome
-                        </DropdownMenuItem>
-                      )}
-                      {isAdmin && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }) })}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                {!selectionMode && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {canEdit && (
+                          <DropdownMenuItem onClick={() => { setEditingSubject({ id: subject.id, name: subject.name }); setEditItemName(subject.name); }}>
+                            <Pencil className="mr-2 h-4 w-4" /> Editar Nome
                           </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                        )}
+                        {(isAdmin || isMod) && (
+                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'subject', id: subject.id, name: subject.name }); setMoveTargetId(null); }}>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                          </DropdownMenuItem>
+                        )}
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }) })}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </div>
             );
@@ -558,7 +672,13 @@ const ContentTab = () => {
             const filePriceType = file.price_type || 'free';
             const fileRestricted = filePriceType !== 'free' && !isSubscriber && !isAdmin && !isMod;
             return (
-              <div key={file.id} className="group flex items-center gap-3 px-5 py-4">
+              <div key={file.id} className="group flex items-center gap-3 px-5 py-4"
+                onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
+                {selectionMode && (
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedItems.has(`file::${file.id}`)} onCheckedChange={() => toggleItem(`file::${file.id}`)} />
+                  </div>
+                )}
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
                   <Icon className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -572,42 +692,48 @@ const ContentTab = () => {
                     {fileRestricted && isPdf && <span className="text-[10px] text-warning font-medium">Prévia limitada</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {canPreview && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
-                      if (isPdf) { setPdfPreviewUrl(file.file_url); setPdfPreviewRestricted(fileRestricted); }
-                      else window.open(file.file_url, '_blank');
-                    }}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {!fileRestricted ? (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
-                      <a href={file.file_url} download={file.file_name} target="_blank" rel="noopener noreferrer"><Download className="h-3.5 w-3.5" /></a>
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled>
-                      <Lock className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {canEdit && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setEditingFile(file); setEditFileName(file.file_name); setEditFilePriceType(file.price_type || 'free'); }}>
-                          <Pencil className="mr-2 h-4 w-4" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => deleteFile.mutate(file.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Remover
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                {!selectionMode && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canPreview && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
+                        if (isPdf) { setPdfPreviewUrl(file.file_url); setPdfPreviewRestricted(fileRestricted); }
+                        else window.open(file.file_url, '_blank');
+                      }}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {!fileRestricted ? (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
+                        <a href={file.file_url} download={file.file_name} target="_blank" rel="noopener noreferrer"><Download className="h-3.5 w-3.5" /></a>
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled>
+                        <Lock className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setEditingFile(file); setEditFileName(file.file_name); setEditFilePriceType(file.price_type || 'free'); }}>
+                            <Pencil className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'file', id: file.id, name: file.file_name }); setMoveTargetId(null); }}>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteFile.mutate(file.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Remover
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -622,7 +748,13 @@ const ContentTab = () => {
             const inCollection = alreadyOwns || alreadyLinked;
             const linkedDeck = alreadyLinked ? userDecks.find(d => (d as any).source_turma_deck_id === td.id) : null;
             return (
-              <div key={td.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50">
+              <div key={td.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50"
+                onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
+                {selectionMode && (
+                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                    <Checkbox checked={selectedItems.has(`deck::${td.id}`)} onCheckedChange={() => toggleItem(`deck::${td.id}`)} />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-foreground truncate">{td.deck_name}</h3>
@@ -630,49 +762,61 @@ const ContentTab = () => {
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{td.card_count ?? 0} cards</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setPreviewDeck(td)}>
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  {!inCollection && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; addToCollection.mutate(td); }}
-                      disabled={addToCollection.isPending || (subscriberOnly && !canImport)}>
-                      {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
+                {!selectionMode && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setPreviewDeck(td)}>
+                      <Eye className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-                  {inCollection && !alreadyOwns && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setConfirmResync(td)} disabled={addToCollection.isPending}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {td.allow_download && !inCollection && canImport && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => downloadDeck.mutate(td)} disabled={downloadDeck.isPending}>
-                      <Download className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {(isAdmin || isOwner) && (
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditPricing(td)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => mutations.unshareDeck.mutate(td.id, { onSuccess: () => toast({ title: 'Baralho removido' }) })}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Remover
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  )}
-                </div>
+                    {!inCollection && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (subscriberOnly && !canImport) return; addToCollection.mutate(td); }}
+                        disabled={addToCollection.isPending || (subscriberOnly && !canImport)}>
+                        {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
+                      </Button>
+                    )}
+                    {inCollection && !alreadyOwns && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setConfirmResync(td)} disabled={addToCollection.isPending}>
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {td.allow_download && !inCollection && canImport && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => downloadDeck.mutate(td)} disabled={downloadDeck.isPending}>
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {(isAdmin || isOwner) && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditPricing(td)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setMovingItem({ type: 'deck', id: td.id, name: td.deck_name || 'Baralho' }); setMoveTargetId(null); }}>
+                              <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.unshareDeck.mutate(td.id, { onSuccess: () => toast({ title: 'Baralho removido' }) })}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Remover
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
 
           {/* Exams */}
           {currentExams.map((exam: any) => (
-            <div key={exam.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50">
+            <div key={exam.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50"
+              onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
+              {selectionMode && (
+                <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                  <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
+                </div>
+              )}
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <ClipboardList className="h-4 w-4 text-primary" />
               </div>
@@ -688,27 +832,33 @@ const ContentTab = () => {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {exam.total_questions > 0 && (
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleOpenExam(exam)}>
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {(isAdmin || exam.created_by === user?.id) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem className="text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }) })}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
+              {!selectionMode && (
+                <div className="flex items-center gap-1 shrink-0">
+                  {exam.total_questions > 0 && (
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleOpenExam(exam)}>
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {(isAdmin || exam.created_by === user?.id) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setMovingItem({ type: 'exam', id: exam.id, name: exam.title }); setMoveTargetId(null); }}>
+                          <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }) })}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -879,6 +1029,34 @@ const ContentTab = () => {
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmResync(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => { addToCollection.mutate(confirmResync); setConfirmResync(null); }}>Atualizar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Dialog */}
+      <Dialog open={!!movingItem} onOpenChange={open => !open && setMovingItem(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle className="font-display">Mover "{movingItem?.name}"</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Selecione a pasta de destino:</p>
+            <Select value={moveTargetId ?? '__root__'} onValueChange={v => setMoveTargetId(v === '__root__' ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="Selecionar pasta" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__root__">Raiz (sem pasta)</SelectItem>
+                {allSubjectsFlat
+                  .filter(s => movingItem?.type !== 'subject' || s.id !== movingItem?.id)
+                  .map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))
+                }
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setMovingItem(null)}>Cancelar</Button>
+              <Button size="sm" onClick={confirmMove} disabled={moveItemMut.isPending}>
+                {moveItemMut.isPending ? 'Movendo...' : 'Mover'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

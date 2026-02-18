@@ -74,7 +74,7 @@ const DashboardActions = ({
           {hasDecks && (
             <Button variant={deckSelectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={toggleSelectionMode}>
               {deckSelectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
-              <span className="hidden sm:inline">{deckSelectionMode ? 'Cancelar' : 'Selecionar'}</span>
+              <span className="hidden sm:inline">{deckSelectionMode ? 'Cancelar' : 'Organizar'}</span>
             </Button>
           )}
           {!deckSelectionMode && (
