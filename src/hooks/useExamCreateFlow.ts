@@ -159,6 +159,7 @@ export function useExamCreateFlow() {
         detailLevel: 'standard',
         cardFormats: [...(mcCount > 0 ? ['multiple_choice'] : []), ...(writtenCount > 0 ? ['qa'] : [])],
         customInstructions: `PROVA ACADÊMICA. Gere ${mcCount} questões de múltipla escolha (${optionsCount} alternativas cada) e ${writtenCount} dissertativas.
+PROIBIDO CLOZE: NÃO use formato cloze, NÃO use {{c1::...}} ou lacunas. Apenas "basic" (dissertativa) e "multiple_choice".
 Cada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".
 Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa.
 Baseie-se APENAS no material fornecido. Varie a dificuldade.${getExampleInstructions()}`,
@@ -259,6 +260,7 @@ Baseie-se APENAS no material fornecido. Varie a dificuldade.${getExampleInstruct
         detailLevel: 'standard',
         cardFormats: [...(fileMcCount > 0 ? ['multiple_choice'] : []), ...(fileWrittenCount > 0 ? ['qa'] : [])],
         customInstructions: `PROVA ACADÊMICA baseada em arquivo. Gere ${fileMcCount} questões de múltipla escolha (${fileOptionsCount} alternativas cada) e ${fileWrittenCount} dissertativas.
+PROIBIDO CLOZE: NÃO use formato cloze, NÃO use {{c1::...}} ou lacunas. Apenas "basic" (dissertativa) e "multiple_choice".
 Cada questão DEVE ter um ENUNCIADO (caso clínico, situação-problema ou texto-base) na "front", separado da pergunta por "---".
 Trate cada página como unidade temática independente. NÃO misture conteúdos de páginas diferentes. NÃO invente informações.
 Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie a dificuldade.${getExampleInstructions()}`,
