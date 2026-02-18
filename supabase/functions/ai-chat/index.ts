@@ -10,17 +10,22 @@ Deno.serve(async (req) => {
   if (cors) return cors;
 
   try {
-    const { messages, aiModel, energyCost, conversationId } = await req.json();
-    if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
-
     const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
-    let userId = "";
-    if (authHeader.startsWith("Bearer ")) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) userId = user.id;
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
     }
+    const userId = claimsData.claims.sub as string;
+
+    const { messages, aiModel, energyCost, conversationId } = await req.json();
+    if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
 
     const cost = energyCost || 0;
     if (userId && cost > 0) {
