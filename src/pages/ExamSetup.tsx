@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import CommunityDeleteBlockDialog from '@/components/CommunityDeleteBlockDialog';
+
 
 const ExamSetup = () => {
   const navigate = useNavigate();
@@ -43,7 +43,7 @@ const ExamSetup = () => {
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [deleteExamId, setDeleteExamId] = useState<string | null>(null);
-  const [communityBlockExam, setCommunityBlockExam] = useState<{ id: string; name: string } | null>(null);
+  
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'folder'; id: string; name: string } | null>(null);
 
   // Folder dialogs
@@ -498,11 +498,7 @@ const ExamSetup = () => {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {
-                          if (exam.source_turma_exam_id) {
-                            setCommunityBlockExam({ id: exam.id, name: exam.title });
-                          } else {
-                            setDeleteExamId(exam.id);
-                          }
+                          setDeleteExamId(exam.id);
                         }}>
                           <Trash2 className="mr-2 h-4 w-4" /> Deletar
                         </DropdownMenuItem>
@@ -522,9 +518,7 @@ const ExamSetup = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Deletar prova?</AlertDialogTitle>
             <AlertDialogDescription>
-              {exams.find(e => e.id === deleteExamId)?.source_turma_exam_id
-                ? 'Esta prova está vinculada a uma comunidade. O vínculo será perdido e esta ação não pode ser desfeita.'
-                : 'Esta ação não pode ser desfeita.'}
+              Esta ação não pode ser desfeita.{exams.find(e => e.id === deleteExamId)?.source_turma_exam_id ? ' O vínculo com a comunidade será perdido.' : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -643,12 +637,6 @@ const ExamSetup = () => {
       {/* Buy Credits Dialog */}
       <BuyCreditsDialog open={creditsOpen} onOpenChange={setCreditsOpen} currentBalance={energy} />
 
-      <CommunityDeleteBlockDialog
-        open={!!communityBlockExam}
-        onOpenChange={(open) => !open && setCommunityBlockExam(null)}
-        itemName={communityBlockExam?.name ?? ''}
-        itemType="exam"
-      />
     </div>
   );
 };
