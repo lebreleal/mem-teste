@@ -6,7 +6,7 @@ import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import RichEditor from '@/components/RichEditor';
+import LazyRichEditor from '@/components/LazyRichEditor';
 import ImageOcclusion from '@/components/ImageOcclusion';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import ImportCardsDialog from '@/components/ImportCardsDialog';
@@ -70,7 +70,7 @@ const DeckDetailDialogs = () => {
                 <Label className="mb-1.5 block">
                   {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : 'Frente'}
                 </Label>
-                <RichEditor
+                <LazyRichEditor
                   content={ctx.front}
                   onChange={ctx.setFront}
                   placeholder={ctx.cardType === 'multiple_choice' ? 'Qual organela é responsável pela produção de energia?' : ctx.cardType === 'cloze' ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.' : 'Pergunta, conceito ou texto com {{c1::lacunas}}...'}
@@ -164,7 +164,7 @@ const DeckDetailDialogs = () => {
               {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
                 <div>
                   <Label className="mb-1.5 block">Verso</Label>
-                  <RichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
+                  <LazyRichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}
 

@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import RichEditor from '@/components/RichEditor';
+import LazyRichEditor from '@/components/LazyRichEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
@@ -418,7 +418,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
               <Label className="mb-1.5 block">
                 {editorType === 'multiple_choice' ? 'Pergunta' : editorType === 'cloze' ? 'Texto com lacunas' : 'Frente (Pergunta)'}
               </Label>
-              <RichEditor
+              <LazyRichEditor
                 content={front}
                 onChange={setFront}
                 placeholder="Pergunta..."
@@ -485,7 +485,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
             ) : (
               <div>
                 <Label className="mb-1.5 block">Verso (Resposta)</Label>
-                <RichEditor content={back} onChange={setBack} placeholder="Resposta..." hideCloze />
+                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta..." hideCloze />
               </div>
             )}
 

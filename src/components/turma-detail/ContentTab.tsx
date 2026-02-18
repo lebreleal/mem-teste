@@ -3,7 +3,7 @@
  * Orchestrator component that delegates to sub-components and hooks.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
@@ -34,7 +34,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
-import PdfCanvasViewer from '@/components/lesson-detail/PdfCanvasViewer';
+const PdfCanvasViewer = lazy(() => import('@/components/lesson-detail/PdfCanvasViewer'));
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -833,7 +833,7 @@ const ContentTab = () => {
               )}
             </DialogTitle>
           </DialogHeader>
-          {pdfPreviewUrl && <PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} />}
+          {pdfPreviewUrl && <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} /></Suspense>}
         </DialogContent>
       </Dialog>
 
