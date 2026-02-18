@@ -23,8 +23,8 @@ const DeckDetailContent = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4 gap-2 overflow-hidden">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <Button variant="ghost" size="icon" onClick={() => fromCommunity && communityTurmaId ? navigate(`/turmas/${communityTurmaId}`, { replace: true }) : navigate('/dashboard', { replace: true })}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
