@@ -173,7 +173,7 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 4096 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 8192 }),
     });
 
     if (!aiResponse.ok) {
@@ -185,7 +185,8 @@ ${getOutputExamples(formats)}`;
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? "";
-    console.log("AI response length:", rawContent.length, "first 200 chars:", rawContent.substring(0, 200));
+    const finishReason = aiData.choices?.[0]?.finish_reason ?? "unknown";
+    console.log("AI response length:", rawContent.length, "finish_reason:", finishReason, "first 200 chars:", rawContent.substring(0, 200));
 
     const usage = {
       prompt_tokens: aiData.usage?.prompt_tokens || 0,
@@ -195,7 +196,20 @@ ${getOutputExamples(formats)}`;
 
     let jsonStr = rawContent;
     const m = rawContent.match(/\[[\s\S]*\]/);
-    if (m) jsonStr = m[0];
+    if (m) {
+      jsonStr = m[0];
+    } else {
+      // Try to repair truncated JSON array (no closing bracket)
+      const arrStart = rawContent.indexOf('[');
+      if (arrStart !== -1) {
+        let truncated = rawContent.slice(arrStart).replace(/,\s*$/, '');
+        // Close any open strings/objects and close the array
+        const openBraces = (truncated.match(/{/g) || []).length - (truncated.match(/}/g) || []).length;
+        for (let i = 0; i < openBraces; i++) truncated += '}';
+        truncated += ']';
+        jsonStr = truncated;
+      }
+    }
 
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
