@@ -122,3 +122,22 @@ export async function startExam(examId: string) {
     .update({ status: 'in_progress', started_at: new Date().toISOString() } as any)
     .eq('id', examId);
 }
+
+/** Update synced_at timestamp for an exam. */
+export async function updateExamSyncedAt(examId: string) {
+  const { error } = await examsTable()
+    .update({ synced_at: new Date().toISOString() } as any)
+    .eq('id', examId);
+  if (error) throw error;
+}
+
+/** Fetch local exam linked to a turma exam. */
+export async function fetchLinkedExam(userId: string, sourceTurmaExamId: string): Promise<Exam | null> {
+  const { data, error } = await examsTable()
+    .select('*')
+    .eq('user_id', userId)
+    .eq('source_turma_exam_id', sourceTurmaExamId)
+    .limit(1);
+  if (error) throw error;
+  return (data && data.length > 0) ? (data[0] as unknown as Exam) : null;
+}

@@ -16,6 +16,7 @@ export interface Exam {
   completed_at: string | null;
   created_at: string;
   source_turma_exam_id: string | null;
+  synced_at: string | null;
 }
 
 export interface ExamQuestion {

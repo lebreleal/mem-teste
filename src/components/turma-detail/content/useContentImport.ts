@@ -200,36 +200,40 @@ export const useContentImport = () => {
     } finally { setImportingExamId(null); }
   };
 
-  // ── Open turma exam (import to personal with folder linking) ──
-  const handleOpenExam = async (exam: any) => {
-    try {
-      // Check if already imported
-      const { data: existing } = await supabase.from('exams').select('id').eq('user_id', user!.id).eq('source_turma_exam_id', exam.id).limit(1);
-      if (existing?.length) { navigate(`/exam/${existing[0].id}`); return; }
+  // ── Exam helpers ──
+  const userHasLinkedExam = (turmaExamId: string) => {
+    // will be checked dynamically via query
+    return false; // placeholder – actual check done in ContentTab via linkedExamsQuery
+  };
 
+  // ── Add exam to collection (Copy) ──
+  const addExamToCollection = useMutation({
+    mutationFn: async (exam: any) => {
+      if (!user || !turma) throw new Error('Not authenticated');
       // Find or create exam folder linked to this community
       const { data: existingFolders } = await supabase.from('exam_folders')
-        .select('id, name').eq('user_id', user!.id);
-      const communityFolderName = turma?.name || 'Comunidade';
+        .select('id, name').eq('user_id', user.id);
+      const communityFolderName = turma.name || 'Comunidade';
       let examFolder = (existingFolders || []).find((f: any) => f.name === communityFolderName);
       if (!examFolder) {
         const { data: newFolder, error: folderErr } = await supabase.from('exam_folders')
-          .insert({ user_id: user!.id, name: communityFolderName }).select().single();
+          .insert({ user_id: user.id, name: communityFolderName }).select().single();
         if (folderErr) throw folderErr;
         examFolder = newFolder;
       }
 
       const { data: questions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', exam.id).order('sort_order', { ascending: true });
-      const { data: userDecksList } = await supabase.from('decks').select('id').eq('user_id', user!.id).limit(1);
+      const { data: userDecksList } = await supabase.from('decks').select('id').eq('user_id', user.id).limit(1);
       let deckId = userDecksList?.[0]?.id;
-      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user!.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
+      if (!deckId) { const { data: newDeck } = await supabase.from('decks').insert({ user_id: user.id, name: 'Provas Importadas' }).select().single(); deckId = newDeck?.id; }
       if (!deckId) throw new Error('Sem baralho disponível');
       const totalPoints = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
       const { data: newExam, error: examError } = await (supabase.from('exams' as any) as any)
         .insert({
-          user_id: user!.id, deck_id: deckId, title: exam.title, status: 'pending',
+          user_id: user.id, deck_id: deckId, title: exam.title, status: 'pending',
           total_points: totalPoints, time_limit_seconds: exam.time_limit_seconds || null,
           source_turma_exam_id: exam.id, folder_id: examFolder?.id || null,
+          synced_at: new Date().toISOString(),
         })
         .select().single();
       if (examError) throw examError;
@@ -238,11 +242,103 @@ export const useContentImport = () => {
         options: q.options ?? null, correct_answer: q.correct_answer, correct_indices: q.correct_indices || null, points: q.points, sort_order: idx,
       }));
       await (supabase.from('exam_questions' as any) as any).insert(questionsToInsert);
+      return { examId: newExam.id, folderName: communityFolderName };
+    },
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       queryClient.invalidateQueries({ queryKey: ['exam-folders'] });
-      toast({ title: 'Prova importada!', description: `Na pasta "${communityFolderName}".` });
-      navigate(`/exam/${newExam.id}`);
-    } catch (err: any) { toast({ title: 'Erro ao abrir prova', description: err.message, variant: 'destructive' }); }
+      queryClient.invalidateQueries({ queryKey: ['linked-exams'] });
+      toast({ title: '✅ Prova adicionada à coleção!', description: `Na pasta "${result.folderName}".` });
+    },
+    onError: (err: any) => toast({ title: 'Erro ao importar prova', description: err.message, variant: 'destructive' }),
+  });
+
+  // ── Compute sync changes for an exam ──
+  const computeExamSyncChanges = async (turmaExamId: string, localExamId: string) => {
+    const { data: sourceQuestions } = await supabase.from('turma_exam_questions').select('*').eq('exam_id', turmaExamId).order('sort_order', { ascending: true });
+    const { data: localQuestions } = await supabase.from('exam_questions').select('*').eq('exam_id', localExamId).order('sort_order', { ascending: true });
+
+    const source = (sourceQuestions ?? []) as any[];
+    const local = (localQuestions ?? []) as any[];
+    const changes: any[] = [];
+
+    // Match by question_text
+    const localMap = new Map<string, any>();
+    local.forEach(q => localMap.set(q.question_text, q));
+
+    const sourceTexts = new Set<string>();
+    for (const sq of source) {
+      sourceTexts.add(sq.question_text);
+      const lq = localMap.get(sq.question_text);
+      if (!lq) {
+        changes.push({ type: 'added', questionText: sq.question_text, sourceData: sq });
+      } else {
+        // Check if modified (options or correct_answer changed)
+        const optionsChanged = JSON.stringify(sq.options) !== JSON.stringify(lq.options);
+        const answerChanged = sq.correct_answer !== lq.correct_answer;
+        if (optionsChanged || answerChanged) {
+          changes.push({ type: 'modified', questionText: lq.question_text, newText: sq.question_text, sourceData: sq, localId: lq.id });
+        }
+      }
+    }
+
+    // Removed: questions in local that came from source but no longer exist
+    for (const lq of local) {
+      if (!sourceTexts.has(lq.question_text) && !lq.card_id) {
+        changes.push({ type: 'removed', questionText: lq.question_text, localId: lq.id });
+      }
+    }
+
+    return changes;
+  };
+
+  // ── Apply sync changes ──
+  const applySyncChanges = async (localExamId: string, selectedChanges: any[]) => {
+    for (const change of selectedChanges) {
+      if (change.type === 'added' && change.sourceData) {
+        const { data: localQs } = await supabase.from('exam_questions').select('sort_order').eq('exam_id', localExamId).order('sort_order', { ascending: false }).limit(1);
+        const nextOrder = ((localQs as any)?.[0]?.sort_order ?? -1) + 1;
+        await (supabase.from('exam_questions' as any) as any).insert({
+          exam_id: localExamId, question_type: change.sourceData.question_type, question_text: change.sourceData.question_text,
+          options: change.sourceData.options ?? null, correct_answer: change.sourceData.correct_answer,
+          correct_indices: change.sourceData.correct_indices || null, points: change.sourceData.points, sort_order: nextOrder,
+        });
+      } else if (change.type === 'removed' && change.localId) {
+        await supabase.from('exam_questions').delete().eq('id', change.localId);
+      } else if (change.type === 'modified' && change.localId && change.sourceData) {
+        await (supabase.from('exam_questions' as any) as any).update({
+          question_text: change.sourceData.question_text,
+          options: change.sourceData.options ?? null,
+          correct_answer: change.sourceData.correct_answer,
+          correct_indices: change.sourceData.correct_indices || null,
+          points: change.sourceData.points,
+        }).eq('id', change.localId);
+      }
+    }
+    // Update synced_at
+    await (supabase.from('exams' as any) as any).update({ synced_at: new Date().toISOString() }).eq('id', localExamId);
+    queryClient.invalidateQueries({ queryKey: ['exams'] });
+    queryClient.invalidateQueries({ queryKey: ['exam-questions'] });
+    queryClient.invalidateQueries({ queryKey: ['linked-exams'] });
+  };
+
+  // ── Sync review state ──
+  const [syncReviewExam, setSyncReviewExam] = useState<{ turmaExamId: string; localExamId: string; title: string } | null>(null);
+  const [syncChanges, setSyncChanges] = useState<any[]>([]);
+  const [loadingSyncChanges, setLoadingSyncChanges] = useState(false);
+
+  const openSyncReview = async (turmaExamId: string, localExamId: string, title: string) => {
+    setLoadingSyncChanges(true);
+    setSyncReviewExam({ turmaExamId, localExamId, title });
+    try {
+      const changes = await computeExamSyncChanges(turmaExamId, localExamId);
+      setSyncChanges(changes);
+    } catch (err) {
+      toast({ title: 'Erro ao comparar', variant: 'destructive' });
+      setSyncReviewExam(null);
+    } finally {
+      setLoadingSyncChanges(false);
+    }
   };
 
   return {
@@ -262,6 +358,13 @@ export const useContentImport = () => {
     loadingExams,
     personalQuestionCounts,
     handleImportExamToTurma,
-    handleOpenExam,
+    // Exam copy/sync
+    addExamToCollection,
+    syncReviewExam,
+    setSyncReviewExam,
+    syncChanges,
+    loadingSyncChanges,
+    openSyncReview,
+    applySyncChanges,
   };
 };

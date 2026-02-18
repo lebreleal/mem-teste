@@ -304,6 +304,7 @@ export type Database = {
           sort_order: number
           source_listing_id: string | null
           source_turma_deck_id: string | null
+          synced_at: string | null
           updated_at: string
           user_id: string
         }
@@ -326,6 +327,7 @@ export type Database = {
           sort_order?: number
           source_listing_id?: string | null
           source_turma_deck_id?: string | null
+          synced_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -348,6 +350,7 @@ export type Database = {
           sort_order?: number
           source_listing_id?: string | null
           source_turma_deck_id?: string | null
+          synced_at?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -503,6 +506,7 @@ export type Database = {
           source_turma_exam_id: string | null
           started_at: string
           status: string
+          synced_at: string | null
           time_limit_seconds: number | null
           title: string
           total_points: number
@@ -518,6 +522,7 @@ export type Database = {
           source_turma_exam_id?: string | null
           started_at?: string
           status?: string
+          synced_at?: string | null
           time_limit_seconds?: number | null
           title?: string
           total_points?: number
@@ -533,6 +538,7 @@ export type Database = {
           source_turma_exam_id?: string | null
           started_at?: string
           status?: string
+          synced_at?: string | null
           time_limit_seconds?: number | null
           title?: string
           total_points?: number
