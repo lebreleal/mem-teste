@@ -49,6 +49,7 @@ interface DeckListProps {
   onDeleteFolder: (folder: Folder) => void;
   
   onCreateSubDeck: (deckId: string) => void;
+  onRenameDeck: (deck: DeckWithStats) => void;
   onMoveDeck: (deck: DeckWithStats) => void;
   onArchiveDeck: (id: string) => void;
   onDeleteDeck: (deck: DeckWithStats) => void;
@@ -61,7 +62,7 @@ interface DeckListProps {
 const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
-  onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
+  onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
   folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
   ...deckRowProps
 }: DeckListProps) => {
@@ -233,6 +234,7 @@ const DeckList = ({
           <DeckRow
             key={deck.id}
             deck={deck}
+            onRename={onRenameDeck}
             onMove={onMoveDeck}
             onArchive={onArchiveDeck}
             onDelete={onDeleteDeck}
