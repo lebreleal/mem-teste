@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, GripVertical,
+  ChevronRight, Link2,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -32,14 +32,13 @@ interface DeckRowProps {
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
-  reorderMode?: boolean;
 }
 
 const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers, reorderMode = false,
+  onCreateSubDeck, onMove, onArchive, onDelete, dragHandlers,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -67,14 +66,6 @@ const DeckRow = ({
         style={{ paddingLeft: `${basePadding}px` }}
         onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(`/decks/${deck.id}`)}
       >
-        {depth === 0 && reorderMode && (
-          <div
-            className="flex h-8 w-6 items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4" />
-          </div>
-        )}
         {deckSelectionMode && (
           <div className="shrink-0" onClick={e => e.stopPropagation()}>
             <Checkbox checked={isDeckSelected} onCheckedChange={() => toggleDeckSelection(deck.id)} />

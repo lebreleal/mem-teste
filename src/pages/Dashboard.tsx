@@ -33,7 +33,7 @@ const Dashboard = () => {
 
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
-  const [reorderMode, setReorderMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -242,8 +242,8 @@ const Dashboard = () => {
           onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setBulkMoveTargetFolder(null); }}
           onBulkArchive={handleBulkArchive}
           onBulkDelete={handleBulkDelete}
-          reorderMode={reorderMode}
-          toggleReorderMode={() => setReorderMode(!reorderMode)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <DeckList
@@ -251,6 +251,7 @@ const Dashboard = () => {
           currentFolders={state.currentFolders}
           currentDecks={state.currentDecks}
           currentFolderId={state.currentFolderId}
+          searchQuery={searchQuery}
           
           deckSelectionMode={state.deckSelectionMode}
           selectedDeckIds={state.selectedDeckIds}
@@ -276,7 +277,6 @@ const Dashboard = () => {
           onDeleteDeck={(d) => state.setDeleteTarget({ type: 'deck', id: d.id, name: d.name })}
           onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
           onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
-          reorderMode={reorderMode}
         />
 
         {/* Archived section */}
