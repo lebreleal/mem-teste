@@ -539,7 +539,7 @@ const ContentTab = () => {
           {hasContent && (isAdmin || isMod) && (
             <Button variant={selectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}>
               {selectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
-              <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Organizar'}</span>
+              <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Selecionar'}</span>
             </Button>
           )}
           {!selectionMode && (isAdmin || isMod) && (
