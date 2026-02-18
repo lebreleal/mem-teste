@@ -64,19 +64,10 @@ const ratingConfig = [
 
 function renderCloze(html: string, revealed: boolean): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
-    const n = parseInt(num);
-    const colors = [
-      { bg: 'rgba(14,165,233,0.15)', border: 'rgba(14,165,233,0.4)', text: 'rgb(14,165,233)' },   // sky
-      { bg: 'rgba(139,92,246,0.15)', border: 'rgba(139,92,246,0.4)', text: 'rgb(139,92,246)' },     // violet
-      { bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.4)', text: 'rgb(16,185,129)' },     // emerald
-      { bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)', text: 'rgb(245,158,11)' },     // amber
-      { bg: 'rgba(244,63,94,0.15)', border: 'rgba(244,63,94,0.4)', text: 'rgb(244,63,94)' },        // rose
-    ];
-    const c = colors[(n - 1) % colors.length];
     if (revealed) {
-      return `<span style="background:${c.bg};border:1px solid ${c.border};border-radius:4px;padding:1px 6px;font-weight:600;color:${c.text}">${answer}</span>`;
+      return `<span class="cloze-revealed">${answer}</span>`;
     }
-    return `<span style="background:${c.bg};border:1px solid ${c.border};border-radius:4px;padding:1px 8px;display:inline-flex;align-items:center;gap:2px"><span style="font-size:10px;font-weight:700;color:${c.text}">${num}</span><span style="color:${c.text};font-weight:500">____</span></span>`;
+    return `<span class="cloze-blank"><span style="font-size:10px;font-weight:700;margin-right:2px">c${num}</span>[...]</span>`;
   });
 }
 
