@@ -27,9 +27,10 @@ const CardList = () => {
     getStateInfo, stripHtml, otherDecks,
   } = useDeckDetail();
 
-  // Check if this deck or any ancestor is linked to a community
+  // Check if this deck, any ancestor, or any descendant is linked to a community
   const isLinkedDeck = (() => {
     if ((deck as any)?.source_turma_deck_id) return true;
+    // Check ancestors
     let parentId = (deck as any)?.parent_deck_id;
     while (parentId) {
       const parent = decks.find((d: any) => d.id === parentId);
@@ -37,6 +38,12 @@ const CardList = () => {
       if ((parent as any).source_turma_deck_id) return true;
       parentId = (parent as any).parent_deck_id;
     }
+    // Check descendants
+    const hasLinkedDescendant = (id: string): boolean => {
+      const children = decks.filter((d: any) => d.parent_deck_id === id);
+      return children.some((c: any) => c.source_turma_deck_id || hasLinkedDescendant(c.id));
+    };
+    if (hasLinkedDescendant(deck?.id)) return true;
     return false;
   })();
 
