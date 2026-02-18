@@ -180,23 +180,29 @@ const ContentTab = () => {
 
   const deleteFile = useMutation({
     mutationFn: async (fileId: string) => {
-      await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
+      const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
+      if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Arquivo removido' }); },
+    onError: (err: any) => toast({ title: 'Erro ao remover arquivo', description: err.message, variant: 'destructive' }),
   });
 
   const updateFileVisibility = useMutation({
     mutationFn: async ({ fileId, pt }: { fileId: string; pt: string }) => {
-      await supabase.from('turma_lesson_files' as any).update({ price_type: pt } as any).eq('id', fileId);
+      const { error } = await supabase.from('turma_lesson_files' as any).update({ price_type: pt } as any).eq('id', fileId);
+      if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Visibilidade atualizada!' }); },
+    onError: (err: any) => toast({ title: 'Erro ao atualizar', description: err.message, variant: 'destructive' }),
   });
 
   const renameFileMut = useMutation({
     mutationFn: async ({ fileId, newName }: { fileId: string; newName: string }) => {
-      await supabase.from('turma_lesson_files' as any).update({ file_name: newName } as any).eq('id', fileId);
+      const { error } = await supabase.from('turma_lesson_files' as any).update({ file_name: newName } as any).eq('id', fileId);
+      if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['turma-content-files'] }); toast({ title: 'Nome atualizado!' }); },
+    onError: (err: any) => toast({ title: 'Erro ao renomear', description: err.message, variant: 'destructive' }),
   });
 
   const handleSaveFile = () => {
@@ -434,16 +440,20 @@ const ContentTab = () => {
   };
   const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
 
-  const handleBulkDelete = () => {
-    for (const key of selectedItems) {
-      const [type, id] = key.split('::');
-      if (type === 'subject') mutations.deleteSubject.mutate(id);
-      else if (type === 'file') deleteFile.mutate(id);
-      else if (type === 'deck') mutations.unshareDeck.mutate(id);
-      else if (type === 'exam') examMutations.deleteExam.mutate(id);
+  const handleBulkDelete = async () => {
+    try {
+      for (const key of selectedItems) {
+        const [type, id] = key.split('::');
+        if (type === 'subject') await new Promise<void>((resolve, reject) => mutations.deleteSubject.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
+        else if (type === 'file') await new Promise<void>((resolve, reject) => deleteFile.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
+        else if (type === 'deck') await new Promise<void>((resolve, reject) => mutations.unshareDeck.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
+        else if (type === 'exam') await new Promise<void>((resolve, reject) => examMutations.deleteExam.mutate(id, { onSuccess: () => resolve(), onError: (e) => reject(e) }));
+      }
+      toast({ title: 'Itens excluídos!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao excluir alguns itens', description: err.message, variant: 'destructive' });
     }
     exitSelectionMode();
-    toast({ title: 'Itens excluídos!' });
   };
 
   // Helper: get all descendant subject IDs to prevent circular moves
@@ -663,7 +673,7 @@ const ContentTab = () => {
                         {isAdmin && (
                           <>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }) })}>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir pasta', description: e.message, variant: 'destructive' }) })}>
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </DropdownMenuItem>
                           </>
@@ -807,7 +817,7 @@ const ContentTab = () => {
                               <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.unshareDeck.mutate(td.id, { onSuccess: () => toast({ title: 'Baralho removido' }) })}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.unshareDeck.mutate(td.id, { onSuccess: () => toast({ title: 'Baralho removido' }), onError: (e: any) => toast({ title: 'Erro ao remover baralho', description: e.message, variant: 'destructive' }) })}>
                               <Trash2 className="mr-2 h-4 w-4" /> Remover
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -861,7 +871,7 @@ const ContentTab = () => {
                           <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }) })}>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir prova', description: e.message, variant: 'destructive' }) })}>
                           <Trash2 className="mr-2 h-4 w-4" /> Excluir
                         </DropdownMenuItem>
                       </DropdownMenuContent>
