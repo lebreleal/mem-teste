@@ -167,6 +167,8 @@ const DeckSettings = () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       queryClient.invalidateQueries({ queryKey: ['study-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['deck', deckId] });
     }
     setResetConfirm(false);
   };
