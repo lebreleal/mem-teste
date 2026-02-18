@@ -424,7 +424,7 @@ const ExamSetup = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Excluir pasta "{deleteTarget?.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>A pasta será excluída. Provas dentro dela ficarão sem pasta.</AlertDialogDescription>
+            <AlertDialogDescription>A pasta será excluída. Provas dentro dela serão movidas para a raiz.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

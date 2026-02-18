@@ -117,12 +117,7 @@ const DeckRow = ({
                 <Archive className="mr-2 h-4 w-4" /> Arquivar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {
-                if (deck.source_turma_deck_id) {
-                  if (!window.confirm('⚠️ Este baralho está vinculado a uma comunidade. Ao excluir, o vínculo será perdido e a pasta pode ficar sem conteúdo. Deseja continuar?')) return;
-                }
-                onDelete(deck);
-              }}>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(deck)}>
                 <Trash2 className="mr-2 h-4 w-4" /> Excluir
               </DropdownMenuItem>
             </DropdownMenuContent>
