@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
@@ -14,7 +14,8 @@ import StudyCardActions from '@/components/StudyCardActions';
 import { invokeTutor } from '@/services/aiService';
 import { useToast } from '@/hooks/use-toast';
 import type { Rating } from '@/lib/fsrs';
-import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
+
+const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
@@ -342,7 +343,9 @@ const Study = () => {
           />
         </div>
       </main>
-      <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
+      <Suspense fallback={null}>
+        <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
+      </Suspense>
     </div>
   );
 };

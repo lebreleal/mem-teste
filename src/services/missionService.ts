@@ -13,21 +13,23 @@ interface MissionStats {
 
 /** Fetch all missions with progress for the current user. */
 export async function fetchMissions(userId: string, stats: MissionStats): Promise<MissionWithProgress[]> {
-  const { data: definitions } = await supabase
-    .from('mission_definitions')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order');
-
-  if (!definitions) return [];
-
   const today = getToday();
   const weekStart = getWeekStart();
 
-  const { data: userMissions } = await supabase
-    .from('user_missions')
-    .select('*')
-    .eq('user_id', userId);
+  // Phase 1: fetch definitions + userMissions in parallel (independent)
+  const [{ data: definitions }, { data: userMissions }] = await Promise.all([
+    supabase
+      .from('mission_definitions')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order'),
+    supabase
+      .from('user_missions')
+      .select('*')
+      .eq('user_id', userId),
+  ]);
+
+  if (!definitions) return [];
 
   const userMissionMap = new Map<string, UserMission>();
   (userMissions ?? []).forEach((um: any) => {
@@ -42,26 +44,27 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
     }
   });
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('daily_cards_studied, successful_cards_counter')
-    .eq('id', userId)
-    .single();
+  // Phase 2: fetch profile + deckCount + weeklyCards in parallel (independent)
+  const weekStartDate = weekStart + 'T00:00:00.000Z';
+  const [{ data: profile }, { count: deckCount }, { count: weeklyCards }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('daily_cards_studied, successful_cards_counter')
+      .eq('id', userId)
+      .single(),
+    supabase
+      .from('decks')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('review_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('reviewed_at', weekStartDate),
+  ]);
 
   const dailyCards = profile?.daily_cards_studied ?? 0;
   const totalCards = profile?.successful_cards_counter ?? 0;
-
-  const { count: deckCount } = await supabase
-    .from('decks')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  const weekStartDate = weekStart + 'T00:00:00.000Z';
-  const { count: weeklyCards } = await supabase
-    .from('review_logs')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('reviewed_at', weekStartDate);
 
   return (definitions as MissionDefinition[]).map(def => {
     const um = userMissionMap.get(def.id);
