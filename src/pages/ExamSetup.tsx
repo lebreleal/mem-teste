@@ -415,7 +415,7 @@ const ExamSetup = () => {
                 <div
                   key={exam.id}
                   className={`group flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors ${selectionMode && selectedExamIds.has(exam.id) ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
-                  onClick={() => selectionMode ? toggleExamSelection(exam.id) : navigate(isCompleted ? `/exam/${exam.id}/results` : `/exam/${exam.id}`)}
+                  onClick={() => { if (selectionMode) { toggleExamSelection(exam.id); return; } navigate(isCompleted ? `/exam/${exam.id}/results` : `/exam/${exam.id}`); }}
                 >
                   {selectionMode && (
                     <div className="shrink-0" onClick={e => e.stopPropagation()}>

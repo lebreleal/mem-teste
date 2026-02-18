@@ -134,7 +134,7 @@ const CardList = () => {
             <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => selectAllCards()}>
               <CheckCheck className="h-3.5 w-3.5" /> Desmarcar
             </Button>
-            {otherDecks.length > 0 && (
+            {otherDecks.length > 0 && !isLinkedDeck && (
               <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => { setBulkMoveOpen(true); setMoveTargetDeck(''); }}>
                 <ArrowUpRight className="h-3.5 w-3.5" /> Mover
               </Button>
