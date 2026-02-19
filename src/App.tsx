@@ -10,37 +10,55 @@ import { ExamNotificationProvider } from "@/hooks/useExamNotifications";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 
+// Retry wrapper for lazy imports — auto-reloads on stale chunk errors
+function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>) {
+  return lazy(() =>
+    factory().catch((err) => {
+      // Only reload once to avoid infinite loops
+      const key = 'chunk_reload';
+      const hasReloaded = sessionStorage.getItem(key);
+      if (!hasReloaded) {
+        sessionStorage.setItem(key, '1');
+        window.location.reload();
+        return new Promise(() => {}); // never resolves, page will reload
+      }
+      sessionStorage.removeItem(key);
+      throw err;
+    })
+  );
+}
+
 // Lazy-loaded pages
-const Index = lazy(() => import("./pages/Index"));
-const Auth = lazy(() => import("./pages/Auth"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const DeckDetail = lazy(() => import("./pages/DeckDetail"));
-const Study = lazy(() => import("./pages/Study"));
-const ManageDeck = lazy(() => import("./pages/ManageDeck"));
-const DeckSettings = lazy(() => import("./pages/DeckSettings"));
-const Profile = lazy(() => import("./pages/Profile"));
-const Turmas = lazy(() => import("./pages/Turmas"));
-const TurmaDetail = lazy(() => import("./pages/TurmaDetail"));
-const LessonDetail = lazy(() => import("./pages/LessonDetail"));
-const TurmaExamTake = lazy(() => import("./pages/TurmaExamTake"));
-const TurmaExamResults = lazy(() => import("./pages/TurmaExamResults"));
-const MemoGrana = lazy(() => import("./pages/MemoGrana"));
-const ExamSetup = lazy(() => import("./pages/ExamSetup"));
-const ExamCreate = lazy(() => import("./pages/ExamCreate"));
-const ExamTake = lazy(() => import("./pages/ExamTake"));
-const ExamResults = lazy(() => import("./pages/ExamResults"));
-const ActivityView = lazy(() => import("./pages/ActivityView"));
-const Feedback = lazy(() => import("./pages/Feedback"));
-const Performance = lazy(() => import("./pages/Performance"));
-const Missions = lazy(() => import("./pages/Missions"));
-const AIAgent = lazy(() => import("./pages/AIAgent"));
-const AdminIA = lazy(() => import("./pages/AdminIA"));
-const AdminUsers = lazy(() => import("./pages/AdminUsers"));
-const AdminLogs = lazy(() => import("./pages/AdminLogs"));
-const Install = lazy(() => import("./pages/Install"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const TermsOfService = lazy(() => import("./pages/TermsOfService"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const Index = lazyRetry(() => import("./pages/Index"));
+const Auth = lazyRetry(() => import("./pages/Auth"));
+const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
+const DeckDetail = lazyRetry(() => import("./pages/DeckDetail"));
+const Study = lazyRetry(() => import("./pages/Study"));
+const ManageDeck = lazyRetry(() => import("./pages/ManageDeck"));
+const DeckSettings = lazyRetry(() => import("./pages/DeckSettings"));
+const Profile = lazyRetry(() => import("./pages/Profile"));
+const Turmas = lazyRetry(() => import("./pages/Turmas"));
+const TurmaDetail = lazyRetry(() => import("./pages/TurmaDetail"));
+const LessonDetail = lazyRetry(() => import("./pages/LessonDetail"));
+const TurmaExamTake = lazyRetry(() => import("./pages/TurmaExamTake"));
+const TurmaExamResults = lazyRetry(() => import("./pages/TurmaExamResults"));
+const MemoGrana = lazyRetry(() => import("./pages/MemoGrana"));
+const ExamSetup = lazyRetry(() => import("./pages/ExamSetup"));
+const ExamCreate = lazyRetry(() => import("./pages/ExamCreate"));
+const ExamTake = lazyRetry(() => import("./pages/ExamTake"));
+const ExamResults = lazyRetry(() => import("./pages/ExamResults"));
+const ActivityView = lazyRetry(() => import("./pages/ActivityView"));
+const Feedback = lazyRetry(() => import("./pages/Feedback"));
+const Performance = lazyRetry(() => import("./pages/Performance"));
+const Missions = lazyRetry(() => import("./pages/Missions"));
+const AIAgent = lazyRetry(() => import("./pages/AIAgent"));
+const AdminIA = lazyRetry(() => import("./pages/AdminIA"));
+const AdminUsers = lazyRetry(() => import("./pages/AdminUsers"));
+const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
+const Install = lazyRetry(() => import("./pages/Install"));
+const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
+const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
