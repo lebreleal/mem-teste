@@ -1,93 +1,97 @@
 
-# Corrigir Bug de Fuso Horario nos Limites Diarios
 
-## Problema
+# Corrigir Logica de Ordem dos Cartoes na Fila de Estudo
 
-A funcao `get_study_queue_limits` no banco de dados usa `CURRENT_DATE` do Postgres (UTC) para contar quantos cards novos e de revisao foram estudados "hoje". Como o usuario esta no Brasil (UTC-3), a partir das 21h (meia-noite UTC) o contador zera e o sistema libera mais 20 cards novos indevidamente.
+## Problemas Identificados
 
-Dados reais do banco:
-- 20+ reviews feitas no dia 18/fev entre 22:00-23:41 UTC
-- Servidor agora em 19/fev UTC = ainda 18/fev no Brasil
-- RPC retorna `new_reviewed_today = 1` (so conta 1 review apos meia-noite UTC)
+1. **Embaralhar mistura tudo**: Quando ativo, o shuffle embaralha inclusive cartoes em andamento (learning), que deveriam sempre furar a fila quando prontos
+2. **Sem prioridade para learning cards**: O `getNextReadyIndex` pega o primeiro card disponivel na lista, sem dar prioridade a cartoes em andamento cujo timer expirou
+3. **Scheduled date nao alinha a meia-noite**: Quando o algoritmo agenda para "1d" (amanha), grava o timestamp exato (ex: 22:55 do dia seguinte), em vez de agendar para 00:00 do dia seguinte
 
 ## Solucao
 
-Passar o offset de timezone do cliente para a funcao RPC, para que ela calcule "hoje" no fuso horario do usuario.
+### 1. Separar shuffle: so embaralhar new + review, nunca learning
 
-### 1. Alterar a funcao RPC no banco
+**Arquivo:** `src/services/studyService.ts` (linha 117-118)
 
-Adicionar parametro `p_tz_offset_minutes` (inteiro, ex: -180 para UTC-3):
-
-```sql
-CREATE OR REPLACE FUNCTION public.get_study_queue_limits(
-  p_user_id uuid,
-  p_card_ids uuid[],
-  p_tz_offset_minutes integer DEFAULT 0
-)
-RETURNS TABLE(new_reviewed_today bigint, review_reviewed_today bigint)
-LANGUAGE sql STABLE
-AS $$
-  WITH user_today AS (
-    SELECT (now() + (p_tz_offset_minutes || ' minutes')::interval)::date AS today_date
-  ),
-  today_reviewed AS (
-    SELECT DISTINCT rl.card_id
-    FROM review_logs rl, user_today ut
-    WHERE rl.card_id = ANY(p_card_ids)
-      AND rl.user_id = p_user_id
-      AND (rl.reviewed_at + (p_tz_offset_minutes || ' minutes')::interval)::date = ut.today_date
-  ),
-  prior_reviewed AS (
-    SELECT DISTINCT rl.card_id
-    FROM review_logs rl, user_today ut
-    WHERE rl.card_id = ANY(p_card_ids)
-      AND rl.user_id = p_user_id
-      AND (rl.reviewed_at + (p_tz_offset_minutes || ' minutes')::interval)::date < ut.today_date
-  )
-  SELECT
-    COUNT(*) FILTER (WHERE tr.card_id IS NOT NULL AND pr.card_id IS NULL) AS new_reviewed_today,
-    COUNT(*) FILTER (WHERE tr.card_id IS NOT NULL AND pr.card_id IS NOT NULL) AS review_reviewed_today
-  FROM today_reviewed tr
-  LEFT JOIN prior_reviewed pr ON pr.card_id = tr.card_id;
-$$;
+Atual:
+```javascript
+const queue = [...newCards, ...learningCards, ...reviewCards];
+return { cards: shuffle ? shuffleArray(queue) : queue, ... };
 ```
 
-### 2. Atualizar `fetchStudyQueue` em `src/services/studyService.ts`
-
-Passar o offset do timezone do navegador na chamada RPC:
-
-```typescript
-const tzOffsetMinutes = -new Date().getTimezoneOffset(); // JS retorna invertido
-
-const { data: limits } = await supabase.rpc('get_study_queue_limits', {
-  p_user_id: userId,
-  p_card_ids: limitCardIds,
-  p_tz_offset_minutes: tzOffsetMinutes,
-});
+Novo:
+```javascript
+const nonLearning = [...newCards, ...reviewCards];
+const shuffled = shuffle ? shuffleArray(nonLearning) : nonLearning;
+// Learning cards go at the beginning (they cut the line when ready)
+const queue = [...learningCards, ...shuffled];
+return { cards: queue, algorithmMode, deckConfig };
 ```
 
-Nota: `new Date().getTimezoneOffset()` retorna 180 para UTC-3, mas com sinal invertido (positivo = atras de UTC). Multiplicamos por -1 para obter o offset correto (-180 para UTC-3).
+Learning cards ficam no inicio da fila. O `getNextReadyIndex` no Study.tsx ja verifica se o timer expirou antes de mostrar.
 
-### 3. Atualizar o filtro de cards na mesma funcao
+### 2. Priorizar learning cards prontos no `getNextReadyIndex`
 
-O filtro OR na query de cards tambem precisa considerar o timezone para a data atual:
+**Arquivo:** `src/pages/Study.tsx` (funcao `getNextReadyIndex`, linha 67-78)
 
-```typescript
-const now = new Date();
-// ... existing code ...
+Atual: percorre a lista sequencialmente e retorna o primeiro card pronto (seja new, review ou learning).
+
+Novo: primeiro procurar um learning card (state=1) cujo timer expirou. Se encontrar, retorna ele (fura a fila). Se nao, retorna o proximo new/review na ordem.
+
+```javascript
+const getNextReadyIndex = (q) => {
+  const now = Date.now();
+  // 1) Learning cards com timer expirado furam a fila
+  for (let i = 0; i < q.length; i++) {
+    if (q[i].state === 1) {
+      const scheduledTime = new Date(q[i].scheduled_date).getTime();
+      if (scheduledTime <= now) return i;
+    }
+  }
+  // 2) Proximo card new/review na ordem
+  for (let i = 0; i < q.length; i++) {
+    if (q[i].state === 0 || q[i].state === 2) return i;
+  }
+  return -1; // todos learning aguardando
+};
 ```
 
-Esse trecho ja usa `new Date()` do JavaScript (que e local), entao esta correto.
+### 3. Alinhar scheduled_date a meia-noite local para intervalos em dias
 
-## Arquivos modificados
+**Arquivos:** `src/lib/fsrs.ts` e `src/lib/sm2.ts`
+
+Quando o intervalo e em dias (1d, 2d, etc.), o `scheduled_date` deve ser meia-noite local do dia alvo, nao o timestamp exato.
+
+Exemplo: se agora sao 22:55 e o intervalo e 1d, agendar para amanha 00:00:00 (local), nao para amanha 22:55.
+
+Criar funcao utilitaria:
+```javascript
+function getLocalMidnight(daysFromNow: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+```
+
+Aplicar nos trechos que fazem `scheduledDate.setDate(scheduledDate.getDate() + interval)` quando `interval_days > 0`.
+
+**Nao afeta** learning cards (1min, 15min), que continuam usando timestamp exato.
+
+## Resumo das Mudancas
 
 | Arquivo | Mudanca |
 |---------|---------|
-| Nova migration SQL | Alterar funcao `get_study_queue_limits` para aceitar timezone |
-| `src/services/studyService.ts` | Passar `p_tz_offset_minutes` na chamada RPC |
+| `src/services/studyService.ts` | Separar shuffle: so embaralhar new+review, learning cards ficam no inicio |
+| `src/pages/Study.tsx` | `getNextReadyIndex` prioriza learning cards prontos (furam fila) |
+| `src/lib/fsrs.ts` | Alinhar `scheduled_date` a meia-noite local quando intervalo e em dias |
+| `src/lib/sm2.ts` | Mesma correcao de meia-noite local |
 
-## Resultado
+## Comportamento Final
 
-- O limite diario de 20 cards novos sera calculado com base no dia do usuario (horario de Brasilia)
-- O contador so vai zerar a meia-noite no fuso do usuario, nao a meia-noite UTC
-- Compativel com qualquer timezone (o offset e calculado no navegador)
+- **Shuffle ON**: new e review aparecem em ordem aleatoria; learning cards furam a fila quando o timer expira
+- **Shuffle OFF**: new e review seguem ordem de criacao; learning cards furam a fila quando o timer expira
+- **Agendamento 1d as 22:55**: card aparece no dia seguinte a partir de 00:00, nao as 22:55
+- **Learning 10min as 22:57**: card fura a fila as 23:07, independente de shuffle
+
