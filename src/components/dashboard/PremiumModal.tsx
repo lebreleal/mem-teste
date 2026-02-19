@@ -21,10 +21,11 @@ interface PremiumModalProps {
 }
 
 const BENEFITS = [
+  { icon: Brain, title: 'Algoritmo FSRS 4.5', desc: 'O melhor algoritmo de repetição espaçada do mundo', color: 'hsl(var(--primary))' },
+  { icon: Sparkles, title: 'Raciocínio Pro liberado', desc: 'Acesse o modelo de IA avançado para gerar conteúdo', color: 'hsl(var(--primary))' },
+  { icon: Zap, title: '50% menos créditos no Flash', desc: 'Modelo Flash consome metade dos créditos de IA', color: 'hsl(var(--warning))' },
+  { icon: Infinity, title: '1.500 créditos por mês', desc: 'Receba créditos de IA mensalmente no seu plano', color: 'hsl(var(--destructive))' },
   { icon: Pencil, title: 'Personalize os cartões', desc: 'Adicione imagens e formate texto facilmente', color: 'hsl(var(--primary))' },
-  { icon: Sparkles, title: 'Crie cartões com IA', desc: 'Gere cartões ilimitados em instantes com IA', color: 'hsl(var(--primary))' },
-  { icon: Infinity, title: 'Aprenda sem limites', desc: 'Desfrute de aprendizado sem limites diários', color: 'hsl(var(--destructive))' },
-  { icon: Brain, title: 'Otimize a Repetição espaçada', desc: 'Melhore a memória com algoritmos especializados', color: 'hsl(var(--primary))' },
 ];
 
 const formatDate = (dateStr: string) => {
@@ -141,19 +142,11 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
               )}
             </div>
 
-            {/* Trial banner */}
-            {isTrial && trialDaysLeft > 0 && (
-              <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 animate-fade-in">
-                <div className="flex items-center justify-center gap-2">
-                  <Timer className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">
-                    Premium Grátis · {trialDaysLeft} {trialDaysLeft === 1 ? 'dia' : 'dias'} restantes
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5 text-center">
-                  Aproveite todos os recursos Premium durante seu período de teste
-                </p>
-              </div>
+            {/* Trial expiry notice */}
+            {isTrial && expiresAt && (
+              <p className="text-xs text-muted-foreground text-center mb-4 animate-fade-in">
+                Seu plano expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span>
+              </p>
             )}
 
             {/* Tabs */}
@@ -232,9 +225,9 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                         <span className="text-sm font-bold text-foreground flex-1">Anual</span>
                         <div className="text-right">
                           <span className="inline-block bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md mb-0.5">
-                            TESTE GRÁTIS DE 14 DIAS
+                            ~52% OFF
                           </span>
-                          <p className="text-xs text-muted-foreground">depois 149,90 BRL ao ano</p>
+                          <p className="text-xs text-muted-foreground">R$12,49/mês · 149,90 BRL/ano</p>
                         </div>
                       </button>
 
