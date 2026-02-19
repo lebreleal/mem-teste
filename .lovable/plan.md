@@ -1,21 +1,54 @@
 
-## Remover cor azul de fundo do PWA
 
-O problema e que o `theme-color` (#2563eb - azul) define a cor da barra de status e area ao redor do app no modo PWA. Precisa ser alterado para combinar com o fundo claro/escuro do app.
+# Tutor IA com resposta fluida estilo ChatGPT (streaming)
 
-### Alteracoes necessarias
+## O que muda
 
-**1. `index.html` (linha 11)**
-- Trocar `<meta name="theme-color" content="#2563eb" />` para `#faf9f7` (cor de fundo do tema claro, correspondente a `--background: 40 20% 98%`)
+Atualmente, quando voce clica em "Explicar Assunto", "Explicar Alternativas" ou "Dica", o sistema espera a resposta INTEIRA da IA e so depois mostra tudo de uma vez. Isso parece robotico.
 
-**2. `vite.config.ts` (linha 37)**
-- Trocar `theme_color: "#2563eb"` para `"#faf9f7"` no manifest do PWA
-- Trocar `background_color: "#ffffff"` para `"#faf9f7"` para consistencia
+A mudanca e fazer o texto aparecer **palavra por palavra** em tempo real, como no ChatGPT -- dando a sensacao de uma pessoa real digitando a explicacao.
 
-**3. `src/hooks/useTheme.ts`**
-- Adicionar logica para atualizar dinamicamente o `<meta name="theme-color">` quando o usuario trocar entre modo claro (`#faf9f7`) e escuro (`#141519`, correspondente a `--background: 220 25% 8%`), garantindo que a barra do PWA acompanhe o tema ativo.
+## Custo
 
-### Resultado
-- Modo claro: fundo e barra do PWA em tom claro (#faf9f7)
-- Modo escuro: fundo e barra do PWA em tom escuro (#141519)
-- Sem mais azul aparecendo atras do conteudo
+**Sem custo adicional.** E a mesma chamada de IA que ja existe, so muda a forma de entrega (streaming vs esperar tudo). O custo em creditos permanece identico (2 creditos Flash / 10 creditos Pro).
+
+## Mudancas tecnicas
+
+### 1. Edge Function `ai-tutor` -- habilitar streaming
+
+Atualmente a funcao espera a resposta completa da OpenAI e retorna `{ hint: "texto" }`. A mudanca:
+
+- Adicionar `stream: true` na chamada da OpenAI
+- Retornar o `response.body` diretamente como `text/event-stream` (mesmo padrao do `ai-chat` que ja funciona)
+- Mover o `logTokenUsage` para antes do stream (sem dados de usage exatos, como o ai-chat ja faz)
+
+### 2. Frontend `Study.tsx` -- novo `handleTutorRequest` com streaming
+
+Substituir a chamada `invokeTutor()` (que espera tudo) por um fetch direto com leitura de stream SSE:
+
+- Usar `fetch()` para chamar a edge function
+- Ler o stream com `ReadableStream` + `TextDecoder`
+- Parsear linhas SSE (`data: {...}`) extraindo `choices[0].delta.content`
+- Atualizar o estado (`hintResponse`, `explainResponse`, `mcExplainResponse`) a cada token recebido -- o texto vai crescendo progressivamente
+
+### 3. Frontend `FlashCard.tsx` -- renderizacao com ReactMarkdown
+
+Trocar o `dangerouslySetInnerHTML` + `formatMarkdown` por `ReactMarkdown` nos blocos de resposta do tutor (hint, explain, mcExplain). Isso:
+
+- Renderiza markdown corretamente mesmo durante o streaming
+- Mantem consistencia com o `StudyChatModal` que ja usa `ReactMarkdown`
+- Adicionar um cursor piscante (CSS) no final do texto enquanto `isTutorLoading` estiver ativo
+
+### 4. Animacao de carregamento
+
+Manter o `TutorLoadingAnimation` existente apenas nos primeiros instantes (antes do primeiro token chegar). Assim que o primeiro token aparece, a animacao some e o texto comeca a fluir.
+
+## Resumo dos arquivos
+
+| Arquivo | Mudanca |
+|---|---|
+| `supabase/functions/ai-tutor/index.ts` | Habilitar `stream: true` e retornar SSE stream |
+| `src/pages/Study.tsx` | Novo handleTutorRequest com leitura de stream SSE |
+| `src/components/FlashCard.tsx` | Usar ReactMarkdown + cursor piscante nos blocos de resposta |
+| `src/services/aiService.ts` | Funcao `invokeTutor` pode ser mantida (nao sera mais usada pelo Study, mas nao quebra nada) |
+
