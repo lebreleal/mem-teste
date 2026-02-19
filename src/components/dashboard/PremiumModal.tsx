@@ -331,7 +331,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                           {pack.credits} créditos
                         </span>
                         <div className="flex items-center gap-2">
-                          {discount > 0 && (
+                          {discount > 0 && i === STRIPE_CREDIT_PACKS.length - 1 && (
                             <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
                               -{discount}%
                             </span>

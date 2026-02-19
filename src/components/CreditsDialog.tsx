@@ -12,9 +12,9 @@ interface CreditsDialogProps {
 
 const packages = [
   { credits: 100, price: 4.99, discount: 0 },
-  { credits: 200, price: 8.99, discount: 10 },
-  { credits: 500, price: 19.99, discount: 20 },
-  { credits: 1000, price: 34.99, discount: 30 },
+  { credits: 200, price: 8.99, discount: 0 },
+  { credits: 500, price: 19.99, discount: 0 },
+  { credits: 1000, price: 24.99, discount: 50 },
 ];
 
 const CreditsDialog = ({ open, onOpenChange }: CreditsDialogProps) => {
