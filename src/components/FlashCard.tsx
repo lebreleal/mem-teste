@@ -47,7 +47,8 @@ interface FlashCardProps {
   energy?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
   isTutorLoading?: boolean;
-  tutorResponse?: string | null;
+  hintResponse?: string | null;
+  explainResponse?: string | null;
   actions?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
@@ -141,7 +142,8 @@ const MultipleChoiceCard = ({
   energy = 0,
   onTutorRequest,
   isTutorLoading,
-  tutorResponse,
+  hintResponse,
+  explainResponse,
   recallData,
   algorithmMode,
   actions,
@@ -157,7 +159,8 @@ const MultipleChoiceCard = ({
   energy?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
   isTutorLoading?: boolean;
-  tutorResponse?: string | null;
+  hintResponse?: string | null;
+  explainResponse?: string | null;
   recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
   algorithmMode?: string;
   actions?: React.ReactNode;
@@ -305,28 +308,28 @@ const MultipleChoiceCard = ({
 
 
 
-          {/* Tutor response (before answering) */}
-          {tutorResponse && !answered && (
+          {/* Tutor hint (before answering) */}
+          {hintResponse && !answered && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <Lightbulb className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(hintResponse)) }} />
               </div>
             </div>
           )}
 
           {/* AI Explanation (after answering) */}
-          {tutorResponse && answered && (
+          {explainResponse && answered && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(explainResponse)) }} />
               </div>
             </div>
           )}
@@ -365,7 +368,7 @@ const MultipleChoiceCard = ({
         ) : (
           <>
             {/* Explain button */}
-            {onTutorRequest && !tutorResponse && (
+            {onTutorRequest && !explainResponse && (
               <button
                 onClick={() => canUseTutor ? onTutorRequest({
                   action: 'explain-mc',
@@ -409,7 +412,7 @@ const MultipleChoiceCard = ({
 const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
-  energy = 0, onTutorRequest, isTutorLoading, tutorResponse, actions,
+  energy = 0, onTutorRequest, isTutorLoading, hintResponse, explainResponse, actions,
   canUndo, onUndo,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
@@ -455,7 +458,8 @@ const FlashCard = ({
         energy={energy}
         onTutorRequest={onTutorRequest}
         isTutorLoading={isTutorLoading}
-        tutorResponse={tutorResponse}
+        hintResponse={hintResponse}
+        explainResponse={explainResponse}
         recallData={recallData}
         algorithmMode={algorithmMode}
         actions={actions}
@@ -624,27 +628,27 @@ const FlashCard = ({
           </div>
 
           {/* Tutor hint response - show before flip */}
-          {tutorResponse && !flipped && (
+          {hintResponse && !flipped && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <Lightbulb className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(hintResponse)) }} />
               </div>
             </div>
           )}
 
           {/* Tutor explain response - show after flip */}
-          {tutorResponse && flipped && (
+          {explainResponse && flipped && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(explainResponse)) }} />
               </div>
             </div>
           )}
@@ -777,7 +781,7 @@ const FlashCard = ({
         ) : (
           <>
             {/* Explain button for basic/cloze/occlusion */}
-            {onTutorRequest && !tutorResponse && (
+            {onTutorRequest && !explainResponse && (
               <button
                 onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
                 disabled={!canUseTutor || isTutorLoading}
