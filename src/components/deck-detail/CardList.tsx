@@ -346,7 +346,7 @@ const CardList = () => {
                     <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
                   )}
                   <div
-                    className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative z-10 ${
+                    className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
                       frozen ? 'opacity-50' : ''
                     } ${
                       isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
