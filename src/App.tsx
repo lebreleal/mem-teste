@@ -38,6 +38,8 @@ const AdminIA = lazy(() => import("./pages/AdminIA"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const AdminLogs = lazy(() => import("./pages/AdminLogs"));
 const Install = lazy(() => import("./pages/Install"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -93,6 +95,8 @@ const App = () => (
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
                 <Route path="/install" element={<Install />} />
+                <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
+                <Route path="/termos-e-servicos" element={<TermsOfService />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
