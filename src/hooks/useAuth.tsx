@@ -79,14 +79,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: error?.message ?? null };
   };
 
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+  const signInWithGoogle = async (): Promise<{ error: string | null }> => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
+        skipBrowserRedirect: true,
         redirectTo: window.location.origin + '/dashboard',
       },
     });
-    return { error: error?.message ?? null };
+
+    if (error) return { error: error.message };
+
+    if (data?.url) {
+      const popup = window.open(data.url, 'google-oauth', 'width=500,height=600');
+      if (!popup) {
+        return { error: 'popup_blocked' };
+      }
+    }
+
+    return { error: null };
   };
 
   const signOut = async () => {

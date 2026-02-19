@@ -45,7 +45,11 @@ const Auth = () => {
 
   const handleGoogle = async () => {
     const { error } = await signInWithGoogle();
-    if (error) toast({ title: 'Erro', description: error, variant: 'destructive' });
+    if (error === 'popup_blocked') {
+      toast({ title: 'Popup bloqueado', description: 'Permita popups neste site para entrar com Google.', variant: 'destructive' });
+    } else if (error) {
+      toast({ title: 'Erro', description: error, variant: 'destructive' });
+    }
   };
 
   return (
