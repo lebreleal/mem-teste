@@ -324,16 +324,22 @@
 .animate-correct-flash {
   animation: correct-flash 0.8s ease-out forwards;
   transition: none !important;
+  z-index: 10;
+  position: relative;
 }
 
 .animate-wrong-flash {
   animation: wrong-flash 0.7s ease-out forwards;
   transition: none !important;
+  z-index: 10;
+  position: relative;
 }
 
 .animate-hard-flash {
   animation: hard-flash 0.7s ease-out forwards;
   transition: none !important;
+  z-index: 10;
+  position: relative;
 }
 
 .animate-shimmer {
