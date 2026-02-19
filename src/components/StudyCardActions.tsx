@@ -1,11 +1,14 @@
 import { useState, useRef } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -362,19 +365,6 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
     <>
       {/* Action buttons */}
       <div className="flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => setFreezeConfirmOpen(true)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-info hover:bg-info/10 transition-colors"
-              aria-label="Congelar card"
-            >
-              <Snowflake className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Congelar card</p></TooltipContent>
-        </Tooltip>
-
         {onOpenChat && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -390,18 +380,29 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
           </Tooltip>
         )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={openEdit}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Editar card"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Editar card</p></TooltipContent>
-        </Tooltip>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  aria-label="Editar card"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent><p>Editar / Congelar</p></TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="min-w-[140px]">
+            <DropdownMenuItem onClick={openEdit} className="gap-2">
+              <Pencil className="h-3.5 w-3.5" /> Editar card
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFreezeConfirmOpen(true)} className="gap-2">
+              <Snowflake className="h-3.5 w-3.5" /> Congelar card
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Freeze confirm */}
