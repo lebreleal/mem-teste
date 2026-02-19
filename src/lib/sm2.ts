@@ -47,6 +47,14 @@ function calculateEFactor(oldEF: number, quality: number): number {
   return Math.max(1.3, newEF);
 }
 
+/** Get local midnight N days from now (for day-based intervals). */
+function getLocalMidnight(daysFromNow: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function getLastInterval(card: SM2Card): number {
   // Estimate last interval from scheduled_date
   const scheduled = new Date(card.scheduled_date).getTime();
@@ -105,8 +113,7 @@ export function sm2Schedule(card: SM2Card, rating: Rating, params: SM2Params = D
     interval = Math.min(Math.max(interval, 1), maxInterval);
 
     const newEF = calculateEFactor(ef === 2.5 && card.state === 0 ? 2.5 : ef, quality);
-    const scheduledDate = new Date(now);
-    scheduledDate.setDate(scheduledDate.getDate() + interval);
+    const scheduledDate = getLocalMidnight(interval);
 
     return {
       stability: Math.max(1.3, newEF),
@@ -153,8 +160,7 @@ export function sm2Schedule(card: SM2Card, rating: Rating, params: SM2Params = D
   if (rating === 4) interval = Math.round(interval * easyBonus);
   interval = Math.min(Math.max(interval, 1), maxInterval);
 
-  const scheduledDate = new Date(now);
-  scheduledDate.setDate(scheduledDate.getDate() + interval);
+  const scheduledDate = getLocalMidnight(interval);
 
   return {
     stability: Math.max(1.3, newEF),

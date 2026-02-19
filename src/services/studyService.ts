@@ -114,8 +114,11 @@ export async function fetchStudyQueue(
   const learningCards = cards.filter(c => c.state === 1);
   const reviewCards = cards.filter(c => c.state === 2).slice(0, effectiveReviewLimit);
 
-  const queue = [...newCards, ...learningCards, ...reviewCards];
-  return { cards: shuffle ? shuffleArray(queue) : queue, algorithmMode, deckConfig };
+  // Shuffle only applies to new + review cards; learning cards always go first (they cut the line when ready)
+  const nonLearning = [...newCards, ...reviewCards];
+  const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
+  const queue = [...learningCards, ...orderedNonLearning];
+  return { cards: queue, algorithmMode, deckConfig };
 }
 
 /** Submit a card review and update scheduling. */
