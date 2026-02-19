@@ -1,47 +1,47 @@
 
 
-# Corrigir Login com Google
-
 ## Problema
-Duas causas identificadas:
 
-1. **Provider Google nao habilitado no Supabase** -- o erro `validation_failed: Unsupported provider` confirma isso
-2. **OAuth via redirect nao funciona em iframe** -- o preview do Lovable roda em iframe, e navegadores bloqueiam cookies de terceiros no redirect
+Ao arquivar um baralho dentro de uma pasta, ele fica "escondido" dentro dessa pasta. Se o usuario deletar a pasta, o `delete_folder_cascade` exclui permanentemente todos os baralhos da pasta -- incluindo os arquivados -- causando perda de dados.
 
-## O que voce precisa fazer (configuracao externa)
+## Solucao proposta
 
-1. Acesse o painel do Supabase: https://supabase.com/dashboard/project/sansumuehxdnmvnswygr/auth/providers
-2. Encontre **Google** na lista de providers
-3. Ative o toggle
-4. Insira o **Client ID** e **Client Secret** do Google Cloud Console
-5. Salve
+Alterar o comportamento do `delete_folder_cascade` para **desarquivar e mover para a raiz** os baralhos arquivados antes de deletar a pasta, em vez de excluir tudo cegamente. Alem disso, adicionar uma secao "Arquivados" visivel na raiz do Dashboard para que o usuario sempre encontre seus itens arquivados.
 
-Se ainda nao criou as credenciais no Google Cloud Console:
-- Acesse https://console.cloud.google.com/apis/credentials
-- Crie um **OAuth Client ID** (tipo: Web application)
-- Em **Authorized JavaScript origins**, adicione: `https://memocards.com.br` e `https://id-preview--cf7450a5-4ce6-4136-b663-b06c2fe28ed3.lovable.app`
-- Em **Authorized redirect URIs**, adicione: `https://sansumuehxdnmvnswygr.supabase.co/auth/v1/callback`
+### Mudancas
 
-## Alteracao no codigo
+### 1. Alterar a funcao SQL `delete_folder_cascade`
 
-### Arquivo: `src/hooks/useAuth.tsx`
-- Alterar `signInWithGoogle` para usar **popup** ao inves de redirect
-- Usar `skipBrowserRedirect: true` para obter a URL do OAuth
-- Abrir essa URL em `window.open()` (popup)
-- Isso resolve o problema de cookies bloqueados em iframe
+Antes de deletar os baralhos de uma pasta, mover os baralhos arquivados para a raiz (folder_id = NULL) em vez de excluir:
 
-### Arquivo: `src/pages/Auth.tsx`
-- Atualizar `handleGoogle` para tratar o caso do popup ser bloqueado pelo navegador
-- Mostrar mensagem amigavel se o popup for bloqueado
+```sql
+-- Dentro de delete_folder_cascade, ANTES de deletar os decks:
+-- Mover baralhos arquivados para raiz em vez de excluir
+UPDATE decks SET folder_id = NULL WHERE folder_id = p_folder_id AND is_archived = true;
 
-## Secao tecnica
-
-```text
-signInWithGoogle mudanca:
-  ANTES:  supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: ... } })
-  DEPOIS: supabase.auth.signInWithOAuth({ provider: 'google', options: { skipBrowserRedirect: true } })
-          + window.open(data.url, popup)
-          + listener para detectar conclusao do login
+-- Depois, continuar deletando apenas os NAO arquivados
+FOR r IN SELECT id FROM decks WHERE folder_id = p_folder_id LOOP
+  PERFORM delete_deck_cascade(r.id);
+END LOOP;
 ```
 
-Arquivos modificados: 2 (`useAuth.tsx`, `Auth.tsx`)
+A mesma logica se aplica a sub-pastas: pastas arquivadas dentro da pasta sendo deletada tambem devem ser movidas para a raiz.
+
+### 2. Adicionar aviso visual ao deletar pasta com itens arquivados
+
+No dialog de confirmacao de exclusao de pasta, informar o usuario caso a pasta contenha itens arquivados, explicando que eles serao movidos para a raiz.
+
+### 3. Garantir visibilidade de arquivados na raiz
+
+Verificar que o botao "Mostrar Arquivados" na raiz do Dashboard exibe corretamente os baralhos e pastas com `folder_id = NULL` e `is_archived = true` -- isso ja funciona pelo filtro atual (`folder_id === currentFolderId` onde `currentFolderId = null`).
+
+---
+
+### Secao tecnica
+
+**Migracao SQL**: Atualizar a funcao `delete_folder_cascade` para preservar itens arquivados.
+
+**Arquivos afetados**:
+- Nova migracao SQL (alteracao da funcao `delete_folder_cascade`)
+- `src/components/dashboard/DashboardDialogs.tsx` (aviso no dialog de exclusao, se necessario)
+
