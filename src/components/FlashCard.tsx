@@ -50,6 +50,7 @@ interface FlashCardProps {
   isTutorLoading?: boolean;
   hintResponse?: string | null;
   explainResponse?: string | null;
+  mcExplainResponse?: string | null;
   actions?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
@@ -145,6 +146,7 @@ const MultipleChoiceCard = ({
   isTutorLoading,
   hintResponse,
   explainResponse,
+  mcExplainResponse,
   recallData,
   algorithmMode,
   actions,
@@ -164,6 +166,7 @@ const MultipleChoiceCard = ({
   isTutorLoading?: boolean;
   hintResponse?: string | null;
   explainResponse?: string | null;
+  mcExplainResponse?: string | null;
   recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
   algorithmMode?: string;
   actions?: React.ReactNode;
@@ -326,15 +329,28 @@ const MultipleChoiceCard = ({
             </div>
           )}
 
-          {/* AI Explanation (after answering) */}
+          {/* AI Subject Explanation (after answering) */}
           {explainResponse && answered && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
+                <BookOpen className="h-4 w-4 text-primary" />
+                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação do Assunto</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(explainResponse)) }} />
+              </div>
+            </div>
+          )}
+
+          {/* AI Alternatives Explanation (after answering) */}
+          {mcExplainResponse && answered && (
+            <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação das Alternativas</span>
+              </div>
+              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(mcExplainResponse)) }} />
               </div>
             </div>
           )}
@@ -387,8 +403,23 @@ const MultipleChoiceCard = ({
           </div>
         ) : (
           <>
-            {/* Explain button */}
+            {/* Explain subject button */}
             {onTutorRequest && !explainResponse && (
+              <button
+                onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                disabled={!canUseTutor || isTutorLoading}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
+                  canUseTutor
+                    ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                    : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                }`}
+              >
+                {isTutorLoading && !mcExplainResponse ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+              </button>
+            )}
+
+            {/* Explain alternatives button */}
+            {onTutorRequest && !mcExplainResponse && (
               <button
                 onClick={() => canUseTutor ? onTutorRequest({
                   action: 'explain-mc',
@@ -403,7 +434,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
+                {isTutorLoading && !explainResponse ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
               </button>
             )}
 
@@ -432,7 +463,7 @@ const MultipleChoiceCard = ({
 const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
-  energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, actions,
+  energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
@@ -480,6 +511,7 @@ const FlashCard = ({
         isTutorLoading={isTutorLoading}
         hintResponse={hintResponse}
         explainResponse={explainResponse}
+        mcExplainResponse={mcExplainResponse}
         recallData={recallData}
         algorithmMode={algorithmMode}
         actions={actions}
@@ -813,7 +845,7 @@ const FlashCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA</>}
+                {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
               </button>
             )}
 

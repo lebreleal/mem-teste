@@ -58,6 +58,7 @@ const Study = () => {
 
   const [hintResponse, setHintResponse] = useState<string | null>(null);
   const [explainResponse, setExplainResponse] = useState<string | null>(null);
+  const [mcExplainResponse, setMcExplainResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -125,6 +126,7 @@ const Study = () => {
   useEffect(() => {
     setHintResponse(null);
     setExplainResponse(null);
+    setMcExplainResponse(null);
     // Cancel any pending tutor request when card changes
     if (tutorAbortRef.current) {
       tutorAbortRef.current.abort();
@@ -146,7 +148,8 @@ const Study = () => {
     const controller = new AbortController();
     tutorAbortRef.current = controller;
 
-    const isExplain = options?.action === 'explain' || options?.action === 'explain-mc';
+    const isMcExplain = options?.action === 'explain-mc';
+    const isExplain = options?.action === 'explain';
 
     setIsTutorLoading(true);
     try {
@@ -161,7 +164,9 @@ const Study = () => {
         energyCost: TUTOR_COST,
       });
       if (controller.signal.aborted) return;
-      if (isExplain) {
+      if (isMcExplain) {
+        setMcExplainResponse(result.hint);
+      } else if (isExplain) {
         setExplainResponse(result.hint);
       } else {
         setHintResponse(result.hint);
@@ -427,6 +432,7 @@ const Study = () => {
             isTutorLoading={isTutorLoading}
             hintResponse={hintResponse}
             explainResponse={explainResponse}
+            mcExplainResponse={mcExplainResponse}
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
             actions={
