@@ -277,7 +277,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
             <AlertDialogTitle className="font-display">Excluir "{props.deleteTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
               {props.deleteTarget?.type === 'folder'
-                ? 'A pasta será excluída. Baralhos dentro dela serão movidos para a raiz.'
+                ? 'A pasta será excluída. Baralhos não arquivados dentro dela serão excluídos permanentemente. Itens arquivados serão preservados e movidos para o Início.'
                 : 'Todos os cards, sub-decks e registros de revisão serão excluídos permanentemente.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
