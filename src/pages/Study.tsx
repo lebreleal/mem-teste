@@ -107,9 +107,17 @@ const Study = () => {
   const totalCards = localQueue.length + reviewCount;
   const progressPercent = totalCards > 0 ? (reviewCount / totalCards) * 100 : 0;
 
+  const tutorAbortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     cardShownAt.current = Date.now();
     setTutorResponse(null);
+    // Cancel any pending tutor request when card changes
+    if (tutorAbortRef.current) {
+      tutorAbortRef.current.abort();
+      tutorAbortRef.current = null;
+    }
+    setIsTutorLoading(false);
   }, [cardKey]);
 
   useEffect(() => {
@@ -120,6 +128,11 @@ const Study = () => {
 
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
+    // Abort previous request if any
+    if (tutorAbortRef.current) tutorAbortRef.current.abort();
+    const controller = new AbortController();
+    tutorAbortRef.current = controller;
+
     setIsTutorLoading(true);
     try {
       const result = await invokeTutor({
@@ -132,12 +145,14 @@ const Study = () => {
         aiModel: model,
         energyCost: TUTOR_COST,
       });
+      if (controller.signal.aborted) return;
       setTutorResponse(result.hint);
       queryClient.invalidateQueries({ queryKey: ['energy'] });
-    } catch {
+    } catch (err) {
+      if (controller.signal.aborted) return;
       toast({ title: 'Erro ao consultar o Tutor', variant: 'destructive' });
     } finally {
-      setIsTutorLoading(false);
+      if (!controller.signal.aborted) setIsTutorLoading(false);
     }
   }, [currentCard, energy, toast, model, TUTOR_COST, queryClient]);
 
@@ -145,6 +160,12 @@ const Study = () => {
 
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
+    // Cancel any pending tutor request so it doesn't block
+    if (tutorAbortRef.current) {
+      tutorAbortRef.current.abort();
+      tutorAbortRef.current = null;
+    }
+    setIsTutorLoading(false);
     const elapsed = Date.now() - cardShownAt.current;
 
     if (elapsed < FAST_THRESHOLD_MS) {
