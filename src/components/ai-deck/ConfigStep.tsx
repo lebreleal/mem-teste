@@ -79,24 +79,21 @@ const ConfigStep = ({
   return (
     <div className="flex flex-col gap-4 flex-1 min-h-0">
       {/* Progress indicator */}
-      <div className="flex items-center gap-2 px-1">
-        {SUB_STEP_LABELS.map((label, i) => (
-          <div key={i} className="flex items-center gap-2 flex-1">
+      <div className="flex items-center px-2">
+        {SUB_STEP_LABELS.map((_, i) => (
+          <div key={i} className="flex items-center" style={{ flex: i < 2 ? 1 : 'none' }}>
             <button
               onClick={() => i <= subStep ? setSubStep(i as ConfigSubStep) : undefined}
-              className={`flex items-center gap-1.5 transition-colors ${
-                i <= subStep ? 'cursor-pointer' : 'cursor-default'
-              }`}
+              className={i <= subStep ? 'cursor-pointer' : 'cursor-default'}
             >
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold shrink-0 transition-all ${
-                i < subStep ? 'bg-primary text-primary-foreground'
-                  : i === subStep ? 'bg-primary text-primary-foreground'
+              <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shrink-0 transition-all ${
+                i <= subStep ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-muted text-muted-foreground'
               }`}>
-                {i < subStep ? <Check className="h-3 w-3" /> : i + 1}
+                {i < subStep ? <Check className="h-3.5 w-3.5" /> : i + 1}
               </span>
             </button>
-            {i < 2 && <div className={`flex-1 h-0.5 rounded-full transition-colors ${i < subStep ? 'bg-primary' : 'bg-border'}`} />}
+            {i < 2 && <div className={`flex-1 h-0.5 mx-2 rounded-full transition-colors ${i < subStep ? 'bg-primary' : 'bg-border'}`} />}
           </div>
         ))}
       </div>
