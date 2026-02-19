@@ -14,8 +14,8 @@ interface BuyCreditsDialogProps {
 
 const packages = [
   { credits: 100, price: 4.99, discount: 0 },
-  { credits: 200, price: 8.99, discount: 10 },
-  { credits: 500, price: 19.99, discount: 20 },
+  { credits: 200, price: 8.99, discount: 0 },
+  { credits: 500, price: 19.99, discount: 0 },
   { credits: 1000, price: 24.99, discount: 50 },
 ];
 
@@ -61,8 +61,8 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
             {packages.map((pkg, i) => {
               const isSelected = selectedPkg === i;
               const isBest = i === 3;
-              const showDiscount = false;
-              const showSavingsDetail = false;
+              const showDiscount = pkg.discount > 0;
+              const showSavingsDetail = pkg.discount > 0;
               const savingsPerCredit = basePerCredit - pkg.price / pkg.credits;
               const totalSavings = (savingsPerCredit * pkg.credits).toFixed(2);
 
