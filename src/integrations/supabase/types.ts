@@ -2072,13 +2072,25 @@ export type Database = {
           name: string
         }[]
       }
-      get_study_queue_limits: {
-        Args: { p_card_ids: string[]; p_user_id: string }
-        Returns: {
-          new_reviewed_today: number
-          review_reviewed_today: number
-        }[]
-      }
+      get_study_queue_limits:
+        | {
+            Args: { p_card_ids: string[]; p_user_id: string }
+            Returns: {
+              new_reviewed_today: number
+              review_reviewed_today: number
+            }[]
+          }
+        | {
+            Args: {
+              p_card_ids: string[]
+              p_tz_offset_minutes?: number
+              p_user_id: string
+            }
+            Returns: {
+              new_reviewed_today: number
+              review_reviewed_today: number
+            }[]
+          }
       get_turma_role: {
         Args: { _turma_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["turma_role"]

@@ -94,10 +94,12 @@ export async function fetchStudyQueue(
   const limitCardIds = (scopeResult.data ?? []).map((c: any) => c.id);
 
   if (limitCardIds.length > 0) {
+    const tzOffsetMinutes = -new Date().getTimezoneOffset();
     const { data: limits } = await supabase.rpc('get_study_queue_limits', {
       p_user_id: userId,
       p_card_ids: limitCardIds,
-    });
+      p_tz_offset_minutes: tzOffsetMinutes,
+    } as any);
     if (limits && (limits as any[]).length > 0) {
       const row = (limits as any[])[0];
       newReviewedToday = row.new_reviewed_today ?? 0;
