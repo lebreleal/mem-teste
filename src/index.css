@@ -299,6 +299,20 @@
   }
 }
 
+@keyframes flip-peek {
+  0% { transform: rotateY(0deg); }
+  20% { transform: rotateY(90deg); }
+  30% { transform: rotateY(90deg); }
+  50% { transform: rotateY(0deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+.animate-flip-peek {
+  animation: flip-peek 0.6s ease-in-out;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

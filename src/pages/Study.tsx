@@ -9,7 +9,7 @@ import { invalidateStudyQueries } from '@/lib/queryKeys';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Brain, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { invokeTutor } from '@/services/aiService';
@@ -287,6 +287,13 @@ const Study = () => {
             <Brain className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple))' }} />
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            aria-label="Pomodoro"
+          >
+            <Timer className="h-3.5 w-3.5" />
+          </button>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
           <span className="text-xs font-bold text-muted-foreground tabular-nums">{reviewCount + 1}/{totalCards}</span>
         </div>

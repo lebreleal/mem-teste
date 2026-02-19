@@ -3,7 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
-import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge } from 'lucide-react';
+import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
@@ -413,6 +413,7 @@ const FlashCard = ({
   energy = 0, onTutorRequest, isTutorLoading, tutorResponse, actions,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
+  const [peekingFront, setPeekingFront] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
 
   // Auto-detect card type: if content has cloze markers, treat as cloze regardless of cardType
@@ -577,16 +578,33 @@ const FlashCard = ({
           </div>
         )}
 
-        {/* Back face */}
+        {/* Back face (or peeking front) */}
         {flipped && (
           <div
-            className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
-            style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
+            style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
           >
+            {/* Flip-to-front peek button */}
+            {!peekingFront && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPeekingFront(true);
+                  setTimeout(() => setPeekingFront(false), 2500);
+                }}
+                className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60 transition-all"
+                aria-label="Ver frente do card"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            )}
             <div
               className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayBack) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
             />
+            {peekingFront && (
+              <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
+            )}
           </div>
         )}
       </div>
