@@ -415,7 +415,7 @@ const MultipleChoiceCard = ({
                 <button
                   onClick={onUndo}
                   disabled={!canUndo}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Desfazer"
                 >
                   <Undo2 className="h-4.5 w-4.5" />
@@ -800,7 +800,7 @@ const FlashCard = ({
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => { setTypingAnswer(true); setTypedAnswer(''); setAnswerSubmitted(false); }}
-                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0"
                       aria-label="Digitar resposta"
                     >
                       <Keyboard className="h-4.5 w-4.5" />
@@ -820,7 +820,7 @@ const FlashCard = ({
                     <button
                       onClick={onUndo}
                       disabled={!canUndo}
-                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
                       aria-label="Desfazer"
                     >
                       <Undo2 className="h-4.5 w-4.5" />
