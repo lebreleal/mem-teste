@@ -462,17 +462,17 @@ const MultipleChoiceCard = ({
             )}
 
             {/* Rating buttons */}
-            <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid w-full grid-cols-4 gap-1.5">
               {ratingConfig.map(({ rating, label, colorClass }) => (
                 <button
                   key={rating}
                   onClick={() => handleRate(rating)}
                   disabled={isSubmitting}
-                  className={`flex flex-col items-center gap-0.5 px-2 py-2.5 sm:py-3 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
+                  className={`flex flex-col items-center gap-0.5 px-1 py-1.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
                   style={{ borderRadius: 'var(--radius)' }}
                 >
-                  <span className="text-sm font-bold">{label}</span>
-                  <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
+                  <span className="text-xs font-bold">{label}</span>
+                  <span className="text-[10px] opacity-80">{intervals[rating]}</span>
                 </button>
               ))}
             </div>
@@ -871,17 +871,17 @@ const FlashCard = ({
                   </button>
                 )}
 
-                <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid w-full grid-cols-4 gap-1.5">
                   {ratingConfig.map(({ rating, label, colorClass }) => (
                     <button
                       key={rating}
                       onClick={() => handleRate(rating)}
                       disabled={isSubmitting}
-                      className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
+                      className={`flex flex-col items-center gap-0.5 px-1 py-1.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
                       style={{ borderRadius: 'var(--radius)' }}
                     >
-                      <span className="text-sm font-bold">{label}</span>
-                      <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
+                      <span className="text-xs font-bold">{label}</span>
+                      <span className="text-[10px] opacity-80">{intervals[rating]}</span>
                     </button>
                   ))}
                 </div>
