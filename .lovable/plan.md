@@ -1,97 +1,99 @@
 
 
-# Corrigir Logica de Ordem dos Cartoes na Fila de Estudo
+# Testes Abrangentes para Logica de Fila de Estudo
 
-## Problemas Identificados
+## Objetivo
 
-1. **Embaralhar mistura tudo**: Quando ativo, o shuffle embaralha inclusive cartoes em andamento (learning), que deveriam sempre furar a fila quando prontos
-2. **Sem prioridade para learning cards**: O `getNextReadyIndex` pega o primeiro card disponivel na lista, sem dar prioridade a cartoes em andamento cujo timer expirou
-3. **Scheduled date nao alinha a meia-noite**: Quando o algoritmo agenda para "1d" (amanha), grava o timestamp exato (ex: 22:55 do dia seguinte), em vez de agendar para 00:00 do dia seguinte
+Criar um arquivo de testes `src/test/studyQueue.test.ts` que valida toda a logica de ordenacao e prioridade da fila de estudo, cobrindo os cenarios descritos pelo usuario.
 
-## Solucao
+## Cenarios a Testar
 
-### 1. Separar shuffle: so embaralhar new + review, nunca learning
+### 1. Funcao `getNextReadyIndex` (extraida de Study.tsx para ser testavel)
 
-**Arquivo:** `src/services/studyService.ts` (linha 117-118)
+A funcao `getNextReadyIndex` atualmente esta inline no componente Study.tsx. Para testa-la em isolamento, vamos extrai-la para `src/lib/studyUtils.ts`.
 
-Atual:
-```javascript
-const queue = [...newCards, ...learningCards, ...reviewCards];
-return { cards: shuffle ? shuffleArray(queue) : queue, ... };
-```
+### 2. Testes de Prioridade (learning cards furam a fila)
 
-Novo:
-```javascript
-const nonLearning = [...newCards, ...reviewCards];
-const shuffled = shuffle ? shuffleArray(nonLearning) : nonLearning;
-// Learning cards go at the beginning (they cut the line when ready)
-const queue = [...learningCards, ...shuffled];
-return { cards: queue, algorithmMode, deckConfig };
-```
+- Learning card com timer expirado e escolhido antes de new/review cards
+- Learning card com timer NAO expirado e pulado (new/review cards passam na frente)
+- Multiplos learning cards prontos: o primeiro na lista e escolhido
+- Mix: 2 learning (1 pronto, 1 aguardando) + 3 new + 2 review -> retorna o learning pronto
+- Todos learning aguardando -> retorna -1
+- Fila vazia -> retorna -1
 
-Learning cards ficam no inicio da fila. O `getNextReadyIndex` no Study.tsx ja verifica se o timer expirou antes de mostrar.
+### 3. Testes de Shuffle (so new + review)
 
-### 2. Priorizar learning cards prontos no `getNextReadyIndex`
+- Shuffle ON: learning cards ficam no inicio, new+review sao embaralhados
+- Shuffle OFF: ordem e preservada (learning primeiro, depois new+review na ordem original)
+- Verificar que learning cards NUNCA sao embaralhados
 
-**Arquivo:** `src/pages/Study.tsx` (funcao `getNextReadyIndex`, linha 67-78)
+### 4. Testes de `getLocalMidnight`
 
-Atual: percorre a lista sequencialmente e retorna o primeiro card pronto (seja new, review ou learning).
+- Intervalo de 1 dia as 22:55 -> scheduled_date e amanha 00:00:00
+- Intervalo de 2 dias -> scheduled_date e daqui 2 dias 00:00:00
+- Horas, minutos e segundos sao sempre 0
+- Learning cards (1min, 10min) usam timestamp exato, NAO meia-noite
 
-Novo: primeiro procurar um learning card (state=1) cujo timer expirou. Se encontrar, retorna ele (fura a fila). Se nao, retorna o proximo new/review na ordem.
+### 5. Testes de Fluxo Completo (simulacao)
 
-```javascript
-const getNextReadyIndex = (q) => {
-  const now = Date.now();
-  // 1) Learning cards com timer expirado furam a fila
-  for (let i = 0; i < q.length; i++) {
-    if (q[i].state === 1) {
-      const scheduledTime = new Date(q[i].scheduled_date).getTime();
-      if (scheduledTime <= now) return i;
-    }
-  }
-  // 2) Proximo card new/review na ordem
-  for (let i = 0; i < q.length; i++) {
-    if (q[i].state === 0 || q[i].state === 2) return i;
-  }
-  return -1; // todos learning aguardando
-};
-```
+- Card rated "Errei" -> vira learning com timer futuro -> timer expira -> corta fila
+- Card dominado rated "Errei" -> perde estado "dominado", vira learning -> corta fila quando pronto
+- Sessao com shuffle: new/review aleatorios, learning sempre corta
 
-### 3. Alinhar scheduled_date a meia-noite local para intervalos em dias
-
-**Arquivos:** `src/lib/fsrs.ts` e `src/lib/sm2.ts`
-
-Quando o intervalo e em dias (1d, 2d, etc.), o `scheduled_date` deve ser meia-noite local do dia alvo, nao o timestamp exato.
-
-Exemplo: se agora sao 22:55 e o intervalo e 1d, agendar para amanha 00:00:00 (local), nao para amanha 22:55.
-
-Criar funcao utilitaria:
-```javascript
-function getLocalMidnight(daysFromNow: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromNow);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-```
-
-Aplicar nos trechos que fazem `scheduledDate.setDate(scheduledDate.getDate() + interval)` quando `interval_days > 0`.
-
-**Nao afeta** learning cards (1min, 15min), que continuam usando timestamp exato.
-
-## Resumo das Mudancas
+## Mudancas Tecnicas
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/services/studyService.ts` | Separar shuffle: so embaralhar new+review, learning cards ficam no inicio |
-| `src/pages/Study.tsx` | `getNextReadyIndex` prioriza learning cards prontos (furam fila) |
-| `src/lib/fsrs.ts` | Alinhar `scheduled_date` a meia-noite local quando intervalo e em dias |
-| `src/lib/sm2.ts` | Mesma correcao de meia-noite local |
+| `src/lib/studyUtils.ts` | Extrair `getNextReadyIndex` como funcao pura testavel |
+| `src/pages/Study.tsx` | Importar `getNextReadyIndex` de studyUtils |
+| `src/test/studyQueue.test.ts` | Novo arquivo com ~30 testes cobrindo todos os cenarios |
 
-## Comportamento Final
+### Exemplo de Testes
 
-- **Shuffle ON**: new e review aparecem em ordem aleatoria; learning cards furam a fila quando o timer expira
-- **Shuffle OFF**: new e review seguem ordem de criacao; learning cards furam a fila quando o timer expira
-- **Agendamento 1d as 22:55**: card aparece no dia seguinte a partir de 00:00, nao as 22:55
-- **Learning 10min as 22:57**: card fura a fila as 23:07, independente de shuffle
+```typescript
+// Teste: learning card com timer expirado corta a fila
+it('learning card with expired timer cuts the line over new/review', () => {
+  const queue = [
+    { id: '1', state: 0, scheduled_date: new Date().toISOString() },        // new
+    { id: '2', state: 2, scheduled_date: pastDate.toISOString() },          // review
+    { id: '3', state: 1, scheduled_date: fiveMinutesAgo.toISOString() },    // learning PRONTO
+  ];
+  expect(getNextReadyIndex(queue)).toBe(2); // learning card corta a fila
+});
+
+// Teste: learning card com timer futuro NAO corta
+it('learning card with future timer does not cut the line', () => {
+  const queue = [
+    { id: '1', state: 0, scheduled_date: new Date().toISOString() },        // new
+    { id: '2', state: 1, scheduled_date: fiveMinutesFromNow.toISOString() }, // learning AGUARDANDO
+  ];
+  expect(getNextReadyIndex(queue)).toBe(0); // new card e mostrado
+});
+
+// Teste: getLocalMidnight sempre retorna 00:00:00
+it('getLocalMidnight returns midnight', () => {
+  const result = getLocalMidnight(1);
+  expect(result.getHours()).toBe(0);
+  expect(result.getMinutes()).toBe(0);
+  expect(result.getSeconds()).toBe(0);
+});
+```
+
+### Fluxo do teste de simulacao completa
+
+```text
+1. Fila inicial: [new1, new2, learning1(10min), review1]
+2. Shuffle ON -> fila: [learning1, ...shuffle(new1,new2,review1)]
+3. getNextReadyIndex -> new/review (learning1 timer nao expirou)
+4. Avancar relogio 10 minutos
+5. getNextReadyIndex -> learning1 (timer expirou, corta fila)
+6. Rate learning1 como "Bom" -> vira review, removido da fila
+7. getNextReadyIndex -> proximo new/review na ordem
+```
+
+## Resultado Esperado
+
+- 30+ testes automatizados validando cada cenario
+- Funcao `getNextReadyIndex` extraida e reutilizavel
+- Cobertura completa dos comportamentos: shuffle, prioridade, meia-noite, fluxo de estados
 
