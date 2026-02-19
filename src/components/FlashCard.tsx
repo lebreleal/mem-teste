@@ -301,10 +301,6 @@ const MultipleChoiceCard = ({
           </div>
 
 
-          {/* Tutor loading animation */}
-          {isTutorLoading && !tutorResponse && (
-            <TutorLoadingAnimation />
-          )}
 
           {/* Tutor response (before answering) */}
           {tutorResponse && !answered && (
@@ -351,8 +347,7 @@ const MultipleChoiceCard = ({
                     }`}
                     style={{ borderRadius: 'var(--radius)' }}
                   >
-                    <Lightbulb className="h-4 w-4" />
-                    {isTutorLoading ? 'Carregando...' : 'Dica do Tutor'}
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <><Lightbulb className="h-4 w-4" /> Dica do Tutor</>}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -382,8 +377,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                {isTutorLoading ? 'Analisando...' : 'Explicar alternativas (2 créditos)'}
+                {isTutorLoading ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas (2 créditos)</>}
               </button>
             )}
 
@@ -612,10 +606,7 @@ const FlashCard = ({
         )}
       </div>
 
-      {/* Tutor loading animation */}
-      {isTutorLoading && !tutorResponse && (
-        <TutorLoadingAnimation />
-      )}
+      {/* Tutor loading removed — now inline in buttons */}
 
       {/* Tutor hint response - show before flip */}
       {tutorResponse && !flipped && (
@@ -665,7 +656,7 @@ const FlashCard = ({
                   }`}
                   style={{ borderRadius: 'var(--radius)' }}
                 >
-                    <Lightbulb className="h-4 w-4" />
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <Lightbulb className="h-4 w-4" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
@@ -708,8 +699,7 @@ const FlashCard = ({
                   : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
               }`}
             >
-              <BookOpen className="h-3.5 w-3.5" />
-              {isTutorLoading ? 'Explicando...' : 'Explicar com IA (2 créditos)'}
+              {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA (2 créditos)</>}
             </button>
           )}
 
