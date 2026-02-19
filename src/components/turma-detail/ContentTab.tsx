@@ -386,7 +386,7 @@ const ContentTab = () => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-card-foreground truncate">{subject.name}</h3>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                    {totalItems > 0 && <span>{totalItems} pasta{totalItems !== 1 ? 's' : ''}</span>}
+                    {totalItems > 0 && <span className="flex items-center gap-1"><FolderOpen className="h-3 w-3" /> {totalItems}</span>}
                     {totalAttachments > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" /> {totalAttachments}</span>}
                     {totalCards > 0 && <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {totalCards}</span>}
                     {relatedExams.length > 0 && <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" /> {relatedExams.length}</span>}
