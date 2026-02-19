@@ -603,13 +603,13 @@ const FlashCard = ({
         {recallData && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className={`flex items-center gap-2 rounded-xl ${recallBgColor} px-3 py-1.5 cursor-help transition-all`}>
-                <Gauge className={`h-3.5 w-3.5 ${recallColor}`} />
-                <span className={`text-xs font-bold ${recallColor}`}>
-                  {recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`}
+              <div className={`flex items-center gap-1.5 sm:gap-2 rounded-xl ${recallBgColor} px-2 sm:px-3 py-1 sm:py-1.5 cursor-help transition-all`}>
+                <Gauge className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${recallColor}`} />
+                <span className={`text-[11px] sm:text-xs font-bold ${recallColor}`}>
+                  {recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`}
                 </span>
-                <span className="text-[10px] text-muted-foreground">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+                <span className="text-[10px] text-muted-foreground hidden sm:inline">•</span>
+                <span className="text-[10px] text-muted-foreground font-medium hidden sm:inline">{recallData.label}</span>
               </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-[240px]">
