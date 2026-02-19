@@ -1,6 +1,6 @@
 // ============= Refactored Dashboard.tsx =============
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useState, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
+import { useSubscription } from '@/hooks/useSubscription';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -32,16 +33,30 @@ const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDele
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
-import { usePremium } from '@/hooks/usePremium';
 import { useMissions } from '@/hooks/useMissions';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const state = useDashboardState();
-  const { isPremium } = usePremium();
+  const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
+
+  // Handle payment return
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (payment === 'success') {
+      toast({ title: '🎉 Pagamento realizado!', description: 'Seu status será atualizado em instantes.' });
+      refreshStatus();
+      setTimeout(refreshStatus, 5000);
+      setSearchParams({}, { replace: true });
+    } else if (payment === 'canceled') {
+      toast({ title: 'Pagamento cancelado', description: 'Nenhuma cobrança foi feita.' });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
