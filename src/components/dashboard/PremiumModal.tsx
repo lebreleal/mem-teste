@@ -1,19 +1,23 @@
 /**
  * Premium modal — subscription plans + credit packs with Stripe checkout.
  * Features: brain icons for credits, trial banner, smooth animations.
+ * Opens with defaultTab from parent (crown → plans, brain → credits).
  */
 
 import { useState, useEffect } from 'react';
-import { Crown, X, Sparkles, Brain, Zap, Pencil, Infinity, Check, ExternalLink, CreditCard, Timer } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Crown, X, Sparkles, Brain, Zap, Pencil, Infinity, Check, ExternalLink, Timer, Rocket, Eye } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useEnergy } from '@/hooks/useEnergy';
 import { useToast } from '@/hooks/use-toast';
 import { STRIPE_PLANS, STRIPE_CREDIT_PACKS } from '@/lib/stripeConfig';
 
 interface PremiumModalProps {
   open: boolean;
   onClose: () => void;
+  defaultTab?: 'plans' | 'credits';
 }
 
 const BENEFITS = [
@@ -37,22 +41,25 @@ const getDaysRemaining = (dateStr: string) => {
 
 type Tab = 'plans' | 'credits';
 
-const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
+const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps) => {
   const { isPremium, plan, expiresAt, isTrial, startCheckout, openPortal, refreshStatus } = useSubscription();
+  const { energy } = useEnergy();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('plans');
+  const [tab, setTab] = useState<Tab>(defaultTab);
   const [visible, setVisible] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<string | null>(null);
 
-  // Animate in
+  // Sync defaultTab when modal opens
   useEffect(() => {
     if (open) {
+      setTab(defaultTab);
       requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
     }
-  }, [open]);
+  }, [open, defaultTab]);
 
   if (!open) return null;
 
@@ -95,14 +102,32 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
 
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-5 sm:p-6">
-            {/* Header */}
+            {/* Header — icon changes based on tab */}
             <div className="text-center mb-4">
               <div
-                className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3 transition-transform duration-500 ${visible ? 'scale-100' : 'scale-50'}`}
-                style={{ background: 'linear-gradient(135deg, hsl(var(--warning)), hsl(45 100% 40%))' }}
+                className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3 transition-all duration-500 ${visible ? 'scale-100' : 'scale-50'}`}
+                style={{
+                  background: tab === 'plans'
+                    ? 'linear-gradient(135deg, hsl(var(--warning)), hsl(45 100% 40%))'
+                    : 'linear-gradient(135deg, hsl(var(--energy-purple, 270 60% 55%)), hsl(var(--primary)))',
+                }}
               >
-                <Crown className="h-7 w-7 text-white" fill={isPremium ? 'white' : 'none'} />
+                {tab === 'plans' ? (
+                  <Crown className="h-7 w-7 text-warning" fill="hsl(var(--warning))" />
+                ) : (
+                  <Brain className="h-7 w-7 text-white" />
+                )}
               </div>
+
+              {/* Credits balance when on credits tab */}
+              {tab === 'credits' && (
+                <div className="mb-2">
+                  <div className="flex items-baseline justify-center gap-2">
+                    <span className="text-3xl font-bold text-foreground tabular-nums">{energy}</span>
+                    <span className="text-sm text-muted-foreground">créditos disponíveis</span>
+                  </div>
+                </div>
+              )}
 
               {/* Trial banner */}
               {isTrial && trialDaysLeft > 0 && (
@@ -119,21 +144,29 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
                 </div>
               )}
 
-              {isPremium && !isTrial ? (
+              {tab === 'plans' && (
                 <>
-                  <h3 className="font-display text-xl font-bold text-foreground">Premium Ativo</h3>
-                  {expiresAt && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {plan === 'lifetime' ? '♾️ Acesso vitalício' : <>Expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span></>}
-                    </p>
-                  )}
+                  {isPremium && !isTrial ? (
+                    <>
+                      <h3 className="font-display text-xl font-bold text-foreground">Premium Ativo</h3>
+                      {expiresAt && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {plan === 'lifetime' ? '♾️ Acesso vitalício' : <>Expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span></>}
+                        </p>
+                      )}
+                    </>
+                  ) : !isTrial ? (
+                    <>
+                      <h3 className="font-display text-xl font-bold text-foreground">Seja Premium</h3>
+                      <p className="text-sm text-muted-foreground mt-1">Desbloqueie todo o potencial do MemoCards</p>
+                    </>
+                  ) : null}
                 </>
-              ) : !isTrial ? (
-                <>
-                  <h3 className="font-display text-xl font-bold text-foreground">Seja Premium</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Desbloqueie todo o potencial do MemoCards</p>
-                </>
-              ) : null}
+              )}
+
+              {tab === 'credits' && (
+                <h3 className="font-display text-xl font-bold text-foreground">Créditos IA</h3>
+              )}
             </div>
 
             {/* Tabs */}
@@ -142,13 +175,13 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
                 onClick={() => setTab('plans')}
                 className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all duration-200 ${tab === 'plans' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Crown className="h-3.5 w-3.5 inline mr-1.5" /> Planos
+                <Crown className="h-3.5 w-3.5 inline mr-1.5 text-warning" fill={tab === 'plans' ? 'hsl(var(--warning))' : 'none'} /> Planos
               </button>
               <button
                 onClick={() => setTab('credits')}
                 className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all duration-200 ${tab === 'credits' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Brain className="h-3.5 w-3.5 inline mr-1.5" /> Créditos IA
+                <Brain className="h-3.5 w-3.5 inline mr-1.5" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} /> Créditos IA
               </button>
             </div>
 
@@ -236,7 +269,7 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
                 {!isPremium && !isTrial && (
                   <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center">
                     <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-1.5">
-                      <Crown className="h-4 w-4 shrink-0" style={{ color: 'hsl(var(--warning))' }} fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
+                      <Crown className="h-4 w-4 shrink-0 text-warning" fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">Aproveite todos os benefícios Premium automaticamente</p>
                   </div>
@@ -245,8 +278,25 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
             )}
 
             {tab === 'credits' && (
-              <div className="space-y-2.5 animate-fade-in">
-                <p className="text-sm text-muted-foreground mb-3">Recarregue seus pontos de IA para gerar cards, provas e usar o tutor.</p>
+              <div className="space-y-3 animate-fade-in">
+                {/* Missions CTA — above prices */}
+                <button
+                  onClick={() => { onClose(); navigate('/missoes'); }}
+                  className="w-full flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--energy-purple, 270 60% 55%) / 0.12)' }}>
+                    <Rocket className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Complete Missões</p>
+                    <p className="text-[11px] text-muted-foreground">Ganhe créditos grátis diariamente</p>
+                  </div>
+                  <Eye className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
+                </button>
+
+                <p className="text-xs text-muted-foreground">Recarregue seus pontos de IA para gerar cards, provas e usar o tutor.</p>
+
+                {/* Credit packs */}
                 {STRIPE_CREDIT_PACKS.map((pack, i) => {
                   const isSelected = selectedCredit === pack.price_id;
                   const basePerCredit = STRIPE_CREDIT_PACKS[0].amount / STRIPE_CREDIT_PACKS[0].credits;
@@ -302,7 +352,7 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
                         </p>
                       </div>
 
-                      {/* Price + action */}
+                      {/* Price */}
                       <div className="text-right shrink-0">
                         <div className="text-base font-bold text-foreground">{pack.price}</div>
                       </div>
@@ -320,7 +370,7 @@ const PremiumModal = ({ open, onClose }: PremiumModalProps) => {
                 })}
 
                 {/* Buy button */}
-                <div className="pt-2">
+                <div className="pt-1">
                   <Button
                     className="w-full h-11 font-semibold transition-all duration-200"
                     disabled={!selectedCredit || !!loading}
