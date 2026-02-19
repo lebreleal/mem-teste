@@ -268,9 +268,14 @@ const MultipleChoiceCard = ({
       {/* Scrollable content area */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
         <div className="space-y-3 pb-2">
-          {/* Question */}
+          {/* Question card — receives feedback animation */}
           <div
-            className="card-premium w-full border border-border/40 bg-card p-4 sm:p-6"
+            className={`card-premium w-full border-2 bg-card p-4 sm:p-6 transition-colors ${
+              feedbackType === 'correct' ? 'animate-correct-flash border-success' :
+              feedbackType === 'wrong' ? 'animate-wrong-flash border-destructive' :
+              feedbackType === 'hard' ? 'animate-hard-flash border-warning' :
+              'border-border/40'
+            }`}
             style={{ borderRadius: 'var(--radius)' }}
           >
             <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 block">Múltipla escolha</span>

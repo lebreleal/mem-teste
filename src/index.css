@@ -233,47 +233,67 @@
 
 @keyframes correct-flash {
   0% { 
-    box-shadow: inset 0 0 0 2px hsl(var(--success) / 0.8);
+    border-color: hsl(var(--success));
+    box-shadow: 0 0 0 0 hsl(var(--success) / 0.4);
   }
-  40% { 
-    box-shadow: inset 0 0 0 3px hsl(var(--success) / 1), 0 0 8px 0 hsl(var(--success) / 0.3);
-    transform: scale(1.005);
+  30% { 
+    border-color: hsl(var(--success));
+    box-shadow: 0 0 12px 2px hsl(var(--success) / 0.25);
+    transform: scale(1.008);
+  }
+  70% {
+    border-color: hsl(var(--success) / 0.5);
+    box-shadow: 0 0 0 0 hsl(var(--success) / 0);
+    transform: scale(1);
   }
   100% { 
-    box-shadow: inset 0 0 0 2px hsl(var(--success) / 0);
-    transform: scale(1);
+    border-color: hsl(var(--border) / 0.4);
+    box-shadow: none;
   }
 }
 
 @keyframes wrong-flash {
   0% { 
-    box-shadow: inset 0 0 0 2px hsl(var(--destructive) / 0.8);
+    border-color: hsl(var(--destructive));
   }
   10% { transform: translateX(-3px); }
   20% { 
     transform: translateX(3px);
-    box-shadow: inset 0 0 0 3px hsl(var(--destructive) / 1), 0 0 8px 0 hsl(var(--destructive) / 0.25);
+    border-color: hsl(var(--destructive));
+    box-shadow: 0 0 10px 1px hsl(var(--destructive) / 0.2);
   }
   30% { transform: translateX(-2px); }
   40% { transform: translateX(2px); }
   50% { transform: translateX(0); }
+  70% {
+    border-color: hsl(var(--destructive) / 0.5);
+    box-shadow: none;
+  }
   100% { 
     transform: translateX(0);
-    box-shadow: inset 0 0 0 2px hsl(var(--destructive) / 0);
+    border-color: hsl(var(--border) / 0.4);
+    box-shadow: none;
   }
 }
 
 @keyframes hard-flash {
   0% { 
-    box-shadow: inset 0 0 0 2px hsl(var(--warning) / 0.8);
+    border-color: hsl(var(--warning));
+    box-shadow: 0 0 0 0 hsl(var(--warning) / 0.4);
   }
-  40% { 
-    box-shadow: inset 0 0 0 3px hsl(var(--warning) / 1), 0 0 8px 0 hsl(var(--warning) / 0.3);
-    transform: scale(1.005);
+  30% { 
+    border-color: hsl(var(--warning));
+    box-shadow: 0 0 12px 2px hsl(var(--warning) / 0.25);
+    transform: scale(1.008);
+  }
+  70% {
+    border-color: hsl(var(--warning) / 0.5);
+    box-shadow: 0 0 0 0 hsl(var(--warning) / 0);
+    transform: scale(1);
   }
   100% { 
-    box-shadow: inset 0 0 0 2px hsl(var(--warning) / 0);
-    transform: scale(1);
+    border-color: hsl(var(--border) / 0.4);
+    box-shadow: none;
   }
 }
 
