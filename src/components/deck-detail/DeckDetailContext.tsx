@@ -167,6 +167,7 @@ interface DeckDetailContextValue {
   handleGenerateExam: () => Promise<void>;
   getStateInfo: (card: CardRow) => { label: string; color: string };
   isFrozenCard: (card: CardRow) => boolean;
+  unfreezeCard: (cardId: string) => Promise<void>;
   stripHtml: (html: string) => string;
 
   // Navigation & utils
@@ -338,6 +339,22 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     const fiftyYears = Date.now() + 50 * 365.25 * 24 * 60 * 60 * 1000;
     return new Date(card.scheduled_date).getTime() > fiftyYears;
   }, []);
+
+  // Unfreeze a card (reset to new state)
+  const unfreezeCard = useCallback(async (cardId: string) => {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { error } = await supabase
+        .from('cards')
+        .update({ scheduled_date: new Date().toISOString(), state: 0, stability: 0, difficulty: 0 })
+        .eq('id', cardId);
+      if (error) throw error;
+      toast({ title: '🔥 Card descongelado', description: 'O card voltou para a fila de estudo.' });
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
+    } catch {
+      toast({ title: 'Erro ao descongelar card', variant: 'destructive' });
+    }
+  }, [toast, queryClient]);
 
   const filteredCards = useMemo(() => {
     let result = allCards;
@@ -841,7 +858,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     handleBulkMove, handleBulkDelete, handleImprove, applyImprovement,
     uploadOcclusionFile, handleOcclusionAttach, handleOcclusionPaste,
     handleImportCards, handleAlgorithmChange, handleAlgorithmCopy, handleGenerateExam,
-    getStateInfo, isFrozenCard, stripHtml,
+    getStateInfo, isFrozenCard, unfreezeCard, stripHtml,
     navigate, toast, queryClient, user, otherDecks, isSaving, canImprove,
   };
 
