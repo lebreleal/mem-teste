@@ -56,7 +56,8 @@ const Study = () => {
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [tutorResponse, setTutorResponse] = useState<string | null>(null);
+  const [hintResponse, setHintResponse] = useState<string | null>(null);
+  const [explainResponse, setExplainResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -122,8 +123,8 @@ const Study = () => {
   const tutorAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    cardShownAt.current = Date.now();
-    setTutorResponse(null);
+    setHintResponse(null);
+    setExplainResponse(null);
     // Cancel any pending tutor request when card changes
     if (tutorAbortRef.current) {
       tutorAbortRef.current.abort();
@@ -145,6 +146,8 @@ const Study = () => {
     const controller = new AbortController();
     tutorAbortRef.current = controller;
 
+    const isExplain = options?.action === 'explain' || options?.action === 'explain-mc';
+
     setIsTutorLoading(true);
     try {
       const result = await invokeTutor({
@@ -158,7 +161,11 @@ const Study = () => {
         energyCost: TUTOR_COST,
       });
       if (controller.signal.aborted) return;
-      setTutorResponse(result.hint);
+      if (isExplain) {
+        setExplainResponse(result.hint);
+      } else {
+        setHintResponse(result.hint);
+      }
       queryClient.invalidateQueries({ queryKey: ['energy'] });
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -371,10 +378,6 @@ const Study = () => {
           >
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
-          <div className="flex items-center gap-1 rounded-xl px-2 py-1" style={{ background: 'hsl(var(--energy-purple) / 0.1)' }}>
-            <Brain className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple))' }} />
-            <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
-          </div>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))}
             className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -382,6 +385,10 @@ const Study = () => {
           >
             <Timer className="h-3.5 w-3.5" />
           </button>
+          <div className="flex items-center gap-1 rounded-xl px-2 py-1" style={{ background: 'hsl(var(--energy-purple) / 0.1)' }}>
+            <Brain className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple))' }} />
+            <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
+          </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
           <span className="text-xs font-bold text-muted-foreground tabular-nums">{reviewCount + 1}/{totalCards}</span>
         </div>
@@ -417,7 +424,8 @@ const Study = () => {
             energy={energy}
             onTutorRequest={handleTutorRequest}
             isTutorLoading={isTutorLoading}
-            tutorResponse={tutorResponse}
+            hintResponse={hintResponse}
+            explainResponse={explainResponse}
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
             actions={
