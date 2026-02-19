@@ -174,12 +174,17 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg h-[80vh] flex flex-col p-0 gap-0 [&>button.absolute]:hidden">
+        <DialogContent className="max-w-lg h-[80dvh] flex flex-col p-0 gap-0 [&>button.absolute]:hidden overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Brain className="h-4 w-4 text-primary" />
-              <span className="font-display font-semibold text-sm">Chat IA</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <Brain className="h-4 w-4 text-primary shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="font-display font-semibold text-sm leading-tight">Chat IA</span>
+                {cardContext && (
+                  <span className="text-[10px] text-muted-foreground truncate leading-tight">Contexto: conteúdo do card atual</span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <AIModelSelector model={model} onChange={setModel} baseCost={BASE_COST} compact />
@@ -196,10 +201,11 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
-                <p className="text-sm">Faça uma pergunta sobre o card</p>
-                <p className="text-xs mt-1">O histórico será perdido ao fechar</p>
+                <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
+                <p className="text-xs mt-1 leading-relaxed">O chat está contextualizado com o conteúdo do cartão que você está estudando</p>
+                <p className="text-[11px] mt-2 opacity-60">O histórico será perdido ao fechar</p>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -238,7 +244,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Digite sua pergunta..."
-                className="min-h-[40px] max-h-[100px] resize-none border-0 bg-muted/50 focus-visible:ring-0 text-sm"
+                className="min-h-[40px] max-h-[100px] resize-none border-0 bg-muted/50 focus-visible:ring-0 text-base sm:text-sm"
                 rows={1}
               />
               <Button
