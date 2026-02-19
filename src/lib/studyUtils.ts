@@ -74,3 +74,33 @@ export function findRootAncestorId(
     currentId = deck.parent_deck_id;
   }
 }
+
+/**
+ * Get the index of the next card ready to be studied.
+ * Priority: learning cards (state 1) with expired timer cut the line.
+ * Then new (state 0) and review (state 2) cards in queue order.
+ * Returns -1 if all remaining cards are learning with future timers.
+ */
+export function getNextReadyIndex(queue: { state: number; scheduled_date: string }[]): number {
+  const now = Date.now();
+  // 1) Learning cards (state 1) with expired timer cut the line
+  for (let i = 0; i < queue.length; i++) {
+    if (queue[i].state === 1) {
+      const scheduledTime = new Date(queue[i].scheduled_date).getTime();
+      if (scheduledTime <= now) return i;
+    }
+  }
+  // 2) Next new/review card in order
+  for (let i = 0; i < queue.length; i++) {
+    if (queue[i].state === 0 || queue[i].state === 2) return i;
+  }
+  return -1; // All remaining cards are learning and waiting
+}
+
+/** Get local midnight N days from now (for day-based intervals). */
+export function getLocalMidnight(daysFromNow: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}

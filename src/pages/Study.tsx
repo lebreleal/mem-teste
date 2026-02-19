@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useEnergy } from '@/hooks/useEnergy';
+import { getNextReadyIndex } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
 import AIModelSelector from '@/components/AIModelSelector';
@@ -63,27 +64,12 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
-  // Find the first card that is ready (learning cards must wait for scheduled_date)
-  const getNextReadyIndex = useCallback((q: any[]): number => {
-    const now = Date.now();
-    // 1) Learning cards (state 1) with expired timer cut the line
-    for (let i = 0; i < q.length; i++) {
-      if (q[i].state === 1) {
-        const scheduledTime = new Date(q[i].scheduled_date).getTime();
-        if (scheduledTime <= now) return i;
-      }
-    }
-    // 2) Next new/review card in order
-    for (let i = 0; i < q.length; i++) {
-      if (q[i].state === 0 || q[i].state === 2) return i;
-    }
-    return -1; // All remaining cards are learning and waiting
-  }, []);
+  // getNextReadyIndex imported from studyUtils
 
   // Determine current card considering learning step timing
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [localQueue, getNextReadyIndex, waitingSeconds]);
+    [localQueue, waitingSeconds]);
   const currentCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
   const allWaiting = localQueue.length > 0 && readyIndex < 0;
 
