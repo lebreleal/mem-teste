@@ -1,24 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import MemoCardsLogo from '@/components/MemoCardsLogo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { ArrowLeft, Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 
-
-
-type Step = 'choose' | 'login' | 'signup-name' | 'signup-email' | 'signup-password' | 'signup-done';
+type Mode = 'login' | 'signup';
 
 const Auth = () => {
-  const [searchParams] = useSearchParams();
-  const initialMode = searchParams.get('mode');
-  
-  const [step, setStep] = useState<Step>(
-    initialMode === 'login' ? 'login' : initialMode === 'signup' ? 'signup-name' : 'choose'
-  );
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -28,345 +20,141 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signIn(email, password);
-    if (error) {
-      toast({ title: 'Erro ao entrar', description: error, variant: 'destructive' });
+    if (mode === 'login') {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({ title: 'Erro ao entrar', description: error, variant: 'destructive' });
+      } else {
+        navigate('/dashboard');
+      }
     } else {
-      navigate('/dashboard');
+      const { error } = await signUp(email, password, name);
+      if (error) {
+        toast({ title: 'Erro ao cadastrar', description: error, variant: 'destructive' });
+      } else {
+        toast({ title: 'Conta criada!', description: 'Verifique seu email para confirmar.' });
+        setMode('login');
+        setPassword('');
+      }
     }
     setLoading(false);
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await signUp(email, password, name);
-    if (error) {
-      toast({ title: 'Erro ao cadastrar', description: error, variant: 'destructive' });
-    } else {
-      setStep('signup-done');
-    }
-    setLoading(false);
+  const handleGoogle = async () => {
+    const { error } = await signInWithGoogle();
+    if (error) toast({ title: 'Erro', description: error, variant: 'destructive' });
   };
-
-  const goBack = () => {
-    const backMap: Record<string, Step> = {
-      'login': 'choose',
-      'signup-name': 'choose',
-      'signup-email': 'signup-name',
-      'signup-password': 'signup-email',
-    };
-    setStep(backMap[step] || 'choose');
-  };
-
-  const canGoBack = step !== 'choose' && step !== 'signup-done';
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 relative">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="w-full max-w-md">
-        {/* Back button */}
-        {canGoBack && (
-          <button
-            onClick={goBack}
-            className="mb-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+
+      <div className="w-full max-w-sm space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-1">
+          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
+            Memo Cards
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta grátis'}
+          </p>
+        </div>
+
+        {/* Google button */}
+        <Button
+          size="lg"
+          variant="outline"
+          className="w-full text-base font-semibold py-6 rounded-2xl border-2 gap-3"
+          onClick={handleGoogle}
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continuar com Google
+        </Button>
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-3 text-muted-foreground">ou com email</span>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {mode === 'signup' && (
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Seu nome"
+                required
+                className="pl-10 h-12 rounded-xl text-sm border-2 focus:border-primary"
+              />
+            </div>
+          )}
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              required
+              className="pl-10 h-12 rounded-xl text-sm border-2 focus:border-primary"
+            />
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={mode === 'signup' ? 'Crie uma senha (mín. 6)' : 'Sua senha'}
+              required
+              minLength={6}
+              className="pl-10 pr-10 h-12 rounded-xl text-sm border-2 focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full text-base font-bold py-6 rounded-2xl"
+            disabled={loading}
           >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="text-sm font-semibold">Voltar</span>
+            {loading
+              ? (mode === 'login' ? 'Entrando...' : 'Criando conta...')
+              : (mode === 'login' ? 'Entrar' : 'Criar conta')}
+          </Button>
+        </form>
+
+        {/* Toggle mode */}
+        <p className="text-center text-sm text-muted-foreground">
+          {mode === 'login' ? 'Não tem conta?' : 'Já tem conta?'}{' '}
+          <button
+            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setPassword(''); }}
+            className="font-semibold text-primary hover:underline"
+          >
+            {mode === 'login' ? 'Criar conta' : 'Entrar'}
           </button>
-        )}
-
-        {/* Choose screen */}
-        {step === 'choose' && (
-          <div className="animate-fade-in flex flex-col items-center text-center">
-            <MemoCardsLogo size={100} />
-            <h1 className="mt-4 font-display text-4xl font-black tracking-tight text-foreground">
-              Memo Cards
-            </h1>
-            <p className="mt-2 text-muted-foreground text-base">
-              Aprenda com repetição espaçada
-            </p>
-            <div className="mt-8 flex flex-col gap-3 w-full">
-              <Button
-                size="lg"
-                className="w-full text-base font-bold py-6 rounded-2xl"
-                onClick={() => setStep('signup-name')}
-              >
-                Criar conta
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full text-base font-bold py-6 rounded-2xl border-2"
-                onClick={() => setStep('login')}
-              >
-                Já tenho conta
-              </Button>
-              <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">ou</span>
-                </div>
-              </div>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full text-base font-bold py-6 rounded-2xl border-2 gap-3"
-                onClick={async () => {
-                  const { error } = await signInWithGoogle();
-                  if (error) toast({ title: 'Erro', description: error, variant: 'destructive' });
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Continuar com Google
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Login */}
-        {step === 'login' && (
-          <div className="animate-fade-in">
-            <div className="mb-8 text-center">
-              <MemoCardsLogo size={64} />
-              <h2 className="mt-4 font-display text-2xl font-black text-foreground">
-                Bom te ver de volta! 🐘
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">Entre com seu email e senha</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  required
-                  className="pl-11 h-14 rounded-2xl text-base border-2 focus:border-primary"
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Sua senha"
-                  required
-                  minLength={6}
-                  className="pl-11 pr-11 h-14 rounded-2xl text-base border-2 focus:border-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full text-base font-bold py-6 rounded-2xl mt-2"
-                disabled={loading}
-              >
-                {loading ? 'Entrando...' : 'Entrar'}
-              </Button>
-            </form>
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">ou</span>
-              </div>
-            </div>
-            <Button
-              size="lg"
-              variant="outline"
-              className="w-full text-base font-bold py-6 rounded-2xl border-2 gap-3"
-              onClick={async () => {
-                const { error } = await signInWithGoogle();
-                if (error) toast({ title: 'Erro', description: error, variant: 'destructive' });
-              }}
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-              </svg>
-              Continuar com Google
-            </Button>
-          </div>
-        )}
-
-        {/* Signup Step 1: Name */}
-        {step === 'signup-name' && (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">Passo 1 de 3</p>
-              <h2 className="mt-2 font-display text-3xl font-black text-foreground">
-                Como podemos te chamar?
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">Escolha um nome para seu perfil</p>
-            </div>
-            <div className="space-y-4">
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Seu nome"
-                  className="pl-11 h-14 rounded-2xl text-base border-2 focus:border-primary"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && name.trim()) setStep('signup-email');
-                  }}
-                />
-              </div>
-              <Button
-                size="lg"
-                className="w-full text-base font-bold py-6 rounded-2xl"
-                disabled={!name.trim()}
-                onClick={() => setStep('signup-email')}
-              >
-                Continuar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Signup Step 2: Email */}
-        {step === 'signup-email' && (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">Passo 2 de 3</p>
-              <h2 className="mt-2 font-display text-3xl font-black text-foreground">
-                Qual seu email, {name.split(' ')[0]}?
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">Vamos usar para salvar seu progresso</p>
-            </div>
-            <div className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  required
-                  className="pl-11 h-14 rounded-2xl text-base border-2 focus:border-primary"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && email.includes('@')) setStep('signup-password');
-                  }}
-                />
-              </div>
-              <Button
-                size="lg"
-                className="w-full text-base font-bold py-6 rounded-2xl"
-                disabled={!email.includes('@')}
-                onClick={() => setStep('signup-password')}
-              >
-                Continuar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Signup Step 3: Password */}
-        {step === 'signup-password' && (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">Passo 3 de 3</p>
-              <h2 className="mt-2 font-display text-3xl font-black text-foreground">
-                Crie uma senha segura 🔒
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">Mínimo 6 caracteres</p>
-            </div>
-            <form onSubmit={handleSignup} className="space-y-4">
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                  minLength={6}
-                  className="pl-11 pr-11 h-14 rounded-2xl text-base border-2 focus:border-primary"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-              {password.length > 0 && (
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        password.length >= i * 3
-                          ? password.length >= 10
-                            ? 'bg-primary'
-                            : password.length >= 6
-                            ? 'bg-warning'
-                            : 'bg-destructive'
-                          : 'bg-muted'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full text-base font-bold py-6 rounded-2xl"
-                disabled={loading || password.length < 6}
-              >
-                {loading ? 'Criando conta...' : 'Criar minha conta'}
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {/* Signup Done */}
-        {step === 'signup-done' && (
-          <div className="animate-fade-in flex flex-col items-center text-center">
-            <div className="text-6xl mb-4">🎉</div>
-            <h2 className="font-display text-3xl font-black text-foreground">
-              Conta criada!
-            </h2>
-            <p className="mt-2 text-muted-foreground max-w-xs">
-              Enviamos um email de confirmação para <strong className="text-foreground">{email}</strong>. Verifique sua caixa de entrada.
-            </p>
-            <Button
-              size="lg"
-              variant="outline"
-              className="mt-8 w-full text-base font-bold py-6 rounded-2xl border-2"
-              onClick={() => { setStep('login'); setPassword(''); }}
-            >
-              Ir para login
-            </Button>
-          </div>
-        )}
+        </p>
       </div>
     </div>
   );
