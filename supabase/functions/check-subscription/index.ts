@@ -64,7 +64,19 @@ serve(async (req) => {
     // Check Stripe customer
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     if (customers.data.length === 0) {
-      // Check for one-time lifetime purchase via sessions
+      // No Stripe customer — check for 14-day trial from profile
+      if (currentExpiry && new Date(currentExpiry) > new Date()) {
+        const createdAt = profile ? (await supabaseAdmin.from("profiles").select("created_at").eq("id", user.id).single()).data?.created_at : null;
+        const isTrial = createdAt ? (new Date(currentExpiry).getTime() - new Date(createdAt).getTime()) < 15 * 24 * 60 * 60 * 1000 : false;
+        return new Response(JSON.stringify({
+          subscribed: true,
+          plan: "trial",
+          subscription_end: currentExpiry,
+          is_trial: isTrial,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ subscribed: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

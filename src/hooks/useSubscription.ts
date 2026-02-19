@@ -10,8 +10,9 @@ import { useCallback } from 'react';
 
 export interface SubscriptionStatus {
   subscribed: boolean;
-  plan?: 'monthly' | 'annual' | 'lifetime';
+  plan?: 'monthly' | 'annual' | 'lifetime' | 'trial';
   subscription_end?: string;
+  is_trial?: boolean;
 }
 
 export function useSubscription() {
@@ -45,6 +46,7 @@ export function useSubscription() {
   const isPremium = data?.subscribed ?? false;
   const plan = data?.plan;
   const expiresAt = data?.subscription_end ?? null;
+  const isTrial = data?.is_trial ?? false;
 
   const startCheckout = useCallback(async (priceId: string, mode: 'subscription' | 'payment') => {
     const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -73,6 +75,7 @@ export function useSubscription() {
     isPremium,
     plan,
     expiresAt,
+    isTrial,
     isLoading,
     startCheckout,
     openPortal,
