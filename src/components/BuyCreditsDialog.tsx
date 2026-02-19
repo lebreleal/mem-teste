@@ -61,8 +61,8 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
             {packages.map((pkg, i) => {
               const isSelected = selectedPkg === i;
               const isBest = i === 3;
-              const showDiscount = pkg.discount > 0;
-              const showSavingsDetail = isBest && pkg.discount > 0;
+              const showDiscount = false;
+              const showSavingsDetail = false;
               const savingsPerCredit = basePerCredit - pkg.price / pkg.credits;
               const totalSavings = (savingsPerCredit * pkg.credits).toFixed(2);
 
