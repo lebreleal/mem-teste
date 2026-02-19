@@ -181,6 +181,7 @@ const MultipleChoiceCard = ({
   const [answered, setAnswered] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
   const [loadingAction, setLoadingAction] = useState<'explain' | 'explain-mc' | 'hint' | null>(null);
+  const [recallExpanded, setRecallExpanded] = useState(false);
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
@@ -481,6 +482,7 @@ const FlashCard = ({
   const [typingAnswer, setTypingAnswer] = useState(false);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
+  const [recallExpanded, setRecallExpanded] = useState(false);
 
   // Auto-detect card type: if content has cloze markers, treat as cloze regardless of cardType
   const effectiveCardType = useMemo(() => {
