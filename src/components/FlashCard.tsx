@@ -45,6 +45,7 @@ interface FlashCardProps {
   quickReview?: boolean;
   algorithmMode?: string;
   energy?: number;
+  tutorCost?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
   isTutorLoading?: boolean;
   hintResponse?: string | null;
@@ -173,7 +174,7 @@ const MultipleChoiceCard = ({
   const [answered, setAnswered] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
   const mcData = parseMultipleChoice(backContent);
-  const canUseTutor = energy >= 2;
+  const canUseTutor = energy >= (2);
 
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
@@ -383,7 +384,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas (2 créditos)</>}
+                {isTutorLoading ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
               </button>
             )}
 
@@ -412,7 +413,7 @@ const MultipleChoiceCard = ({
 const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
-  energy = 0, onTutorRequest, isTutorLoading, hintResponse, explainResponse, actions,
+  energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, actions,
   canUndo, onUndo,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
@@ -433,7 +434,7 @@ const FlashCard = ({
   const isCloze = effectiveCardType === 'cloze';
   const isOcclusion = effectiveCardType === 'image_occlusion';
   const isMultipleChoice = effectiveCardType === 'multiple_choice';
-  const canUseTutor = energy >= 2;
+  const canUseTutor = energy >= tutorCost;
 
   const recallData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
@@ -791,7 +792,7 @@ const FlashCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA (2 créditos)</>}
+                {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA</>}
               </button>
             )}
 
