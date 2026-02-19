@@ -13,6 +13,8 @@ export const useTheme = () => {
     const root = document.documentElement;
     root.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('memo-theme', theme);
+    const color = theme === 'dark' ? '#141519' : '#faf9f7';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
   }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
