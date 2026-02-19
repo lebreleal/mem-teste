@@ -234,20 +234,16 @@
 @keyframes correct-flash {
   0% { 
     border-color: hsl(var(--success));
-    box-shadow: 0 0 8px 2px hsl(var(--success) / 0.45),
-                0 0 24px 8px hsl(var(--success) / 0.2),
-                0 0 48px 16px hsl(var(--success) / 0.08);
+    box-shadow: 0 4px 20px -2px hsl(var(--success) / 0.5);
   }
-  40% { 
+  50% { 
     border-color: hsl(var(--success));
-    box-shadow: 0 0 10px 3px hsl(var(--success) / 0.35),
-                0 0 32px 12px hsl(var(--success) / 0.15),
-                0 0 60px 24px hsl(var(--success) / 0.05);
-    transform: scale(1.006);
+    box-shadow: 0 6px 28px -2px hsl(var(--success) / 0.4);
+    transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: 0 0 0 0 hsl(var(--success) / 0);
+    box-shadow: none;
     transform: scale(1);
   }
 }
@@ -255,50 +251,37 @@
 @keyframes wrong-flash {
   0% { 
     border-color: hsl(var(--destructive));
-    box-shadow: 0 0 8px 2px hsl(var(--destructive) / 0.45),
-                0 0 24px 8px hsl(var(--destructive) / 0.2),
-                0 0 48px 16px hsl(var(--destructive) / 0.08);
+    box-shadow: 0 4px 20px -2px hsl(var(--destructive) / 0.5);
   }
   10% { transform: translateX(-3px); }
   20% { 
     transform: translateX(3px);
     border-color: hsl(var(--destructive));
-    box-shadow: 0 0 10px 3px hsl(var(--destructive) / 0.4),
-                0 0 32px 12px hsl(var(--destructive) / 0.18),
-                0 0 60px 24px hsl(var(--destructive) / 0.06);
+    box-shadow: 0 6px 28px -2px hsl(var(--destructive) / 0.45);
   }
   30% { transform: translateX(-2px); }
   40% { transform: translateX(2px); }
   50% { transform: translateX(0); }
-  70% {
-    border-color: hsl(var(--destructive) / 0.4);
-    box-shadow: 0 0 4px 1px hsl(var(--destructive) / 0.1),
-                0 0 12px 4px hsl(var(--destructive) / 0.04);
-  }
   100% { 
     transform: translateX(0);
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0);
+    box-shadow: none;
   }
 }
 
 @keyframes hard-flash {
   0% { 
     border-color: hsl(var(--warning));
-    box-shadow: 0 0 8px 2px hsl(var(--warning) / 0.45),
-                0 0 24px 8px hsl(var(--warning) / 0.2),
-                0 0 48px 16px hsl(var(--warning) / 0.08);
+    box-shadow: 0 4px 20px -2px hsl(var(--warning) / 0.5);
   }
-  40% { 
+  50% { 
     border-color: hsl(var(--warning));
-    box-shadow: 0 0 10px 3px hsl(var(--warning) / 0.35),
-                0 0 32px 12px hsl(var(--warning) / 0.15),
-                0 0 60px 24px hsl(var(--warning) / 0.05);
-    transform: scale(1.006);
+    box-shadow: 0 6px 28px -2px hsl(var(--warning) / 0.4);
+    transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: 0 0 0 0 hsl(var(--warning) / 0);
+    box-shadow: none;
     transform: scale(1);
   }
 }
