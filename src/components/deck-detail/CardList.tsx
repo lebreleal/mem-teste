@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Search, Plus, Trash2, X, CheckCheck, ArrowUpRight, PenLine, Sparkles, Download, Filter,
-  MoreVertical, Eye,
+  MoreVertical, Eye, Flame,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -26,7 +26,7 @@ const CardList = () => {
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
-    getStateInfo, stripHtml, otherDecks, isFrozenCard,
+    getStateInfo, stripHtml, otherDecks, isFrozenCard, unfreezeCard,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
@@ -459,6 +459,11 @@ const CardList = () => {
                               <DropdownMenuItem onClick={e => { e.stopPropagation(); openEdit(card); }}>
                                 <PenLine className="mr-2 h-4 w-4" /> Editar
                               </DropdownMenuItem>
+                              {frozen && (
+                                <DropdownMenuItem onClick={e => { e.stopPropagation(); unfreezeCard(card.id); }}>
+                                  <Flame className="mr-2 h-4 w-4" /> Descongelar
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={e => { e.stopPropagation(); setDeleteId(card.id); }}>
                                 <Trash2 className="mr-2 h-4 w-4" /> Excluir

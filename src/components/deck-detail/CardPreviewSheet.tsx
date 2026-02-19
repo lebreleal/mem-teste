@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import {
@@ -148,7 +148,7 @@ interface Props {
 }
 
 const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
-  const { openEdit, setDeleteId, setMoveCardId } = useDeckDetail();
+  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard } = useDeckDetail();
   const isMobile = useIsMobile();
 
   const virtualCards = useMemo(() => {
@@ -279,6 +279,11 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
               <DropdownMenuItem onClick={() => { onClose(); setMoveCardId(card.id); }}>
                 <ArrowUpRight className="mr-2 h-4 w-4" /> Mover
               </DropdownMenuItem>
+              {isFrozenCard(card) && (
+                <DropdownMenuItem onClick={() => { unfreezeCard(card.id); }}>
+                  <Flame className="mr-2 h-4 w-4" /> Descongelar
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
                 <Trash2 className="mr-2 h-4 w-4" /> Excluir
