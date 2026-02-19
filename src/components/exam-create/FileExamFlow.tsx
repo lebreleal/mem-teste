@@ -1,5 +1,5 @@
 /**
- * File-based exam flow: upload, page selection, config, and generation.
+ * File-based exam flow: upload → page selection → shared wizard config.
  */
 
 import { useRef } from 'react';
@@ -8,11 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import {
-  FileUp, Upload, Loader2, CheckCircle2, ChevronLeft,
-  Clock, Sparkles, Zap,
+  FileUp, Upload, Loader2, CheckCircle2, ChevronRight,
+  Sparkles,
 } from 'lucide-react';
-import AIModelSelector from '@/components/AIModelSelector';
-import ExampleReferenceSection from './ExampleReferenceSection';
+import ExamConfigWizard from './ExamConfigWizard';
 import type { PageItem } from './types';
 import type { AIModel } from '@/hooks/useAIModel';
 
@@ -23,7 +22,6 @@ interface FileExamFlowProps {
   fileLoadProgress: { current: number; total: number };
   fileLoading: boolean;
   fileName: string;
-  // Config state
   fileTitle: string;
   setFileTitle: (v: string) => void;
   fileTotalQuestions: number;
@@ -38,14 +36,12 @@ interface FileExamFlowProps {
   setModel: (m: AIModel) => void;
   fileTotalCost: number;
   fileCanAfford: boolean;
-  // Actions
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onTogglePage: (idx: number) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onContinueToConfig: () => void;
   onGenerate: () => void;
-  // Example reference
   exampleMode: 'none' | 'text' | 'image';
   setExampleMode: (m: 'none' | 'text' | 'image') => void;
   exampleText: string;
@@ -67,10 +63,10 @@ const FileExamFlow = ({
 }: FileExamFlowProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFilePages = filePages.filter(p => p.selected);
-  const fileMcCount = Math.max(0, fileTotalQuestions - fileWrittenCount);
 
   return (
     <div className="space-y-5">
+      {/* Upload step */}
       {fileStep === 'upload' && (
         <div className="rounded-2xl border border-border/50 bg-card p-6 space-y-5 shadow-sm">
           <div className="flex items-center gap-3">
@@ -91,6 +87,7 @@ const FileExamFlow = ({
         </div>
       )}
 
+      {/* Loading step */}
       {fileStep === 'loading' && (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -99,6 +96,7 @@ const FileExamFlow = ({
         </div>
       )}
 
+      {/* Page selection step */}
       {fileStep === 'pages' && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -140,100 +138,50 @@ const FileExamFlow = ({
               <span className="font-bold text-foreground">{selectedFilePages.length}</span> páginas selecionadas
             </div>
             <Button onClick={onContinueToConfig} disabled={selectedFilePages.length === 0} className="gap-2">
-              Continuar <ChevronLeft className="h-4 w-4 rotate-180" />
+              Continuar <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
 
+      {/* Config step – reuses shared wizard */}
       {fileStep === 'config' && (
-        <>
-          <div className="rounded-2xl border border-border/50 bg-card p-6 space-y-5 shadow-sm">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5">
-                <FileUp className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h2 className="font-display text-lg font-bold text-foreground">Configurar Prova</h2>
-                <p className="text-xs text-muted-foreground">{selectedFilePages.length} páginas de "{fileName}"</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-semibold">Título (opcional)</Label>
-                <Input className="mt-1.5" placeholder="Ex: Prova de Anatomia" value={fileTitle} onChange={e => setFileTitle(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm font-semibold">Total questões</Label>
-                  <Input type="number" min={1} max={50} className="mt-1.5" value={fileTotalQuestions} onChange={e => {
-                    const v = Math.max(1, Math.min(50, parseInt(e.target.value) || 1));
-                    setFileTotalQuestions(v);
-                    if (fileWrittenCount > v) setFileWrittenCount(v);
-                  }} />
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">Dissertativas</Label>
-                  <Input type="number" min={0} max={fileTotalQuestions} className="mt-1.5" value={fileWrittenCount}
-                    onChange={e => setFileWrittenCount(Math.max(0, Math.min(fileTotalQuestions, parseInt(e.target.value) || 0)))} />
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground -mt-2">{fileMcCount} múltipla escolha + {fileWrittenCount} dissertativas</p>
-              {fileMcCount > 0 && (
-                <div>
-                  <Label className="text-sm font-semibold">Alternativas por questão</Label>
-                  <div className="flex gap-2 mt-1.5">
-                    {([4, 5] as const).map(n => (
-                      <button key={n} onClick={() => setFileOptionsCount(n)} className={`flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all ${
-                        fileOptionsCount === n ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted/50'
-                      }`}>{n} opções</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                <Label className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Tempo limite (minutos)</Label>
-                <Input type="number" min={0} className="mt-1.5" placeholder="0 = sem limite" value={fileTimeLimit || ''}
-                  onChange={e => setFileTimeLimit(Math.max(0, parseInt(e.target.value) || 0))} />
-              </div>
-              <ExampleReferenceSection
-                userId={userId}
-                exampleMode={exampleMode} setExampleMode={setExampleMode}
-                exampleText={exampleText} setExampleText={setExampleText}
-                exampleImageUrl={exampleImageUrl} setExampleImageUrl={setExampleImageUrl}
-                exampleImageUploading={exampleImageUploading} setExampleImageUploading={setExampleImageUploading}
-              />
-              <div>
-                <Label className="text-sm font-semibold">Modelo de IA</Label>
-                <div className="mt-1.5">
-                  <AIModelSelector model={model} onChange={setModel} baseCost={fileTotalQuestions * 2} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className={`rounded-2xl border px-5 py-4 ${fileCanAfford ? 'border-primary/20 bg-primary/5' : 'border-destructive/30 bg-destructive/5'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Custo estimado</span>
               </div>
-              <span className={`text-sm font-bold tabular-nums ${fileCanAfford ? 'text-primary' : 'text-destructive'}`}>{fileTotalCost} Créditos IA</span>
+              <div>
+                <h2 className="font-display text-base font-bold text-foreground">Configurar Prova</h2>
+                <p className="text-[11px] text-muted-foreground">{selectedFilePages.length} páginas de "{fileName}"</p>
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">{fileTotalQuestions} questões × 2 créditos = {fileTotalQuestions * 2}{model === 'pro' ? ' × 5 = ' + fileTotalCost : ''}</p>
           </div>
 
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3">
-            <p className="text-xs text-muted-foreground">
-              <Zap className="inline h-3.5 w-3.5 text-primary mr-1" />
-              Correção de dissertativas: <span className="font-bold text-foreground">gratuita 10x/dia</span>, após 2 Créditos IA.
-            </p>
+          {/* Title input before wizard */}
+          <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+            <Label className="text-sm font-semibold">Título <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+            <Input className="mt-1.5" placeholder="Ex: Prova de Anatomia" value={fileTitle} onChange={e => setFileTitle(e.target.value)} />
           </div>
 
-          <Button className="w-full gap-2 h-12 text-base" size="lg" onClick={onGenerate} disabled={selectedFilePages.length === 0 || !fileCanAfford}>
-            <Sparkles className="h-5 w-5" /> Gerar Prova com IA
-          </Button>
-        </>
+          <ExamConfigWizard
+            userId={userId}
+            totalQuestions={fileTotalQuestions} setTotalQuestions={setFileTotalQuestions}
+            writtenCount={fileWrittenCount} setWrittenCount={setFileWrittenCount}
+            optionsCount={fileOptionsCount} setOptionsCount={setFileOptionsCount}
+            timeLimit={fileTimeLimit} setTimeLimit={setFileTimeLimit}
+            model={model} setModel={setModel}
+            totalCost={fileTotalCost} canAfford={fileCanAfford}
+            onGenerate={onGenerate}
+            generateDisabled={selectedFilePages.length === 0}
+            exampleMode={exampleMode} setExampleMode={setExampleMode}
+            exampleText={exampleText} setExampleText={setExampleText}
+            exampleImageUrl={exampleImageUrl} setExampleImageUrl={setExampleImageUrl}
+            exampleImageUploading={exampleImageUploading} setExampleImageUploading={setExampleImageUploading}
+            summaryExtra={`${selectedFilePages.length} páginas`}
+          />
+        </div>
       )}
     </div>
   );

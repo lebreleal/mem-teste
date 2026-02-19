@@ -1,5 +1,6 @@
 /**
  * Manual questions editor for exam creation and editing.
+ * Improved UX with better question type distribution visualization.
  */
 
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, PenLine, Save, Plus, Trash2, CheckCircle2, Zap } from 'lucide-react';
+import { Clock, PenLine, Save, Plus, Trash2, CheckCircle2, Zap, CircleDot } from 'lucide-react';
 import { createEmptyQuestion, type ManualQuestion } from './types';
 
 interface ManualQuestionsEditorProps {
@@ -26,6 +27,8 @@ interface ManualQuestionsEditorProps {
   onSave: () => void;
   isSaving: boolean;
 }
+
+const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
 const ManualQuestionsEditor = ({
   isEditing, manualTitle, setManualTitle, manualTimeLimit, setManualTimeLimit,
@@ -46,11 +49,13 @@ const ManualQuestionsEditor = ({
   };
 
   const totalPoints = manualQuestions.reduce((sum, q) => sum + q.points, 0);
+  const mcQuestions = manualQuestions.filter(q => q.type === 'multiple_choice');
+  const writtenQuestions = manualQuestions.filter(q => q.type === 'written');
 
   return (
     <div className="space-y-5">
       {/* Config card */}
-      <div className="rounded-2xl border border-border/50 bg-card p-6 space-y-5 shadow-sm">
+      <div className="rounded-2xl border border-border/50 bg-card p-5 space-y-5 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5">
             {isEditing ? <Save className="h-5 w-5 text-primary" /> : <PenLine className="h-5 w-5 text-primary" />}
@@ -81,46 +86,68 @@ const ManualQuestionsEditor = ({
             <Input className="mt-1.5" placeholder="Ex: Prova de Anatomia" value={manualTitle} onChange={e => setManualTitle(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Tempo (min)</Label>
-              <Input type="number" min={0} className="mt-1.5" placeholder="0 = sem limite" value={manualTimeLimit || ''}
-                onChange={e => setManualTimeLimit(Math.max(0, parseInt(e.target.value) || 0))} />
-            </div>
-            <div>
-              <Label className="text-sm font-semibold">Alternativas</Label>
-              <div className="flex gap-2 mt-1.5">
-                {([4, 5] as const).map(n => (
-                  <button key={n} onClick={() => setManualOptionsCount(n)} className={`flex-1 rounded-xl border-2 py-2 text-sm font-bold transition-all ${
-                    manualOptionsCount === n ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'
-                  }`}>{n}</button>
-                ))}
-              </div>
+          <div>
+            <Label className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Tempo limite (min)</Label>
+            <Input type="number" min={0} className="mt-1.5" placeholder="0 = sem limite" value={manualTimeLimit || ''}
+              onChange={e => setManualTimeLimit(Math.max(0, parseInt(e.target.value) || 0))} />
+          </div>
+
+          {/* Options count with ABCD/ABCDE visual */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Alternativas por questão</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([4, 5] as const).map(n => (
+                <button
+                  key={n}
+                  onClick={() => setManualOptionsCount(n)}
+                  className={`rounded-xl border-2 py-3 px-4 transition-all ${
+                    manualOptionsCount === n
+                      ? 'border-primary bg-primary/5 shadow-sm'
+                      : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-sm font-bold ${manualOptionsCount === n ? 'text-primary' : 'text-foreground'}`}>
+                      {n} opções
+                    </span>
+                    {manualOptionsCount === n && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                  </div>
+                  <div className="flex gap-1">
+                    {LETTERS.slice(0, n).map(l => (
+                      <span key={l} className={`flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold ${
+                        manualOptionsCount === n ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                      }`}>{l}</span>
+                    ))}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
       {/* Summary bar */}
-      <div className="flex items-center justify-between rounded-2xl border border-border/50 bg-card px-5 py-3 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="text-center">
-            <span className="text-lg font-display font-black text-foreground">{manualQuestions.length}</span>
-            <span className="text-[10px] text-muted-foreground block">questões</span>
+      <div className="rounded-2xl border border-border/50 bg-card px-5 py-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <span className="text-lg font-display font-black text-foreground">{manualQuestions.length}</span>
+              <span className="text-[10px] text-muted-foreground block">questões</span>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div className="text-center">
+              <span className="text-lg font-display font-black text-foreground">{totalPoints.toFixed(1)}</span>
+              <span className="text-[10px] text-muted-foreground block">pontos</span>
+            </div>
           </div>
-          <div className="h-8 w-px bg-border" />
-          <div className="text-center">
-            <span className="text-lg font-display font-black text-foreground">{totalPoints.toFixed(1)}</span>
-            <span className="text-[10px] text-muted-foreground block">pontos</span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+              <CircleDot className="h-3 w-3" /> {mcQuestions.length}
+            </span>
+            <span className="flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-[10px] font-bold text-warning">
+              <PenLine className="h-3 w-3" /> {writtenQuestions.length}
+            </span>
           </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-            {manualQuestions.filter(q => q.type === 'multiple_choice').length} obj.
-          </span>
-          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
-            {manualQuestions.filter(q => q.type === 'written').length} diss.
-          </span>
         </div>
       </div>
 
@@ -133,13 +160,17 @@ const ManualQuestionsEditor = ({
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{idx + 1}</span>
                 <div className="flex gap-1">
                   <button onClick={() => updateQuestion(q.id, { type: 'multiple_choice' })}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 ${
                       q.type === 'multiple_choice' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}>Múltipla</button>
+                    }`}>
+                    <CircleDot className="h-3 w-3" /> Múltipla
+                  </button>
                   <button onClick={() => updateQuestion(q.id, { type: 'written' })}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 ${
                       q.type === 'written' ? 'bg-warning text-warning-foreground shadow-sm' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}>Dissertativa</button>
+                    }`}>
+                    <PenLine className="h-3 w-3" /> Dissertativa
+                  </button>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -171,19 +202,17 @@ const ManualQuestionsEditor = ({
                           q.correctIndex === optIdx ? 'bg-success/10' : 'hover:bg-muted/30'
                         }`}
                       >
-                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                          q.correctIndex === optIdx ? 'border-success bg-success text-white' : 'border-muted-foreground/30'
-                        }`}>
-                          {q.correctIndex === optIdx && <CheckCircle2 className="h-3 w-3" />}
-                        </div>
-                        <span className="text-xs font-bold text-muted-foreground w-5">{String.fromCharCode(65 + optIdx)})</span>
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold shrink-0 ${
+                          q.correctIndex === optIdx ? 'bg-success text-white' : 'bg-muted text-muted-foreground'
+                        }`}>{LETTERS[optIdx]}</span>
                         <Input
                           className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-7 text-sm"
-                          placeholder={`Alternativa ${String.fromCharCode(65 + optIdx)}`}
+                          placeholder={`Alternativa ${LETTERS[optIdx]}`}
                           value={opt}
                           onChange={e => { e.stopPropagation(); updateOption(q.id, optIdx, e.target.value); }}
                           onClick={e => e.stopPropagation()}
                         />
+                        {q.correctIndex === optIdx && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
                       </div>
                     ))}
                   </div>
@@ -202,11 +231,11 @@ const ManualQuestionsEditor = ({
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1 gap-2 h-11 rounded-xl border-dashed border-2" size="sm"
             onClick={() => setManualQuestions(prev => [...prev, createEmptyQuestion('multiple_choice')])}>
-            <Plus className="h-4 w-4" /> Múltipla Escolha
+            <CircleDot className="h-4 w-4" /> Múltipla Escolha
           </Button>
           <Button variant="outline" className="flex-1 gap-2 h-11 rounded-xl border-dashed border-2" size="sm"
             onClick={() => setManualQuestions(prev => [...prev, createEmptyQuestion('written')])}>
-            <Plus className="h-4 w-4" /> Dissertativa
+            <PenLine className="h-4 w-4" /> Dissertativa
           </Button>
         </div>
       </div>
