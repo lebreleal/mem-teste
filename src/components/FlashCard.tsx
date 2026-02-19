@@ -242,24 +242,23 @@ const MultipleChoiceCard = ({
       {/* Top bar: recall + actions */}
       <div className="flex items-center justify-center gap-2 flex-shrink-0 pb-3">
         {recallData && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 cursor-help transition-all`}>
-                <Gauge className={`h-3 w-3 ${recallColor}`} />
-                <span className={`text-[11px] font-bold ${recallColor}`}>
-                  {recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`}
-                </span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px]">
-              <p className="text-xs font-bold mb-1">📊 Probabilidade de Acerto</p>
-              <p className="text-[10px] text-muted-foreground">
-                {recallData.state === 'new' ? 'Card novo, ainda não estudado.' :
-                 recallData.state === 'learning' ? 'Em aprendizado inicial.' :
-                 `Baseado no algoritmo ${algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'}.`}
-              </p>
-            </TooltipContent>
-          </Tooltip>
+          <button
+            onClick={() => setRecallExpanded(prev => !prev)}
+            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+          >
+            <Gauge className={`h-3 w-3 ${recallColor}`} />
+            <span className={`text-[11px] font-bold ${recallColor}`}>
+              {recallExpanded
+                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
+                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+            </span>
+            {!recallExpanded && (
+              <>
+                <span className="text-[10px] text-muted-foreground">•</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+              </>
+            )}
+          </button>
         )}
         {actions}
       </div>
@@ -603,28 +602,23 @@ const FlashCard = ({
       {/* Recall probability bar + actions */}
       <div className="flex items-center justify-center gap-2 w-full flex-shrink-0 pb-3">
         {recallData && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className={`flex items-center gap-1.5 sm:gap-2 rounded-xl ${recallBgColor} px-2 sm:px-3 py-1 sm:py-1.5 cursor-help transition-all`}>
-                <Gauge className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${recallColor}`} />
-                <span className={`text-[11px] sm:text-xs font-bold ${recallColor}`}>
-                  {recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`}
-                </span>
-                <span className="text-[10px] text-muted-foreground hidden sm:inline">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium hidden sm:inline">{recallData.label}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[240px]">
-              <p className="text-xs font-bold mb-1">📊 Probabilidade de Acerto</p>
-              {recallData.state === 'new' ? (
-                <p className="text-[10px] text-muted-foreground">Este card é novo e ainda não foi estudado.</p>
-              ) : recallData.state === 'learning' ? (
-                <p className="text-[10px] text-muted-foreground">Card em aprendizado inicial.</p>
-              ) : (
-                <p className="text-[10px] text-muted-foreground">Baseado no algoritmo {algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'}.</p>
-              )}
-            </TooltipContent>
-          </Tooltip>
+          <button
+            onClick={() => setRecallExpanded(prev => !prev)}
+            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+          >
+            <Gauge className={`h-3 w-3 ${recallColor}`} />
+            <span className={`text-[11px] font-bold ${recallColor}`}>
+              {recallExpanded
+                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
+                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+            </span>
+            {!recallExpanded && (
+              <>
+                <span className="text-[10px] text-muted-foreground">•</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+              </>
+            )}
+          </button>
         )}
         {actions}
       </div>
