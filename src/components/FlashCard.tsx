@@ -523,11 +523,9 @@ const FlashCard = ({
     : '';
 
   return (
-    <div className="flex flex-col items-center gap-3 sm:gap-4 w-full max-w-lg mx-auto px-1 relative h-full">
-      {/* Card border flash only — no confetti */}
-
+    <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
       {/* Recall probability bar + actions */}
-      <div className="flex items-center justify-center gap-2 w-full">
+      <div className="flex items-center justify-center gap-2 w-full flex-shrink-0 pb-3">
         {recallData && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -555,170 +553,175 @@ const FlashCard = ({
         {actions}
       </div>
 
-      {/* Card container - no 3D flip, use simple show/hide for reliability */}
-      <div
-        className={`relative w-full ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}
-        onClick={() => !flipped && setFlipped(true)}
-        style={{ cursor: !flipped ? 'pointer' : 'default' }}
-      >
-        {/* Front face */}
-        {!flipped && (
+      {/* Scrollable content area */}
+      <div className={`flex-1 min-h-0 overflow-y-auto scrollbar-hide ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}>
+        <div className="space-y-3 pb-2">
+          {/* Card container */}
           <div
-            className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
-            style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => !flipped && setFlipped(true)}
+            style={{ cursor: !flipped ? 'pointer' : 'default' }}
+            className="w-full"
           >
-            <div
-              className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
-            />
-          </div>
-        )}
+            {/* Front face */}
+            {!flipped && (
+              <div
+                className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
+                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <div
+                  className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
+                />
+              </div>
+            )}
 
-        {/* Back face (or peeking front) */}
-        {flipped && (
-          <div
-            className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
-            style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
-          >
-            {/* Flip-to-front peek toggle */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setPeekingFront(prev => !prev);
-              }}
-              className={`absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
-                peekingFront
-                  ? 'text-primary bg-primary/10'
-                  : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60'
-              }`}
-              aria-label={peekingFront ? 'Ver verso do card' : 'Ver frente do card'}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </button>
-            <div
-              className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
-            />
-            {peekingFront && (
-              <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
+            {/* Back face (or peeking front) */}
+            {flipped && (
+              <div
+                className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
+                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPeekingFront(prev => !prev);
+                  }}
+                  className={`absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                    peekingFront
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60'
+                  }`}
+                  aria-label={peekingFront ? 'Ver verso do card' : 'Ver frente do card'}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+                <div
+                  className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                />
+                {peekingFront && (
+                  <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
+                )}
+              </div>
             )}
           </div>
-        )}
+
+          {/* Tutor hint response - show before flip */}
+          {tutorResponse && !flipped && (
+            <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="h-4 w-4 text-primary" />
+                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
+              </div>
+              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              </div>
+            </div>
+          )}
+
+          {/* Tutor explain response - show after flip */}
+          {tutorResponse && flipped && (
+            <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="h-4 w-4 text-primary" />
+                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
+              </div>
+              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Tutor loading removed — now inline in buttons */}
+      {/* Fixed bottom buttons */}
+      <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
+        {!flipped ? (
+          <div className="flex w-full gap-2">
+            <button
+              onClick={() => setFlipped(true)}
+              className="card-premium flex-1 border border-border/40 bg-card px-6 py-3.5 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
+              style={{ borderRadius: 'var(--radius)' }}
+            >
+              Mostrar Resposta
+            </button>
+            {onTutorRequest && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={canUseTutor ? () => onTutorRequest() : undefined}
+                    disabled={!canUseTutor || isTutorLoading}
+                    className={`flex items-center justify-center border px-3 py-3.5 transition-all active:scale-95 ${
+                      canUseTutor
+                        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                        : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                    }`}
+                    style={{ borderRadius: 'var(--radius)' }}
+                  >
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <Lightbulb className="h-4 w-4" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {canUseTutor ? <p>Pedir dica ao Tutor (2 Créditos IA)</p> : <p>Estude mais para ganhar Créditos IA</p>}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        ) : quickReview ? (
+          <div className="grid w-full grid-cols-2 gap-2.5">
+            <button
+              onClick={() => handleRate(1)}
+              disabled={isSubmitting}
+              className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              style={{ borderRadius: 'var(--radius)' }}
+            >
+              <span className="text-sm font-bold">Errei</span>
+            </button>
+            <button
+              onClick={() => handleRate(3)}
+              disabled={isSubmitting}
+              className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
+              style={{ borderRadius: 'var(--radius)' }}
+            >
+              <span className="text-sm font-bold flex items-center gap-1">
+                Acertei <Sparkles className="h-3.5 w-3.5" />
+              </span>
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Explain button for basic/cloze/occlusion */}
+            {onTutorRequest && !tutorResponse && (
+              <button
+                onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                disabled={!canUseTutor || isTutorLoading}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
+                  canUseTutor
+                    ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                    : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                }`}
+              >
+                {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA (2 créditos)</>}
+              </button>
+            )}
 
-      {/* Tutor hint response - show before flip */}
-      {tutorResponse && !flipped && (
-        <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Lightbulb className="h-4 w-4 text-primary" />
-            <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
-          </div>
-          <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-            <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
-          </div>
-        </div>
-      )}
-
-      {/* Tutor explain response - show after flip */}
-      {tutorResponse && flipped && (
-        <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <BookOpen className="h-4 w-4 text-primary" />
-            <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
-          </div>
-          <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-            <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
-          </div>
-        </div>
-      )}
-
-      {!flipped ? (
-        <div className="flex w-full gap-2">
-          <button
-            onClick={() => setFlipped(true)}
-            className="card-premium flex-1 border border-border/40 bg-card px-6 py-3.5 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
-            style={{ borderRadius: 'var(--radius)' }}
-          >
-            Mostrar Resposta
-          </button>
-          {onTutorRequest && (
-            <Tooltip>
-              <TooltipTrigger asChild>
+            <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
+              {ratingConfig.map(({ rating, label, colorClass }) => (
                 <button
-                  onClick={canUseTutor ? () => onTutorRequest() : undefined}
-                  disabled={!canUseTutor || isTutorLoading}
-                  className={`flex items-center justify-center border px-3 py-3.5 transition-all active:scale-95 ${
-                    canUseTutor
-                      ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
-                      : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                  }`}
+                  key={rating}
+                  onClick={() => handleRate(rating)}
+                  disabled={isSubmitting}
+                  className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
                   style={{ borderRadius: 'var(--radius)' }}
                 >
-                    {isTutorLoading ? <TutorLoadingAnimation /> : <Lightbulb className="h-4 w-4" />}
+                  <span className="text-sm font-bold">{label}</span>
+                  <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
                 </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {canUseTutor ? <p>Pedir dica ao Tutor (2 Créditos IA)</p> : <p>Estude mais para ganhar Créditos IA</p>}
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      ) : quickReview ? (
-        <div className="grid w-full grid-cols-2 gap-2.5">
-          <button
-            onClick={() => handleRate(1)}
-            disabled={isSubmitting}
-            className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-            style={{ borderRadius: 'var(--radius)' }}
-          >
-            <span className="text-sm font-bold">Errei</span>
-          </button>
-          <button
-            onClick={() => handleRate(3)}
-            disabled={isSubmitting}
-            className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
-            style={{ borderRadius: 'var(--radius)' }}
-          >
-            <span className="text-sm font-bold flex items-center gap-1">
-              Acertei <Sparkles className="h-3.5 w-3.5" />
-            </span>
-          </button>
-        </div>
-      ) : (
-        <div className="w-full space-y-2">
-          {/* Explain button for basic/cloze/occlusion */}
-          {onTutorRequest && !tutorResponse && (
-            <button
-              onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
-              disabled={!canUseTutor || isTutorLoading}
-              className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
-                canUseTutor
-                  ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
-                  : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-              }`}
-            >
-              {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar com IA (2 créditos)</>}
-            </button>
-          )}
-
-          <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
-            {ratingConfig.map(({ rating, label, colorClass }) => (
-              <button
-                key={rating}
-                onClick={() => handleRate(rating)}
-                disabled={isSubmitting}
-                className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
-                style={{ borderRadius: 'var(--radius)' }}
-              >
-                <span className="text-sm font-bold">{label}</span>
-                <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
