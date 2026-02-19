@@ -25,7 +25,7 @@ const BENEFITS = [
   { icon: Sparkles, title: 'Raciocínio Pro liberado', desc: 'Acesse o modelo de IA avançado para gerar conteúdo', color: 'hsl(var(--primary))' },
   { icon: Zap, title: '50% menos créditos no Flash', desc: 'Modelo Flash consome metade dos créditos de IA', color: 'hsl(var(--warning))' },
   { icon: Infinity, title: '1.500 créditos por mês', desc: 'Receba créditos de IA mensalmente no seu plano', color: 'hsl(var(--destructive))' },
-  { icon: Pencil, title: 'Personalize os cartões', desc: 'Adicione imagens e formate texto facilmente', color: 'hsl(var(--primary))' },
+  { icon: Pencil, title: 'Edite cartões ao estudar', desc: 'Corrija e melhore seus cartões durante a revisão', color: 'hsl(var(--primary))' },
 ];
 
 const formatDate = (dateStr: string) => {
@@ -211,7 +211,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                       {/* Annual — highlighted */}
                       <button
                         onClick={() => setSelectedPlan('annual')}
-                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left relative ${
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left ${
                           selectedPlan === 'annual'
                             ? 'border-primary bg-primary/5'
                             : 'border-border/60 hover:border-border'
@@ -223,11 +223,11 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                           {selectedPlan === 'annual' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
                         </div>
                         <span className="text-sm font-bold text-foreground flex-1">Anual</span>
-                        <div className="text-right">
-                          <span className="inline-block bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md mb-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
                             ~52% OFF
                           </span>
-                          <p className="text-xs text-muted-foreground">R$12,49/mês · 149,90 BRL/ano</p>
+                          <span className="text-sm text-muted-foreground">R$12,49/mês</span>
                         </div>
                       </button>
 
@@ -286,118 +286,92 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
 
             {/* ===== CREDITS TAB ===== */}
             {tab === 'credits' && (
-              <div className="space-y-3 animate-fade-in">
-                {/* Missions CTA */}
-                <button
-                  onClick={() => { onClose(); navigate('/missoes'); }}
-                  className="w-full flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: 'hsl(var(--energy-purple, 270 60% 55%) / 0.12)' }}>
-                    <Rocket className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground">Complete Missões</p>
-                    <p className="text-[11px] text-muted-foreground">Ganhe créditos grátis diariamente</p>
-                  </div>
-                  <Eye className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
-                </button>
-
-                <p className="text-xs text-muted-foreground">Recarregue seus pontos de IA para gerar cards, provas e usar o tutor.</p>
-
-                {/* Credit packs */}
-                {STRIPE_CREDIT_PACKS.map((pack, i) => {
-                  const isSelected = selectedCredit === pack.price_id;
-                  const basePerCredit = STRIPE_CREDIT_PACKS[0].amount / STRIPE_CREDIT_PACKS[0].credits;
-                  const thisPerCredit = pack.amount / pack.credits;
-                  const discount = Math.round((1 - thisPerCredit / basePerCredit) * 100);
-
-                  return (
-                    <button
-                      key={pack.price_id}
-                      onClick={() => setSelectedCredit(isSelected ? null : pack.price_id)}
-                      className={`relative w-full flex items-center gap-3.5 p-3.5 rounded-xl border-2 transition-all duration-200 text-left ${
-                        isSelected
-                          ? 'border-[hsl(var(--energy-purple,270_60%_55%))] bg-[hsl(var(--energy-purple,270_60%_55%)/0.06)] shadow-md'
-                          : pack.popular
-                            ? 'border-primary/40 bg-primary/5 hover:border-primary/60'
-                            : 'border-border/60 hover:border-border hover:bg-muted/30'
-                      }`}
-                      style={{ animationDelay: `${i * 60}ms` }}
+              <div className="animate-fade-in">
+                {/* Missions CTA — same style as benefit row */}
+                <div className="space-y-3 mb-6">
+                  <button
+                    onClick={() => { onClose(); navigate('/missoes'); }}
+                    className="w-full flex items-center gap-3 text-left"
+                  >
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: 'hsl(var(--energy-purple, 270 60% 55%) / 0.12)' }}
                     >
-                      {pack.popular && (
-                        <span
-                          className="absolute -top-2.5 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-                          style={{ background: 'linear-gradient(135deg, hsl(var(--energy-purple, 270 60% 55%)), hsl(var(--primary)))' }}
-                        >
-                          <Sparkles className="h-3 w-3 inline mr-0.5" /> Melhor valor
-                        </span>
-                      )}
+                      <Rocket className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground leading-tight">Complete Missões</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Ganhe créditos grátis diariamente</p>
+                    </div>
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
 
-                      <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-200"
-                        style={{
-                          background: isSelected
-                            ? 'linear-gradient(135deg, hsl(var(--energy-purple, 270 60% 55%)), hsl(var(--primary)))'
-                            : 'hsl(var(--energy-purple, 270 60% 55%) / 0.12)',
-                        }}
+                <p className="text-xs text-muted-foreground mb-4">Recarregue créditos de IA para gerar cards, provas e usar o tutor.</p>
+
+                {/* Credit packs — radio style matching plans */}
+                <div className="space-y-2.5 mb-4">
+                  {STRIPE_CREDIT_PACKS.map((pack, i) => {
+                    const isSelected = selectedCredit === pack.price_id;
+                    const basePerCredit = STRIPE_CREDIT_PACKS[0].amount / STRIPE_CREDIT_PACKS[0].credits;
+                    const thisPerCredit = pack.amount / pack.credits;
+                    const discount = Math.round((1 - thisPerCredit / basePerCredit) * 100);
+
+                    return (
+                      <button
+                        key={pack.price_id}
+                        onClick={() => setSelectedCredit(isSelected ? null : pack.price_id)}
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : pack.popular
+                              ? 'border-primary/40 bg-primary/5 hover:border-primary/60'
+                              : 'border-border/60 hover:border-border'
+                        }`}
                       >
-                        <Brain className={`h-5 w-5 ${isSelected ? 'text-white' : ''}`} style={isSelected ? {} : { color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-bold text-foreground">{pack.credits} créditos</span>
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          isSelected ? 'border-primary' : 'border-muted-foreground/40'
+                        }`}>
+                          {isSelected && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <span className="text-sm font-bold text-foreground flex-1">
+                          {pack.credits} créditos
+                        </span>
+                        <div className="flex items-center gap-2">
                           {discount > 0 && (
-                            <span className="text-xs font-semibold" style={{ color: 'hsl(var(--success, 142 71% 45%))' }}>
+                            <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
                               -{discount}%
                             </span>
                           )}
+                          {pack.popular && discount === 0 && (
+                            <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              Popular
+                            </span>
+                          )}
+                          <span className="text-sm text-muted-foreground">{pack.price}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          R${(pack.amount / pack.credits / 100).toFixed(3)}/crédito
-                        </p>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="text-base font-bold text-foreground">{pack.price}</div>
-                      </div>
-
-                      {isSelected && (
-                        <div
-                          className="absolute top-2.5 left-2.5 h-5 w-5 rounded-full flex items-center justify-center"
-                          style={{ background: 'hsl(var(--energy-purple, 270 60% 55%))' }}
-                        >
-                          <Check className="h-3 w-3 text-white" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* Buy button */}
-                <div className="pt-1">
-                  <Button
-                    className="w-full h-11 font-semibold transition-all duration-200"
-                    disabled={!selectedCredit || !!loading}
-                    onClick={() => {
-                      if (selectedCredit) {
-                        const pack = STRIPE_CREDIT_PACKS.find(p => p.price_id === selectedCredit);
-                        if (pack) handleCheckout(pack.price_id, 'payment', pack.label);
-                      }
-                    }}
-                    style={
-                      selectedCredit
-                        ? { background: 'linear-gradient(135deg, hsl(var(--energy-purple, 270 60% 55%)), hsl(var(--primary)))' }
-                        : undefined
-                    }
-                  >
-                    {loading ? 'Processando...' : selectedCredit
-                      ? `Comprar ${STRIPE_CREDIT_PACKS.find(p => p.price_id === selectedCredit)?.label}`
-                      : 'Selecione um pacote'}
-                  </Button>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <p className="text-[11px] text-muted-foreground text-center pt-1 leading-relaxed">
+                {/* Buy button */}
+                <Button
+                  className="w-full h-12 text-base font-semibold rounded-xl"
+                  disabled={!selectedCredit || !!loading}
+                  onClick={() => {
+                    if (selectedCredit) {
+                      const pack = STRIPE_CREDIT_PACKS.find(p => p.price_id === selectedCredit);
+                      if (pack) handleCheckout(pack.price_id, 'payment', pack.label);
+                    }
+                  }}
+                >
+                  {loading ? 'Processando...' : selectedCredit
+                    ? `Comprar ${STRIPE_CREDIT_PACKS.find(p => p.price_id === selectedCredit)?.label}`
+                    : 'Selecione um pacote'}
+                </Button>
+
+                <p className="text-[11px] text-muted-foreground text-center pt-3 leading-relaxed">
                   Créditos são usados pelo Tutor IA e Agente IA.
                   <br />
                   Você também ganha créditos grátis estudando diariamente!
