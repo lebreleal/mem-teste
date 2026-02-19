@@ -599,33 +599,37 @@ const FlashCard = ({
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
-      {/* Recall probability bar + actions */}
-      <div className="flex items-center justify-center gap-2 w-full flex-shrink-0 pb-3">
-        {recallData && (
-          <button
-            onClick={() => setRecallExpanded(prev => !prev)}
-            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
-          >
-            <Gauge className={`h-3 w-3 ${recallColor}`} />
-            <span className={`text-[11px] font-bold ${recallColor}`}>
-              {recallExpanded
-                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
-                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
-            </span>
-            {!recallExpanded && (
-              <>
-                <span className="text-[10px] text-muted-foreground">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
-              </>
-            )}
-          </button>
-        )}
+      {/* Actions bar (always visible) */}
+      <div className="flex items-center justify-center gap-2 w-full flex-shrink-0 pb-1">
         {actions}
       </div>
 
       {/* Scrollable content area */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4">
         <div className="space-y-3 pb-2 pt-1">
+          {/* Recall badge — only on front, centered above card */}
+          {!flipped && recallData && (
+            <div className="flex justify-center pb-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); setRecallExpanded(prev => !prev); }}
+                className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+              >
+                <Gauge className={`h-3 w-3 ${recallColor}`} />
+                <span className={`text-[11px] font-bold ${recallColor}`}>
+                  {recallExpanded
+                    ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
+                    : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+                </span>
+                {!recallExpanded && (
+                  <>
+                    <span className="text-[10px] text-muted-foreground">•</span>
+                    <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {/* Card container */}
           <div
             onClick={() => !flipped && setFlipped(true)}
