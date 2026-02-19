@@ -3,7 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
-import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2 } from 'lucide-react';
+import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 
@@ -674,6 +674,13 @@ const FlashCard = ({
                 placeholder="Digite a resposta"
                 className="flex-1 rounded-xl border-2 border-primary/40 bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
               />
+              <button
+                onClick={() => { setTypingAnswer(false); setTypedAnswer(''); }}
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-all active:scale-95 shrink-0"
+                aria-label="Cancelar"
+              >
+                <X className="h-5 w-5" />
+              </button>
               <button
                 onClick={() => {
                   if (typedAnswer.trim()) {
