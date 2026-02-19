@@ -1,6 +1,6 @@
 /**
  * Premium modal — subscription plans + credit packs with Stripe checkout.
- * Features: brain icons for credits, trial banner, smooth animations.
+ * Reference: clean benefit list with icon circles, radio-style plan selector, big CTA.
  * Opens with defaultTab from parent (crown → plans, brain → credits).
  */
 
@@ -21,11 +21,10 @@ interface PremiumModalProps {
 }
 
 const BENEFITS = [
-  { icon: Brain, title: 'Algoritmo FSRS-4.5', desc: 'Repetição espaçada de última geração' },
-  { icon: Sparkles, title: 'Modelo IA Pro', desc: 'Raciocínio avançado, 5× mais potente' },
-  { icon: Zap, title: '1.500 créditos IA / mês', desc: 'Gere cards e provas sem preocupação' },
-  { icon: Pencil, title: 'Editar cards no estudo', desc: 'Corrija e melhore enquanto revisa' },
-  { icon: Infinity, title: 'Aprenda sem limites', desc: 'Desfrute de aprendizado sem restrições' },
+  { icon: Pencil, title: 'Personalize os cartões', desc: 'Adicione imagens e formate texto facilmente', color: 'hsl(var(--primary))' },
+  { icon: Sparkles, title: 'Crie cartões com IA', desc: 'Gere cartões ilimitados em instantes com IA', color: 'hsl(var(--primary))' },
+  { icon: Infinity, title: 'Aprenda sem limites', desc: 'Desfrute de aprendizado sem limites diários', color: 'hsl(var(--destructive))' },
+  { icon: Brain, title: 'Otimize a Repetição espaçada', desc: 'Melhore a memória com algoritmos especializados', color: 'hsl(var(--primary))' },
 ];
 
 const formatDate = (dateStr: string) => {
@@ -50,8 +49,8 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
   const [tab, setTab] = useState<Tab>(defaultTab);
   const [visible, setVisible] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
 
-  // Sync defaultTab when modal opens
   useEffect(() => {
     if (open) {
       setTab(defaultTab);
@@ -86,6 +85,16 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
 
   const trialDaysLeft = isTrial && expiresAt ? getDaysRemaining(expiresAt) : 0;
 
+  const handlePlanContinue = () => {
+    const planConfig = {
+      monthly: { priceId: STRIPE_PLANS.monthly.price_id, mode: 'subscription' as const, label: 'Mensal' },
+      annual: { priceId: STRIPE_PLANS.annual.price_id, mode: 'subscription' as const, label: 'Anual' },
+      lifetime: { priceId: STRIPE_PLANS.lifetime.price_id, mode: 'payment' as const, label: 'Vitalício' },
+    };
+    const cfg = planConfig[selectedPlan];
+    handleCheckout(cfg.priceId, cfg.mode, cfg.label);
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-all duration-300 ${visible ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/0'}`}
@@ -96,81 +105,59 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
         style={{ maxHeight: 'calc(100dvh - 5rem)' }}
         onClick={e => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-foreground transition-colors">
-          <X className="h-4 w-4" />
+        <button onClick={onClose} className="absolute top-3 left-3 z-10 text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-5 w-5" />
         </button>
 
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-5 sm:p-6">
-            {/* Header — icon changes based on tab */}
-            <div className="text-center mb-4">
-              <div
-                className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl mb-3 transition-all duration-500 ${visible ? 'scale-100' : 'scale-50'}`}
-                style={{
-                  background: tab === 'plans'
-                    ? 'linear-gradient(135deg, hsl(var(--warning)), hsl(45 100% 40%))'
-                    : 'linear-gradient(135deg, hsl(var(--energy-purple, 270 60% 55%)), hsl(var(--primary)))',
-                }}
-              >
-                {tab === 'plans' ? (
-                  <Crown className="h-7 w-7 text-warning" fill="hsl(var(--warning))" />
-                ) : (
-                  <Brain className="h-7 w-7 text-white" />
-                )}
-              </div>
-
-              {/* Credits balance when on credits tab */}
-              {tab === 'credits' && (
-                <div className="mb-2">
-                  <div className="flex items-baseline justify-center gap-2">
-                    <span className="text-3xl font-bold text-foreground tabular-nums">{energy}</span>
-                    <span className="text-sm text-muted-foreground">créditos disponíveis</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Trial banner */}
-              {isTrial && trialDaysLeft > 0 && (
-                <div className="mb-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 animate-fade-in">
-                  <div className="flex items-center justify-center gap-2">
-                    <Timer className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">
-                      Premium Grátis · {trialDaysLeft} {trialDaysLeft === 1 ? 'dia' : 'dias'} restantes
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Aproveite todos os recursos Premium durante seu período de teste
-                  </p>
-                </div>
-              )}
-
-              {tab === 'plans' && (
+            {/* Header */}
+            <div className="text-center mb-5">
+              {tab === 'plans' ? (
                 <>
+                  <Crown className="h-8 w-8 mx-auto mb-2 text-warning" fill="hsl(var(--warning))" />
                   {isPremium && !isTrial ? (
                     <>
-                      <h3 className="font-display text-xl font-bold text-foreground">Premium Ativo</h3>
+                      <h3 className="font-display text-2xl font-bold text-foreground italic">Premium Ativo</h3>
                       {expiresAt && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {plan === 'lifetime' ? '♾️ Acesso vitalício' : <>Expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span></>}
                         </p>
                       )}
                     </>
-                  ) : !isTrial ? (
-                    <>
-                      <h3 className="font-display text-xl font-bold text-foreground">Seja Premium</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Desbloqueie todo o potencial do MemoCards</p>
-                    </>
-                  ) : null}
+                  ) : (
+                    <h3 className="font-display text-2xl font-bold text-primary italic">Premium</h3>
+                  )}
                 </>
-              )}
-
-              {tab === 'credits' && (
-                <h3 className="font-display text-xl font-bold text-foreground">Créditos IA</h3>
+              ) : (
+                <>
+                  <Brain className="h-8 w-8 mx-auto mb-2" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
+                  <h3 className="font-display text-2xl font-bold text-foreground">Créditos IA</h3>
+                  <div className="flex items-baseline justify-center gap-2 mt-1">
+                    <span className="text-3xl font-bold text-foreground tabular-nums">{energy}</span>
+                    <span className="text-sm text-muted-foreground">créditos disponíveis</span>
+                  </div>
+                </>
               )}
             </div>
 
+            {/* Trial banner */}
+            {isTrial && trialDaysLeft > 0 && (
+              <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 animate-fade-in">
+                <div className="flex items-center justify-center gap-2">
+                  <Timer className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">
+                    Premium Grátis · {trialDaysLeft} {trialDaysLeft === 1 ? 'dia' : 'dias'} restantes
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 text-center">
+                  Aproveite todos os recursos Premium durante seu período de teste
+                </p>
+              </div>
+            )}
+
             {/* Tabs */}
-            <div className="flex bg-muted/40 rounded-xl p-1 mb-4 gap-1">
+            <div className="flex bg-muted/40 rounded-xl p-1 mb-5 gap-1">
               <button
                 onClick={() => setTab('plans')}
                 className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all duration-200 ${tab === 'plans' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
@@ -185,77 +172,104 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
               </button>
             </div>
 
+            {/* ===== PLANS TAB ===== */}
             {tab === 'plans' && (
               <div className="animate-fade-in">
-                {/* Benefits */}
-                <div className="space-y-0.5 mb-4">
+                {/* Benefits list — reference style with icon circles */}
+                <div className="space-y-3 mb-8">
                   {BENEFITS.map((b, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-muted/40"
-                      style={{ animationDelay: `${i * 50}ms` }}
-                    >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <b.icon className="h-4 w-4 text-primary" />
+                    <div key={i} className="flex items-center gap-3">
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                        style={{ backgroundColor: `${b.color}15` }}
+                      >
+                        <b.icon className="h-5 w-5" style={{ color: b.color }} />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground leading-tight">{b.title}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{b.desc}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{b.desc}</p>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Plans */}
+                {/* Plan selector — radio style like reference */}
                 {(!isPremium || isTrial) && (
-                  <div className="space-y-2 mb-4">
-                    {/* Monthly */}
-                    <div className="rounded-xl border border-border/50 p-3 flex items-center justify-between transition-all duration-200 hover:border-border">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">Mensal</p>
-                        <p className="text-lg font-bold text-foreground">R$25,90<span className="text-xs font-normal text-muted-foreground">/mês</span></p>
-                      </div>
-                      <Button size="sm" variant="outline" disabled={!!loading}
-                        onClick={() => handleCheckout(STRIPE_PLANS.monthly.price_id, 'subscription', 'Mensal')}>
-                        {loading === STRIPE_PLANS.monthly.price_id ? '...' : 'Assinar'}
-                      </Button>
-                    </div>
-
-                    {/* Annual */}
-                    <div className="rounded-xl border-2 border-primary/50 bg-primary/5 p-3 flex items-center justify-between relative transition-all duration-200 hover:border-primary/70">
-                      <span className="absolute -top-2.5 left-3 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">MAIS POPULAR</span>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">Anual</p>
-                        <p className="text-lg font-bold text-foreground">R$149,90<span className="text-xs font-normal text-muted-foreground">/ano</span></p>
-                        <p className="text-[11px] text-primary font-medium">~R$12,49/mês · 52% off</p>
-                      </div>
-                      <Button size="sm" disabled={!!loading}
-                        onClick={() => handleCheckout(STRIPE_PLANS.annual.price_id, 'subscription', 'Anual')}>
-                        {loading === STRIPE_PLANS.annual.price_id ? '...' : 'Assinar'}
-                      </Button>
-                    </div>
-
-                    {/* Lifetime */}
-                    <div className="rounded-xl border border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/5 p-3 transition-all duration-200 hover:border-[hsl(var(--warning))]/70">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                            <Infinity className="h-4 w-4" style={{ color: 'hsl(var(--warning))' }} /> Vitalício
-                          </p>
-                          <p className="text-lg font-bold text-foreground">R$299,00<span className="text-xs font-normal text-muted-foreground"> único</span></p>
+                  <>
+                    <div className="space-y-2.5 mb-4">
+                      {/* Monthly */}
+                      <button
+                        onClick={() => setSelectedPlan('monthly')}
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left ${
+                          selectedPlan === 'monthly'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border/60 hover:border-border'
+                        }`}
+                      >
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          selectedPlan === 'monthly' ? 'border-primary' : 'border-muted-foreground/40'
+                        }`}>
+                          {selectedPlan === 'monthly' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
                         </div>
-                        <Button size="sm" variant="outline" disabled={!!loading}
-                          className="border-[hsl(var(--warning))]/50"
-                          onClick={() => handleCheckout(STRIPE_PLANS.lifetime.price_id, 'payment', 'Vitalício')}>
-                          {loading === STRIPE_PLANS.lifetime.price_id ? '...' : 'Comprar'}
-                        </Button>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                        <Brain className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
-                        Inclui <span className="font-semibold text-foreground">50.000 créditos IA</span> permanentes
-                      </p>
+                        <span className="text-sm font-semibold text-foreground flex-1">Mensal</span>
+                        <span className="text-sm text-muted-foreground">25,90 BRL por mês</span>
+                      </button>
+
+                      {/* Annual — highlighted */}
+                      <button
+                        onClick={() => setSelectedPlan('annual')}
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left relative ${
+                          selectedPlan === 'annual'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border/60 hover:border-border'
+                        }`}
+                      >
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          selectedPlan === 'annual' ? 'border-primary' : 'border-muted-foreground/40'
+                        }`}>
+                          {selectedPlan === 'annual' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <span className="text-sm font-bold text-foreground flex-1">Anual</span>
+                        <div className="text-right">
+                          <span className="inline-block bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md mb-0.5">
+                            TESTE GRÁTIS DE 14 DIAS
+                          </span>
+                          <p className="text-xs text-muted-foreground">depois 149,90 BRL ao ano</p>
+                        </div>
+                      </button>
+
+                      {/* Lifetime */}
+                      <button
+                        onClick={() => setSelectedPlan('lifetime')}
+                        className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left ${
+                          selectedPlan === 'lifetime'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border/60 hover:border-border'
+                        }`}
+                      >
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          selectedPlan === 'lifetime' ? 'border-primary' : 'border-muted-foreground/40'
+                        }`}>
+                          {selectedPlan === 'lifetime' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <span className="text-sm font-semibold text-foreground flex-1">Vitalício</span>
+                        <span className="text-sm text-muted-foreground">299,00 BRL</span>
+                      </button>
                     </div>
-                  </div>
+
+                    <p className="text-xs text-muted-foreground text-center mb-3">
+                      Cancele a qualquer momento
+                    </p>
+
+                    {/* CTA Button */}
+                    <Button
+                      className="w-full h-12 text-base font-semibold rounded-xl"
+                      disabled={!!loading}
+                      onClick={handlePlanContinue}
+                    >
+                      {loading ? 'Processando...' : 'Continuar'}
+                    </Button>
+                  </>
                 )}
 
                 {/* Manage subscription */}
@@ -267,7 +281,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
 
                 {/* Trial info for non-premium */}
                 {!isPremium && !isTrial && (
-                  <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center">
+                  <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center mt-4">
                     <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-1.5">
                       <Crown className="h-4 w-4 shrink-0 text-warning" fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
                     </p>
@@ -277,9 +291,10 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
               </div>
             )}
 
+            {/* ===== CREDITS TAB ===== */}
             {tab === 'credits' && (
               <div className="space-y-3 animate-fade-in">
-                {/* Missions CTA — above prices */}
+                {/* Missions CTA */}
                 <button
                   onClick={() => { onClose(); navigate('/missoes'); }}
                   className="w-full flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-muted/40"
@@ -325,7 +340,6 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                         </span>
                       )}
 
-                      {/* Brain icon */}
                       <div
                         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-200"
                         style={{
@@ -337,7 +351,6 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                         <Brain className={`h-5 w-5 ${isSelected ? 'text-white' : ''}`} style={isSelected ? {} : { color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
                       </div>
 
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2">
                           <span className="text-sm font-bold text-foreground">{pack.credits} créditos</span>
@@ -352,7 +365,6 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                         </p>
                       </div>
 
-                      {/* Price */}
                       <div className="text-right shrink-0">
                         <div className="text-base font-bold text-foreground">{pack.price}</div>
                       </div>
