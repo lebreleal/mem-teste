@@ -234,13 +234,16 @@
 @keyframes correct-flash {
   0% { 
     border-color: hsl(var(--success));
+    box-shadow: 0 0 16px hsl(var(--success) / 0.4);
   }
   50% { 
     border-color: hsl(var(--success));
+    box-shadow: 0 0 24px hsl(var(--success) / 0.35);
     transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
+    box-shadow: var(--shadow-card);
     transform: scale(1);
   }
 }
@@ -248,11 +251,13 @@
 @keyframes wrong-flash {
   0% { 
     border-color: hsl(var(--destructive));
+    box-shadow: 0 0 16px hsl(var(--destructive) / 0.4);
   }
   10% { transform: translateX(-3px); }
   20% { 
     transform: translateX(3px);
     border-color: hsl(var(--destructive));
+    box-shadow: 0 0 24px hsl(var(--destructive) / 0.35);
   }
   30% { transform: translateX(-2px); }
   40% { transform: translateX(2px); }
@@ -260,19 +265,23 @@
   100% { 
     transform: translateX(0);
     border-color: hsl(var(--border) / 0.4);
+    box-shadow: var(--shadow-card);
   }
 }
 
 @keyframes hard-flash {
   0% { 
     border-color: hsl(var(--warning));
+    box-shadow: 0 0 16px hsl(var(--warning) / 0.4);
   }
   50% { 
     border-color: hsl(var(--warning));
+    box-shadow: 0 0 24px hsl(var(--warning) / 0.35);
     transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
+    box-shadow: var(--shadow-card);
     transform: scale(1);
   }
 }
@@ -323,14 +332,17 @@
 
 .animate-correct-flash {
   animation: correct-flash 0.8s ease-out forwards;
+  transition: none !important;
 }
 
 .animate-wrong-flash {
   animation: wrong-flash 0.7s ease-out forwards;
+  transition: none !important;
 }
 
 .animate-hard-flash {
   animation: hard-flash 0.7s ease-out forwards;
+  transition: none !important;
 }
 
 .animate-shimmer {
