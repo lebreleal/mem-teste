@@ -367,21 +367,7 @@ const MultipleChoiceCard = ({
       <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
         {!answered ? (
           <div className="flex w-full items-center gap-2">
-            {/* Undo */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={onUndo}
-                  disabled={!canUndo}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                  aria-label="Desfazer"
-                >
-                  <Undo2 className="h-4.5 w-4.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
-            </Tooltip>
-
+            {/* Tutor IA icon — left side */}
             {onTutorRequest && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -399,9 +385,27 @@ const MultipleChoiceCard = ({
                 </TooltipContent>
               </Tooltip>
             )}
+
             {!onTutorRequest && (
               <p className="text-center text-sm text-muted-foreground flex-1 py-3">Selecione uma alternativa</p>
             )}
+
+            {onTutorRequest && <div className="flex-1" />}
+
+            {/* Undo — right side */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onUndo}
+                  disabled={!canUndo}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Desfazer"
+                >
+                  <Undo2 className="h-4.5 w-4.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <>
@@ -757,6 +761,23 @@ const FlashCard = ({
           ) : (
             /* Normal "Mostrar resposta" bar with keyboard + undo */
             <div className="flex w-full items-center gap-2">
+              {/* Tutor IA icon — left side */}
+              {onTutorRequest && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={canUseTutor ? () => onTutorRequest() : undefined}
+                      disabled={!canUseTutor || isTutorLoading}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="Tutor IA"
+                    >
+                      {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Dica do Tutor IA</p></TooltipContent>
+                </Tooltip>
+              )}
+
               {/* Keyboard / type answer */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -780,7 +801,7 @@ const FlashCard = ({
                 Mostrar Resposta
               </button>
 
-              {/* Undo */}
+              {/* Undo — right side */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -794,23 +815,6 @@ const FlashCard = ({
                 </TooltipTrigger>
                 <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
               </Tooltip>
-
-              {/* Tutor IA icon */}
-              {onTutorRequest && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={canUseTutor ? () => onTutorRequest() : undefined}
-                      disabled={!canUseTutor || isTutorLoading}
-                      className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                      aria-label="Tutor IA"
-                    >
-                      {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Dica do Tutor IA</p></TooltipContent>
-                </Tooltip>
-              )}
             </div>
           )
         ) : quickReview ? (
