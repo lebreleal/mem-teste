@@ -1,22 +1,29 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Search, Sparkles } from 'lucide-react';
+import { BookOpen, Search, Sparkles, ListChecks } from 'lucide-react';
 
-const phases = [
+const defaultPhases = [
   { icon: BookOpen, label: 'Lendo cartão...' },
   { icon: Search, label: 'Buscando fonte confiável...' },
   { icon: Sparkles, label: 'Elaborando explicação...' },
 ];
 
+const mcAlternativesPhases = [
+  { icon: ListChecks, label: 'Verificando alternativas...' },
+  { icon: Search, label: 'Analisando opções...' },
+  { icon: Sparkles, label: 'Elaborando análise...' },
+];
+
 /** Compact inline loading – cycles icon + text inside a button-sized area */
-const TutorLoadingAnimation = () => {
+const TutorLoadingAnimation = ({ variant = 'default' }: { variant?: 'default' | 'mc-alternatives' }) => {
   const [phase, setPhase] = useState(0);
+  const phases = variant === 'mc-alternatives' ? mcAlternativesPhases : defaultPhases;
 
   useEffect(() => {
     const interval = setInterval(() => {
       setPhase(prev => (prev + 1) % phases.length);
     }, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [phases.length]);
 
   const { icon: Icon, label } = phases[phase];
 
