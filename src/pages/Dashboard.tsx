@@ -21,7 +21,7 @@ const SuspenseLoading = () => {
 
 const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
 const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
-const CreditsDialog = lazy(() => import('@/components/CreditsDialog'));
+
 
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
@@ -236,8 +236,8 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
-        onCreditsOpen={() => state.setCreditsOpen(true)}
-        onPremiumOpen={() => state.setPremiumOpen(true)}
+        onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
+        onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
       />
 
       <main className="container mx-auto px-4 py-6">
@@ -455,10 +455,7 @@ const Dashboard = () => {
         {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
       </Suspense>
       <Suspense fallback={<SuspenseLoading />}>
-        {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />}
-      </Suspense>
-      <Suspense fallback={<SuspenseLoading />}>
-        {state.creditsOpen && <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />}
+        {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
       </Suspense>
 
       <Suspense fallback={null}>

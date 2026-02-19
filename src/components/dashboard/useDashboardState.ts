@@ -37,6 +37,7 @@ export function useDashboardState() {
   const [importDeckName, setImportDeckName] = useState('');
   const [aiDeckOpen, setAiDeckOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
+  const [premiumTab, setPremiumTab] = useState<'plans' | 'credits'>('plans');
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [deckSelectionMode, setDeckSelectionMode] = useState(false);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
@@ -261,6 +262,7 @@ export function useDashboardState() {
     importDeckName, setImportDeckName,
     aiDeckOpen, setAiDeckOpen,
     premiumOpen, setPremiumOpen,
+    premiumTab, setPremiumTab,
     creditsOpen, setCreditsOpen,
     deckSelectionMode, setDeckSelectionMode,
     selectedDeckIds, setSelectedDeckIds,

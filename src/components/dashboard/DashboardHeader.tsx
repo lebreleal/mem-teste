@@ -59,7 +59,7 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
 
         <div className="flex items-center gap-1.5">
           <button onClick={() => { onPremiumOpen(); }} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Premium">
-            <Crown className="h-4 w-4 text-warning" fill={isPremium ? 'hsl(var(--warning))' : 'none'} />
+            <Crown className="h-4 w-4 text-warning" fill="hsl(var(--warning))" />
           </button>
           <button onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
