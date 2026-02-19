@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +33,7 @@ interface StudyChatModalProps {
 
 const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { energy } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const [input, setInput] = useState('');
@@ -157,8 +159,10 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
       setMessages(prev => prev.filter(m => !(m.role === 'assistant' && m.content === '')));
     } finally {
       setIsStreaming(false);
+      // Refresh energy in header after spending credits
+      queryClient.invalidateQueries({ queryKey: ['energy'] });
     }
-  }, [input, isStreaming, energy, cost, messages, model, cardContext, toast]);
+  }, [input, isStreaming, energy, cost, messages, model, cardContext, toast, queryClient]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

@@ -422,6 +422,7 @@ const Study = () => {
             quickReview={algorithmMode === 'quick_review'}
             algorithmMode={algorithmMode}
             energy={energy}
+            tutorCost={TUTOR_COST}
             onTutorRequest={handleTutorRequest}
             isTutorLoading={isTutorLoading}
             hintResponse={hintResponse}
