@@ -234,16 +234,13 @@
 @keyframes correct-flash {
   0% { 
     border-color: hsl(var(--success));
-    box-shadow: 0 4px 20px -2px hsl(var(--success) / 0.5);
   }
   50% { 
     border-color: hsl(var(--success));
-    box-shadow: 0 6px 28px -2px hsl(var(--success) / 0.4);
     transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: none;
     transform: scale(1);
   }
 }
@@ -251,13 +248,11 @@
 @keyframes wrong-flash {
   0% { 
     border-color: hsl(var(--destructive));
-    box-shadow: 0 4px 20px -2px hsl(var(--destructive) / 0.5);
   }
   10% { transform: translateX(-3px); }
   20% { 
     transform: translateX(3px);
     border-color: hsl(var(--destructive));
-    box-shadow: 0 6px 28px -2px hsl(var(--destructive) / 0.45);
   }
   30% { transform: translateX(-2px); }
   40% { transform: translateX(2px); }
@@ -265,23 +260,19 @@
   100% { 
     transform: translateX(0);
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: none;
   }
 }
 
 @keyframes hard-flash {
   0% { 
     border-color: hsl(var(--warning));
-    box-shadow: 0 4px 20px -2px hsl(var(--warning) / 0.5);
   }
   50% { 
     border-color: hsl(var(--warning));
-    box-shadow: 0 6px 28px -2px hsl(var(--warning) / 0.4);
     transform: scale(1.005);
   }
   100% { 
     border-color: hsl(var(--border) / 0.4);
-    box-shadow: none;
     transform: scale(1);
   }
 }
