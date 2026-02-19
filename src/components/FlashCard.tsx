@@ -266,8 +266,8 @@ const MultipleChoiceCard = ({
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4">
-        <div className="space-y-3 pb-2 pt-1">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 -mx-4">
+        <div className="space-y-3 pb-4 pt-1">
           {/* Question card — receives feedback animation */}
           <div
             className={`card-premium w-full border border-border/40 bg-card p-4 sm:p-6 ${
