@@ -1,0 +1,1 @@
+ALTER TABLE public.decks ALTER COLUMN shuffle_cards SET DEFAULT false;
