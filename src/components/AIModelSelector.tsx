@@ -1,4 +1,4 @@
-import { Zap, Sparkles } from 'lucide-react';
+import { Zap, Crown } from 'lucide-react';
 import { type AIModel, MODEL_CONFIG } from '@/hooks/useAIModel';
 
 interface AIModelSelectorProps {
@@ -20,7 +20,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModel
         {model === 'flash' ? (
           <Zap className="h-3 w-3 text-warning" />
         ) : (
-          <Sparkles className="h-3 w-3" style={{ color: 'hsl(var(--energy-purple))' }} />
+          <Crown className="h-3 w-3 text-warning" />
         )}
         <span className="text-foreground hidden sm:inline">{MODEL_CONFIG[model].label}</span>
         {baseCost !== undefined && (
@@ -49,15 +49,9 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModel
             {m === 'flash' ? (
               <Zap className="h-3.5 w-3.5 text-warning" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5" style={{ color: 'hsl(var(--energy-purple))' }} />
+              <Crown className="h-3.5 w-3.5 text-warning" />
             )}
             <span className="text-sm font-bold text-foreground">{MODEL_CONFIG[m].label}</span>
-            {m === 'pro' && (
-              <span className="ml-auto rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-                style={{ background: 'hsl(var(--energy-purple) / 0.15)', color: 'hsl(var(--energy-purple))' }}>
-                Premium
-              </span>
-            )}
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">{MODEL_CONFIG[m].description}</p>
           {baseCost !== undefined && (
