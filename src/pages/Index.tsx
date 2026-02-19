@@ -58,7 +58,7 @@ const Index = () => {
           <Button
             size="lg"
             className="w-full text-lg md:text-xl font-bold py-6 md:py-7 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-            onClick={() => navigate('/auth?mode=signup')}
+            onClick={() => navigate('/auth')}
           >
             Começar agora — é grátis
           </Button>
@@ -66,7 +66,7 @@ const Index = () => {
             size="lg"
             variant="outline"
             className="w-full text-lg md:text-xl font-bold py-6 md:py-7 rounded-2xl border-2 hover:bg-accent transition-all"
-            onClick={() => navigate('/auth?mode=login')}
+            onClick={() => navigate('/auth')}
           >
             Já tenho conta
           </Button>
