@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Rating } from '@/lib/fsrs';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
+const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
@@ -56,6 +57,10 @@ const Study = () => {
 
   const [tutorResponse, setTutorResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Undo state: store the previous queue snapshot + reviewCount
+  const [undoSnapshot, setUndoSnapshot] = useState<{ queue: any[]; reviewCount: number; cardKey: number } | null>(null);
 
   // Initialize local queue from fetched data (once)
   useEffect(() => {
@@ -160,6 +165,8 @@ const Study = () => {
 
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
+    // Save undo snapshot before modifying
+    setUndoSnapshot({ queue: [...localQueue], reviewCount, cardKey });
     // Cancel any pending tutor request so it doesn't block
     if (tutorAbortRef.current) {
       tutorAbortRef.current.abort();
@@ -221,7 +228,15 @@ const Study = () => {
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, toast]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, toast, localQueue, reviewCount, cardKey]);
+
+  const handleUndo = useCallback(() => {
+    if (!undoSnapshot) return;
+    setLocalQueue(undoSnapshot.queue);
+    setReviewCount(undoSnapshot.reviewCount);
+    setCardKey(undoSnapshot.cardKey);
+    setUndoSnapshot(null);
+  }, [undoSnapshot]);
 
   if (isLoading) {
     return (
@@ -351,6 +366,8 @@ const Study = () => {
             onTutorRequest={handleTutorRequest}
             isTutorLoading={isTutorLoading}
             tutorResponse={tutorResponse}
+            canUndo={!!undoSnapshot}
+            onUndo={handleUndo}
             actions={
               <StudyCardActions
                 card={currentCard}
@@ -371,6 +388,7 @@ const Study = () => {
                     return q;
                   });
                 }}
+                onOpenChat={() => setChatOpen(true)}
               />
             }
           />
@@ -378,6 +396,11 @@ const Study = () => {
       </main>
       <Suspense fallback={null}>
         <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
+        <StudyChatModal
+          open={chatOpen}
+          onOpenChange={setChatOpen}
+          cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
+        />
       </Suspense>
     </div>
   );

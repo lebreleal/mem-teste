@@ -3,7 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
-import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen } from 'lucide-react';
+import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 
@@ -49,6 +49,8 @@ interface FlashCardProps {
   isTutorLoading?: boolean;
   tutorResponse?: string | null;
   actions?: React.ReactNode;
+  canUndo?: boolean;
+  onUndo?: () => void;
 }
 
 interface MultipleChoiceData {
@@ -408,10 +410,14 @@ const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, onTutorRequest, isTutorLoading, tutorResponse, actions,
+  canUndo, onUndo,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
   const [peekingFront, setPeekingFront] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
+  const [typingAnswer, setTypingAnswer] = useState(false);
+  const [typedAnswer, setTypedAnswer] = useState('');
+  const [answerSubmitted, setAnswerSubmitted] = useState(false);
 
   // Auto-detect card type: if content has cloze markers, treat as cloze regardless of cardType
   const effectiveCardType = useMemo(() => {
@@ -578,32 +584,42 @@ const FlashCard = ({
 
             {/* Back face (or peeking front) */}
             {flipped && (
-              <div
-                className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
-                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPeekingFront(prev => !prev);
-                  }}
-                  className={`absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
-                    peekingFront
-                      ? 'text-primary bg-primary/10'
-                      : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60'
-                  }`}
-                  aria-label={peekingFront ? 'Ver verso do card' : 'Ver frente do card'}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-                <div
-                  className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
-                />
-                {peekingFront && (
-                  <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
+              <>
+                {/* Typed answer comparison */}
+                {answerSubmitted && typedAnswer.trim() && (
+                  <div className="card-premium w-full border-2 border-primary/30 bg-primary/5 p-4 mb-3 animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 block">Sua resposta</span>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{typedAnswer}</p>
+                  </div>
                 )}
-              </div>
+
+                <div
+                  className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
+                  style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPeekingFront(prev => !prev);
+                    }}
+                    className={`absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                      peekingFront
+                        ? 'text-primary bg-primary/10'
+                        : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60'
+                    }`}
+                    aria-label={peekingFront ? 'Ver verso do card' : 'Ver frente do card'}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  <div
+                    className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                  />
+                  {peekingFront && (
+                    <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
@@ -638,36 +654,81 @@ const FlashCard = ({
       {/* Fixed bottom buttons */}
       <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
         {!flipped ? (
-          <div className="flex w-full gap-2">
-            <button
-              onClick={() => setFlipped(true)}
-              className="card-premium flex-1 border border-border/40 bg-card px-6 py-3.5 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
-              style={{ borderRadius: 'var(--radius)' }}
-            >
-              Mostrar Resposta
-            </button>
-            {onTutorRequest && (
+          typingAnswer ? (
+            /* Type-answer input mode */
+            <div className="flex w-full gap-2 items-end">
+              <input
+                autoFocus
+                type="text"
+                value={typedAnswer}
+                onChange={e => setTypedAnswer(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && typedAnswer.trim()) {
+                    setAnswerSubmitted(true);
+                    setFlipped(true);
+                  } else if (e.key === 'Escape') {
+                    setTypingAnswer(false);
+                    setTypedAnswer('');
+                  }
+                }}
+                placeholder="Digite a resposta"
+                className="flex-1 rounded-xl border-2 border-primary/40 bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+              <button
+                onClick={() => {
+                  if (typedAnswer.trim()) {
+                    setAnswerSubmitted(true);
+                    setFlipped(true);
+                  }
+                }}
+                disabled={!typedAnswer.trim()}
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all active:scale-95 shrink-0"
+              >
+                <Check className="h-5 w-5" />
+              </button>
+            </div>
+          ) : (
+            /* Normal "Mostrar resposta" bar with keyboard + undo */
+            <div className="flex w-full items-center gap-2">
+              {/* Keyboard / type answer */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={canUseTutor ? () => onTutorRequest() : undefined}
-                    disabled={!canUseTutor || isTutorLoading}
-                    className={`flex items-center justify-center border px-3 py-3.5 transition-all active:scale-95 ${
-                      canUseTutor
-                        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
-                        : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                    }`}
-                    style={{ borderRadius: 'var(--radius)' }}
+                    onClick={() => { setTypingAnswer(true); setTypedAnswer(''); setAnswerSubmitted(false); }}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                    aria-label="Digitar resposta"
                   >
-                    {isTutorLoading ? <TutorLoadingAnimation /> : <Lightbulb className="h-4 w-4" />}
+                    <Keyboard className="h-4.5 w-4.5" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  {canUseTutor ? <p>Pedir dica ao Tutor (2 Créditos IA)</p> : <p>Estude mais para ganhar Créditos IA</p>}
-                </TooltipContent>
+                <TooltipContent><p>Digitar resposta</p></TooltipContent>
               </Tooltip>
-            )}
-          </div>
+
+              {/* Show answer button */}
+              <button
+                onClick={() => setFlipped(true)}
+                className="card-premium flex-1 border border-border/40 bg-card px-6 py-3 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
+                style={{ borderRadius: 'var(--radius)' }}
+              >
+                Mostrar Resposta
+              </button>
+
+              {/* Undo */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={onUndo}
+                    disabled={!canUndo}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                    aria-label="Desfazer"
+                  >
+                    <Undo2 className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
+              </Tooltip>
+            </div>
+          )
         ) : quickReview ? (
           <div className="grid w-full grid-cols-2 gap-2.5">
             <button
