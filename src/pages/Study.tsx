@@ -49,6 +49,7 @@ const Study = () => {
   const [reviewCount, setReviewCount] = useState(0);
   const [cardKey, setCardKey] = useState(0);
   const [waitingSeconds, setWaitingSeconds] = useState(0);
+  const [learningTick, setLearningTick] = useState(0);
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,8 +70,22 @@ const Study = () => {
   // Determine current card considering learning step timing
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [localQueue, waitingSeconds]);
+    [localQueue, waitingSeconds, learningTick]);
   const currentCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
+
+  // Force re-render when the soonest learning card's timer expires
+  useEffect(() => {
+    const now = Date.now();
+    const futureTimes = localQueue
+      .filter(c => c.state === 1)
+      .map(c => new Date(c.scheduled_date).getTime())
+      .filter(t => t > now);
+    if (futureTimes.length === 0) return;
+    const soonest = Math.min(...futureTimes);
+    const delay = soonest - now + 100;
+    const timer = setTimeout(() => setLearningTick(prev => prev + 1), delay);
+    return () => clearTimeout(timer);
+  }, [localQueue]);
   const allWaiting = localQueue.length > 0 && readyIndex < 0;
 
   // Countdown timer when all remaining cards are in learning steps
