@@ -3,7 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
-import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw } from 'lucide-react';
+import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
@@ -610,12 +610,23 @@ const FlashCard = ({
         )}
       </div>
 
-      {/* Tutor response - hide when flipped */}
+      {/* Tutor hint response - show before flip */}
       {tutorResponse && !flipped && (
         <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
+          </div>
+          <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+        </div>
+      )}
+
+      {/* Tutor explain response - show after flip */}
+      {tutorResponse && flipped && (
+        <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="h-4 w-4 text-primary" />
+            <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
           </div>
           <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
         </div>
@@ -678,19 +689,41 @@ const FlashCard = ({
           </button>
         </div>
       ) : (
-        <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
-          {ratingConfig.map(({ rating, label, colorClass }) => (
+        <div className="w-full space-y-2">
+          {/* Explain button for basic/cloze/occlusion */}
+          {onTutorRequest && !tutorResponse && (
             <button
-              key={rating}
-              onClick={() => handleRate(rating)}
-              disabled={isSubmitting}
-              className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
-              style={{ borderRadius: 'var(--radius)' }}
+              onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+              disabled={!canUseTutor || isTutorLoading}
+              className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
+                canUseTutor
+                  ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                  : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+              }`}
             >
-              <span className="text-sm font-bold">{label}</span>
-              <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
+              {isTutorLoading ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              ) : (
+                <BookOpen className="h-3.5 w-3.5" />
+              )}
+              {isTutorLoading ? 'Explicando...' : 'Explicar com IA (2 créditos)'}
             </button>
-          ))}
+          )}
+
+          <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
+            {ratingConfig.map(({ rating, label, colorClass }) => (
+              <button
+                key={rating}
+                onClick={() => handleRate(rating)}
+                disabled={isSubmitting}
+                className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
+                style={{ borderRadius: 'var(--radius)' }}
+              >
+                <span className="text-sm font-bold">{label}</span>
+                <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
