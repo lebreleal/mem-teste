@@ -210,10 +210,8 @@ const MultipleChoiceCard = ({
   const handleSelect = (idx: number) => {
     if (answered) return;
     setSelectedIndex(idx);
-    // Auto-confirm on select
     setAnswered(true);
-    const isCorrect = idx === mcData.correctIndex;
-    setFeedbackType(isCorrect ? 'correct' : 'wrong');
+    // No card-level shadow animation on select — only on rating
   };
 
   const handleRate = (rating: Rating) => {
