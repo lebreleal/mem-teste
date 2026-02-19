@@ -170,7 +170,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg h-[80vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-lg h-[80vh] flex flex-col p-0 gap-0 [&>button.absolute]:hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
@@ -179,6 +179,13 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
             </div>
             <div className="flex items-center gap-2">
               <AIModelSelector model={model} onChange={setModel} baseCost={BASE_COST} compact />
+              <button
+                onClick={() => onOpenChange(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
@@ -199,7 +206,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
                     : 'bg-muted text-foreground'
                 }`}>
                   {msg.role === 'assistant' ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
                       <ReactMarkdown>{msg.content || '...'}</ReactMarkdown>
                     </div>
                   ) : (
