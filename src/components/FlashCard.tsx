@@ -268,7 +268,7 @@ const MultipleChoiceCard = ({
         <div className="space-y-3 pb-2">
           {/* Question card — receives feedback animation */}
           <div
-            className={`card-premium w-full border-2 border-border/40 bg-card p-4 sm:p-6 transition-colors ${
+            className={`card-premium w-full border border-border/40 bg-card p-4 sm:p-6 ${
               feedbackType === 'correct' ? 'animate-correct-flash' :
               feedbackType === 'wrong' ? 'animate-wrong-flash' :
               feedbackType === 'hard' ? 'animate-hard-flash' :
@@ -661,7 +661,7 @@ const FlashCard = ({
                 )}
 
                 <div
-                  className={`card-premium w-full border-2 border-border/40 bg-card p-6 sm:p-8 transition-colors ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'} ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}
+                  className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'} ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}
                   style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
                 >
                   <button
