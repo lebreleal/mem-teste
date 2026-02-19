@@ -81,11 +81,21 @@ const Study = () => {
 
   // getNextReadyIndex imported from studyUtils
 
+  const [isTransitioning, setIsTransitioning] = useState(false);
   // Determine current card considering learning step timing
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [localQueue, waitingSeconds, learningTick]);
-  const currentCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
+  const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
+
+  // Lock the displayed card during transitions to prevent flash of wrong card
+  const [displayedCard, setDisplayedCard] = useState<any>(null);
+  useEffect(() => {
+    if (!isTransitioning && nextCard) {
+      setDisplayedCard(nextCard);
+    }
+  }, [nextCard, isTransitioning]);
+  const currentCard = isTransitioning ? displayedCard : (nextCard ?? displayedCard);
 
   // Force re-render when the soonest learning card's timer expires
   useEffect(() => {
@@ -180,7 +190,7 @@ const Study = () => {
     }
   }, [currentCard, energy, toast, model, TUTOR_COST, queryClient]);
 
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  // isTransitioning moved earlier (before currentCard computation)
 
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
@@ -412,7 +422,7 @@ const Study = () => {
       </div>
 
       <main className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
-        {isTransitioning ? null : <div key={cardKey} className="w-full animate-fade-in">
+        <div key={cardKey} className="w-full animate-fade-in">
           <FlashCard
             frontContent={currentCard.front_content}
             backContent={currentCard.back_content}
@@ -459,7 +469,7 @@ const Study = () => {
               />
             }
           />
-        </div>}
+        </div>
       </main>
       <Suspense fallback={null}>
         <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
