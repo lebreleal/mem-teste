@@ -50,7 +50,6 @@ const ConfigStep = ({
   const handleToggleFormat = (f: CardFormat) => {
     const isSelected = cardFormats.includes(f);
     if (isSelected) {
-      // Show warning when trying to deselect
       setShowFormatWarning(true);
     }
     onToggleFormat(f);
@@ -78,68 +77,67 @@ const ConfigStep = ({
   };
 
   return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+    <div className="flex flex-col gap-4 flex-1 min-h-0">
       {/* Progress indicator */}
-      <div className="flex items-center gap-1.5 px-1">
+      <div className="flex items-center gap-2 px-1">
         {SUB_STEP_LABELS.map((label, i) => (
-          <div key={i} className="flex items-center gap-1.5 flex-1">
+          <div key={i} className="flex items-center gap-2 flex-1">
             <button
               onClick={() => i <= subStep ? setSubStep(i as ConfigSubStep) : undefined}
-              className={`flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${
-                i === subStep ? 'text-primary' : i < subStep ? 'text-primary/60 cursor-pointer' : 'text-muted-foreground/40'
+              className={`flex items-center gap-1.5 transition-colors ${
+                i <= subStep ? 'cursor-pointer' : 'cursor-default'
               }`}
             >
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold shrink-0 transition-all ${
                 i < subStep ? 'bg-primary text-primary-foreground'
-                  : i === subStep ? 'bg-primary/15 text-primary border border-primary/30'
+                  : i === subStep ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground'
               }`}>
                 {i < subStep ? <Check className="h-3 w-3" /> : i + 1}
               </span>
-              <span className="hidden sm:inline">{label}</span>
             </button>
-            {i < 2 && <div className={`flex-1 h-px ${i < subStep ? 'bg-primary/40' : 'bg-border'}`} />}
+            {i < 2 && <div className={`flex-1 h-0.5 rounded-full transition-colors ${i < subStep ? 'bg-primary' : 'bg-border'}`} />}
           </div>
         ))}
+      </div>
+
+      {/* Sub-step title */}
+      <div>
+        <h3 className="text-sm font-bold text-foreground">{SUB_STEP_LABELS[subStep]}</h3>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          {subStep === 0 && 'Escolha o quanto a IA deve aprofundar no conteúdo.'}
+          {subStep === 1 && 'Selecione os tipos de cartão a serem gerados.'}
+          {subStep === 2 && 'Ajuste a quantidade, instruções e modelo.'}
+        </p>
       </div>
 
       {/* Sub-step content */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide max-h-[55dvh] sm:max-h-[60vh]">
         {/* Sub-step 0: Detail level */}
         {subStep === 0 && (
-          <div className="space-y-3">
-            <div>
-              <Label className="text-sm font-bold">Nível de detalhe</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Escolha o quanto a IA deve aprofundar no conteúdo.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              {DETAIL_OPTIONS.map(opt => (
-                <button key={opt.value} onClick={() => onDetailLevelChange(opt.value)}
-                  className={`rounded-xl border-2 p-3.5 text-left transition-all ${
-                    detailLevel === opt.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-muted-foreground/30'
-                  }`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-foreground">{opt.label}</span>
-                    {opt.value === 'standard' && detailLevel !== opt.value && (
-                      <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase tracking-wider">Recomendado</span>
-                    )}
-                    {detailLevel === opt.value && <Check className="h-4 w-4 text-primary ml-auto" />}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{opt.desc}</p>
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 gap-2.5">
+            {DETAIL_OPTIONS.map(opt => (
+              <button key={opt.value} onClick={() => onDetailLevelChange(opt.value)}
+                className={`rounded-xl border-2 p-3.5 text-left transition-all ${
+                  detailLevel === opt.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-muted-foreground/30'
+                }`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-foreground">{opt.label}</span>
+                  {opt.value === 'standard' && detailLevel !== opt.value && (
+                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase tracking-wider">Recomendado</span>
+                  )}
+                  {detailLevel === opt.value && <Check className="h-4 w-4 text-primary ml-auto" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{opt.desc}</p>
+              </button>
+            ))}
           </div>
         )}
 
         {/* Sub-step 1: Card format */}
         {subStep === 1 && (
           <div className="space-y-3">
-            <div>
-              <Label className="text-sm font-bold">Formato do cartão</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Selecione os tipos de cartão a serem gerados.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 gap-2.5">
               {FORMAT_OPTIONS.map(opt => {
                 const active = cardFormats.includes(opt.value);
                 return (
