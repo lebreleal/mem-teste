@@ -8,6 +8,7 @@ interface RetentionGaugeProps {
     stability: number;
     difficulty: number;
     scheduled_date: string;
+    last_reviewed_at?: string;
   }>;
   algorithmMode: string;
   size?: number;
@@ -19,89 +20,97 @@ const FSRS_DECAY = -0.5;
 const FSRS_FACTOR = 19 / 81;
 
 /**
- * Unified recall probability algorithm.
- * 
- * FSRS: Uses the official FSRS-4.5 power-law forgetting curve.
- *   R(t) = (1 + FACTOR * t / S)^DECAY
- *   where t = days since last review, S = stability (days for R to reach 0.9)
- *   We estimate lastReview from: interval = S/FACTOR * (0.9^(1/DECAY) - 1) = S
- *   So lastReview ≈ scheduledDate - S days.
- * 
- * SM-2: Adapts the same power-law model for SM-2 cards.
- *   We estimate an effective stability from the SM-2 parameters:
- *   - For review cards: stability based on interval (derived from EF and reps)
- *   - For learning cards: short stability (~0.5-2 days)
- *   Then apply the same forgetting curve for consistency.
- *   This gives a smooth, research-backed decay instead of arbitrary heuristics.
+ * Unified recall probability based on FSRS-4.5 forgetting curve.
+ *
+ * R(t) = (1 + FACTOR * t / S)^DECAY
+ *
+ * Where:
+ *   t = elapsed time since last review (days, fractional)
+ *   S = stability (days for R to reach ~90%)
+ *
+ * This formula is applied identically to ALL card states and algorithms.
+ * The only difference is how we determine S and t.
  */
-export function calculateCardRecall(card: { state: number; stability: number; difficulty: number; scheduled_date: string }, algorithmMode: string): { percent: number; label: string; state: 'new' | 'learning' | 'review' } {
+export function calculateCardRecall(
+  card: { state: number; stability: number; difficulty: number; scheduled_date: string; last_reviewed_at?: string },
+  algorithmMode: string,
+): { percent: number; label: string; state: 'new' | 'learning' | 'review' } {
   if (card.state === 0) return { percent: 0, label: 'Novo', state: 'new' };
 
   const now = Date.now();
-  const isLearning = card.state === 1;
   const scheduledMs = new Date(card.scheduled_date).getTime();
+  const lastReviewedMs = card.last_reviewed_at ? new Date(card.last_reviewed_at).getTime() : null;
 
-  // ── Learning cards (state=1): recently FAILED ──
-  // These cards are in the learning queue because the user got them wrong.
-  // Showing 90% would be misleading. Instead, we use a pedagogical estimate:
-  // - Base ~40-50%, scaling with difficulty (lower difficulty = easier = slightly higher)
-  // - If the scheduled step is in the past (overdue), reduce further
-  if (isLearning) {
-    let basePct: number;
+  // ── Learning cards (state=1) ──
+  if (card.state === 1) {
+    let stabilityDays: number;
+    let elapsedDays: number;
 
     if (algorithmMode === 'fsrs') {
-      // FSRS difficulty ranges 1-10 (lower = easier)
-      const diffNorm = Math.min(1, Math.max(0, (card.difficulty - 1) / 9));
-      basePct = 55 - diffNorm * 20; // 55% (easy) → 35% (hard)
+      // FSRS learning cards: stability is already set by the algorithm
+      stabilityDays = Math.max(card.stability, 0.001);
     } else {
-      // SM-2: EFactor in stability (1.3-2.5), higher = easier
-      const ef = card.stability || 2.5;
-      const efNorm = Math.min(1, Math.max(0, (ef - 1.3) / (2.5 - 1.3)));
-      basePct = 35 + efNorm * 20; // 35% (hard) → 55% (easy)
+      // SM-2 learning cards: stability holds EFactor, not useful for decay.
+      // The scheduled_date is the next learning step. Estimate the step duration
+      // from the gap between last_reviewed_at and scheduled_date.
+      if (lastReviewedMs) {
+        const stepDays = Math.max(0.001, (scheduledMs - lastReviewedMs) / 86400000);
+        stabilityDays = stepDays;
+      } else {
+        // Fallback: assume a 10-minute step
+        stabilityDays = 10 / 1440; // ~0.007 days
+      }
     }
 
-    // If overdue (past the scheduled step), decay slightly
-    if (now > scheduledMs) {
-      const overdueMin = (now - scheduledMs) / 60000;
-      // Lose ~5% per 30 min overdue, floor at 10%
-      basePct = Math.max(10, basePct - (overdueMin / 30) * 5);
+    if (lastReviewedMs) {
+      elapsedDays = Math.max(0, (now - lastReviewedMs) / 86400000);
+    } else {
+      // Fallback: estimate lastReview from scheduled_date - step
+      const estimatedLastReview = scheduledMs - stabilityDays * 86400000;
+      elapsedDays = Math.max(0, (now - estimatedLastReview) / 86400000);
     }
 
-    return { percent: Math.round(basePct), label: 'Aprendendo', state: 'learning' };
-  }
-
-  // ── Review cards (state=2): use forgetting curve ──
-  if (algorithmMode === 'fsrs') {
-    const stability = Math.max(card.stability, 0.1);
-    const intervalMs = stability * 86400000;
-    const lastReviewMs = scheduledMs - intervalMs;
-    const elapsedDays = Math.max(0, (now - lastReviewMs) / 86400000);
-
-    const R = Math.pow(1 + FSRS_FACTOR * elapsedDays / stability, FSRS_DECAY);
+    const R = Math.pow(1 + FSRS_FACTOR * elapsedDays / stabilityDays, FSRS_DECAY);
     const pct = Math.max(0, Math.min(100, Math.round(R * 100)));
-    return { percent: pct, label: 'Revisão', state: 'review' };
+    return { percent: pct, label: 'Aprendendo', state: 'learning' };
   }
 
-  // SM-2 review cards
-  const ef = card.stability || 2.5;
-  const reps = Math.round(card.difficulty);
+  // ── Review cards (state=2) ──
+  let stabilityDays: number;
+  let elapsedDays: number;
 
-  let effectiveStability: number;
-  if (reps <= 1) {
-    effectiveStability = 1;
-  } else if (reps === 2) {
-    effectiveStability = 6;
+  if (algorithmMode === 'fsrs') {
+    stabilityDays = Math.max(card.stability, 0.1);
+
+    if (lastReviewedMs) {
+      elapsedDays = Math.max(0, (now - lastReviewedMs) / 86400000);
+    } else {
+      // Fallback: estimate lastReview = scheduledDate - S
+      const lastReviewMs = scheduledMs - stabilityDays * 86400000;
+      elapsedDays = Math.max(0, (now - lastReviewMs) / 86400000);
+    }
   } else {
-    effectiveStability = Math.min(365, 6 * Math.pow(ef, Math.max(0, reps - 2)));
+    // SM-2: derive effective stability from EFactor (stability) and reps (difficulty)
+    const ef = card.stability || 2.5;
+    const reps = Math.round(card.difficulty);
+
+    if (lastReviewedMs) {
+      // Real interval = scheduled_date - last_reviewed_at = effective stability
+      stabilityDays = Math.max(0.1, (scheduledMs - lastReviewedMs) / 86400000);
+      elapsedDays = Math.max(0, (now - lastReviewedMs) / 86400000);
+    } else {
+      // Fallback: estimate stability from SM-2 parameters
+      if (reps <= 1) stabilityDays = 1;
+      else if (reps === 2) stabilityDays = 6;
+      else stabilityDays = Math.min(365, 6 * Math.pow(ef, Math.max(0, reps - 2)));
+
+      const lastReviewMs = scheduledMs - stabilityDays * 86400000;
+      elapsedDays = Math.max(0, (now - lastReviewMs) / 86400000);
+    }
   }
 
-  const intervalMs = effectiveStability * 86400000;
-  const lastReviewMs = scheduledMs - intervalMs;
-  const elapsedDays = Math.max(0, (now - lastReviewMs) / 86400000);
-
-  const R = Math.pow(1 + FSRS_FACTOR * elapsedDays / effectiveStability, FSRS_DECAY);
+  const R = Math.pow(1 + FSRS_FACTOR * elapsedDays / stabilityDays, FSRS_DECAY);
   const pct = Math.max(0, Math.min(100, Math.round(R * 100)));
-
   return { percent: pct, label: 'Revisão', state: 'review' };
 }
 

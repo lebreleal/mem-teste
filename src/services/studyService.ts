@@ -134,7 +134,7 @@ export async function submitCardReview(
     const newState = rating > 2 ? 2 : 1;
     await supabase
       .from('cards')
-      .update({ state: newState })
+      .update({ state: newState, last_reviewed_at: new Date().toISOString() } as any)
       .eq('id', card.id);
 
     await supabase.from('review_logs').insert({
@@ -193,15 +193,16 @@ export async function submitCardReview(
     result = sm2Schedule(sm2Card, rating, sm2Params);
   }
 
-  const { error: updateError } = await supabase
-    .from('cards')
-    .update({
-      stability: result.stability,
-      difficulty: result.difficulty,
-      state: result.state,
-      scheduled_date: result.scheduled_date,
-    })
-    .eq('id', card.id);
+    const { error: updateError } = await supabase
+      .from('cards')
+      .update({
+        stability: result.stability,
+        difficulty: result.difficulty,
+        state: result.state,
+        scheduled_date: result.scheduled_date,
+        last_reviewed_at: new Date().toISOString(),
+      } as any)
+      .eq('id', card.id);
   if (updateError) throw updateError;
 
   const { error: logError } = await supabase

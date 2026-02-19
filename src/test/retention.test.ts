@@ -7,6 +7,7 @@ function makeCard(opts: {
   stability: number;
   difficulty: number;
   scheduledOffsetDays: number;
+  last_reviewed_at?: string;
 }) {
   const d = new Date();
   d.setDate(d.getDate() + opts.scheduledOffsetDays);
@@ -15,6 +16,33 @@ function makeCard(opts: {
     stability: opts.stability,
     difficulty: opts.difficulty,
     scheduled_date: d.toISOString(),
+    last_reviewed_at: opts.last_reviewed_at,
+  };
+}
+
+/** Create a card with explicit last_reviewed_at offset (in days from now) */
+function makeCardWithReview(opts: {
+  state: number;
+  stability: number;
+  difficulty: number;
+  scheduledOffsetDays: number;
+  reviewedAgoMinutes?: number;
+  reviewedAgoDays?: number;
+}) {
+  const d = new Date();
+  d.setDate(d.getDate() + opts.scheduledOffsetDays);
+  const reviewed = new Date();
+  if (opts.reviewedAgoMinutes !== undefined) {
+    reviewed.setMinutes(reviewed.getMinutes() - opts.reviewedAgoMinutes);
+  } else if (opts.reviewedAgoDays !== undefined) {
+    reviewed.setDate(reviewed.getDate() - opts.reviewedAgoDays);
+  }
+  return {
+    state: opts.state,
+    stability: opts.stability,
+    difficulty: opts.difficulty,
+    scheduled_date: d.toISOString(),
+    last_reviewed_at: reviewed.toISOString(),
   };
 }
 
@@ -34,15 +62,22 @@ describe('FSRS Recall Algorithm', () => {
     expect(calculateCardRecall(makeCard({ state: 0, stability: 5, difficulty: 5, scheduledOffsetDays: 0 }), algo).percent).toBe(0);
   });
 
-  it('at due date → exactly 90% (for any stability)', () => {
+  it('at due date (fallback, no last_reviewed_at) → exactly 90%', () => {
     for (const s of [0.5, 1, 2, 5, 10, 20, 50, 100, 365]) {
       const card = makeCard({ state: 2, stability: s, difficulty: 5, scheduledOffsetDays: 0 });
       expect(calculateCardRecall(card, algo).percent).toBe(90);
     }
   });
 
-  it('just reviewed (elapsed ≈ 0) → ~100%', () => {
-    // scheduled in S days → lastReview ≈ now → elapsed ≈ 0
+  it('just reviewed (last_reviewed_at = now) → ~100%', () => {
+    for (const s of [1, 5, 10, 30]) {
+      const card = makeCardWithReview({ state: 2, stability: s, difficulty: 5, scheduledOffsetDays: s, reviewedAgoMinutes: 0 });
+      const r = calculateCardRecall(card, algo);
+      expect(r.percent).toBeGreaterThanOrEqual(98);
+    }
+  });
+
+  it('just reviewed (fallback, scheduled in S days) → ~100%', () => {
     for (const s of [1, 5, 10, 30]) {
       const card = makeCard({ state: 2, stability: s, difficulty: 5, scheduledOffsetDays: s });
       const r = calculateCardRecall(card, algo);
@@ -51,7 +86,6 @@ describe('FSRS Recall Algorithm', () => {
   });
 
   it('half-way to due → R ≈ 95%', () => {
-    // elapsed = S/2, R = (1 + FACTOR * 0.5)^DECAY ≈ 0.946
     const s = 10;
     const card = makeCard({ state: 2, stability: s, difficulty: 5, scheduledOffsetDays: Math.round(s / 2) });
     const r = calculateCardRecall(card, algo);
@@ -109,23 +143,8 @@ describe('FSRS Recall Algorithm', () => {
     expect(r.percent).toBeGreaterThan(0);
   });
 
-  it('learning card (state=1) → low-moderate (just failed)', () => {
-    const card = makeCard({ state: 1, stability: 2, difficulty: 5, scheduledOffsetDays: 0 });
-    const r = calculateCardRecall(card, algo);
-    // Should NOT be 90%+ since the card was just failed
-    expect(r.percent).toBeGreaterThanOrEqual(20);
-    expect(r.percent).toBeLessThanOrEqual(60);
-    expect(r.state).toBe('learning');
-  });
-
-  it('learning card harder difficulty → lower recall', () => {
-    const easy = calculateCardRecall(makeCard({ state: 1, stability: 0.5, difficulty: 2, scheduledOffsetDays: 0 }), algo);
-    const hard = calculateCardRecall(makeCard({ state: 1, stability: 0.5, difficulty: 9, scheduledOffsetDays: 0 }), algo);
-    expect(easy.percent).toBeGreaterThan(hard.percent);
-  });
-
   // ---- 50 parametric FSRS simulations ----
-  it('50 parametric simulations match expected formula', () => {
+  it('50 parametric simulations match expected formula (fallback)', () => {
     const stabilities = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 365];
     const offsets = [-100, -50, -20, -10, -5, -1, 0, 5, 10, 20];
     let count = 0;
@@ -135,17 +154,88 @@ describe('FSRS Recall Algorithm', () => {
         const card = makeCard({ state: 2, stability: s, difficulty: 5, scheduledOffsetDays: offset });
         const r = calculateCardRecall(card, algo);
 
-        // Manually compute expected
-        const elapsedDays = Math.max(0, s - offset); // elapsed from lastReview = s + (-offset) = s - offset for offset<0, or s - offset for offset>0
+        // Manually compute expected: lastReview = scheduled - S days, elapsed = S - offset
+        const elapsedDays = Math.max(0, s - offset);
         const expected = expectedFSRS(s, elapsedDays);
 
-        expect(Math.abs(r.percent - expected)).toBeLessThanOrEqual(1); // allow ±1 rounding
+        expect(Math.abs(r.percent - expected)).toBeLessThanOrEqual(1);
         expect(r.percent).toBeGreaterThanOrEqual(0);
         expect(r.percent).toBeLessThanOrEqual(100);
         count++;
       }
     }
     expect(count).toBe(50);
+  });
+});
+
+// ===================== LEARNING CARD TESTS (NEW BEHAVIOR) =====================
+describe('Learning cards with last_reviewed_at', () => {
+  it('FSRS: just reviewed learning card → high recall (~95%+)', () => {
+    const card = makeCardWithReview({ state: 1, stability: 0.5, difficulty: 5, scheduledOffsetDays: 0, reviewedAgoMinutes: 0 });
+    const r = calculateCardRecall(card, 'fsrs');
+    expect(r.percent).toBeGreaterThanOrEqual(90);
+    expect(r.state).toBe('learning');
+  });
+
+  it('FSRS: learning card reviewed 30min ago with low stability → decayed', () => {
+    const card = makeCardWithReview({ state: 1, stability: 0.007, difficulty: 5, scheduledOffsetDays: 0, reviewedAgoMinutes: 30 });
+    const r = calculateCardRecall(card, 'fsrs');
+    expect(r.percent).toBeLessThan(85);
+    expect(r.state).toBe('learning');
+  });
+
+  it('SM-2: just reviewed learning card → high recall', () => {
+    // SM-2 learning: step = scheduled - lastReview, just reviewed → elapsed ≈ 0
+    const card = makeCardWithReview({ state: 1, stability: 2.5, difficulty: 1, scheduledOffsetDays: 0, reviewedAgoMinutes: 0 });
+    const r = calculateCardRecall(card, 'sm2');
+    expect(r.percent).toBeGreaterThanOrEqual(90);
+    expect(r.state).toBe('learning');
+  });
+
+  it('Review card with last_reviewed_at: just reviewed → ~100%', () => {
+    const card = makeCardWithReview({ state: 2, stability: 10, difficulty: 5, scheduledOffsetDays: 10, reviewedAgoMinutes: 0 });
+    const r = calculateCardRecall(card, 'fsrs');
+    expect(r.percent).toBeGreaterThanOrEqual(98);
+  });
+
+  it('Review card with last_reviewed_at: on due date → ~90%', () => {
+    const card = makeCardWithReview({ state: 2, stability: 10, difficulty: 5, scheduledOffsetDays: 0, reviewedAgoDays: 10 });
+    const r = calculateCardRecall(card, 'fsrs');
+    expect(r.percent).toBeGreaterThanOrEqual(88);
+    expect(r.percent).toBeLessThanOrEqual(92);
+  });
+
+  it('SM-2 review with last_reviewed_at: real interval used as stability', () => {
+    // Reviewed 5 days ago, scheduled today → interval=5 days → elapsed=5 → R=90%
+    const card = makeCardWithReview({ state: 2, stability: 2.5, difficulty: 3, scheduledOffsetDays: 0, reviewedAgoDays: 5 });
+    const r = calculateCardRecall(card, 'sm2');
+    expect(r.percent).toBe(90);
+  });
+});
+
+// ===================== FALLBACK TESTS (no last_reviewed_at) =====================
+describe('Fallback behavior (legacy cards without last_reviewed_at)', () => {
+  it('FSRS learning card fallback → uses estimated step', () => {
+    const card = makeCard({ state: 1, stability: 0.5, difficulty: 5, scheduledOffsetDays: 0 });
+    const r = calculateCardRecall(card, 'fsrs');
+    // Should produce some value (not crash), exact value depends on estimation
+    expect(r.percent).toBeGreaterThanOrEqual(0);
+    expect(r.percent).toBeLessThanOrEqual(100);
+    expect(r.state).toBe('learning');
+  });
+
+  it('SM-2 learning card fallback → uses 10min step estimate', () => {
+    const card = makeCard({ state: 1, stability: 2.5, difficulty: 1, scheduledOffsetDays: 0 });
+    const r = calculateCardRecall(card, 'sm2');
+    expect(r.percent).toBeGreaterThanOrEqual(0);
+    expect(r.percent).toBeLessThanOrEqual(100);
+    expect(r.state).toBe('learning');
+  });
+
+  it('SM-2 review card fallback → same as before', () => {
+    const card = makeCard({ state: 2, stability: 2.5, difficulty: 3, scheduledOffsetDays: 0 });
+    const r = calculateCardRecall(card, 'sm2');
+    expect(r.percent).toBe(90);
   });
 });
 
@@ -157,30 +247,13 @@ describe('SM-2 Recall Algorithm (power-law based)', () => {
     expect(calculateCardRecall(makeCard({ state: 0, stability: 2.5, difficulty: 0, scheduledOffsetDays: 0 }), algo).percent).toBe(0);
   });
 
-  it('learning card (state=1) → moderate range (just failed)', () => {
-    const card = makeCard({ state: 1, stability: 2.5, difficulty: 1, scheduledOffsetDays: 0 });
-    const r = calculateCardRecall(card, algo);
-    expect(r.percent).toBeGreaterThanOrEqual(20);
-    expect(r.percent).toBeLessThanOrEqual(60);
-    expect(r.state).toBe('learning');
-  });
-
-  it('learning card with low EF → lower recall', () => {
-    const lowEF = calculateCardRecall(makeCard({ state: 1, stability: 1.3, difficulty: 1, scheduledOffsetDays: 0 }), algo);
-    const highEF = calculateCardRecall(makeCard({ state: 1, stability: 2.5, difficulty: 1, scheduledOffsetDays: 0 }), algo);
-    expect(highEF.percent).toBeGreaterThan(lowEF.percent);
-  });
-
   it('review card on time (rep=3, EF=2.5) → ~90%', () => {
-    // reps=3 → effective stability = 6 * 2.5^1 = 15 days
-    // at due date → elapsed = effectiveStability → R = 90%
     const card = makeCard({ state: 2, stability: 2.5, difficulty: 3, scheduledOffsetDays: 0 });
     const r = calculateCardRecall(card, algo);
-    expect(r.percent).toBe(90); // Power law at due date = 90%
+    expect(r.percent).toBe(90);
   });
 
   it('review card with many reps on time → 90%', () => {
-    // At due date, regardless of effective stability, R = 90%
     const card = makeCard({ state: 2, stability: 2.5, difficulty: 8, scheduledOffsetDays: 0 });
     const r = calculateCardRecall(card, algo);
     expect(r.percent).toBe(90);
@@ -193,8 +266,6 @@ describe('SM-2 Recall Algorithm (power-law based)', () => {
   });
 
   it('review card far overdue → low but not 0', () => {
-    // reps=3, EF=1.5 → effective stability = 6 * 1.5^1 = 9 days
-    // 60 days overdue → elapsed = 69 days, well past stability → should drop significantly
     const card = makeCard({ state: 2, stability: 1.5, difficulty: 3, scheduledOffsetDays: -60 });
     const r = calculateCardRecall(card, algo);
     expect(r.percent).toBeGreaterThan(0);
@@ -214,7 +285,6 @@ describe('SM-2 Recall Algorithm (power-law based)', () => {
   it('higher reps = longer effective stability = slower decay when overdue', () => {
     const fewReps = calculateCardRecall(makeCard({ state: 2, stability: 2.5, difficulty: 2, scheduledOffsetDays: -10 }), algo);
     const manyReps = calculateCardRecall(makeCard({ state: 2, stability: 2.5, difficulty: 5, scheduledOffsetDays: -10 }), algo);
-    // More reps = longer effective stability = higher retention when overdue by same amount
     expect(manyReps.percent).toBeGreaterThanOrEqual(fewReps.percent);
   });
 });
@@ -227,7 +297,7 @@ describe('Cross-algorithm consistency', () => {
     expect(calculateCardRecall(card, 'sm2').percent).toBe(0);
   });
 
-  it('both algorithms return 90% at due date for review cards', () => {
+  it('both algorithms return 90% at due date for review cards (fallback)', () => {
     const fsrs = calculateCardRecall(makeCard({ state: 2, stability: 10, difficulty: 5, scheduledOffsetDays: 0 }), 'fsrs');
     const sm2 = calculateCardRecall(makeCard({ state: 2, stability: 2.5, difficulty: 4, scheduledOffsetDays: 0 }), 'sm2');
     expect(fsrs.percent).toBe(90);
@@ -278,7 +348,6 @@ describe('SM-2: 50 parametric simulations', () => {
           expect(r.percent).toBeLessThanOrEqual(100);
           expect(r.state).toBe('review');
           
-          // Overdue cards should be below 90%
           if (offset < 0) {
             expect(r.percent).toBeLessThanOrEqual(90);
           }
@@ -316,11 +385,9 @@ describe('Simulation: progressive study', () => {
   it('SM-2: increasing reps improves retention when on schedule', () => {
     const retentions: number[] = [];
     for (const rep of [1, 2, 3, 4, 5]) {
-      // All at due date → all 90%, but with future schedule they differ
       const card = makeCard({ state: 2, stability: 2.5, difficulty: rep, scheduledOffsetDays: 5 });
       retentions.push(calculateCardRecall(card, 'sm2').percent);
     }
-    // All should be high (scheduled in future)
     for (const r of retentions) {
       expect(r).toBeGreaterThanOrEqual(85);
     }
