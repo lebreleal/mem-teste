@@ -34,7 +34,7 @@ export const STRIPE_CREDIT_PACKS = [
   { price_id: 'price_1T2R63LixpPnXFCMjn1fyW91', credits: 100, amount: 4_99, label: '100 créditos', price: 'R$4,99', popular: false },
   { price_id: 'price_1T2R69LixpPnXFCMJ0rtC6EA', credits: 200, amount: 8_99, label: '200 créditos', price: 'R$8,99', popular: false },
   { price_id: 'price_1T2R6CLixpPnXFCMf0vN8f7x', credits: 500, amount: 19_99, label: '500 créditos', price: 'R$19,99', popular: true },
-  { price_id: 'price_1T2R6DLixpPnXFCMFrH58Bq7', credits: 1000, amount: 34_99, label: '1000 créditos', price: 'R$34,99', popular: false },
+  { price_id: 'price_1T2R6DLixpPnXFCMFrH58Bq7', credits: 1000, amount: 24_99, label: '1000 créditos', price: 'R$24,99', popular: false },
 ] as const;
 
 /** All product IDs that grant premium access */
