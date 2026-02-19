@@ -38,6 +38,7 @@ interface FlashCardProps {
   difficulty: number;
   state: number;
   scheduledDate: string;
+  lastReviewedAt?: string;
   cardType?: string;
   onRate: (rating: Rating) => void;
   isSubmitting: boolean;
@@ -404,7 +405,7 @@ const MultipleChoiceCard = ({
 };
 
 const FlashCard = ({
-  frontContent, backContent, stability, difficulty, state, scheduledDate, cardType,
+  frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, onTutorRequest, isTutorLoading, tutorResponse, actions,
 }: FlashCardProps) => {
@@ -427,8 +428,8 @@ const FlashCard = ({
 
   const recallData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
-    return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate }, algorithmMode);
-  }, [state, stability, difficulty, scheduledDate, algorithmMode]);
+    return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate, last_reviewed_at: lastReviewedAt }, algorithmMode);
+  }, [state, stability, difficulty, scheduledDate, lastReviewedAt, algorithmMode]);
 
   useEffect(() => {
     if (feedbackType) {

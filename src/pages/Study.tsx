@@ -341,6 +341,7 @@ const Study = () => {
             difficulty={currentCard.difficulty}
             state={currentCard.state}
             scheduledDate={currentCard.scheduled_date}
+            lastReviewedAt={currentCard.last_reviewed_at}
             cardType={currentCard.card_type}
             onRate={handleRate}
             isSubmitting={submitReview.isPending || isTransitioning}

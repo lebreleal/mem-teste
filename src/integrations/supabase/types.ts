@@ -208,6 +208,7 @@ export type Database = {
           difficulty: number
           front_content: string
           id: string
+          last_reviewed_at: string | null
           scheduled_date: string
           stability: number
           state: number
@@ -221,6 +222,7 @@ export type Database = {
           difficulty?: number
           front_content: string
           id?: string
+          last_reviewed_at?: string | null
           scheduled_date?: string
           stability?: number
           state?: number
@@ -234,6 +236,7 @@ export type Database = {
           difficulty?: number
           front_content?: string
           id?: string
+          last_reviewed_at?: string | null
           scheduled_date?: string
           stability?: number
           state?: number

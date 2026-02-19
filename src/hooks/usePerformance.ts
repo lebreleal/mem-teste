@@ -36,7 +36,7 @@ export const usePerformance = () => {
 
       const { data: cards } = await supabase
         .from('cards')
-        .select('id, deck_id, state, scheduled_date, stability, difficulty, card_type')
+        .select('id, deck_id, state, scheduled_date, stability, difficulty, card_type, last_reviewed_at')
         .in('deck_id', allDeckIds);
 
       const sevenDaysAgo = new Date();
