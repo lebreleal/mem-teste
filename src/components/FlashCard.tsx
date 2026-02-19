@@ -3,7 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
-import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check } from 'lucide-react';
+import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 
@@ -727,6 +727,23 @@ const FlashCard = ({
                 </TooltipTrigger>
                 <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
               </Tooltip>
+
+              {/* Tutor IA icon */}
+              {onTutorRequest && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={canUseTutor ? () => onTutorRequest() : undefined}
+                      disabled={!canUseTutor || isTutorLoading}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="Tutor IA"
+                    >
+                      {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Dica do Tutor IA</p></TooltipContent>
+                </Tooltip>
+              )}
             </div>
           )
         ) : quickReview ? (

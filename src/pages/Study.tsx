@@ -14,6 +14,7 @@ import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { invokeTutor } from '@/services/aiService';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import type { Rating } from '@/lib/fsrs';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
@@ -59,8 +60,14 @@ const Study = () => {
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
-  // Undo state: store the previous queue snapshot + reviewCount
-  const [undoSnapshot, setUndoSnapshot] = useState<{ queue: any[]; reviewCount: number; cardKey: number } | null>(null);
+  // Undo state: store the previous queue snapshot + reviewCount + card DB state
+  const [undoSnapshot, setUndoSnapshot] = useState<{
+    queue: any[];
+    reviewCount: number;
+    cardKey: number;
+    cardId: string;
+    prevCardState: { stability: number; difficulty: number; state: number; scheduled_date: string; last_reviewed_at: string | null };
+  } | null>(null);
 
   // Initialize local queue from fetched data (once)
   useEffect(() => {
@@ -165,8 +172,20 @@ const Study = () => {
 
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
-    // Save undo snapshot before modifying
-    setUndoSnapshot({ queue: [...localQueue], reviewCount, cardKey });
+    // Save undo snapshot before modifying (including card DB state for revert)
+    setUndoSnapshot({
+      queue: [...localQueue],
+      reviewCount,
+      cardKey,
+      cardId: currentCard.id,
+      prevCardState: {
+        stability: currentCard.stability,
+        difficulty: currentCard.difficulty,
+        state: currentCard.state,
+        scheduled_date: currentCard.scheduled_date,
+        last_reviewed_at: currentCard.last_reviewed_at ?? null,
+      },
+    });
     // Cancel any pending tutor request so it doesn't block
     if (tutorAbortRef.current) {
       tutorAbortRef.current.abort();
@@ -230,13 +249,46 @@ const Study = () => {
     );
   }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, toast, localQueue, reviewCount, cardKey]);
 
-  const handleUndo = useCallback(() => {
+  const handleUndo = useCallback(async () => {
     if (!undoSnapshot) return;
+    // Revert local state
     setLocalQueue(undoSnapshot.queue);
     setReviewCount(undoSnapshot.reviewCount);
     setCardKey(undoSnapshot.cardKey);
     setUndoSnapshot(null);
-  }, [undoSnapshot]);
+
+    // Revert card in DB to previous state
+    try {
+      await supabase
+        .from('cards')
+        .update({
+          stability: undoSnapshot.prevCardState.stability,
+          difficulty: undoSnapshot.prevCardState.difficulty,
+          state: undoSnapshot.prevCardState.state,
+          scheduled_date: undoSnapshot.prevCardState.scheduled_date,
+          last_reviewed_at: undoSnapshot.prevCardState.last_reviewed_at,
+        } as any)
+        .eq('id', undoSnapshot.cardId);
+
+      // Delete the most recent review_log for this card
+      const { data: logs } = await supabase
+        .from('review_logs')
+        .select('id')
+        .eq('card_id', undoSnapshot.cardId)
+        .order('reviewed_at', { ascending: false })
+        .limit(1);
+      if (logs && logs.length > 0) {
+        await supabase.from('review_logs').delete().eq('id', logs[0].id);
+      }
+
+      // Revert energy/stats counters
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+    } catch {
+      toast({ title: 'Erro ao desfazer no banco', variant: 'destructive' });
+    }
+  }, [undoSnapshot, queryClient, toast]);
 
   if (isLoading) {
     return (
