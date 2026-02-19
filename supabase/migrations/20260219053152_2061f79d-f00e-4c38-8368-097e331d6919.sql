@@ -1,0 +1,1 @@
+DELETE FROM app_error_logs;
