@@ -31,11 +31,15 @@ export async function createCard(deckId: string, input: { frontContent: string; 
 
 /** Create multiple cards at once (batch insert). Splits into batches of 200 to avoid payload limits. */
 export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[]) {
-  const rows = cards.map(c => ({
+  // Use incrementing created_at timestamps so insertion order is preserved
+  // This ensures that when shuffle is disabled, cards appear in the original order
+  const baseTime = Date.now();
+  const rows = cards.map((c, idx) => ({
     deck_id: deckId,
     front_content: c.frontContent,
     back_content: c.backContent,
     card_type: c.cardType,
+    created_at: new Date(baseTime + idx).toISOString(),
   }));
   const BATCH_SIZE = 200;
   const allData: any[] = [];

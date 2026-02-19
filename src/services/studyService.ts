@@ -58,7 +58,7 @@ export async function fetchStudyQueue(
   const newLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
   const algorithmMode = deckConfig?.algorithm_mode || 'sm2';
-  const shuffle = deckConfig?.shuffle_cards ?? true;
+  const shuffle = deckConfig?.shuffle_cards ?? false;
 
   if (algorithmMode === 'quick_review') {
     const { data, error } = await supabase
