@@ -22,6 +22,20 @@ function stripToPlainText(md: string): string {
     .trim();
 }
 
+/** Extract only the "Explicação" section from structured AI tutor responses */
+export function extractExplanationSection(text: string): string {
+  // Try to find the "Explicação" section (## 2. or **2. or **Explicação**)
+  const patterns = [
+    /(?:#{1,3}\s*)?(?:\d+\.\s*)?(?:\*\*)?Explicação(?:\*\*)?[:\s]*\n?([\s\S]*?)(?=(?:#{1,3}\s*)?(?:\d+\.\s*)?(?:\*\*)?(?:Conexão|Relação|3\.)|$)/i,
+    /(?:#{1,3}\s*)?2\.\s*(?:\*\*)?[^*\n]+(?:\*\*)?[:\s]*\n?([\s\S]*?)(?=(?:#{1,3}\s*)?3\.|$)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]?.trim()) return match[1].trim();
+  }
+  return text;
+}
+
 const TtsButton = ({ text, className = '' }: TtsButtonProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -53,14 +67,23 @@ const TtsButton = ({ text, className = '' }: TtsButtonProps) => {
 
     setIsLoading(true);
     try {
+      // Get auth token for usage logging
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
+          headers,
           body: JSON.stringify({ text: plainText }),
         }
       );

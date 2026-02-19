@@ -6,7 +6,7 @@ import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
-import TtsButton from '@/components/TtsButton';
+import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
 import ReactMarkdown from 'react-markdown';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
@@ -350,7 +350,7 @@ const MultipleChoiceCard = ({
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação do Assunto</span>
-                {!isTutorLoading && explainResponse && <TtsButton text={explainResponse} />}
+                {!isTutorLoading && explainResponse && <TtsButton text={extractExplanationSection(explainResponse)} />}
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
@@ -723,7 +723,7 @@ const FlashCard = ({
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
-                {!isTutorLoading && explainResponse && <TtsButton text={explainResponse} />}
+                {!isTutorLoading && explainResponse && <TtsButton text={extractExplanationSection(explainResponse)} />}
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
