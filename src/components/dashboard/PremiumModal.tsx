@@ -49,7 +49,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
   const [loading, setLoading] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(defaultTab);
   const [visible, setVisible] = useState(false);
-  const [selectedCredit, setSelectedCredit] = useState<string | null>(null);
+  const [selectedCredit, setSelectedCredit] = useState<string | null>(STRIPE_CREDIT_PACKS[3].price_id);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
 
   useEffect(() => {
@@ -293,12 +293,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                     onClick={() => { onClose(); navigate('/missoes'); }}
                     className="w-full flex items-center gap-3 text-left"
                   >
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                      style={{ backgroundColor: 'hsl(var(--energy-purple, 270 60% 55%) / 0.12)' }}
-                    >
-                      <Rocket className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple, 270 60% 55%))' }} />
-                    </div>
+                    <Rocket className="h-5 w-5 text-primary" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-foreground leading-tight">Complete Missões</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Ganhe créditos grátis diariamente</p>
