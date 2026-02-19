@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
-import { invokeTutor } from '@/services/aiService';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Rating } from '@/lib/fsrs';
@@ -154,38 +153,84 @@ const Study = () => {
 
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
-    // Abort previous request if any
     if (tutorAbortRef.current) tutorAbortRef.current.abort();
     const controller = new AbortController();
     tutorAbortRef.current = controller;
 
     const isMcExplain = options?.action === 'explain-mc';
     const isExplain = options?.action === 'explain';
+    const setter = isMcExplain ? setMcExplainResponse : isExplain ? setExplainResponse : setHintResponse;
 
     setIsTutorLoading(true);
     try {
-      const result = await invokeTutor({
-        frontContent: currentCard.front_content,
-        backContent: currentCard.back_content,
-        action: options?.action,
-        mcOptions: options?.mcOptions,
-        correctIndex: options?.correctIndex,
-        selectedIndex: options?.selectedIndex,
-        aiModel: model,
-        energyCost: TUTOR_COST,
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token || '';
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          frontContent: currentCard.front_content,
+          backContent: currentCard.back_content,
+          action: options?.action,
+          mcOptions: options?.mcOptions,
+          correctIndex: options?.correctIndex,
+          selectedIndex: options?.selectedIndex,
+          aiModel: model,
+          energyCost: TUTOR_COST,
+        }),
+        signal: controller.signal,
       });
-      if (controller.signal.aborted) return;
-      if (isMcExplain) {
-        setMcExplainResponse(result.hint);
-      } else if (isExplain) {
-        setExplainResponse(result.hint);
-      } else {
-        setHintResponse(result.hint);
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro ao consultar IA');
       }
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error('No stream');
+
+      const decoder = new TextDecoder();
+      let content = '';
+      let textBuffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              content += delta;
+              const snapshot = content;
+              setter(snapshot);
+            }
+          } catch {
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['energy'] });
-    } catch (err) {
+    } catch (err: any) {
       if (controller.signal.aborted) return;
-      toast({ title: 'Erro ao consultar o Tutor', variant: 'destructive' });
+      toast({ title: 'Erro ao consultar o Tutor', description: err.message, variant: 'destructive' });
     } finally {
       if (!controller.signal.aborted) setIsTutorLoading(false);
     }

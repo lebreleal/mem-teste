@@ -9,6 +9,11 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+
   try {
     const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost } = await req.json();
     if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
@@ -53,10 +58,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Log token usage before streaming (estimated, same pattern as ai-chat)
+    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, cost);
+
     const response = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []), { role: "user", content: prompt }], max_tokens: maxTokens, temperature }),
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [
+          ...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []),
+          { role: "user", content: prompt },
+        ],
+        max_tokens: maxTokens,
+        temperature,
+        stream: true,
+      }),
     });
 
     if (!response.ok) {
@@ -65,11 +82,15 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "AI service unavailable" }, 502);
     }
 
-    const aiData = await response.json();
-    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, aiData.usage, cost);
-
-    const hint = aiData.choices?.[0]?.message?.content ?? "Não foi possível gerar uma explicação.";
-    return jsonResponse({ hint });
+    // Stream the OpenAI SSE response directly to the client
+    return new Response(response.body, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   } catch (err) {
     console.error("Error:", err);
     return jsonResponse({ error: "Internal error" }, 500);

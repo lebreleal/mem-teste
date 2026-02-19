@@ -6,6 +6,7 @@ import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
+import ReactMarkdown from 'react-markdown';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
 function formatMarkdown(text: string): string {
@@ -333,7 +334,10 @@ const MultipleChoiceCard = ({
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(hintResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
+                  <ReactMarkdown>{hintResponse}</ReactMarkdown>
+                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                </div>
               </div>
             </div>
           )}
@@ -346,7 +350,10 @@ const MultipleChoiceCard = ({
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação do Assunto</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(explainResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
+                  <ReactMarkdown>{explainResponse}</ReactMarkdown>
+                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                </div>
               </div>
             </div>
           )}
@@ -359,7 +366,10 @@ const MultipleChoiceCard = ({
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação das Alternativas</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(mcExplainResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
+                  <ReactMarkdown>{mcExplainResponse}</ReactMarkdown>
+                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                </div>
               </div>
             </div>
           )}
@@ -694,7 +704,10 @@ const FlashCard = ({
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(hintResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
+                  <ReactMarkdown>{hintResponse}</ReactMarkdown>
+                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                </div>
               </div>
             </div>
           )}
@@ -707,7 +720,10 @@ const FlashCard = ({
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
               </div>
               <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(explainResponse)) }} />
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
+                  <ReactMarkdown>{explainResponse}</ReactMarkdown>
+                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                </div>
               </div>
             </div>
           )}
