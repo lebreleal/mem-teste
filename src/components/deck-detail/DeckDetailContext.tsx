@@ -166,6 +166,7 @@ interface DeckDetailContextValue {
   handleAlgorithmCopy: () => Promise<void>;
   handleGenerateExam: () => Promise<void>;
   getStateInfo: (card: CardRow) => { label: string; color: string };
+  isFrozenCard: (card: CardRow) => boolean;
   stripHtml: (html: string) => string;
 
   // Navigation & utils
@@ -332,6 +333,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const isSaving = createCard.isPending || updateCard.isPending;
   const canImprove = !!cardType && cardType !== 'image_occlusion';
 
+  // Helper: detect frozen cards (scheduled_date > 50 years from now)
+  const isFrozenCard = useCallback((card: CardRow) => {
+    const fiftyYears = Date.now() + 50 * 365.25 * 24 * 60 * 60 * 1000;
+    return new Date(card.scheduled_date).getTime() > fiftyYears;
+  }, []);
+
   const filteredCards = useMemo(() => {
     let result = allCards;
     if (typeFilter !== 'all') {
@@ -341,17 +348,29 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       });
     }
     if (stateFilter !== 'all') {
-      if (stateFilter === 'new') result = result.filter(c => c.state === 0);
-      else if (stateFilter === 'learning') result = result.filter(c => c.state === 1);
-      else if (stateFilter === 'mastered') result = result.filter(c => c.state >= 2);
+      if (stateFilter === 'frozen') result = result.filter(c => isFrozenCard(c));
+      else if (stateFilter === 'new') result = result.filter(c => c.state === 0 && !isFrozenCard(c));
+      else if (stateFilter === 'learning') result = result.filter(c => c.state === 1 && !isFrozenCard(c));
+      else if (stateFilter === 'mastered') result = result.filter(c => c.state >= 2 && !isFrozenCard(c));
     }
-    if (!search.trim()) return result;
-    const q = search.toLowerCase();
-    return result.filter(c => c.front_content.toLowerCase().includes(q) || c.back_content.toLowerCase().includes(q));
-  }, [allCards, search, typeFilter, stateFilter]);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(c => c.front_content.toLowerCase().includes(q) || c.back_content.toLowerCase().includes(q));
+    }
+    // Sort: frozen cards always at the bottom
+    return [...result].sort((a, b) => {
+      const aFrozen = isFrozenCard(a) ? 1 : 0;
+      const bFrozen = isFrozenCard(b) ? 1 : 0;
+      return aFrozen - bFrozen;
+    });
+  }, [allCards, search, typeFilter, stateFilter, isFrozenCard]);
 
   // ─── Helpers ───────────────────────────
   const getStateInfo = useCallback((card: CardRow) => {
+    // Frozen detection
+    if (isFrozenCard(card)) {
+      return { label: '❄️ Congelado', color: 'text-info bg-info/10' };
+    }
     if (isQuickReview) {
       if (card.state === 0) return { label: 'Não estudado', color: 'text-muted-foreground bg-muted' };
       if (card.state === 1) return { label: 'Não entendi', color: 'text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40' };
@@ -379,7 +398,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     if (due <= startOfDayAfter2) return { label: 'Amanhã', color: 'text-primary bg-primary/10' };
     const days = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return { label: `${days}d`, color: 'text-primary bg-primary/10' };
-  }, [isQuickReview]);
+  }, [isQuickReview, isFrozenCard]);
 
   const stripHtml = useCallback((html: string) => {
     const div = document.createElement('div');
@@ -822,7 +841,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     handleBulkMove, handleBulkDelete, handleImprove, applyImprovement,
     uploadOcclusionFile, handleOcclusionAttach, handleOcclusionPaste,
     handleImportCards, handleAlgorithmChange, handleAlgorithmCopy, handleGenerateExam,
-    getStateInfo, stripHtml,
+    getStateInfo, isFrozenCard, stripHtml,
     navigate, toast, queryClient, user, otherDecks, isSaving, canImprove,
   };
 

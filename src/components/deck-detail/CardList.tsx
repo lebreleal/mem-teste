@@ -26,7 +26,7 @@ const CardList = () => {
     actualNewCount, learningCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
-    getStateInfo, stripHtml, otherDecks,
+    getStateInfo, stripHtml, otherDecks, isFrozenCard,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
@@ -53,18 +53,22 @@ const CardList = () => {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const hasActiveFilter = typeFilter !== 'all' || stateFilter !== 'all';
 
+  const frozenCount = allCards.filter(c => isFrozenCard(c)).length;
+
   const stateOptions = isQuickReview
     ? [
         { value: 'all', label: 'Todos' },
         { value: 'new', label: 'Não estudado' },
         { value: 'learning', label: 'Não entendi' },
         { value: 'mastered', label: 'Entendi' },
+        ...(frozenCount > 0 ? [{ value: 'frozen', label: '❄️ Congelados' }] : []),
       ]
     : [
         { value: 'all', label: 'Todos' },
         { value: 'new', label: 'Novos' },
         { value: 'learning', label: 'Em andamento' },
         { value: 'mastered', label: 'Dominados' },
+        ...(frozenCount > 0 ? [{ value: 'frozen', label: '❄️ Congelados' }] : []),
       ];
 
   const typeOptions = [
@@ -85,9 +89,10 @@ const CardList = () => {
 
   const getStateCount = (value: string) => {
     if (value === 'all') return allCards.length;
-    if (value === 'new') return allCards.filter(c => c.state === 0).length;
-    if (value === 'learning') return allCards.filter(c => c.state === 1).length;
-    return allCards.filter(c => c.state >= 2).length;
+    if (value === 'frozen') return frozenCount;
+    if (value === 'new') return allCards.filter(c => c.state === 0 && !isFrozenCard(c)).length;
+    if (value === 'learning') return allCards.filter(c => c.state === 1 && !isFrozenCard(c)).length;
+    return allCards.filter(c => c.state >= 2 && !isFrozenCard(c)).length;
   };
 
   return (
@@ -305,14 +310,15 @@ const CardList = () => {
             
 
             return groups.map((group, gi) => {
-              const card = group.cards[0];
-              const isCloze = card.card_type === 'cloze';
-              const isMultiple = card.card_type === 'multiple_choice';
-              const isOcclusion = card.card_type === 'image_occlusion';
-              const isSelected = selectedCards.has(card.id);
+               const card = group.cards[0];
+               const isCloze = card.card_type === 'cloze';
+               const isMultiple = card.card_type === 'multiple_choice';
+               const isOcclusion = card.card_type === 'image_occlusion';
+               const isSelected = selectedCards.has(card.id);
+               const frozen = isFrozenCard(card);
 
-              const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
-              const typeBadgeClass = isCloze
+                  const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
+                  const typeBadgeClass = isCloze
                 ? 'bg-primary/15 text-primary border-primary/30'
                 : isMultiple
                 ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
@@ -341,6 +347,8 @@ const CardList = () => {
                   )}
                   <div
                     className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative z-10 ${
+                      frozen ? 'opacity-50' : ''
+                    } ${
                       isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
                     }`}
                     onClick={() => {
