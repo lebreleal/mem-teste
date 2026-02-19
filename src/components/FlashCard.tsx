@@ -260,11 +260,11 @@ const MultipleChoiceCard = ({
       </div>
 
       {/* Scrollable content area */}
-      <div className={`flex-1 min-h-0 overflow-y-auto scrollbar-hide ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
         <div className="space-y-3 pb-2">
           {/* Question */}
           <div
-            className="card-premium w-full border border-border/40 bg-card p-4 sm:p-6"
+            className={`card-premium w-full border-2 bg-card p-4 sm:p-6 transition-colors ${feedbackType === 'correct' ? 'animate-correct-flash border-success' : feedbackType === 'wrong' ? 'animate-wrong-flash border-destructive' : feedbackType === 'hard' ? 'animate-hard-flash border-warning' : 'border-border/40'}`}
             style={{ borderRadius: 'var(--radius)' }}
           >
             <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 block">Múltipla escolha</span>
@@ -382,18 +382,14 @@ const MultipleChoiceCard = ({
                   <button
                     onClick={canUseTutor ? () => onTutorRequest() : undefined}
                     disabled={!canUseTutor || isTutorLoading}
-                    className={`card-premium flex-1 flex items-center justify-center gap-2 border px-4 py-3 font-display font-semibold text-sm transition-all active:scale-[0.98] ${
-                      canUseTutor
-                        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
-                        : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                    }`}
-                    style={{ borderRadius: 'var(--radius)' }}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                    aria-label="Dica do Tutor IA"
                   >
-                    {isTutorLoading ? <TutorLoadingAnimation /> : <><Lightbulb className="h-4 w-4" /> Dica do Tutor</>}
+                    {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {canUseTutor ? <p>Dica do Tutor</p> : <p>Sem créditos</p>}
+                  {canUseTutor ? <p>Dica do Tutor IA</p> : <p>Sem créditos</p>}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -619,7 +615,7 @@ const FlashCard = ({
       </div>
 
       {/* Scrollable content area */}
-      <div className={`flex-1 min-h-0 overflow-y-auto scrollbar-hide ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
         <div className="space-y-3 pb-2">
           {/* Card container */}
           <div
@@ -652,7 +648,7 @@ const FlashCard = ({
                 )}
 
                 <div
-                  className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
+                  className={`card-premium w-full border-2 bg-card p-6 sm:p-8 transition-colors ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'} ${feedbackType === 'correct' ? 'animate-correct-flash border-success' : feedbackType === 'wrong' ? 'animate-wrong-flash border-destructive' : feedbackType === 'hard' ? 'animate-hard-flash border-warning' : 'border-border/40'}`}
                   style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
                 >
                   <button
