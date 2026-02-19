@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn } from 'lucide-react';
+import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -35,7 +35,7 @@ const AdminUsers = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const { session } = useAuth();
-  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory } = useAdminUsers();
+  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry } = useAdminUsers();
   const { toast } = useToast();
   
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
@@ -319,8 +319,19 @@ const AdminUsers = () => {
                                 {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="flex items-center gap-2">
                               <Badge variant="secondary" className="text-xs font-mono">{entry.model}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                onClick={async () => {
+                                  const ok = await deleteTokenUsageEntry(entry.id);
+                                  if (ok) setTokenUsageDetailed(prev => prev.filter(e => e.id !== entry.id));
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">

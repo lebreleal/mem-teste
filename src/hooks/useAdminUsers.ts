@@ -118,5 +118,15 @@ export const useAdminUsers = () => {
     return (data as any[]) || [];
   };
 
-  return { users, loading, search, setSearch, fetchUsers, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory };
+  const deleteTokenUsageEntry = async (entryId: string): Promise<boolean> => {
+    const { error } = await supabase.from('ai_token_usage').delete().eq('id', entryId);
+    if (error) {
+      toast({ title: 'Erro', description: 'Falha ao deletar registro.', variant: 'destructive' });
+      return false;
+    }
+    toast({ title: 'Registro deletado!' });
+    return true;
+  };
+
+  return { users, loading, search, setSearch, fetchUsers, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry };
 };
