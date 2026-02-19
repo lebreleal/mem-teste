@@ -14,8 +14,8 @@ interface BuyCreditsDialogProps {
 
 const packages = [
   { credits: 100, price: 4.99, discount: 0 },
-  { credits: 200, price: 8.99, discount: 0 },
-  { credits: 500, price: 19.99, discount: 0 },
+  { credits: 200, price: 8.99, discount: 10 },
+  { credits: 500, price: 19.99, discount: 20 },
   { credits: 1000, price: 24.99, discount: 50 },
 ];
 
@@ -61,6 +61,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
             {packages.map((pkg, i) => {
               const isSelected = selectedPkg === i;
               const isBest = i === 3;
+              const showDiscount = isBest && pkg.discount > 0;
               const savingsPerCredit = basePerCredit - pkg.price / pkg.credits;
               const totalSavings = (savingsPerCredit * pkg.credits).toFixed(2);
 
@@ -101,7 +102,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                       <span className="text-base font-bold text-foreground">{pkg.credits} créditos</span>
-                      {pkg.discount > 0 && (
+                      {showDiscount && (
                         <span className="text-xs font-semibold" style={{ color: 'hsl(var(--success))' }}>
                           -{pkg.discount}%
                         </span>
@@ -109,7 +110,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       R$ {(pkg.price / pkg.credits).toFixed(3)}/crédito
-                      {pkg.discount > 0 && (
+                      {showDiscount && (
                         <span className="ml-1" style={{ color: 'hsl(var(--success))' }}>
                           • Economia de R$ {totalSavings}
                         </span>
@@ -122,7 +123,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
                     <div className="text-lg font-bold text-foreground">
                       R$ {pkg.price.toFixed(2).replace('.', ',')}
                     </div>
-                    {pkg.discount > 0 && (
+                    {showDiscount && (
                       <div className="text-[11px] text-muted-foreground line-through">
                         R$ {(basePerCredit * pkg.credits).toFixed(2).replace('.', ',')}
                       </div>
