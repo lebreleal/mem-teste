@@ -6,6 +6,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, lazy, Suspense } from 'react';
+import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
+import { useEffect } from 'react';
+
+/** Suspense fallback that shows global loading overlay while chunk loads */
+const SuspenseLoading = () => {
+  useEffect(() => {
+    showGlobalLoading();
+    return () => { hideGlobalLoading(); };
+  }, []);
+  return null;
+};
 
 const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
 const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
@@ -425,13 +436,13 @@ const Dashboard = () => {
         )}
       </Suspense>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<SuspenseLoading />}>
         {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
       </Suspense>
-      <Suspense fallback={null}>
+      <Suspense fallback={<SuspenseLoading />}>
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} />}
       </Suspense>
-      <Suspense fallback={null}>
+      <Suspense fallback={<SuspenseLoading />}>
         {state.creditsOpen && <CreditsDialog open={state.creditsOpen} onOpenChange={state.setCreditsOpen} />}
       </Suspense>
 
