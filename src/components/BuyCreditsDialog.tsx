@@ -61,7 +61,8 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
             {packages.map((pkg, i) => {
               const isSelected = selectedPkg === i;
               const isBest = i === 3;
-              const showDiscount = isBest && pkg.discount > 0;
+              const showDiscount = pkg.discount > 0;
+              const showSavingsDetail = isBest && pkg.discount > 0;
               const savingsPerCredit = basePerCredit - pkg.price / pkg.credits;
               const totalSavings = (savingsPerCredit * pkg.credits).toFixed(2);
 
@@ -110,7 +111,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       R$ {(pkg.price / pkg.credits).toFixed(3)}/crédito
-                      {showDiscount && (
+                      {showSavingsDetail && (
                         <span className="ml-1" style={{ color: 'hsl(var(--success))' }}>
                           • Economia de R$ {totalSavings}
                         </span>
@@ -123,7 +124,7 @@ const BuyCreditsDialog = ({ open, onOpenChange, currentBalance }: BuyCreditsDial
                     <div className="text-lg font-bold text-foreground">
                       R$ {pkg.price.toFixed(2).replace('.', ',')}
                     </div>
-                    {showDiscount && (
+                    {showSavingsDetail && (
                       <div className="text-[11px] text-muted-foreground line-through">
                         R$ {(basePerCredit * pkg.credits).toFixed(2).replace('.', ',')}
                       </div>
