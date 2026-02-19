@@ -319,9 +319,7 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                         className={`w-full flex items-center gap-3 rounded-xl border-2 p-3.5 transition-all duration-200 text-left ${
                           isSelected
                             ? 'border-primary bg-primary/5'
-                            : pack.popular
-                              ? 'border-primary/40 bg-primary/5 hover:border-primary/60'
-                              : 'border-border/60 hover:border-border'
+                            : 'border-border/60 hover:border-border'
                         }`}
                       >
                         <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
