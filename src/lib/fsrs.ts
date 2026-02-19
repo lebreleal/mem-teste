@@ -80,6 +80,14 @@ function stabilityToInterval(stability: number, requestedRetention: number, maxi
   return clamp(interval, 1, maximumInterval);
 }
 
+/** Get local midnight N days from now (for day-based intervals). */
+function getLocalMidnight(daysFromNow: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 // Main FSRS function with configurable params
 export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams = DEFAULT_FSRS_PARAMS): FSRSOutput {
   const now = new Date();
@@ -107,8 +115,7 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     // Good or Easy → review
     const interval = stabilityToInterval(s, requestedRetention, maximumInterval);
     const finalInterval = rating === 4 ? Math.max(interval, 4) : interval;
-    const scheduledDate = new Date(now);
-    scheduledDate.setDate(scheduledDate.getDate() + finalInterval);
+    const scheduledDate = getLocalMidnight(finalInterval);
     return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
   }
 
@@ -132,8 +139,7 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     // Good or Easy → graduate to review
     const interval = stabilityToInterval(s, requestedRetention, maximumInterval);
     const finalInterval = rating === 4 ? Math.max(interval, 4) : Math.max(interval, 1);
-    const scheduledDate = new Date(now);
-    scheduledDate.setDate(scheduledDate.getDate() + finalInterval);
+    const scheduledDate = getLocalMidnight(finalInterval);
     return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
   }
 
@@ -167,8 +173,7 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
   }
   finalInterval = Math.min(finalInterval, maximumInterval);
 
-  const scheduledDate = new Date(now);
-  scheduledDate.setDate(scheduledDate.getDate() + finalInterval);
+  const scheduledDate = getLocalMidnight(finalInterval);
   return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
 }
 

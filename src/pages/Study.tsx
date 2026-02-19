@@ -66,15 +66,18 @@ const Study = () => {
   // Find the first card that is ready (learning cards must wait for scheduled_date)
   const getNextReadyIndex = useCallback((q: any[]): number => {
     const now = Date.now();
+    // 1) Learning cards (state 1) with expired timer cut the line
     for (let i = 0; i < q.length; i++) {
-      const card = q[i];
-      // New cards (state 0) and review cards (state 2) are always ready
-      if (card.state === 0 || card.state === 2) return i;
-      // Learning cards (state 1): check if scheduled_date has passed
-      const scheduledTime = new Date(card.scheduled_date).getTime();
-      if (scheduledTime <= now) return i;
+      if (q[i].state === 1) {
+        const scheduledTime = new Date(q[i].scheduled_date).getTime();
+        if (scheduledTime <= now) return i;
+      }
     }
-    return -1; // All remaining cards are waiting
+    // 2) Next new/review card in order
+    for (let i = 0; i < q.length; i++) {
+      if (q[i].state === 0 || q[i].state === 2) return i;
+    }
+    return -1; // All remaining cards are learning and waiting
   }, []);
 
   // Determine current card considering learning step timing
