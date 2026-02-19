@@ -1,74 +1,47 @@
 
 
-## Novo Algoritmo de Probabilidade de Acerto (Recall Display)
+# Corrigir Login com Google
 
-**Importante:** A repetição espaçada (FSRS/SM-2) esta funcionando corretamente. O problema é apenas no **indicador visual de %** que aparece no gauge e nos cards. Os agendamentos continuam iguais.
+## Problema
+Duas causas identificadas:
 
-### O que muda
+1. **Provider Google nao habilitado no Supabase** -- o erro `validation_failed: Unsupported provider` confirma isso
+2. **OAuth via redirect nao funciona em iframe** -- o preview do Lovable roda em iframe, e navegadores bloqueiam cookies de terceiros no redirect
 
-**1. Migração de banco de dados**
-- Adicionar coluna `last_reviewed_at timestamptz` na tabela `cards`
-- Sem valor padrão (null para cards existentes, preenchido conforme forem revisados)
+## O que voce precisa fazer (configuracao externa)
 
-**2. `src/services/studyService.ts`**
-- No `submitCardReview`, incluir `last_reviewed_at: new Date().toISOString()` no update do card
+1. Acesse o painel do Supabase: https://supabase.com/dashboard/project/sansumuehxdnmvnswygr/auth/providers
+2. Encontre **Google** na lista de providers
+3. Ative o toggle
+4. Insira o **Client ID** e **Client Secret** do Google Cloud Console
+5. Salve
 
-**3. `src/components/RetentionGauge.tsx`** (mudança principal)
-- Interface do card passa a aceitar `last_reviewed_at?: string`
-- Reescrever `calculateCardRecall` com algoritmo unificado:
+Se ainda nao criou as credenciais no Google Cloud Console:
+- Acesse https://console.cloud.google.com/apis/credentials
+- Crie um **OAuth Client ID** (tipo: Web application)
+- Em **Authorized JavaScript origins**, adicione: `https://memocards.com.br` e `https://id-preview--cf7450a5-4ce6-4136-b663-b06c2fe28ed3.lovable.app`
+- Em **Authorized redirect URIs**, adicione: `https://sansumuehxdnmvnswygr.supabase.co/auth/v1/callback`
+
+## Alteracao no codigo
+
+### Arquivo: `src/hooks/useAuth.tsx`
+- Alterar `signInWithGoogle` para usar **popup** ao inves de redirect
+- Usar `skipBrowserRedirect: true` para obter a URL do OAuth
+- Abrir essa URL em `window.open()` (popup)
+- Isso resolve o problema de cookies bloqueados em iframe
+
+### Arquivo: `src/pages/Auth.tsx`
+- Atualizar `handleGoogle` para tratar o caso do popup ser bloqueado pelo navegador
+- Mostrar mensagem amigavel se o popup for bloqueado
+
+## Secao tecnica
 
 ```text
-state=0 (Novo): percent = 0, label = "Novo"
-
-state=1 (Aprendendo):
-  Se tem last_reviewed_at:
-    t = tempo desde last_reviewed_at (em dias fracionários)
-    S = card.stability (FSRS) ou step em dias (SM-2, mínimo 0.007)
-    R = (1 + FACTOR * t / S) ^ DECAY
-  Se não tem (fallback):
-    Estimar lastReview = scheduledDate - stepDuration
-    Mesma fórmula
-
-state=2 (Revisão):
-  Se tem last_reviewed_at:
-    t = tempo desde last_reviewed_at (em dias)
-    S = card.stability (FSRS) ou intervalo real (SM-2)
-    R = (1 + FACTOR * t / S) ^ DECAY
-  Se não tem (fallback):
-    FSRS: lastReview ≈ scheduledDate - S dias
-    SM-2: lastReview via estimativa atual (mantém lógica existente)
+signInWithGoogle mudanca:
+  ANTES:  supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: ... } })
+  DEPOIS: supabase.auth.signInWithOAuth({ provider: 'google', options: { skipBrowserRedirect: true } })
+          + window.open(data.url, popup)
+          + listener para detectar conclusao do login
 ```
 
-- Resultado: acabou de revisar = ~95%+, no dia agendado = ~90%, atrasado = decai realisticamente
-- Learning cards que acabaram de ser vistos = recall ALTO (não mais 35%)
-
-**4. `src/hooks/usePerformance.ts`**
-- Incluir `last_reviewed_at` no select de cards
-
-**5. `src/components/FlashCard.tsx`**
-- Passar `last_reviewed_at` do card para o `calculateCardRecall`
-
-**6. `src/test/retention.test.ts`**
-- Atualizar testes de learning cards: agora esperam recall alto quando acabaram de ser revisados
-- Adicionar testes com `last_reviewed_at` explícito
-- Manter testes de fallback (sem `last_reviewed_at`)
-
-### Cenários concretos
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Errei card, voltou em 1min | 35-55% | ~95% |
-| Errei, esperou 30min (step 10min) | 30-50% | ~35% |
-| Card de revisão no dia certo | ~90% | ~90% |
-| Card atrasado 5 dias (S=10) | ~85% | ~85% |
-| Card novo | 0% | 0% "Novo" |
-
-### Arquivos modificados
-
-1. Nova migração SQL (adicionar `last_reviewed_at`)
-2. `src/services/studyService.ts` -- salvar timestamp
-3. `src/components/RetentionGauge.tsx` -- novo algoritmo
-4. `src/hooks/usePerformance.ts` -- incluir campo na query
-5. `src/components/FlashCard.tsx` -- passar campo
-6. `src/test/retention.test.ts` -- atualizar testes
-
+Arquivos modificados: 2 (`useAuth.tsx`, `Auth.tsx`)
