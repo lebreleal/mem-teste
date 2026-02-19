@@ -41,12 +41,13 @@ Deno.serve(async (req) => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           userId = user.id;
-          // Log usage: estimate ~1 token per 4 chars for TTS
-          const estimatedTokens = Math.ceil(trimmed.length / 4);
+          // TTS-1 pricing: $0.015 per 1K characters
+          // Log character count directly as "tokens" for cost tracking
+          const charCount = trimmed.length;
           await logTokenUsage(supabase, userId, "tts", "tts-1", {
-            prompt_tokens: estimatedTokens,
+            prompt_tokens: charCount,
             completion_tokens: 0,
-            total_tokens: estimatedTokens,
+            total_tokens: charCount,
           }, 0);
         }
       } catch {}
