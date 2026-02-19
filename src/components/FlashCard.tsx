@@ -5,6 +5,7 @@ import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
 import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
 function formatMarkdown(text: string): string {
@@ -300,6 +301,11 @@ const MultipleChoiceCard = ({
           </div>
 
 
+          {/* Tutor loading animation */}
+          {isTutorLoading && !tutorResponse && (
+            <TutorLoadingAnimation />
+          )}
+
           {/* Tutor response (before answering) */}
           {tutorResponse && !answered && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
@@ -307,7 +313,9 @@ const MultipleChoiceCard = ({
                 <Lightbulb className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
               </div>
-              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              </div>
             </div>
           )}
 
@@ -318,7 +326,9 @@ const MultipleChoiceCard = ({
                 <Sparkles className="h-4 w-4 text-primary" />
                 <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
               </div>
-              <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+              </div>
             </div>
           )}
         </div>
@@ -341,12 +351,8 @@ const MultipleChoiceCard = ({
                     }`}
                     style={{ borderRadius: 'var(--radius)' }}
                   >
-                    {isTutorLoading ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                    ) : (
-                      <Lightbulb className="h-4 w-4" />
-                    )}
-                    Dica do Tutor
+                    <Lightbulb className="h-4 w-4" />
+                    {isTutorLoading ? 'Carregando...' : 'Dica do Tutor'}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -376,11 +382,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading ? (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
-                )}
+                <Sparkles className="h-3.5 w-3.5" />
                 {isTutorLoading ? 'Analisando...' : 'Explicar alternativas (2 créditos)'}
               </button>
             )}
@@ -610,6 +612,11 @@ const FlashCard = ({
         )}
       </div>
 
+      {/* Tutor loading animation */}
+      {isTutorLoading && !tutorResponse && (
+        <TutorLoadingAnimation />
+      )}
+
       {/* Tutor hint response - show before flip */}
       {tutorResponse && !flipped && (
         <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
@@ -617,7 +624,9 @@ const FlashCard = ({
             <Lightbulb className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Tutor IA</span>
           </div>
-          <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+          <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+          </div>
         </div>
       )}
 
@@ -628,7 +637,9 @@ const FlashCard = ({
             <BookOpen className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação IA</span>
           </div>
-          <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+          <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words" style={{ overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMarkdown(tutorResponse)) }} />
+          </div>
         </div>
       )}
 
@@ -654,11 +665,7 @@ const FlashCard = ({
                   }`}
                   style={{ borderRadius: 'var(--radius)' }}
                 >
-                  {isTutorLoading ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  ) : (
                     <Lightbulb className="h-4 w-4" />
-                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
@@ -701,11 +708,7 @@ const FlashCard = ({
                   : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
               }`}
             >
-              {isTutorLoading ? (
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              ) : (
-                <BookOpen className="h-3.5 w-3.5" />
-              )}
+              <BookOpen className="h-3.5 w-3.5" />
               {isTutorLoading ? 'Explicando...' : 'Explicar com IA (2 créditos)'}
             </button>
           )}
