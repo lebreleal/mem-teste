@@ -2,7 +2,7 @@
  * Dashboard header — streak, energy, notifications, theme toggle, menu.
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
@@ -58,7 +58,7 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button onClick={onPremiumOpen} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Premium">
+          <button onClick={() => { onPremiumOpen(); }} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Premium">
             <Crown className="h-4 w-4 text-warning" fill={isPremium ? 'hsl(var(--warning))' : 'none'} />
           </button>
           <button onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
