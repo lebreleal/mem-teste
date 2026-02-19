@@ -88,14 +88,15 @@ const Study = () => {
     [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
 
-  // Lock the displayed card during transitions to prevent flash of wrong card
+  // Lock the displayed card — only update when cardKey changes (user rated) or during init
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
     if (!isTransitioning && nextCard) {
       setDisplayedCard(nextCard);
     }
-  }, [nextCard, isTransitioning]);
-  const currentCard = isTransitioning ? displayedCard : (nextCard ?? displayedCard);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardKey, isTransitioning]);
+  const currentCard = displayedCard ?? nextCard;
 
   // Force re-render when the soonest learning card's timer expires
   useEffect(() => {

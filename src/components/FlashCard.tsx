@@ -599,32 +599,33 @@ const FlashCard = ({
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
-      {/* Scrollable content area */}
-      <div className={`flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4 ${!flipped ? 'flex items-center' : ''}`}>
-        <div className={`space-y-3 pb-2 pt-1 w-full ${!flipped ? 'my-auto' : ''}`}>
-          {/* Recall probability bar + actions */}
-          <div className="flex items-center justify-center gap-2 w-full">
-            {recallData && (
-              <button
-                onClick={() => setRecallExpanded(prev => !prev)}
-                className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
-              >
-                <Gauge className={`h-3 w-3 ${recallColor}`} />
-                <span className={`text-[11px] font-bold ${recallColor}`}>
-                  {recallExpanded
-                    ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
-                    : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
-                </span>
-                {!recallExpanded && (
-                  <>
-                    <span className="text-[10px] text-muted-foreground">•</span>
-                    <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
-                  </>
-                )}
-              </button>
+      {/* Top bar: recall + actions */}
+      <div className="flex items-center justify-center gap-2 flex-shrink-0 pb-3">
+        {recallData && (
+          <button
+            onClick={() => setRecallExpanded(prev => !prev)}
+            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+          >
+            <Gauge className={`h-3 w-3 ${recallColor}`} />
+            <span className={`text-[11px] font-bold ${recallColor}`}>
+              {recallExpanded
+                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
+                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+            </span>
+            {!recallExpanded && (
+              <>
+                <span className="text-[10px] text-muted-foreground">•</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+              </>
             )}
-            {actions}
-          </div>
+          </button>
+        )}
+        {actions}
+      </div>
+
+      {/* Scrollable content area */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4">
+        <div className="space-y-3 pb-2 pt-1 w-full">
           {/* Card container */}
           <div
             onClick={() => !flipped && setFlipped(true)}
@@ -698,102 +699,6 @@ const FlashCard = ({
             </div>
           )}
 
-          {/* Front-side action bar: inside content flow, close to the card */}
-          {!flipped && (
-            <div className="pt-1">
-              {typingAnswer ? (
-                <div className="flex w-full gap-2 items-end">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={typedAnswer}
-                    onChange={e => setTypedAnswer(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && typedAnswer.trim()) {
-                        setAnswerSubmitted(true);
-                        setFlipped(true);
-                      } else if (e.key === 'Escape') {
-                        setTypingAnswer(false);
-                        setTypedAnswer('');
-                      }
-                    }}
-                    placeholder="Digite a resposta"
-                    className="flex-1 rounded-xl border-2 border-primary/40 bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-                  />
-                  <button
-                    onClick={() => { setTypingAnswer(false); setTypedAnswer(''); }}
-                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-all active:scale-95 shrink-0"
-                    aria-label="Cancelar"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (typedAnswer.trim()) {
-                        setAnswerSubmitted(true);
-                        setFlipped(true);
-                      }
-                    }}
-                    disabled={!typedAnswer.trim()}
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all active:scale-95 shrink-0"
-                  >
-                    <Check className="h-5 w-5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex w-full items-center gap-2">
-                  {onTutorRequest && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={canUseTutor ? () => onTutorRequest() : undefined}
-                          disabled={!canUseTutor || isTutorLoading}
-                          className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                          aria-label="Tutor IA"
-                        >
-                          {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent><p>Dica do Tutor IA</p></TooltipContent>
-                    </Tooltip>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => { setTypingAnswer(true); setTypedAnswer(''); setAnswerSubmitted(false); }}
-                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                        aria-label="Digitar resposta"
-                      >
-                        <Keyboard className="h-4.5 w-4.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Digitar resposta</p></TooltipContent>
-                  </Tooltip>
-                  <button
-                    onClick={() => setFlipped(true)}
-                    className="card-premium flex-1 border border-border/40 bg-card px-6 py-3 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
-                    style={{ borderRadius: 'var(--radius)' }}
-                  >
-                    Mostrar Resposta
-                  </button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={onUndo}
-                        disabled={!canUndo}
-                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                        aria-label="Desfazer"
-                      >
-                        <Undo2 className="h-4.5 w-4.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
-                  </Tooltip>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Tutor explain response - show after flip */}
           {explainResponse && flipped && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
@@ -809,65 +714,160 @@ const FlashCard = ({
         </div>
       </div>
 
-      {/* Fixed bottom buttons — only for back side (rating) */}
-      {flipped && (
-        <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
-          {quickReview ? (
-            <div className="grid w-full grid-cols-2 gap-2.5">
-              <button
-                onClick={() => handleRate(1)}
-                disabled={isSubmitting}
-                className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                style={{ borderRadius: 'var(--radius)' }}
-              >
-                <span className="text-sm font-bold">Errei</span>
-              </button>
-              <button
-                onClick={() => handleRate(3)}
-                disabled={isSubmitting}
-                className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
-                style={{ borderRadius: 'var(--radius)' }}
-              >
-                <span className="text-sm font-bold flex items-center gap-1">
-                  Acertei <Sparkles className="h-3.5 w-3.5" />
-                </span>
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Explain button for basic/cloze/occlusion */}
-              {onTutorRequest && !explainResponse && (
+      {/* Fixed bottom buttons */}
+      <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
+        {!flipped ? (
+          <div>
+            {typingAnswer ? (
+              <div className="flex w-full gap-2 items-end">
+                <input
+                  autoFocus
+                  type="text"
+                  value={typedAnswer}
+                  onChange={e => setTypedAnswer(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && typedAnswer.trim()) {
+                      setAnswerSubmitted(true);
+                      setFlipped(true);
+                    } else if (e.key === 'Escape') {
+                      setTypingAnswer(false);
+                      setTypedAnswer('');
+                    }
+                  }}
+                  placeholder="Digite a resposta"
+                  className="flex-1 rounded-xl border-2 border-primary/40 bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                />
                 <button
-                  onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
-                  disabled={!canUseTutor || isTutorLoading}
-                  className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
-                    canUseTutor
-                      ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
-                      : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                  }`}
+                  onClick={() => { setTypingAnswer(false); setTypedAnswer(''); }}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-all active:scale-95 shrink-0"
+                  aria-label="Cancelar"
                 >
-                  {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                  <X className="h-5 w-5" />
                 </button>
-              )}
-
-              <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
-                {ratingConfig.map(({ rating, label, colorClass }) => (
-                  <button
-                    key={rating}
-                    onClick={() => handleRate(rating)}
-                    disabled={isSubmitting}
-                    className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
-                    style={{ borderRadius: 'var(--radius)' }}
-                  >
-                    <span className="text-sm font-bold">{label}</span>
-                    <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
-                  </button>
-                ))}
+                <button
+                  onClick={() => {
+                    if (typedAnswer.trim()) {
+                      setAnswerSubmitted(true);
+                      setFlipped(true);
+                    }
+                  }}
+                  disabled={!typedAnswer.trim()}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all active:scale-95 shrink-0"
+                >
+                  <Check className="h-5 w-5" />
+                </button>
               </div>
-            </>
-          )}
-        </div>
-      )}
+            ) : (
+              <div className="flex w-full items-center gap-2">
+                {onTutorRequest && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={canUseTutor ? () => onTutorRequest() : undefined}
+                        disabled={!canUseTutor || isTutorLoading}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                        aria-label="Tutor IA"
+                      >
+                        {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Dica do Tutor IA</p></TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => { setTypingAnswer(true); setTypedAnswer(''); setAnswerSubmitted(false); }}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                      aria-label="Digitar resposta"
+                    >
+                      <Keyboard className="h-4.5 w-4.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Digitar resposta</p></TooltipContent>
+                </Tooltip>
+                <button
+                  onClick={() => setFlipped(true)}
+                  className="card-premium flex-1 border border-border/40 bg-card px-6 py-3 font-display font-semibold text-card-foreground transition-all hover:shadow-md active:scale-[0.98]"
+                  style={{ borderRadius: 'var(--radius)' }}
+                >
+                  Mostrar Resposta
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={onUndo}
+                      disabled={!canUndo}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="Desfazer"
+                    >
+                      <Undo2 className="h-4.5 w-4.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {quickReview ? (
+              <div className="grid w-full grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => handleRate(1)}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  style={{ borderRadius: 'var(--radius)' }}
+                >
+                  <span className="text-sm font-bold">Errei</span>
+                </button>
+                <button
+                  onClick={() => handleRate(3)}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center gap-1 px-2 py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  style={{ borderRadius: 'var(--radius)' }}
+                >
+                  <span className="text-sm font-bold flex items-center gap-1">
+                    Acertei <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Explain button for basic/cloze/occlusion */}
+                {onTutorRequest && !explainResponse && (
+                  <button
+                    onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                    disabled={!canUseTutor || isTutorLoading}
+                    className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
+                      canUseTutor
+                        ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                        : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                    }`}
+                  >
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                  </button>
+                )}
+
+                <div className="grid w-full grid-cols-2 sm:grid-cols-4 gap-2">
+                  {ratingConfig.map(({ rating, label, colorClass }) => (
+                    <button
+                      key={rating}
+                      onClick={() => handleRate(rating)}
+                      disabled={isSubmitting}
+                      className={`flex flex-col items-center gap-0.5 sm:gap-1 px-2 py-3 sm:py-3.5 font-medium transition-all active:scale-95 disabled:opacity-50 ${colorClass}`}
+                      style={{ borderRadius: 'var(--radius)' }}
+                    >
+                      <span className="text-sm font-bold">{label}</span>
+                      <span className="text-[11px] sm:text-xs opacity-80">{intervals[rating]}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
