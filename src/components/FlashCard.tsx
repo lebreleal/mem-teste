@@ -223,7 +223,7 @@ const MultipleChoiceCard = ({
       setSelectedIndex(null);
       setAnswered(false);
       setFeedbackType(null);
-    }, 100);
+    }, 700);
   };
 
   const recallColor = recallData
