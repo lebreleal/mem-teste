@@ -152,6 +152,8 @@ const MultipleChoiceCard = ({
   difficulty,
   state,
   scheduledDate,
+  canUndo,
+  onUndo,
 }: {
   frontContent: string;
   backContent: string;
@@ -169,6 +171,8 @@ const MultipleChoiceCard = ({
   difficulty: number;
   state: number;
   scheduledDate: string;
+  canUndo?: boolean;
+  onUndo?: () => void;
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -340,7 +344,22 @@ const MultipleChoiceCard = ({
       {/* Fixed bottom buttons */}
       <div className="flex-shrink-0 pt-3 pb-2 space-y-2">
         {!answered ? (
-          <div className="flex w-full">
+          <div className="flex w-full items-center gap-2">
+            {/* Undo */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onUndo}
+                  disabled={!canUndo}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Desfazer"
+                >
+                  <Undo2 className="h-4.5 w-4.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent><p>Desfazer última revisão</p></TooltipContent>
+            </Tooltip>
+
             {onTutorRequest && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -358,12 +377,12 @@ const MultipleChoiceCard = ({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {canUseTutor ? <p>Dica do Tutor (2 créditos)</p> : <p>Sem créditos</p>}
+                  {canUseTutor ? <p>Dica do Tutor</p> : <p>Sem créditos</p>}
                 </TooltipContent>
               </Tooltip>
             )}
             {!onTutorRequest && (
-              <p className="text-center text-sm text-muted-foreground w-full py-3">Selecione uma alternativa</p>
+              <p className="text-center text-sm text-muted-foreground flex-1 py-3">Selecione uma alternativa</p>
             )}
           </div>
         ) : (
@@ -468,6 +487,8 @@ const FlashCard = ({
         difficulty={difficulty}
         state={state}
         scheduledDate={scheduledDate}
+        canUndo={canUndo}
+        onUndo={onUndo}
       />
     );
   }
