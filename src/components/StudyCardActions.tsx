@@ -47,6 +47,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   const { toast } = useToast();
 
   const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [freezeConfirmOpen, setFreezeConfirmOpen] = useState(false);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
@@ -63,7 +64,12 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
 
-  const openEdit = () => {
+  const openEdit = async () => {
+    setEditLoading(true);
+    // Preload the RichEditor chunk before opening the dialog
+    try {
+      await import('@/components/RichEditor');
+    } catch {}
     setFront(card.front_content);
     originalFrontRef.current = card.front_content;
     if (card.card_type === 'multiple_choice') {
@@ -77,7 +83,6 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       }
     } else if (card.card_type === 'cloze') {
       setEditorType('cloze');
-      // Parse JSON back_content to extract only the extra field
       try {
         const parsed = JSON.parse(card.back_content);
         if (typeof parsed.clozeTarget === 'number') {
@@ -92,6 +97,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       setEditorType('basic');
       setBack(card.back_content);
     }
+    setEditLoading(false);
     setEditOpen(true);
   };
 
@@ -387,8 +393,9 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
                 <button
                   className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                   aria-label="Editar card"
+                  disabled={editLoading}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
                 </button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
