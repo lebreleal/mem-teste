@@ -80,24 +80,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGoogle = async (): Promise<{ error: string | null }> => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const isLovableDomain =
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com');
+
+    if (isLovableDomain) {
+      // Popup flow for Lovable preview (avoids iframe issues)
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          skipBrowserRedirect: true,
+          redirectTo: window.location.origin + '/dashboard',
+        },
+      });
+      if (error) return { error: error.message };
+      if (data?.url) {
+        const popup = window.open(data.url, 'google-oauth', 'width=500,height=600');
+        if (!popup) return { error: 'popup_blocked' };
+      }
+      return { error: null };
+    }
+
+    // Full redirect for custom domains (more reliable, avoids state cookie issues)
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        skipBrowserRedirect: true,
         redirectTo: window.location.origin + '/dashboard',
       },
     });
-
-    if (error) return { error: error.message };
-
-    if (data?.url) {
-      const popup = window.open(data.url, 'google-oauth', 'width=500,height=600');
-      if (!popup) {
-        return { error: 'popup_blocked' };
-      }
-    }
-
-    return { error: null };
+    return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
