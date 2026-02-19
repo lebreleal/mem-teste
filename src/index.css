@@ -348,15 +348,15 @@
 }
 
 .animate-correct-flash {
-  animation: correct-flash 0.8s ease-out;
+  animation: correct-flash 0.8s ease-out forwards;
 }
 
 .animate-wrong-flash {
-  animation: wrong-flash 0.7s ease-out;
+  animation: wrong-flash 0.7s ease-out forwards;
 }
 
 .animate-hard-flash {
-  animation: hard-flash 0.7s ease-out;
+  animation: hard-flash 0.7s ease-out forwards;
 }
 
 .animate-shimmer {
