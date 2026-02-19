@@ -180,6 +180,7 @@ const MultipleChoiceCard = ({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'correct' | 'wrong' | 'hard' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'explain' | 'explain-mc' | 'hint' | null>(null);
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
@@ -198,6 +199,11 @@ const MultipleChoiceCard = ({
       return () => clearTimeout(timer);
     }
   }, [feedbackType]);
+
+  // Clear loading action when loading finishes
+  useEffect(() => {
+    if (!isTutorLoading) setLoadingAction(null);
+  }, [isTutorLoading]);
 
   if (!mcData) return <p className="text-destructive text-sm">Erro ao carregar opções</p>;
 
@@ -264,7 +270,7 @@ const MultipleChoiceCard = ({
         <div className="space-y-3 pb-2">
           {/* Question */}
           <div
-            className={`card-premium w-full border-2 bg-card p-4 sm:p-6 transition-colors ${feedbackType === 'correct' ? 'animate-correct-flash border-success' : feedbackType === 'wrong' ? 'animate-wrong-flash border-destructive' : feedbackType === 'hard' ? 'animate-hard-flash border-warning' : 'border-border/40'}`}
+            className="card-premium w-full border border-border/40 bg-card p-4 sm:p-6"
             style={{ borderRadius: 'var(--radius)' }}
           >
             <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1.5 block">Múltipla escolha</span>
@@ -380,12 +386,12 @@ const MultipleChoiceCard = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={canUseTutor ? () => onTutorRequest() : undefined}
+                    onClick={canUseTutor ? () => { setLoadingAction('hint'); onTutorRequest(); } : undefined}
                     disabled={!canUseTutor || isTutorLoading}
                     className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:text-primary/80 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Dica do Tutor IA"
                   >
-                    {isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
+                    {loadingAction === 'hint' && isTutorLoading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Lightbulb className="h-4.5 w-4.5" />}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -402,7 +408,7 @@ const MultipleChoiceCard = ({
             {/* Explain subject button */}
             {onTutorRequest && !explainResponse && (
               <button
-                onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onTutorRequest({ action: 'explain' }); }}
                 disabled={!canUseTutor || isTutorLoading}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                   canUseTutor
@@ -410,19 +416,19 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading && !mcExplainResponse ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
               </button>
             )}
 
             {/* Explain alternatives button */}
             {onTutorRequest && !mcExplainResponse && (
               <button
-                onClick={() => canUseTutor ? onTutorRequest({
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onTutorRequest({
                   action: 'explain-mc',
                   mcOptions: mcData.options,
                   correctIndex: mcData.correctIndex,
                   selectedIndex: selectedIndex ?? undefined,
-                }) : undefined}
+                }); }}
                 disabled={!canUseTutor || isTutorLoading}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                   canUseTutor
@@ -430,7 +436,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {isTutorLoading && !explainResponse ? <TutorLoadingAnimation /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
+                {loadingAction === 'explain-mc' && isTutorLoading ? <TutorLoadingAnimation variant="mc-alternatives" /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
               </button>
             )}
 
