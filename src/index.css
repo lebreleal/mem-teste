@@ -233,16 +233,13 @@
 
 @keyframes correct-flash {
   0% { 
-    border-color: hsl(var(--success));
-    box-shadow: 0 0 0 1px hsl(var(--success)), 0 0 20px 4px hsl(var(--success) / 0.35);
+    box-shadow: 0 0 18px 6px hsl(var(--success) / 0.25);
   }
   50% { 
-    border-color: hsl(var(--success));
-    box-shadow: 0 0 0 1px hsl(var(--success)), 0 0 28px 8px hsl(var(--success) / 0.3);
+    box-shadow: 0 0 26px 10px hsl(var(--success) / 0.2);
     transform: scale(1.005);
   }
   100% { 
-    border-color: hsl(var(--border));
     box-shadow: var(--shadow-card);
     transform: scale(1);
   }
@@ -250,37 +247,31 @@
 
 @keyframes wrong-flash {
   0% { 
-    border-color: hsl(var(--destructive));
-    box-shadow: 0 0 0 1px hsl(var(--destructive)), 0 0 20px 4px hsl(var(--destructive) / 0.35);
+    box-shadow: 0 0 18px 6px hsl(var(--destructive) / 0.25);
   }
   10% { transform: translateX(-3px); }
   20% { 
     transform: translateX(3px);
-    border-color: hsl(var(--destructive));
-    box-shadow: 0 0 0 1px hsl(var(--destructive)), 0 0 28px 8px hsl(var(--destructive) / 0.3);
+    box-shadow: 0 0 26px 10px hsl(var(--destructive) / 0.2);
   }
   30% { transform: translateX(-2px); }
   40% { transform: translateX(2px); }
   50% { transform: translateX(0); }
   100% { 
     transform: translateX(0);
-    border-color: hsl(var(--border));
     box-shadow: var(--shadow-card);
   }
 }
 
 @keyframes hard-flash {
   0% { 
-    border-color: hsl(var(--warning));
-    box-shadow: 0 0 0 1px hsl(var(--warning)), 0 0 20px 4px hsl(var(--warning) / 0.35);
+    box-shadow: 0 0 18px 6px hsl(var(--warning) / 0.25);
   }
   50% { 
-    border-color: hsl(var(--warning));
-    box-shadow: 0 0 0 1px hsl(var(--warning)), 0 0 28px 8px hsl(var(--warning) / 0.3);
+    box-shadow: 0 0 26px 10px hsl(var(--warning) / 0.2);
     transform: scale(1.005);
   }
   100% { 
-    border-color: hsl(var(--border));
     box-shadow: var(--shadow-card);
     transform: scale(1);
   }
