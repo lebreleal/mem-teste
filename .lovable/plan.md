@@ -1,53 +1,34 @@
 
 
-# Melhorar responsividade e animacao de loading da IA
+## Limpeza dos Logs de Erros
 
-## Problema atual
-1. A resposta da IA "quebra a visao" -- o conteudo longo extrapola o layout, nao tem scroll adequado e empurra os botoes de rating para fora da tela
-2. O loading e um simples spinner generico sem contexto -- o usuario nao entende o que a IA esta fazendo
+### Situacao atual
 
-## Solucao
+Foram analisados todos os logs de erros registrados na tabela `app_error_logs`:
 
-### 1. Responsividade da resposta da IA
+- **30 logs antigos** (antes de 18/02 18h): erros ja corrigidos como `useDeckDetail must be used within DeckDetailProvider`, `reorderMode is not defined`, `useQueryClient is not defined`, etc.
+- **~8 logs recentes** (18/02 18h ate agora): todos relacionados a cache do Service Worker (chunks JS antigos invalidados por novos deploys) ou bugs de codigo ja corrigidos.
 
-**FlashCard basico/cloze/occlusion (linhas 612-633):**
-- Envolver todo o conteudo (card + resposta do tutor) em um container com scroll (`overflow-y-auto`) e altura limitada (`max-h` calculada)
-- A resposta da IA tera `max-h-[50vh] overflow-y-auto` proprio para nao empurrar os botoes
-- Adicionar `break-words` e `overflow-wrap` no bloco de prosa para evitar quebras de layout
+### Categorias dos erros recentes
 
-**MultipleChoiceCard (linhas 303-323):**
-- Mesma logica: limitar altura da resposta do tutor com scroll interno
+1. **Cache do Service Worker** (7 de 8 logs): `'text/html' is not a valid JavaScript MIME type` e `Failed to fetch dynamically imported module` -- acontecem quando o usuario tem uma versao antiga cacheada e o deploy muda os nomes dos chunks JS. Resolvido automaticamente quando o Service Worker atualiza.
 
-### 2. Animacao de loading com fases
+2. **Bug de codigo corrigido** (1 log): `SuspenseLoading is not defined` -- referencia a componente que nao existia, ja foi corrigido no codigo.
 
-Substituir o spinner simples por uma animacao com 3 fases rotativas que indicam o processo da IA:
+### Acoes
 
-```
-Fase 1: "Lendo cartao..."        (icone BookOpen)     -- 0-2s
-Fase 2: "Buscando fonte confiavel..."  (icone Search)  -- 2-4s  
-Fase 3: "Elaborando explicacao..." (icone Sparkles)    -- 4s+
-```
+1. **Deletar todos os 30 logs antigos** (antes de 18/02 18h) -- conforme solicitado
+2. **Deletar todos os ~8 logs recentes** -- todos sao erros ja resolvidos (cache de SW ou bugs corrigidos)
 
-Cada fase tera:
-- Icone animado (pulse suave)
-- Texto descritivo
-- Barra de progresso indeterminada com shimmer
-- Transicao suave entre fases (fade)
-
-Isso sera implementado como um componente `TutorLoadingAnimation` inline no FlashCard.
-
-### Arquivos modificados
-
-- `src/components/FlashCard.tsx`:
-  - Novo componente `TutorLoadingAnimation` com as 3 fases
-  - Substituir o spinner nos botoes de "Explicar" e "Dica do Tutor" pela animacao
-  - Quando `isTutorLoading === true`, mostrar o componente de animacao no lugar onde a resposta apareceria
-  - Limitar altura da resposta com scroll interno
-  - Corrigir overflow de texto longo com `break-words`
+Resultado final: tabela `app_error_logs` ficara vazia e limpa.
 
 ### Detalhes tecnicos
 
-**TutorLoadingAnimation**: componente que usa `useState` + `useEffect` com `setInterval` para ciclar entre as 3 fases a cada ~2.5s. Renderiza dentro do mesmo espaco onde a resposta aparece, com fundo `bg-primary/5` e borda `border-primary/20`.
+Sera executada uma unica query SQL para limpar todos os registros:
 
-**Responsividade**: O bloco de resposta da IA recebe `max-h-[40vh] overflow-y-auto` com `scrollbar-hide` e a classe `break-words` no container de prosa. O layout externo do FlashCard basico usa `flex flex-col h-full` com `min-h-0` no container scrollavel.
+```sql
+DELETE FROM app_error_logs;
+```
+
+Nenhuma alteracao de codigo e necessaria, pois todos os erros ja foram corrigidos em versoes anteriores.
 
