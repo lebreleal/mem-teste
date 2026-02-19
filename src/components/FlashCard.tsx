@@ -264,7 +264,7 @@ const MultipleChoiceCard = ({
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide px-3 -mx-3">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4">
         <div className="space-y-3 pb-2 pt-1">
           {/* Question card — receives feedback animation */}
           <div
@@ -628,7 +628,7 @@ const FlashCard = ({
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide px-3 -mx-3">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-4 -m-4">
         <div className="space-y-3 pb-2 pt-1">
           {/* Card container */}
           <div
