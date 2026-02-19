@@ -584,20 +584,21 @@ const FlashCard = ({
             className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'}`}
             style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
           >
-            {/* Flip-to-front peek button */}
-            {!peekingFront && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPeekingFront(true);
-                  setTimeout(() => setPeekingFront(false), 2500);
-                }}
-                className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60 transition-all"
-                aria-label="Ver frente do card"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
-            )}
+            {/* Flip-to-front peek toggle */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setPeekingFront(prev => !prev);
+              }}
+              className={`absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                peekingFront
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/60'
+              }`}
+              aria-label={peekingFront ? 'Ver verso do card' : 'Ver frente do card'}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
             <div
               className="prose prose-sm max-w-none text-center text-card-foreground w-full"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
