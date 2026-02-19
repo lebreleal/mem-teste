@@ -37,9 +37,14 @@ Deno.serve(async (req) => {
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
 
     let prompt: string;
+    let maxTokens = 200;
     if (action === "explain-mc") {
       const optionsList = (mcOptions || []).map((opt: string, i: number) => `${i === correctIndex ? "✅" : "❌"} ${String.fromCharCode(65 + i)}) ${opt}`).join("\n");
       prompt = `Você é um tutor educacional. O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nExplique:\n1. Por que a resposta correta está certa (1-2 frases)\n2. Por que CADA alternativa incorreta está errada (1 frase cada)\n\nResponda na mesma língua da pergunta. Seja conciso.`;
+      maxTokens = 500;
+    } else if (action === "explain") {
+      prompt = `Você é um professor universitário experiente. O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nResponda nesta estrutura:\n1. **Referência Acadêmica**: Cite 1-2 livros ou fontes acadêmicas referência sobre este assunto, ex.: Fisiologia: exemplo 1. Guyton & Hall, exemplo 2.\n2. **Explicação**: Explique o conceito de forma didática e completa, como se estivesse dando aula particular. Use analogias e exemplos práticos.\n3. **Conexão com o card**: Relacione sua explicação diretamente com a pergunta/resposta do card.\n\nResponda na mesma língua do card. Seja completo, didático e claro, tudo pra conseguir entender o conteúdo do baralho, pois às vezes precisamos saber um conteúdo chave antes de conseguir entender o conteúdo.`;
+      maxTokens = 800;
     } else {
       if (promptConfig?.user_prompt_template) {
         prompt = promptConfig.user_prompt_template.replace("{{front}}", cleanFront).replace("{{backHint}}", cleanBack ? `(The answer is: ${cleanBack} - but DO NOT reveal this. Give a hint instead.)` : "");
@@ -51,7 +56,7 @@ Deno.serve(async (req) => {
     const response = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []), { role: "user", content: prompt }], max_tokens: action === "explain-mc" ? 500 : 200, temperature }),
+      body: JSON.stringify({ model: selectedModel, messages: [...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []), { role: "user", content: prompt }], max_tokens: maxTokens, temperature }),
     });
 
     if (!response.ok) {
