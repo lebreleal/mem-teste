@@ -1,156 +1,111 @@
 
 
-# Otimizar Velocidade de Geracao + Corrigir Botao Reload
+# Estrategia de Intercalacao Cientifica + Verificacao de Configuracoes do Usuario
 
-## Diagnostico: Por que esta lento?
+## Problema Atual
 
-Hoje, para um PDF de 49 paginas (~98k chars), o sistema faz:
+O prompt ainda contem a "REGRA DE COBERTURA TRIPLA" (linhas 95-105 do edge function) que triplica os cards por conceito, gerando excesso e diluindo qualidade. Precisa ser revertido para a estrategia de intercalacao (1 conceito = 1 card, alternando formatos).
 
-```text
-16 batches x 3 formatos = 48 chamadas de API (sequenciais por batch)
-48 chamadas x ~15s cada = ~4-8 minutos
-```
+Alem disso, preciso verificar se todas as configuracoes do usuario (nivel de detalhe, formatos, quantidade, instrucoes adicionais) estao sendo corretamente passadas e respeitadas no prompt.
 
-A separacao por formato (1 chamada por formato por batch) foi criada para "evitar alucinacoes", mas o prompt JA lida perfeitamente com multiplos formatos misturados -- ele tem instrucoes de distribuicao uniforme e exemplos para cada tipo.
+## Diagnostico das Configuracoes
 
-## Solucao: 3 mudancas combinadas
+Apos analise do fluxo completo (ConfigStep -> useAIDeckFlow -> edge function):
 
-### Mudanca 1 -- Remover separacao por formato (MAIOR IMPACTO)
+| Configuracao | Passada corretamente? | Respeitada no prompt? |
+|---|---|---|
+| Nivel de detalhe (essential/standard/comprehensive) | Sim - `detailLevel` | Sim - `getDetailInstruction()` funciona bem |
+| Formatos do cartao | Sim - `cardFormats[]` | Sim - `getFormatInstructions()` lista os formatos |
+| Quantidade (auto vs manual) | Sim - `targetCardCount` | Sim - mas precisa ajuste no modo auto |
+| Instrucoes adicionais | Sim - `customInstructions` | Sim - inseridas no prompt |
+| Modelo de IA | Sim - `model` | Sim - `MODEL_MAP` resolve |
 
-Enviar TODOS os formatos em UMA unica chamada por batch, como era originalmente. O prompt ja tem instrucoes para distribuir uniformemente entre os formatos.
+**Problema encontrado no modo "Auto"**: Quando `cardCount = 0` (auto), o prompt diz "Crie a quantidade ideal para cobrir o conteudo de forma completa" mas NAO reforça que deve cobrir 100% do conteudo. Precisa integrar melhor com o `detailLevel`.
 
-| Antes | Depois |
-|-------|--------|
-| 16 batches x 3 chamadas = 48 calls | 16 batches x 1 chamada = 16 calls |
+## Mudancas Planejadas
 
-Reducao de 66% no numero de chamadas, sem nenhuma perda de qualidade.
+### 1. Edge Function (`supabase/functions/generate-deck/index.ts`)
 
-### Mudanca 2 -- Aumentar batch size (6k para 12k chars)
+**A) Reverter "Cobertura Tripla" para "Intercalacao Cientifica"** (linhas 94-106):
 
-Moderado e seguro -- 12k chars e menos de 1% da janela de contexto do Gemini (1M tokens). Da MAIS contexto por chamada, o que MELHORA a qualidade.
+Substituir por regra de intercalacao:
+- Cada conceito recebe exatamente 1 card em 1 formato
+- Formatos se alternam sequencialmente (basic -> cloze -> multiple_choice -> basic -> ...)
+- Distribuicao final equilibrada (diferenca maxima de 1 card entre formatos)
+- Cada card individual deve ser profundo e rico em contexto
+- Manter ordem cronologica do material
 
-| Antes | Depois |
-|-------|--------|
-| 16 batches | ~8 batches |
+**B) Melhorar instrucao de quantidade no modo auto** (linha 189):
 
-### Mudanca 3 -- Paralelizar batches (ate 3 simultaneos)
+Quando `requestedCount = 0` (auto), integrar com o nivel de detalhe:
+- Essential: "poucos cards, 3-5 conceitos fundamentais"
+- Standard: "cubra todos os topicos mencionados"
+- Comprehensive: "cubra 100% do conteudo, nenhum detalhe ignorado"
 
-Executar 2-3 batches ao mesmo tempo usando pool de concorrencia.
+Isso ja existe em `getDetailInstruction()` mas a linha 189 do prompt apenas diz "quantidade ideal" sem reforcar o nivel de cobertura. Vou unificar para evitar conflito.
 
-| Antes | Depois |
-|-------|--------|
-| 8 batches sequenciais | 3 rodadas de 3 batches |
+**C) Reforcar ordem cronologica**: A instrucao de ordem ja existe (linha 195), esta ok.
 
-### Resultado final
+**D) Instrucoes adicionais**: Ja funcionam (linha 196), esta ok.
 
-```text
-ANTES: 48 chamadas sequenciais = 4-8 min
-DEPOIS: ~8 chamadas em 3 rodadas = 30s-1.5 min
-```
+### 2. UX de Carregamento (`GenerationProgress.tsx`)
 
-Reducao de ~80% no tempo, SEM tocar no prompt.
+Substituir os dots de lote por uma barra de progresso suave e moderna:
+- Barra com gradiente animado e transicao CSS suave (`transition: width 700ms ease-out`)
+- Sem porcentagem numerica (evita o bug de pular numeros)
+- Texto de fase rotativo (ja existe) + indicador textual "Lote X de Y"
+- Layout mais limpo e centralizado
+- Manter dicas educativas e botao "Continuar em segundo plano"
 
-## Prompt: Analise
+---
 
-O prompt atual esta muito bom. Pontos fortes:
+## Detalhes Tecnicos
 
-- Instrucoes de fidelidade (EXCLUSIVIDADE, nao inventar)
-- Autocontido (nunca referenciar figuras/anexos)
-- Exemplos corretos e incorretos para cloze
-- Distribuicao obrigatoria entre formatos
-- Validacao de cloze no pos-processamento
+### Edge Function - Nova regra de distribuicao (linhas 94-106)
 
-NAO muda nada no prompt. Ele ja suporta multiplos formatos numa unica chamada.
-
-## Botao Reload no Admin
-
-O botao existe mas usa `variant="ghost"` que e praticamente invisivel. Trocar para `variant="outline"` com icone destacado.
-
-## Arquivos a alterar
-
-### 1. `src/components/ai-deck/useAIDeckFlow.ts`
-- Remover loop de formatos -- enviar `cardFormats` completo em 1 chamada por batch
-- Aumentar `MAX_CHARS` de 6000 para 12000
-- Adicionar pool de concorrencia para processar ate 3 batches simultaneos
-- Simplificar logica de progresso (total = numero de batches, nao batches x formatos)
-
-### 2. `supabase/functions/generate-deck/index.ts`
-- Aumentar trim de 10000 para 16000 caracteres (acompanhar batch maior)
-- Aumentar `max_tokens` de 8192 para 12000 (resposta maior para mais cards)
-
-### 3. `src/pages/AdminUsers.tsx`
-- Trocar botao Reload de `variant="ghost"` para `variant="outline"`
-
-## Detalhes tecnicos
-
-### useAIDeckFlow.ts -- Nova logica simplificada
+A secao multi-formato sera substituida por:
 
 ```typescript
-const MAX_CHARS = 12000; // era 6000
-const CONCURRENT_BATCHES = 3;
+parts.push(`\nREGRA DE INTERCALAÇÃO (OBRIGATÓRIA):
+1. Cada conceito/tópico deve ser coberto por APENAS UM formato — NUNCA repita o mesmo assunto em formatos diferentes.
+2. ALTERNE os formatos na sequência: ${formatNames.join(" → ")} → ${formatNames[0]} → ... (ciclo contínuo).
+3. Distribuição IGUAL: cada formato deve ter aproximadamente o mesmo número de cartões (diferença máxima de 1).
+4. PROFUNDIDADE: cada cartão deve ser RICO em contexto e testar compreensão real, não apenas memorização superficial.
 
-// Montar batches (igual, so muda o MAX_CHARS)
-// ...
-
-const totalBatches = textBatches.length;
-setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
-
-// Processar em grupos de 3 batches simultaneos
-for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
-  const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
-
-  const groupPromises = group.map((batch, gi) => {
-    const batchIdx = i + gi;
-    const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
-
-    return aiService.generateDeckCards({
-      textContent: batch.texts.join('\n\n'),
-      cardCount: targetCardCount > 0
-        ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
-        : 0,  // deixar a IA decidir (melhor qualidade)
-      detailLevel,
-      cardFormats,  // TODOS os formatos de uma vez
-      customInstructions: customInstructions.trim() || undefined,
-      aiModel: model,
-      energyCost: batchCost,
-      skipLog: true,
-    });
-  });
-
-  const results = await Promise.allSettled(groupPromises);
-  // coletar cards e usage de cada resultado...
-
-  // Atualizar progresso
-  setGenProgress(prev => ({
-    current: Math.min(i + CONCURRENT_BATCHES, totalBatches),
-    total: totalBatches,
-    creditsUsed: totalEnergyCost,
-  }));
-}
+EXEMPLO com ${count} formatos e 6 conceitos:
+Conceito 1 → ${formatNames[0]}
+Conceito 2 → ${formatNames[1 % count]}
+Conceito 3 → ${formatNames[2 % count]}
+Conceito 4 → ${formatNames[3 % count]}
+Conceito 5 → ${formatNames[4 % count]}
+Conceito 6 → ${formatNames[5 % count]}`);
 ```
 
-### generate-deck/index.ts -- Limites maiores
+### Edge Function - Quantidade auto melhorada (linha 189)
 
 ```typescript
-const trimmedContent = textContent.slice(0, 16000); // era 10000
-// ...
-max_tokens: 12000  // era 8192
+// Antes:
+`Crie a quantidade ideal para cobrir o conteúdo de forma completa.`
+
+// Depois — integra com detailLevel:
+requestedCount > 0
+  ? `Crie exatamente ${requestedCount} cartões.`
+  : `Crie a quantidade NECESSÁRIA de cartões para o nível de cobertura solicitado abaixo. NÃO limite artificialmente — gere tantos cartões quantos forem necessários.`
 ```
 
-### AdminUsers.tsx -- Botao visivel
+### GenerationProgress - Barra suave
 
-```typescript
-<Button variant="outline" size="sm" ...>
-  <RefreshCw className="w-4 h-4 mr-1" />
-  Atualizar
-</Button>
-```
+- Calcular progresso como `genProgress.current / genProgress.total`
+- Usar componente `Progress` do shadcn com gradiente customizado
+- Transicao CSS suave sem numeros pulando
+- Texto descritivo "Lote X de Y" abaixo da barra
 
-## Por que NAO perde qualidade?
+### Arquivos modificados
 
-1. O prompt ja foi desenhado para multiplos formatos -- tem instrucoes de distribuicao e exemplos
-2. Mais texto por batch = MAIS contexto = menos alucinacao (a IA entende melhor o tema)
-3. 12k chars e trivial para o Gemini (janela de 1M tokens)
-4. A validacao de cloze no pos-processamento continua intacta
-5. O retry automatico para 503 ja esta implementado
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/generate-deck/index.ts` | Reverter tripla -> intercalacao + melhorar auto count |
+| `src/components/ai-deck/GenerationProgress.tsx` | Redesign com barra suave sem porcentagem |
+
+Nenhuma mudanca necessaria em `useAIDeckFlow.ts` — a logica de lotes, background e passagem de parametros esta correta.
 
