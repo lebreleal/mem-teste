@@ -92,7 +92,11 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA: Distribua os cartões UNIFORMEMENTE entre: ${formatNames.join(", ")}. Cada formato deve ter aproximadamente ${Math.round(100/count)}% dos cartões.`);
+    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA E EXATA: Distribua os cartões de forma IGUAL entre os ${count} formatos: ${formatNames.join(", ")}.
+Se forem N cartões no total, cada formato deve ter exatamente floor(N/${count}) cartões (± 1 cartão de diferença máxima).
+EXEMPLO: Se criar 12 cartões com 3 formatos → 4 basic, 4 cloze, 4 multiple_choice.
+EXEMPLO: Se criar 10 cartões com 2 formatos → 5 de cada.
+NÃO concentre cartões em um único formato. Esta regra é OBRIGATÓRIA.`);
   }
 
   if (forbiddenNames.length > 0) {
@@ -182,6 +186,7 @@ REGRAS OBRIGATÓRIAS:
 - Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
 - CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
+- ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):

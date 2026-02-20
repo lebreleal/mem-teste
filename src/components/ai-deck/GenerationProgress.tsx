@@ -1,10 +1,10 @@
 /**
- * Polished generation progress with smooth progress bar and animated credits counter.
+ * Modern generation progress with stepped indicator, animated dots, and credits counter.
+ * No buggy percentage — uses batch steps + a pulsing orbital animation.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle } from 'lucide-react';
 import type { GenProgress } from './types';
 
@@ -31,41 +31,9 @@ const TIPS = [
   '🏆 Consistência diária é o segredo',
 ];
 
-/** Smoothly animated number that counts up to target */
-function AnimatedNumber({ value }: { value: number }) {
-  const [display, setDisplay] = useState(value);
-  const rafRef = useRef<number>();
-  const startRef = useRef({ value: 0, time: 0 });
-
-  useEffect(() => {
-    if (value === display) return;
-    const start = display;
-    const startTime = performance.now();
-    const duration = 600; // ms
-
-    const tick = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(start + (value - start) * eased);
-      setDisplay(current);
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [value]);
-
-  return <span>{display}</span>;
-}
-
 const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [tipIdx, setTipIdx] = useState(0);
-  const [smoothProgress, setSmoothProgress] = useState(0);
 
   useEffect(() => {
     const iv = setInterval(() => setPhaseIdx(p => (p + 1) % PHASES.length), 3000);
@@ -77,40 +45,27 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
     return () => clearInterval(iv);
   }, []);
 
-  // Smooth progress: interpolate between actual progress steps
   const hasBatches = genProgress.total > 0;
-  const actualPercent = hasBatches ? Math.round((genProgress.current / genProgress.total) * 100) : 0;
-
-  useEffect(() => {
-    if (!hasBatches) return;
-    // When actual progress jumps, smoothly animate towards it
-    // Also add a slow "fake" progress between steps to feel alive
-    setSmoothProgress(prev => Math.max(prev, actualPercent));
-  }, [actualPercent, hasBatches]);
-
-  // Slow fake progress between real updates (max 2% ahead of last real value)
-  useEffect(() => {
-    if (!hasBatches || actualPercent >= 100) return;
-    const maxFake = Math.min(actualPercent + 8, 99);
-    const iv = setInterval(() => {
-      setSmoothProgress(prev => {
-        if (prev >= maxFake) return prev;
-        return prev + 1;
-      });
-    }, 800);
-    return () => clearInterval(iv);
-  }, [actualPercent, hasBatches]);
-
   const phase = PHASES[phaseIdx];
   const PhaseIcon = phase.icon;
 
   return (
     <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-6 animate-fade-in">
-      {/* Pulsing icon */}
-      <div className="relative flex items-center justify-center h-20 w-20">
-        <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2s' }} />
-        <div className="absolute inset-1 rounded-full bg-primary/5" />
-        <PhaseIcon className="relative z-10 h-8 w-8 text-primary transition-all duration-500" key={phaseIdx} />
+      {/* Orbital animation */}
+      <div className="relative flex items-center justify-center h-24 w-24">
+        {/* Outer rotating ring */}
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div
+          className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary"
+          style={{ animation: 'spin 1.8s linear infinite' }}
+        />
+        {/* Middle pulse */}
+        <div className="absolute inset-3 rounded-full bg-primary/5 animate-pulse" />
+        {/* Icon */}
+        <PhaseIcon
+          className="relative z-10 h-8 w-8 text-primary transition-all duration-500"
+          key={phaseIdx}
+        />
       </div>
 
       {/* Status text */}
@@ -120,31 +75,41 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         </p>
       </div>
 
-      {/* Progress bar */}
+      {/* Step indicator — dots not percentage */}
       {hasBatches && (
-        <div className="w-full max-w-xs space-y-2">
-          <div className="relative">
-            <Progress
-              value={smoothProgress}
-              className="h-3 bg-muted/50"
-            />
+        <div className="flex flex-col items-center gap-3">
+          {/* Dot steps */}
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: genProgress.total }).map((_, i) => {
+              const done = i < genProgress.current;
+              const active = i === genProgress.current;
+              return (
+                <div
+                  key={i}
+                  className={`rounded-full transition-all duration-500 ${
+                    done
+                      ? 'h-2.5 w-2.5 bg-primary'
+                      : active
+                        ? 'h-3 w-3 bg-primary/60 animate-pulse'
+                        : 'h-2 w-2 bg-muted-foreground/20'
+                  }`}
+                />
+              );
+            })}
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}</span>
-            <span className="font-mono font-semibold text-foreground tabular-nums">
-              {smoothProgress}%
-            </span>
-          </div>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}
+          </span>
         </div>
       )}
 
-      {/* Animated credits counter */}
+      {/* Credits counter */}
       {hasBatches && genProgress.creditsUsed > 0 && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10">
           <Zap className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs text-muted-foreground">
             <span className="font-bold text-primary tabular-nums">
-              <AnimatedNumber value={genProgress.creditsUsed} />
+              {genProgress.creditsUsed}
             </span>
             {' '}créditos usados
           </span>
