@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -59,13 +59,16 @@ Deno.serve(async (req) => {
     // Log token usage before streaming (estimated, same pattern as ai-chat)
     await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, cost);
 
-    const response = await fetch(AI_URL, {
+    const antiPreamblePrompt = "Você é um tutor educacional direto e objetivo. PROIBIDO: saudações, elogios, preâmbulos, \"Olá\", \"Ótima pergunta\", \"Excelente iniciativa\". Vá direto ao conteúdo. Use Markdown para formatação.";
+    const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt;
+
+    const response = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
       body: JSON.stringify({
         model: selectedModel,
         messages: [
-          ...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []),
+          { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
         ],
         max_tokens: maxTokens,
@@ -75,9 +78,11 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errText = await response.text(); console.error("OpenAI error:", response.status, errText);
+      const errText = await response.text(); console.error("AI error:", response.status, errText);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
-      return jsonResponse({ error: "AI service unavailable" }, 502);
+      if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
+      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
+      return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
     // Stream the OpenAI SSE response directly to the client
