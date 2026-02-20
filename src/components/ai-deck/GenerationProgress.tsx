@@ -54,21 +54,43 @@ function formatElapsed(ms: number): string {
 const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
   const [tipIdx, setTipIdx] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const [displayPercent, setDisplayPercent] = useState(0);
 
   useEffect(() => {
     const iv = setInterval(() => setTipIdx(p => (p + 1) % TIPS.length), 5000);
     return () => clearInterval(iv);
   }, []);
 
-  // Tick every second for elapsed time
+  // Tick every second for elapsed time + smooth progress
   useEffect(() => {
-    const iv = setInterval(() => setNow(Date.now()), 1000);
+    const iv = setInterval(() => {
+      setNow(Date.now());
+      setDisplayPercent(prev => {
+        if (genProgress.total <= 0) return 0;
+        if (genProgress.current >= genProgress.total) return 100;
+
+        const realPercent = (genProgress.current / genProgress.total) * 100;
+        const nextCheckpoint = ((genProgress.current + 1) / genProgress.total) * 100;
+        const ceiling = realPercent + (nextCheckpoint - realPercent) * 0.9;
+
+        // If we're behind real progress (batch just completed), jump closer
+        if (prev < realPercent) {
+          return realPercent;
+        }
+
+        const distToCeiling = ceiling - prev;
+        const increment = Math.max(0.3, distToCeiling * 0.08);
+        return Math.min(ceiling, prev + increment);
+      });
+    }, 1000);
     return () => clearInterval(iv);
-  }, []);
+  }, [genProgress.current, genProgress.total]);
 
   const hasBatches = genProgress.total > 0;
-  const progressValue = hasBatches ? Math.round((genProgress.current / genProgress.total) * 100) : 0;
-  const phase = getPhase(progressValue);
+  const smoothPercent = hasBatches
+    ? (genProgress.current >= genProgress.total ? 100 : Math.round(displayPercent))
+    : 0;
+  const phase = getPhase(smoothPercent);
   const PhaseIcon = phase.icon;
 
   const eta = useMemo(() => {
@@ -92,7 +114,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         <div className="absolute inset-3 rounded-full bg-primary/5 animate-pulse" />
         <PhaseIcon
           className="relative z-10 h-8 w-8 text-primary transition-all duration-500"
-          key={progressValue > 70 ? 'final' : progressValue > 30 ? 'mid' : 'start'}
+          key={smoothPercent > 70 ? 'final' : smoothPercent > 30 ? 'mid' : 'start'}
         />
       </div>
 
@@ -120,14 +142,14 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
       {hasBatches && (
         <div className="flex flex-col items-center gap-2 w-full max-w-xs">
           <Progress
-            value={progressValue}
+            value={smoothPercent}
             className="h-2.5 w-full bg-muted/40"
             style={{
               ['--progress-transition' as string]: 'width 700ms ease-out',
             }}
           />
           <div className="flex justify-between w-full text-xs text-muted-foreground tabular-nums">
-            <span>Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}</span>
+            <span>Gerando cartões...</span>
             {elapsed > 0 && <span>{formatElapsed(elapsed)} decorridos</span>}
           </div>
         </div>
