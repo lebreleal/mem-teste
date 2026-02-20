@@ -272,6 +272,7 @@ const Dashboard = () => {
             decks={state.decks}
             avgSecondsPerCard={avgSecondsPerCard}
             hasPlan={!!plan}
+            planDeckIds={plan?.deck_ids}
           />
         )}
 
