@@ -1,10 +1,10 @@
 /**
- * Modern generation progress with stepped indicator, animated dots, and credits counter.
- * No buggy percentage — uses batch steps + a pulsing orbital animation.
+ * Modern generation progress with smooth bar, animated phases, and credits counter.
  */
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle } from 'lucide-react';
 import type { GenProgress } from './types';
 
@@ -46,6 +46,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
   }, []);
 
   const hasBatches = genProgress.total > 0;
+  const progressValue = hasBatches ? Math.round((genProgress.current / genProgress.total) * 100) : 0;
   const phase = PHASES[phaseIdx];
   const PhaseIcon = phase.icon;
 
@@ -53,15 +54,12 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
     <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-6 animate-fade-in">
       {/* Orbital animation */}
       <div className="relative flex items-center justify-center h-24 w-24">
-        {/* Outer rotating ring */}
         <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
         <div
           className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary"
           style={{ animation: 'spin 1.8s linear infinite' }}
         />
-        {/* Middle pulse */}
         <div className="absolute inset-3 rounded-full bg-primary/5 animate-pulse" />
-        {/* Icon */}
         <PhaseIcon
           className="relative z-10 h-8 w-8 text-primary transition-all duration-500"
           key={phaseIdx}
@@ -75,28 +73,16 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         </p>
       </div>
 
-      {/* Step indicator — dots not percentage */}
+      {/* Smooth progress bar */}
       {hasBatches && (
-        <div className="flex flex-col items-center gap-3">
-          {/* Dot steps */}
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: genProgress.total }).map((_, i) => {
-              const done = i < genProgress.current;
-              const active = i === genProgress.current;
-              return (
-                <div
-                  key={i}
-                  className={`rounded-full transition-all duration-500 ${
-                    done
-                      ? 'h-2.5 w-2.5 bg-primary'
-                      : active
-                        ? 'h-3 w-3 bg-primary/60 animate-pulse'
-                        : 'h-2 w-2 bg-muted-foreground/20'
-                  }`}
-                />
-              );
-            })}
-          </div>
+        <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+          <Progress
+            value={progressValue}
+            className="h-2.5 w-full bg-muted/40"
+            style={{
+              ['--progress-transition' as string]: 'width 700ms ease-out',
+            }}
+          />
           <span className="text-xs text-muted-foreground tabular-nums">
             Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}
           </span>

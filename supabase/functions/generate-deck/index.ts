@@ -92,17 +92,19 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    parts.push(`\nREGRA DE COBERTURA TRIPLA (OBRIGATÓRIA):
-Cada conceito/tópico importante do material DEVE ser abordado em TODOS os ${count} formatos (${formatNames.join(", ")}).
+    parts.push(`\nREGRA DE INTERCALAÇÃO (OBRIGATÓRIA):
+1. Cada conceito/tópico deve ser coberto por APENAS UM formato — NUNCA repita o mesmo assunto em formatos diferentes.
+2. ALTERNE os formatos na sequência: ${formatNames.join(" → ")} → ${formatNames[0]} → ... (ciclo contínuo).
+3. Distribuição IGUAL: cada formato deve ter aproximadamente o mesmo número de cartões (diferença máxima de 1).
+4. PROFUNDIDADE: cada cartão deve ser RICO em contexto e testar compreensão real, não apenas memorização superficial.
 
-EXEMPLO com o conceito "gastrulação":
-1. basic: "Qual é o processo que forma os três folhetos germinativos?" → "A gastrulação..."
-2. cloze: "O processo que forma os três folhetos germinativos é a {{c1::gastrulação}}."
-3. multiple_choice: "Qual processo embriológico origina ectoderma, mesoderma e endoderma?" → [opções]
-
-Cada conceito = ${count} cartões (1 de cada formato), abordando o MESMO conteúdo por ângulos diferentes.
-Isso garante memorização de 100% por múltiplas vias cognitivas (recall ativo, reconhecimento e completamento).
-Os cartões do mesmo conceito devem ficar AGRUPADOS na sequência (basic→cloze→multiple_choice) antes de passar ao próximo conceito.`);
+EXEMPLO com ${count} formatos e 6 conceitos:
+Conceito 1 → ${formatNames[0]}
+Conceito 2 → ${formatNames[1 % count]}
+Conceito 3 → ${formatNames[2 % count]}
+Conceito 4 → ${formatNames[3 % count]}
+Conceito 5 → ${formatNames[4 % count]}
+Conceito 6 → ${formatNames[5 % count]}`);
   }
 
   if (forbiddenNames.length > 0) {
@@ -186,7 +188,7 @@ Deno.serve(async (req) => {
     const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
 REGRAS OBRIGATÓRIAS:
-- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade ideal para cobrir o conteúdo de forma completa.'}
+- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade NECESSÁRIA de cartões para o nível de cobertura solicitado abaixo. NÃO limite artificialmente — gere tantos cartões quantos forem necessários.'}
 - ${getDetailInstruction(detail)}
 - TUDO em PORTUGUÊS (ou na língua do material).
 - Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
