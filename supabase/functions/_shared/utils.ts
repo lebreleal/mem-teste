@@ -85,6 +85,19 @@ export async function logTokenUsage(
   }
 }
 
+/** Fetch with automatic retry for 503 (model overloaded). */
+export async function fetchWithRetry(
+  url: string, options: RequestInit, maxRetries = 2
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.status !== 503 || attempt === maxRetries) return response;
+    console.warn(`503 retry ${attempt + 1}/${maxRetries}, waiting 2s...`);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return await fetch(url, options); // fallback (unreachable)
+}
+
 /** Fetch prompt config from ai_prompts table. */
 export async function fetchPromptConfig(supabase: any, featureKey: string) {
   try {

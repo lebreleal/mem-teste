@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, getAIConfig } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       ...(messages || []).map((m: any) => ({ role: m.role, content: m.content })),
     ];
 
-    const response = await fetch(AI_URL, {
+    const response = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
       body: JSON.stringify({ model: selectedModel, messages: chatMessages, max_tokens: 1500, temperature: 0.7, stream: true }),
@@ -48,8 +48,10 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("OpenAI error:", response.status, errText);
+      console.error("AI error:", response.status, errText);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
+      if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
+      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 

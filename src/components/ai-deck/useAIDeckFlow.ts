@@ -74,7 +74,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPages = pages.filter(p => p.selected);
-  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE);
+  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE, isPremium);
   const busy = isLoading || isSaving;
 
   const resetState = useCallback(() => {
@@ -266,52 +266,52 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     for (let b = 0; b < totalBatches; b++) {
       const batch = textBatches[b];
       const batchText = batch.texts.join('\n\n');
-      const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE);
+      const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
       totalEnergyCost += batchCost;
       const batchCardCount = targetCardCount > 0
         ? Math.max(2, Math.ceil(targetCardCount / totalBatches))
         : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
-      // Loop per format: each format gets its own dedicated API call
-      for (let f = 0; f < formats.length; f++) {
-        requestIdx++;
-        const format = formats[f];
+      // Parallel format calls within each batch (3x faster)
+      const formatPromises = formats.map((format, f) => {
         const formatCardCount = Math.max(2, Math.ceil(batchCardCount / formats.length));
         // Only charge energy on the first format call of each batch
         const formatEnergyCost = f === 0 ? batchCost : 0;
 
-        const progress = { current: requestIdx, total: totalRequests, creditsUsed: totalEnergyCost };
-        setGenProgress(progress);
+        return aiService.generateDeckCards({
+          textContent: batchText,
+          cardCount: formatCardCount,
+          detailLevel,
+          cardFormats: [format],
+          customInstructions: customInstructions.trim() || undefined,
+          aiModel: model,
+          energyCost: formatEnergyCost,
+          skipLog: true,
+        });
+      });
 
-        // Update pending store if running in background
-        if (isBackgroundRef.current && pendingIdRef.current) {
-          updatePending(pendingIdRef.current, { progress: { current: requestIdx, total: totalRequests } });
-        }
+      // Update progress for batch start
+      requestIdx += formats.length;
+      const progress = { current: requestIdx, total: totalRequests, creditsUsed: totalEnergyCost };
+      setGenProgress(progress);
+      if (isBackgroundRef.current && pendingIdRef.current) {
+        updatePending(pendingIdRef.current, { progress: { current: requestIdx, total: totalRequests } });
+      }
 
-        try {
-          const result = await aiService.generateDeckCards({
-            textContent: batchText,
-            cardCount: formatCardCount,
-            detailLevel,
-            cardFormats: [format], // Single format per call
-            customInstructions: customInstructions.trim() || undefined,
-            aiModel: model,
-            energyCost: formatEnergyCost,
-            skipLog: true,
-          });
-          allCards.push(...result.cards);
-
-          // Accumulate usage
-          if (result.usage) {
-            aggregatedUsage.prompt_tokens += result.usage.prompt_tokens;
-            aggregatedUsage.completion_tokens += result.usage.completion_tokens;
-            aggregatedUsage.total_tokens += result.usage.total_tokens;
+      const results = await Promise.allSettled(formatPromises);
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allCards.push(...result.value.cards);
+          if (result.value.usage) {
+            aggregatedUsage.prompt_tokens += result.value.usage.prompt_tokens;
+            aggregatedUsage.completion_tokens += result.value.usage.completion_tokens;
+            aggregatedUsage.total_tokens += result.value.usage.total_tokens;
           }
-
-          // Resolve actual model name for logging
           const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
           if (modelConfig) usedModel = modelConfig.backendModel as string;
-        } catch (err) { console.error(`Batch ${b + 1}, format ${format} failed:`, err); }
+        } else {
+          console.error(`Format call failed:`, result.reason);
+        }
       }
     }
 
@@ -400,7 +400,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     customInstructions, setCustomInstructions, targetCardCount, setTargetCardCount,
     genProgress, cards, editingIdx, editFront, setEditFront, editBack, setEditBack,
     isSaving, isLoading, busy, fileInputRef,
-    selectedPages, totalCredits, energy, model, setModel,
+    selectedPages, totalCredits, energy, model, setModel, isPremium,
     pendingPro, confirmPro, cancelPro,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,

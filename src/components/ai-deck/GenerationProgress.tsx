@@ -107,7 +107,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
       </p>
 
       {/* Dismiss button */}
-      {canDismiss && elapsed >= 10 && onDismiss && (
+      {canDismiss && onDismiss && (
         <div className="space-y-2 animate-fade-in">
           <Button
             variant="ghost"
