@@ -1,72 +1,48 @@
 
 
-# Progresso Suave Universal (1 a N lotes)
+# Fix AI Tutor, TTS, and Chat Issues
 
-## Problema
+## Problems Identified
 
-O plano anterior so resolvia lote unico (total === 1). Mas com 2, 3, 4, 5 lotes o progresso ainda pula em blocos grandes (50%, 33%, 25%...). Precisamos de progresso suave para TODOS os casos.
+### 1. AI Tutor still says "Ola! Que otima pergunta..."
+**Root cause found:** The `ai_prompts` database table has a custom `system_prompt` for `ai_tutor` that says *"Seja encorajador e positivo"*. The code on line 66 does `const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt` -- since the DB has a value, the anti-preamble rules are **completely ignored**. The DB prompt literally tells the AI to be encouraging, which causes the greetings.
 
-## Solucao: Progresso simulado que interpola entre lotes reais
+**Fix:** Merge the anti-preamble rules INTO the prompt, prepending them before whatever is in the DB. The anti-preamble rules should always be enforced regardless of DB configuration.
 
-A barra nunca pula. Ela avanca suavemente e usa os lotes completados como "checkpoints" reais.
+### 2. AI Tutor response cuts off mid-sentence  
+**Root cause:** The `max_tokens` for the default "hint" action is only **400**. Combined with the DB's `temperature: 0.8` (verbose), the model runs out of tokens. Also, the "explain" action uses 2000 tokens which may not be enough for very detailed explanations.
 
-```text
-Exemplo com 2 lotes:
-  0s  -> 0%   (simulando...)
-  5s  -> 12%  (simulando...)
-  15s -> 35%  (simulando, trava em 45%)
-  20s -> Lote 1 completa! Target sobe pra 50%, barra alcanca
-  21s -> 52%  (simulando de novo...)
-  35s -> 78%  (simulando, trava em 90%)
-  40s -> Lote 2 completa! -> 100%
-```
+**Fix:** Increase `max_tokens` -- hint to 600, explain to 4000, explain-mc to 2000.
 
-## Como funciona
+### 3. TTS uses OpenAI API, not Google
+**Root cause confirmed:** The `tts/index.ts` function explicitly uses `OPENAI_API_KEY` and calls `https://api.openai.com/v1/audio/speech`. There is a `GOOGLE_CLOUD_TTS_KEY` secret configured but unused by this function.
 
-O componente mantem um `displayPercent` local que:
+**Fix:** Rewrite the TTS edge function to use Google Cloud Text-to-Speech API with the existing `GOOGLE_CLOUD_TTS_KEY`, adding automatic language detection (PT-BR vs EN-US) for voice selection.
 
-1. Calcula o **target real** baseado nos lotes completados: `(current / total) * 100`
-2. Define um **teto simulado**: o ponto medio entre o target atual e o proximo checkpoint, para nunca "ultrapassar" a realidade. Formula: `target + ((nextTarget - target) * 0.9)` — ou seja, avanca ate 90% do proximo trecho
-3. A cada segundo, incrementa `displayPercent` com desaceleracao (avanca rapido longe do teto, devagar perto)
-4. Quando um lote completa, o target sobe e a barra continua avancando suavemente
+### 4. Chat IA freezing
+**Root cause:** The streaming loop in `StudyChatModal` has a subtle bug -- when `[DONE]` is received inside the inner `while` loop, it only `break`s out of the inner loop, but the outer `while(true)` keeps reading. The stream may hang waiting for more data that never comes. Also missing buffer flush after the loop.
 
-## Regras de exibicao
+**Fix:** Add a `streamDone` flag (same pattern used in Study.tsx) and flush the buffer after the loop ends.
 
-- **Barra**: usa `displayPercent` (suave) em vez do progresso real (discreto)
-- **Fases**: baseadas no `displayPercent` (Processando/Gerando/Finalizando)
-- **ETA**: mantido para multi-lote (avgBatchMs), para lote unico mostra apenas tempo decorrido
-- **Texto inferior**: apenas tempo decorrido, sem "Lote X de Y"
+---
 
-## Secao Tecnica
+## Technical Plan
 
-**Arquivo modificado:** `src/components/ai-deck/GenerationProgress.tsx`
+### Step 1: Fix AI Tutor system prompt (ai-tutor/index.ts)
+- Always prepend anti-preamble rules to whatever system prompt comes from DB
+- Change line 66 from `promptConfig?.system_prompt || antiPreamblePrompt` to always include anti-preamble + DB prompt combined
+- Increase max_tokens: hint 400 -> 600, explain 2000 -> 4000
 
-**Logica do displayPercent:**
+### Step 2: Fix Chat streaming (StudyChatModal.tsx)
+- Add `streamDone` flag to break outer loop when `[DONE]` is received
+- Add buffer flush after the main loop (same pattern as Study.tsx)
 
-```text
-// A cada tick (1s):
-const realPercent = (current / total) * 100;
-const nextCheckpoint = ((current + 1) / total) * 100;
-const ceiling = realPercent + (nextCheckpoint - realPercent) * 0.9;
+### Step 3: Rewrite TTS to use Google Cloud (tts/index.ts)
+- Replace OpenAI TTS with Google Cloud Text-to-Speech API
+- Use `GOOGLE_CLOUD_TTS_KEY` (already configured)
+- Add language detection: if text is primarily Portuguese, use `pt-BR-Neural2-A`; otherwise use `en-US-Neural2-J`
+- Return audio/mpeg response
 
-// Se completou tudo:
-if (current >= total) displayPercent = 100;
-// Senao, incrementa com desaceleracao:
-else {
-  const distToCeiling = ceiling - displayPercent;
-  const increment = Math.max(0.3, distToCeiling * 0.08);
-  displayPercent = Math.min(ceiling, displayPercent + increment);
-}
-```
-
-**Comportamento por quantidade de lotes:**
-
-| Lotes | Sem mudanca | Com mudanca |
-|-------|-------------|-------------|
-| 1 | 0% -> 100% (pulo) | 0% -> 5% -> 20% -> 55% -> 90% (trava) -> 100% |
-| 2 | 0% -> 50% -> 100% | 0% -> 15% -> 40% (lote 1) -> 55% -> 80% (lote 2) -> 100% |
-| 3 | 0% -> 33% -> 66% -> 100% | Progresso suave com 3 checkpoints |
-| 5+ | Pulos de 20% | Progresso quase continuo |
-
-**Nenhuma mudanca no useAIDeckFlow.ts** — a logica de geracao permanece identica.
+### Step 4: Deploy edge functions
+- Deploy `ai-tutor` and `tts`
 
