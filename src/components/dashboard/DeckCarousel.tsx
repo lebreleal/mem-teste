@@ -16,22 +16,41 @@ function formatMinutes(m: number) {
   return r > 0 ? `${h}h${r}min` : `${h}h`;
 }
 
-/** Calculate today's pending cards for a deck, respecting daily limits */
-function getDeckTodayStats(deck: DeckWithStats) {
-  const newAvailable = Math.max(0, Math.min(
-    deck.daily_new_limit - deck.new_graduated_today,
-    deck.new_count
-  ));
-  const reviewAvailable = deck.review_count;
-  const learningAvailable = deck.learning_count;
+/** Aggregate stats across a deck and all its descendants */
+function getAggregateRaw(deck: DeckWithStats, allDecks: DeckWithStats[]): { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number } {
+  const subs = allDecks.filter(d => d.parent_deck_id === deck.id && !d.is_archived);
+  let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+  let newReviewed = deck.new_reviewed_today ?? 0;
+  let newGraduated = deck.new_graduated_today ?? 0;
+  let reviewed = deck.reviewed_today ?? 0;
+  for (const sub of subs) {
+    const s = getAggregateRaw(sub, allDecks);
+    n += s.new_count; l += s.learning_count; r += s.review_count;
+    newReviewed += s.newReviewed;
+    newGraduated += s.newGraduated;
+    reviewed += s.reviewed;
+  }
+  return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+}
+
+/** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits */
+function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
+  const raw = getAggregateRaw(deck, allDecks);
+  const dailyNewLimit = deck.daily_new_limit ?? 20;
+  const dailyReviewLimit = deck.daily_review_limit ?? 100;
+
+  const newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
+  const reviewReviewedToday = Math.max(0, raw.reviewed - raw.newGraduated);
+  const reviewAvailable = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
+  const learningAvailable = raw.learning_count;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
-  const studiedToday = deck.reviewed_today;
+  const studiedToday = raw.reviewed;
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: DeckWithStats; avgSecondsPerCard: number }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number }) {
   const navigate = useNavigate();
-  const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck);
+  const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks);
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
@@ -87,18 +106,18 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan }:
     const pending: DeckWithStats[] = [];
     const done: DeckWithStats[] = [];
     for (const deck of activeDecks) {
-      const { pendingToday } = getDeckTodayStats(deck);
+      const { pendingToday } = getDeckTodayStats(deck, decks);
       if (pendingToday > 0) pending.push(deck);
       else done.push(deck);
     }
     return { pendingDecks: pending, doneDecks: done };
-  }, [activeDecks]);
+  }, [activeDecks, decks]);
 
   const filteredDecks = activeTab === 'pending' ? pendingDecks : doneDecks;
 
   if (activeDecks.length === 0) return null;
 
-  const totalPending = pendingDecks.reduce((sum, d) => sum + getDeckTodayStats(d).pendingToday, 0);
+  const totalPending = pendingDecks.reduce((sum, d) => sum + getDeckTodayStats(d, decks).pendingToday, 0);
 
   return (
     <div className="space-y-3 mb-6">
@@ -142,7 +161,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan }:
       ) : (
         <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4 scrollbar-hide">
           {filteredDecks.map(deck => (
-            <DeckStudyCard key={deck.id} deck={deck} avgSecondsPerCard={avgSecondsPerCard} />
+            <DeckStudyCard key={deck.id} deck={deck} allDecks={decks} avgSecondsPerCard={avgSecondsPerCard} />
           ))}
         </div>
       )}
