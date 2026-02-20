@@ -399,7 +399,7 @@ const MultipleChoiceCard = ({
             {/* Explain subject button — opens chat */}
             {onOpenExplainChat && (
               <button
-                onClick={() => { if (!canUseTutor) return; onOpenExplainChat({ action: 'explain' }); }}
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onOpenExplainChat({ action: 'explain' }); }}
                 disabled={!canUseTutor || isTutorLoading}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                   canUseTutor
@@ -407,14 +407,14 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {<><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
+                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
               </button>
             )}
 
             {/* Explain alternatives button — opens chat */}
             {onOpenExplainChat && (
               <button
-                onClick={() => { if (!canUseTutor) return; onOpenExplainChat({
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onOpenExplainChat({
                   action: 'explain-mc',
                   mcOptions: mcData.options,
                   correctIndex: mcData.correctIndex,
@@ -427,7 +427,7 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {<><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
+                {loadingAction === 'explain-mc' && isTutorLoading ? <TutorLoadingAnimation variant="mc-alternatives" /> : <><Sparkles className="h-3.5 w-3.5" /> Explicar alternativas</>}
               </button>
             )}
 
@@ -838,7 +838,7 @@ const FlashCard = ({
                         : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                     }`}
                   >
-                    {<><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
                   </button>
                 )}
 
