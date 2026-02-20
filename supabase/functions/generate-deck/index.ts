@@ -13,13 +13,14 @@ PRINCÍPIOS:
 4. CONEXÕES: Faça perguntas que conectem conceitos entre si.
 5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas. Se o material não contém informação suficiente para criar uma pergunta, NÃO crie essa pergunta.
 6. FIDELIDADE: Todas as perguntas e respostas devem ser diretamente deriváveis do texto fornecido. Não extrapole.
+7. ATOMICIDADE: Cada cartão deve testar APENAS UMA ideia ou conceito. Se um tópico tem 3 sub-pontos, crie 3 cartões separados. Evite respostas longas com listas ou múltiplos itens.
 
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
-    case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado.";
+    case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, mesmo que pareça secundário. Se o texto citar uma EXCEÇÃO, crie um cartão para essa exceção. Se citar um EXEMPLO concreto, crie um cartão sobre esse exemplo. Se houver listas, cada item merece seu próprio cartão atômico.";
     default: return "Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Não pule nenhum tema mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
@@ -69,9 +70,9 @@ function getFormatInstructions(formats: string[]): string {
     • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
 
   const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.', name: "pergunta/resposta", typeName: "basic" },
-    { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction, name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis (não absurdas). "correctIndex" com o índice correto (0-based). As alternativas incorretas devem ser distratores realistas.', name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida. Foque em perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?") e COMPARAÇÃO ("Qual a diferença entre X e Y?"). Evite perguntas de dicionário ("O que é X?") — prefira perguntas que forçam o estudante a EXPLICAR e RACIOCINAR.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados que não apareçam no texto.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -192,6 +193,7 @@ REGRAS OBRIGATÓRIAS:
 - ${getDetailInstruction(detail)}
 - TUDO em PORTUGUÊS (ou na língua do material).
 - Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
+- SEM DECOREBA: Não faça perguntas que possam ser respondidas apenas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
 - CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
 - ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
