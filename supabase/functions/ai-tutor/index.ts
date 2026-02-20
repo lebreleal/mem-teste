@@ -40,14 +40,14 @@ Deno.serve(async (req) => {
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
 
     let prompt: string;
-    let maxTokens = 400;
+    let maxTokens = 600;
     if (action === "explain-mc") {
       const optionsList = (mcOptions || []).map((opt: string, i: number) => `${i === correctIndex ? "✅" : "❌"} ${String.fromCharCode(65 + i)}) ${opt}`).join("\n");
       prompt = `O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nExplique:\n1. Por que a resposta correta está certa (1-2 frases)\n2. Por que CADA alternativa incorreta está errada (1 frase cada)\n\nResponda na mesma língua da pergunta. Seja conciso.`;
-      maxTokens = 1000;
+      maxTokens = 2000;
     } else if (action === "explain") {
       prompt = `O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nResponda nesta estrutura:\n1. **Referência utilizada**: Informe a referência acadêmica que você usou para elaborar esta explicação (1-2 livros ou fontes clássicas da área). Escreva no formato: "Baseado em: [Nome do livro/autor]". Não sugira leitura — afirme que foi a fonte consultada.\n2. **Explicação**: Explique o conceito de forma didática e completa, como se estivesse dando aula particular. Use analogias e exemplos práticos.\n3. **Conexão com o card**: Relacione sua explicação diretamente com a pergunta/resposta do card.\n\nResponda na mesma língua do card. Seja completo, didático e claro, tudo pra conseguir entender o conteúdo do baralho, pois às vezes precisamos saber um conteúdo chave antes de conseguir entender o conteúdo.`;
-      maxTokens = 2000;
+      maxTokens = 4000;
     } else {
       if (promptConfig?.user_prompt_template) {
         prompt = promptConfig.user_prompt_template.replace("{{front}}", cleanFront).replace("{{backHint}}", cleanBack ? `(The answer is: ${cleanBack} - but DO NOT reveal this. Give a hint instead.)` : "");
@@ -63,7 +63,9 @@ Deno.serve(async (req) => {
 4. NÃO faça preâmbulos. NÃO cumprimente. NÃO elogie. NÃO comente sobre a pergunta. VÁ DIRETO ao conteúdo.
 5. Use Markdown para formatação. Seja didático e completo.
 6. Você é um tutor educacional. Responda SOMENTE o conteúdo acadêmico solicitado.`;
-    const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt;
+    // ALWAYS prepend anti-preamble rules, then append DB prompt if any
+    const dbPrompt = promptConfig?.system_prompt ? `\n\nInstruções adicionais:\n${promptConfig.system_prompt}` : '';
+    const systemPrompt = antiPreamblePrompt + dbPrompt;
 
     // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
     const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);

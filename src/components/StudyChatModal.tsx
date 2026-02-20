@@ -113,10 +113,11 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
       const decoder = new TextDecoder();
       let assistantContent = '';
       let textBuffer = '';
+      let streamDone = false;
 
       setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -132,7 +133,10 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
           if (!line.startsWith('data: ')) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') {
+            streamDone = true;
+            break;
+          }
 
           try {
             const parsed = JSON.parse(jsonStr);
@@ -152,6 +156,21 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
             textBuffer = line + '\n' + textBuffer;
             break;
           }
+        }
+      }
+
+      // Flush any remaining buffer content
+      if (textBuffer.trim()) {
+        const remaining = textBuffer.trim();
+        if (remaining.startsWith('data: ') && remaining.slice(6).trim() !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(remaining.slice(6).trim());
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m));
+            }
+          } catch {}
         }
       }
     } catch (e: any) {
