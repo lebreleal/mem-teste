@@ -61,11 +61,15 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     }
   }, [open]);
 
+  // Absorb external streaming response into local messages
+  const absorbedRef = useRef<string | null>(null);
+
   // Reset messages when card changes (resetKey)
   useEffect(() => {
     setMessages([]);
     setInput('');
     setIsStreaming(false);
+    absorbedRef.current = null;
   }, [resetKey]);
 
   // Notify parent about messages state
@@ -73,10 +77,8 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     onHasMessagesChange?.(messages.length > 0);
   }, [messages.length, onHasMessagesChange]);
 
-  // Absorb external streaming response into local messages
-  const absorbedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) { absorbedRef.current = null; return; }
+    if (!open) return; // Don't reset absorbedRef on close - preserve tracking
     if (streamingResponse && !isStreamingResponse && absorbedRef.current !== streamingResponse) {
       // Streaming finished — append as a new assistant message (don't replace old ones)
       absorbedRef.current = streamingResponse;
@@ -255,7 +257,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.length === 0 && !streamingResponse && (
+            {messages.length === 0 && !streamingResponse && !isStreamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
@@ -288,7 +290,18 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
                 </div>
               </div>
             ))}
-            {/* Live streaming response appended at the end */}
+            {/* Loading indicator when AI is thinking but no content yet */}
+            {isStreamingResponse && !streamingResponse && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
+                  <div className="flex items-center gap-2 py-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/60" />
+                    <span className="text-xs text-muted-foreground">Gerando explicação...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Live streaming response at the end */}
             {streamingResponse && absorbedRef.current !== streamingResponse && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">

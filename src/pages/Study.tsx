@@ -523,6 +523,9 @@ const Study = () => {
             onUndo={handleUndo}
             onOpenExplainChat={(options) => {
               const action = options?.action || 'explain';
+              // Reset the response state so old value doesn't interfere
+              if (action === 'explain') setExplainResponse(null);
+              if (action === 'explain-mc') setMcExplainResponse(null);
               setExplainInChat(action);
               setChatOpen(true);
               handleTutorRequest(options || { action: 'explain' });
