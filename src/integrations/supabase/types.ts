@@ -1040,6 +1040,44 @@ export type Database = {
           },
         ]
       }
+      study_plans: {
+        Row: {
+          created_at: string
+          daily_minutes: number
+          deck_ids: string[]
+          id: string
+          target_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_minutes?: number
+          deck_ids?: string[]
+          id?: string
+          target_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_minutes?: number
+          deck_ids?: string[]
+          id?: string
+          target_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       turma_decks: {
         Row: {
           allow_download: boolean
@@ -2047,6 +2085,7 @@ export type Database = {
           reviewed_today: number
         }[]
       }
+      get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
       get_community_full_preview: {
         Args: { p_turma_id: string }
         Returns: Json
@@ -2067,6 +2106,14 @@ export type Database = {
         }[]
       }
       get_marketplace_fee: { Args: { tier: number }; Returns: number }
+      get_plan_metrics: {
+        Args: { p_deck_ids: string[]; p_user_id: string }
+        Returns: {
+          total_learning: number
+          total_new: number
+          total_review: number
+        }[]
+      }
       get_public_profiles: {
         Args: { p_user_ids: string[] }
         Returns: {
