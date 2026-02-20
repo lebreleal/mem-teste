@@ -130,20 +130,22 @@ function StudyLoadBar({ estimatedMinutes, capacityMinutes, recommendedMinutes, r
 // ─── Deck Study Card (Carousel Item) ──────────────────
 function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: any; avgSecondsPerCard: number }) {
   const navigate = useNavigate();
-  const totalCards = deck.card_count ?? 0;
-  const newCards = deck.new_count ?? 0;
+  const newAvailable = Math.max(0, Math.min((deck.daily_new_limit ?? 20) - (deck.new_graduated_today ?? 0), deck.new_count ?? 0));
   const reviewCards = deck.review_count ?? 0;
-  const pendingCards = newCards + reviewCards;
-  const doneCards = Math.max(0, totalCards - pendingCards);
-  const progressPercent = totalCards > 0 ? Math.round((doneCards / totalCards) * 100) : 0;
+  const learningCards = deck.learning_count ?? 0;
+  const pendingCards = newAvailable + reviewCards + learningCards;
+  const studiedToday = deck.reviewed_today ?? 0;
+  const totalToday = pendingCards + studiedToday;
+  const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingCards * avgSecondsPerCard) / 60);
 
   return (
     <div className="min-w-[260px] max-w-[300px] snap-start flex flex-col rounded-xl border bg-card p-4 space-y-3 shrink-0">
       <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
       <div className="flex gap-1.5 flex-wrap">
-        {newCards > 0 && <Badge variant="outline" className="text-[10px] h-5">{newCards} novos</Badge>}
+        {newAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5">{newAvailable} novos</Badge>}
         {reviewCards > 0 && <Badge variant="outline" className="text-[10px] h-5">{reviewCards} revisões</Badge>}
+        {learningCards > 0 && <Badge variant="outline" className="text-[10px] h-5">{learningCards} aprendendo</Badge>}
         {pendingCards === 0 && <Badge variant="secondary" className="text-[10px] h-5">✓ Concluído</Badge>}
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -153,7 +155,7 @@ function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: any; avgSecondsPerCa
         </span>
       </div>
       <Progress value={progressPercent} className="h-1.5" />
-      <p className="text-[10px] text-muted-foreground">{progressPercent}% concluído</p>
+      <p className="text-[10px] text-muted-foreground">{studiedToday}/{totalToday} cards · {progressPercent}% concluído</p>
       <div className="flex items-center gap-2 mt-auto">
         <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
           <Play className="h-3 w-3 mr-1" /> Estudar
