@@ -114,22 +114,22 @@ function getFormatInstructions(formats: string[]): string {
 
     let distributionText: string;
     if (hasAll3) {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo):
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
 - Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
 - Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
-- Múltipla Escolha: ~20% dos cartões (MÁXIMO) — SOMENTE para diferenciação de conceitos similares.`;
+- Múltipla Escolha: ~20% dos cartões (MÍNIMO 15%) — OBRIGATÓRIO para diferenciação de conceitos similares. Você DEVE gerar cartões deste tipo. Se gerar 20 cartões, pelo menos 3-4 DEVEM ser múltipla escolha.`;
     } else if (hasCloze && hasBasic) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
 - Cloze: ~60% dos cartões — formato dominante para retenção.
 - Pergunta/Resposta (basic): ~40% dos cartões — para raciocínio e compreensão.`;
     } else if (hasCloze && hasMCQ) {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
 - Cloze: ~70% dos cartões — formato dominante para retenção.
-- Múltipla Escolha: ~30% dos cartões — para diferenciação de conceitos.`;
+- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
     } else {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
 - Pergunta/Resposta (basic): ~70% dos cartões — para raciocínio e compreensão.
-- Múltipla Escolha: ~30% dos cartões — para diferenciação de conceitos.`;
+- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
     }
 
     parts.push(`\nREGRAS DE DISTRIBUIÇÃO (OBRIGATÓRIA):
