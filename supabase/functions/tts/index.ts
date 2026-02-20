@@ -2,7 +2,16 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { handleCors, jsonResponse, logTokenUsage } from "../_shared/utils.ts";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const GOOGLE_KEY = Deno.env.get("GOOGLE_CLOUD_TTS_KEY");
+
+/** Simple heuristic to detect Portuguese text */
+function isPortuguese(text: string): boolean {
+  // Check for Portuguese-specific characters
+  if (/[çãõáàâéèêíóòôúü]/i.test(text)) return true;
+  // Check for common Portuguese words (case-insensitive, word boundaries)
+  const ptWords = /\b(que|como|para|com|não|uma|são|mais|está|isso|também|porque|quando|muito|então|pode|fazer|sobre|ainda|esse|esta|pela|pelo|seus|suas|você|vocês|nós|dele|dela|aqui|onde|toda|cada|qual|quem|entre|após|desde|até|foram|sido|será|seria|temos|nosso|nossa|nossos|nossas)\b/i;
+  return ptWords.test(text);
+}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -21,12 +30,17 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "text is required" }, 400);
     }
 
-    if (!OPENAI_API_KEY) {
-      return jsonResponse({ error: "OPENAI_API_KEY not configured" }, 500);
+    if (!GOOGLE_KEY) {
+      return jsonResponse({ error: "GOOGLE_CLOUD_TTS_KEY not configured" }, 500);
     }
 
     // Limit text length to avoid excessive costs
     const trimmed = text.slice(0, 4096);
+
+    // Detect language and pick voice
+    const isPT = isPortuguese(trimmed);
+    const languageCode = isPT ? "pt-BR" : "en-US";
+    const voiceName = isPT ? "pt-BR-Neural2-A" : "en-US-Neural2-J";
 
     // Auth (optional – log if authenticated)
     let userId: string | null = null;
@@ -41,10 +55,8 @@ Deno.serve(async (req) => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           userId = user.id;
-          // TTS-1 pricing: $0.015 per 1K characters
-          // Log character count directly as "tokens" for cost tracking
           const charCount = trimmed.length;
-          await logTokenUsage(supabase, userId, "tts", "tts-1", {
+          await logTokenUsage(supabase, userId, "tts", "google-tts-neural2", {
             prompt_tokens: charCount,
             completion_tokens: 0,
             total_tokens: charCount,
@@ -53,28 +65,45 @@ Deno.serve(async (req) => {
       } catch {}
     }
 
-    const response = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "tts-1",
-        input: trimmed,
-        voice: voice || "nova",
-        response_format: "mp3",
-      }),
-    });
+    // Call Google Cloud TTS
+    const response = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: { text: trimmed },
+          voice: { languageCode, name: voiceName },
+          audioConfig: {
+            audioEncoding: "MP3",
+            speakingRate: 1.0,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("OpenAI TTS error:", response.status, errText);
+      console.error("Google TTS error:", response.status, errText);
       return jsonResponse({ error: "TTS generation failed" }, 500);
     }
 
-    // Stream the audio back
-    return new Response(response.body, {
+    const data = await response.json();
+    const audioContent = data.audioContent;
+
+    if (!audioContent) {
+      console.error("Google TTS: no audioContent in response");
+      return jsonResponse({ error: "TTS generation failed" }, 500);
+    }
+
+    // Decode base64 to binary
+    const binaryString = atob(audioContent);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return new Response(bytes, {
       headers: {
         ...corsHeaders,
         "Content-Type": "audio/mpeg",
