@@ -1,0 +1,1 @@
+INSERT INTO ai_settings (key, value) VALUES ('tts_voice_pt', 'pt-BR-Neural2-A'), ('tts_voice_en', 'en-US-Neural2-J');
