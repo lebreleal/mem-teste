@@ -1,112 +1,123 @@
 
 
-# Implementacao do Guia UI/UX do MemoPlanner
+# Refatoracao do PlanDashboard - Hero Card Unificado + Drag-and-Drop
 
-## Gaps Identificados (PDF vs. Implementacao Atual)
+## Resumo
 
-O PDF define requisitos especificos de UI/UX que ainda nao foram implementados. Abaixo, cada item do documento e o que precisa ser feito:
+Reescrever o componente `PlanDashboard` (linhas 392-796 de `src/pages/StudyPlan.tsx`) para criar um dashboard compacto, unificado e de alto impacto visual conforme especificado.
 
-### 1. "Termometro de Tempo" (Secao 2 do PDF)
-**Status:** NAO IMPLEMENTADO
-**O que falta:** Um grafico visual tipo "velocimetro" ou barra com 4 cores (Verde, Amarelo, Laranja, Vermelho) mostrando a carga de estudo diaria estimada em MINUTOS, nao apenas cards. O indicador atual e apenas um ponto colorido com 3 cores.
-**Acao:** Criar componente `StudyLoadGauge` com barra segmentada em 4 niveis de cor. A metrica central passa a ser "minutos estimados hoje" (novos + revisoes), nao cards.
+---
 
-### 2. Tres Pilares Sempre Visiveis (Secao 3 do PDF)
-**Status:** PARCIALMENTE IMPLEMENTADO
-**O que falta:**
-- **Data de Conclusao:** Ja existe, mas sem o texto didatico "Quando eu terminarei de ver tudo?"
-- **Taxa de Retencao Desejada:** NAO EXISTE. O PDF exige exibir o % de retencao alvo (padrao FSRS: 90%).
-- **Capacidade Diaria:** Existe, mas sem interconexao dinamica clara
-**Acao:** Adicionar card de 3 pilares no dashboard com os tres valores interconectados. A taxa de retencao vem do campo `requested_retention` dos decks selecionados (media ponderada).
+## Mudancas no arquivo `src/pages/StudyPlan.tsx`
 
-### 3. Controles Editaveis na Segunda Visita (Secao 4 do PDF)
-**Status:** PARCIALMENTE IMPLEMENTADO
-**O que falta:**
-- **Slider de Tempo com feedback de impacto:** Existe slider, mas sem feedback tipo "Reduzir para 20 min/dia adiara sua data de conclusao em 4 dias"
-- **Priorizacao de Baralhos (drag & drop):** NAO EXISTE. O PDF pede arrastar e soltar ou botoes de seta para reordenar prioridade
-- **Edicao da Data da Meta inline:** Existe no wizard, mas nao no dashboard
-- **Botao "Limpar Atraso" (Catch-up):** NAO EXISTE. Deve oferecer opcoes para redistribuir backlog
-**Acao:**
-- Adicionar feedback de impacto no slider
-- Implementar reordenacao de baralhos com botoes de seta (up/down) no dashboard
-- Adicionar edicao inline de data e tempo no dashboard (sem voltar ao wizard completo)
-- Criar botao "Limpar Atraso" com dialog de opcoes de diluicao
+### 1. Hero Card Unificado (Secao A)
 
-### 4. Progressive Disclosure - 3 Niveis (Secao 5 do PDF)
-**Status:** NAO IMPLEMENTADO
-**O que falta:**
-- **Nivel 1:** Tela principal mostra apenas Termometro de Tempo + status geral ("Voce esta no caminho certo")
-- **Nivel 2:** Ao clicar, mostra quebra: "20 min de Revisoes + 25 min de Novos Cards"
-- **Nivel 3:** Configuracoes avancadas (FSRS) escondidas
-**Acao:** Reestruturar dashboard para ter card principal clicavel/expansivel. Nivel 1 = resumo. Nivel 2 = detalhes ao expandir. Nivel 3 = link para configuracoes avancadas (ja existe em DeckSettings).
+Substituir os elementos separados (HealthRing + StudyLoadBar + botao contextual) por um unico `Card` com gradiente dinamico:
 
-### 5. Indicador "Saude do Plano" como Percentual (Secao 7 do PDF)
-**Status:** PARCIALMENTE IMPLEMENTADO
-**O que falta:** O PDF pede um indicador de CONSISTENCIA em percentual (100% = usuario segue o plano, diminui se pula dias). Atualmente so tem verde/amarelo/vermelho baseado em cobertura.
-**Acao:** Calcular "Saude do Plano" como % baseado em dias estudados vs dias do plano (usando review_logs). Exibir como barra de progresso com mensagem proativa quando abaixo de 80%.
+- Fundo: `bg-gradient-to-br from-emerald-50/50 to-white` (green), `from-amber-50/50` (yellow), `from-orange-50/50` (orange), `from-red-50/50` (red)
+- Borda sutil colorida: `border-emerald-200/60`, etc.
+- Conteudo vertical sem separacoes internas:
+  - HealthRing centralizado (mantido como esta)
+  - StudyLoadBar logo abaixo, sem card proprio, apenas como elemento inline
+  - Botao "Ajustar Plano" / "Resolver Atraso" como rodape do card, visivel apenas quando `needsAttention`
 
-### 6. 4 Cores em vez de 3 (Secao 2 do PDF)
-**Status:** INCORRETO
-**O que falta:** PDF define 4 niveis: Verde (leve, ate ~40 cards novos/dia), Amarelo (moderado), Laranja (intenso), Vermelho (sobrecarga). Implementacao atual usa apenas 3.
-**Acao:** Atualizar logica de healthStatus para 4 niveis e adicionar "orange" ao sistema de cores.
+### 2. Card "Meus Objetivos" Compacto (Secao B)
+
+Manter a estrutura atual dos 3 pilares mas:
+
+- Reduzir padding de `p-5` para `p-4`
+- O feedback de impacto do slider aparece como banner sutil (`bg-amber-50 text-amber-700 rounded-lg px-3 py-1.5 text-xs`) imediatamente abaixo do slider, nao em card separado
+- Integrar sugestoes de cobertura diretamente abaixo da barra de progresso (em vez de card separado de Sugestoes)
+
+### 3. Lista de Baralhos com Drag-and-Drop Real (Secao C)
+
+- Importar `useDragReorder` de `@/hooks/useDragReorder`
+- Remover a funcao `handleReorder` manual (setas up/down)
+- Remover os botoes `ChevronUp`/`ChevronDown`
+- Usar `useDragReorder({ items: planDecks, getId: d => d.id, onReorder })` onde `onReorder` chama `onUpdatePlan({ deck_ids: reordered.map(d => d.id) })`
+- Cada item usa `{...getHandlers(deck)}` + icone `GripVertical` como alca visual com `cursor-grab`
+- Itens mais compactos: `p-2` em vez de `p-2.5`
+
+### 4. Eliminar Card de Sugestoes Separado (Secao D)
+
+- Remover o card "Sugestoes" separado
+- Integrar alertas relevantes:
+  - Alerta de consistencia baixa: dentro do Hero Card, como texto pequeno abaixo do HealthRing
+  - Alerta de backlog: no botao contextual do Hero Card
+  - Alerta de cobertura: inline no card de Metas, abaixo da barra de progresso
+
+### 5. Limpeza de Espacamento
+
+- Container principal: `space-y-3` (era `space-y-5`)
+- CardContent: `p-4` (era `p-5`)
+- Remover imports nao usados: `ChevronUp`, `ChevronDown`, `Info` (apos remover sugestoes separadas)
+
+### 6. Confirmacao Dupla para Excluir
+
+- No Dialog de Settings, ao clicar "Excluir plano", abrir um `AlertDialog` de confirmacao com texto "Tem certeza? Esta acao nao pode ser desfeita." + botoes "Cancelar" / "Excluir"
+- Importar `AlertDialog` components de `@/components/ui/alert-dialog`
 
 ---
 
 ## Secao Tecnica
 
-### Arquivos Modificados
+### Arquivo unico modificado
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/StudyPlan.tsx` | Reescrever dashboard com Termometro, 3 pilares, progressive disclosure, botao Limpar Atraso, reordenacao de baralhos, edicao inline, feedback de impacto no slider |
-| `src/hooks/useStudyPlan.ts` | Adicionar calculo de saude do plano (%), logica de 4 cores, calculo de impacto ao mudar tempo, calculo de minutos estimados (nao so cards) |
+`src/pages/StudyPlan.tsx` - reescrita da funcao `PlanDashboard` (linhas 392-796)
 
-### Detalhes de Implementacao
+### Novos imports necessarios
 
-**1. Componente StudyLoadGauge (dentro de StudyPlan.tsx)**
-- Barra horizontal segmentada em 4 faixas de cor
-- Ponteiro/indicador na posicao correspondente aos minutos estimados hoje
-- Verde: 0-30min / Amarelo: 30-60min / Laranja: 60-120min / Vermelho: 120min+
-- Limites ajustaveis baseados no `daily_minutes` do usuario (verde = ate 70% do tempo disponivel, etc.)
+```typescript
+import { useDragReorder } from '@/hooks/useDragReorder';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
+```
 
-**2. Card dos 3 Pilares**
-- Linha 1: Data de Conclusao (com icone calendario) + dias restantes
-- Linha 2: Taxa de Retencao (icone brain) - media dos `requested_retention` dos decks no plano (padrao 90%)
-- Linha 3: Capacidade Diaria (icone relogio) - tempo configurado pelo usuario
-- Cada valor clicavel para editar inline
+### Imports removidos
 
-**3. Progressive Disclosure**
-- Card principal: mostra apenas Termometro + frase de status ("Voce esta no caminho certo para sua prova de Fisiologia")
-- Ao clicar/expandir: mostra quebra detalhada (minutos de revisao + minutos de novos cards + cards atrasados)
-- Usa Collapsible do radix-ui (ja instalado)
+`ChevronUp`, `ChevronDown` (setas de reordenacao manual), `Info` (card de sugestoes)
 
-**4. Priorizacao de Baralhos**
-- Lista dos baralhos no plano com botoes de seta (cima/baixo) para reordenar
-- A ordem e salva no array `deck_ids` da tabela `study_plans` (a posicao no array = prioridade)
-- Sem necessidade de nova coluna no banco
+### Estrutura do Hero Card
 
-**5. Botao "Limpar Atraso"**
-- Aparece apenas quando `metrics.totalReview > 0` (ha backlog)
-- Ao clicar: Dialog com opcoes: "Diluir em 3 dias", "Diluir em 5 dias", "Diluir em 7 dias"
-- Mostra calculo: "Serao +X cards extras por dia durante N dias"
-- Nesta versao: exibe a sugestao como informacao visual (o sistema de estudo ja prioriza revisoes vencidas naturalmente)
+```text
++─────────────────────────────────+
+│  bg-gradient-to-br (por status) │
+│                                  │
+│       [HealthRing 128x128]       │
+│         "No Caminho"             │
+│    "Consistencia: 85%"           │
+│                                  │
+│  Carga de hoje          45min    │
+│  [====verde===][amarelo][verm]   │
+│  15min Revisoes + 30min Novos    │
+│                                  │
+│  [  Ajustar Plano  ] (se alert)  │
++─────────────────────────────────+
+```
 
-**6. Saude do Plano (%)**
-- Calculo: dias em que o usuario estudou (tem review_logs) / dias totais desde criacao do plano * 100
-- Buscar via query simples: contar dias distintos com review_logs desde `plan.created_at`
-- Exibir como barra de progresso circular ou linear
-- Se < 80%: mensagem proativa "Sua Saude do Plano esta em X%. Que tal ajustarmos sua carga?"
+### Drag-and-Drop na lista
 
-**7. Feedback de Impacto no Slider**
-- Ao mover o slider no dashboard (edicao inline):
-  - Se tem target_date: "Reduzir para Xmin/dia adiara sua conclusao em Y dias"
-  - Se nao tem: "Com Xmin/dia voce revisara ~Z cards por dia"
-- Calculo: `novoDiasNecessarios = totalCards / novosCardsPerDay` vs `diasRestantes`
+```typescript
+const { getHandlers, displayItems } = useDragReorder({
+  items: planDecks,
+  getId: (deck: any) => deck.id,
+  onReorder: async (reordered) => {
+    await onUpdatePlan({ deck_ids: reordered.map((d: any) => d.id) });
+  },
+});
 
-**8. Sistema de 4 Cores**
-- Atualizar `healthStatus` no hook:
-  - Verde: cobertura >= 100% OU cards novos/dia <= 40
-  - Amarelo: cobertura >= 70% OU carga moderada
-  - Laranja: cobertura >= 50% OU carga intensa
-  - Vermelho: cobertura < 50% OU sobrecarga
+// Render:
+{displayItems.map((deck) => {
+  const handlers = getHandlers(deck);
+  return (
+    <div key={deck.id} {...handlers} className={cn("flex items-center gap-2 p-2 rounded-xl border bg-card", handlers.className)}>
+      <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab" />
+      <p className="text-sm font-medium truncate flex-1">{deck.name}</p>
+    </div>
+  );
+})}
+```
 
