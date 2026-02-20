@@ -2035,31 +2035,18 @@ export type Database = {
           subscription_price: number
         }[]
       }
-      get_all_user_deck_stats:
-        | {
-            Args: { p_user_id: string }
-            Returns: {
-              deck_id: string
-              learning_count: number
-              new_count: number
-              new_graduated_today: number
-              new_reviewed_today: number
-              review_count: number
-              reviewed_today: number
-            }[]
-          }
-        | {
-            Args: { p_tz_offset_minutes?: number; p_user_id: string }
-            Returns: {
-              deck_id: string
-              learning_count: number
-              new_count: number
-              new_graduated_today: number
-              new_reviewed_today: number
-              review_count: number
-              reviewed_today: number
-            }[]
-          }
+      get_all_user_deck_stats: {
+        Args: { p_tz_offset_minutes?: number; p_user_id: string }
+        Returns: {
+          deck_id: string
+          learning_count: number
+          new_count: number
+          new_graduated_today: number
+          new_reviewed_today: number
+          review_count: number
+          reviewed_today: number
+        }[]
+      }
       get_community_full_preview: {
         Args: { p_turma_id: string }
         Returns: Json
@@ -2068,29 +2055,17 @@ export type Database = {
         Args: { p_turma_id: string }
         Returns: Json
       }
-      get_deck_stats:
-        | {
-            Args: { p_deck_id: string }
-            Returns: {
-              learning_count: number
-              new_count: number
-              new_graduated_today: number
-              new_reviewed_today: number
-              review_count: number
-              reviewed_today: number
-            }[]
-          }
-        | {
-            Args: { p_deck_id: string; p_tz_offset_minutes?: number }
-            Returns: {
-              learning_count: number
-              new_count: number
-              new_graduated_today: number
-              new_reviewed_today: number
-              review_count: number
-              reviewed_today: number
-            }[]
-          }
+      get_deck_stats: {
+        Args: { p_deck_id: string; p_tz_offset_minutes?: number }
+        Returns: {
+          learning_count: number
+          new_count: number
+          new_graduated_today: number
+          new_reviewed_today: number
+          review_count: number
+          reviewed_today: number
+        }[]
+      }
       get_marketplace_fee: { Args: { tier: number }; Returns: number }
       get_public_profiles: {
         Args: { p_user_ids: string[] }
@@ -2100,25 +2075,17 @@ export type Database = {
           name: string
         }[]
       }
-      get_study_queue_limits:
-        | {
-            Args: { p_card_ids: string[]; p_user_id: string }
-            Returns: {
-              new_reviewed_today: number
-              review_reviewed_today: number
-            }[]
-          }
-        | {
-            Args: {
-              p_card_ids: string[]
-              p_tz_offset_minutes?: number
-              p_user_id: string
-            }
-            Returns: {
-              new_reviewed_today: number
-              review_reviewed_today: number
-            }[]
-          }
+      get_study_queue_limits: {
+        Args: {
+          p_card_ids: string[]
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: {
+          new_reviewed_today: number
+          review_reviewed_today: number
+        }[]
+      }
       get_turma_role: {
         Args: { _turma_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["turma_role"]
