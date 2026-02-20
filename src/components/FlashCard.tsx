@@ -869,7 +869,7 @@ const FlashCard = ({
                         : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                     }`}
                   >
-                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
                   </button>
                 )}
 

@@ -152,6 +152,13 @@ const Study = () => {
     };
   }, []);
 
+  // Open chat modal when first streaming content arrives for explain-in-chat
+  useEffect(() => {
+    if (explainInChat && explainResponse && !chatOpen) {
+      setChatOpen(true);
+    }
+  }, [explainInChat, explainResponse, chatOpen]);
+
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
     if (tutorAbortRef.current) tutorAbortRef.current.abort();
@@ -513,7 +520,8 @@ const Study = () => {
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
             onOpenExplainChat={() => {
-              setChatOpen(true);
+              // First trigger tutor request (shows loading animation on button)
+              // Chat modal opens automatically when streaming content arrives
               setExplainInChat(true);
               handleTutorRequest({ action: 'explain' });
             }}
