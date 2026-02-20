@@ -198,7 +198,8 @@ const Study = () => {
       let content = '';
       let textBuffer = '';
 
-      while (true) {
+      let streamDone = false;
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
         textBuffer += decoder.decode(value, { stream: true });
@@ -211,7 +212,7 @@ const Study = () => {
           if (line.startsWith(':') || line.trim() === '') continue;
           if (!line.startsWith('data: ')) continue;
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') { streamDone = true; break; }
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content;
@@ -224,6 +225,25 @@ const Study = () => {
             textBuffer = line + '\n' + textBuffer;
             break;
           }
+        }
+      }
+
+      // Flush any remaining buffer
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              content += delta;
+              setter(content);
+            }
+          } catch { /* ignore partial leftovers */ }
         }
       }
 
