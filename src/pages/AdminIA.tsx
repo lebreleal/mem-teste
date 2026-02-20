@@ -126,23 +126,36 @@ const AdminIA = () => {
         audioRef.current.pause();
         audioRef.current = null;
       }
+
+      // Create Audio element immediately in user gesture context
+      const audio = new Audio();
+      audioRef.current = audio;
+
       const sampleText = lang === 'pt'
         ? 'Olá! Esta é uma prévia da voz selecionada para o português brasileiro.'
         : 'Hello! This is a preview of the selected voice for American English.';
 
-      const res = await supabase.functions.invoke('tts', {
-        body: { text: sampleText, voice: voiceName },
-        headers: { Accept: 'audio/mpeg' },
+      // Use fetch directly for binary audio response (supabase.functions.invoke doesn't handle binary well)
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ text: sampleText, voice: voiceName }),
       });
 
-      if (res.error) throw res.error;
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
 
-      const blob = res.data instanceof Blob
-        ? res.data
-        : new Blob([res.data], { type: 'audio/mpeg' });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
+      audio.src = url;
       audio.onended = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
       audio.onerror = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
       await audio.play();
