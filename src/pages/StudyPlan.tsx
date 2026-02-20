@@ -6,6 +6,7 @@ import {
   Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
   GripVertical, MoreVertical, Pause, X as XIcon
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -25,7 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useStudyPlan, getMinutesForDay, getWeeklyAvgMinutes, DAY_LABELS, type DayKey, type WeeklyMinutes } from '@/hooks/useStudyPlan';
+import { useStudyPlan, getMinutesForDay, getWeeklyAvgMinutes, DAY_LABELS, type DayKey, type WeeklyMinutes, type WeeklyCardDataPoint } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
@@ -48,28 +49,30 @@ const HEALTH_CONFIG = {
   red: { color: 'bg-red-500', ring: 'text-red-500', label: 'Em Risco', text: 'text-red-600', bg: 'bg-red-500/10', border: 'border-red-500/20', icon: '⚠' },
 };
 
-// ─── Health Ring ─────────────────────────────────────
-function HealthRing({ status, percent }: { status: keyof typeof HEALTH_CONFIG; percent: number }) {
+// ─── Weekly Card Chart ─────────────────────────────────
+function WeeklyCardChart({ data, status }: { data: WeeklyCardDataPoint[]; status: keyof typeof HEALTH_CONFIG }) {
   const cfg = HEALTH_CONFIG[status];
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
 
   return (
-    <div className="relative w-32 h-32 mx-auto">
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
-        <circle cx="64" cy="64" r={radius} fill="none" strokeWidth="8" className="stroke-muted" />
-        <circle
-          cx="64" cy="64" r={radius} fill="none" strokeWidth="8"
-          strokeDasharray={circumference} strokeDashoffset={offset}
-          strokeLinecap="round"
-          className={cn('transition-all duration-700 ease-out', cfg.ring.replace('text-', 'stroke-'))}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={cn('text-2xl font-bold', cfg.text)}>{percent}%</span>
-        <span className={cn('text-[10px] font-medium', cfg.text)}>{cfg.label}</span>
+    <div className="space-y-2">
+      <div className="flex justify-center">
+        <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border', cfg.bg, cfg.text, cfg.border)}>
+          {cfg.icon} {cfg.label}
+        </span>
       </div>
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart data={data} barGap={2}>
+          <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
+          <Tooltip
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+            formatter={(value: number, name: string) => [value, name === 'review' ? 'Revisão' : 'Novos']}
+            labelFormatter={(label: string) => label}
+          />
+          <Bar dataKey="review" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} name="review" />
+          <Bar dataKey="newCards" stackId="a" fill="hsl(142 71% 45%)" radius={[4, 4, 0, 0]} name="newCards" />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -449,7 +452,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
   const [tempRetention, setTempRetention] = useState(Math.round((metrics?.avgRetention ?? 0.9) * 100));
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
-  const healthPercent = metrics?.planHealthPercent ?? 0;
   const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
 
   const todayCapacity = metrics?.todayCapacityMinutes ?? plan.daily_minutes;
@@ -553,7 +555,9 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         {/* ═══ HERO CARD: Status + Carga + Ação ═══ */}
         <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
           <CardContent className="p-4 space-y-4">
-            <HealthRing status={healthStatus} percent={healthPercent} />
+            {metrics?.weeklyCardData && (
+              <WeeklyCardChart data={metrics.weeklyCardData} status={healthStatus} />
+            )}
 
             {metrics && metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
               <p className="text-xs text-center text-muted-foreground">

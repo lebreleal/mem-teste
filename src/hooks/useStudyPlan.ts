@@ -38,6 +38,14 @@ export function getWeeklyAvgMinutes(plan: StudyPlan): number {
   return Math.round(vals.reduce((a, b) => a + b, 0) / 7);
 }
 
+export interface WeeklyCardDataPoint {
+  day: string;
+  review: number;
+  newCards: number;
+  total: number;
+  minutes: number;
+}
+
 export interface PlanMetrics {
   totalNew: number;
   totalReview: number;
@@ -54,12 +62,10 @@ export interface PlanMetrics {
   newMinutes: number;
   planHealthPercent: number | null;
   avgRetention: number;
-  /** Minutes the user defined for TODAY (from weekly or daily) */
   todayCapacityMinutes: number;
-  /** Cards the user CAN do today based on capacity */
   capacityCardsToday: number;
-  /** Projected completion date based on current capacity */
   projectedCompletionDate: string | null;
+  weeklyCardData: WeeklyCardDataPoint[];
 }
 
 export function useStudyPlan() {
@@ -167,11 +173,28 @@ export function useStudyPlan() {
     const capacityCardsToday = Math.floor((todayCapacityMinutes * 60) / avgSec);
     const cardsPerWeek = cardsPerDay * 7;
 
-    // Estimate minutes today
-    const reviewMinutes = Math.round((totalReview * avgSec) / 60);
-    const dailyNewCards = Math.max(0, capacityCardsToday - totalReview);
-    const newMinutes = Math.round((Math.min(dailyNewCards, totalNew) * avgSec) / 60);
+    // Estimate minutes today — prioritize reviews, fill remaining with new cards
+    const estimatedReviewsToday = totalReview > 0
+      ? Math.min(totalReview, capacityCardsToday)
+      : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
+    const reviewMinutes = Math.round((estimatedReviewsToday * avgSec) / 60);
+    const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
+    const dailyNewCards = Math.min(remainingCapacity, totalNew);
+    const newMinutes = Math.round((dailyNewCards * avgSec) / 60);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
+
+    // Weekly card data for chart
+    const totalPending = totalNew + totalReview + totalLearning;
+    const reviewRatio = totalPending > 0 ? (totalReview + totalLearning) / totalPending : 0.3;
+    const weeklyCardData: WeeklyCardDataPoint[] = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(dayKey => {
+      const dayMinutes = getMinutesForDay(plan, dayKey);
+      const dayCapacity = Math.floor((dayMinutes * 60) / avgSec);
+      const dayReviews = totalReview > 0
+        ? Math.min(totalReview, dayCapacity)
+        : Math.min(totalLearning, Math.ceil(dayCapacity * reviewRatio));
+      const dayNew = Math.min(Math.max(0, dayCapacity - dayReviews), totalNew);
+      return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, total: dayReviews + dayNew, minutes: dayMinutes };
+    });
 
     let requiredCardsPerDay: number | null = null;
     let daysRemaining: number | null = null;
@@ -179,7 +202,7 @@ export function useStudyPlan() {
     let healthStatus: 'green' | 'yellow' | 'orange' | 'red' = 'green';
     let projectedCompletionDate: string | null = null;
 
-    const totalPending = totalNew + totalReview + totalLearning;
+    // totalPending already declared above
 
     // Projected completion based on capacity
     if (cardsPerDay > 0 && totalPending > 0) {
@@ -227,6 +250,7 @@ export function useStudyPlan() {
       todayCapacityMinutes,
       capacityCardsToday,
       projectedCompletionDate,
+      weeklyCardData,
     };
   }, [planQuery.data, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data]);
 
