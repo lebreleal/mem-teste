@@ -3,14 +3,39 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo } from 'react';
 
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+export type DayKey = typeof DAY_KEYS[number];
+export type WeeklyMinutes = Record<DayKey, number>;
+
+export const DAY_LABELS: Record<DayKey, string> = {
+  mon: 'Seg', tue: 'Ter', wed: 'Qua', thu: 'Qui', fri: 'Sex', sat: 'Sáb', sun: 'Dom',
+};
+
 export interface StudyPlan {
   id: string;
   user_id: string;
   daily_minutes: number;
+  weekly_minutes: WeeklyMinutes | null;
   deck_ids: string[];
   target_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Get minutes for a specific day, falling back to daily_minutes */
+export function getMinutesForDay(plan: StudyPlan, day?: DayKey): number {
+  const d = day ?? (DAY_KEYS[new Date().getDay()] as DayKey);
+  if (plan.weekly_minutes && plan.weekly_minutes[d] != null) {
+    return plan.weekly_minutes[d];
+  }
+  return plan.daily_minutes;
+}
+
+/** Average daily minutes across the week */
+export function getWeeklyAvgMinutes(plan: StudyPlan): number {
+  if (!plan.weekly_minutes) return plan.daily_minutes;
+  const vals = DAY_KEYS.map(d => plan.weekly_minutes![d] ?? plan.daily_minutes);
+  return Math.round(vals.reduce((a, b) => a + b, 0) / 7);
 }
 
 export interface PlanMetrics {
@@ -29,6 +54,12 @@ export interface PlanMetrics {
   newMinutes: number;
   planHealthPercent: number | null;
   avgRetention: number;
+  /** Minutes the user defined for TODAY (from weekly or daily) */
+  todayCapacityMinutes: number;
+  /** Cards the user CAN do today based on capacity */
+  capacityCardsToday: number;
+  /** Projected completion date based on current capacity */
+  projectedCompletionDate: string | null;
 }
 
 export function useStudyPlan() {
@@ -77,7 +108,6 @@ export function useStudyPlan() {
     enabled: !!userId && !!planQuery.data,
   });
 
-  // Fetch retention from decks in plan
   const retentionQuery = useQuery({
     queryKey: ['plan-retention', planQuery.data?.deck_ids],
     queryFn: async () => {
@@ -96,7 +126,6 @@ export function useStudyPlan() {
     staleTime: 5 * 60_000,
   });
 
-  // Plan health: count distinct study days since plan creation
   const planHealthQuery = useQuery({
     queryKey: ['plan-health', userId, planQuery.data?.created_at],
     queryFn: async () => {
@@ -108,7 +137,6 @@ export function useStudyPlan() {
         .eq('user_id', userId!)
         .gte('reviewed_at', plan.created_at);
       if (error) throw error;
-      // Count distinct days
       const days = new Set<string>();
       (data ?? []).forEach((r: any) => {
         days.add(new Date(r.reviewed_at).toISOString().slice(0, 10));
@@ -130,12 +158,18 @@ export function useStudyPlan() {
     const totalReview = Number(raw.total_review) || 0;
     const totalLearning = Number(raw.total_learning) || 0;
     const avgSec = avg;
-    const cardsPerDay = Math.floor((plan.daily_minutes * 60) / avgSec);
+
+    // Today's capacity from weekly or daily
+    const todayCapacityMinutes = getMinutesForDay(plan);
+    const avgDailyMinutes = getWeeklyAvgMinutes(plan);
+
+    const cardsPerDay = Math.floor((avgDailyMinutes * 60) / avgSec);
+    const capacityCardsToday = Math.floor((todayCapacityMinutes * 60) / avgSec);
     const cardsPerWeek = cardsPerDay * 7;
 
     // Estimate minutes today
     const reviewMinutes = Math.round((totalReview * avgSec) / 60);
-    const dailyNewCards = Math.max(0, cardsPerDay - totalReview);
+    const dailyNewCards = Math.max(0, capacityCardsToday - totalReview);
     const newMinutes = Math.round((Math.min(dailyNewCards, totalNew) * avgSec) / 60);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
@@ -143,26 +177,34 @@ export function useStudyPlan() {
     let daysRemaining: number | null = null;
     let coveragePercent: number | null = null;
     let healthStatus: 'green' | 'yellow' | 'orange' | 'red' = 'green';
+    let projectedCompletionDate: string | null = null;
+
+    const totalPending = totalNew + totalReview + totalLearning;
+
+    // Projected completion based on capacity
+    if (cardsPerDay > 0 && totalPending > 0) {
+      const daysNeeded = Math.ceil(totalPending / cardsPerDay);
+      const projected = new Date();
+      projected.setDate(projected.getDate() + daysNeeded);
+      projectedCompletionDate = projected.toISOString().slice(0, 10);
+    }
 
     if (plan.target_date) {
       const target = new Date(plan.target_date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       daysRemaining = Math.max(1, Math.ceil((target.getTime() - today.getTime()) / 86400000));
-      const totalPending = totalNew + totalReview + totalLearning;
       requiredCardsPerDay = Math.ceil(totalPending / daysRemaining);
       coveragePercent = requiredCardsPerDay > 0 ? Math.min(100, Math.round((cardsPerDay / requiredCardsPerDay) * 100)) : 100;
 
-      // 4-color system
       if (coveragePercent >= 100) healthStatus = 'green';
       else if (coveragePercent >= 70) healthStatus = 'yellow';
       else if (coveragePercent >= 50) healthStatus = 'orange';
       else healthStatus = 'red';
     } else {
-      // Without target date, use load-based 4-color
-      if (estimatedMinutesToday <= plan.daily_minutes * 0.7) healthStatus = 'green';
-      else if (estimatedMinutesToday <= plan.daily_minutes) healthStatus = 'yellow';
-      else if (estimatedMinutesToday <= plan.daily_minutes * 1.5) healthStatus = 'orange';
+      if (estimatedMinutesToday <= todayCapacityMinutes * 0.7) healthStatus = 'green';
+      else if (estimatedMinutesToday <= todayCapacityMinutes) healthStatus = 'yellow';
+      else if (estimatedMinutesToday <= todayCapacityMinutes * 1.5) healthStatus = 'orange';
       else healthStatus = 'red';
     }
 
@@ -182,6 +224,9 @@ export function useStudyPlan() {
       newMinutes,
       planHealthPercent: planHealthQuery.data ?? null,
       avgRetention: retentionQuery.data ?? 0.9,
+      todayCapacityMinutes,
+      capacityCardsToday,
+      projectedCompletionDate,
     };
   }, [planQuery.data, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data]);
 
@@ -215,12 +260,13 @@ export function useStudyPlan() {
   };
 
   const createPlan = useMutation({
-    mutationFn: async (input: { daily_minutes: number; deck_ids: string[]; target_date: string | null }) => {
+    mutationFn: async (input: { daily_minutes: number; deck_ids: string[]; target_date: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
       const { error } = await supabase.from('study_plans' as any).insert({
         user_id: userId,
         daily_minutes: input.daily_minutes,
         deck_ids: input.deck_ids,
         target_date: input.target_date,
+        weekly_minutes: input.weekly_minutes ?? null,
       } as any);
       if (error) throw error;
     },
@@ -228,7 +274,7 @@ export function useStudyPlan() {
   });
 
   const updatePlan = useMutation({
-    mutationFn: async (input: { daily_minutes?: number; deck_ids?: string[]; target_date?: string | null }) => {
+    mutationFn: async (input: { daily_minutes?: number; deck_ids?: string[]; target_date?: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
       const { error } = await supabase
         .from('study_plans' as any)
         .update(input as any)
