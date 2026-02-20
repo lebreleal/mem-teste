@@ -3,7 +3,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
@@ -242,11 +242,12 @@ const Dashboard = () => {
 
       <main className="container mx-auto px-4 py-6">
         {/* Quick Nav */}
-        <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
+        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
           {[
             { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
+            { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
               <div className="relative">
