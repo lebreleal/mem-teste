@@ -1,48 +1,62 @@
 
 
-# Fix AI Tutor, TTS, and Chat Issues
+# Configurar Vozes TTS no Painel Admin
 
-## Problems Identified
+## O que sera feito
 
-### 1. AI Tutor still says "Ola! Que otima pergunta..."
-**Root cause found:** The `ai_prompts` database table has a custom `system_prompt` for `ai_tutor` that says *"Seja encorajador e positivo"*. The code on line 66 does `const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt` -- since the DB has a value, the anti-preamble rules are **completely ignored**. The DB prompt literally tells the AI to be encouraging, which causes the greetings.
+Adicionar uma nova secao "Configurar Voz" no painel Admin IA onde voce podera:
+- Escolher a voz PT-BR (entre varias opcoes Neural2 do Google)
+- Escolher a voz EN-US (entre varias opcoes Neural2 do Google)
+- Ouvir uma preview de cada voz com um botao de teste
+- Salvar a escolha no banco (tabela `ai_settings`)
+- A edge function `tts` vai ler a voz configurada do banco
 
-**Fix:** Merge the anti-preamble rules INTO the prompt, prepending them before whatever is in the DB. The anti-preamble rules should always be enforced regardless of DB configuration.
-
-### 2. AI Tutor response cuts off mid-sentence  
-**Root cause:** The `max_tokens` for the default "hint" action is only **400**. Combined with the DB's `temperature: 0.8` (verbose), the model runs out of tokens. Also, the "explain" action uses 2000 tokens which may not be enough for very detailed explanations.
-
-**Fix:** Increase `max_tokens` -- hint to 600, explain to 4000, explain-mc to 2000.
-
-### 3. TTS uses OpenAI API, not Google
-**Root cause confirmed:** The `tts/index.ts` function explicitly uses `OPENAI_API_KEY` and calls `https://api.openai.com/v1/audio/speech`. There is a `GOOGLE_CLOUD_TTS_KEY` secret configured but unused by this function.
-
-**Fix:** Rewrite the TTS edge function to use Google Cloud Text-to-Speech API with the existing `GOOGLE_CLOUD_TTS_KEY`, adding automatic language detection (PT-BR vs EN-US) for voice selection.
-
-### 4. Chat IA freezing
-**Root cause:** The streaming loop in `StudyChatModal` has a subtle bug -- when `[DONE]` is received inside the inner `while` loop, it only `break`s out of the inner loop, but the outer `while(true)` keeps reading. The stream may hang waiting for more data that never comes. Also missing buffer flush after the loop.
-
-**Fix:** Add a `streamDone` flag (same pattern used in Study.tsx) and flush the buffer after the loop ends.
+Todas as vozes Neural2 tem o mesmo custo, entao nao muda nada no preco.
 
 ---
 
-## Technical Plan
+## Detalhes Tecnicos
 
-### Step 1: Fix AI Tutor system prompt (ai-tutor/index.ts)
-- Always prepend anti-preamble rules to whatever system prompt comes from DB
-- Change line 66 from `promptConfig?.system_prompt || antiPreamblePrompt` to always include anti-preamble + DB prompt combined
-- Increase max_tokens: hint 400 -> 600, explain 2000 -> 4000
+### 1. Vozes disponiveis (Neural2, mesmo custo)
 
-### Step 2: Fix Chat streaming (StudyChatModal.tsx)
-- Add `streamDone` flag to break outer loop when `[DONE]` is received
-- Add buffer flush after the main loop (same pattern as Study.tsx)
+**PT-BR:**
+- `pt-BR-Neural2-A` (Feminina)
+- `pt-BR-Neural2-B` (Masculina)
+- `pt-BR-Neural2-C` (Feminina)
 
-### Step 3: Rewrite TTS to use Google Cloud (tts/index.ts)
-- Replace OpenAI TTS with Google Cloud Text-to-Speech API
-- Use `GOOGLE_CLOUD_TTS_KEY` (already configured)
-- Add language detection: if text is primarily Portuguese, use `pt-BR-Neural2-A`; otherwise use `en-US-Neural2-J`
-- Return audio/mpeg response
+**EN-US:**
+- `en-US-Neural2-A` (Masculina)
+- `en-US-Neural2-C` (Feminina)
+- `en-US-Neural2-D` (Masculina)
+- `en-US-Neural2-E` (Feminina)
+- `en-US-Neural2-F` (Feminina)
+- `en-US-Neural2-G` (Feminina)
+- `en-US-Neural2-H` (Feminina)
+- `en-US-Neural2-I` (Masculina)
+- `en-US-Neural2-J` (Masculina)
 
-### Step 4: Deploy edge functions
-- Deploy `ai-tutor` and `tts`
+### 2. Banco de dados (`ai_settings`)
+Usar duas novas chaves na tabela `ai_settings` existente (sem migracao necessaria, so insert):
+- `tts_voice_pt` -> ex: `pt-BR-Neural2-B`
+- `tts_voice_en` -> ex: `en-US-Neural2-J`
+
+### 3. Admin IA (`src/pages/AdminIA.tsx`)
+Adicionar um novo card "Configurar Voz" na tela principal do Admin IA que abre uma secao com:
+- Select para voz PT-BR com as 3 opcoes
+- Select para voz EN-US com as 9 opcoes
+- Botao "Testar" ao lado de cada select que chama a edge function TTS com um texto curto de exemplo e toca o audio
+- Botao "Salvar Vozes"
+
+### 4. Edge function TTS (`supabase/functions/tts/index.ts`)
+Modificar para:
+- Ler as configuracoes `tts_voice_pt` e `tts_voice_en` do banco usando service role
+- Usar a voz configurada ao inves das hardcoded
+- Se nao houver configuracao, manter os defaults atuais (`pt-BR-Neural2-A` e `en-US-Neural2-J`)
+
+### 5. Fluxo
+1. Admin abre Admin IA -> clica em "Configurar Voz"
+2. Seleciona uma voz PT-BR e uma EN-US
+3. Clica "Testar" para ouvir preview
+4. Clica "Salvar" para gravar no `ai_settings`
+5. Proximas chamadas TTS usam a voz escolhida
 
