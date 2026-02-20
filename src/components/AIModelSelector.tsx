@@ -6,9 +6,15 @@ interface AIModelSelectorProps {
   onChange: (model: AIModel) => void;
   baseCost?: number;
   compact?: boolean;
+  isPremium?: boolean;
 }
 
-const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModelSelectorProps) => {
+const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium = false }: AIModelSelectorProps) => {
+  const getDisplayCost = (m: AIModel) => {
+    if (baseCost === undefined) return undefined;
+    const multiplier = m === 'flash' && isPremium ? 0.5 : MODEL_CONFIG[m].costMultiplier;
+    return Math.ceil(baseCost * multiplier);
+  };
   if (compact) {
     return (
       <button
@@ -25,7 +31,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModel
         <span className="text-foreground hidden sm:inline">{MODEL_CONFIG[model].label}</span>
         {baseCost !== undefined && (
           <span className="text-muted-foreground">
-            {baseCost * MODEL_CONFIG[model].costMultiplier}
+            {getDisplayCost(model)}
           </span>
         )}
       </button>
@@ -57,7 +63,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false }: AIModel
           <p className="text-[10px] text-muted-foreground mt-0.5">{MODEL_CONFIG[m].description}</p>
           {baseCost !== undefined && (
             <p className="text-[10px] font-semibold mt-1" style={{ color: 'hsl(var(--energy-purple))' }}>
-              {baseCost * MODEL_CONFIG[m].costMultiplier} créditos
+              {getDisplayCost(m)} créditos
             </p>
           )}
         </button>

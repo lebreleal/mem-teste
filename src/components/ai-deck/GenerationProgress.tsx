@@ -1,9 +1,10 @@
 /**
- * Clean, minimal loading animation during AI deck generation.
+ * Modern generation progress with smooth bar, animated phases, and credits counter.
  */
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle } from 'lucide-react';
 import type { GenProgress } from './types';
 
@@ -33,7 +34,6 @@ const TIPS = [
 const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [tipIdx, setTipIdx] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     const iv = setInterval(() => setPhaseIdx(p => (p + 1) % PHASES.length), 3000);
@@ -45,60 +45,61 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
     return () => clearInterval(iv);
   }, []);
 
-  useEffect(() => {
-    const iv = setInterval(() => setElapsed(p => p + 1), 1000);
-    return () => clearInterval(iv);
-  }, []);
-
   const hasBatches = genProgress.total > 0;
-  const progressValue = hasBatches ? (genProgress.current / genProgress.total) * 100 : 0;
+  const progressValue = hasBatches ? Math.round((genProgress.current / genProgress.total) * 100) : 0;
   const phase = PHASES[phaseIdx];
   const PhaseIcon = phase.icon;
 
   return (
-    <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-8 animate-fade-in">
-      {/* Pulsing icon */}
-      <div className="relative flex items-center justify-center h-20 w-20">
-        <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2s' }} />
-        <div className="absolute inset-1 rounded-full bg-primary/5" />
-        <PhaseIcon className="relative z-10 h-8 w-8 text-primary transition-all duration-500" key={phaseIdx} />
+    <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-6 animate-fade-in">
+      {/* Orbital animation */}
+      <div className="relative flex items-center justify-center h-24 w-24">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div
+          className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary"
+          style={{ animation: 'spin 1.8s linear infinite' }}
+        />
+        <div className="absolute inset-3 rounded-full bg-primary/5 animate-pulse" />
+        <PhaseIcon
+          className="relative z-10 h-8 w-8 text-primary transition-all duration-500"
+          key={phaseIdx}
+        />
       </div>
 
       {/* Status text */}
-      <div className="text-center space-y-1.5 min-h-[3rem]">
+      <div className="text-center space-y-1 min-h-[2.5rem]">
         <p className="text-sm font-semibold text-foreground animate-fade-in" key={phaseIdx}>
           {phase.text}
         </p>
-        {hasBatches && genProgress.current > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Lote {genProgress.current} de {genProgress.total}
-          </p>
-        )}
       </div>
 
-      {/* Progress dots */}
+      {/* Smooth progress bar */}
       {hasBatches && (
-        <div className="flex items-center gap-2">
-          {Array.from({ length: genProgress.total }, (_, i) => (
-            <div
-              key={i}
-              className={`h-2 rounded-full transition-all duration-500 ${
-                i < genProgress.current
-                  ? 'w-6 bg-primary'
-                  : i === genProgress.current
-                    ? 'w-4 bg-primary/50 animate-pulse'
-                    : 'w-2 bg-muted-foreground/20'
-              }`}
-            />
-          ))}
+        <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+          <Progress
+            value={progressValue}
+            className="h-2.5 w-full bg-muted/40"
+            style={{
+              ['--progress-transition' as string]: 'width 700ms ease-out',
+            }}
+          />
+          <span className="text-xs text-muted-foreground tabular-nums">
+            Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}
+          </span>
         </div>
       )}
 
-      {/* Credits used */}
-      {hasBatches && (
-        <p className="text-[11px] text-muted-foreground">
-          <span className="font-bold" style={{ color: 'hsl(var(--energy-purple))' }}>{genProgress.creditsUsed}</span> créditos usados
-        </p>
+      {/* Credits counter */}
+      {hasBatches && genProgress.creditsUsed > 0 && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10">
+          <Zap className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs text-muted-foreground">
+            <span className="font-bold text-primary tabular-nums">
+              {genProgress.creditsUsed}
+            </span>
+            {' '}créditos usados
+          </span>
+        </div>
       )}
 
       {/* Tip */}
@@ -107,7 +108,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
       </p>
 
       {/* Dismiss button */}
-      {canDismiss && elapsed >= 10 && onDismiss && (
+      {canDismiss && onDismiss && (
         <div className="space-y-2 animate-fade-in">
           <Button
             variant="ghost"

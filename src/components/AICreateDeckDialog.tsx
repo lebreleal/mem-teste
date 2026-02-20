@@ -92,6 +92,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
 
         {flow.step === 'config' && (
           <ConfigStep
+            isPremium={flow.isPremium}
             detailLevel={flow.detailLevel}
             onDetailLevelChange={flow.setDetailLevel}
             cardFormats={flow.cardFormats}

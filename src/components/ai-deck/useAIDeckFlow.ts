@@ -74,7 +74,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPages = pages.filter(p => p.selected);
-  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE);
+  const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE, isPremium);
   const busy = isLoading || isSaving;
 
   const resetState = useCallback(() => {
@@ -217,7 +217,58 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     return targetDeckId;
   }, [user, existingDeckId, folderId, queryClient]);
 
-  // === Generation (character-based batching) ===
+  // === Deduplication helper (Bloco 4) ===
+  const deduplicateCards = useCallback((cards: GeneratedCard[]): GeneratedCard[] => {
+    const normalize = (text: string) =>
+      text.replace(/<[^>]*>/g, '').replace(/\{\{c\d+::/g, '').replace(/\}\}/g, '').toLowerCase().replace(/[^\w\sà-ú]/g, '').trim();
+
+    const getWords = (text: string) => {
+      const words = normalize(text).split(/\s+/).filter(w => w.length > 2);
+      return new Set(words);
+    };
+
+    const similarity = (a: Set<string>, b: Set<string>): number => {
+      if (a.size === 0 || b.size === 0) return 0;
+      let intersection = 0;
+      for (const w of a) { if (b.has(w)) intersection++; }
+      return intersection / Math.max(a.size, b.size);
+    };
+
+    const seen: { words: Set<string>; idx: number }[] = [];
+    const keep: boolean[] = new Array(cards.length).fill(true);
+
+    for (let i = 0; i < cards.length; i++) {
+      const words = getWords(cards[i].front);
+      let isDup = false;
+      for (const s of seen) {
+        if (similarity(words, s.words) > 0.8) {
+          // Keep the one with longer back (more complete answer)
+          const existingLen = normalize(cards[s.idx].back).length;
+          const currentLen = normalize(cards[i].back).length;
+          if (currentLen > existingLen) {
+            keep[s.idx] = false;
+            s.idx = i;
+            s.words = words;
+          } else {
+            isDup = true;
+          }
+          break;
+        }
+      }
+      if (!isDup) {
+        seen.push({ words, idx: i });
+      } else {
+        keep[i] = false;
+      }
+    }
+
+    const result = cards.filter((_, i) => keep[i]);
+    const removed = cards.length - result.length;
+    if (removed > 0) console.log(`Deduplication: removed ${removed} duplicate cards`);
+    return result;
+  }, []);
+
+  // === Generation (semantic batching with overlap — Blocos 2, 4, 5) ===
   const handleGenerate = useCallback(async () => {
     const selected = pages.filter(p => p.selected && p.textContent.trim().length > 0);
     if (selected.length === 0) {
@@ -230,105 +281,96 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     setStep('generating'); setIsLoading(true);
 
-    // Character-based batching instead of fixed page count
-    const MAX_CHARS = 6000;
-    const textBatches: { texts: string[]; pageCount: number }[] = [{ texts: [], pageCount: 0 }];
-    let currentSize = 0;
+    // Page-based batching: group selected pages into batches of 10
+    const PAGES_PER_BATCH = 10;
+    const CONCURRENT_BATCHES = 3;
 
-    for (const page of selected) {
-      const text = page.textContent.trim();
-      if (currentSize + text.length > MAX_CHARS && textBatches[textBatches.length - 1].texts.length > 0) {
-        textBatches.push({ texts: [], pageCount: 0 });
-        currentSize = 0;
-      }
-      textBatches[textBatches.length - 1].texts.push(text);
-      textBatches[textBatches.length - 1].pageCount++;
-      currentSize += text.length;
+    const textBatches: { text: string; pageCount: number }[] = [];
+    for (let i = 0; i < selected.length; i += PAGES_PER_BATCH) {
+      const batchPages = selected.slice(i, i + PAGES_PER_BATCH);
+      const text = batchPages.map(p => p.textContent).join('\n\n');
+      textBatches.push({ text, pageCount: batchPages.length });
     }
 
-    // Total requests = batches * formats (one API call per format per batch)
     const totalBatches = textBatches.length;
-    const formats = cardFormats.length > 0 ? cardFormats : ['qa' as CardFormat];
-    const totalRequests = totalBatches * formats.length;
-    setGenProgress({ current: 0, total: totalRequests, creditsUsed: 0 });
+    setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
     const allCards: GeneratedCard[] = [];
 
-    // Accumulate token usage across all requests for a single aggregated log
     const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     let totalEnergyCost = 0;
     let usedModel = '';
 
-    // Density factor for auto card count (chars per card)
-    const densityFactor = detailLevel === 'comprehensive' ? 150 : detailLevel === 'essential' ? 500 : 300;
+    // Bloco 5: Refined density factor (chars per card)
+    const densityFactor = detailLevel === 'comprehensive' ? 120 : detailLevel === 'essential' ? 600 : 250;
 
-    let requestIdx = 0;
+    for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
+      const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
 
-    for (let b = 0; b < totalBatches; b++) {
-      const batch = textBatches[b];
-      const batchText = batch.texts.join('\n\n');
-      const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE);
-      totalEnergyCost += batchCost;
-      const batchCardCount = targetCardCount > 0
-        ? Math.max(2, Math.ceil(targetCardCount / totalBatches))
-        : Math.max(3, Math.ceil(batchText.length / densityFactor));
+      const groupPromises = group.map((batch, gi) => {
+        const batchIndex = i + gi;
+        const batchText = batch.text;
+        const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
+        totalEnergyCost += batchCost;
 
-      // Loop per format: each format gets its own dedicated API call
-      for (let f = 0; f < formats.length; f++) {
-        requestIdx++;
-        const format = formats[f];
-        const formatCardCount = Math.max(2, Math.ceil(batchCardCount / formats.length));
-        // Only charge energy on the first format call of each batch
-        const formatEnergyCost = f === 0 ? batchCost : 0;
+        const batchCardCount = targetCardCount > 0
+          ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
+          : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
-        const progress = { current: requestIdx, total: totalRequests, creditsUsed: totalEnergyCost };
-        setGenProgress(progress);
+        const orderPrefix = totalBatches > 1
+          ? `[CONTEXTO: Este é o trecho ${batchIndex + 1} de ${totalBatches} do material, em ORDEM SEQUENCIAL. Gere cartões seguindo a ordem do texto.]\n\n`
+          : '';
 
-        // Update pending store if running in background
-        if (isBackgroundRef.current && pendingIdRef.current) {
-          updatePending(pendingIdRef.current, { progress: { current: requestIdx, total: totalRequests } });
-        }
+        return aiService.generateDeckCards({
+          textContent: orderPrefix + batchText,
+          cardCount: batchCardCount,
+          detailLevel,
+          cardFormats,
+          customInstructions: customInstructions.trim() || undefined,
+          aiModel: model,
+          energyCost: batchCost,
+          skipLog: true,
+        });
+      });
 
-        try {
-          const result = await aiService.generateDeckCards({
-            textContent: batchText,
-            cardCount: formatCardCount,
-            detailLevel,
-            cardFormats: [format], // Single format per call
-            customInstructions: customInstructions.trim() || undefined,
-            aiModel: model,
-            energyCost: formatEnergyCost,
-            skipLog: true,
-          });
-          allCards.push(...result.cards);
-
-          // Accumulate usage
-          if (result.usage) {
-            aggregatedUsage.prompt_tokens += result.usage.prompt_tokens;
-            aggregatedUsage.completion_tokens += result.usage.completion_tokens;
-            aggregatedUsage.total_tokens += result.usage.total_tokens;
+      const results = await Promise.allSettled(groupPromises);
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allCards.push(...result.value.cards);
+          if (result.value.usage) {
+            aggregatedUsage.prompt_tokens += result.value.usage.prompt_tokens;
+            aggregatedUsage.completion_tokens += result.value.usage.completion_tokens;
+            aggregatedUsage.total_tokens += result.value.usage.total_tokens;
           }
-
-          // Resolve actual model name for logging
           const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
           if (modelConfig) usedModel = modelConfig.backendModel as string;
-        } catch (err) { console.error(`Batch ${b + 1}, format ${format} failed:`, err); }
+        } else {
+          console.error(`Batch call failed:`, result.reason);
+        }
+      }
+
+      const completedBatches = Math.min(i + CONCURRENT_BATCHES, totalBatches);
+      const progress = { current: completedBatches, total: totalBatches, creditsUsed: totalEnergyCost };
+      setGenProgress(progress);
+      if (isBackgroundRef.current && pendingIdRef.current) {
+        updatePending(pendingIdRef.current, { progress: { current: completedBatches, total: totalBatches } });
       }
     }
 
-    // Log aggregated token usage once for the entire deck generation
     try {
       await aiService.logAggregatedTokenUsage(usedModel, aggregatedUsage, totalEnergyCost);
     } catch (e) { console.error('Failed to log aggregated usage:', e); }
 
     queryClient.invalidateQueries({ queryKey: ['energy'] });
 
-    // If running in background, auto-save
+    // Bloco 4: Deduplicate cards across all batches
+    const dedupedCards = deduplicateCards(allCards);
+
     if (isBackgroundRef.current && pendingIdRef.current) {
-      if (allCards.length > 0) {
+      if (dedupedCards.length > 0) {
         updatePending(pendingIdRef.current, { status: 'saving' });
         try {
-          await saveCardsToDeck(allCards, deckName);
-          toast({ title: '🧠 Baralho criado!', description: `${allCards.length} cartões salvos em "${deckName}"` });
+          await saveCardsToDeck(dedupedCards, deckName);
+          toast({ title: '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos em "${deckName}"` });
         } catch (err: any) {
           toast({ title: 'Erro ao salvar baralho', description: err?.message, variant: 'destructive' });
         }
@@ -340,15 +382,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       return;
     }
 
-    // Foreground flow
-    if (allCards.length === 0) {
+    if (dedupedCards.length === 0) {
       toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
       setStep('config');
     } else {
-      setCards(allCards); setStep('review');
+      setCards(dedupedCards); setStep('review');
     }
     setIsLoading(false);
-  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG]);
+  }, [pages, targetCardCount, detailLevel, cardFormats, customInstructions, model, getCost, toast, queryClient, deckName, saveCardsToDeck, updatePending, removePending, resetState, MODEL_CONFIG, deduplicateCards, isPremium]);
 
   // === Dismiss to background ===
   const handleDismissToBackground = useCallback(() => {
@@ -400,7 +441,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     customInstructions, setCustomInstructions, targetCardCount, setTargetCardCount,
     genProgress, cards, editingIdx, editFront, setEditFront, editBack, setEditBack,
     isSaving, isLoading, busy, fileInputRef,
-    selectedPages, totalCredits, energy, model, setModel,
+    selectedPages, totalCredits, energy, model, setModel, isPremium,
     pendingPro, confirmPro, cancelPro,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,

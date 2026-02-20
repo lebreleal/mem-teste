@@ -23,9 +23,16 @@ export function handleCors(req: Request): Response | null {
   return null;
 }
 
+/** Centralized AI config */
+export function getAIConfig() {
+  const apiKey = Deno.env.get("GOOGLE_AI_KEY");
+  const url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  return { apiKey, url };
+}
+
 /** Fetch model mapping from ai_settings table. */
 export async function getModelMap(supabase: any): Promise<Record<string, string>> {
-  const map: Record<string, string> = { pro: "gpt-4o", flash: "gpt-4o-mini" };
+  const map: Record<string, string> = { pro: "gemini-2.5-pro", flash: "gemini-2.5-flash" };
   try {
     const { data } = await supabase
       .from("ai_settings")
@@ -76,6 +83,19 @@ export async function logTokenUsage(
   } catch (e) {
     console.error("Token logging error:", e);
   }
+}
+
+/** Fetch with automatic retry for 503 (model overloaded). */
+export async function fetchWithRetry(
+  url: string, options: RequestInit, maxRetries = 2
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.status !== 503 || attempt === maxRetries) return response;
+    console.warn(`503 retry ${attempt + 1}/${maxRetries}, waiting 2s...`);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return await fetch(url, options); // fallback (unreachable)
 }
 
 /** Fetch prompt config from ai_prompts table. */

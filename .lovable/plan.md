@@ -1,95 +1,86 @@
 
 
-# Corrigir generate-deck: Aplicar TODAS as mudanças pendentes
+# Qualidade Maxima: Batching por Paginas + Metodo Ativo
 
-## O que esta errado
+## Problema Atual
 
-O arquivo `generate-deck/index.ts` nunca recebeu as mudanças dos planos aprovados. Esta tudo no estado original:
+O sistema junta texto de varias paginas num bloco de 12.000 caracteres, perdendo contexto e foco. O modelo recebe um "textao" e tenta gerar cards genericos. Alem disso, o output trava em 16.000 tokens, cortando cards.
 
-| Item | Estado Atual (ERRADO) | Correto |
-|------|----------------------|---------|
-| Distribuicao | 33% uniforme (linha 98) | Cloze 55%, Basico 30%, MC 15% |
-| max_tokens | 8.192 (linha 205) | 65.000 |
-| Truncagem input | slice(0, 10000) (linha 167) | Sem truncagem |
-| MC distratores | "distratores realistas" (linha 77) | Conceitos reais do material |
-| Metodo Ativo | Ausente | Bloco explicito no prompt |
+## Solucao: 3 Mudancas
 
-## Mudancas
+### 1. Frontend: Batching por Paginas (useAIDeckFlow.ts)
 
-### 1. Distribuicao ponderada (linha 94-99)
-
-Substituir a logica uniforme por:
+Substituir toda a logica complexa de paragrafos + overlap por agrupamento simples:
 
 ```text
-Se 3 formatos: Cloze ~55%, Basico ~30%, MC ~15%
-Se 2 formatos:
-  - Cloze + Basico: 65% / 35%
-  - Cloze + MC: 75% / 25%
-  - Basico + MC: 70% / 30%
-Se 1 formato: 100% (ja funciona)
+Antes: Paragrafos -> acumula 12.000 chars -> overlap 500 chars -> batch
+Depois: Paginas selecionadas -> agrupa de 10 em 10 -> batch
 ```
 
-Adicionar orientacao de QUANDO usar cada formato:
-- Cloze (55%): fatos, definicoes, valores, nomes, localizacoes
-- Basico (30%): mecanismos, causa-efeito, comparacoes, "por que?", "como?"
-- MC (15%): aplicacao pratica, diagnostico diferencial, cenarios de decisao
+- `PAGES_PER_BATCH = 10` (10 paginas ~ 5.000 tokens input, seguro)
+- Sem overlap, sem prefixo "[CONTEXTO ANTERIOR]" (desnecessario com paginas)
+- Mantem `CONCURRENT_BATCHES = 3` (paralelismo)
+- Mantem deduplicacao entre lotes
+- Mantem background generation
 
-### 2. Instrucao de MC rigorosa (linha 77)
+O codigo fica muito mais simples: um `for` que fatia o array de paginas de 10 em 10.
 
-De:
+### 2. Backend: Capacidade + Cobertura (generate-deck/index.ts)
+
+**max_tokens: 16.000 -> 65.000**
+- Gemini 2.5 Flash suporta ate 65.536 tokens de output
+- Elimina truncagem em 99% dos casos
+- 10 paginas geram ~30-50 cards (~4.000 tokens), muito abaixo do limite
+
+**Remover truncagem de input** (linha 209)
+- Atualmente: `textContent.slice(0, 16000)` corta conteudo silenciosamente
+- Novo: sem truncagem (o frontend ja controla o tamanho via PAGES_PER_BATCH)
+
+**Prompt de cobertura reforçado:**
+- "Compreensao Primeiro" muda de restritivo para inclusivo: "Se o material menciona um conceito sem explicacao profunda, crie um card factual simples em vez de ignora-lo"
+- Nivel `standard` ganha instrucao explicita: "COBERTURA COMPLETA — NAO pule NENHUM tema mencionado"
+
+### 3. Prompt de Metodo Ativo (generate-deck/index.ts)
+
+Adicionar principios de aprendizagem ativa no system prompt:
+
+- **Interrogacao Elaborativa**: "Por que isso funciona assim?" em vez de "O que e X?"
+- **Pratica Intercalada**: Variar o angulo cognitivo entre cards consecutivos (mecanismo, aplicacao, comparacao)
+- **Geracao Ativa**: O estudante deve PRODUZIR a resposta, nao reconhece-la
+- **Conexoes**: Cards que conectam conceitos entre si ("Como X se relaciona com Y?")
+
+Texto adicionado ao prompt:
+
 ```
-"options" com 4-5 alternativas plausíveis (não absurdas). "correctIndex" com o índice correto (0-based). As alternativas incorretas devem ser distratores realistas.
-```
-
-Para:
-```
-Pergunta de APLICACAO ou DIFERENCIACAO na "front". "back" vazio.
-"options" com 4-5 alternativas. "correctIndex" com indice correto (0-based).
-REGRAS DOS DISTRATORES:
-- Os distratores DEVEM ser conceitos REAIS presentes no material fornecido
-- As alternativas devem ser do MESMO campo semantico (ex: se a resposta e um musculo, distratores sao outros musculos do texto)
-- PROIBIDO inventar alternativas genericas ou obviamente absurdas
-- O estudante deve precisar PENSAR e DIFERENCIAR para acertar
-```
-
-### 3. Remover truncagem de input (linha 167)
-
-De: `const trimmedContent = textContent.slice(0, 10000);`
-Para: `const trimmedContent = textContent;`
-
-O frontend ja controla o tamanho via batching por paginas (10 paginas por batch).
-
-### 4. max_tokens: 8192 para 65000 (linha 205)
-
-Gemini 2.5 Flash suporta ate 65.536 tokens de output. Elimina truncagem de resposta.
-
-### 5. Metodo Ativo no system prompt (linhas 8-20)
-
-Adicionar ao DEFAULT_SYSTEM_PROMPT:
-
-```text
 METODO ATIVO (obrigatorio):
 - INTERROGACAO ELABORATIVA: Pergunte "Por que?" e "Como?" em vez de "O que e?"
 - CONEXOES: Crie cards que conectam conceitos entre si do mesmo material
 - APLICACAO: Sempre que possivel, use cenarios praticos/clinicos
-- CONTRASTE: Compare conceitos similares para forcar diferenciacao
-- COBERTURA: Se o material menciona um conceito sem explicacao profunda, crie um card factual simples em vez de ignora-lo
+- CONTRASTE: Compare conceitos similares para forcas diferenciacao
 ```
 
-### 6. Nivel standard reforçado (linha 26)
+## Resumo de Impacto
 
-De: `"Crie cartões cobrindo TODOS os tópicos..."`
-Para: adicionar `"COBERTURA COMPLETA — NAO pule NENHUM tema mencionado no material."`
+| Item | Antes | Depois |
+|------|-------|--------|
+| Unidade de batch | 12.000 caracteres | 10 paginas |
+| Overlap entre lotes | 500 chars + prefixo | Nenhum |
+| max_tokens output | 16.000 | 65.000 |
+| Truncagem de input | Sim (16k chars) | Nao |
+| Risco de truncagem | Alto | Quase zero |
+| Metodo ativo | Parcial | Explicito no prompt |
+| Complexidade do codigo | Alta | Baixa |
 
-## Arquivo modificado
+## Arquivos Modificados
 
-`supabase/functions/generate-deck/index.ts` — 6 pontos de alteracao
+1. **`src/components/ai-deck/useAIDeckFlow.ts`** — simplificar `handleGenerate` (batching por paginas em vez de caracteres)
+2. **`supabase/functions/generate-deck/index.ts`** — max_tokens 65k, remover truncagem input, reforcar prompt cobertura + metodo ativo
 
 ## O que NAO muda
 
-- Logica de cloze safety validation (linhas 256-270)
-- mapCardType (linhas 125-135)
-- Parsing JSON e repair de truncagem
-- Logging, energia, autenticacao
-- Frontend (useAIDeckFlow.ts) — ja esta com batching por paginas
-
+- Deduplicacao entre lotes (mantida)
+- Processamento paralelo de 3 lotes (mantido)
+- Contagem de creditos por pagina (mantida)
+- Background generation (mantido)
+- Logica de custo e logging (mantida)
+- Repair de JSON truncado (mantido como safety net)

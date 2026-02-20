@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import ThemeToggle from '@/components/ThemeToggle';
-import MemoCardsLogo from '@/components/MemoCardsLogo';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 
 type Mode = 'login' | 'signup';
@@ -17,25 +16,9 @@ const Auth = () => {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { user, loading: authLoading, signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, authLoading, navigate]);
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  if (user) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,14 +58,11 @@ const Auth = () => {
 
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-center gap-3">
-            <MemoCardsLogo size={48} />
-            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              MemoCards
-            </h1>
-          </div>
-          <p className="text-sm text-muted-foreground text-center">
+        <div className="text-center space-y-1">
+          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
+            Memo Cards
+          </h1>
+          <p className="text-sm text-muted-foreground">
             {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta grátis'}
           </p>
         </div>

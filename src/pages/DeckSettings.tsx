@@ -92,6 +92,8 @@ const DeckSettings = () => {
   const [shareModal, setShareModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [exportModal, setExportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'sm2' | 'fsrs' | 'quick_review' | null>(null);
 
   useEffect(() => {
@@ -260,6 +262,45 @@ const DeckSettings = () => {
     navigate(`/decks/${(newDeck as any).id}`);
   };
 
+  const handleExportCSV = async () => {
+    if (!deckId) return;
+    setExporting(true);
+    try {
+      const { data: cards, error } = await supabase
+        .from('cards')
+        .select('front_content, back_content')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!cards || cards.length === 0) {
+        toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
+        setExporting(false);
+        return;
+      }
+      const escapeCSV = (s: string) => {
+        // Strip HTML tags for clean CSV
+        const text = s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+        if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      };
+      const csv = cards.map(c => `${escapeCSV(c.front_content)},${escapeCSV(c.back_content)}`).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name || 'baralho'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: `${cards.length} cartões exportados!` });
+      setExportModal(false);
+    } catch {
+      toast({ title: 'Erro ao exportar', variant: 'destructive' });
+    }
+    setExporting(false);
+  };
+
   const addLearningStep = () => setLearningSteps(prev => [...prev, '10m']);
   const removeLearningStep = (i: number) => { if (learningSteps.length > 1) setLearningSteps(prev => prev.filter((_, idx) => idx !== i)); };
   const updateLearningStep = (i: number, v: string) => setLearningSteps(prev => prev.map((s, idx) => idx === i ? v : s));
@@ -363,9 +404,9 @@ const DeckSettings = () => {
           />
           <SettingsRow
             icon={<Upload className="h-5 w-5" />}
-            label="Exportar baralho"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
+            label="Exportar cartões"
+            subtitle="CSV ou enviar por e-mail"
+            onClick={() => setExportModal(true)}
           />
         </SettingsGroup>
 
@@ -723,6 +764,41 @@ const DeckSettings = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Export modal */}
+      <Dialog open={exportModal} onOpenChange={setExportModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Exportar cartões</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <button
+              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
+              onClick={handleExportCSV}
+              disabled={exporting}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                {exporting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Download className="h-5 w-5 text-muted-foreground" />}
+              </div>
+              <div>
+                <p className="font-medium text-sm text-foreground">Exportar como CSV</p>
+                <p className="text-xs text-muted-foreground">Baixar arquivo separado por vírgulas</p>
+              </div>
+            </button>
+            <button
+              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
+              disabled
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                <Mail className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium text-sm text-foreground">Enviar por e-mail</p>
+                <p className="text-xs text-muted-foreground">Em breve</p>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Reset progress confirmation */}
       <AlertDialog open={resetConfirm} onOpenChange={setResetConfirm}>
         <AlertDialogContent>

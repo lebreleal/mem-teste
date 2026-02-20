@@ -1,36 +1,45 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
-const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards usando técnicas de aprendizagem ativa (active recall, interleaving, elaborative interrogation).
+Sua missão: criar flashcards que garantam DOMÍNIO REAL do conteúdo — compreensão profunda, recuperação ativa e aplicação prática.
 
-Sua missão: criar flashcards que ajudem o estudante a DOMINAR o conteúdo — não apenas memorizar, mas compreender profundamente e aplicar.
+PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
 
-PRINCÍPIOS:
-1. PROFUNDIDADE: Crie perguntas que testem compreensão, não apenas memorização. Ex: "Por que X causa Y?" ao invés de "O que é X?"
-2. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
-3. PRÁTICO: Inclua perguntas de aplicação clínica/prática quando relevante.
-4. CONEXÕES: Faça perguntas que conectem conceitos entre si.
-5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas. Se o material não contém informação suficiente para criar uma pergunta, NÃO crie essa pergunta.
-6. FIDELIDADE: Todas as perguntas e respostas devem ser diretamente deriváveis do texto fornecido. Não extrapole.
+1. COMPREENSÃO PRIMEIRO: Se o material menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
+2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Respostas com mais de 1 frase são PROIBIDAS para basic. Se precisar de mais, divida em cartões separados.
+3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
+4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se o material lista 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
+5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos críticos, crie cartões que testem o MESMO conceito de ângulos diferentes. Ex: "X causa Y" num cartão e "Y é causado por {{c1::X}}" em outro.
+6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
+7. PERSONALIZAÇÃO: Quando possível, use exemplos práticos/clínicos em vez de definições abstratas.
+8. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas.
+9. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
+10. SEM DECOREBA: NÃO faça perguntas que podem ser respondidas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
+
+ANTI-PADRÕES (PROIBIDO):
+❌ Perguntas "O que é X?" com respostas de dicionário
+❌ Respostas que são listas ("A, B, C e D")
+❌ Cards que agrupam múltiplos conceitos
+❌ Múltipla escolha com distratores absurdos/inventados
+❌ Cloze com lacunas em palavras triviais (artigos, preposições)
+❌ Cards que copiam frases inteiras do material sem reformulação
 
 MÉTODO ATIVO (obrigatório):
-- INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?"
-- CONEXÕES: Crie cards que conectam conceitos entre si do mesmo material
-- APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos
-- CONTRASTE: Compare conceitos similares para forçar diferenciação
-- COBERTURA: Se o material menciona um conceito sem explicação profunda, crie um card factual simples em vez de ignorá-lo
+- INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
+- CONEXÕES: Crie cards que conectam conceitos entre si do mesmo material ("Como X se relaciona com Y?").
+- APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos em vez de definições abstratas.
+- CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").
 
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
-    case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado.";
-    default: return "COBERTURA COMPLETA — NÃO pule NENHUM tema mencionado no material. Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Inclua conceitos-chave, mecanismos importantes e aplicações práticas. Se um conceito é mencionado brevemente, crie ao menos um card factual simples.";
+    case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
+    default: return "COBERTURA COMPLETA: Crie cartões para TODOS os tópicos, conceitos e mecanismos presentes no material. NÃO pule NENHUM tema, NENHUM conceito mencionado. Se o material menciona um assunto, DEVE haver pelo menos um cartão sobre ele. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
 
@@ -79,15 +88,9 @@ function getFormatInstructions(formats: string[]): string {
     • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
 
   const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.', name: "pergunta/resposta", typeName: "basic" },
-    { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction, name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: `- type:"multiple_choice": Pergunta de APLICAÇÃO ou DIFERENCIAÇÃO na "front". "back" vazio.
-  "options" com 4-5 alternativas. "correctIndex" com índice correto (0-based).
-  REGRAS DOS DISTRATORES:
-    • Os distratores DEVEM ser conceitos REAIS presentes no material fornecido
-    • As alternativas devem ser do MESMO campo semântico (ex: se a resposta é um músculo, distratores são outros músculos do texto)
-    • PROIBIDO inventar alternativas genéricas ou obviamente absurdas
-    • O estudante deve precisar PENSAR e DIFERENCIAR para acertar`, name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa (1 frase, máximo 2) no verso. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados. Múltipla escolha serve para DIFERENCIAÇÃO entre conceitos similares, não para perguntas triviais.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -107,22 +110,39 @@ function getFormatInstructions(formats: string[]): string {
   const count = formatNames.length;
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
-  } else if (count === 3) {
-    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA (respeite rigorosamente):
-- Cloze: ~55% dos cartões — use para fatos, definições, valores numéricos, nomes, localizações
-- Básico (pergunta/resposta): ~30% dos cartões — use para mecanismos, relações causa-efeito, comparações, "por quê?", "como?"
-- Múltipla Escolha: ~15% dos cartões — use para diagnóstico diferencial, aplicação prática, cenários onde o aluno deve DECIDIR entre alternativas plausíveis do material`);
   } else {
-    // 2 formats — weighted distribution
-    const hasCloze = formatNames.includes("cloze");
-    const hasBasic = formatNames.includes("pergunta/resposta");
-    const hasMC = formatNames.includes("múltipla escolha");
-    let dist = "";
-    if (hasCloze && hasBasic) dist = "Cloze ~65%, Básico ~35%";
-    else if (hasCloze && hasMC) dist = "Cloze ~75%, Múltipla Escolha ~25%";
-    else if (hasBasic && hasMC) dist = "Básico ~70%, Múltipla Escolha ~30%";
-    else dist = `${formatNames[0]} ~60%, ${formatNames[1]} ~40%`;
-    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA: ${dist}.`);
+    // Build pedagogical distribution based on SuperMemo principles
+    // Cloze dominates (50%), Basic for reasoning (30%), MCQ for differentiation (20%)
+    const hasAll3 = formatNames.length === 3;
+    const hasCloze = formats.includes("cloze");
+    const hasBasic = formats.includes("qa") || formats.includes("definition");
+    const hasMCQ = formats.includes("multiple_choice");
+
+    let distributionText: string;
+    if (hasAll3) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
+- Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
+- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
+- Múltipla Escolha: ~20% dos cartões (MÍNIMO 15%) — OBRIGATÓRIO para diferenciação de conceitos similares. Você DEVE gerar cartões deste tipo. Se gerar 20 cartões, pelo menos 3-4 DEVEM ser múltipla escolha.`;
+    } else if (hasCloze && hasBasic) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+- Cloze: ~60% dos cartões — formato dominante para retenção.
+- Pergunta/Resposta (basic): ~40% dos cartões — para raciocínio e compreensão.`;
+    } else if (hasCloze && hasMCQ) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
+- Cloze: ~70% dos cartões — formato dominante para retenção.
+- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
+    } else {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
+- Pergunta/Resposta (basic): ~70% dos cartões — para raciocínio e compreensão.
+- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
+    }
+
+    parts.push(`\nREGRAS DE DISTRIBUIÇÃO (OBRIGATÓRIA):
+1. Cada conceito/tópico deve ser coberto por APENAS UM formato — NUNCA repita o mesmo assunto em formatos diferentes (exceto redundância estratégica intencional).
+2. ${distributionText}
+3. Siga a ordem cronológica do material.
+4. PROFUNDIDADE: cada cartão deve ser RICO em contexto e testar compreensão real.`);
   }
 
   if (forbiddenNames.length > 0) {
@@ -135,16 +155,16 @@ function getFormatInstructions(formats: string[]): string {
 function getOutputExamples(formats: string[]): string {
   const examples: string[] = [];
   if (formats.includes("definition") || formats.includes("qa")) {
-    examples.push('{"front":"Qual o mecanismo pelo qual X causa Y?","back":"X inibe Z, levando a...","type":"basic"}');
+    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica, impedindo o colapso pulmonar.","type":"basic"}');
   }
   if (formats.includes("cloze")) {
-    examples.push('{"front":"A {{c1::proteína p53}} é responsável por...","back":"","type":"cloze"}');
+    examples.push('{"front":"A {{c1::proteína p53}} atua como supressor tumoral ao induzir {{c2::apoptose}} em células com DNA danificado.","back":"","type":"cloze"}');
   }
   if (formats.includes("multiple_choice")) {
-    examples.push('{"front":"Paciente com sintomas X, Y e Z. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Opção A","Opção B","Opção C","Opção D"],"correctIndex":1}');
+    examples.push('{"front":"Paciente com dispneia, murmúrio vesicular abolido à esquerda e desvio de traqueia para a direita. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Pneumotórax hipertensivo","Derrame pleural","Atelectasia","Pneumonia lobar"],"correctIndex":0}');
   }
   if (examples.length === 0) {
-    examples.push('{"front":"Qual o mecanismo pelo qual X causa Y?","back":"X inibe Z, levando a...","type":"basic"}');
+    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica.","type":"basic"}');
   }
   return `[\n  ${examples.join(',\n  ')}\n]`;
 }
@@ -177,7 +197,8 @@ Deno.serve(async (req) => {
 
     const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost, skipLog } = await req.json();
 
-    if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
     if (!textContent?.trim()) return jsonResponse({ error: "textContent é obrigatório" }, 400);
 
     const cost = energyCost || 0;
@@ -188,11 +209,12 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
-    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
+    // Bloco 5: increased max from 50 to 80 for comprehensive batches
+    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
@@ -202,15 +224,23 @@ Deno.serve(async (req) => {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
     }
 
+    // Bloco 5: when cardCount=0 (auto), don't impose a numeric limit — let detailLevel drive quantity
+    const countInstruction = requestedCount > 0
+      ? `Crie exatamente ${requestedCount} cartões.`
+      : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
+
     const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
 REGRAS OBRIGATÓRIAS:
-- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade ideal para cobrir o conteúdo de forma completa.'}
+- ${countInstruction}
 - ${getDetailInstruction(detail)}
 - TUDO em PORTUGUÊS (ou na língua do material).
-- Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
+- Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
+- SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
 - CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
+- ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
+- EVITE LISTAS: Se uma resposta teria múltiplos itens, crie cartões separados para cada item.
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
@@ -226,16 +256,18 @@ ${getOutputExamples(formats)}`;
 
     console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
-    const aiResponse = await fetch(OPENAI_URL, {
+    const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
       body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 65000 }),
     });
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
-      console.error("OpenAI error:", aiResponse.status, errText);
+      console.error("AI error:", aiResponse.status, errText);
       if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
+      if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
+      if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
@@ -250,28 +282,61 @@ ${getOutputExamples(formats)}`;
       total_tokens: aiData.usage?.total_tokens || 0,
     };
 
-    let jsonStr = rawContent;
-    const m = rawContent.match(/\[[\s\S]*\]/);
+    // Clean AI response: strip markdown fences, BOM, zero-width chars, control chars
+    let jsonStr = rawContent
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // strip control chars except \n \r \t
+      .trim();
+
+    const m = jsonStr.match(/\[[\s\S]*\]/);
     if (m) {
       jsonStr = m[0];
     } else {
       // Try to repair truncated JSON array (no closing bracket)
       const arrStart = rawContent.indexOf('[');
       if (arrStart !== -1) {
-        let truncated = rawContent.slice(arrStart).replace(/,\s*$/, '');
-        // Close any open strings/objects and close the array
-        const openBraces = (truncated.match(/{/g) || []).length - (truncated.match(/}/g) || []).length;
-        for (let i = 0; i < openBraces; i++) truncated += '}';
-        truncated += ']';
-        jsonStr = truncated;
+        const raw = rawContent.slice(arrStart);
+        const lastBrace = raw.lastIndexOf('}');
+        if (lastBrace !== -1) {
+          jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
+        } else {
+          jsonStr = '[]';
+        }
       }
     }
 
+    // Fix common JSON issues: trailing commas before ] or }
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
-      console.error("Parse failed, raw:", rawContent.substring(0, 500));
-      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-      return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+      // Second attempt: strip the last incomplete object and try again
+      try {
+        const lastComplete = jsonStr.lastIndexOf('},');
+        if (lastComplete !== -1) {
+          cards = JSON.parse(jsonStr.slice(0, lastComplete + 1) + ']');
+        } else {
+          const lastObj = jsonStr.lastIndexOf('}');
+          if (lastObj !== -1) {
+            cards = JSON.parse(jsonStr.slice(0, lastObj + 1) + ']');
+          } else {
+            throw new Error("no recoverable JSON");
+          }
+        }
+      } catch {
+        // Third attempt: try to fix unescaped newlines inside strings
+        try {
+          const fixed = jsonStr.replace(/"([^"]*)\n([^"]*)"/g, (_, a, b) => `"${a}\\n${b}"`);
+          cards = JSON.parse(fixed);
+        } catch {
+          console.error("Parse failed, raw:", rawContent.substring(0, 500));
+          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+        }
+      }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {

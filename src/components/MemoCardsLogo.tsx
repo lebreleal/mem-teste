@@ -1,4 +1,4 @@
-import logoImg from '@/assets/logo-memo.png';
+import logoImg from '@/assets/logo-memo.svg';
 
 const MemoCardsLogo = ({ size = 40, className = '' }: { size?: number; className?: string }) => {
   return (

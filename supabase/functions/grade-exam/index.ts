@@ -1,9 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, logTokenUsage, fetchPromptConfig } from "../_shared/utils.ts";
-
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+import { handleCors, jsonResponse, getModelMap, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
 const FREE_DAILY_GRADINGS = 10;
 const GRADING_COST = 2;
@@ -23,12 +20,13 @@ Deno.serve(async (req) => {
     const userId = user.id;
 
     const { questionId, userAnswer, correctAnswer, questionText, aiModel, energyCost } = await req.json();
-    if (!OPENAI_API_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
     if (!questionId || !userAnswer || !correctAnswer) return jsonResponse({ error: "Campos obrigatórios faltando" }, 400);
 
     const promptConfig = await fetchPromptConfig(supabase, "grade_exam");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.2;
 
     const { data: profile } = await supabase.from("profiles").select("daily_free_gradings, last_grading_reset_date, energy").eq("id", userId).single();
@@ -63,9 +61,9 @@ Deno.serve(async (req) => {
       prompt = `Você é um avaliador de provas educacionais. Avalie a resposta do aluno comparando com a resposta esperada.\n\nPERGUNTA: ${cleanQuestion}\nRESPOSTA ESPERADA: ${cleanCorrect}\nRESPOSTA DO ALUNO: ${cleanUser}\n\nAvalie de 0 a 100. Considere conceitos-chave, precisão e completude.\n\nResponda APENAS com JSON válido:\n{"score": <0-100>, "feedback": "Feedback educativo em 2-3 frases"}`;
     }
 
-    const aiResponse = await fetch(OPENAI_URL, {
+    const aiResponse = await fetch(AI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
       body: JSON.stringify({ model: selectedModel, messages: [...(promptConfig?.system_prompt ? [{ role: "system", content: promptConfig.system_prompt }] : []), { role: "user", content: prompt }], temperature }),
     });
 

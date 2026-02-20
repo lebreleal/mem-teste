@@ -1,9 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig } from "../_shared/utils.ts";
-
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em criação de flashcards eficazes para estudo com repetição espaçada.
 
@@ -40,7 +37,8 @@ Deno.serve(async (req) => {
 
   try {
     const { front, back, cardType, aiModel, energyCost } = await req.json();
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!front || !front.trim()) return jsonResponse({ error: "Escreva algo no card antes de melhorar." }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -60,7 +58,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_card");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
     if (cardType === "multiple_choice") systemPrompt += `\n\nATENÇÃO: Este é um card de Múltipla Escolha. O campo "back" é JSON puro. Retorne o "back" melhorado TAMBÉM como JSON válido {"options": [...], "correctIndex": N}. Mantenha o correctIndex apontando para a mesma resposta correta.`;
@@ -73,9 +71,9 @@ Deno.serve(async (req) => {
 
     const tools = [{ type: "function", function: { name: "return_improved_card", description: "Return the improved flashcard", parameters: { type: "object", properties: { front: { type: "string", description: "Improved front content" }, back: { type: "string", description: "Improved back content" }, unchanged: { type: "boolean", description: "True if no changes were made" } }, required: ["front", "back", "unchanged"], additionalProperties: false } } }];
 
-    const response = await fetch(OPENAI_URL, {
+    const response = await fetch(AI_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }], tools, tool_choice: { type: "function", function: { name: "return_improved_card" } } }),
     });
 

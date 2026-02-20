@@ -7,13 +7,13 @@ const MODEL_CONFIG = {
     label: 'Flash',
     description: 'Rápido e eficiente',
     costMultiplier: 1,
-    backendModel: 'gpt-4o-mini',
+    backendModel: 'gemini-2.5-flash',
   },
   pro: {
     label: 'Pro',
     description: 'Raciocínio avançado',
     costMultiplier: 5,
-    backendModel: 'gpt-4o',
+    backendModel: 'gemini-2.5-pro',
   },
 } as const;
 
@@ -43,8 +43,13 @@ export const useAIModel = () => {
 
   const config = MODEL_CONFIG[model];
 
-  /** Calculate real cost given a base cost */
-  const getCost = useCallback((baseCost: number) => baseCost * MODEL_CONFIG[model].costMultiplier, [model]);
+  /** Calculate real cost given a base cost. Premium users get 50% off Flash. */
+  const getCost = useCallback((baseCost: number, isPremium = false) => {
+    const multiplier = model === 'flash' && isPremium
+      ? 0.5  // Premium: 1 crédito/página
+      : MODEL_CONFIG[model].costMultiplier;
+    return Math.ceil(baseCost * multiplier);
+  }, [model]);
 
   return { model, setModel: requestModelChange, config, getCost, MODEL_CONFIG, pendingPro, confirmPro, cancelPro };
 };
