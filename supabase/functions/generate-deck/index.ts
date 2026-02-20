@@ -2,25 +2,37 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
-const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards usando técnicas de aprendizagem ativa (active recall, interleaving, elaborative interrogation).
+const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
-Sua missão: criar flashcards que ajudem o estudante a DOMINAR o conteúdo — não apenas memorizar, mas compreender profundamente e aplicar.
+Sua missão: criar flashcards que garantam DOMÍNIO REAL do conteúdo — compreensão profunda, recuperação ativa e aplicação prática.
 
-PRINCÍPIOS:
-1. PROFUNDIDADE: Crie perguntas que testem compreensão, não apenas memorização. Ex: "Por que X causa Y?" ao invés de "O que é X?"
-2. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
-3. PRÁTICO: Inclua perguntas de aplicação clínica/prática quando relevante.
-4. CONEXÕES: Faça perguntas que conectem conceitos entre si.
-5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas. Se o material não contém informação suficiente para criar uma pergunta, NÃO crie essa pergunta.
-6. FIDELIDADE: Todas as perguntas e respostas devem ser diretamente deriváveis do texto fornecido. Não extrapole.
-7. ATOMICIDADE: Cada cartão deve testar APENAS UMA ideia ou conceito. Se um tópico tem 3 sub-pontos, crie 3 cartões separados. Evite respostas longas com listas ou múltiplos itens.
+PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
+
+1. COMPREENSÃO PRIMEIRO: Nunca crie um cartão sobre algo que o material não explica adequadamente.
+2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Respostas com mais de 1 frase são PROIBIDAS para basic. Se precisar de mais, divida em cartões separados.
+3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
+4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se o material lista 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
+5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos críticos, crie cartões que testem o MESMO conceito de ângulos diferentes. Ex: "X causa Y" num cartão e "Y é causado por {{c1::X}}" em outro.
+6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
+7. PERSONALIZAÇÃO: Quando possível, use exemplos práticos/clínicos em vez de definições abstratas.
+8. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas.
+9. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
+10. SEM DECOREBA: NÃO faça perguntas que podem ser respondidas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
+
+ANTI-PADRÕES (PROIBIDO):
+❌ Perguntas "O que é X?" com respostas de dicionário
+❌ Respostas que são listas ("A, B, C e D")
+❌ Cards que agrupam múltiplos conceitos
+❌ Múltipla escolha com distratores absurdos/inventados
+❌ Cloze com lacunas em palavras triviais (artigos, preposições)
+❌ Cards que copiam frases inteiras do material sem reformulação
 
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
-    case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, mesmo que pareça secundário. Se o texto citar uma EXCEÇÃO, crie um cartão para essa exceção. Se citar um EXEMPLO concreto, crie um cartão sobre esse exemplo. Se houver listas, cada item merece seu próprio cartão atômico.";
+    case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
     default: return "Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Não pule nenhum tema mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
@@ -70,9 +82,9 @@ function getFormatInstructions(formats: string[]): string {
     • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
 
   const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida. Foque em perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?") e COMPARAÇÃO ("Qual a diferença entre X e Y?"). Evite perguntas de dicionário ("O que é X?") — prefira perguntas que forçam o estudante a EXPLICAR e RACIOCINAR.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa (1 frase, máximo 2) no verso. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados que não apareçam no texto.', name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados. Múltipla escolha serve para DIFERENCIAÇÃO entre conceitos similares, não para perguntas triviais.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -93,19 +105,38 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    parts.push(`\nREGRA DE INTERCALAÇÃO (OBRIGATÓRIA):
-1. Cada conceito/tópico deve ser coberto por APENAS UM formato — NUNCA repita o mesmo assunto em formatos diferentes.
-2. ALTERNE os formatos na sequência: ${formatNames.join(" → ")} → ${formatNames[0]} → ... (ciclo contínuo).
-3. Distribuição IGUAL: cada formato deve ter aproximadamente o mesmo número de cartões (diferença máxima de 1).
-4. PROFUNDIDADE: cada cartão deve ser RICO em contexto e testar compreensão real, não apenas memorização superficial.
+    // Build pedagogical distribution based on SuperMemo principles
+    // Cloze dominates (50%), Basic for reasoning (30%), MCQ for differentiation (20%)
+    const hasAll3 = formatNames.length === 3;
+    const hasCloze = formats.includes("cloze");
+    const hasBasic = formats.includes("qa") || formats.includes("definition");
+    const hasMCQ = formats.includes("multiple_choice");
 
-EXEMPLO com ${count} formatos e 6 conceitos:
-Conceito 1 → ${formatNames[0]}
-Conceito 2 → ${formatNames[1 % count]}
-Conceito 3 → ${formatNames[2 % count]}
-Conceito 4 → ${formatNames[3 % count]}
-Conceito 5 → ${formatNames[4 % count]}
-Conceito 6 → ${formatNames[5 % count]}`);
+    let distributionText: string;
+    if (hasAll3) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo):
+- Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
+- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
+- Múltipla Escolha: ~20% dos cartões (MÁXIMO) — SOMENTE para diferenciação de conceitos similares.`;
+    } else if (hasCloze && hasBasic) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+- Cloze: ~60% dos cartões — formato dominante para retenção.
+- Pergunta/Resposta (basic): ~40% dos cartões — para raciocínio e compreensão.`;
+    } else if (hasCloze && hasMCQ) {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+- Cloze: ~70% dos cartões — formato dominante para retenção.
+- Múltipla Escolha: ~30% dos cartões — para diferenciação de conceitos.`;
+    } else {
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
+- Pergunta/Resposta (basic): ~70% dos cartões — para raciocínio e compreensão.
+- Múltipla Escolha: ~30% dos cartões — para diferenciação de conceitos.`;
+    }
+
+    parts.push(`\nREGRAS DE DISTRIBUIÇÃO (OBRIGATÓRIA):
+1. Cada conceito/tópico deve ser coberto por APENAS UM formato — NUNCA repita o mesmo assunto em formatos diferentes (exceto redundância estratégica intencional).
+2. ${distributionText}
+3. Siga a ordem cronológica do material.
+4. PROFUNDIDADE: cada cartão deve ser RICO em contexto e testar compreensão real.`);
   }
 
   if (forbiddenNames.length > 0) {
@@ -118,16 +149,16 @@ Conceito 6 → ${formatNames[5 % count]}`);
 function getOutputExamples(formats: string[]): string {
   const examples: string[] = [];
   if (formats.includes("definition") || formats.includes("qa")) {
-    examples.push('{"front":"Qual o mecanismo pelo qual X causa Y?","back":"X inibe Z, levando a...","type":"basic"}');
+    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica, impedindo o colapso pulmonar.","type":"basic"}');
   }
   if (formats.includes("cloze")) {
-    examples.push('{"front":"A {{c1::proteína p53}} é responsável por...","back":"","type":"cloze"}');
+    examples.push('{"front":"A {{c1::proteína p53}} atua como supressor tumoral ao induzir {{c2::apoptose}} em células com DNA danificado.","back":"","type":"cloze"}');
   }
   if (formats.includes("multiple_choice")) {
-    examples.push('{"front":"Paciente com sintomas X, Y e Z. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Opção A","Opção B","Opção C","Opção D"],"correctIndex":1}');
+    examples.push('{"front":"Paciente com dispneia, murmúrio vesicular abolido à esquerda e desvio de traqueia para a direita. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Pneumotórax hipertensivo","Derrame pleural","Atelectasia","Pneumonia lobar"],"correctIndex":0}');
   }
   if (examples.length === 0) {
-    examples.push('{"front":"Qual o mecanismo pelo qual X causa Y?","back":"X inibe Z, levando a...","type":"basic"}');
+    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica.","type":"basic"}');
   }
   return `[\n  ${examples.join(',\n  ')}\n]`;
 }
@@ -176,7 +207,8 @@ Deno.serve(async (req) => {
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent.slice(0, 16000);
-    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
+    // Bloco 5: increased max from 50 to 80 for comprehensive batches
+    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
@@ -186,17 +218,23 @@ Deno.serve(async (req) => {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
     }
 
+    // Bloco 5: when cardCount=0 (auto), don't impose a numeric limit — let detailLevel drive quantity
+    const countInstruction = requestedCount > 0
+      ? `Crie exatamente ${requestedCount} cartões.`
+      : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
+
     const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
 REGRAS OBRIGATÓRIAS:
-- ${requestedCount > 0 ? `Crie exatamente ${requestedCount} cartões.` : 'Crie a quantidade NECESSÁRIA de cartões para o nível de cobertura solicitado abaixo. NÃO limite artificialmente — gere tantos cartões quantos forem necessários.'}
+- ${countInstruction}
 - ${getDetailInstruction(detail)}
 - TUDO em PORTUGUÊS (ou na língua do material).
-- Varie os TIPOS de pergunta: definição, mecanismo, comparação, aplicação clínica, causa-efeito.
-- SEM DECOREBA: Não faça perguntas que possam ser respondidas apenas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
+- Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
+- SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
 - CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
 - ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
+- EVITE LISTAS: Se uma resposta teria múltiplos itens, crie cartões separados para cada item.
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
