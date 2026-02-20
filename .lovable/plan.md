@@ -1,146 +1,156 @@
 
-# Corrigir Precificacao de IA + Otimizar Velocidade do Gemini Pro
 
-## Problema 1: Desconto Premium nao aplicado no Flash
+# Otimizar Velocidade de Geracao + Corrigir Botao Reload
 
-A memoria do sistema diz que **Premium recebe 50% de desconto no Flash** (1 credito vs 2 por pagina), mas o codigo atual em `useAIModel.ts` nao considera o status Premium. O `costMultiplier` e fixo em 1 para Flash e 5 para Pro, independente do plano do usuario.
+## Diagnostico: Por que esta lento?
 
-**Resultado:** Usuarios Premium pagam o mesmo que gratuitos pelo Flash -- o desconto prometido nao existe.
+Hoje, para um PDF de 49 paginas (~98k chars), o sistema faz:
 
-**Solucao:** Alterar `useAIModel.ts` para aceitar `isPremium` e aplicar o desconto:
-- Flash: Premium paga 1 credito/pagina (multiplicador 0.5), Free paga 2 (multiplicador 1)
-- Pro: 10 creditos/pagina para todos (multiplicador 5)
+```text
+16 batches x 3 formatos = 48 chamadas de API (sequenciais por batch)
+48 chamadas x ~15s cada = ~4-8 minutos
+```
 
-Atualizar `useAIDeckFlow.ts` para passar `isPremium` ao `getCost`.
+A separacao por formato (1 chamada por formato por batch) foi criada para "evitar alucinacoes", mas o prompt JA lida perfeitamente com multiplos formatos misturados -- ele tem instrucoes de distribuicao uniforme e exemplos para cada tipo.
 
-## Problema 2: Gemini Pro muito lento (sequencial por formato)
+## Solucao: 3 mudancas combinadas
 
-Os logs mostram que cada chamada ao Gemini Pro leva 10-30 segundos. Com 3 formatos (QA, Cloze, MC) por batch, cada batch demora 30-90 segundos. Com multiplos batches, o tempo total facilmente passa de 3-5 minutos.
+### Mudanca 1 -- Remover separacao por formato (MAIOR IMPACTO)
 
-**Causa raiz:** As chamadas por formato sao feitas **sequencialmente** dentro de cada batch. O loop em `useAIDeckFlow.ts` espera cada formato terminar antes de iniciar o proximo.
+Enviar TODOS os formatos em UMA unica chamada por batch, como era originalmente. O prompt ja tem instrucoes para distribuir uniformemente entre os formatos.
 
-**Solucao:** Paralelizar as chamadas por formato dentro de cada batch usando `Promise.all`. Isso reduz o tempo de cada batch de ~90s para ~30s (o tempo da chamada mais lenta).
+| Antes | Depois |
+|-------|--------|
+| 16 batches x 3 chamadas = 48 calls | 16 batches x 1 chamada = 16 calls |
 
-## Problema 3: Botao "Segundo plano" demora 10s para aparecer
+Reducao de 66% no numero de chamadas, sem nenhuma perda de qualidade.
 
-Em `GenerationProgress.tsx`, a condicao `elapsed >= 10` faz o botao de dismiss so aparecer apos 10 segundos. O usuario fica preso sem saber que pode sair.
+### Mudanca 2 -- Aumentar batch size (6k para 12k chars)
 
-**Solucao:** Remover a condicao de 10 segundos -- mostrar o botao imediatamente.
+Moderado e seguro -- 12k chars e menos de 1% da janela de contexto do Gemini (1M tokens). Da MAIS contexto por chamada, o que MELHORA a qualidade.
 
-## Problema 4: Retry para erro 503 + mensagens diferenciadas
+| Antes | Depois |
+|-------|--------|
+| 16 batches | ~8 batches |
 
-Implementar `fetchWithRetry()` centralizado em `_shared/utils.ts` e diferenciar erros 403/429/503 nos edge functions.
+### Mudanca 3 -- Paralelizar batches (ate 3 simultaneos)
 
-## Problema 5: Preambulo indesejado no ai-tutor
+Executar 2-3 batches ao mesmo tempo usando pool de concorrencia.
 
-Adicionar system prompt anti-preambulo padrao no `ai-tutor`.
+| Antes | Depois |
+|-------|--------|
+| 8 batches sequenciais | 3 rodadas de 3 batches |
 
----
+### Resultado final
+
+```text
+ANTES: 48 chamadas sequenciais = 4-8 min
+DEPOIS: ~8 chamadas em 3 rodadas = 30s-1.5 min
+```
+
+Reducao de ~80% no tempo, SEM tocar no prompt.
+
+## Prompt: Analise
+
+O prompt atual esta muito bom. Pontos fortes:
+
+- Instrucoes de fidelidade (EXCLUSIVIDADE, nao inventar)
+- Autocontido (nunca referenciar figuras/anexos)
+- Exemplos corretos e incorretos para cloze
+- Distribuicao obrigatoria entre formatos
+- Validacao de cloze no pos-processamento
+
+NAO muda nada no prompt. Ele ja suporta multiplos formatos numa unica chamada.
+
+## Botao Reload no Admin
+
+O botao existe mas usa `variant="ghost"` que e praticamente invisivel. Trocar para `variant="outline"` com icone destacado.
 
 ## Arquivos a alterar
 
-### Frontend
+### 1. `src/components/ai-deck/useAIDeckFlow.ts`
+- Remover loop de formatos -- enviar `cardFormats` completo em 1 chamada por batch
+- Aumentar `MAX_CHARS` de 6000 para 12000
+- Adicionar pool de concorrencia para processar ate 3 batches simultaneos
+- Simplificar logica de progresso (total = numero de batches, nao batches x formatos)
 
-1. **`src/hooks/useAIModel.ts`**
-   - `getCost` passa a considerar `isPremium`
-   - Flash Premium: multiplicador 0.5 (1 credito/pagina)
-   - Flash Free: multiplicador 1 (2 creditos/pagina)
-   - Pro: multiplicador 5 para todos
+### 2. `supabase/functions/generate-deck/index.ts`
+- Aumentar trim de 10000 para 16000 caracteres (acompanhar batch maior)
+- Aumentar `max_tokens` de 8192 para 12000 (resposta maior para mais cards)
 
-2. **`src/components/ai-deck/useAIDeckFlow.ts`**
-   - Passar `isPremium` para `getCost`
-   - Paralelizar chamadas por formato dentro de cada batch com `Promise.all`
-
-3. **`src/components/ai-deck/GenerationProgress.tsx`**
-   - Remover `elapsed >= 10` do botao de dismiss
-
-4. **`src/components/AIModelSelector.tsx`**
-   - Passar `isPremium` para exibir custo correto
-
-5. **`src/components/ai-deck/ConfigStep.tsx`**
-   - Garantir que o custo exibido reflete o desconto Premium
-
-### Edge Functions
-
-6. **`supabase/functions/_shared/utils.ts`**
-   - Adicionar funcao `fetchWithRetry(url, options, maxRetries)` com retry para 503
-
-7. **`supabase/functions/generate-deck/index.ts`**
-   - Usar `fetchWithRetry` em vez de `fetch` direto
-   - Diferenciar erros 403, 429, 503
-
-8. **`supabase/functions/ai-tutor/index.ts`**
-   - Usar `fetchWithRetry`
-   - Adicionar system prompt padrao anti-preambulo
-   - Diferenciar erros
-
-9. **`supabase/functions/ai-chat/index.ts`**
-   - Usar `fetchWithRetry`
-   - Diferenciar erros
-
----
+### 3. `src/pages/AdminUsers.tsx`
+- Trocar botao Reload de `variant="ghost"` para `variant="outline"`
 
 ## Detalhes tecnicos
 
-### getCost com Premium (useAIModel.ts)
+### useAIDeckFlow.ts -- Nova logica simplificada
 
 ```typescript
-const getCost = useCallback((baseCost: number, isPremium = false) => {
-  const multiplier = model === 'flash' && isPremium
-    ? 0.5  // Premium: 1 credito/pagina
-    : MODEL_CONFIG[model].costMultiplier;
-  return Math.ceil(baseCost * multiplier);
-}, [model]);
-```
+const MAX_CHARS = 12000; // era 6000
+const CONCURRENT_BATCHES = 3;
 
-### Paralelizacao por formato (useAIDeckFlow.ts)
+// Montar batches (igual, so muda o MAX_CHARS)
+// ...
 
-Dentro do loop de batches, ao inves de iterar sequencialmente pelos formatos:
+const totalBatches = textBatches.length;
+setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
 
-```typescript
-// ANTES: sequencial (lento)
-for (const format of formats) {
-  const result = await aiService.generateDeckCards({...});
-}
+// Processar em grupos de 3 batches simultaneos
+for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
+  const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
 
-// DEPOIS: paralelo (3x mais rapido)
-const formatPromises = formats.map((format, f) => 
-  aiService.generateDeckCards({
-    ...commonParams,
-    cardFormats: [format],
-    energyCost: f === 0 ? batchCost : 0,
-  })
-);
-const results = await Promise.allSettled(formatPromises);
-```
+  const groupPromises = group.map((batch, gi) => {
+    const batchIdx = i + gi;
+    const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
 
-### fetchWithRetry (_shared/utils.ts)
+    return aiService.generateDeckCards({
+      textContent: batch.texts.join('\n\n'),
+      cardCount: targetCardCount > 0
+        ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
+        : 0,  // deixar a IA decidir (melhor qualidade)
+      detailLevel,
+      cardFormats,  // TODOS os formatos de uma vez
+      customInstructions: customInstructions.trim() || undefined,
+      aiModel: model,
+      energyCost: batchCost,
+      skipLog: true,
+    });
+  });
 
-```typescript
-export async function fetchWithRetry(
-  url: string, options: RequestInit, maxRetries = 2
-): Promise<Response> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
-    if (response.status !== 503 || attempt === maxRetries) return response;
-    console.warn(`503 retry ${attempt+1}/${maxRetries}`);
-    await new Promise(r => setTimeout(r, 2000));
-  }
-  return await fetch(url, options);
+  const results = await Promise.allSettled(groupPromises);
+  // coletar cards e usage de cada resultado...
+
+  // Atualizar progresso
+  setGenProgress(prev => ({
+    current: Math.min(i + CONCURRENT_BATCHES, totalBatches),
+    total: totalBatches,
+    creditsUsed: totalEnergyCost,
+  }));
 }
 ```
 
-### System prompt anti-preambulo (ai-tutor)
+### generate-deck/index.ts -- Limites maiores
 
+```typescript
+const trimmedContent = textContent.slice(0, 16000); // era 10000
+// ...
+max_tokens: 12000  // era 8192
 ```
-Voce e um tutor educacional direto e objetivo.
-PROIBIDO: saudacoes, elogios, preambulos, "Ola", "Otima pergunta", "Excelente iniciativa".
-Va direto ao conteudo. Use Markdown para formatacao.
+
+### AdminUsers.tsx -- Botao visivel
+
+```typescript
+<Button variant="outline" size="sm" ...>
+  <RefreshCw className="w-4 h-4 mr-1" />
+  Atualizar
+</Button>
 ```
 
-### Impacto esperado
+## Por que NAO perde qualidade?
 
-- **Velocidade Pro**: Reducao de ~60-70% no tempo total (3 formatos em paralelo)
-- **Custo Premium Flash**: Metade do preco (1 credito vs 2 por pagina)
-- **UX**: Botao de segundo plano imediato, retry automatico para 503
-- **Qualidade**: Sem preambulos no tutor
+1. O prompt ja foi desenhado para multiplos formatos -- tem instrucoes de distribuicao e exemplos
+2. Mais texto por batch = MAIS contexto = menos alucinacao (a IA entende melhor o tema)
+3. 12k chars e trivial para o Gemini (janela de 1M tokens)
+4. A validacao de cloze no pos-processamento continua intacta
+5. O retry automatico para 503 ja esta implementado
+
