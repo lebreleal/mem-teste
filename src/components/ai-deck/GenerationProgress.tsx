@@ -81,7 +81,7 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         const increment = Math.max(0.15, distToCeiling * 0.04);
         return Math.min(ceiling, prev + increment);
       });
-    }, 2000);
+    }, 1500);
     return () => clearInterval(iv);
   }, [genProgress.current, genProgress.total]);
 
