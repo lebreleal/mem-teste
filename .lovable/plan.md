@@ -1,131 +1,185 @@
 
-# Grafico Semanal de Cards + Correcao do Calculo de Capacidade
+
+# Redesign Visual do PlanDashboard - Cards Horizontais por Baralho
 
 ## Resumo
 
-Duas mudancas principais:
-1. Substituir o HealthRing (anel de 100%) por um grafico de barras vertical mostrando cards por dia da semana
-2. Corrigir o calculo de capacidade para considerar reviews + novos cards corretamente
+Inspirado no layout de referencia (carrossel horizontal de aulas), redesenhar a secao de baralhos do PlanDashboard para exibir cards horizontais deslizaveis com progresso individual, tempo estimado e acoes rapidas -- adaptado ao contexto de flashcards.
 
 ---
 
-## 1. Grafico de Barras Semanal (substitui o HealthRing no Hero Card)
+## Estrutura Final do Dashboard
 
-Remover o componente `HealthRing` do Hero Card e substituir por um grafico de barras usando Recharts (ja instalado no projeto).
-
-**Eixo X:** Dias da semana (Seg, Ter, Qua, Qui, Sex, Sab, Dom) - baseado na capacidade definida pelo usuario
-
-**Eixo Y:** Quantidade de cards
-
-**Cada barra mostra duas cores empilhadas:**
-- Azul/Primary: cards de revisao estimados para aquele dia
-- Verde claro: cards novos que cabem no tempo restante
-
-**Calculo por dia:**
-- Para cada dia da semana, pegar os minutos definidos (de `weekly_minutes` ou `daily_minutes`)
-- Converter minutos em capacidade total de cards: `Math.floor((minutesDia * 60) / avgSecondsPerCard)`
-- Dividir entre reviews e novos: como usuario novo nao tem historico, usar proporcao global dos cards pendentes (`totalReview / totalPending` para reviews, `totalNew / totalPending` para novos)
-- Se houver historico (totalReview > 0), reviews tem prioridade - primeiro aloca reviews ate o limite, depois preenche com novos
-
-**O label de status** (No Caminho / Atencao / Em Risco) continua visivel acima do grafico, como um badge colorido compacto em vez do anel grande.
-
-**Componente:** `WeeklyCardChart` usando `BarChart` do Recharts com `ResponsiveContainer`, altura de ~160px.
-
----
-
-## 2. Correcao do Calculo de Capacidade
-
-### Problema atual
-O calculo em `useStudyPlan.ts` (linhas 170-174) calcula `estimatedMinutesToday` como:
-- `reviewMinutes = totalReview * avgSec / 60` (todos os reviews pendentes, nao apenas os de hoje)
-- `newMinutes = min(capacityCardsToday - totalReview, totalNew) * avgSec / 60`
-
-Isso esta errado porque `totalReview` eh o total de reviews pendentes (pode ser centenas), nao os reviews do dia.
-
-### Correcao
-Mudar a logica para:
-1. **Reviews do dia** = `totalReview` (cards com scheduled_date <= now, que precisam ser feitos hoje)
-2. **Capacidade restante para novos** = `max(0, capacityCardsToday - totalReview)` - isso ja esta correto
-3. **Cards novos do dia** = `min(capacidadeRestante, totalNew)`
-4. **Total estimado** = `reviewMinutes + newMinutes` (correto)
-
-O problema real eh que `totalReview` da RPC `get_plan_metrics` retorna todos os reviews vencidos acumulados, nao apenas os de hoje. Para um usuario novo sem historico, `totalReview` seria 0 e `totalNew` seria todos os cards.
-
-**Proporcao para usuario novo (sem historico):**
-- Usar uma proporcao padrao: ~70% da capacidade para novos cards, ~30% reservado para reviews que surgirao ao longo do dia (cards em aprendizado que vencem)
-- Conforme o usuario ganha historico, a proporcao real substitui a padrao
-
-**Nova logica em `useStudyPlan.ts`:**
-
-```
-// Se nao ha reviews pendentes (usuario novo), estimar baseado em proporcao
-const estimatedReviewsToday = totalReview > 0 
-  ? Math.min(totalReview, capacityCardsToday) 
-  : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-
-const reviewMinutes = Math.round((estimatedReviewsToday * avgSec) / 60);
-const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
-const dailyNewCards = Math.min(remainingCapacity, totalNew);
-const newMinutes = Math.round((dailyNewCards * avgSec) / 60);
-const estimatedMinutesToday = reviewMinutes + newMinutes;
+```text
++───────────────────────────────────────+
+│  Header: "Meu Plano de Estudos"  [⚙] │
++───────────────────────────────────────+
+│                                       │
+│  [Para estudar]  [Concluidos]         │
+│                          Semana: 17-23/02 │
+│                                       │
+│  Baralhos da semana                   │
+│  3 de 5 concluidos                    │
+│                                       │
+│  ┌──────────┐ ┌──────────┐ ┌────────  │
+│  │ Anatomia │ │ Fisiolog │ │ Bioqui  │
+│  │          │ │          │ │         │
+│  │ 45 cards │ │ 32 cards │ │ 28 car  │
+│  │ ⏱ 1h30   │ │ ⏱ 55min  │ │ ⏱ 45m  │
+│  │ [══70%══]│ │ [══40%══]│ │ [═20%═  │
+│  │          │ │          │ │         │
+│  │[Estudar→]│ │[Estudar→]│ │[Estuda  │
+│  └──────────┘ └──────────┘ └────────  │
+│         ← deslizar →                  │
+│                                       │
+│  ┌───────────────────────────────────┐│
+│  │ Carga de hoje        45min       ││
+│  │ [====verde====][amarelo][vermelho]││
+│  │ 15min Revisoes + 30min Novos     ││
+│  └───────────────────────────────────┘│
+│                                       │
+│  ┌───────────────────────────────────┐│
+│  │ Grafico Semanal (barras)         ││
+│  │ Seg Ter Qua Qui Sex Sab Dom     ││
+│  └───────────────────────────────────┘│
+│                                       │
+│  ┌───────────────────────────────────┐│
+│  │ Meus Objetivos                   ││
+│  │ Data | Retencao | Capacidade     ││
+│  └───────────────────────────────────┘│
+│                                       │
++───────────────────────────────────────+
 ```
 
 ---
 
-## 3. Dados do Grafico Semanal
+## Mudancas Detalhadas
 
-Nova propriedade em `PlanMetrics`:
+### 1. Carrossel Horizontal de Baralhos (nova secao principal)
 
-```typescript
-weeklyCardData: Array<{
-  day: string;       // "Seg", "Ter", etc.
-  review: number;    // cards de revisao estimados
-  newCards: number;   // cards novos estimados
-  total: number;      // review + newCards
-  minutes: number;    // minutos definidos pelo usuario
-}>
-```
+Substituir a lista vertical de "Prioridade dos Baralhos" por um carrossel horizontal deslizavel, similar ao layout de referencia.
 
-Calculado no `useMemo` do hook, iterando por cada dia da semana:
+**Cada card de baralho mostra:**
+- Nome do baralho (titulo em negrito)
+- Badges: quantidade de cards novos, cards de revisao
+- Tempo estimado (icone relogio + "Est. 1h30")
+- Barra de progresso (cards estudados / total)
+- Botao "Estudar" (navega para `/study/{deckId}`) + "Pular" (ghost)
 
-```
-DAY_KEYS.map(dayKey => {
-  const dayMinutes = getMinutesForDay(plan, dayKey);
-  const dayCapacity = Math.floor((dayMinutes * 60) / avgSec);
-  const dayReviews = Math.min(totalReview > 0 ? totalReview : totalLearning, 
-                              Math.ceil(dayCapacity * reviewRatio));
-  const dayNew = Math.min(dayCapacity - dayReviews, totalNew);
-  return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, ... };
-})
-```
+**Implementacao:**
+- Container com `flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2` e `scrollbar-hide`
+- Cada card com `min-w-[260px] max-w-[300px] snap-start` e borda arredondada
+- Calcular progresso por deck usando dados de `metrics` (total_new, total_review por deck)
+- Como nao temos metricas individuais por deck na RPC atual, usar proporcao: `deckProgress = (totalCards - newCards - reviewCards) / totalCards`
+
+### 2. Tabs "Para estudar" / "Concluidos"
+
+Acima do carrossel, adicionar duas tabs simples:
+- **Para estudar**: mostra baralhos com cards pendentes (novos ou revisao)
+- **Concluidos**: mostra baralhos onde todos os cards ja foram vistos hoje
+
+Usar estado local `activeTab` com estilo de toggle compacto (botoes outline/default).
+
+### 3. Header da Semana
+
+Linha com "Semana: 17/02 a 23/02" (calculada dinamicamente) ao lado das tabs, similar ao layout de referencia.
+
+### 4. Contador de Progresso
+
+Texto "X de Y baralhos" acima do carrossel indicando quantos ja foram estudados hoje.
+
+### 5. Reorganizar Ordem do Dashboard
+
+Nova ordem das secoes:
+1. Tabs + Semana header
+2. Carrossel de baralhos (nova secao principal)
+3. Hero Card (Carga de hoje + StudyLoadBar) - compactado
+4. Grafico semanal (WeeklyCardChart)
+5. Card "Meus Objetivos" (data, retencao, capacidade)
+
+O Hero Card e o grafico semanal sao separados em cards distintos para clareza visual.
+
+### 6. Manter Drag-and-Drop via Settings
+
+A reordenacao de prioridade (drag-and-drop) sera movida para dentro do dialog de Settings, pois a ordem no carrossel ja reflete a prioridade (deck_ids). Na tela principal, nao ha mais grip handles -- a ordem segue o plano.
 
 ---
 
 ## Secao Tecnica
 
-### Arquivos modificados
+### Arquivo modificado
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/hooks/useStudyPlan.ts` | Adicionar `weeklyCardData` ao PlanMetrics, corrigir calculo de reviewMinutes/newMinutes |
-| `src/pages/StudyPlan.tsx` | Substituir HealthRing por WeeklyCardChart no Hero Card, manter badge de status |
+`src/pages/StudyPlan.tsx` - reescrita da funcao `PlanDashboard`
 
-### Imports novos em StudyPlan.tsx
+### Novos imports
+
+Nenhum pacote novo. Usa `flex overflow-x-auto` nativo do CSS (sem Embla/Swiper).
+
+### Calculo de progresso por deck
+
+Como a RPC `get_plan_metrics` retorna totais agregados (nao por deck), o progresso individual sera estimado:
 
 ```typescript
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+// Para cada deck, buscar contagem de cards
+const deckCards = allCards.filter(c => c.deck_id === deck.id);
+const newCount = deckCards.filter(c => c.state === 0).length;
+const reviewCount = deckCards.filter(c => c.state === 2 && new Date(c.scheduled_date) <= new Date()).length;
+const totalCount = deckCards.length;
+const progressPercent = totalCount > 0 ? Math.round(((totalCount - newCount - reviewCount) / totalCount) * 100) : 0;
 ```
 
-### Componente WeeklyCardChart
+Alternativa mais simples (sem buscar todos os cards): usar `deck.new_count`, `deck.review_count` e `deck.card_count` que ja existem nos dados dos decks retornados por `useDecks`.
 
-- Altura: 160px
-- Barras empilhadas (stacked): review (cor primary) + novos (cor emerald)
-- Labels do eixo X: dias da semana abreviados
-- Eixo Y: numeros inteiros
-- Tooltip mostrando detalhamento ao tocar/hover
-- Acima do grafico: badge compacto com cor de status + label ("No Caminho", etc.)
+### Estrutura do DeckStudyCard
 
-### Remocoes
+```typescript
+function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: any; avgSecondsPerCard: number }) {
+  const navigate = useNavigate();
+  const totalCards = deck.card_count ?? 0;
+  const newCards = deck.new_count ?? 0;
+  const reviewCards = deck.review_count ?? 0;
+  const pendingCards = newCards + reviewCards;
+  const doneCards = Math.max(0, totalCards - pendingCards);
+  const progressPercent = totalCards > 0 ? Math.round((doneCards / totalCards) * 100) : 0;
+  const estimatedMinutes = Math.round((pendingCards * avgSecondsPerCard) / 60);
 
-- Componente `HealthRing` removido do Hero Card (pode manter a funcao para uso futuro mas nao renderiza mais)
-- A constante `HEALTH_CONFIG` permanece para cores do badge de status
+  return (
+    <div className="min-w-[260px] max-w-[300px] snap-start flex flex-col rounded-xl border bg-card p-4 space-y-3">
+      <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
+      <div className="flex gap-1.5 flex-wrap">
+        {newCards > 0 && <Badge variant="outline">{newCards} novos</Badge>}
+        {reviewCards > 0 && <Badge variant="outline">{reviewCards} revisoes</Badge>}
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Inicie seu estudo</span>
+        <span className="flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Est. {formatMinutes(estimatedMinutes)}
+        </span>
+      </div>
+      <Progress value={progressPercent} className="h-1.5" />
+      <p className="text-[10px] text-muted-foreground">{progressPercent}% concluido</p>
+      <div className="flex items-center gap-2 mt-auto">
+        <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
+          Estudar
+        </Button>
+        <Button size="icon" variant="default" className="h-8 w-8 rounded-full shrink-0">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+```
+
+### CSS para scrollbar invisivel
+
+Adicionar ao `index.css`:
+```css
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+```
+
+### Reordenacao no Settings Dialog
+
+Mover a lista de drag-and-drop para dentro do Dialog de Settings, mantendo o `useDragReorder` hook ja implementado.
+
