@@ -92,11 +92,17 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA E EXATA: Distribua os cartões de forma IGUAL entre os ${count} formatos: ${formatNames.join(", ")}.
-Se forem N cartões no total, cada formato deve ter exatamente floor(N/${count}) cartões (± 1 cartão de diferença máxima).
-EXEMPLO: Se criar 12 cartões com 3 formatos → 4 basic, 4 cloze, 4 multiple_choice.
-EXEMPLO: Se criar 10 cartões com 2 formatos → 5 de cada.
-NÃO concentre cartões em um único formato. Esta regra é OBRIGATÓRIA.`);
+    parts.push(`\nREGRA DE COBERTURA TRIPLA (OBRIGATÓRIA):
+Cada conceito/tópico importante do material DEVE ser abordado em TODOS os ${count} formatos (${formatNames.join(", ")}).
+
+EXEMPLO com o conceito "gastrulação":
+1. basic: "Qual é o processo que forma os três folhetos germinativos?" → "A gastrulação..."
+2. cloze: "O processo que forma os três folhetos germinativos é a {{c1::gastrulação}}."
+3. multiple_choice: "Qual processo embriológico origina ectoderma, mesoderma e endoderma?" → [opções]
+
+Cada conceito = ${count} cartões (1 de cada formato), abordando o MESMO conteúdo por ângulos diferentes.
+Isso garante memorização de 100% por múltiplas vias cognitivas (recall ativo, reconhecimento e completamento).
+Os cartões do mesmo conceito devem ficar AGRUPADOS na sequência (basic→cloze→multiple_choice) antes de passar ao próximo conceito.`);
   }
 
   if (forbiddenNames.length > 0) {
