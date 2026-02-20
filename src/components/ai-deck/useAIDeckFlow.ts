@@ -264,6 +264,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
 
       const groupPromises = group.map((batch, gi) => {
+        const batchIndex = i + gi; // absolute batch position
         const batchText = batch.texts.join('\n\n');
         const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
         totalEnergyCost += batchCost;
@@ -271,11 +272,16 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
           : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
+        // Add ordering context so AI knows this is part N of M
+        const orderPrefix = totalBatches > 1
+          ? `[CONTEXTO: Este é o trecho ${batchIndex + 1} de ${totalBatches} do material, em ORDEM SEQUENCIAL. Gere cartões seguindo a ordem do texto.]\n\n`
+          : '';
+
         return aiService.generateDeckCards({
-          textContent: batchText,
+          textContent: orderPrefix + batchText,
           cardCount: batchCardCount,
           detailLevel,
-          cardFormats,  // ALL formats in a single call
+          cardFormats,
           customInstructions: customInstructions.trim() || undefined,
           aiModel: model,
           energyCost: batchCost,
