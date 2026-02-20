@@ -90,17 +90,21 @@ interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
   hasPlan: boolean;
+  planDeckIds?: string[];
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds }: DeckCarouselProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'done'>('pending');
 
-  // Only show root-level non-archived decks with cards
-  const activeDecks = useMemo(() =>
-    decks.filter(d => !d.is_archived && !d.parent_deck_id),
-    [decks]
-  );
+  // When plan exists, show only plan decks; otherwise show all root-level non-archived decks
+  const activeDecks = useMemo(() => {
+    const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
+    if (hasPlan && planDeckIds && planDeckIds.length > 0) {
+      return roots.filter(d => planDeckIds.includes(d.id));
+    }
+    return roots;
+  }, [decks, hasPlan, planDeckIds]);
 
   const { pendingDecks, doneDecks } = useMemo(() => {
     const pending: DeckWithStats[] = [];
