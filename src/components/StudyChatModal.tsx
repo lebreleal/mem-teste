@@ -74,20 +74,13 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
   }, [messages.length, onHasMessagesChange]);
 
   // Absorb external streaming response into local messages
-  const absorbedRef = useRef(false);
+  const absorbedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) { absorbedRef.current = false; return; }
-    if (streamingResponse && !isStreamingResponse && !absorbedRef.current) {
-      // Streaming finished — absorb into messages array so user can continue chatting
-      absorbedRef.current = true;
-      setMessages(prev => {
-        // If we already have a placeholder assistant msg from streaming, replace it
-        if (prev.length === 1 && prev[0].role === 'assistant') {
-          return [{ role: 'assistant', content: streamingResponse }];
-        }
-        // Otherwise just add it
-        return [{ role: 'assistant', content: streamingResponse }, ...prev];
-      });
+    if (!open) { absorbedRef.current = null; return; }
+    if (streamingResponse && !isStreamingResponse && absorbedRef.current !== streamingResponse) {
+      // Streaming finished — append as a new assistant message (don't replace old ones)
+      absorbedRef.current = streamingResponse;
+      setMessages(prev => [...prev, { role: 'assistant', content: streamingResponse }]);
       onClearStreaming?.();
     }
   }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
@@ -262,23 +255,6 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-            {/* Show external streaming response as first assistant message */}
-            {streamingResponse && !absorbedRef.current && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
-                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
-                    <ReactMarkdown>{streamingResponse}</ReactMarkdown>
-                    {isStreamingResponse && (
-                      <div className="flex items-center gap-1.5 mt-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
             {messages.length === 0 && !streamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
@@ -312,6 +288,23 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
                 </div>
               </div>
             ))}
+            {/* Live streaming response appended at the end */}
+            {streamingResponse && absorbedRef.current !== streamingResponse && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
+                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
+                    <ReactMarkdown>{streamingResponse}</ReactMarkdown>
+                    {isStreamingResponse && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input */}
