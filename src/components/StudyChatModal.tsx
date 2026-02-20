@@ -78,11 +78,12 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     }
   }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
 
+  // Auto-scroll: only scroll down for user-initiated chat messages, not for external streaming
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !streamingResponse) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingResponse]);
+  }, [messages]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -250,7 +251,13 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
                 <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
                   <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
                     <ReactMarkdown>{streamingResponse}</ReactMarkdown>
-                    {isStreamingResponse && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                    {isStreamingResponse && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

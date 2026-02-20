@@ -29,7 +29,7 @@ const UploadStep = ({
   <div className="space-y-4">
     <div className="space-y-2">
       <Label>Nome da coleção</Label>
-      <Input value={deckName} onChange={e => onDeckNameChange(e.target.value)} placeholder="Ex: Calcificações Patológicas 2026" maxLength={100} />
+      <Input autoFocus value={deckName} onChange={e => onDeckNameChange(e.target.value)} placeholder="Ex: Calcificações Patológicas 2026" maxLength={100} />
     </div>
 
     {!inputMode && (
