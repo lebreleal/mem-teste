@@ -17,13 +17,20 @@ PRINCÍPIOS:
 5. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas. Se o material não contém informação suficiente para criar uma pergunta, NÃO crie essa pergunta.
 6. FIDELIDADE: Todas as perguntas e respostas devem ser diretamente deriváveis do texto fornecido. Não extrapole.
 
+MÉTODO ATIVO (obrigatório):
+- INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?"
+- CONEXÕES: Crie cards que conectam conceitos entre si do mesmo material
+- APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos
+- CONTRASTE: Compare conceitos similares para forçar diferenciação
+- COBERTURA: Se o material menciona um conceito sem explicação profunda, crie um card factual simples em vez de ignorá-lo
+
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
     case "comprehensive": return "Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. A cobertura deve ser de 100% — o estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado.";
-    default: return "Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Não pule nenhum tema mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
+    default: return "COBERTURA COMPLETA — NÃO pule NENHUM tema mencionado no material. Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Inclua conceitos-chave, mecanismos importantes e aplicações práticas. Se um conceito é mencionado brevemente, crie ao menos um card factual simples.";
   }
 }
 
@@ -74,7 +81,13 @@ function getFormatInstructions(formats: string[]): string {
   const allFormats = [
     { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa e precisa no verso. Prefira perguntas "Por quê?", "Como?", "Qual a diferença entre?" ao invés de "O que é?". A pergunta DEVE ser autocontida.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction, name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis (não absurdas). "correctIndex" com o índice correto (0-based). As alternativas incorretas devem ser distratores realistas.', name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: `- type:"multiple_choice": Pergunta de APLICAÇÃO ou DIFERENCIAÇÃO na "front". "back" vazio.
+  "options" com 4-5 alternativas. "correctIndex" com índice correto (0-based).
+  REGRAS DOS DISTRATORES:
+    • Os distratores DEVEM ser conceitos REAIS presentes no material fornecido
+    • As alternativas devem ser do MESMO campo semântico (ex: se a resposta é um músculo, distratores são outros músculos do texto)
+    • PROIBIDO inventar alternativas genéricas ou obviamente absurdas
+    • O estudante deve precisar PENSAR e DIFERENCIAR para acertar`, name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -94,8 +107,22 @@ function getFormatInstructions(formats: string[]): string {
   const count = formatNames.length;
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
+  } else if (count === 3) {
+    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA (respeite rigorosamente):
+- Cloze: ~55% dos cartões — use para fatos, definições, valores numéricos, nomes, localizações
+- Básico (pergunta/resposta): ~30% dos cartões — use para mecanismos, relações causa-efeito, comparações, "por quê?", "como?"
+- Múltipla Escolha: ~15% dos cartões — use para diagnóstico diferencial, aplicação prática, cenários onde o aluno deve DECIDIR entre alternativas plausíveis do material`);
   } else {
-    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA: Distribua os cartões UNIFORMEMENTE entre: ${formatNames.join(", ")}. Cada formato deve ter aproximadamente ${Math.round(100/count)}% dos cartões.`);
+    // 2 formats — weighted distribution
+    const hasCloze = formatNames.includes("cloze");
+    const hasBasic = formatNames.includes("pergunta/resposta");
+    const hasMC = formatNames.includes("múltipla escolha");
+    let dist = "";
+    if (hasCloze && hasBasic) dist = "Cloze ~65%, Básico ~35%";
+    else if (hasCloze && hasMC) dist = "Cloze ~75%, Múltipla Escolha ~25%";
+    else if (hasBasic && hasMC) dist = "Básico ~70%, Múltipla Escolha ~30%";
+    else dist = `${formatNames[0]} ~60%, ${formatNames[1]} ~40%`;
+    parts.push(`\nDISTRIBUIÇÃO OBRIGATÓRIA: ${dist}.`);
   }
 
   if (forbiddenNames.length > 0) {
@@ -164,7 +191,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = textContent.slice(0, 10000);
+    const trimmedContent = textContent;
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
@@ -202,7 +229,7 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetch(OPENAI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 8192 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 65000 }),
     });
 
     if (!aiResponse.ok) {
