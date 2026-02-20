@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: chatMessages, max_tokens: 1500, temperature: 0.7, stream: true }),
+      body: JSON.stringify({ model: selectedModel, messages: chatMessages, max_tokens: 4096, temperature: 0.7, stream: true }),
     });
 
     if (!response.ok) {
