@@ -2,10 +2,16 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CalendarCheck, BookOpen, Clock, Target, AlertTriangle,
-  Pencil, Trash2, CalendarIcon, ChevronUp, ChevronDown, Brain,
+  Pencil, Trash2, CalendarIcon, Brain,
   Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
-  GripVertical, MoreVertical, Pause, X as XIcon, Info
+  GripVertical, MoreVertical, Pause, X as XIcon
 } from 'lucide-react';
+import { useDragReorder } from '@/hooks/useDragReorder';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -392,6 +398,14 @@ const StudyPlan = () => {
 // ═══════════════════════════════════════════════════════════
 // ─── UNIFIED PLAN DASHBOARD ─────────────────────────────
 // ═══════════════════════════════════════════════════════════
+
+const HERO_GRADIENT = {
+  green: 'bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-background border-emerald-200/60 dark:border-emerald-800/40',
+  yellow: 'bg-gradient-to-br from-amber-50/50 to-white dark:from-amber-950/20 dark:to-background border-amber-200/60 dark:border-amber-800/40',
+  orange: 'bg-gradient-to-br from-orange-50/50 to-white dark:from-orange-950/20 dark:to-background border-orange-200/60 dark:border-orange-800/40',
+  red: 'bg-gradient-to-br from-red-50/50 to-white dark:from-red-950/20 dark:to-background border-red-200/60 dark:border-red-800/40',
+};
+
 interface PlanDashboardProps {
   plan: any;
   metrics: any;
@@ -408,19 +422,34 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
   const { toast } = useToast();
   const [showCatchUp, setShowCatchUp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [tempMinutes, setTempMinutes] = useState(plan.daily_minutes);
   const [editingDate, setEditingDate] = useState(false);
   const [tempDate, setTempDate] = useState<Date | undefined>(plan.target_date ? new Date(plan.target_date) : undefined);
 
-  const health = metrics ? HEALTH_CONFIG[metrics.healthStatus as keyof typeof HEALTH_CONFIG] : HEALTH_CONFIG.green;
+  const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
+  const health = HEALTH_CONFIG[healthStatus];
   const healthPercent = metrics?.planHealthPercent ?? 0;
-  const needsAttention = metrics && (metrics.healthStatus === 'yellow' || metrics.healthStatus === 'orange' || metrics.healthStatus === 'red');
+  const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
 
   const planDecks = useMemo(() => {
     const ids = plan.deck_ids ?? [];
     return ids.map((id: string) => decks.find(d => d.id === id)).filter(Boolean);
   }, [plan.deck_ids, decks]);
+
+  // Drag-and-drop reorder
+  const { getHandlers, displayItems } = useDragReorder({
+    items: planDecks,
+    getId: (deck: any) => deck.id,
+    onReorder: async (reordered: any[]) => {
+      try {
+        await onUpdatePlan({ deck_ids: reordered.map((d: any) => d.id) });
+      } catch {
+        toast({ title: 'Erro ao reordenar', variant: 'destructive' });
+      }
+    },
+  });
 
   const impactMessage = useMemo(() => {
     if (!editingMinutes) return null;
@@ -428,41 +457,13 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
     if (!impact) return null;
     if (impact.daysDiff != null) {
       if (impact.daysDiff > 0)
-        return `⚠️ Reduzir para ${formatMinutes(tempMinutes)} adiará sua conclusão em ~${impact.daysDiff} dias`;
+        return { text: `Reduzir para ${formatMinutes(tempMinutes)} adiará sua conclusão em ~${impact.daysDiff} dias`, tone: 'warning' as const };
       if (impact.daysDiff < 0)
-        return `✅ Aumentar para ${formatMinutes(tempMinutes)} adiantará sua conclusão em ~${Math.abs(impact.daysDiff)} dias`;
-      return `Com ${formatMinutes(tempMinutes)} você mantém o ritmo atual`;
+        return { text: `Aumentar para ${formatMinutes(tempMinutes)} adiantará sua conclusão em ~${Math.abs(impact.daysDiff)} dias`, tone: 'success' as const };
+      return { text: `Com ${formatMinutes(tempMinutes)} você mantém o ritmo atual`, tone: 'neutral' as const };
     }
-    return `Com ${formatMinutes(tempMinutes)} você revisará ~${impact.cardsPerDay} cards/dia`;
+    return { text: `Com ${formatMinutes(tempMinutes)} você revisará ~${impact.cardsPerDay} cards/dia`, tone: 'neutral' as const };
   }, [editingMinutes, tempMinutes, calcImpact]);
-
-  // Suggestions
-  const suggestions = useMemo(() => {
-    if (!metrics) return [];
-    const items: { text: string; action?: string; actionLabel?: string }[] = [];
-    if (metrics.planHealthPercent != null && metrics.planHealthPercent < 80) {
-      items.push({
-        text: `Sua consistência está em ${metrics.planHealthPercent}%. Que tal estudar um pouco hoje?`,
-        action: 'adjust',
-        actionLabel: 'Ajustar Carga',
-      });
-    }
-    if (metrics.totalReview > 20) {
-      items.push({
-        text: `Você tem ${metrics.totalReview} revisões pendentes. Dilua o atraso em poucos dias.`,
-        action: 'catchup',
-        actionLabel: 'Diluir Agora',
-      });
-    }
-    if (metrics.coveragePercent != null && metrics.coveragePercent < 50) {
-      items.push({
-        text: 'Seu ritmo atual pode não ser suficiente para sua meta. Considere aumentar o tempo diário.',
-        action: 'adjust',
-        actionLabel: 'Ver Opções',
-      });
-    }
-    return items;
-  }, [metrics]);
 
   const handleSaveMinutes = async () => {
     try {
@@ -484,18 +485,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
     }
   };
 
-  const handleReorder = useCallback(async (index: number, direction: 'up' | 'down') => {
-    const ids = [...(plan.deck_ids ?? [])];
-    const newIdx = direction === 'up' ? index - 1 : index + 1;
-    if (newIdx < 0 || newIdx >= ids.length) return;
-    [ids[index], ids[newIdx]] = [ids[newIdx], ids[index]];
-    try {
-      await onUpdatePlan({ deck_ids: ids });
-    } catch {
-      toast({ title: 'Erro ao reordenar', variant: 'destructive' });
-    }
-  }, [plan.deck_ids, onUpdatePlan, toast]);
-
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
@@ -509,42 +498,51 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         </Button>
       </header>
 
-      <main className="container mx-auto px-4 py-5 max-w-lg space-y-5">
+      <main className="container mx-auto px-4 py-4 max-w-lg space-y-3">
 
-        {/* ═══ SEÇÃO A: VISÃO GERAL E STATUS IMEDIATO ═══ */}
-        <section className="space-y-4">
-          {/* Health Ring */}
-          <HealthRing status={(metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG} percent={healthPercent} />
+        {/* ═══ HERO CARD: Status + Carga + Ação ═══ */}
+        <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
+          <CardContent className="p-4 space-y-4">
+            {/* Health Ring */}
+            <HealthRing status={healthStatus} percent={healthPercent} />
 
-          {/* Load Bar */}
-          {metrics && (
-            <StudyLoadBar
-              estimatedMinutes={metrics.estimatedMinutesToday}
-              dailyMinutes={plan.daily_minutes}
-              reviewMin={metrics.reviewMinutes}
-              newMin={metrics.newMinutes}
-            />
-          )}
+            {/* Consistency alert inline */}
+            {metrics && metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
+              <p className="text-xs text-center text-muted-foreground">
+                Consistência: {metrics.planHealthPercent}% — estude hoje para melhorar!
+              </p>
+            )}
 
-          {/* Contextual Action Button */}
-          {needsAttention && (
-            <Button
-              className="w-full"
-              variant={metrics?.healthStatus === 'red' ? 'destructive' : 'default'}
-              onClick={() => {
-                if (metrics?.totalReview > 20) setShowCatchUp(true);
-                else setEditingMinutes(true);
-              }}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              {metrics?.totalReview > 20 ? 'Resolver Atraso' : 'Ajustar Plano'}
-            </Button>
-          )}
-        </section>
+            {/* Study Load Bar */}
+            {metrics && (
+              <StudyLoadBar
+                estimatedMinutes={metrics.estimatedMinutesToday}
+                dailyMinutes={plan.daily_minutes}
+                reviewMin={metrics.reviewMinutes}
+                newMin={metrics.newMinutes}
+              />
+            )}
 
-        {/* ═══ SEÇÃO B: MEUS OBJETIVOS ═══ */}
+            {/* Contextual Action Button */}
+            {needsAttention && (
+              <Button
+                className="w-full"
+                variant={healthStatus === 'red' ? 'destructive' : 'default'}
+                onClick={() => {
+                  if (metrics?.totalReview > 20) setShowCatchUp(true);
+                  else setEditingMinutes(true);
+                }}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                {metrics?.totalReview > 20 ? 'Resolver Atraso' : 'Ajustar Plano'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ═══ MEUS OBJETIVOS (compact) ═══ */}
         <Card>
-          <CardContent className="p-5 space-y-4">
+          <CardContent className="p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Meus Objetivos</h3>
 
             {/* Pilar 1: Data */}
@@ -612,7 +610,14 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                       min={15} max={240} step={15}
                     />
                     {impactMessage && (
-                      <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">{impactMessage}</p>
+                      <div className={cn(
+                        'rounded-lg px-3 py-1.5 text-xs',
+                        impactMessage.tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+                        impactMessage.tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400',
+                        impactMessage.tone === 'neutral' && 'bg-muted text-muted-foreground',
+                      )}>
+                        {impactMessage.text}
+                      </div>
                     )}
                     <div className="flex gap-1">
                       <Button size="sm" className="h-7 text-xs" onClick={handleSaveMinutes}>Salvar</Button>
@@ -628,7 +633,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
               </div>
             </div>
 
-            {/* Coverage Progress */}
+            {/* Coverage Progress + inline coverage alert */}
             {plan.target_date && metrics && metrics.coveragePercent != null && (
               <div className="pt-3 border-t space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -641,79 +646,48 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                     Necessário: {metrics.requiredCardsPerDay} cards/dia para cobrir 100%
                   </p>
                 )}
+                {metrics.coveragePercent < 50 && (
+                  <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-xs">
+                    Seu ritmo atual pode não ser suficiente. Considere aumentar o tempo diário.
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* ═══ SEÇÃO C: PRIORIDADE DOS BARALHOS ═══ */}
+        {/* ═══ PRIORIDADE DOS BARALHOS (drag-and-drop) ═══ */}
         <Card>
-          <CardContent className="p-5 space-y-3">
+          <CardContent className="p-4 space-y-2">
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Prioridade dos Baralhos</h3>
 
             {planDecks.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-3">Nenhum baralho no plano.</p>
             )}
 
-            <div className="space-y-1.5">
-              {planDecks.map((deck: any, i: number) => (
-                <div key={deck.id} className="flex items-center gap-2 p-2.5 rounded-xl border bg-card hover:bg-muted/30 transition-colors group">
-                  <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{deck.name}</p>
+            <div className="space-y-1">
+              {displayItems.map((deck: any) => {
+                const handlers = getHandlers(deck);
+                return (
+                  <div
+                    key={deck.id}
+                    {...handlers}
+                    className={cn(
+                      'flex items-center gap-2 p-2 rounded-xl border bg-card hover:bg-muted/30 transition-colors',
+                      handlers.className
+                    )}
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0 cursor-grab active:cursor-grabbing" />
+                    <p className="text-sm font-medium truncate flex-1">{deck.name}</p>
                   </div>
-                  <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost" size="icon" className="h-7 w-7"
-                      disabled={i === 0}
-                      onClick={() => handleReorder(i, 'up')}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" className="h-7 w-7"
-                      disabled={i === planDecks.length - 1}
-                      onClick={() => handleReorder(i, 'down')}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
 
-        {/* ═══ SEÇÃO D: SUGESTÕES E AÇÕES RÁPIDAS ═══ */}
-        {suggestions.length > 0 && (
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Sugestões</h3>
-              {suggestions.map((s, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40">
-                  <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground leading-relaxed">{s.text}</p>
-                    {s.actionLabel && (
-                      <Button
-                        size="sm" variant="outline" className="mt-2 h-7 text-xs"
-                        onClick={() => {
-                          if (s.action === 'catchup') setShowCatchUp(true);
-                          else setEditingMinutes(true);
-                        }}
-                      >
-                        {s.actionLabel}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Catch-up button if no suggestions but has reviews */}
-        {suggestions.length === 0 && metrics && metrics.totalReview > 0 && (
+        {/* Catch-up button if has reviews but no critical alert */}
+        {!needsAttention && metrics && metrics.totalReview > 0 && (
           <Button variant="outline" className="w-full" onClick={() => setShowCatchUp(true)}>
             <RotateCcw className="h-4 w-4 mr-2" /> Limpar Atraso ({metrics.totalReview} revisões)
           </Button>
@@ -728,7 +702,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         avgSecondsPerCard={avgSecondsPerCard}
       />
 
-      {/* Settings Dialog (contains Edit + Delete) */}
+      {/* Settings Dialog (contains Edit + Delete with confirmation) */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -739,9 +713,30 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
             <Button variant="outline" className="w-full justify-start" onClick={() => { setShowSettings(false); onEdit(); }}>
               <Pencil className="h-4 w-4 mr-2" /> Editar plano completo
             </Button>
-            <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={() => { setShowSettings(false); onDelete(); }}>
-              <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
-            </Button>
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Seu plano de estudos será permanentemente excluído.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => { setShowSettings(false); setShowDeleteConfirm(false); onDelete(); }}
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </DialogContent>
       </Dialog>
