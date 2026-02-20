@@ -16,7 +16,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       .eq('user_id', userId)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),
-    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId }),
+    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: -new Date().getTimezoneOffset() }),
   ]);
   if (decksResult.error) throw decksResult.error;
   const decks = decksResult.data;
