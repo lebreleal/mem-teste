@@ -155,10 +155,10 @@ const Study = () => {
 
   // Open chat modal when first streaming content arrives for explain-in-chat
   useEffect(() => {
-    if (explainInChat && explainResponse && !chatOpen) {
+    if (explainInChat && (explainResponse || mcExplainResponse) && !chatOpen) {
       setChatOpen(true);
     }
-  }, [explainInChat, explainResponse, chatOpen]);
+  }, [explainInChat, explainResponse, mcExplainResponse, chatOpen]);
 
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
@@ -520,11 +520,11 @@ const Study = () => {
             mcExplainResponse={mcExplainResponse}
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
-            onOpenExplainChat={() => {
+            onOpenExplainChat={(options) => {
               // First trigger tutor request (shows loading animation on button)
               // Chat modal opens automatically when streaming content arrives
               setExplainInChat(true);
-              handleTutorRequest({ action: 'explain' });
+              handleTutorRequest(options || { action: 'explain' });
             }}
             actions={
               <StudyCardActions
@@ -559,7 +559,7 @@ const Study = () => {
           open={chatOpen}
           onOpenChange={setChatOpen}
           cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
-          streamingResponse={explainInChat ? explainResponse : undefined}
+          streamingResponse={explainInChat ? (explainResponse || mcExplainResponse) : undefined}
           isStreamingResponse={explainInChat ? isTutorLoading : false}
           onClearStreaming={() => setExplainInChat(false)}
           resetKey={cardKey}

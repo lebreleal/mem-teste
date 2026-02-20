@@ -56,8 +56,8 @@ interface FlashCardProps {
   actions?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
-  /** Opens the chat modal with the explain streaming — used for basic/cloze/occlusion "Explicar assunto" */
-  onOpenExplainChat?: () => void;
+  /** Opens the chat modal with the explain streaming */
+  onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
 }
 
 interface MultipleChoiceData {
@@ -160,6 +160,7 @@ const MultipleChoiceCard = ({
   scheduledDate,
   canUndo,
   onUndo,
+  onOpenExplainChat,
 }: {
   frontContent: string;
   backContent: string;
@@ -180,6 +181,7 @@ const MultipleChoiceCard = ({
   scheduledDate: string;
   canUndo?: boolean;
   onUndo?: () => void;
+  onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -428,10 +430,10 @@ const MultipleChoiceCard = ({
           </div>
         ) : (
           <>
-            {/* Explain subject button */}
-            {onTutorRequest && !explainResponse && (
+            {/* Explain subject button — opens chat */}
+            {onOpenExplainChat && !explainResponse && (
               <button
-                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onTutorRequest({ action: 'explain' }); }}
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onOpenExplainChat({ action: 'explain' }); }}
                 disabled={!canUseTutor || isTutorLoading}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                   canUseTutor
@@ -439,14 +441,14 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
               </button>
             )}
 
-            {/* Explain alternatives button */}
-            {onTutorRequest && !mcExplainResponse && (
+            {/* Explain alternatives button — opens chat */}
+            {onOpenExplainChat && !mcExplainResponse && (
               <button
-                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onTutorRequest({
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onOpenExplainChat({
                   action: 'explain-mc',
                   mcOptions: mcData.options,
                   correctIndex: mcData.correctIndex,
@@ -547,6 +549,7 @@ const FlashCard = ({
         scheduledDate={scheduledDate}
         canUndo={canUndo}
         onUndo={onUndo}
+        onOpenExplainChat={onOpenExplainChat}
       />
     );
   }
@@ -861,7 +864,7 @@ const FlashCard = ({
                 {/* Explain button for basic/cloze/occlusion — opens chat modal */}
                 {onOpenExplainChat && !explainResponse && (
                   <button
-                    onClick={() => canUseTutor ? onOpenExplainChat() : undefined}
+                    onClick={() => canUseTutor ? onOpenExplainChat({ action: 'explain' }) : undefined}
                     disabled={!canUseTutor || isTutorLoading}
                     className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                       canUseTutor
