@@ -29,7 +29,6 @@ function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>
 }
 
 // Lazy-loaded pages
-const Index = lazyRetry(() => import("./pages/Index"));
 const Auth = lazyRetry(() => import("./pages/Auth"));
 const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
 const DeckDetail = lazyRetry(() => import("./pages/DeckDetail"));
@@ -82,7 +81,7 @@ const App = () => (
             <ScrollToTop />
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
               <Routes>
-                <Route path="/" element={<Index />} />
+                <Route path="/" element={<Auth />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/decks/:deckId" element={<ProtectedRoute><DeckDetail /></ProtectedRoute>} />
