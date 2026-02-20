@@ -1,104 +1,146 @@
 
+# Corrigir Precificacao de IA + Otimizar Velocidade do Gemini Pro
 
-# Migrar OpenAI para Google Gemini (API propria)
+## Problema 1: Desconto Premium nao aplicado no Flash
 
-## Resumo
+A memoria do sistema diz que **Premium recebe 50% de desconto no Flash** (1 credito vs 2 por pagina), mas o codigo atual em `useAIModel.ts` nao considera o status Premium. O `costMultiplier` e fixo em 1 para Flash e 5 para Pro, independente do plano do usuario.
 
-Substituir todas as chamadas OpenAI por Google Gemini usando sua propria API key do Google AI Studio. A API do Gemini oferece um endpoint compativel com o formato OpenAI, o que torna a migracao simples -- basta trocar URL, API key e nomes dos modelos.
+**Resultado:** Usuarios Premium pagam o mesmo que gratuitos pelo Flash -- o desconto prometido nao existe.
 
-## Pre-requisito: API Key
+**Solucao:** Alterar `useAIModel.ts` para aceitar `isPremium` e aplicar o desconto:
+- Flash: Premium paga 1 credito/pagina (multiplicador 0.5), Free paga 2 (multiplicador 1)
+- Pro: 10 creditos/pagina para todos (multiplicador 5)
 
-Voce precisa de uma API key do Google AI Studio (https://aistudio.google.com/apikeys). Pode ser a mesma conta Google que ja usa. Vamos salvar como secret `GOOGLE_AI_KEY` no Supabase.
+Atualizar `useAIDeckFlow.ts` para passar `isPremium` ao `getCost`.
 
-## Modelos
+## Problema 2: Gemini Pro muito lento (sequencial por formato)
 
-```text
-Uso atual (OpenAI)          ->  Novo (Gemini)
---------------------------      ---------------------------
-gpt-4o-mini (Flash)         ->  gemini-2.5-flash-lite
-gpt-4o (Pro)                ->  gemini-2.5-pro
-```
+Os logs mostram que cada chamada ao Gemini Pro leva 10-30 segundos. Com 3 formatos (QA, Cloze, MC) por batch, cada batch demora 30-90 segundos. Com multiplos batches, o tempo total facilmente passa de 3-5 minutos.
 
-## Endpoint compativel OpenAI
+**Causa raiz:** As chamadas por formato sao feitas **sequencialmente** dentro de cada batch. O loop em `useAIDeckFlow.ts` espera cada formato terminar antes de iniciar o proximo.
 
-O Google oferece um endpoint que aceita o mesmo formato de request/response do OpenAI:
+**Solucao:** Paralelizar as chamadas por formato dentro de cada batch usando `Promise.all`. Isso reduz o tempo de cada batch de ~90s para ~30s (o tempo da chamada mais lenta).
 
-```text
-URL:  https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
-Auth: Authorization: Bearer <GOOGLE_AI_KEY>
-```
+## Problema 3: Botao "Segundo plano" demora 10s para aparecer
 
-Isso significa que streaming, tool calling e o formato de usage/tokens funcionam identicamente -- a migracao e basicamente trocar 3 coisas: URL, API key e nomes de modelo.
+Em `GenerationProgress.tsx`, a condicao `elapsed >= 10` faz o botao de dismiss so aparecer apos 10 segundos. O usuario fica preso sem saber que pode sair.
+
+**Solucao:** Remover a condicao de 10 segundos -- mostrar o botao imediatamente.
+
+## Problema 4: Retry para erro 503 + mensagens diferenciadas
+
+Implementar `fetchWithRetry()` centralizado em `_shared/utils.ts` e diferenciar erros 403/429/503 nos edge functions.
+
+## Problema 5: Preambulo indesejado no ai-tutor
+
+Adicionar system prompt anti-preambulo padrao no `ai-tutor`.
+
+---
 
 ## Arquivos a alterar
 
-### 1. Secret nova
-- Adicionar `GOOGLE_AI_KEY` com sua key do Google AI Studio
+### Frontend
 
-### 2. `supabase/functions/_shared/utils.ts`
-- Atualizar `getModelMap()` com modelos Gemini padrao:
-  - flash: `gemini-2.5-flash-lite`
-  - pro: `gemini-2.5-pro`
-- Adicionar helper `getAIConfig()` que retorna URL e API key centralizados
+1. **`src/hooks/useAIModel.ts`**
+   - `getCost` passa a considerar `isPremium`
+   - Flash Premium: multiplicador 0.5 (1 credito/pagina)
+   - Flash Free: multiplicador 1 (2 creditos/pagina)
+   - Pro: multiplicador 5 para todos
 
-### 3. Edge Functions (8 arquivos) -- mesma mudanca em todos:
+2. **`src/components/ai-deck/useAIDeckFlow.ts`**
+   - Passar `isPremium` para `getCost`
+   - Paralelizar chamadas por formato dentro de cada batch com `Promise.all`
 
-Cada function recebe a mesma alteracao mecanica:
+3. **`src/components/ai-deck/GenerationProgress.tsx`**
+   - Remover `elapsed >= 10` do botao de dismiss
 
-```text
-// ANTES
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-// ...
-headers: { Authorization: `Bearer ${OPENAI_API_KEY}` }
+4. **`src/components/AIModelSelector.tsx`**
+   - Passar `isPremium` para exibir custo correto
 
-// DEPOIS
-const GOOGLE_AI_KEY = Deno.env.get("GOOGLE_AI_KEY");
-const AI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-// ...
-headers: { Authorization: `Bearer ${GOOGLE_AI_KEY}` }
+5. **`src/components/ai-deck/ConfigStep.tsx`**
+   - Garantir que o custo exibido reflete o desconto Premium
+
+### Edge Functions
+
+6. **`supabase/functions/_shared/utils.ts`**
+   - Adicionar funcao `fetchWithRetry(url, options, maxRetries)` com retry para 503
+
+7. **`supabase/functions/generate-deck/index.ts`**
+   - Usar `fetchWithRetry` em vez de `fetch` direto
+   - Diferenciar erros 403, 429, 503
+
+8. **`supabase/functions/ai-tutor/index.ts`**
+   - Usar `fetchWithRetry`
+   - Adicionar system prompt padrao anti-preambulo
+   - Diferenciar erros
+
+9. **`supabase/functions/ai-chat/index.ts`**
+   - Usar `fetchWithRetry`
+   - Diferenciar erros
+
+---
+
+## Detalhes tecnicos
+
+### getCost com Premium (useAIModel.ts)
+
+```typescript
+const getCost = useCallback((baseCost: number, isPremium = false) => {
+  const multiplier = model === 'flash' && isPremium
+    ? 0.5  // Premium: 1 credito/pagina
+    : MODEL_CONFIG[model].costMultiplier;
+  return Math.ceil(baseCost * multiplier);
+}, [model]);
 ```
 
-Functions afetadas:
-- `ai-chat/index.ts` (streaming)
-- `ai-tutor/index.ts` (streaming)
-- `generate-deck/index.ts` (JSON response)
-- `enhance-card/index.ts` (tool calling)
-- `enhance-import/index.ts` (tool calling)
-- `grade-exam/index.ts` (JSON response)
-- `generate-onboarding/index.ts` (tool calling)
-- `organize-import/index.ts` (tool calling)
+### Paralelizacao por formato (useAIDeckFlow.ts)
 
-### 4. `src/hooks/useAIModel.ts`
-- Atualizar `backendModel` de `gpt-4o-mini`/`gpt-4o` para `gemini-2.5-flash-lite`/`gemini-2.5-pro`
+Dentro do loop de batches, ao inves de iterar sequencialmente pelos formatos:
 
-### 5. `src/components/AIModelSelector.tsx`
-- Atualizar descricoes dos modelos (opcional, pode manter)
+```typescript
+// ANTES: sequencial (lento)
+for (const format of formats) {
+  const result = await aiService.generateDeckCards({...});
+}
 
-### 6. TTS (`supabase/functions/tts/index.ts`)
-- Nao muda -- ja foi migrado para Google Cloud TTS separadamente
+// DEPOIS: paralelo (3x mais rapido)
+const formatPromises = formats.map((format, f) => 
+  aiService.generateDeckCards({
+    ...commonParams,
+    cardFormats: [format],
+    energyCost: f === 0 ? batchCost : 0,
+  })
+);
+const results = await Promise.allSettled(formatPromises);
+```
 
-## Nota sobre o organize-import
+### fetchWithRetry (_shared/utils.ts)
 
-O `organize-import` usa `gpt-4o` hardcoded (nao usa getModelMap). Sera atualizado para `gemini-2.5-pro`.
+```typescript
+export async function fetchWithRetry(
+  url: string, options: RequestInit, maxRetries = 2
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.status !== 503 || attempt === maxRetries) return response;
+    console.warn(`503 retry ${attempt+1}/${maxRetries}`);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return await fetch(url, options);
+}
+```
 
-## Nota sobre o ai-chat (auth com getClaims)
+### System prompt anti-preambulo (ai-tutor)
 
-O `organize-import` usa `getClaims` que esta obsoleto. Sera corrigido para `getUser()` durante a migracao.
+```
+Voce e um tutor educacional direto e objetivo.
+PROIBIDO: saudacoes, elogios, preambulos, "Ola", "Otima pergunta", "Excelente iniciativa".
+Va direto ao conteudo. Use Markdown para formatacao.
+```
 
-## Compatibilidade confirmada
+### Impacto esperado
 
-A API OpenAI-compatible do Gemini suporta:
-- Streaming SSE (mesmo formato `data: {...}` + `data: [DONE]`)
-- Tool calling (mesmo schema `tools` + `tool_choice`)
-- Usage tokens no response (`usage.prompt_tokens`, etc.)
-- Mensagens system/user/assistant
-
-## Passos de implementacao
-
-1. Pedir sua API key do Google AI Studio e salvar como `GOOGLE_AI_KEY`
-2. Atualizar `_shared/utils.ts` com novos modelos padrao
-3. Atualizar as 8 edge functions (trocar URL, key, nomes de modelo)
-4. Atualizar `useAIModel.ts` no frontend
-5. Deploy e teste de todas as functions
-
+- **Velocidade Pro**: Reducao de ~60-70% no tempo total (3 formatos em paralelo)
+- **Custo Premium Flash**: Metade do preco (1 credito vs 2 por pagina)
+- **UX**: Botao de segundo plano imediato, retry automatico para 503
+- **Qualidade**: Sem preambulos no tutor
