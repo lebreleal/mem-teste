@@ -79,7 +79,7 @@ const Auth = () => {
           <div className="flex items-center justify-center gap-3">
             <MemoCardsLogo size={48} />
             <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              Memocards
+              MemoCards
             </h1>
           </div>
           <p className="text-sm text-muted-foreground text-center">

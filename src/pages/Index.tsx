@@ -95,7 +95,7 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="py-6 text-center text-xs md:text-sm text-muted-foreground border-t border-border">
-        Memo Cards © {new Date().getFullYear()} · Aprenda com superpoderes 🐘
+        MemoCards © {new Date().getFullYear()} · Aprenda com superpoderes 🐘
       </footer>
     </div>
   );
