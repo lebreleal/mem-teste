@@ -238,6 +238,7 @@ REGRAS OBRIGATÓRIAS:
 - Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
 - SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
+- PROIBIDO referenciar a fonte nos cartões. NUNCA escreva "de acordo com o material", "segundo o texto", "conforme o conteúdo", "o material menciona" ou qualquer variação. Os cartões devem parecer conhecimento independente, como se viessem de um livro didático.
 - CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
 - ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
 - EVITE LISTAS: Se uma resposta teria múltiplos itens, crie cartões separados para cada item.
