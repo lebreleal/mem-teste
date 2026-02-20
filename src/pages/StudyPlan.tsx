@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CalendarCheck, BookOpen, Clock, Target, AlertTriangle,
   Pencil, Trash2, CalendarIcon, ChevronUp, ChevronDown, Brain,
-  Flame, TrendingUp, RotateCcw
+  Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
+  GripVertical, MoreVertical, Pause, X as XIcon, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,48 +35,69 @@ function formatMinutes(m: number) {
 }
 
 const HEALTH_CONFIG = {
-  green: { color: 'bg-emerald-500', label: 'No Trilho', text: 'text-emerald-600' },
-  yellow: { color: 'bg-amber-500', label: 'Atenção', text: 'text-amber-600' },
-  orange: { color: 'bg-orange-500', label: 'Intenso', text: 'text-orange-600' },
-  red: { color: 'bg-red-500', label: 'Meta em Risco', text: 'text-red-600' },
+  green: { color: 'bg-emerald-500', ring: 'text-emerald-500', label: 'No Caminho', text: 'text-emerald-600', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: '✓' },
+  yellow: { color: 'bg-amber-500', ring: 'text-amber-500', label: 'Atenção', text: 'text-amber-600', bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: '!' },
+  orange: { color: 'bg-orange-500', ring: 'text-orange-500', label: 'Intenso', text: 'text-orange-600', bg: 'bg-orange-500/10', border: 'border-orange-500/20', icon: '!!' },
+  red: { color: 'bg-red-500', ring: 'text-red-500', label: 'Em Risco', text: 'text-red-600', bg: 'bg-red-500/10', border: 'border-red-500/20', icon: '⚠' },
 };
 
-// ─── Study Load Gauge (Termômetro de Tempo) ─────────────
-function StudyLoadGauge({ estimatedMinutes, dailyMinutes }: { estimatedMinutes: number; dailyMinutes: number }) {
+// ─── Health Ring ─────────────────────────────────────
+function HealthRing({ status, percent }: { status: keyof typeof HEALTH_CONFIG; percent: number }) {
+  const cfg = HEALTH_CONFIG[status];
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
+
+  return (
+    <div className="relative w-32 h-32 mx-auto">
+      <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
+        <circle cx="64" cy="64" r={radius} fill="none" strokeWidth="8" className="stroke-muted" />
+        <circle
+          cx="64" cy="64" r={radius} fill="none" strokeWidth="8"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          strokeLinecap="round"
+          className={cn('transition-all duration-700 ease-out', cfg.ring.replace('text-', 'stroke-'))}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={cn('text-2xl font-bold', cfg.text)}>{percent}%</span>
+        <span className={cn('text-[10px] font-medium', cfg.text)}>{cfg.label}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Study Load Bar (Termômetro de Tempo) ─────────────
+function StudyLoadBar({ estimatedMinutes, dailyMinutes, reviewMin, newMin }: {
+  estimatedMinutes: number; dailyMinutes: number; reviewMin: number; newMin: number;
+}) {
   const maxDisplay = Math.max(dailyMinutes * 2, 150);
   const percent = Math.min(100, (estimatedMinutes / maxDisplay) * 100);
-
-  // 4 color segments based on user's daily capacity
   const g = (dailyMinutes * 0.7 / maxDisplay) * 100;
   const y = (dailyMinutes / maxDisplay) * 100;
   const o = (dailyMinutes * 1.5 / maxDisplay) * 100;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Carga de hoje</span>
-        <span className="text-lg font-bold">{formatMinutes(estimatedMinutes)}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-sm font-medium text-foreground">Carga de hoje</span>
+        <span className="text-xl font-bold text-foreground">{formatMinutes(estimatedMinutes)}</span>
       </div>
-      <div className="relative h-3 rounded-full overflow-hidden bg-muted">
-        {/* Color segments */}
+      <div className="relative h-2.5 rounded-full overflow-hidden bg-muted">
         <div className="absolute inset-0 flex">
-          <div className="bg-emerald-400/60" style={{ width: `${g}%` }} />
-          <div className="bg-amber-400/60" style={{ width: `${y - g}%` }} />
-          <div className="bg-orange-400/60" style={{ width: `${o - y}%` }} />
-          <div className="bg-red-400/60" style={{ width: `${100 - o}%` }} />
+          <div className="bg-emerald-400/50" style={{ width: `${g}%` }} />
+          <div className="bg-amber-400/50" style={{ width: `${y - g}%` }} />
+          <div className="bg-orange-400/50" style={{ width: `${o - y}%` }} />
+          <div className="bg-red-400/50" style={{ width: `${100 - o}%` }} />
         </div>
-        {/* Indicator */}
         <div
-          className="absolute top-0 h-full w-1 bg-foreground rounded-full shadow-md transition-all duration-500"
+          className="absolute top-0 h-full w-1 bg-foreground rounded-full shadow transition-all duration-500"
           style={{ left: `${Math.min(percent, 99)}%` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>Leve</span>
-        <span>Moderado</span>
-        <span>Intenso</span>
-        <span>Sobrecarga</span>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        {formatMinutes(reviewMin)} Revisões + {formatMinutes(newMin)} Novos Cards
+      </p>
     </div>
   );
 }
@@ -196,7 +218,6 @@ const StudyPlan = () => {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-lg">
-        {/* Step 1 */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
@@ -273,7 +294,6 @@ const StudyPlan = () => {
           </div>
         )}
 
-        {/* Step 2 */}
         {step === 2 && step2Metrics && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
@@ -315,7 +335,6 @@ const StudyPlan = () => {
           </div>
         )}
 
-        {/* Step 3 */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
@@ -370,7 +389,9 @@ const StudyPlan = () => {
   );
 };
 
-// ─── Plan Dashboard ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// ─── UNIFIED PLAN DASHBOARD ─────────────────────────────
+// ═══════════════════════════════════════════════════════════
 interface PlanDashboardProps {
   plan: any;
   metrics: any;
@@ -385,27 +406,21 @@ interface PlanDashboardProps {
 function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, onEdit, onDelete, onUpdatePlan }: PlanDashboardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [expanded, setExpanded] = useState(false);
   const [showCatchUp, setShowCatchUp] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [tempMinutes, setTempMinutes] = useState(plan.daily_minutes);
   const [editingDate, setEditingDate] = useState(false);
   const [tempDate, setTempDate] = useState<Date | undefined>(plan.target_date ? new Date(plan.target_date) : undefined);
 
-  const health = metrics ? HEALTH_CONFIG[metrics.healthStatus] : HEALTH_CONFIG.green;
+  const health = metrics ? HEALTH_CONFIG[metrics.healthStatus as keyof typeof HEALTH_CONFIG] : HEALTH_CONFIG.green;
+  const healthPercent = metrics?.planHealthPercent ?? 0;
+  const needsAttention = metrics && (metrics.healthStatus === 'yellow' || metrics.healthStatus === 'orange' || metrics.healthStatus === 'red');
 
   const planDecks = useMemo(() => {
     const ids = plan.deck_ids ?? [];
     return ids.map((id: string) => decks.find(d => d.id === id)).filter(Boolean);
   }, [plan.deck_ids, decks]);
-
-  const statusMessage = useMemo(() => {
-    if (!metrics) return '';
-    if (metrics.healthStatus === 'green') return 'Você está no caminho certo! 🎯';
-    if (metrics.healthStatus === 'yellow') return 'Carga moderada, continue assim!';
-    if (metrics.healthStatus === 'orange') return 'Carga intensa — considere ajustar o plano.';
-    return 'Meta em risco — ajuste seu plano para não acumular.';
-  }, [metrics]);
 
   const impactMessage = useMemo(() => {
     if (!editingMinutes) return null;
@@ -420,6 +435,34 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
     }
     return `Com ${formatMinutes(tempMinutes)} você revisará ~${impact.cardsPerDay} cards/dia`;
   }, [editingMinutes, tempMinutes, calcImpact]);
+
+  // Suggestions
+  const suggestions = useMemo(() => {
+    if (!metrics) return [];
+    const items: { text: string; action?: string; actionLabel?: string }[] = [];
+    if (metrics.planHealthPercent != null && metrics.planHealthPercent < 80) {
+      items.push({
+        text: `Sua consistência está em ${metrics.planHealthPercent}%. Que tal estudar um pouco hoje?`,
+        action: 'adjust',
+        actionLabel: 'Ajustar Carga',
+      });
+    }
+    if (metrics.totalReview > 20) {
+      items.push({
+        text: `Você tem ${metrics.totalReview} revisões pendentes. Dilua o atraso em poucos dias.`,
+        action: 'catchup',
+        actionLabel: 'Diluir Agora',
+      });
+    }
+    if (metrics.coveragePercent != null && metrics.coveragePercent < 50) {
+      items.push({
+        text: 'Seu ritmo atual pode não ser suficiente para sua meta. Considere aumentar o tempo diário.',
+        action: 'adjust',
+        actionLabel: 'Ver Opções',
+      });
+    }
+    return items;
+  }, [metrics]);
 
   const handleSaveMinutes = async () => {
     try {
@@ -455,100 +498,64 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <CalendarCheck className="h-5 w-5 text-primary" />
-        <h1 className="font-display text-lg font-bold flex-1">Meu Plano</h1>
-        <Button variant="ghost" size="sm" onClick={onEdit}>
-          <Pencil className="h-4 w-4 mr-1" /> Editar
+        <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
+        <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
+          <Settings2 className="h-5 w-5" />
         </Button>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-lg space-y-4">
+      <main className="container mx-auto px-4 py-5 max-w-lg space-y-5">
 
-        {/* ─── LEVEL 1: Termômetro + Status (Progressive Disclosure) ─── */}
-        <Collapsible open={expanded} onOpenChange={setExpanded}>
-          <Card>
-            <CollapsibleTrigger asChild>
-              <CardContent className="p-5 cursor-pointer hover:bg-muted/30 transition-colors">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className={cn('h-3 w-3 rounded-full', health.color)} />
-                  <span className={cn('text-sm font-semibold', health.text)}>{health.label}</span>
-                  <TrendingUp className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
-                </div>
+        {/* ═══ SEÇÃO A: VISÃO GERAL E STATUS IMEDIATO ═══ */}
+        <section className="space-y-4">
+          {/* Health Ring */}
+          <HealthRing status={(metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG} percent={healthPercent} />
 
-                {metrics && (
-                  <StudyLoadGauge
-                    estimatedMinutes={metrics.estimatedMinutesToday}
-                    dailyMinutes={plan.daily_minutes}
-                  />
-                )}
+          {/* Load Bar */}
+          {metrics && (
+            <StudyLoadBar
+              estimatedMinutes={metrics.estimatedMinutesToday}
+              dailyMinutes={plan.daily_minutes}
+              reviewMin={metrics.reviewMinutes}
+              newMin={metrics.newMinutes}
+            />
+          )}
 
-                <p className="text-sm text-muted-foreground mt-3">{statusMessage}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {expanded ? 'Toque para recolher' : 'Toque para ver detalhes'}
-                </p>
-              </CardContent>
-            </CollapsibleTrigger>
+          {/* Contextual Action Button */}
+          {needsAttention && (
+            <Button
+              className="w-full"
+              variant={metrics?.healthStatus === 'red' ? 'destructive' : 'default'}
+              onClick={() => {
+                if (metrics?.totalReview > 20) setShowCatchUp(true);
+                else setEditingMinutes(true);
+              }}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              {metrics?.totalReview > 20 ? 'Resolver Atraso' : 'Ajustar Plano'}
+            </Button>
+          )}
+        </section>
 
-            {/* ─── LEVEL 2: Detailed breakdown ─── */}
-            <CollapsibleContent>
-              <CardContent className="pt-0 px-5 pb-5 space-y-3 border-t">
-                {metrics && (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg bg-muted/50 p-3 text-center">
-                        <p className="text-lg font-bold">{formatMinutes(metrics.reviewMinutes)}</p>
-                        <p className="text-[10px] text-muted-foreground">Revisões</p>
-                      </div>
-                      <div className="rounded-lg bg-muted/50 p-3 text-center">
-                        <p className="text-lg font-bold">{formatMinutes(metrics.newMinutes)}</p>
-                        <p className="text-[10px] text-muted-foreground">Novos Cards</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <p className="text-lg font-bold">{metrics.totalNew}</p>
-                        <p className="text-[10px] text-muted-foreground">Novos</p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-bold">{metrics.totalLearning}</p>
-                        <p className="text-[10px] text-muted-foreground">Aprendendo</p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-bold">{metrics.totalReview}</p>
-                        <p className="text-[10px] text-muted-foreground">Revisão</p>
-                      </div>
-                    </div>
-
-                    {/* Level 3 link */}
-                    <p className="text-[10px] text-muted-foreground text-center pt-2">
-                      Ajustes avançados (FSRS) estão disponíveis nas configurações de cada baralho.
-                    </p>
-                  </>
-                )}
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        {/* ─── 3 Pilares ─── */}
+        {/* ═══ SEÇÃO B: MEUS OBJETIVOS ═══ */}
         <Card>
-          <CardContent className="p-5 space-y-3">
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Seus 3 Pilares</h3>
+          <CardContent className="p-5 space-y-4">
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Meus Objetivos</h3>
 
-            {/* Pilar 1: Data de Conclusão */}
+            {/* Pilar 1: Data */}
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <CalendarIcon className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-muted-foreground">Quando terminarei de ver tudo?</p>
+                <p className="text-[11px] text-muted-foreground">Data de conclusão</p>
                 {editingDate ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-1">
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className={cn('w-full justify-start text-left text-xs', !tempDate && 'text-muted-foreground')}>
@@ -566,43 +573,46 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditingDate(true)} className="text-sm font-semibold hover:underline">
+                  <button onClick={() => setEditingDate(true)} className="text-sm font-semibold hover:text-primary transition-colors flex items-center gap-1">
                     {plan.target_date
-                      ? `${format(new Date(plan.target_date), "dd/MM/yyyy")} (${metrics?.daysRemaining ?? '?'} dias)`
-                      : 'Sem data definida'}
+                      ? <>Terminar até {format(new Date(plan.target_date), "dd/MM/yyyy")} <span className="text-muted-foreground font-normal">({metrics?.daysRemaining ?? '?'} dias)</span></>
+                      : 'Definir data'}
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Pilar 2: Taxa de Retenção */}
+            {/* Pilar 2: Retenção */}
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Brain className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1">
-                <p className="text-[10px] text-muted-foreground">Taxa de retenção desejada</p>
-                <p className="text-sm font-semibold">{Math.round((metrics?.avgRetention ?? 0.9) * 100)}%</p>
+                <p className="text-[11px] text-muted-foreground">Taxa de retenção desejada</p>
+                <p className="text-sm font-semibold">{Math.round((metrics?.avgRetention ?? 0.9) * 100)}% de Retenção</p>
               </div>
             </div>
 
-            {/* Pilar 3: Capacidade Diária */}
+            {/* Pilar 3: Capacidade */}
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Clock className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1">
-                <p className="text-[10px] text-muted-foreground">Capacidade diária</p>
+                <p className="text-[11px] text-muted-foreground">Capacidade diária de estudo</p>
                 {editingMinutes ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-1">
+                    <div className="text-center">
+                      <span className="text-lg font-bold text-primary">{formatMinutes(tempMinutes)}</span>
+                    </div>
                     <Slider
                       value={[tempMinutes]}
                       onValueChange={([v]) => setTempMinutes(v)}
                       min={15} max={240} step={15}
                     />
-                    <p className="text-sm font-semibold text-center">{formatMinutes(tempMinutes)}</p>
                     {impactMessage && (
-                      <p className="text-xs text-muted-foreground">{impactMessage}</p>
+                      <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">{impactMessage}</p>
                     )}
                     <div className="flex gap-1">
                       <Button size="sm" className="h-7 text-xs" onClick={handleSaveMinutes}>Salvar</Button>
@@ -610,121 +620,132 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditingMinutes(true)} className="text-sm font-semibold hover:underline">
-                    {formatMinutes(plan.daily_minutes)} ({metrics?.cardsPerDay ?? '?'} cards/dia)
+                  <button onClick={() => setEditingMinutes(true)} className="text-sm font-semibold hover:text-primary transition-colors flex items-center gap-1">
+                    {formatMinutes(plan.daily_minutes)}/dia <span className="text-muted-foreground font-normal">({metrics?.cardsPerDay ?? '?'} cards/dia)</span>
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
                   </button>
                 )}
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* ─── Coverage / Target Date Progress ─── */}
-        {plan.target_date && metrics && metrics.coveragePercent != null && (
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold">Meta até {format(new Date(plan.target_date), "dd/MM/yyyy")}</span>
-              </div>
-              <Progress value={metrics.coveragePercent} className="h-2" />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Cobertura: {metrics.coveragePercent}%</span>
+            {/* Coverage Progress */}
+            {plan.target_date && metrics && metrics.coveragePercent != null && (
+              <div className="pt-3 border-t space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Cobertura</span>
+                  <span className="font-semibold">{metrics.coveragePercent}%</span>
+                </div>
+                <Progress value={metrics.coveragePercent} className="h-2" />
                 {metrics.requiredCardsPerDay != null && (
-                  <span>Necessário: {metrics.requiredCardsPerDay} cards/dia</span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Necessário: {metrics.requiredCardsPerDay} cards/dia para cobrir 100%
+                  </p>
                 )}
               </div>
-              {metrics.coveragePercent < 50 && (
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-xs text-destructive">
-                    Seu ritmo atual pode não ser suficiente. Considere aumentar o tempo diário ou focar em menos baralhos.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ─── Saúde do Plano (%) ─── */}
-        {metrics && metrics.planHealthPercent != null && (
-          <Card>
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <Flame className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold">Saúde do Plano</span>
-                <span className="ml-auto text-sm font-bold">{metrics.planHealthPercent}%</span>
-              </div>
-              <Progress
-                value={metrics.planHealthPercent}
-                className={cn('h-2', metrics.planHealthPercent < 50 && '[&>div]:bg-red-500', metrics.planHealthPercent < 80 && metrics.planHealthPercent >= 50 && '[&>div]:bg-amber-500')}
-              />
-              <p className="text-xs text-muted-foreground">
-                Baseado na consistência: dias em que você estudou vs. dias desde a criação do plano.
-              </p>
-              {metrics.planHealthPercent < 80 && (
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Sua Saúde do Plano está em {metrics.planHealthPercent}%. Que tal ajustarmos sua carga?
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ─── Catch-up / Limpar Atraso ─── */}
-        {metrics && metrics.totalReview > 0 && (
-          <Button variant="outline" className="w-full" onClick={() => setShowCatchUp(true)}>
-            <RotateCcw className="h-4 w-4 mr-2" /> Limpar Atraso ({metrics.totalReview} revisões pendentes)
-          </Button>
-        )}
-
-        <CatchUpDialog
-          open={showCatchUp}
-          onOpenChange={setShowCatchUp}
-          totalReview={metrics?.totalReview ?? 0}
-          avgSecondsPerCard={avgSecondsPerCard}
-        />
-
-        {/* ─── Deck Prioritization ─── */}
-        <Card>
-          <CardContent className="p-5 space-y-2">
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2">
-              Prioridade dos Baralhos
-            </h3>
-            {planDecks.length === 0 && (
-              <p className="text-xs text-muted-foreground">Nenhum baralho no plano.</p>
             )}
-            {planDecks.map((deck: any, i: number) => (
-              <div key={deck.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
-                <span className="text-xs text-muted-foreground w-5 text-center">{i + 1}</span>
-                <p className="text-sm font-medium flex-1 truncate">{deck.name}</p>
-                <Button
-                  variant="ghost" size="icon" className="h-7 w-7"
-                  disabled={i === 0}
-                  onClick={() => handleReorder(i, 'up')}
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost" size="icon" className="h-7 w-7"
-                  disabled={i === planDecks.length - 1}
-                  onClick={() => handleReorder(i, 'down')}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
           </CardContent>
         </Card>
 
-        {/* Delete */}
-        <Button variant="ghost" className="w-full text-destructive hover:text-destructive" onClick={onDelete}>
-          <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
-        </Button>
+        {/* ═══ SEÇÃO C: PRIORIDADE DOS BARALHOS ═══ */}
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Prioridade dos Baralhos</h3>
+
+            {planDecks.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhum baralho no plano.</p>
+            )}
+
+            <div className="space-y-1.5">
+              {planDecks.map((deck: any, i: number) => (
+                <div key={deck.id} className="flex items-center gap-2 p-2.5 rounded-xl border bg-card hover:bg-muted/30 transition-colors group">
+                  <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{deck.name}</p>
+                  </div>
+                  <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7"
+                      disabled={i === 0}
+                      onClick={() => handleReorder(i, 'up')}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7"
+                      disabled={i === planDecks.length - 1}
+                      onClick={() => handleReorder(i, 'down')}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ═══ SEÇÃO D: SUGESTÕES E AÇÕES RÁPIDAS ═══ */}
+        {suggestions.length > 0 && (
+          <Card>
+            <CardContent className="p-5 space-y-3">
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Sugestões</h3>
+              {suggestions.map((s, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40">
+                  <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-foreground leading-relaxed">{s.text}</p>
+                    {s.actionLabel && (
+                      <Button
+                        size="sm" variant="outline" className="mt-2 h-7 text-xs"
+                        onClick={() => {
+                          if (s.action === 'catchup') setShowCatchUp(true);
+                          else setEditingMinutes(true);
+                        }}
+                      >
+                        {s.actionLabel}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Catch-up button if no suggestions but has reviews */}
+        {suggestions.length === 0 && metrics && metrics.totalReview > 0 && (
+          <Button variant="outline" className="w-full" onClick={() => setShowCatchUp(true)}>
+            <RotateCcw className="h-4 w-4 mr-2" /> Limpar Atraso ({metrics.totalReview} revisões)
+          </Button>
+        )}
       </main>
+
+      {/* ═══ DIALOGS ═══ */}
+      <CatchUpDialog
+        open={showCatchUp}
+        onOpenChange={setShowCatchUp}
+        totalReview={metrics?.totalReview ?? 0}
+        avgSecondsPerCard={avgSecondsPerCard}
+      />
+
+      {/* Settings Dialog (contains Edit + Delete) */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Configurações do Plano</DialogTitle>
+            <DialogDescription>Editar ou excluir seu plano de estudos.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 pt-2">
+            <Button variant="outline" className="w-full justify-start" onClick={() => { setShowSettings(false); onEdit(); }}>
+              <Pencil className="h-4 w-4 mr-2" /> Editar plano completo
+            </Button>
+            <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive" onClick={() => { setShowSettings(false); onDelete(); }}>
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   );
@@ -745,7 +766,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
         <DialogHeader>
           <DialogTitle>Limpar Atraso</DialogTitle>
           <DialogDescription>
-            Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha em quantos dias deseja diluir:
+            Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha como diluir:
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-2">
@@ -753,7 +774,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
             const extra = Math.ceil(totalReview / days);
             const extraMin = Math.round((extra * avgSecondsPerCard) / 60);
             return (
-              <div key={days} className="flex items-center justify-between p-3 rounded-lg border">
+              <div key={days} className="flex items-center justify-between p-3 rounded-xl border hover:bg-muted/30 transition-colors cursor-pointer">
                 <div>
                   <p className="text-sm font-medium">Diluir em {days} dias</p>
                   <p className="text-xs text-muted-foreground">
@@ -764,7 +785,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
             );
           })}
           <p className="text-[10px] text-muted-foreground text-center pt-2">
-            O sistema de estudo já prioriza revisões vencidas automaticamente. Estas sugestões servem como referência para seu planejamento.
+            O sistema já prioriza revisões vencidas automaticamente. Use como referência.
           </p>
         </div>
       </DialogContent>
