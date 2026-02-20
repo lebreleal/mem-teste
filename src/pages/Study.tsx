@@ -60,7 +60,7 @@ const Study = () => {
   const [mcExplainResponse, setMcExplainResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [explainInChat, setExplainInChat] = useState(false);
+  const [explainInChat, setExplainInChat] = useState<string | false>(false);
   const [chatHasMessages, setChatHasMessages] = useState(false);
 
   // Undo state: store the previous queue snapshot + reviewCount + card DB state
@@ -154,11 +154,12 @@ const Study = () => {
   }, []);
 
   // Open chat modal when first streaming content arrives for explain-in-chat
+  const activeStreamingResponse = explainInChat === 'explain-mc' ? mcExplainResponse : explainInChat === 'explain' ? explainResponse : null;
   useEffect(() => {
-    if (explainInChat && (explainResponse || mcExplainResponse) && !chatOpen) {
+    if (explainInChat && activeStreamingResponse && !chatOpen) {
       setChatOpen(true);
     }
-  }, [explainInChat, explainResponse, mcExplainResponse, chatOpen]);
+  }, [explainInChat, activeStreamingResponse, chatOpen]);
 
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
@@ -521,9 +522,11 @@ const Study = () => {
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
             onOpenExplainChat={(options) => {
-              // First trigger tutor request (shows loading animation on button)
-              // Chat modal opens automatically when streaming content arrives
-              setExplainInChat(true);
+              const action = options?.action || 'explain';
+              // Clear previous responses when starting a new explain
+              if (action === 'explain') setMcExplainResponse(null);
+              if (action === 'explain-mc') setExplainResponse(null);
+              setExplainInChat(action);
               handleTutorRequest(options || { action: 'explain' });
             }}
             actions={
@@ -559,7 +562,7 @@ const Study = () => {
           open={chatOpen}
           onOpenChange={setChatOpen}
           cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
-          streamingResponse={explainInChat ? (explainResponse || mcExplainResponse) : undefined}
+          streamingResponse={explainInChat ? activeStreamingResponse : undefined}
           isStreamingResponse={explainInChat ? isTutorLoading : false}
           onClearStreaming={() => setExplainInChat(false)}
           resetKey={cardKey}

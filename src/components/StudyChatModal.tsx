@@ -266,7 +266,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
             {streamingResponse && !absorbedRef.current && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
-                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
                     <ReactMarkdown>{streamingResponse}</ReactMarkdown>
                     {isStreamingResponse && (
                       <div className="flex items-center gap-1.5 mt-2">
@@ -284,7 +284,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
                 <p className="text-xs mt-1 leading-relaxed">O chat está contextualizado com o conteúdo do cartão que você está estudando</p>
-                <p className="text-[11px] mt-2 opacity-60">O histórico será perdido ao fechar</p>
+                <p className="text-[11px] mt-2 opacity-60">O histórico é mantido enquanto estiver neste card</p>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -296,7 +296,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
                 }`}>
                   {msg.role === 'assistant' ? (
                     msg.content ? (
-                      <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+                      <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     ) : (
