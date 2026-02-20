@@ -528,9 +528,9 @@ const Study = () => {
               if (action === 'explain') setExplainResponse(null);
               if (action === 'explain-mc') setMcExplainResponse(null);
               setExplainInChat(action);
-              // Open modal IMMEDIATELY and signal to clear old messages
+              // Clear old messages for fresh explanation
               chatClearRef.current?.();
-              setChatOpen(true);
+              // Don't open modal yet — it opens when content arrives (via useEffect)
               handleTutorRequest(options || { action: 'explain' });
             }}
             actions={
