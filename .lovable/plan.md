@@ -1,71 +1,104 @@
 
 
-## Bug: "Cartoes para hoje" nao diminui apos estudar
+# Migrar OpenAI para Google Gemini (API propria)
 
-### Causa raiz identificada
+## Resumo
 
-A funcao do banco de dados `get_all_user_deck_stats` usa `CURRENT_DATE` (que e baseado em UTC) para determinar quais cards foram estudados "hoje". Porem, o fuso horario do Brasil e UTC-3, entao:
+Substituir todas as chamadas OpenAI por Google Gemini usando sua propria API key do Google AI Studio. A API do Gemini oferece um endpoint compativel com o formato OpenAI, o que torna a migracao simples -- basta trocar URL, API key e nomes dos modelos.
 
-- **Agora no UTC**: 20 de fevereiro (00:21)
-- **Agora no Brasil**: 19 de fevereiro (21:21)
+## Pre-requisito: API Key
 
-Resultado: a funcao acha que **0 cards** foram estudados hoje, quando na verdade **15 cards** ja foram revisados no dia local do usuario.
+Voce precisa de uma API key do Google AI Studio (https://aistudio.google.com/apikeys). Pode ser a mesma conta Google que ja usa. Vamos salvar como secret `GOOGLE_AI_KEY` no Supabase.
 
-A fila de estudo (`get_study_queue_limits`) ja recebe o fuso horario do usuario e funciona corretamente. O problema esta **apenas** na funcao que calcula as estatisticas do dashboard.
-
-### Evidencia
+## Modelos
 
 ```text
-Funcao get_all_user_deck_stats (UTC):
-  new_reviewed_today = 0    <-- ERRADO
-  
-Consulta com fuso horario correto:
-  cards_reviewed = 15       <-- CORRETO
+Uso atual (OpenAI)          ->  Novo (Gemini)
+--------------------------      ---------------------------
+gpt-4o-mini (Flash)         ->  gemini-2.5-flash-lite
+gpt-4o (Pro)                ->  gemini-2.5-pro
 ```
 
-### Plano de correcao
+## Endpoint compativel OpenAI
 
-**1. Atualizar `get_all_user_deck_stats` para aceitar timezone**
+O Google oferece um endpoint que aceita o mesmo formato de request/response do OpenAI:
 
-Adicionar parametro `p_tz_offset_minutes` (igual ao `get_study_queue_limits`) e substituir todas as referencias a `CURRENT_DATE` por calculos com o offset do timezone do usuario.
-
-Antes:
-```sql
-rl.reviewed_at::date = CURRENT_DATE
+```text
+URL:  https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+Auth: Authorization: Bearer <GOOGLE_AI_KEY>
 ```
 
-Depois:
-```sql
-(rl.reviewed_at + (p_tz_offset_minutes || ' minutes')::interval)::date 
-  = (now() + (p_tz_offset_minutes || ' minutes')::interval)::date
+Isso significa que streaming, tool calling e o formato de usage/tokens funcionam identicamente -- a migracao e basicamente trocar 3 coisas: URL, API key e nomes de modelo.
+
+## Arquivos a alterar
+
+### 1. Secret nova
+- Adicionar `GOOGLE_AI_KEY` com sua key do Google AI Studio
+
+### 2. `supabase/functions/_shared/utils.ts`
+- Atualizar `getModelMap()` com modelos Gemini padrao:
+  - flash: `gemini-2.5-flash-lite`
+  - pro: `gemini-2.5-pro`
+- Adicionar helper `getAIConfig()` que retorna URL e API key centralizados
+
+### 3. Edge Functions (8 arquivos) -- mesma mudanca em todos:
+
+Cada function recebe a mesma alteracao mecanica:
+
+```text
+// ANTES
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+// ...
+headers: { Authorization: `Bearer ${OPENAI_API_KEY}` }
+
+// DEPOIS
+const GOOGLE_AI_KEY = Deno.env.get("GOOGLE_AI_KEY");
+const AI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+// ...
+headers: { Authorization: `Bearer ${GOOGLE_AI_KEY}` }
 ```
 
-**2. Atualizar `get_deck_stats` tambem**
+Functions afetadas:
+- `ai-chat/index.ts` (streaming)
+- `ai-tutor/index.ts` (streaming)
+- `generate-deck/index.ts` (JSON response)
+- `enhance-card/index.ts` (tool calling)
+- `enhance-import/index.ts` (tool calling)
+- `grade-exam/index.ts` (JSON response)
+- `generate-onboarding/index.ts` (tool calling)
+- `organize-import/index.ts` (tool calling)
 
-A funcao `get_deck_stats` (usada na pagina de detalhe do deck) tem o mesmo problema com `CURRENT_DATE`. Aplicar a mesma correcao.
+### 4. `src/hooks/useAIModel.ts`
+- Atualizar `backendModel` de `gpt-4o-mini`/`gpt-4o` para `gemini-2.5-flash-lite`/`gemini-2.5-pro`
 
-**3. Atualizar o frontend para passar o timezone**
+### 5. `src/components/AIModelSelector.tsx`
+- Atualizar descricoes dos modelos (opcional, pode manter)
 
-- Em `src/services/deckService.ts`: calcular `tzOffsetMinutes` e passar como parametro nas chamadas RPC
-- Em qualquer outro lugar que chame `get_deck_stats` ou `get_all_user_deck_stats`
+### 6. TTS (`supabase/functions/tts/index.ts`)
+- Nao muda -- ja foi migrado para Google Cloud TTS separadamente
 
-### Detalhes tecnicos
+## Nota sobre o organize-import
 
-**Migracao SQL** - Recriar as duas funcoes:
+O `organize-import` usa `gpt-4o` hardcoded (nao usa getModelMap). Sera atualizado para `gemini-2.5-pro`.
 
-- `get_all_user_deck_stats(p_user_id, p_tz_offset_minutes)`: adicionar parametro com default 0 para compatibilidade
-- `get_deck_stats(p_deck_id, p_tz_offset_minutes)`: idem
+## Nota sobre o ai-chat (auth com getClaims)
 
-**Arquivos a modificar:**
+O `organize-import` usa `getClaims` que esta obsoleto. Sera corrigido para `getUser()` durante a migracao.
 
-1. **Nova migracao SQL**: Recriar ambas funcoes com suporte a timezone
-2. **`src/services/deckService.ts`**: Passar `p_tz_offset_minutes: -new Date().getTimezoneOffset()` na chamada RPC
-3. **Qualquer outro chamador de `get_deck_stats`**: Buscar e atualizar (provavelmente em `DeckDetail` ou hooks relacionados)
+## Compatibilidade confirmada
 
-### Impacto
+A API OpenAI-compatible do Gemini suporta:
+- Streaming SSE (mesmo formato `data: {...}` + `data: [DONE]`)
+- Tool calling (mesmo schema `tools` + `tool_choice`)
+- Usage tokens no response (`usage.prompt_tokens`, etc.)
+- Mensagens system/user/assistant
 
-- Corrige o contador "Cartoes para hoje" no dashboard
-- Corrige o contador na pagina de detalhe do deck
-- Alinha o comportamento do dashboard com a fila de estudo (ambos usarao timezone local)
-- Nao quebra funcionalidade existente (parametro tem default 0)
+## Passos de implementacao
+
+1. Pedir sua API key do Google AI Studio e salvar como `GOOGLE_AI_KEY`
+2. Atualizar `_shared/utils.ts` com novos modelos padrao
+3. Atualizar as 8 edge functions (trocar URL, key, nomes de modelo)
+4. Atualizar `useAIModel.ts` no frontend
+5. Deploy e teste de todas as functions
 
