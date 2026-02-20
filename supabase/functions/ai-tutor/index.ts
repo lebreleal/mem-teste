@@ -56,11 +56,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Log token usage before streaming (estimated, same pattern as ai-chat)
-    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, cost);
-
     const antiPreamblePrompt = "Você é um tutor educacional direto e objetivo. PROIBIDO: saudações, elogios, preâmbulos, \"Olá\", \"Ótima pergunta\", \"Excelente iniciativa\". Vá direto ao conteúdo. Use Markdown para formatação.";
     const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt;
+
+    // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
+    const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
+    const estimatedCompletionTokens = Math.ceil(maxTokens * 0.7);
+    const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
 
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
@@ -84,6 +86,13 @@ Deno.serve(async (req) => {
       if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
+
+    // Log estimated token usage (streaming prevents exact count)
+    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, {
+      prompt_tokens: estimatedPromptTokens,
+      completion_tokens: estimatedCompletionTokens,
+      total_tokens: estimatedTotal,
+    }, cost);
 
     // Stream the OpenAI SSE response directly to the client
     return new Response(response.body, {
