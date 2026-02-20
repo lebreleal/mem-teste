@@ -12,6 +12,25 @@ function detectLanguage(text: string): "pt-BR" | "en-US" {
   return ratio > 0.08 ? "pt-BR" : "en-US";
 }
 
+/** Fetch configured voice from ai_settings */
+async function getConfiguredVoice(lang: "pt-BR" | "en-US"): Promise<string | null> {
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const key = lang === "pt-BR" ? "tts_voice_pt" : "tts_voice_en";
+    const { data } = await supabaseAdmin
+      .from("ai_settings")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+    return data?.value || null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -33,7 +52,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "GOOGLE_CLOUD_TTS_KEY not configured" }, 500);
     }
 
-    // Limit text length to avoid excessive costs
     const trimmed = text.slice(0, 4096);
 
     // Auth (optional – log if authenticated)
@@ -61,7 +79,13 @@ Deno.serve(async (req) => {
 
     // Detect language and pick voice
     const lang = detectLanguage(trimmed);
-    const voiceName = voice || (lang === "pt-BR" ? "pt-BR-Neural2-A" : "en-US-Neural2-J");
+
+    // Priority: explicit voice param > configured in DB > default
+    let voiceName = voice;
+    if (!voiceName) {
+      const configuredVoice = await getConfiguredVoice(lang);
+      voiceName = configuredVoice || (lang === "pt-BR" ? "pt-BR-Neural2-A" : "en-US-Neural2-J");
+    }
 
     // Call Google Cloud Text-to-Speech API
     const googleTtsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_CLOUD_TTS_KEY}`;
@@ -90,7 +114,7 @@ Deno.serve(async (req) => {
     }
 
     const result = await response.json();
-    const audioContent = result.audioContent; // base64 encoded
+    const audioContent = result.audioContent;
 
     if (!audioContent) {
       console.error("Google TTS: no audioContent in response");
