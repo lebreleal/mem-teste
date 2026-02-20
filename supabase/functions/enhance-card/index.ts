@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_card");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash-lite";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
     if (cardType === "multiple_choice") systemPrompt += `\n\nATENÇÃO: Este é um card de Múltipla Escolha. O campo "back" é JSON puro. Retorne o "back" melhorado TAMBÉM como JSON válido {"options": [...], "correctIndex": N}. Mantenha o correctIndex apontando para a mesma resposta correta.`;

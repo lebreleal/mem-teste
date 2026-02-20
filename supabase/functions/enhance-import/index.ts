@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_import");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash-lite";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     const cardsText = cards.map((c: { front: string; back: string }, i: number) => `[${i}] Frente: ${c.front}\nVerso: ${c.back}`).join("\n---\n");
 

@@ -7,7 +7,7 @@ const MODEL_CONFIG = {
     label: 'Flash',
     description: 'Rápido e eficiente',
     costMultiplier: 1,
-    backendModel: 'gemini-2.5-flash-lite',
+    backendModel: 'gemini-2.5-flash',
   },
   pro: {
     label: 'Pro',
