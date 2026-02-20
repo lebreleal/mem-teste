@@ -61,6 +61,7 @@ const Study = () => {
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [explainInChat, setExplainInChat] = useState(false);
+  const [chatHasMessages, setChatHasMessages] = useState(false);
 
   // Undo state: store the previous queue snapshot + reviewCount + card DB state
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -546,6 +547,7 @@ const Study = () => {
                   });
                 }}
                 onOpenChat={() => setChatOpen(true)}
+                chatHasMessages={chatHasMessages}
               />
             }
           />
@@ -560,6 +562,8 @@ const Study = () => {
           streamingResponse={explainInChat ? explainResponse : undefined}
           isStreamingResponse={explainInChat ? isTutorLoading : false}
           onClearStreaming={() => setExplainInChat(false)}
+          resetKey={cardKey}
+          onHasMessagesChange={setChatHasMessages}
         />
       </Suspense>
     </div>

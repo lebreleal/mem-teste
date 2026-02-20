@@ -36,11 +36,12 @@ interface StudyCardActionsProps {
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
   onSiblingsUpdated?: (updates: { id: string; front_content: string; back_content: string }[], deletedIds: string[]) => void;
   onOpenChat?: () => void;
+  chatHasMessages?: boolean;
 }
 
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice';
 
-const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -376,13 +377,20 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
             <TooltipTrigger asChild>
               <button
                 onClick={onOpenChat}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                  chatHasMessages
+                    ? 'text-primary bg-primary/10'
+                    : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                }`}
                 aria-label="Chat com IA"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
+                {chatHasMessages && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+                )}
               </button>
             </TooltipTrigger>
-            <TooltipContent><p>Chat com IA</p></TooltipContent>
+            <TooltipContent><p>{chatHasMessages ? 'Ver explicação gerada' : 'Chat com IA'}</p></TooltipContent>
           </Tooltip>
         )}
 

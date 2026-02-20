@@ -35,9 +35,13 @@ interface StudyChatModalProps {
   isStreamingResponse?: boolean;
   /** Called when the streaming response has been consumed into local messages */
   onClearStreaming?: () => void;
+  /** When this key changes, messages are reset (e.g. card change) */
+  resetKey?: string | number;
+  /** Callback to inform parent whether the chat has messages */
+  onHasMessagesChange?: (has: boolean) => void;
 }
 
-const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming }: StudyChatModalProps) => {
+const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming, resetKey, onHasMessagesChange }: StudyChatModalProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { energy } = useEnergy();
@@ -50,14 +54,24 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
 
   const cost = getCost(BASE_COST);
 
-  // Reset messages when modal closes
+  // Only reset streaming state when modal closes (preserve messages)
   useEffect(() => {
     if (!open) {
-      setMessages([]);
-      setInput('');
       setIsStreaming(false);
     }
   }, [open]);
+
+  // Reset messages when card changes (resetKey)
+  useEffect(() => {
+    setMessages([]);
+    setInput('');
+    setIsStreaming(false);
+  }, [resetKey]);
+
+  // Notify parent about messages state
+  useEffect(() => {
+    onHasMessagesChange?.(messages.length > 0);
+  }, [messages.length, onHasMessagesChange]);
 
   // Absorb external streaming response into local messages
   const absorbedRef = useRef(false);
@@ -78,11 +92,14 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     }
   }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
 
-  // Auto-scroll: only scroll down for user-initiated chat messages, not for external streaming
+  // Auto-scroll: only when user sends a new message (not on streaming updates)
+  const lastUserMsgCount = useRef(0);
   useEffect(() => {
-    if (scrollRef.current && !streamingResponse) {
+    const userMsgCount = messages.filter(m => m.role === 'user').length;
+    if (scrollRef.current && userMsgCount > lastUserMsgCount.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    lastUserMsgCount.current = userMsgCount;
   }, [messages]);
 
   const handleSend = useCallback(async () => {
