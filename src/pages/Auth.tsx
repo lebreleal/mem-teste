@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import ThemeToggle from '@/components/ThemeToggle';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 
 type Mode = 'login' | 'signup';
@@ -74,11 +75,14 @@ const Auth = () => {
 
       <div className="w-full max-w-sm space-y-6">
         {/* Header */}
-        <div className="text-center space-y-1">
-          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-            Memo Cards
-          </h1>
-          <p className="text-sm text-muted-foreground">
+        <div className="space-y-1">
+          <div className="flex items-center justify-center gap-3">
+            <MemoCardsLogo size={48} />
+            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
+              Memocards
+            </h1>
+          </div>
+          <p className="text-sm text-muted-foreground text-center">
             {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta grátis'}
           </p>
         </div>
