@@ -150,9 +150,9 @@ const MoveBrowser = ({
       </div>
 
       {/* Items list */}
-      <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+      <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border overflow-x-hidden">
         {canGoBack && (
-          <button onClick={handleBack} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+          <button onClick={handleBack} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors min-w-0">
             <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-muted-foreground">Voltar</span>
           </button>
@@ -160,9 +160,9 @@ const MoveBrowser = ({
 
         {/* Folders (only when not inside a deck) */}
         {!isInsideDeck && movableFolders.map(f => (
-          <button key={f.id} onClick={() => { setMoveBrowseFolderId(f.id); setMoveParentDeckId(null); }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+          <button key={f.id} onClick={() => { setMoveBrowseFolderId(f.id); setMoveParentDeckId(null); }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors min-w-0">
             <FolderOpen className="h-4 w-4 text-primary shrink-0" />
-            <span className="flex-1 text-left font-medium truncate">{f.name}</span>
+            <span className="flex-1 text-left font-medium truncate min-w-0">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         ))}
@@ -173,10 +173,10 @@ const MoveBrowser = ({
           return (
             <button
               key={d.id}
-              onClick={() => hasChildren ? setMoveParentDeckId(d.id) : setMoveParentDeckId(d.id)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+              onClick={() => setMoveParentDeckId(d.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors min-w-0"
             >
-              <span className="flex-1 text-left font-medium truncate">{d.name}</span>
+              <span className="flex-1 text-left font-medium truncate min-w-0">{d.name}</span>
               {hasChildren && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
             </button>
           );
