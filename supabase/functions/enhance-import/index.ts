@@ -1,9 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig } from "../_shared/utils.ts";
-
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um assistente que corrige e melhora flashcards importados de CSVs malformados.
 
@@ -23,7 +20,8 @@ Deno.serve(async (req) => {
 
   try {
     const { cards, aiModel, energyCost } = await req.json();
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) throw new Error("No cards provided");
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -43,13 +41,13 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_import");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash-lite";
     const systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     const cardsText = cards.map((c: { front: string; back: string }, i: number) => `[${i}] Frente: ${c.front}\nVerso: ${c.back}`).join("\n---\n");
 
-    const response = await fetch(OPENAI_URL, {
+    const response = await fetch(AI_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: selectedModel,
         messages: [{ role: "system", content: systemPrompt }, { role: "user", content: `Corrija estes ${cards.length} flashcards importados. Retorne APENAS os cards corrigidos:\n\n${cardsText}` }],

@@ -1,9 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, handleCors, jsonResponse, logTokenUsage } from "../_shared/utils.ts";
-
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+import { corsHeaders, handleCors, jsonResponse, logTokenUsage, getAIConfig, getModelMap } from "../_shared/utils.ts";
 
 interface DeckNode {
   name: string;
@@ -140,11 +137,12 @@ async function organizeBatch(
     ? `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) como subdecks de "${deckName}".\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`
     : `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) em uma árvore temática.\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`;
 
-  const response = await fetch(OPENAI_URL, {
+  const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
+  const response = await fetch(AI_URL, {
     method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "gemini-2.5-pro",
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
@@ -223,15 +221,15 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const anonClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userError } = await anonClient.auth.getUser();
+    if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
-    const userId: string = claimsData.claims.sub as string;
+    const userId: string = user.id;
 
     const { cards, deckName } = await req.json();
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    const { apiKey: AI_KEY } = getAIConfig();
+    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       return jsonResponse({ error: "No cards provided" }, 400);
     }
@@ -311,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      await logTokenUsage(supabase, userId, "organize_import", "gpt-4o",
+      await logTokenUsage(supabase, userId, "organize_import", "gemini-2.5-pro",
         { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 
