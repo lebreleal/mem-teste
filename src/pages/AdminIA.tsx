@@ -130,14 +130,16 @@ const AdminIA = () => {
         ? 'Olá! Esta é uma prévia da voz selecionada para o português brasileiro.'
         : 'Hello! This is a preview of the selected voice for American English.';
 
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke('tts', {
         body: { text: sampleText, voice: voiceName },
+        headers: { Accept: 'audio/mpeg' },
       });
 
       if (res.error) throw res.error;
 
-      const blob = new Blob([res.data], { type: 'audio/mpeg' });
+      const blob = res.data instanceof Blob
+        ? res.data
+        : new Blob([res.data], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioRef.current = audio;
