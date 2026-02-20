@@ -29,9 +29,15 @@ interface StudyChatModalProps {
   onOpenChange: (open: boolean) => void;
   /** Optional context from the current card */
   cardContext?: { front: string; back: string };
+  /** External streaming response (e.g. from ai-tutor explain) shown as first assistant message */
+  streamingResponse?: string | null;
+  /** Whether the external streaming is still in progress */
+  isStreamingResponse?: boolean;
+  /** Called when the streaming response has been consumed into local messages */
+  onClearStreaming?: () => void;
 }
 
-const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps) => {
+const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming }: StudyChatModalProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { energy } = useEnergy();
@@ -53,11 +59,30 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
     }
   }, [open]);
 
+  // Absorb external streaming response into local messages
+  const absorbedRef = useRef(false);
+  useEffect(() => {
+    if (!open) { absorbedRef.current = false; return; }
+    if (streamingResponse && !isStreamingResponse && !absorbedRef.current) {
+      // Streaming finished — absorb into messages array so user can continue chatting
+      absorbedRef.current = true;
+      setMessages(prev => {
+        // If we already have a placeholder assistant msg from streaming, replace it
+        if (prev.length === 1 && prev[0].role === 'assistant') {
+          return [{ role: 'assistant', content: streamingResponse }];
+        }
+        // Otherwise just add it
+        return [{ role: 'assistant', content: streamingResponse }, ...prev];
+      });
+      onClearStreaming?.();
+    }
+  }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamingResponse]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -219,7 +244,18 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.length === 0 && (
+            {/* Show external streaming response as first assistant message */}
+            {streamingResponse && !absorbedRef.current && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
+                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+                    <ReactMarkdown>{streamingResponse}</ReactMarkdown>
+                    {isStreamingResponse && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
+                  </div>
+                </div>
+              </div>
+            )}
+            {messages.length === 0 && !streamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>

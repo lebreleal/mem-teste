@@ -56,6 +56,8 @@ interface FlashCardProps {
   actions?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
+  /** Opens the chat modal with the explain streaming — used for basic/cloze/occlusion "Explicar assunto" */
+  onOpenExplainChat?: () => void;
 }
 
 interface MultipleChoiceData {
@@ -487,7 +489,7 @@ const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
-  canUndo, onUndo,
+  canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
   const [peekingFront, setPeekingFront] = useState(false);
@@ -717,8 +719,8 @@ const FlashCard = ({
             </div>
           )}
 
-          {/* Tutor explain response - show after flip */}
-          {explainResponse && flipped && (
+          {/* Tutor explain response - show after flip (only if no onOpenExplainChat, i.e. fallback) */}
+          {explainResponse && flipped && !onOpenExplainChat && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
@@ -856,10 +858,10 @@ const FlashCard = ({
               </div>
             ) : (
               <>
-                {/* Explain button for basic/cloze/occlusion */}
-                {onTutorRequest && !explainResponse && (
+                {/* Explain button for basic/cloze/occlusion — opens chat modal */}
+                {onOpenExplainChat && !explainResponse && (
                   <button
-                    onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                    onClick={() => canUseTutor ? onOpenExplainChat() : undefined}
                     disabled={!canUseTutor || isTutorLoading}
                     className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                       canUseTutor

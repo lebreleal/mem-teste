@@ -60,6 +60,7 @@ const Study = () => {
   const [mcExplainResponse, setMcExplainResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [explainInChat, setExplainInChat] = useState(false);
 
   // Undo state: store the previous queue snapshot + reviewCount + card DB state
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -511,6 +512,11 @@ const Study = () => {
             mcExplainResponse={mcExplainResponse}
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
+            onOpenExplainChat={() => {
+              setChatOpen(true);
+              setExplainInChat(true);
+              handleTutorRequest({ action: 'explain' });
+            }}
             actions={
               <StudyCardActions
                 card={currentCard}
@@ -543,6 +549,9 @@ const Study = () => {
           open={chatOpen}
           onOpenChange={setChatOpen}
           cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
+          streamingResponse={explainInChat ? explainResponse : undefined}
+          isStreamingResponse={explainInChat ? isTutorLoading : false}
+          onClearStreaming={() => setExplainInChat(false)}
         />
       </Suspense>
     </div>
