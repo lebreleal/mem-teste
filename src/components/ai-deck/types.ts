@@ -15,6 +15,9 @@ export interface GenProgress {
   current: number;
   total: number;
   creditsUsed: number;
+  startedAt: number;
+  lastBatchMs: number;
+  avgBatchMs: number;
 }
 
 // Re-export for convenience
