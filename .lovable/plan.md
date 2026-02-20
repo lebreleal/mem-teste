@@ -1,62 +1,72 @@
 
 
-# Configurar Vozes TTS no Painel Admin
+# Explicacao IA direto no Chat
 
-## O que sera feito
+## Situacao Atual
 
-Adicionar uma nova secao "Configurar Voz" no painel Admin IA onde voce podera:
-- Escolher a voz PT-BR (entre varias opcoes Neural2 do Google)
-- Escolher a voz EN-US (entre varias opcoes Neural2 do Google)
-- Ouvir uma preview de cada voz com um botao de teste
-- Salvar a escolha no banco (tabela `ai_settings`)
-- A edge function `tts` vai ler a voz configurada do banco
+Quando voce clica em "Explicar assunto com IA", a explicacao aparece num cartaozinho inline abaixo do card de estudo. Isso tem dois problemas:
+- A formatacao fica apertada (max-h-[40vh], texto pequeno)
+- Se surgir uma duvida durante a leitura, voce precisa abrir o chat separadamente e perder a explicacao
 
-Todas as vozes Neural2 tem o mesmo custo, entao nao muda nada no preco.
+## O que vai mudar
 
----
+Ao clicar em "Explicar assunto com IA", o sistema vai abrir o **StudyChatModal** diretamente e a explicacao vai aparecer como a primeira mensagem do assistente, com streaming em tempo real. Depois que terminar, voce pode continuar perguntando duvidas ali mesmo, sem perder o contexto.
+
+O fluxo dos outros modos (dica/hint antes de virar, e explicacao de alternativas no multipla escolha) continua inline como esta hoje -- so o "Explicar assunto" muda.
+
+## Fluxo novo
+
+1. Usuario vira o card
+2. Clica em "Explicar assunto com IA"
+3. O ChatModal abre imediatamente
+4. A explicacao aparece como primeira mensagem do assistente (streaming)
+5. Ao terminar, o usuario pode digitar perguntas de follow-up no mesmo chat
 
 ## Detalhes Tecnicos
 
-### 1. Vozes disponiveis (Neural2, mesmo custo)
+### 1. StudyChatModal - aceitar mensagem inicial (StudyChatModal.tsx)
 
-**PT-BR:**
-- `pt-BR-Neural2-A` (Feminina)
-- `pt-BR-Neural2-B` (Masculina)
-- `pt-BR-Neural2-C` (Feminina)
+Adicionar uma nova prop `initialAssistantMessage` que, quando presente:
+- Insere a mensagem como primeira mensagem do assistente ao abrir
+- Permite que o usuario continue a conversa normalmente depois
 
-**EN-US:**
-- `en-US-Neural2-A` (Masculina)
-- `en-US-Neural2-C` (Feminina)
-- `en-US-Neural2-D` (Masculina)
-- `en-US-Neural2-E` (Feminina)
-- `en-US-Neural2-F` (Feminina)
-- `en-US-Neural2-G` (Feminina)
-- `en-US-Neural2-H` (Feminina)
-- `en-US-Neural2-I` (Masculina)
-- `en-US-Neural2-J` (Masculina)
+Tambem adicionar prop `onStreamExplain` -- uma funcao que o modal chama ao abrir para disparar o streaming da explicacao. Isso permite que o modal controle o streaming internamente.
 
-### 2. Banco de dados (`ai_settings`)
-Usar duas novas chaves na tabela `ai_settings` existente (sem migracao necessaria, so insert):
-- `tts_voice_pt` -> ex: `pt-BR-Neural2-B`
-- `tts_voice_en` -> ex: `en-US-Neural2-J`
+Alternativa mais simples: o modal recebe `streamingExplainResponse` (string que vai crescendo) e `isExplainStreaming` como props, e renderiza como primeira mensagem do assistente enquanto faz streaming. Quando o streaming termina, a mensagem fica fixa e o usuario pode continuar.
 
-### 3. Admin IA (`src/pages/AdminIA.tsx`)
-Adicionar um novo card "Configurar Voz" na tela principal do Admin IA que abre uma secao com:
-- Select para voz PT-BR com as 3 opcoes
-- Select para voz EN-US com as 9 opcoes
-- Botao "Testar" ao lado de cada select que chama a edge function TTS com um texto curto de exemplo e toca o audio
-- Botao "Salvar Vozes"
+### 2. FlashCard.tsx - redirecionar "Explicar assunto" para o chat
 
-### 4. Edge function TTS (`supabase/functions/tts/index.ts`)
-Modificar para:
-- Ler as configuracoes `tts_voice_pt` e `tts_voice_en` do banco usando service role
-- Usar a voz configurada ao inves das hardcoded
-- Se nao houver configuracao, manter os defaults atuais (`pt-BR-Neural2-A` e `en-US-Neural2-J`)
+- O botao "Explicar assunto com IA" (linhas 860-872) em vez de chamar `onTutorRequest({ action: 'explain' })` inline, vai chamar uma nova callback `onOpenExplainChat`
+- Remover a renderizacao inline do `explainResponse` para cards basicos/cloze (linhas 721-735) -- a explicacao agora vive no chat
 
-### 5. Fluxo
-1. Admin abre Admin IA -> clica em "Configurar Voz"
-2. Seleciona uma voz PT-BR e uma EN-US
-3. Clica "Testar" para ouvir preview
-4. Clica "Salvar" para gravar no `ai_settings`
-5. Proximas chamadas TTS usam a voz escolhida
+### 3. Study.tsx - orquestrar o fluxo
+
+- Quando `onOpenExplainChat` e chamado:
+  1. Abrir o `StudyChatModal` (`setChatOpen(true)`)
+  2. Disparar o tutor request com action `explain`
+  3. Passar o `explainResponse` (que ja faz streaming) como prop para o `StudyChatModal`
+- O `StudyChatModal` renderiza o `explainResponse` como primeira mensagem do assistente
+- Quando o streaming termina, o usuario pode enviar mensagens normais
+
+### 4. Mudancas no StudyChatModal
+
+- Nova prop: `streamingResponse?: string | null` -- conteudo da explicacao em streaming
+- Nova prop: `isStreamingResponse?: boolean` -- se esta fazendo streaming
+- Quando `streamingResponse` existe e o modal abre:
+  - Renderizar como primeira mensagem do assistente (role: assistant)
+  - Mostrar cursor de loading enquanto `isStreamingResponse` for true
+  - Quando streaming terminar, converter para mensagem fixa no array `messages`
+  - A partir dai, usuario pode continuar conversando normalmente (cada mensagem nova custa creditos como hoje)
+- Manter a formatacao rica do chat (ReactMarkdown com prose classes) que ja e bem melhor que o inline
+
+### 5. Ajuste de formatacao no chat (bonus)
+
+- Adicionar classes de prose mais generosas no chat para melhorar a leitura de explicacoes longas
+- Garantir que listas, titulos, codigo e paragrafos fiquem bem formatados
+
+### Arquivos a editar
+
+1. `src/components/StudyChatModal.tsx` -- novas props de streaming, logica de mensagem inicial
+2. `src/components/FlashCard.tsx` -- botao "Explicar assunto" chama nova callback em vez de inline; remover renderizacao inline do explain para basic/cloze
+3. `src/pages/Study.tsx` -- passar explainResponse e isStreaming para o StudyChatModal; abrir chat ao clicar explicar
 
