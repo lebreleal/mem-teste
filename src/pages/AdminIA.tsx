@@ -63,8 +63,8 @@ const AdminIA = () => {
   };
 
   const openModelConfig = () => {
-    setFlashModel(getSetting('flash_model') || 'gpt-4o-mini');
-    setProModel(getSetting('pro_model') || 'gpt-4o');
+    setFlashModel(getSetting('flash_model') || 'gemini-2.5-flash-lite');
+    setProModel(getSetting('pro_model') || 'gemini-2.5-pro');
     setShowModelConfig(true);
     setSelectedKey(null);
   };
@@ -117,7 +117,7 @@ const AdminIA = () => {
                   <Settings className="w-5 h-5 text-primary" />
                   <div>
                     <p className="font-medium">Configurar Modelos</p>
-                    <p className="text-xs text-muted-foreground">Qual modelo da OpenAI é Flash e qual é Pro</p>
+                    <p className="text-xs text-muted-foreground">Qual modelo do Gemini é Flash e qual é Pro</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -139,18 +139,18 @@ const AdminIA = () => {
           </>
         ) : showModelConfig ? (
           <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">Configure qual modelo da OpenAI é usado para cada tier. Você pode colocar qualquer model ID válido da OpenAI.</p>
+            <p className="text-sm text-muted-foreground">Configure qual modelo do Gemini é usado para cada tier. Você pode colocar qualquer model ID válido do Google AI.</p>
 
             <div className="space-y-2">
               <Label>Modelo Flash (rápido e barato)</Label>
-              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gpt-4o-mini" className="font-mono" />
-              <p className="text-xs text-muted-foreground">Ex: gpt-4o-mini, gpt-3.5-turbo</p>
+              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gemini-2.5-flash-lite" className="font-mono" />
+              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-flash-lite, gemini-2.0-flash</p>
             </div>
 
             <div className="space-y-2">
               <Label>Modelo Pro (avançado)</Label>
-              <Input value={proModel} onChange={e => setProModel(e.target.value)} placeholder="gpt-4o" className="font-mono" />
-              <p className="text-xs text-muted-foreground">Ex: gpt-4o, o1-mini, o1-preview, gpt-4-turbo</p>
+              <Input value={proModel} onChange={e => setProModel(e.target.value)} placeholder="gemini-2.5-pro" className="font-mono" />
+              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-pro, gemini-2.5-flash</p>
             </div>
 
             <Button onClick={handleSaveModels} disabled={savingModels} className="w-full">
@@ -181,8 +181,8 @@ const AdminIA = () => {
               <Select value={editState.default_model || 'flash'} onValueChange={v => setEditState(s => ({ ...s, default_model: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gpt-4o-mini'})</SelectItem>
-                  <SelectItem value="pro">Pro ({getSetting('pro_model') || 'gpt-4o'})</SelectItem>
+                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gemini-2.5-flash-lite'})</SelectItem>
+                  <SelectItem value="pro">Pro ({getSetting('pro_model') || 'gemini-2.5-pro'})</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">O usuário escolhe Flash ou Pro ao solicitar. Este é apenas o fallback caso não especifique.</p>
