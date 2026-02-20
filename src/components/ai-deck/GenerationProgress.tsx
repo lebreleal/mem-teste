@@ -16,11 +16,11 @@ interface GenerationProgressProps {
 
 const TIPS = [
   '💡 Flashcards aumentam retenção em até 50%',
-  '🧠 Repetição espaçada é a técnica mais eficaz',
-  '📚 Intervalos curtos superam sessões longas',
-  '🎯 Testar a si mesmo > reler o material',
-  '⚡ 20 min de revisão ativa > 2h de leitura',
-  '🏆 Consistência diária é o segredo',
+  '🧠 Repetição espaçada é a técnica mais eficaz de estudo',
+  '📚 Sessões curtas e frequentes superam maratonas',
+  '🎯 Testar a si mesmo é melhor que apenas reler',
+  '⚡ 20 min de revisão ativa > 2h de leitura passiva',
+  '🏆 Estudar um pouco todo dia é o segredo',
 ];
 
 const CONCURRENT_BATCHES = 3;
@@ -73,16 +73,15 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         const nextCheckpoint = ((genProgress.current + 1) / genProgress.total) * 100;
         const ceiling = realPercent + (nextCheckpoint - realPercent) * 0.9;
 
-        // If we're behind real progress (batch just completed), jump closer
         if (prev < realPercent) {
           return realPercent;
         }
 
         const distToCeiling = ceiling - prev;
-        const increment = Math.max(0.3, distToCeiling * 0.08);
+        const increment = Math.max(0.15, distToCeiling * 0.04);
         return Math.min(ceiling, prev + increment);
       });
-    }, 1000);
+    }, 2000);
     return () => clearInterval(iv);
   }, [genProgress.current, genProgress.total]);
 
@@ -124,16 +123,10 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
           {phase.text}
         </p>
         {/* ETA */}
-        {hasBatches && (
+        {hasBatches && genProgress.current > 0 && genProgress.current < genProgress.total && eta !== null && (
           <p className="text-xs text-muted-foreground tabular-nums flex items-center justify-center gap-1">
             <Clock className="h-3 w-3" />
-            {genProgress.current === 0
-              ? 'Estimando tempo...'
-              : genProgress.current >= genProgress.total
-                ? 'Concluído!'
-                : eta !== null
-                  ? formatTime(eta)
-                  : 'Calculando...'}
+            {formatTime(eta)}
           </p>
         )}
       </div>
