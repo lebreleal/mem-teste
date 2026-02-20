@@ -1,54 +1,71 @@
 
 
-# Tutor IA com resposta fluida estilo ChatGPT (streaming)
+## Bug: "Cartoes para hoje" nao diminui apos estudar
 
-## O que muda
+### Causa raiz identificada
 
-Atualmente, quando voce clica em "Explicar Assunto", "Explicar Alternativas" ou "Dica", o sistema espera a resposta INTEIRA da IA e so depois mostra tudo de uma vez. Isso parece robotico.
+A funcao do banco de dados `get_all_user_deck_stats` usa `CURRENT_DATE` (que e baseado em UTC) para determinar quais cards foram estudados "hoje". Porem, o fuso horario do Brasil e UTC-3, entao:
 
-A mudanca e fazer o texto aparecer **palavra por palavra** em tempo real, como no ChatGPT -- dando a sensacao de uma pessoa real digitando a explicacao.
+- **Agora no UTC**: 20 de fevereiro (00:21)
+- **Agora no Brasil**: 19 de fevereiro (21:21)
 
-## Custo
+Resultado: a funcao acha que **0 cards** foram estudados hoje, quando na verdade **15 cards** ja foram revisados no dia local do usuario.
 
-**Sem custo adicional.** E a mesma chamada de IA que ja existe, so muda a forma de entrega (streaming vs esperar tudo). O custo em creditos permanece identico (2 creditos Flash / 10 creditos Pro).
+A fila de estudo (`get_study_queue_limits`) ja recebe o fuso horario do usuario e funciona corretamente. O problema esta **apenas** na funcao que calcula as estatisticas do dashboard.
 
-## Mudancas tecnicas
+### Evidencia
 
-### 1. Edge Function `ai-tutor` -- habilitar streaming
+```text
+Funcao get_all_user_deck_stats (UTC):
+  new_reviewed_today = 0    <-- ERRADO
+  
+Consulta com fuso horario correto:
+  cards_reviewed = 15       <-- CORRETO
+```
 
-Atualmente a funcao espera a resposta completa da OpenAI e retorna `{ hint: "texto" }`. A mudanca:
+### Plano de correcao
 
-- Adicionar `stream: true` na chamada da OpenAI
-- Retornar o `response.body` diretamente como `text/event-stream` (mesmo padrao do `ai-chat` que ja funciona)
-- Mover o `logTokenUsage` para antes do stream (sem dados de usage exatos, como o ai-chat ja faz)
+**1. Atualizar `get_all_user_deck_stats` para aceitar timezone**
 
-### 2. Frontend `Study.tsx` -- novo `handleTutorRequest` com streaming
+Adicionar parametro `p_tz_offset_minutes` (igual ao `get_study_queue_limits`) e substituir todas as referencias a `CURRENT_DATE` por calculos com o offset do timezone do usuario.
 
-Substituir a chamada `invokeTutor()` (que espera tudo) por um fetch direto com leitura de stream SSE:
+Antes:
+```sql
+rl.reviewed_at::date = CURRENT_DATE
+```
 
-- Usar `fetch()` para chamar a edge function
-- Ler o stream com `ReadableStream` + `TextDecoder`
-- Parsear linhas SSE (`data: {...}`) extraindo `choices[0].delta.content`
-- Atualizar o estado (`hintResponse`, `explainResponse`, `mcExplainResponse`) a cada token recebido -- o texto vai crescendo progressivamente
+Depois:
+```sql
+(rl.reviewed_at + (p_tz_offset_minutes || ' minutes')::interval)::date 
+  = (now() + (p_tz_offset_minutes || ' minutes')::interval)::date
+```
 
-### 3. Frontend `FlashCard.tsx` -- renderizacao com ReactMarkdown
+**2. Atualizar `get_deck_stats` tambem**
 
-Trocar o `dangerouslySetInnerHTML` + `formatMarkdown` por `ReactMarkdown` nos blocos de resposta do tutor (hint, explain, mcExplain). Isso:
+A funcao `get_deck_stats` (usada na pagina de detalhe do deck) tem o mesmo problema com `CURRENT_DATE`. Aplicar a mesma correcao.
 
-- Renderiza markdown corretamente mesmo durante o streaming
-- Mantem consistencia com o `StudyChatModal` que ja usa `ReactMarkdown`
-- Adicionar um cursor piscante (CSS) no final do texto enquanto `isTutorLoading` estiver ativo
+**3. Atualizar o frontend para passar o timezone**
 
-### 4. Animacao de carregamento
+- Em `src/services/deckService.ts`: calcular `tzOffsetMinutes` e passar como parametro nas chamadas RPC
+- Em qualquer outro lugar que chame `get_deck_stats` ou `get_all_user_deck_stats`
 
-Manter o `TutorLoadingAnimation` existente apenas nos primeiros instantes (antes do primeiro token chegar). Assim que o primeiro token aparece, a animacao some e o texto comeca a fluir.
+### Detalhes tecnicos
 
-## Resumo dos arquivos
+**Migracao SQL** - Recriar as duas funcoes:
 
-| Arquivo | Mudanca |
-|---|---|
-| `supabase/functions/ai-tutor/index.ts` | Habilitar `stream: true` e retornar SSE stream |
-| `src/pages/Study.tsx` | Novo handleTutorRequest com leitura de stream SSE |
-| `src/components/FlashCard.tsx` | Usar ReactMarkdown + cursor piscante nos blocos de resposta |
-| `src/services/aiService.ts` | Funcao `invokeTutor` pode ser mantida (nao sera mais usada pelo Study, mas nao quebra nada) |
+- `get_all_user_deck_stats(p_user_id, p_tz_offset_minutes)`: adicionar parametro com default 0 para compatibilidade
+- `get_deck_stats(p_deck_id, p_tz_offset_minutes)`: idem
+
+**Arquivos a modificar:**
+
+1. **Nova migracao SQL**: Recriar ambas funcoes com suporte a timezone
+2. **`src/services/deckService.ts`**: Passar `p_tz_offset_minutes: -new Date().getTimezoneOffset()` na chamada RPC
+3. **Qualquer outro chamador de `get_deck_stats`**: Buscar e atualizar (provavelmente em `DeckDetail` ou hooks relacionados)
+
+### Impacto
+
+- Corrige o contador "Cartoes para hoje" no dashboard
+- Corrige o contador na pagina de detalhe do deck
+- Alinha o comportamento do dashboard com a fila de estudo (ambos usarao timezone local)
+- Nao quebra funcionalidade existente (parametro tem default 0)
 
