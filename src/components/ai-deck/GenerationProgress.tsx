@@ -1,11 +1,11 @@
 /**
- * Modern generation progress with smooth bar, animated phases, and credits counter.
+ * Generation progress with real-time ETA based on actual batch durations.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle } from 'lucide-react';
+import { BookOpen, Brain, Lightbulb, Sparkles, Zap, X, AlertTriangle, Clock } from 'lucide-react';
 import type { GenProgress } from './types';
 
 interface GenerationProgressProps {
@@ -13,14 +13,6 @@ interface GenerationProgressProps {
   onDismiss?: () => void;
   canDismiss?: boolean;
 }
-
-const PHASES = [
-  { icon: BookOpen, text: 'Extraindo conteúdo...' },
-  { icon: Brain, text: 'Analisando conceitos...' },
-  { icon: Lightbulb, text: 'Criando perguntas...' },
-  { icon: Sparkles, text: 'Gerando flashcards...' },
-  { icon: Zap, text: 'Finalizando cartões...' },
-];
 
 const TIPS = [
   '💡 Flashcards aumentam retenção em até 50%',
@@ -31,24 +23,62 @@ const TIPS = [
   '🏆 Consistência diária é o segredo',
 ];
 
-const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
-  const [phaseIdx, setPhaseIdx] = useState(0);
-  const [tipIdx, setTipIdx] = useState(0);
+const CONCURRENT_BATCHES = 3;
 
-  useEffect(() => {
-    const iv = setInterval(() => setPhaseIdx(p => (p + 1) % PHASES.length), 3000);
-    return () => clearInterval(iv);
-  }, []);
+function getPhase(percent: number): { icon: typeof BookOpen; text: string } {
+  if (percent <= 0) return { icon: BookOpen, text: 'Iniciando geração...' };
+  if (percent <= 30) return { icon: Brain, text: 'Processando conteúdo...' };
+  if (percent <= 70) return { icon: Lightbulb, text: 'Gerando flashcards...' };
+  if (percent < 100) return { icon: Sparkles, text: 'Finalizando cartões...' };
+  return { icon: Zap, text: 'Concluído!' };
+}
+
+function formatTime(ms: number): string {
+  if (ms <= 10_000) return 'Quase pronto...';
+  const seconds = Math.round(ms / 1000);
+  if (seconds > 90) {
+    const mins = Math.ceil(seconds / 60);
+    return `~${mins} min restantes`;
+  }
+  return `~${seconds}s restantes`;
+}
+
+function formatElapsed(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+}
+
+const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationProgressProps) => {
+  const [tipIdx, setTipIdx] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     const iv = setInterval(() => setTipIdx(p => (p + 1) % TIPS.length), 5000);
     return () => clearInterval(iv);
   }, []);
 
+  // Tick every second for elapsed time
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   const hasBatches = genProgress.total > 0;
   const progressValue = hasBatches ? Math.round((genProgress.current / genProgress.total) * 100) : 0;
-  const phase = PHASES[phaseIdx];
+  const phase = getPhase(progressValue);
   const PhaseIcon = phase.icon;
+
+  const eta = useMemo(() => {
+    if (!hasBatches || genProgress.current === 0) return null;
+    if (genProgress.current >= genProgress.total) return null;
+    const remainingGroups = Math.ceil((genProgress.total - genProgress.current) / CONCURRENT_BATCHES);
+    return remainingGroups * genProgress.avgBatchMs;
+  }, [hasBatches, genProgress.current, genProgress.total, genProgress.avgBatchMs]);
+
+  const elapsed = genProgress.startedAt > 0 ? now - genProgress.startedAt : 0;
 
   return (
     <div className="flex flex-col items-center justify-center py-10 sm:py-14 gap-6 animate-fade-in">
@@ -62,15 +92,28 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
         <div className="absolute inset-3 rounded-full bg-primary/5 animate-pulse" />
         <PhaseIcon
           className="relative z-10 h-8 w-8 text-primary transition-all duration-500"
-          key={phaseIdx}
+          key={progressValue > 70 ? 'final' : progressValue > 30 ? 'mid' : 'start'}
         />
       </div>
 
       {/* Status text */}
       <div className="text-center space-y-1 min-h-[2.5rem]">
-        <p className="text-sm font-semibold text-foreground animate-fade-in" key={phaseIdx}>
+        <p className="text-sm font-semibold text-foreground">
           {phase.text}
         </p>
+        {/* ETA */}
+        {hasBatches && (
+          <p className="text-xs text-muted-foreground tabular-nums flex items-center justify-center gap-1">
+            <Clock className="h-3 w-3" />
+            {genProgress.current === 0
+              ? 'Estimando tempo...'
+              : genProgress.current >= genProgress.total
+                ? 'Concluído!'
+                : eta !== null
+                  ? formatTime(eta)
+                  : 'Calculando...'}
+          </p>
+        )}
       </div>
 
       {/* Smooth progress bar */}
@@ -83,9 +126,10 @@ const GenerationProgress = ({ genProgress, onDismiss, canDismiss }: GenerationPr
               ['--progress-transition' as string]: 'width 700ms ease-out',
             }}
           />
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}
-          </span>
+          <div className="flex justify-between w-full text-xs text-muted-foreground tabular-nums">
+            <span>Lote {Math.min(genProgress.current + 1, genProgress.total)} de {genProgress.total}</span>
+            {elapsed > 0 && <span>{formatElapsed(elapsed)} decorridos</span>}
+          </div>
         </div>
       )}
 
