@@ -282,7 +282,15 @@ ${getOutputExamples(formats)}`;
       total_tokens: aiData.usage?.total_tokens || 0,
     };
 
-    let jsonStr = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    // Clean AI response: strip markdown fences, BOM, zero-width chars, control chars
+    let jsonStr = rawContent
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // strip control chars except \n \r \t
+      .trim();
+
     const m = jsonStr.match(/\[[\s\S]*\]/);
     if (m) {
       jsonStr = m[0];
@@ -290,17 +298,18 @@ ${getOutputExamples(formats)}`;
       // Try to repair truncated JSON array (no closing bracket)
       const arrStart = rawContent.indexOf('[');
       if (arrStart !== -1) {
-        // Extract up to the last complete object (ends with })
         const raw = rawContent.slice(arrStart);
         const lastBrace = raw.lastIndexOf('}');
         if (lastBrace !== -1) {
-          // Take everything up to and including the last complete }, trim trailing comma
           jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
         } else {
           jsonStr = '[]';
         }
       }
     }
+
+    // Fix common JSON issues: trailing commas before ] or }
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
 
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
@@ -318,9 +327,15 @@ ${getOutputExamples(formats)}`;
           }
         }
       } catch {
-        console.error("Parse failed, raw:", rawContent.substring(0, 500));
-        if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+        // Third attempt: try to fix unescaped newlines inside strings
+        try {
+          const fixed = jsonStr.replace(/"([^"]*)\n([^"]*)"/g, (_, a, b) => `"${a}\\n${b}"`);
+          cards = JSON.parse(fixed);
+        } catch {
+          console.error("Parse failed, raw:", rawContent.substring(0, 500));
+          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+        }
       }
     }
 
