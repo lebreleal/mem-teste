@@ -1,85 +1,72 @@
 
 
-# Previsao Realista de Tempo na Geracao de Cards
+# Progresso Suave Universal (1 a N lotes)
 
 ## Problema
 
-A tela de loading atual mostra apenas "Lote X de Y" com fases animadas aleatorias. O usuario nao tem ideia de quanto tempo falta. As fases ("Extraindo conteudo...", "Analisando conceitos...") sao cosmeticas e nao refletem o estado real.
+O plano anterior so resolvia lote unico (total === 1). Mas com 2, 3, 4, 5 lotes o progresso ainda pula em blocos grandes (50%, 33%, 25%...). Precisamos de progresso suave para TODOS os casos.
 
-## Solucao: Timer baseado em velocidade real dos lotes
+## Solucao: Progresso simulado que interpola entre lotes reais
 
-A unica metrica confiavel que temos e o **tempo real que cada lote leva para completar**. Ao medir isso, podemos calcular a media e extrapolar o tempo restante com precisao.
+A barra nunca pula. Ela avanca suavemente e usa os lotes completados como "checkpoints" reais.
 
 ```text
-Lote 1: 23s  |  Lote 2: 18s  |  Media: 20.5s
-Faltam 3 lotes -> ~62s restantes -> "~1 min restante"
+Exemplo com 2 lotes:
+  0s  -> 0%   (simulando...)
+  5s  -> 12%  (simulando...)
+  15s -> 35%  (simulando, trava em 45%)
+  20s -> Lote 1 completa! Target sobe pra 50%, barra alcanca
+  21s -> 52%  (simulando de novo...)
+  35s -> 78%  (simulando, trava em 90%)
+  40s -> Lote 2 completa! -> 100%
 ```
 
-## Mudancas
+## Como funciona
 
-### 1. Expandir GenProgress com dados de tempo (`types.ts`)
+O componente mantem um `displayPercent` local que:
 
-Adicionar campos ao tipo `GenProgress`:
+1. Calcula o **target real** baseado nos lotes completados: `(current / total) * 100`
+2. Define um **teto simulado**: o ponto medio entre o target atual e o proximo checkpoint, para nunca "ultrapassar" a realidade. Formula: `target + ((nextTarget - target) * 0.9)` — ou seja, avanca ate 90% do proximo trecho
+3. A cada segundo, incrementa `displayPercent` com desaceleracao (avanca rapido longe do teto, devagar perto)
+4. Quando um lote completa, o target sobe e a barra continua avancando suavemente
 
-- `startedAt`: timestamp do inicio da geracao
-- `lastBatchMs`: duracao do ultimo lote (ms)
-- `avgBatchMs`: media movel de todos os lotes completados
+## Regras de exibicao
 
-### 2. Medir tempo real dos lotes (`useAIDeckFlow.ts`)
-
-No loop de geracao, registrar o tempo antes e depois de cada grupo de lotes paralelos:
-
-- Antes do `Promise.allSettled` -> `Date.now()`
-- Depois -> calcular duracao e atualizar media movel
-- Passar esses dados via `setGenProgress`
-
-### 3. Mostrar tempo restante estimado (`GenerationProgress.tsx`)
-
-Substituir as fases cosmeticas por informacao real:
-
-- **Barra de progresso**: mantida (baseada em lotes)
-- **Texto principal**: fase real baseada no progresso (nao em timer aleatorio)
-- **Tempo estimado**: "~X min restantes" ou "~Xs restantes" calculado como `(totalBatches - currentBatch) * avgBatchMs`
-- **Tempo decorrido**: "Xa decorridos" como referencia
-
-A logica de exibicao:
-- Antes do primeiro lote completar: "Estimando tempo..."
-- Apos primeiro lote: "~X min restantes" (baseado na media real)
-- Ultimo lote: "Finalizando..."
-- Formatar: acima de 60s mostra minutos, abaixo mostra segundos
-
-### 4. Fases realistas em vez de aleatorias
-
-As fases atuais ciclam por timer a cada 3s, sem relacao com o estado real. Mudar para fases baseadas no progresso:
-
-- 0% -> "Iniciando geracao..."
-- 1-30% -> "Processando conteudo..."
-- 31-70% -> "Gerando flashcards..."
-- 71-99% -> "Finalizando cartoes..."
-- 100% -> "Concluido!"
+- **Barra**: usa `displayPercent` (suave) em vez do progresso real (discreto)
+- **Fases**: baseadas no `displayPercent` (Processando/Gerando/Finalizando)
+- **ETA**: mantido para multi-lote (avgBatchMs), para lote unico mostra apenas tempo decorrido
+- **Texto inferior**: apenas tempo decorrido, sem "Lote X de Y"
 
 ## Secao Tecnica
 
-**Arquivos modificados:**
+**Arquivo modificado:** `src/components/ai-deck/GenerationProgress.tsx`
 
-1. `src/components/ai-deck/types.ts` -- adicionar campos de tempo ao GenProgress
-2. `src/components/ai-deck/useAIDeckFlow.ts` -- medir tempo dos lotes e propagar via genProgress
-3. `src/components/ai-deck/GenerationProgress.tsx` -- exibir tempo estimado e fases realistas
-
-**Calculo de estimativa:**
+**Logica do displayPercent:**
 
 ```text
-avgBatchMs = soma de duracoes / lotes completados
-remainingMs = (total - current) * avgBatchMs
-// Para grupos paralelos (3 lotes simultaneos):
-// a duracao do grupo e o max dos 3 lotes, entao a media ja captura isso naturalmente
+// A cada tick (1s):
+const realPercent = (current / total) * 100;
+const nextCheckpoint = ((current + 1) / total) * 100;
+const ceiling = realPercent + (nextCheckpoint - realPercent) * 0.9;
+
+// Se completou tudo:
+if (current >= total) displayPercent = 100;
+// Senao, incrementa com desaceleracao:
+else {
+  const distToCeiling = ceiling - displayPercent;
+  const increment = Math.max(0.3, distToCeiling * 0.08);
+  displayPercent = Math.min(ceiling, displayPercent + increment);
+}
 ```
 
-**Formato de exibicao:**
+**Comportamento por quantidade de lotes:**
 
-```text
-remainingMs > 90000 -> "~X min restantes"
-remainingMs > 10000 -> "~Xs restantes"  
-remainingMs <= 10000 -> "Quase pronto..."
-```
+| Lotes | Sem mudanca | Com mudanca |
+|-------|-------------|-------------|
+| 1 | 0% -> 100% (pulo) | 0% -> 5% -> 20% -> 55% -> 90% (trava) -> 100% |
+| 2 | 0% -> 50% -> 100% | 0% -> 15% -> 40% (lote 1) -> 55% -> 80% (lote 2) -> 100% |
+| 3 | 0% -> 33% -> 66% -> 100% | Progresso suave com 3 checkpoints |
+| 5+ | Pulos de 20% | Progresso quase continuo |
+
+**Nenhuma mudanca no useAIDeckFlow.ts** — a logica de geracao permanece identica.
 
