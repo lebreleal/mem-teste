@@ -4,8 +4,10 @@ import {
   ArrowLeft, CalendarCheck, BookOpen, Clock, Target, AlertTriangle,
   Pencil, Trash2, CalendarIcon, Brain,
   Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
-  GripVertical, MoreVertical, Pause, X as XIcon
+  GripVertical, MoreVertical, Pause, X as XIcon, Play
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import {
@@ -125,7 +127,45 @@ function StudyLoadBar({ estimatedMinutes, capacityMinutes, recommendedMinutes, r
   );
 }
 
-// ─── Main Component ─────────────────────────────────────
+// ─── Deck Study Card (Carousel Item) ──────────────────
+function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: any; avgSecondsPerCard: number }) {
+  const navigate = useNavigate();
+  const totalCards = deck.card_count ?? 0;
+  const newCards = deck.new_count ?? 0;
+  const reviewCards = deck.review_count ?? 0;
+  const pendingCards = newCards + reviewCards;
+  const doneCards = Math.max(0, totalCards - pendingCards);
+  const progressPercent = totalCards > 0 ? Math.round((doneCards / totalCards) * 100) : 0;
+  const estimatedMinutes = Math.round((pendingCards * avgSecondsPerCard) / 60);
+
+  return (
+    <div className="min-w-[260px] max-w-[300px] snap-start flex flex-col rounded-xl border bg-card p-4 space-y-3 shrink-0">
+      <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
+      <div className="flex gap-1.5 flex-wrap">
+        {newCards > 0 && <Badge variant="outline" className="text-[10px] h-5">{newCards} novos</Badge>}
+        {reviewCards > 0 && <Badge variant="outline" className="text-[10px] h-5">{reviewCards} revisões</Badge>}
+        {pendingCards === 0 && <Badge variant="secondary" className="text-[10px] h-5">✓ Concluído</Badge>}
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{pendingCards > 0 ? 'Inicie seu estudo' : 'Tudo em dia!'}</span>
+        <span className="flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Est. {formatMinutes(estimatedMinutes)}
+        </span>
+      </div>
+      <Progress value={progressPercent} className="h-1.5" />
+      <p className="text-[10px] text-muted-foreground">{progressPercent}% concluído</p>
+      <div className="flex items-center gap-2 mt-auto">
+        <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
+          <Play className="h-3 w-3 mr-1" /> Estudar
+        </Button>
+        <Button size="icon" variant="outline" className="h-8 w-8 rounded-full shrink-0" onClick={() => navigate(`/deck/${deck.id}`)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -439,6 +479,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
   const { toast } = useToast();
   const [showCatchUp, setShowCatchUp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pending' | 'done'>('pending');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [editingWeekly, setEditingWeekly] = useState(false);
@@ -552,19 +593,65 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
 
       <main className="container mx-auto px-4 py-4 max-w-lg space-y-3">
 
-        {/* ═══ HERO CARD: Status + Carga + Ação ═══ */}
+        {/* ═══ TABS + WEEK HEADER ═══ */}
+        {(() => {
+          const weekStart = new Date();
+          const dayOfWeek = weekStart.getDay();
+          weekStart.setDate(weekStart.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          const fmtDay = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+          const pendingDecks = planDecks.filter((d: any) => (d.new_count ?? 0) + (d.review_count ?? 0) > 0);
+          const doneDecks = planDecks.filter((d: any) => (d.new_count ?? 0) + (d.review_count ?? 0) === 0);
+          const filteredDecks = activeTab === 'pending' ? pendingDecks : doneDecks;
+          const completedCount = doneDecks.length;
+
+          return (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pending' | 'done')} className="flex-1">
+                  <TabsList className="h-9 w-full">
+                    <TabsTrigger value="pending" className="flex-1 text-xs">Para estudar</TabsTrigger>
+                    <TabsTrigger value="done" className="flex-1 text-xs">Concluídos</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                  Semana: {fmtDay(weekStart)} a {fmtDay(weekEnd)}
+                </span>
+              </div>
+
+              {/* Deck counter */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Baralhos da semana</h3>
+                  <p className="text-xs text-muted-foreground">{completedCount} de {planDecks.length} concluídos</p>
+                </div>
+              </div>
+
+              {/* ═══ HORIZONTAL DECK CAROUSEL ═══ */}
+              {filteredDecks.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      {activeTab === 'pending' ? '🎉 Tudo concluído por hoje!' : 'Nenhum baralho concluído ainda.'}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 scrollbar-hide -mx-4 px-4">
+                  {filteredDecks.map((deck: any) => (
+                    <DeckStudyCard key={deck.id} deck={deck} avgSecondsPerCard={avgSecondsPerCard} />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ═══ HERO CARD: Carga + Termômetro ═══ */}
         <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
           <CardContent className="p-4 space-y-4">
-            {metrics?.weeklyCardData && (
-              <WeeklyCardChart data={metrics.weeklyCardData} status={healthStatus} />
-            )}
-
-            {metrics && metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
-              <p className="text-xs text-center text-muted-foreground">
-                Consistência: {metrics.planHealthPercent}% — estude hoje para melhorar!
-              </p>
-            )}
-
             {metrics && (
               <StudyLoadBar
                 estimatedMinutes={metrics.estimatedMinutesToday}
@@ -575,6 +662,12 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                 capacityCards={metrics.capacityCardsToday}
                 recommendedCards={metrics.requiredCardsPerDay}
               />
+            )}
+
+            {metrics && metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
+              <p className="text-xs text-center text-muted-foreground">
+                Consistência: {metrics.planHealthPercent}% — estude hoje para melhorar!
+              </p>
             )}
 
             {needsAttention && (
@@ -592,6 +685,15 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
             )}
           </CardContent>
         </Card>
+
+        {/* ═══ WEEKLY CARD CHART ═══ */}
+        {metrics?.weeklyCardData && (
+          <Card>
+            <CardContent className="p-4">
+              <WeeklyCardChart data={metrics.weeklyCardData} status={healthStatus} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* ═══ MEUS OBJETIVOS (compact) ═══ */}
         <Card>
@@ -802,36 +904,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
           </CardContent>
         </Card>
 
-        {/* ═══ PRIORIDADE DOS BARALHOS (drag-and-drop) ═══ */}
-        <Card>
-          <CardContent className="p-4 space-y-2">
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Prioridade dos Baralhos</h3>
-
-            {planDecks.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-3">Nenhum baralho no plano.</p>
-            )}
-
-            <div className="space-y-1">
-              {displayItems.map((deck: any) => {
-                const handlers = getHandlers(deck);
-                return (
-                  <div
-                    key={deck.id}
-                    {...handlers}
-                    className={cn(
-                      'flex items-center gap-2 p-2 rounded-xl border bg-card hover:bg-muted/30 transition-colors',
-                      handlers.className
-                    )}
-                  >
-                    <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0 cursor-grab active:cursor-grabbing" />
-                    <p className="text-sm font-medium truncate flex-1">{deck.name}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
         {!needsAttention && metrics && metrics.totalReview > 0 && (
           <Button variant="outline" className="w-full" onClick={() => setShowCatchUp(true)}>
             <RotateCcw className="h-4 w-4 mr-2" /> Limpar Atraso ({metrics.totalReview} revisões)
@@ -853,34 +925,60 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
             <DialogTitle>Configurações do Plano</DialogTitle>
             <DialogDescription>Editar ou excluir seu plano de estudos.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 pt-2">
-            <Button variant="outline" className="w-full justify-start" onClick={() => { setShowSettings(false); onEdit(); }}>
-              <Pencil className="h-4 w-4 mr-2" /> Editar plano completo
-            </Button>
-            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Seu plano de estudos será permanentemente excluído.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    onClick={() => { setShowSettings(false); setShowDeleteConfirm(false); onDelete(); }}
-                  >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          <div className="space-y-4 pt-2">
+            {/* Drag-and-drop reorder */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Prioridade dos Baralhos</h4>
+              <p className="text-[10px] text-muted-foreground">Arraste para reordenar a prioridade de estudo.</p>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {displayItems.map((deck: any) => {
+                  const handlers = getHandlers(deck);
+                  return (
+                    <div
+                      key={deck.id}
+                      {...handlers}
+                      className={cn(
+                        'flex items-center gap-2 p-2 rounded-xl border bg-card hover:bg-muted/30 transition-colors',
+                        handlers.className
+                      )}
+                    >
+                      <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0 cursor-grab active:cursor-grabbing" />
+                      <p className="text-sm font-medium truncate flex-1">{deck.name}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Button variant="outline" className="w-full justify-start" onClick={() => { setShowSettings(false); onEdit(); }}>
+                <Pencil className="h-4 w-4 mr-2" /> Editar plano completo
+              </Button>
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir plano
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação não pode ser desfeita. Seu plano de estudos será permanentemente excluído.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => { setShowSettings(false); setShowDeleteConfirm(false); onDelete(); }}
+                    >
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
