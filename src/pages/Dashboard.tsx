@@ -9,6 +9,8 @@ import { useState, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
+import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -43,6 +45,7 @@ const Dashboard = () => {
   const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
+  const { plan, avgSecondsPerCard } = useStudyPlan();
 
   // Handle payment return
   useEffect(() => {
@@ -262,6 +265,15 @@ const Dashboard = () => {
             </button>
           ))}
         </div>
+
+        {/* Deck Carousel - Today's study cards */}
+        {!state.isLoading && state.decks.length > 0 && (
+          <DeckCarousel
+            decks={state.decks}
+            avgSecondsPerCard={avgSecondsPerCard}
+            hasPlan={!!plan}
+          />
+        )}
 
         <DashboardActions
           currentFolderId={state.currentFolderId}
