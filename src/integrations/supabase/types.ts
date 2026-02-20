@@ -1049,6 +1049,7 @@ export type Database = {
           target_date: string | null
           updated_at: string
           user_id: string
+          weekly_minutes: Json | null
         }
         Insert: {
           created_at?: string
@@ -1058,6 +1059,7 @@ export type Database = {
           target_date?: string | null
           updated_at?: string
           user_id: string
+          weekly_minutes?: Json | null
         }
         Update: {
           created_at?: string
@@ -1067,6 +1069,7 @@ export type Database = {
           target_date?: string | null
           updated_at?: string
           user_id?: string
+          weekly_minutes?: Json | null
         }
         Relationships: [
           {

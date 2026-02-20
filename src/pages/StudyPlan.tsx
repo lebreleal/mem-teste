@@ -12,6 +12,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useStudyPlan } from '@/hooks/useStudyPlan';
+import { useStudyPlan, getMinutesForDay, getWeeklyAvgMinutes, DAY_LABELS, type DayKey, type WeeklyMinutes } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
@@ -74,17 +75,18 @@ function HealthRing({ status, percent }: { status: keyof typeof HEALTH_CONFIG; p
 }
 
 // ─── Study Load Bar (Termômetro de Tempo) ─────────────
-function StudyLoadBar({ estimatedMinutes, dailyMinutes, reviewMin, newMin }: {
-  estimatedMinutes: number; dailyMinutes: number; reviewMin: number; newMin: number;
+function StudyLoadBar({ estimatedMinutes, capacityMinutes, recommendedMinutes, reviewMin, newMin, capacityCards, recommendedCards }: {
+  estimatedMinutes: number; capacityMinutes: number; recommendedMinutes: number | null;
+  reviewMin: number; newMin: number; capacityCards: number; recommendedCards: number | null;
 }) {
-  const maxDisplay = Math.max(dailyMinutes * 2, 150);
+  const maxDisplay = Math.max(capacityMinutes * 2, 150);
   const percent = Math.min(100, (estimatedMinutes / maxDisplay) * 100);
-  const g = (dailyMinutes * 0.7 / maxDisplay) * 100;
-  const y = (dailyMinutes / maxDisplay) * 100;
-  const o = (dailyMinutes * 1.5 / maxDisplay) * 100;
+  const g = (capacityMinutes * 0.7 / maxDisplay) * 100;
+  const y = (capacityMinutes / maxDisplay) * 100;
+  const o = (capacityMinutes * 1.5 / maxDisplay) * 100;
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium text-foreground">Carga de hoje</span>
         <span className="text-xl font-bold text-foreground">{formatMinutes(estimatedMinutes)}</span>
@@ -101,9 +103,21 @@ function StudyLoadBar({ estimatedMinutes, dailyMinutes, reviewMin, newMin }: {
           style={{ left: `${Math.min(percent, 99)}%` }}
         />
       </div>
-      <p className="text-xs text-muted-foreground">
-        {formatMinutes(reviewMin)} Revisões + {formatMinutes(newMin)} Novos Cards
-      </p>
+      <div className="flex flex-col gap-0.5">
+        <p className="text-xs text-muted-foreground">
+          {formatMinutes(reviewMin)} Revisões + {formatMinutes(newMin)} Novos Cards
+        </p>
+        <div className="flex items-center gap-3 text-[11px]">
+          <span className="text-muted-foreground">
+            🎯 Sua capacidade: <strong className="text-foreground">{capacityCards} cards</strong> ({formatMinutes(capacityMinutes)})
+          </span>
+          {recommendedCards != null && recommendedMinutes != null && (
+            <span className="text-muted-foreground">
+              📊 Sistema: <strong className="text-foreground">{recommendedCards} cards</strong>
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -424,14 +438,21 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
+  const [editingWeekly, setEditingWeekly] = useState(false);
   const [tempMinutes, setTempMinutes] = useState(plan.daily_minutes);
+  const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(
+    plan.weekly_minutes ?? { mon: plan.daily_minutes, tue: plan.daily_minutes, wed: plan.daily_minutes, thu: plan.daily_minutes, fri: plan.daily_minutes, sat: plan.daily_minutes, sun: plan.daily_minutes }
+  );
   const [editingDate, setEditingDate] = useState(false);
   const [tempDate, setTempDate] = useState<Date | undefined>(plan.target_date ? new Date(plan.target_date) : undefined);
+  const [editingRetention, setEditingRetention] = useState(false);
+  const [tempRetention, setTempRetention] = useState(Math.round((metrics?.avgRetention ?? 0.9) * 100));
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
-  const health = HEALTH_CONFIG[healthStatus];
   const healthPercent = metrics?.planHealthPercent ?? 0;
   const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
+
+  const todayCapacity = metrics?.todayCapacityMinutes ?? plan.daily_minutes;
 
   const planDecks = useMemo(() => {
     const ids = plan.deck_ids ?? [];
@@ -467,8 +488,20 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
 
   const handleSaveMinutes = async () => {
     try {
-      await onUpdatePlan({ daily_minutes: tempMinutes });
+      await onUpdatePlan({ daily_minutes: tempMinutes, weekly_minutes: null });
       toast({ title: 'Tempo atualizado!' });
+      setEditingMinutes(false);
+    } catch {
+      toast({ title: 'Erro ao atualizar', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveWeekly = async () => {
+    try {
+      const avg = Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7);
+      await onUpdatePlan({ daily_minutes: avg, weekly_minutes: tempWeekly });
+      toast({ title: 'Horário semanal salvo!' });
+      setEditingWeekly(false);
       setEditingMinutes(false);
     } catch {
       toast({ title: 'Erro ao atualizar', variant: 'destructive' });
@@ -485,11 +518,28 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
     }
   };
 
+  const handleSaveRetention = async () => {
+    try {
+      // Update retention for all decks in the plan
+      const deckIds = plan.deck_ids ?? [];
+      const retention = tempRetention / 100;
+      for (const id of deckIds) {
+        await supabase.from('decks').update({ requested_retention: retention }).eq('id', id);
+      }
+      toast({ title: 'Retenção atualizada!' });
+      setEditingRetention(false);
+    } catch {
+      toast({ title: 'Erro ao atualizar', variant: 'destructive' });
+    }
+  };
+
+  const isUsingWeekly = !!plan.weekly_minutes;
+
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
@@ -503,27 +553,26 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         {/* ═══ HERO CARD: Status + Carga + Ação ═══ */}
         <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
           <CardContent className="p-4 space-y-4">
-            {/* Health Ring */}
             <HealthRing status={healthStatus} percent={healthPercent} />
 
-            {/* Consistency alert inline */}
             {metrics && metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
               <p className="text-xs text-center text-muted-foreground">
                 Consistência: {metrics.planHealthPercent}% — estude hoje para melhorar!
               </p>
             )}
 
-            {/* Study Load Bar */}
             {metrics && (
               <StudyLoadBar
                 estimatedMinutes={metrics.estimatedMinutesToday}
-                dailyMinutes={plan.daily_minutes}
+                capacityMinutes={todayCapacity}
+                recommendedMinutes={metrics.requiredCardsPerDay != null ? Math.round((metrics.requiredCardsPerDay * metrics.avgSecondsPerCard) / 60) : null}
                 reviewMin={metrics.reviewMinutes}
                 newMin={metrics.newMinutes}
+                capacityCards={metrics.capacityCardsToday}
+                recommendedCards={metrics.requiredCardsPerDay}
               />
             )}
 
-            {/* Contextual Action Button */}
             {needsAttention && (
               <Button
                 className="w-full"
@@ -581,75 +630,168 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
               </div>
             </div>
 
-            {/* Pilar 2: Retenção */}
+            {/* Pilar 2: Retenção (editable) */}
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Brain className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1">
                 <p className="text-[11px] text-muted-foreground">Taxa de retenção desejada</p>
-                <p className="text-sm font-semibold">{Math.round((metrics?.avgRetention ?? 0.9) * 100)}% de Retenção</p>
-              </div>
-            </div>
-
-            {/* Pilar 3: Capacidade */}
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Clock className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="text-[11px] text-muted-foreground">Capacidade diária de estudo</p>
-                {editingMinutes ? (
+                {editingRetention ? (
                   <div className="space-y-2 mt-1">
                     <div className="text-center">
-                      <span className="text-lg font-bold text-primary">{formatMinutes(tempMinutes)}</span>
+                      <span className="text-lg font-bold text-primary">{tempRetention}%</span>
                     </div>
                     <Slider
-                      value={[tempMinutes]}
-                      onValueChange={([v]) => setTempMinutes(v)}
-                      min={15} max={240} step={15}
+                      value={[tempRetention]}
+                      onValueChange={([v]) => setTempRetention(v)}
+                      min={70} max={99} step={1}
                     />
-                    {impactMessage && (
-                      <div className={cn(
-                        'rounded-lg px-3 py-1.5 text-xs',
-                        impactMessage.tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
-                        impactMessage.tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400',
-                        impactMessage.tone === 'neutral' && 'bg-muted text-muted-foreground',
-                      )}>
-                        {impactMessage.text}
-                      </div>
-                    )}
+                    <p className="text-[10px] text-muted-foreground">
+                      {tempRetention >= 95 ? '⚠️ Alta retenção = intervalos mais curtos = mais revisões' :
+                       tempRetention <= 80 ? '💡 Retenção baixa = intervalos longos = menos revisões' :
+                       '✅ Retenção equilibrada (recomendado: 85-92%)'}
+                    </p>
                     <div className="flex gap-1">
-                      <Button size="sm" className="h-7 text-xs" onClick={handleSaveMinutes}>Salvar</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingMinutes(false); setTempMinutes(plan.daily_minutes); }}>Cancelar</Button>
+                      <Button size="sm" className="h-7 text-xs" onClick={handleSaveRetention}>Salvar</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingRetention(false); setTempRetention(Math.round((metrics?.avgRetention ?? 0.9) * 100)); }}>Cancelar</Button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditingMinutes(true)} className="text-sm font-semibold hover:text-primary transition-colors flex items-center gap-1">
-                    {formatMinutes(plan.daily_minutes)}/dia <span className="text-muted-foreground font-normal">({metrics?.cardsPerDay ?? '?'} cards/dia)</span>
+                  <button onClick={() => setEditingRetention(true)} className="text-sm font-semibold hover:text-primary transition-colors flex items-center gap-1">
+                    {Math.round((metrics?.avgRetention ?? 0.9) * 100)}% de Retenção
                     <Pencil className="h-3 w-3 text-muted-foreground" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Coverage Progress + inline coverage alert */}
-            {plan.target_date && metrics && metrics.coveragePercent != null && (
-              <div className="pt-3 border-t space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Cobertura</span>
-                  <span className="font-semibold">{metrics.coveragePercent}%</span>
-                </div>
-                <Progress value={metrics.coveragePercent} className="h-2" />
-                {metrics.requiredCardsPerDay != null && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Necessário: {metrics.requiredCardsPerDay} cards/dia para cobrir 100%
-                  </p>
-                )}
-                {metrics.coveragePercent < 50 && (
-                  <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-xs">
-                    Seu ritmo atual pode não ser suficiente. Considere aumentar o tempo diário.
+            {/* Pilar 3: Capacidade (daily or weekly) */}
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Clock className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[11px] text-muted-foreground">Capacidade de estudo</p>
+                {editingMinutes || editingWeekly ? (
+                  <div className="space-y-3 mt-1">
+                    {/* Toggle between daily/weekly */}
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm" variant={!editingWeekly ? 'default' : 'outline'}
+                        className="h-7 text-xs flex-1"
+                        onClick={() => setEditingWeekly(false)}
+                      >
+                        Igual todo dia
+                      </Button>
+                      <Button
+                        size="sm" variant={editingWeekly ? 'default' : 'outline'}
+                        className="h-7 text-xs flex-1"
+                        onClick={() => setEditingWeekly(true)}
+                      >
+                        Por dia da semana
+                      </Button>
+                    </div>
+
+                    {editingWeekly ? (
+                      /* Weekly editor */
+                      <div className="space-y-2">
+                        {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
+                          <div key={day} className="flex items-center gap-2">
+                            <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[day]}</span>
+                            <Slider
+                              value={[tempWeekly[day]]}
+                              onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))}
+                              min={0} max={240} step={15}
+                              className="flex-1"
+                            />
+                            <span className="text-xs font-semibold w-12 text-right">{formatMinutes(tempWeekly[day])}</span>
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-muted-foreground text-center">
+                          Média: {formatMinutes(Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7))}/dia
+                        </p>
+                        <div className="flex gap-1">
+                          <Button size="sm" className="h-7 text-xs" onClick={handleSaveWeekly}>Salvar</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingWeekly(false); setEditingMinutes(false); }}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Daily editor */
+                      <div className="space-y-2">
+                        <div className="text-center">
+                          <span className="text-lg font-bold text-primary">{formatMinutes(tempMinutes)}</span>
+                        </div>
+                        <Slider
+                          value={[tempMinutes]}
+                          onValueChange={([v]) => setTempMinutes(v)}
+                          min={15} max={240} step={15}
+                        />
+                        {impactMessage && (
+                          <div className={cn(
+                            'rounded-lg px-3 py-1.5 text-xs',
+                            impactMessage.tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+                            impactMessage.tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400',
+                            impactMessage.tone === 'neutral' && 'bg-muted text-muted-foreground',
+                          )}>
+                            {impactMessage.text}
+                          </div>
+                        )}
+                        <div className="flex gap-1">
+                          <Button size="sm" className="h-7 text-xs" onClick={handleSaveMinutes}>Salvar</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingMinutes(false); setTempMinutes(plan.daily_minutes); }}>Cancelar</Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <button onClick={() => { setEditingMinutes(true); setEditingWeekly(isUsingWeekly); }} className="text-sm font-semibold hover:text-primary transition-colors flex items-center gap-1">
+                    {isUsingWeekly ? (
+                      <>Hoje: {formatMinutes(todayCapacity)} <span className="text-muted-foreground font-normal">(média {formatMinutes(getWeeklyAvgMinutes(plan))}/dia)</span></>
+                    ) : (
+                      <>{formatMinutes(plan.daily_minutes)}/dia <span className="text-muted-foreground font-normal">({metrics?.cardsPerDay ?? '?'} cards/dia)</span></>
+                    )}
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Coverage Progress + projected completion */}
+            {metrics && (
+              <div className="pt-3 border-t space-y-2">
+                {plan.target_date && metrics.coveragePercent != null && (
+                  <>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Cobertura</span>
+                      <span className="font-semibold">{metrics.coveragePercent}%</span>
+                    </div>
+                    <Progress value={metrics.coveragePercent} className="h-2" />
+                    <div className="space-y-0.5">
+                      {metrics.requiredCardsPerDay != null && (
+                        <p className="text-[11px] text-muted-foreground">
+                          📊 Sistema recomenda: <strong>{metrics.requiredCardsPerDay} cards/dia</strong> para 100% até a meta
+                        </p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        🎯 Sua capacidade: <strong>{metrics.capacityCardsToday} cards/dia</strong>
+                        {metrics.coveragePercent > 100 && ' — você terminará antes da data!'}
+                      </p>
+                    </div>
+                    {metrics.coveragePercent < 50 && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-xs">
+                        Seu ritmo pode não ser suficiente. Considere aumentar o tempo diário.
+                      </div>
+                    )}
+                  </>
+                )}
+                {metrics.projectedCompletionDate && (
+                  <p className="text-[11px] text-muted-foreground">
+                    📅 Previsão de conclusão: <strong>{format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}</strong>
+                    {plan.target_date && metrics.coveragePercent != null && metrics.coveragePercent >= 100 && (
+                      <span className="text-emerald-600 dark:text-emerald-400"> (antes da meta!)</span>
+                    )}
+                  </p>
                 )}
               </div>
             )}
@@ -686,7 +828,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
           </CardContent>
         </Card>
 
-        {/* Catch-up button if has reviews but no critical alert */}
         {!needsAttention && metrics && metrics.totalReview > 0 && (
           <Button variant="outline" className="w-full" onClick={() => setShowCatchUp(true)}>
             <RotateCcw className="h-4 w-4 mr-2" /> Limpar Atraso ({metrics.totalReview} revisões)
@@ -702,7 +843,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         avgSecondsPerCard={avgSecondsPerCard}
       />
 
-      {/* Settings Dialog (contains Edit + Delete with confirmation) */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
