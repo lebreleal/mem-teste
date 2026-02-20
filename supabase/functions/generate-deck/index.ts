@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash-lite";
     const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = textContent.slice(0, 10000);
+    const trimmedContent = textContent.slice(0, 16000);
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 50) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
@@ -200,7 +200,7 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 8192 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 12000 }),
     });
 
     if (!aiResponse.ok) {

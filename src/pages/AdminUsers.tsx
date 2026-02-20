@@ -271,7 +271,7 @@ const AdminUsers = () => {
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Consumo dos últimos 30 dias</p>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       disabled={refreshingAI}
                       onClick={async () => {
