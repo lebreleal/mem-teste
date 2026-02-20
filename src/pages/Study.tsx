@@ -62,6 +62,7 @@ const Study = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [explainInChat, setExplainInChat] = useState<string | false>(false);
   const [chatHasMessages, setChatHasMessages] = useState(false);
+  const chatClearRef = useRef<(() => void) | null>(null);
 
   // Undo state: store the previous queue snapshot + reviewCount + card DB state
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -523,10 +524,12 @@ const Study = () => {
             onUndo={handleUndo}
             onOpenExplainChat={(options) => {
               const action = options?.action || 'explain';
-              // Reset the response state so old value doesn't interfere
+              // Reset response states
               if (action === 'explain') setExplainResponse(null);
               if (action === 'explain-mc') setMcExplainResponse(null);
               setExplainInChat(action);
+              // Open modal IMMEDIATELY and signal to clear old messages
+              chatClearRef.current?.();
               setChatOpen(true);
               handleTutorRequest(options || { action: 'explain' });
             }}
@@ -568,6 +571,7 @@ const Study = () => {
           onClearStreaming={() => setExplainInChat(false)}
           resetKey={cardKey}
           onHasMessagesChange={setChatHasMessages}
+          clearRef={chatClearRef}
         />
       </Suspense>
     </div>

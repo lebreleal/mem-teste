@@ -3,7 +3,7 @@
  * History is lost on close. Uses the same ai-chat edge function.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,9 +39,11 @@ interface StudyChatModalProps {
   resetKey?: string | number;
   /** Callback to inform parent whether the chat has messages */
   onHasMessagesChange?: (has: boolean) => void;
+  /** Ref that parent can call to clear messages (for re-explain) */
+  clearRef?: MutableRefObject<(() => void) | null>;
 }
 
-const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming, resetKey, onHasMessagesChange }: StudyChatModalProps) => {
+const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming, resetKey, onHasMessagesChange, clearRef }: StudyChatModalProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { energy } = useEnergy();
@@ -71,6 +73,16 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     setIsStreaming(false);
     absorbedRef.current = null;
   }, [resetKey]);
+
+  // Expose clear function to parent via ref
+  useEffect(() => {
+    if (clearRef) {
+      clearRef.current = () => {
+        setMessages([]);
+        absorbedRef.current = null;
+      };
+    }
+  }, [clearRef]);
 
   // Notify parent about messages state
   useEffect(() => {
