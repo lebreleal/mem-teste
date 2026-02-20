@@ -1,54 +1,37 @@
 
 
-# Tutor IA com resposta fluida estilo ChatGPT (streaming)
+# Implementar Google Cloud TTS
 
-## O que muda
+## 1. Adicionar Secret
+- Salvar `GOOGLE_CLOUD_TTS_KEY` com o valor fornecido como secret no Supabase
 
-Atualmente, quando voce clica em "Explicar Assunto", "Explicar Alternativas" ou "Dica", o sistema espera a resposta INTEIRA da IA e so depois mostra tudo de uma vez. Isso parece robotico.
+## 2. Reescrever Edge Function `supabase/functions/tts/index.ts`
+- Substituir chamada OpenAI pela API REST do Google Cloud TTS
+- Endpoint: `https://texttospeech.googleapis.com/v1/text:synthesize?key=API_KEY`
+- Deteccao automatica de idioma (PT-BR vs EN-US) por heuristica simples
+- Vozes: `pt-BR-Neural2-A` (portugues) e `en-US-Neural2-J` (ingles)
+- Decodificar base64 do response do Google para retornar audio/mpeg binario
+- Manter logging de uso existente, atualizando modelo para `google-tts-neural2`
 
-A mudanca e fazer o texto aparecer **palavra por palavra** em tempo real, como no ChatGPT -- dando a sensacao de uma pessoa real digitando a explicacao.
+## 3. Frontend
+- Nenhuma alteracao necessaria -- `TtsButton.tsx` ja envia texto e recebe audio/mpeg
 
-## Custo
+## Detalhes Tecnicos
 
-**Sem custo adicional.** E a mesma chamada de IA que ja existe, so muda a forma de entrega (streaming vs esperar tudo). O custo em creditos permanece identico (2 creditos Flash / 10 creditos Pro).
+### Heuristica de idioma
+Verifica presenca de caracteres/palavras tipicas do portugues (ç, ã, õ, é, "que", "como", "para"). Se encontrar, usa voz PT-BR; caso contrario, usa EN-US.
 
-## Mudancas tecnicas
+### Fluxo da edge function
+```text
+1. Recebe { text, voice? } do frontend
+2. Detecta idioma do texto
+3. POST para Google Cloud TTS com voz adequada
+4. Recebe { audioContent: "base64..." }
+5. Decodifica base64 para bytes
+6. Retorna Response com Content-Type: audio/mpeg
+```
 
-### 1. Edge Function `ai-tutor` -- habilitar streaming
-
-Atualmente a funcao espera a resposta completa da OpenAI e retorna `{ hint: "texto" }`. A mudanca:
-
-- Adicionar `stream: true` na chamada da OpenAI
-- Retornar o `response.body` diretamente como `text/event-stream` (mesmo padrao do `ai-chat` que ja funciona)
-- Mover o `logTokenUsage` para antes do stream (sem dados de usage exatos, como o ai-chat ja faz)
-
-### 2. Frontend `Study.tsx` -- novo `handleTutorRequest` com streaming
-
-Substituir a chamada `invokeTutor()` (que espera tudo) por um fetch direto com leitura de stream SSE:
-
-- Usar `fetch()` para chamar a edge function
-- Ler o stream com `ReadableStream` + `TextDecoder`
-- Parsear linhas SSE (`data: {...}`) extraindo `choices[0].delta.content`
-- Atualizar o estado (`hintResponse`, `explainResponse`, `mcExplainResponse`) a cada token recebido -- o texto vai crescendo progressivamente
-
-### 3. Frontend `FlashCard.tsx` -- renderizacao com ReactMarkdown
-
-Trocar o `dangerouslySetInnerHTML` + `formatMarkdown` por `ReactMarkdown` nos blocos de resposta do tutor (hint, explain, mcExplain). Isso:
-
-- Renderiza markdown corretamente mesmo durante o streaming
-- Mantem consistencia com o `StudyChatModal` que ja usa `ReactMarkdown`
-- Adicionar um cursor piscante (CSS) no final do texto enquanto `isTutorLoading` estiver ativo
-
-### 4. Animacao de carregamento
-
-Manter o `TutorLoadingAnimation` existente apenas nos primeiros instantes (antes do primeiro token chegar). Assim que o primeiro token aparece, a animacao some e o texto comeca a fluir.
-
-## Resumo dos arquivos
-
-| Arquivo | Mudanca |
-|---|---|
-| `supabase/functions/ai-tutor/index.ts` | Habilitar `stream: true` e retornar SSE stream |
-| `src/pages/Study.tsx` | Novo handleTutorRequest com leitura de stream SSE |
-| `src/components/FlashCard.tsx` | Usar ReactMarkdown + cursor piscante nos blocos de resposta |
-| `src/services/aiService.ts` | Funcao `invokeTutor` pode ser mantida (nao sera mais usada pelo Study, mas nao quebra nada) |
+### Economia estimada
+- De $15/1M caracteres (OpenAI) para $4/1M caracteres (Google Neural2)
+- ~3.7x mais barato com pronuncia PT-BR nativa superior
 
