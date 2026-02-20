@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash-lite";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.5;
     const cleanFront = frontContent.replace(/<[^>]*>/g, "").trim();
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";

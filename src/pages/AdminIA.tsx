@@ -63,7 +63,7 @@ const AdminIA = () => {
   };
 
   const openModelConfig = () => {
-    setFlashModel(getSetting('flash_model') || 'gemini-2.5-flash-lite');
+    setFlashModel(getSetting('flash_model') || 'gemini-2.5-flash');
     setProModel(getSetting('pro_model') || 'gemini-2.5-pro');
     setShowModelConfig(true);
     setSelectedKey(null);
@@ -143,8 +143,8 @@ const AdminIA = () => {
 
             <div className="space-y-2">
               <Label>Modelo Flash (rápido e barato)</Label>
-              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gemini-2.5-flash-lite" className="font-mono" />
-              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-flash-lite, gemini-2.0-flash</p>
+              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gemini-2.5-flash" className="font-mono" />
+              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-flash, gemini-2.5-flash-lite</p>
             </div>
 
             <div className="space-y-2">
@@ -181,7 +181,7 @@ const AdminIA = () => {
               <Select value={editState.default_model || 'flash'} onValueChange={v => setEditState(s => ({ ...s, default_model: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gemini-2.5-flash-lite'})</SelectItem>
+                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gemini-2.5-flash'})</SelectItem>
                   <SelectItem value="pro">Pro ({getSetting('pro_model') || 'gemini-2.5-pro'})</SelectItem>
                 </SelectContent>
               </Select>
