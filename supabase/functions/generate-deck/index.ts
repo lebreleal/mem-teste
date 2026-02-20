@@ -8,7 +8,7 @@ Sua missão: criar flashcards que garantam DOMÍNIO REAL do conteúdo — compre
 
 PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
 
-1. COMPREENSÃO PRIMEIRO: Nunca crie um cartão sobre algo que o material não explica adequadamente.
+1. COMPREENSÃO PRIMEIRO: Se o material menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
 2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Respostas com mais de 1 frase são PROIBIDAS para basic. Se precisar de mais, divida em cartões separados.
 3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
 4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se o material lista 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
@@ -27,13 +27,19 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
 ❌ Cards que copiam frases inteiras do material sem reformulação
 
+MÉTODO ATIVO (obrigatório):
+- INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
+- CONEXÕES: Crie cards que conectam conceitos entre si do mesmo material ("Como X se relaciona com Y?").
+- APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos em vez de definições abstratas.
+- CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").
+
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
     case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
-    default: return "Crie cartões cobrindo TODOS os tópicos e conceitos presentes no material. Não pule nenhum tema mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
+    default: return "COBERTURA COMPLETA: Crie cartões para TODOS os tópicos, conceitos e mecanismos presentes no material. NÃO pule NENHUM tema, NENHUM conceito mencionado. Se o material menciona um assunto, DEVE haver pelo menos um cartão sobre ele. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
 
@@ -206,7 +212,7 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.5;
 
-    const trimmedContent = textContent.slice(0, 16000);
+    const trimmedContent = textContent;
     // Bloco 5: increased max from 50 to 80 for comprehensive batches
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
@@ -253,7 +259,7 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 16000 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 65000 }),
     });
 
     if (!aiResponse.ok) {

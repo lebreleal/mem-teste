@@ -281,41 +281,15 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     setStep('generating'); setIsLoading(true);
 
-    // Bloco 2: Semantic batching — respect paragraph boundaries with overlap
-    const MAX_CHARS = 12000;
-    const OVERLAP_CHARS = 500;
+    // Page-based batching: group selected pages into batches of 10
+    const PAGES_PER_BATCH = 10;
     const CONCURRENT_BATCHES = 3;
 
-    // Collect all paragraphs from selected pages
-    const allParagraphs: { text: string; pageIdx: number }[] = [];
-    for (let pi = 0; pi < selected.length; pi++) {
-      const paras = selected[pi].textContent.split(/\n{2,}/).filter(p => p.trim().length > 0);
-      for (const p of paras) {
-        allParagraphs.push({ text: p.trim(), pageIdx: pi });
-      }
-    }
-
-    // Build batches respecting paragraph boundaries
     const textBatches: { text: string; pageCount: number }[] = [];
-    let currentBatch = '';
-    let currentPages = new Set<number>();
-    let previousBatchTail = '';
-
-    for (const para of allParagraphs) {
-      if (currentBatch.length + para.text.length > MAX_CHARS && currentBatch.length > 0) {
-        textBatches.push({ text: currentBatch.trim(), pageCount: currentPages.size });
-        previousBatchTail = currentBatch.slice(-OVERLAP_CHARS);
-        currentBatch = '';
-        currentPages = new Set();
-      }
-      if (currentBatch.length === 0 && previousBatchTail.length > 0) {
-        currentBatch = `[CONTEXTO ANTERIOR (já coberto, NÃO gere cards repetidos — use apenas como referência de continuidade):\n${previousBatchTail}]\n\n`;
-      }
-      currentBatch += para.text + '\n\n';
-      currentPages.add(para.pageIdx);
-    }
-    if (currentBatch.trim()) {
-      textBatches.push({ text: currentBatch.trim(), pageCount: currentPages.size });
+    for (let i = 0; i < selected.length; i += PAGES_PER_BATCH) {
+      const batchPages = selected.slice(i, i + PAGES_PER_BATCH);
+      const text = batchPages.map(p => p.textContent).join('\n\n');
+      textBatches.push({ text, pageCount: batchPages.length });
     }
 
     const totalBatches = textBatches.length;
@@ -338,11 +312,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         const batchCost = batch.pageCount * getCost(CREDITS_PER_PAGE, isPremium);
         totalEnergyCost += batchCost;
 
-        // Strip overlap prefix from length for card count calculation
-        const effectiveText = batchText.replace(/^\[CONTEXTO ANTERIOR[^\]]*\][\s\S]*?\]\n\n/, '');
         const batchCardCount = targetCardCount > 0
           ? Math.max(3, Math.ceil(targetCardCount / totalBatches))
-          : Math.max(3, Math.ceil(effectiveText.length / densityFactor));
+          : Math.max(3, Math.ceil(batchText.length / densityFactor));
 
         const orderPrefix = totalBatches > 1
           ? `[CONTEXTO: Este é o trecho ${batchIndex + 1} de ${totalBatches} do material, em ORDEM SEQUENCIAL. Gere cartões seguindo a ordem do texto.]\n\n`
