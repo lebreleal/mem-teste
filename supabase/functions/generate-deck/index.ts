@@ -284,20 +284,38 @@ ${getOutputExamples(formats)}`;
       // Try to repair truncated JSON array (no closing bracket)
       const arrStart = rawContent.indexOf('[');
       if (arrStart !== -1) {
-        let truncated = rawContent.slice(arrStart).replace(/,\s*$/, '');
-        // Close any open strings/objects and close the array
-        const openBraces = (truncated.match(/{/g) || []).length - (truncated.match(/}/g) || []).length;
-        for (let i = 0; i < openBraces; i++) truncated += '}';
-        truncated += ']';
-        jsonStr = truncated;
+        // Extract up to the last complete object (ends with })
+        const raw = rawContent.slice(arrStart);
+        const lastBrace = raw.lastIndexOf('}');
+        if (lastBrace !== -1) {
+          // Take everything up to and including the last complete }, trim trailing comma
+          jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
+        } else {
+          jsonStr = '[]';
+        }
       }
     }
 
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
     try { cards = JSON.parse(jsonStr); } catch {
-      console.error("Parse failed, raw:", rawContent.substring(0, 500));
-      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-      return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+      // Second attempt: strip the last incomplete object and try again
+      try {
+        const lastComplete = jsonStr.lastIndexOf('},');
+        if (lastComplete !== -1) {
+          cards = JSON.parse(jsonStr.slice(0, lastComplete + 1) + ']');
+        } else {
+          const lastObj = jsonStr.lastIndexOf('}');
+          if (lastObj !== -1) {
+            cards = JSON.parse(jsonStr.slice(0, lastObj + 1) + ']');
+          } else {
+            throw new Error("no recoverable JSON");
+          }
+        }
+      } catch {
+        console.error("Parse failed, raw:", rawContent.substring(0, 500));
+        if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+      }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
