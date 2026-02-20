@@ -200,7 +200,7 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 12000 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 16000 }),
     });
 
     if (!aiResponse.ok) {
@@ -223,8 +223,8 @@ ${getOutputExamples(formats)}`;
       total_tokens: aiData.usage?.total_tokens || 0,
     };
 
-    let jsonStr = rawContent;
-    const m = rawContent.match(/\[[\s\S]*\]/);
+    let jsonStr = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    const m = jsonStr.match(/\[[\s\S]*\]/);
     if (m) {
       jsonStr = m[0];
     } else {
