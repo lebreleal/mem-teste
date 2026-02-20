@@ -523,10 +523,8 @@ const Study = () => {
             onUndo={handleUndo}
             onOpenExplainChat={(options) => {
               const action = options?.action || 'explain';
-              // Clear previous responses when starting a new explain
-              if (action === 'explain') setMcExplainResponse(null);
-              if (action === 'explain-mc') setExplainResponse(null);
               setExplainInChat(action);
+              setChatOpen(true);
               handleTutorRequest(options || { action: 'explain' });
             }}
             actions={
