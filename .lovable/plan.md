@@ -1,123 +1,131 @@
 
-
-# Refatoracao do PlanDashboard - Hero Card Unificado + Drag-and-Drop
+# Grafico Semanal de Cards + Correcao do Calculo de Capacidade
 
 ## Resumo
 
-Reescrever o componente `PlanDashboard` (linhas 392-796 de `src/pages/StudyPlan.tsx`) para criar um dashboard compacto, unificado e de alto impacto visual conforme especificado.
+Duas mudancas principais:
+1. Substituir o HealthRing (anel de 100%) por um grafico de barras vertical mostrando cards por dia da semana
+2. Corrigir o calculo de capacidade para considerar reviews + novos cards corretamente
 
 ---
 
-## Mudancas no arquivo `src/pages/StudyPlan.tsx`
+## 1. Grafico de Barras Semanal (substitui o HealthRing no Hero Card)
 
-### 1. Hero Card Unificado (Secao A)
+Remover o componente `HealthRing` do Hero Card e substituir por um grafico de barras usando Recharts (ja instalado no projeto).
 
-Substituir os elementos separados (HealthRing + StudyLoadBar + botao contextual) por um unico `Card` com gradiente dinamico:
+**Eixo X:** Dias da semana (Seg, Ter, Qua, Qui, Sex, Sab, Dom) - baseado na capacidade definida pelo usuario
 
-- Fundo: `bg-gradient-to-br from-emerald-50/50 to-white` (green), `from-amber-50/50` (yellow), `from-orange-50/50` (orange), `from-red-50/50` (red)
-- Borda sutil colorida: `border-emerald-200/60`, etc.
-- Conteudo vertical sem separacoes internas:
-  - HealthRing centralizado (mantido como esta)
-  - StudyLoadBar logo abaixo, sem card proprio, apenas como elemento inline
-  - Botao "Ajustar Plano" / "Resolver Atraso" como rodape do card, visivel apenas quando `needsAttention`
+**Eixo Y:** Quantidade de cards
 
-### 2. Card "Meus Objetivos" Compacto (Secao B)
+**Cada barra mostra duas cores empilhadas:**
+- Azul/Primary: cards de revisao estimados para aquele dia
+- Verde claro: cards novos que cabem no tempo restante
 
-Manter a estrutura atual dos 3 pilares mas:
+**Calculo por dia:**
+- Para cada dia da semana, pegar os minutos definidos (de `weekly_minutes` ou `daily_minutes`)
+- Converter minutos em capacidade total de cards: `Math.floor((minutesDia * 60) / avgSecondsPerCard)`
+- Dividir entre reviews e novos: como usuario novo nao tem historico, usar proporcao global dos cards pendentes (`totalReview / totalPending` para reviews, `totalNew / totalPending` para novos)
+- Se houver historico (totalReview > 0), reviews tem prioridade - primeiro aloca reviews ate o limite, depois preenche com novos
 
-- Reduzir padding de `p-5` para `p-4`
-- O feedback de impacto do slider aparece como banner sutil (`bg-amber-50 text-amber-700 rounded-lg px-3 py-1.5 text-xs`) imediatamente abaixo do slider, nao em card separado
-- Integrar sugestoes de cobertura diretamente abaixo da barra de progresso (em vez de card separado de Sugestoes)
+**O label de status** (No Caminho / Atencao / Em Risco) continua visivel acima do grafico, como um badge colorido compacto em vez do anel grande.
 
-### 3. Lista de Baralhos com Drag-and-Drop Real (Secao C)
+**Componente:** `WeeklyCardChart` usando `BarChart` do Recharts com `ResponsiveContainer`, altura de ~160px.
 
-- Importar `useDragReorder` de `@/hooks/useDragReorder`
-- Remover a funcao `handleReorder` manual (setas up/down)
-- Remover os botoes `ChevronUp`/`ChevronDown`
-- Usar `useDragReorder({ items: planDecks, getId: d => d.id, onReorder })` onde `onReorder` chama `onUpdatePlan({ deck_ids: reordered.map(d => d.id) })`
-- Cada item usa `{...getHandlers(deck)}` + icone `GripVertical` como alca visual com `cursor-grab`
-- Itens mais compactos: `p-2` em vez de `p-2.5`
+---
 
-### 4. Eliminar Card de Sugestoes Separado (Secao D)
+## 2. Correcao do Calculo de Capacidade
 
-- Remover o card "Sugestoes" separado
-- Integrar alertas relevantes:
-  - Alerta de consistencia baixa: dentro do Hero Card, como texto pequeno abaixo do HealthRing
-  - Alerta de backlog: no botao contextual do Hero Card
-  - Alerta de cobertura: inline no card de Metas, abaixo da barra de progresso
+### Problema atual
+O calculo em `useStudyPlan.ts` (linhas 170-174) calcula `estimatedMinutesToday` como:
+- `reviewMinutes = totalReview * avgSec / 60` (todos os reviews pendentes, nao apenas os de hoje)
+- `newMinutes = min(capacityCardsToday - totalReview, totalNew) * avgSec / 60`
 
-### 5. Limpeza de Espacamento
+Isso esta errado porque `totalReview` eh o total de reviews pendentes (pode ser centenas), nao os reviews do dia.
 
-- Container principal: `space-y-3` (era `space-y-5`)
-- CardContent: `p-4` (era `p-5`)
-- Remover imports nao usados: `ChevronUp`, `ChevronDown`, `Info` (apos remover sugestoes separadas)
+### Correcao
+Mudar a logica para:
+1. **Reviews do dia** = `totalReview` (cards com scheduled_date <= now, que precisam ser feitos hoje)
+2. **Capacidade restante para novos** = `max(0, capacityCardsToday - totalReview)` - isso ja esta correto
+3. **Cards novos do dia** = `min(capacidadeRestante, totalNew)`
+4. **Total estimado** = `reviewMinutes + newMinutes` (correto)
 
-### 6. Confirmacao Dupla para Excluir
+O problema real eh que `totalReview` da RPC `get_plan_metrics` retorna todos os reviews vencidos acumulados, nao apenas os de hoje. Para um usuario novo sem historico, `totalReview` seria 0 e `totalNew` seria todos os cards.
 
-- No Dialog de Settings, ao clicar "Excluir plano", abrir um `AlertDialog` de confirmacao com texto "Tem certeza? Esta acao nao pode ser desfeita." + botoes "Cancelar" / "Excluir"
-- Importar `AlertDialog` components de `@/components/ui/alert-dialog`
+**Proporcao para usuario novo (sem historico):**
+- Usar uma proporcao padrao: ~70% da capacidade para novos cards, ~30% reservado para reviews que surgirao ao longo do dia (cards em aprendizado que vencem)
+- Conforme o usuario ganha historico, a proporcao real substitui a padrao
+
+**Nova logica em `useStudyPlan.ts`:**
+
+```
+// Se nao ha reviews pendentes (usuario novo), estimar baseado em proporcao
+const estimatedReviewsToday = totalReview > 0 
+  ? Math.min(totalReview, capacityCardsToday) 
+  : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
+
+const reviewMinutes = Math.round((estimatedReviewsToday * avgSec) / 60);
+const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
+const dailyNewCards = Math.min(remainingCapacity, totalNew);
+const newMinutes = Math.round((dailyNewCards * avgSec) / 60);
+const estimatedMinutesToday = reviewMinutes + newMinutes;
+```
+
+---
+
+## 3. Dados do Grafico Semanal
+
+Nova propriedade em `PlanMetrics`:
+
+```typescript
+weeklyCardData: Array<{
+  day: string;       // "Seg", "Ter", etc.
+  review: number;    // cards de revisao estimados
+  newCards: number;   // cards novos estimados
+  total: number;      // review + newCards
+  minutes: number;    // minutos definidos pelo usuario
+}>
+```
+
+Calculado no `useMemo` do hook, iterando por cada dia da semana:
+
+```
+DAY_KEYS.map(dayKey => {
+  const dayMinutes = getMinutesForDay(plan, dayKey);
+  const dayCapacity = Math.floor((dayMinutes * 60) / avgSec);
+  const dayReviews = Math.min(totalReview > 0 ? totalReview : totalLearning, 
+                              Math.ceil(dayCapacity * reviewRatio));
+  const dayNew = Math.min(dayCapacity - dayReviews, totalNew);
+  return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, ... };
+})
+```
 
 ---
 
 ## Secao Tecnica
 
-### Arquivo unico modificado
+### Arquivos modificados
 
-`src/pages/StudyPlan.tsx` - reescrita da funcao `PlanDashboard` (linhas 392-796)
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/hooks/useStudyPlan.ts` | Adicionar `weeklyCardData` ao PlanMetrics, corrigir calculo de reviewMinutes/newMinutes |
+| `src/pages/StudyPlan.tsx` | Substituir HealthRing por WeeklyCardChart no Hero Card, manter badge de status |
 
-### Novos imports necessarios
-
-```typescript
-import { useDragReorder } from '@/hooks/useDragReorder';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
-} from '@/components/ui/alert-dialog';
-```
-
-### Imports removidos
-
-`ChevronUp`, `ChevronDown` (setas de reordenacao manual), `Info` (card de sugestoes)
-
-### Estrutura do Hero Card
-
-```text
-+─────────────────────────────────+
-│  bg-gradient-to-br (por status) │
-│                                  │
-│       [HealthRing 128x128]       │
-│         "No Caminho"             │
-│    "Consistencia: 85%"           │
-│                                  │
-│  Carga de hoje          45min    │
-│  [====verde===][amarelo][verm]   │
-│  15min Revisoes + 30min Novos    │
-│                                  │
-│  [  Ajustar Plano  ] (se alert)  │
-+─────────────────────────────────+
-```
-
-### Drag-and-Drop na lista
+### Imports novos em StudyPlan.tsx
 
 ```typescript
-const { getHandlers, displayItems } = useDragReorder({
-  items: planDecks,
-  getId: (deck: any) => deck.id,
-  onReorder: async (reordered) => {
-    await onUpdatePlan({ deck_ids: reordered.map((d: any) => d.id) });
-  },
-});
-
-// Render:
-{displayItems.map((deck) => {
-  const handlers = getHandlers(deck);
-  return (
-    <div key={deck.id} {...handlers} className={cn("flex items-center gap-2 p-2 rounded-xl border bg-card", handlers.className)}>
-      <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab" />
-      <p className="text-sm font-medium truncate flex-1">{deck.name}</p>
-    </div>
-  );
-})}
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 ```
 
+### Componente WeeklyCardChart
+
+- Altura: 160px
+- Barras empilhadas (stacked): review (cor primary) + novos (cor emerald)
+- Labels do eixo X: dias da semana abreviados
+- Eixo Y: numeros inteiros
+- Tooltip mostrando detalhamento ao tocar/hover
+- Acima do grafico: badge compacto com cor de status + label ("No Caminho", etc.)
+
+### Remocoes
+
+- Componente `HealthRing` removido do Hero Card (pode manter a funcao para uso futuro mas nao renderiza mais)
+- A constante `HEALTH_CONFIG` permanece para cores do badge de status
