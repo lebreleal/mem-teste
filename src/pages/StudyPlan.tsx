@@ -1423,23 +1423,83 @@ const StudyPlan = () => {
                       : <>{formatMinutes(globalCapacity.dailyMinutes)}/dia <span className="text-muted-foreground font-normal text-xs">({metrics?.cardsPerDay ?? '?'} cards)</span></>
                     }
                   </p>
-                  {metrics?.projectedCompletionDate && (
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <CalendarIcon className="h-3 w-3" />
-                        Conclusão estimada dos novos cards: <strong className="text-foreground">{format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}</strong>
-                      </p>
-                      <p className="text-[10px] text-muted-foreground/70">
-                        Limitado por {globalCapacity.dailyNewCardsLimit} novos cards/dia.{' '}
-                        <button
-                          className="text-primary underline hover:text-primary/80 transition-colors"
-                          onClick={() => { setTempNewCards(globalCapacity.dailyNewCardsLimit); setShowNewCardsConfirm(true); }}
-                        >
-                          Aumentar limite
-                        </button>
-                      </p>
-                    </div>
-                  )}
+                  {metrics?.projectedCompletionDate && (() => {
+                    const totalNew = metrics.totalNew;
+                    const budget = globalCapacity.dailyNewCardsLimit;
+                    const projDate = new Date(metrics.projectedCompletionDate);
+                    
+                    // Check if any plan has a target_date before projectedCompletionDate
+                    const plansWithTarget = plans.filter(p => p.target_date);
+                    const earliestTarget = plansWithTarget.length > 0
+                      ? plansWithTarget.reduce((min, p) => {
+                          const d = new Date(p.target_date!);
+                          return d < min ? d : min;
+                        }, new Date(plansWithTarget[0].target_date!))
+                      : null;
+                    
+                    const willMissTarget = earliestTarget && projDate > earliestTarget;
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const daysUntilTarget = earliestTarget
+                      ? Math.max(1, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
+                      : null;
+                    const neededPerDay = daysUntilTarget ? Math.ceil(totalNew / daysUntilTarget) : null;
+                    
+                    return (
+                      <div className={cn(
+                        "mt-2 rounded-lg border p-2.5 space-y-1.5",
+                        willMissTarget
+                          ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20"
+                          : "border-border bg-muted/30"
+                      )}>
+                        <p className="text-[11px] font-medium flex items-center gap-1.5">
+                          <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>
+                            {totalNew > 0
+                              ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong>. No ritmo atual ({budget}/dia), você termina em <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
+                              : <>Todos os cards novos foram concluídos! 🎉</>
+                            }
+                          </span>
+                        </p>
+                        
+                        {willMissTarget && neededPerDay && (
+                          <div className="space-y-1">
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                              ⚠️ Sua meta é <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual você só termina em {format(projDate, "dd/MM/yyyy")}.
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Para cumprir a meta, aumente para pelo menos <strong className="text-foreground">{neededPerDay} novos cards/dia</strong>.
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] px-2 mt-0.5"
+                              onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
+                            >
+                              Ajustar para {neededPerDay}/dia
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {!willMissTarget && earliestTarget && (
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                            ✓ No ritmo atual, você conclui antes da meta de {format(earliestTarget, "dd/MM/yyyy")}.
+                          </p>
+                        )}
+                        
+                        {!earliestTarget && totalNew > 0 && (
+                          <p className="text-[10px] text-muted-foreground/70">
+                            Limitado por {budget} novos cards/dia.{' '}
+                            <button
+                              className="text-primary underline hover:text-primary/80 transition-colors"
+                              onClick={() => { setTempNewCards(budget); setShowNewCardsConfirm(true); }}
+                            >
+                              Alterar limite
+                            </button>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </CardContent>
