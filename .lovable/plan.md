@@ -1,52 +1,41 @@
 
+## Plano: Sincronizar projecao de conclusao com taxa efetiva real
 
-## Plano: Melhorar clareza da conclusao, gargalo, grafico e remover icones coloridos
+### Problema
 
-### 1. Remover emojis coloridos do status (HEALTH_CONFIG)
+A data de conclusao estimada (`projectedCompletionDate`) e calculada no hook `useStudyPlan.ts` usando o **limite de novos cards** (52/dia), ignorando o gargalo de tempo. Porem, a UI em `StudyPlan.tsx` recalcula a taxa efetiva como `min(52, 23) = 23 cards/dia` (baseado no tempo disponivel). Resultado: a projecao diz "conclui ate 28/02" (usando 52/dia) mas mostra "23/dia" e "Em risco" (usando a taxa real).
 
-No arquivo `src/components/study-plan/constants.ts`, substituir os emojis coloridos (🟡, 🟠, 🔴) por icones de texto simples consistentes:
-- green: "✓" (ja esta ok)
-- yellow: "!" (em vez de 🟡)  
-- orange: "!!" (em vez de 🟠)
-- red: "⚠" (em vez de 🔴)
+### Solucao
 
-### 2. Botao combinado "Aplicar ambos" quando meta esta em risco
-
-No `src/pages/StudyPlan.tsx` (secao "Conclusao estimada", linhas ~1488-1527), quando `willMissTarget`:
-- Manter os 2 botoes individuais mas adicionar um **terceiro botao combinado**: "Aplicar ambos (X cards + Ymin/dia)" que ajusta cards E tempo simultaneamente
-- Remover o texto confuso "Seu gargalo e o..." e substituir por uma explicacao direta e simples:
-  - Se gargalo for `new_limit`: "Seu limite de **X novos cards/dia** nao e suficiente. Voce tem tempo de sobra (**Ymin/dia**), mas precisa estudar mais cards."
-  - Se gargalo for `time`: "Seu tempo de **Xmin/dia** nao e suficiente. Apos as revisoes, cabem apenas **~Y novos cards/dia**."
-- Cada botao individual tera descricao clara do que muda: "Manter tempo atual (Xmin) e aumentar cards para Y/dia" vs "Manter cards atual (X/dia) e aumentar tempo para Ymin/dia"
-
-### 3. Melhorar interpretacao do grafico de previsao
-
-No `src/components/study-plan/PlanComponents.tsx` (linhas ~467-493), melhorar o bloco de resumo/interpretacao abaixo do grafico:
-- Quando `!isBelowCapacity` (carga excede meta), alem do aviso generico, oferecer **solucoes concretas** com botoes:
-  - "Reduzir novos cards/dia" com botao para abrir configuracoes
-  - "Aumentar tempo de estudo" com botao para abrir configuracoes
-- Quando `isBelowCapacity`, manter texto positivo atual
-- Adicionar informacao sobre data limite se existir: "Para cumprir sua meta ate DD/MM, voce precisa manter esse ritmo."
-
-### 4. Wizard de edicao de planos
-
-Na secao `feasibilityBlock` (linhas ~837-866), a informacao ja esta boa. Garantir que o texto "em Meu Plano -> Configuracoes" aponte para a acao correta e incluir botoes diretos para ajustar (em vez de apenas texto orientador), similar ao que ja existe na conclusao estimada.
-
----
+Corrigir o calculo de `projectedCompletionDate` no hook para usar a **taxa efetiva** (menor entre limite de cards e capacidade de tempo), nao apenas o limite de cards.
 
 ### Detalhes Tecnicos
 
-**`src/components/study-plan/constants.ts`:**
-- Alterar `emoji` de yellow para `'!'`, orange para `'!!'`, red para `'⚠'`
+**Arquivo: `src/hooks/useStudyPlan.ts` (linhas 398-404)**
 
-**`src/pages/StudyPlan.tsx` (linhas ~1462-1555):**
-- Reescrever bloco de gargalo com texto mais claro e direto
-- Adicionar terceiro botao "Aplicar ambos" que chama `updateNewCardsLimit` + `updateCapacity` em sequencia
-- Cada botao individual explicar o que mantem e o que muda
+Substituir o calculo atual:
+```typescript
+if (globalNewBudget > 0 && totalNew > 0) {
+  const daysForNew = Math.ceil(totalNew / globalNewBudget);
+  ...
+}
+```
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~467-493):**
-- Adicionar botoes de acao no bloco de interpretacao quando carga excede meta
-- Repassar props `updateCapacity` e callbacks para ajuste de novos cards (ja recebe `updateCapacity` como prop do `ForecastSimulatorSection`)
+Pelo calculo com taxa efetiva:
+```typescript
+if (globalNewBudget > 0 && totalNew > 0) {
+  // Effective rate = min(card limit, cards that fit in available time)
+  const availMinForNew = Math.max(0, avgDailyMinutes - reviewMinutes);
+  const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avg) : 0;
+  const effectiveRate = Math.min(globalNewBudget, cardsFitByTime);
+  const rateToUse = Math.max(1, effectiveRate);
+  const daysForNew = Math.ceil(totalNew / rateToUse);
+  ...
+}
+```
 
-**`src/pages/StudyPlan.tsx` (wizard, linhas ~837-866):**
-- Adicionar botoes de acao rapida nas 3 opcoes de resolucao (aumentar cards, mudar data, aumentar tempo) em vez de apenas texto
+Isso garante que a projecao, o status de saude, e a UI da secao "Conclusao estimada" usem todos a **mesma taxa**, eliminando a contradição entre as duas telas.
+
+**Arquivo: `src/pages/StudyPlan.tsx` (linhas 1450-1462)**
+
+A UI ja calcula `effectiveRate` corretamente. Nenhuma mudanca necessaria aqui -- o fix no hook resolve a dessincronizacao automaticamente.
