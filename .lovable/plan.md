@@ -1,126 +1,79 @@
 
-# Refatoracao v4.0 - Ecossistema de Estudo Inteligente
+# Ajuste Fino v4.0 - Checklist Final
 
 ## Resumo
 
-Remover o conceito de "Plano Principal" e centralizar a capacidade de estudo no perfil do usuario. Todos os objetivos sao ativos simultaneamente. O carrossel do Dashboard (Inicio) mostra decks de TODOS os objetivos. A previsao de carga e metricas sao consolidadas globalmente.
+Quatro ajustes para fechar a refatoracao Multi-Objetivo: (1) confirmar deduplicacao (ja feita), (2) alocacao de novos cards por prioridade, (3) badge de objetivo no carrossel, (4) limpeza de codigo morto.
 
 ---
 
-## 1. Migracao de Banco de Dados
+## 1. Deduplicacao -- JA IMPLEMENTADA
 
-Adicionar colunas de capacidade global na tabela `profiles`:
+O `useStudyPlan.ts` (linha 136-142) ja usa `new Set<string>()` para deduplicar `allDeckIds`. Nenhuma mudanca necessaria.
 
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS daily_study_minutes integer NOT NULL DEFAULT 60,
-  ADD COLUMN IF NOT EXISTS weekly_study_minutes jsonb DEFAULT NULL;
-```
+## 2. Alocacao de Novos Cards por Prioridade de Objetivo
 
-Adicionar coluna de prioridade na tabela `study_plans` (para drag-and-drop de objetivos):
+**Problema atual:** Em `useStudyPlan.ts`, `dailyNewCards` (linha 252) e calculado como `Math.min(remainingCapacity, totalNew)` -- um numero global que nao respeita a ordem de prioridade dos objetivos. Quando sobra tempo apos revisoes, o sistema deveria preencher novos cards do Objetivo 1 primeiro, depois do 2, etc.
 
-```sql
-ALTER TABLE public.study_plans
-  ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAULT 0;
-```
+**Arquivo:** `src/hooks/useStudyPlan.ts`
 
----
+**Mudanca:** Apos calcular `remainingCapacity`, iterar sobre `plans` (ja ordenados por `priority ASC`) e alocar novos cards de cada objetivo ate esgotar a capacidade restante. Isso requer buscar `total_new` por objetivo (nao apenas o global). Como a RPC `get_plan_metrics` retorna dados agregados, a alternativa pratica e:
 
-## 2. Hook `useStudyPlan.ts` - Capacidade Global + Metricas Consolidadas
+- Adicionar um campo `newCardsAllocation: Record<string, number>` no retorno de `PlanMetrics`, mapeando `planId -> quantidade de novos cards alocados para hoje`.
+- Na logica do `computed`, iterar pelos planos em ordem de prioridade. Para cada plano, calcular quantos novos cards seus decks tem (usando os dados ja disponiveis ou estimando proporcionalmente). Alocar ate o limite de `remainingCapacity`, decrementar, e passar ao proximo.
+- Essa informacao sera puramente informativa no dashboard (mostrar "X novos cards" por objetivo). A sessao de estudo real ja carrega todos os decks e respeita os limites `daily_new_limit` de cada deck.
 
-Mudancas principais:
-
-- **Buscar capacidade do perfil**: Nova query para `profiles.daily_study_minutes` e `profiles.weekly_study_minutes` (substitui `plan.daily_minutes` como fonte de capacidade).
-- **Agregar deck_ids**: Unir `deck_ids` de TODOS os planos, removendo duplicatas. Passar essa lista unificada para `get_plan_metrics`.
-- **Metricas globais**: O `computed` (PlanMetrics) passa a usar a capacidade do perfil e a soma de cards de todos os objetivos.
-- **Metricas por objetivo**: Nova propriedade retornada - `objectiveMetrics: Map<string, { health, coverage, totalNew, totalReview }>` - calculada dividindo a capacidade proporcionalmente entre objetivos por prioridade.
-- **Previsao consolidada**: `forecastData` usa TODOS os deck_ids de todos os objetivos (deduplicados) vs capacidade global.
-- **calcImpact multi-objetivo**: Feedback do slider mostra impacto em cada objetivo individualmente (ex: "ENARE ficara em risco").
-- **Remover `selectPlan`**: A mutation `selectPlan` (que setava `selected_plan_id`) sera removida.
-- **Salvar capacidade no perfil**: Nova mutation `updateCapacity` que faz `profiles.update({ daily_study_minutes, weekly_study_minutes })`.
-- **Salvar prioridade**: Nova mutation `reorderObjectives` que atualiza `study_plans.priority` para cada objetivo.
-- **Remover query `selected-plan-id`**: Nao e mais necessaria.
-- A propriedade `plan` (plano selecionado) sera substituida por `allDeckIds` (uniao deduplicada) e `globalCapacity`.
-
----
-
-## 3. Pagina `StudyPlan.tsx` - Dashboard Unificado
-
-### Home View (sem PlanDashboard separado):
-
-**Hero Card Global:**
-- HealthRing + StudyLoadBar usando metricas consolidadas de TODOS os objetivos vs capacidade global do perfil.
-- Remover referencia a `plan` individual. Usar `metrics` global.
-
-**Meus Objetivos:**
-- Remover badge "Principal", botao Target/Estrela e `handleSelectPrincipal`.
-- Cada card mostra: nome, data limite, dot de saude individual (calculado por objetivo), barra de cobertura individual, grip para drag-and-drop de prioridade.
-- Drag-and-drop persiste em `study_plans.priority` via nova mutation.
-- Ao expandir um objetivo, mostrar decks com drag-and-drop interno (reordena `deck_ids` dentro do plano).
-
-**Capacidade Diaria Global:**
-- Slider altera `profiles.daily_study_minutes` (nao mais `study_plans.daily_minutes`).
-- Feedback multi-objetivo: mostra impacto em cada objetivo.
-- Opcao "por dia da semana" altera `profiles.weekly_study_minutes`.
-
-**Previsao de Carga:**
-- Grafico usa dados consolidados (todos objetivos).
-
-**Baralhos por Objetivo:**
-- Mantido como esta, mas com drag-and-drop real dentro de cada objetivo (reordena `deck_ids` no plano).
-
-### Wizard View:
-- Step 3 (capacidade) vira informativo: "Sua capacidade global atual e X min/dia" com link para ajustar no dashboard.
-- Criar objetivo nao altera mais `selected_plan_id` no perfil.
-
----
-
-## 4. Dashboard (Inicio) - Carrossel sem "Principal"
-
-### `Dashboard.tsx`:
-- Substituir `plan?.deck_ids` por uniao de `deck_ids` de TODOS os planos.
-- Mudar de `const { plan, avgSecondsPerCard } = useStudyPlan()` para `const { plans, avgSecondsPerCard, allDeckIds } = useStudyPlan()`.
-- Passar `hasPlan={plans.length > 0}` e `planDeckIds={allDeckIds}`.
-
-### `DeckCarousel.tsx`:
-- Nenhuma mudanca estrutural necessaria. Ele ja recebe `planDeckIds` como prop e filtra por root ancestor. Agora recebera a uniao de todos os objetivos.
-
----
-
-## 5. Deletar `PlanDashboard.tsx`
-
-O arquivo `src/components/study-plan/PlanDashboard.tsx` (774 linhas) sera deletado. Toda a logica ja esta consolidada em `StudyPlan.tsx`.
-
----
-
-## Secao Tecnica - Fluxo de Dados
+**Logica simplificada:**
 
 ```text
-profiles.daily_study_minutes ──> Capacidade Global (Single Source)
-profiles.weekly_study_minutes ──> Capacidade por dia da semana
-                                       |
-study_plans[] (todos) ──> Uniao de deck_ids (dedup) ──> get_plan_metrics(all_deck_ids)
-                                       |
-                              Metricas Consolidadas (Hero Card + Forecast)
-                                       |
-                    +──────────────────+──────────────────+
-                    |                                     |
-        Por Objetivo (individual)              Previsao 7 dias (consolidada)
-        - saude = f(cards_obj, capacity_share)  - revisoes de todos objetivos
-        - cobertura = cards_dominados / total   - novos cards alocados por prioridade
-        - prioridade = study_plans.priority     - vs capacidade global
+remaining = capacityCardsToday - estimatedReviewsToday
+for each plan in plans (sorted by priority):
+  planNewCards = count of new cards in plan's deck_ids
+  allocated = min(remaining, planNewCards)
+  newCardsAllocation[plan.id] = allocated
+  remaining -= allocated
+  if remaining <= 0: break
 ```
 
-### Calculo de Saude por Objetivo:
-- Para cada objetivo com `target_date`: capacidade_alocada = global * (peso / soma_pesos). Cobertura = capacidade_cards/dia / cards_necessarios/dia.
-- Peso = f(proximidade_data, prioridade_manual).
-- Verde >= 100%, Amarelo >= 70%, Laranja >= 50%, Vermelho < 50%.
+Nota: como nao temos `total_new` por objetivo separado na RPC atual, usaremos uma estimativa proporcional baseada na quantidade de decks de cada objetivo vs o total. Em uma versao futura, uma RPC que retorne metricas por deck permitiria precisao total.
 
-### Arquivos Modificados:
-1. **Migracao SQL** - colunas no profiles + priority no study_plans
-2. **`src/hooks/useStudyPlan.ts`** - capacidade global, metricas consolidadas, remover selectPlan, novas mutations
-3. **`src/pages/StudyPlan.tsx`** - remover "Principal", capacidade global, drag-and-drop persistente
-4. **`src/pages/Dashboard.tsx`** - planDeckIds = uniao de todos
-5. **`src/components/study-plan/PlanDashboard.tsx`** - DELETAR
-6. **`src/components/study-plan/PlanComponents.tsx`** - manter (componentes reutilizaveis)
-7. **`src/components/study-plan/constants.ts`** - manter
+## 3. Badge de Objetivo no Carrossel (DeckCarousel)
+
+**Arquivo:** `src/components/dashboard/DeckCarousel.tsx`
+
+**Mudanca:**
+- Aceitar nova prop `plansByDeckId: Record<string, string>` no `DeckCarousel` -- mapeia cada `deck_id` ao nome do objetivo de maior prioridade que o contem.
+- No `DeckStudyCard`, renderizar uma pequena `Badge` no canto superior com o nome do objetivo (ex: "ENARE"). Se o deck pertence a multiplos objetivos, mostrar o de menor `priority` (maior prioridade).
+- A Badge tera estilo `text-[9px]` com fundo sutil para nao poluir visualmente.
+
+**Arquivo:** `src/pages/Dashboard.tsx`
+
+**Mudanca:** Construir o mapa `plansByDeckId` a partir de `plans` e passa-lo como prop para `DeckCarousel`.
+
+```text
+const plansByDeckId: Record<string, string> = {};
+for (const plan of plans) {  // plans ja vem ordenados por priority
+  for (const deckId of plan.deck_ids) {
+    const rootId = getRootId(deckId);  // resolver para root
+    if (rootId && !plansByDeckId[rootId]) {
+      plansByDeckId[rootId] = plan.name;
+    }
+  }
+}
+```
+
+## 4. Limpeza de Codigo Morto
+
+**`selected_plan_id`:** Verificacao feita -- aparece apenas em `src/integrations/supabase/types.ts` (gerado automaticamente). Nenhum componente usa esse campo para filtragem ou logica. Nenhuma acao necessaria.
+
+**`selectPlan` mutation:** Ja foi removida do `useStudyPlan.ts`. Confirmado.
+
+**`handleSelectPrincipal`:** Ja foi removido do `StudyPlan.tsx`. Confirmado.
+
+---
+
+## Arquivos Modificados
+
+1. **`src/hooks/useStudyPlan.ts`** -- Adicionar `newCardsAllocation` no `PlanMetrics`, logica de alocacao por prioridade no `computed`.
+2. **`src/components/dashboard/DeckCarousel.tsx`** -- Aceitar prop `plansByDeckId`, renderizar Badge com nome do objetivo em cada `DeckStudyCard`.
+3. **`src/pages/Dashboard.tsx`** -- Construir `plansByDeckId` e passar como prop.
