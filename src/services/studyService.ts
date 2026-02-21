@@ -184,8 +184,17 @@ export async function fetchStudyQueue(
               excess -= trim;
             }
           }
-          // Sum allocation for all deckIds in this study session
-          const totalForSession = deckIds.reduce((s, id) => s + (allocation[id] ?? 0), 0);
+          // Resolve allocation to root IDs before summing for this session
+          const rootAllocation: Record<string, number> = {};
+          for (const [did, count] of Object.entries(allocation)) {
+            const rootId = findRootAncestorId(allDecks ?? [], did);
+            rootAllocation[rootId] = (rootAllocation[rootId] ?? 0) + count;
+          }
+          // Sum allocation for all deckIds in this study session (resolve each to root)
+          const totalForSession = deckIds.reduce((s, id) => {
+            const rootId = findRootAncestorId(allDecks ?? [], id);
+            return s + (rootAllocation[rootId] ?? 0);
+          }, 0);
           if (totalForSession > 0) {
             planNewLimit = totalForSession;
           }

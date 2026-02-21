@@ -171,6 +171,43 @@ export function useStudyPlan() {
     enabled: !!userId && allDeckIds.length > 0,
   });
 
+  // ─── Deck hierarchy for child→root resolution ───
+  const deckHierarchyQuery = useQuery({
+    queryKey: ['deck-hierarchy', userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('decks')
+        .select('id, parent_deck_id')
+        .eq('user_id', userId!);
+      return data ?? [];
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+  });
+  const deckHierarchy = deckHierarchyQuery.data ?? [];
+
+  const findRoot = useCallback((id: string): string => {
+    const deck = deckHierarchy.find(d => d.id === id);
+    if (!deck || !deck.parent_deck_id) return id;
+    return findRoot(deck.parent_deck_id);
+  }, [deckHierarchy]);
+
+  // Collect descendant IDs for plan decks (so we count new cards across the whole tree)
+  const expandedDeckIds = useMemo(() => {
+    if (deckHierarchy.length === 0) return allDeckIds;
+    const result = new Set<string>(allDeckIds);
+    const collectDescendants = (parentId: string) => {
+      for (const d of deckHierarchy) {
+        if (d.parent_deck_id === parentId && !result.has(d.id)) {
+          result.add(d.id);
+          collectDescendants(d.id);
+        }
+      }
+    };
+    for (const id of allDeckIds) collectDescendants(id);
+    return Array.from(result);
+  }, [allDeckIds, deckHierarchy]);
+
   // ─── Per-deck new card counts for proportional allocation ───
   const perDeckStatsQuery = useQuery({
     queryKey: ['per-deck-new-counts', userId, allDeckIds],
@@ -180,11 +217,13 @@ export function useStudyPlan() {
       if (error) throw error;
       const map: Record<string, number> = {};
       const rows = (data as any[]) ?? [];
-      // Only include decks that belong to objectives
-      const deckIdSet = new Set(allDeckIds);
+      // Include decks that belong to objectives OR are descendants of objective decks
+      const expandedSet = new Set(expandedDeckIds);
       for (const row of rows) {
-        if (deckIdSet.has(row.deck_id)) {
-          map[row.deck_id] = Number(row.new_count) || 0;
+        if (expandedSet.has(row.deck_id)) {
+          // Aggregate under root ancestor
+          const rootId = findRoot(row.deck_id);
+          map[rootId] = (map[rootId] ?? 0) + (Number(row.new_count) || 0);
         }
       }
       return map;
@@ -287,19 +326,22 @@ export function useStudyPlan() {
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
     // Calculate weight per deck using ACTUAL new card count per deck
+    // Resolve all plan deck IDs to their root ancestors for consistent keying
     const deckWeights: { deckId: string; newCount: number; weight: number }[] = [];
     const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    const seenDecks = new Set<string>();
+    const seenRoots = new Set<string>();
     for (const p of sortedPlans) {
       const daysLeft = p.target_date
         ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
         : 90;
       for (const deckId of (p.deck_ids ?? [])) {
-        if (seenDecks.has(deckId)) continue;
-        seenDecks.add(deckId);
-        const actualNew = perDeckNewCounts[deckId] ?? 0;
-        if (actualNew === 0) { deckNewAllocation[deckId] = 0; continue; }
-        deckWeights.push({ deckId, newCount: actualNew, weight: actualNew / daysLeft });
+        const rootId = findRoot(deckId);
+        if (seenRoots.has(rootId)) continue;
+        seenRoots.add(rootId);
+        // perDeckNewCounts is already keyed by root (aggregated above)
+        const actualNew = perDeckNewCounts[rootId] ?? 0;
+        if (actualNew === 0) { deckNewAllocation[rootId] = 0; continue; }
+        deckWeights.push({ deckId: rootId, newCount: actualNew, weight: actualNew / daysLeft });
       }
     }
 

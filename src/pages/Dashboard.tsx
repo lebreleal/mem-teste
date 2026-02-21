@@ -45,6 +45,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
+  // deckNewAllocation is already keyed by root IDs from useStudyPlan
   const state = useDashboardState(metrics?.deckNewAllocation);
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
