@@ -97,11 +97,27 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'done'>('pending');
 
-  // When plan exists, show only plan decks; otherwise show all root-level non-archived decks
+  // When plan exists, show only plan decks; otherwise show all root-level non-archived decks.
+  // Plan deck_ids can contain both root and sub-deck IDs, so we need to find the
+  // root ancestor of each plan deck and show those root decks.
   const activeDecks = useMemo(() => {
     const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     if (hasPlan && planDeckIds && planDeckIds.length > 0) {
-      return roots.filter(d => planDeckIds.includes(d.id));
+      const planIdSet = new Set(planDeckIds);
+      // Find root ancestor of a deck
+      const getRootId = (deckId: string): string | null => {
+        const d = decks.find(x => x.id === deckId);
+        if (!d) return null;
+        if (!d.parent_deck_id) return d.id;
+        return getRootId(d.parent_deck_id);
+      };
+      // Collect all root IDs that have at least one descendant (or themselves) in planDeckIds
+      const rootIds = new Set<string>();
+      for (const pid of planDeckIds) {
+        const rootId = getRootId(pid);
+        if (rootId) rootIds.add(rootId);
+      }
+      return roots.filter(d => rootIds.has(d.id));
     }
     return roots;
   }, [decks, hasPlan, planDeckIds]);

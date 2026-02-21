@@ -141,6 +141,7 @@ export function useStudyPlan() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['selected-plan-id'] });
+      qc.invalidateQueries({ queryKey: ['study-plans'] });
       qc.invalidateQueries({ queryKey: ['plan-metrics'] });
       qc.invalidateQueries({ queryKey: ['plan-health'] });
       qc.invalidateQueries({ queryKey: ['plan-retention'] });
