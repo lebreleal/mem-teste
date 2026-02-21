@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
 import {
   useStudyPlan, getMinutesForDayGlobal, getWeeklyAvgMinutesGlobal,
   DAY_LABELS, type StudyPlan as StudyPlanType, type DayKey, type WeeklyMinutes,
@@ -55,32 +56,133 @@ function getObjectiveHealth(p: StudyPlanType): 'green' | 'yellow' | 'orange' | '
 }
 
 // ─── Catch-Up Dialog ────────────────────────────────────
-function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
-  open: boolean; onOpenChange: (v: boolean) => void; totalReview: number; avgSecondsPerCard: number;
+function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, allDeckIds }: {
+  open: boolean; onOpenChange: (v: boolean) => void; totalReview: number; avgSecondsPerCard: number; allDeckIds: string[];
 }) {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [overdueCount, setOverdueCount] = useState<number | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  // Count severely overdue cards (>30 days) when dialog opens
+  useEffect(() => {
+    if (!open || allDeckIds.length === 0) return;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    supabase
+      .from('cards')
+      .select('id', { count: 'exact', head: true })
+      .in('deck_id', allDeckIds)
+      .eq('state', 2)
+      .lt('scheduled_date', cutoff.toISOString())
+      .then(({ count }) => setOverdueCount(count ?? 0));
+  }, [open, allDeckIds]);
+
+  const handleDilute = (days: number) => {
+    const perDay = Math.ceil(totalReview / days);
+    const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+    onOpenChange(false);
+    toast({
+      title: `Meta: ${perDay} revisões/dia por ${days} dias`,
+      description: `Isso levará ~${formatMinutes(minPerDay)} extra por dia. Comece agora!`,
+    });
+    navigate('/study');
+  };
+
+  const handleResetOverdue = async () => {
+    if (allDeckIds.length === 0) return;
+    setResetting(true);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    
+    const { error } = await supabase
+      .from('cards')
+      .update({ state: 0, stability: 0, difficulty: 0 } as any)
+      .in('deck_id', allDeckIds)
+      .eq('state', 2)
+      .lt('scheduled_date', cutoff.toISOString());
+    
+    setResetting(false);
+    setShowResetConfirm(false);
+    onOpenChange(false);
+    
+    if (error) {
+      toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: `${overdueCount} cards resetados`, description: 'Eles voltaram ao estado "novo" e serão reapresentados gradualmente.' });
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Limpar Atraso</DialogTitle>
-          <DialogDescription>
-            Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha como diluir:
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 pt-2">
-          {[3, 5, 7].map(days => {
-            const perDay = Math.ceil(totalReview / days);
-            const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
-            return (
-              <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => onOpenChange(false)}>
-                <span>Diluir em <strong>{days} dias</strong></span>
-                <span className="text-xs text-muted-foreground">{perDay} cards/dia · {formatMinutes(minPerDay)}</span>
-              </Button>
-            );
-          })}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open && !showResetConfirm} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Limpar Atraso</DialogTitle>
+            <DialogDescription>
+              Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha uma estratégia:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Diluir em dias</p>
+            {[3, 5, 7].map(days => {
+              const perDay = Math.ceil(totalReview / days);
+              const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+              return (
+                <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)}>
+                  <span>Diluir em <strong>{days} dias</strong></span>
+                  <span className="text-xs text-muted-foreground">{perDay} cards/dia · {formatMinutes(minPerDay)}</span>
+                </Button>
+              );
+            })}
+
+            {/* Reset overdue option */}
+            {overdueCount != null && overdueCount > 0 && (
+              <>
+                <div className="border-t pt-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cards esquecidos</p>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between h-auto py-3 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    onClick={() => setShowResetConfirm(true)}
+                  >
+                    <span>Resetar <strong>{overdueCount}</strong> cards com &gt;30 dias de atraso</span>
+                    <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">
+                    Cards com atraso grave voltam ao estado "novo" — como se nunca tivessem sido estudados.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Double confirmation for reset */}
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Resetar {overdueCount} cards?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso é irreversível. Esses cards perderão todo o progresso de repetição espaçada e voltarão ao estado "novo".
+              Use apenas se você ficou muito tempo sem estudar e quer recomeçar esses cards do zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetOverdue}
+              disabled={resetting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {resetting ? 'Resetando...' : 'Sim, resetar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -1139,29 +1241,6 @@ const StudyPlan = () => {
           plans={plans}
         />
 
-        {/* ═══ 5. BARALHOS POR OBJETIVO ═══ */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Baralhos por Objetivo</h3>
-          {decksByObjective.map(({ plan: p, decks: objDecks }) => (
-            <div key={p.id} className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  'h-2 w-2 rounded-full shrink-0 bg-primary'
-                )} />
-                <p className="text-xs font-semibold text-muted-foreground">{p.name || 'Objetivo'}</p>
-                <span className="text-[9px] text-muted-foreground">({objDecks.length})</span>
-              </div>
-              {objDecks.length > 0 ? (
-                objDecks.map((deck: any) => (
-                  <CompactDeckRow key={deck.id} deck={deck} avgSecondsPerCard={avgSecondsPerCard} showGrip={false} />
-                ))
-              ) : (
-                <p className="text-[10px] text-muted-foreground pl-4">Nenhum baralho</p>
-              )}
-            </div>
-          ))}
-        </div>
-
         {/* Clear backlog */}
         {!needsAttention && metrics && metrics.totalReview > 0 && (
           <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCatchUp(true)}>
@@ -1171,7 +1250,7 @@ const StudyPlan = () => {
       </main>
 
       {/* Dialogs */}
-      <CatchUpDialog open={showCatchUp} onOpenChange={setShowCatchUp} totalReview={metrics?.totalReview ?? 0} avgSecondsPerCard={avgSecondsPerCard} />
+      <CatchUpDialog open={showCatchUp} onOpenChange={setShowCatchUp} totalReview={metrics?.totalReview ?? 0} avgSecondsPerCard={avgSecondsPerCard} allDeckIds={allDeckIds} />
 
       <BottomNav />
     </div>
