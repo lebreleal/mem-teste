@@ -46,7 +46,7 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], planA
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDone, planAllocation }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; isDone?: boolean; planAllocation?: Record<string, number> }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, planAllocation }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; planAllocation?: Record<string, number> }) {
   const navigate = useNavigate();
   const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks, planAllocation);
   const totalToday = pendingToday + studiedToday;
@@ -54,7 +54,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDon
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
 
   return (
-    <div className={`min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm transition-opacity ${isDone ? 'opacity-60' : ''}`}>
+    <div className="min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm">
       <div className="flex items-start justify-between gap-1">
         <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
         {objectiveName && (
@@ -131,28 +131,20 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return roots;
   }, [decks, hasPlan, planDeckIds]);
 
-  // Sort by planDeckOrder, then split pending first, done last
+  // Only show decks with pending cards; sort by planDeckOrder
   const sortedDecks = useMemo(() => {
-    const pending: DeckWithStats[] = [];
-    const done: DeckWithStats[] = [];
-
-    // Sort activeDecks by planDeckOrder position
     const sorted = [...activeDecks].sort((a, b) => {
       if (!planDeckOrder || planDeckOrder.length === 0) return 0;
-      const ai = planDeckOrder.indexOf(a.id);
-      const bi = planDeckOrder.indexOf(b.id);
-      const aPos = ai === -1 ? Infinity : ai;
-      const bPos = bi === -1 ? Infinity : bi;
-      return aPos - bPos;
+      const aPos = planDeckOrder.indexOf(a.id);
+      const bPos = planDeckOrder.indexOf(b.id);
+      return (aPos === -1 ? Infinity : aPos) - (bPos === -1 ? Infinity : bPos);
     });
 
-    for (const deck of sorted) {
+    return sorted.filter(deck => {
       const { pendingToday } = getDeckTodayStats(deck, decks, planAllocation);
-      if (pendingToday > 0) pending.push(deck);
-      else done.push(deck);
-    }
-    return [...pending, ...done];
-  }, [activeDecks, decks, planDeckOrder]);
+      return pendingToday > 0;
+    });
+  }, [activeDecks, decks, planDeckOrder, planAllocation]);
 
   if (activeDecks.length === 0) return null;
 
@@ -160,7 +152,6 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     const { pendingToday } = getDeckTodayStats(d, decks, planAllocation);
     return sum + pendingToday;
   }, 0);
-  const doneCount = sortedDecks.filter(d => getDeckTodayStats(d, decks, planAllocation).pendingToday === 0).length;
 
   return (
     <div className="space-y-3 mb-6">
@@ -187,20 +178,16 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         </div>
       ) : (
         <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
-          {sortedDecks.map(deck => {
-            const { pendingToday } = getDeckTodayStats(deck, decks, planAllocation);
-            return (
+          {sortedDecks.map(deck => (
               <DeckStudyCard
                 key={deck.id}
                 deck={deck}
                 allDecks={decks}
                 avgSecondsPerCard={avgSecondsPerCard}
                 objectiveName={plansByDeckId?.[deck.id]}
-                isDone={pendingToday === 0}
                 planAllocation={planAllocation}
               />
-            );
-          })}
+            ))}
         </div>
       )}
     </div>
