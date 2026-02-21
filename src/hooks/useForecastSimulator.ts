@@ -41,7 +41,11 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     staleTime: 5 * 60_000,
   });
 
-  const defaultNewCardsPerDay = paramsQuery.data?.avg_new_cards_per_day ?? 40;
+  const defaultNewCardsPerDay = useMemo(() => {
+    const decks = paramsQuery.data?.decks;
+    if (!decks || decks.length === 0) return 20;
+    return decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
+  }, [paramsQuery.data?.decks]);
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
   // Create / terminate worker
