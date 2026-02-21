@@ -372,14 +372,17 @@ export function useStudyPlan() {
       }
     }
 
-    // Also aggregate per-plan for display (deduplicate by root to avoid multiplying)
+    // Also aggregate per-plan for display — each root is claimed by the first (highest priority) plan only
+    const globalClaimedRoots = new Set<string>();
     for (const p of sortedPlans) {
       const planRoots = new Set<string>();
       let sum = 0;
       for (const id of (p.deck_ids ?? [])) {
         const rootId = findRoot(id);
-        if (!planRoots.has(rootId)) {
-          planRoots.add(rootId);
+        if (planRoots.has(rootId)) continue;
+        planRoots.add(rootId);
+        if (!globalClaimedRoots.has(rootId)) {
+          globalClaimedRoots.add(rootId);
           sum += deckNewAllocation[rootId] ?? 0;
         }
       }
