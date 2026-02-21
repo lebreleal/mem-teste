@@ -830,8 +830,12 @@ const StudyPlan = () => {
       const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
       if (!isImpossible && !isTight) return null;
       const suggestedDate = new Date(today);
-      const suggestedDays = isTight ? Math.ceil(minDaysNeeded * 1.3) : minDaysNeeded;
-      suggestedDate.setDate(suggestedDate.getDate() + suggestedDays);
+      // For burnout (neededPerDay > 50), suggest based on 50/day max; otherwise use budget with 1.3x margin
+      const neededRate = Math.ceil(selectedNewCards / daysLeft);
+      const safeDays = neededRate > 50
+        ? Math.ceil(Math.ceil(selectedNewCards / 50) * 1.3)
+        : isTight ? Math.ceil(minDaysNeeded * 1.3) : minDaysNeeded;
+      suggestedDate.setDate(suggestedDate.getDate() + safeDays);
       const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
     })() : null;
@@ -1557,8 +1561,12 @@ const StudyPlan = () => {
                                     if (editablePlan) {
                                       const minDays = Math.ceil(totalNew / 50);
                                       const suggested = new Date();
+                                      suggested.setHours(0, 0, 0, 0);
                                       suggested.setDate(suggested.getDate() + Math.ceil(minDays * 1.3));
-                                      updatePlan.mutate({ id: editablePlan.id, target_date: suggested.toISOString() });
+                                      const yr = suggested.getFullYear();
+                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
+                                      const dy = String(suggested.getDate()).padStart(2, '0');
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
                                       toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
                                     }
                                   }}
@@ -1581,8 +1589,12 @@ const StudyPlan = () => {
                                     if (editablePlan && neededPerDay && daysUntilTarget) {
                                       const minDays = Math.ceil(totalNew / neededPerDay);
                                       const suggested = new Date();
+                                      suggested.setHours(0, 0, 0, 0);
                                       suggested.setDate(suggested.getDate() + Math.ceil(minDays * 1.3));
-                                      updatePlan.mutate({ id: editablePlan.id, target_date: suggested.toISOString() });
+                                      const yr = suggested.getFullYear();
+                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
+                                      const dy = String(suggested.getDate()).padStart(2, '0');
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
                                       toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
                                     }
                                   }}
