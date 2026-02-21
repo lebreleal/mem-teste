@@ -466,10 +466,9 @@ export function ForecastSimulator({
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Summary explanation - didactic */}
-            {summary && (() => {
+            {/* Summary explanation */}
+            {summary && data.length > 0 && (() => {
               const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
-              // Calculate actual new cards/day from simulation data (may differ from slider due to time constraints)
               const daysWithNewAll = data.filter(d => d.newCards > 0);
               const actualNewPerDay = daysWithNewAll.length > 0
                 ? Math.round(daysWithNewAll.reduce((s, d) => s + d.newCards, 0) / daysWithNewAll.length)
@@ -477,92 +476,46 @@ export function ForecastSimulator({
               const isBelowCapacity = summary.avgDailyMin < avgCapacity;
               const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
 
-              // Phase analysis: intensive (new cards being introduced) vs maintenance (reviews only)
-              const daysWithNew = data.filter(d => d.newCards > 0);
-              const daysOnlyReview = data.filter(d => d.newCards === 0);
-              const intenseDays = daysWithNew.length;
-              const intenseAvgMin = intenseDays > 0
-                ? Math.round(daysWithNew.reduce((s, d) => s + d.totalMin, 0) / intenseDays)
-                : 0;
-              const maintenanceAvgMin = daysOnlyReview.length > 0
-                ? Math.round(daysOnlyReview.reduce((s, d) => s + d.totalMin, 0) / daysOnlyReview.length)
-                : 0;
-              const hasMaintenancePhase = daysOnlyReview.length >= 3 && intenseDays > 0;
+              // Detect weekly aggregation (worker uses S1, S2... labels for 90d+)
+              const isWeeklyData = data[0]?.day?.startsWith('S');
+              const approxDays = isWeeklyData ? data.length * 7 : data.length;
 
               // Target date info
               const plansTarget = (plansList ?? []).filter(p => p.target_date);
               const earliestTarget = plansTarget.length > 0
                 ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
                 : null;
-              // Total unique new cards = sum of first day's newCards * days (approximation)
-              // Actually, we need the total remaining new cards, not sum of daily studied
-              // The correct count is: newCardsPerDay * daysWithNew (capped by what's available)
-              // But the most accurate is just currentNewCards * intenseDays (the simulation already caps it)
-              const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
-              const totalNewRemaining = totalNewCards + createdInPeriod;
+              const totalNewRemaining = totalNewCards;
 
               return (
                 <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
-                  {/* Phase-aware explanation */}
-                  {hasMaintenancePhase ? (
-                    <div className="space-y-1.5">
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-[11px] font-semibold text-foreground">Fase intensa</span>
-                        <span className="text-[10px] text-muted-foreground">{intenseDays} dias · ~{formatMinutes(intenseAvgMin)}/dia</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        Enquanto há cards novos (nunca vistos) sendo estudados, a carga diária será maior.
-                      </p>
-                      <div className="h-px bg-border" />
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-[11px] font-semibold text-foreground">Fase de manutenção</span>
-                        <span className="text-[10px] text-muted-foreground">{daysOnlyReview.length} dias · ~{formatMinutes(maintenanceAvgMin)}/dia</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        Após concluir os novos cards, sobram apenas revisões.
-                      </p>
-                      {summary.peakMin > intenseAvgMin * 1.2 && (
-                        <>
-                          <div className="h-px bg-border" />
-                          <p className="text-[10px] text-muted-foreground">
-                            📈 Pico em <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> — <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
-                      você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
-                      {summary.peakMin > summary.avgDailyMin * 1.2 && (
-                        <> Pico em <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</>
-                      )}
-                    </p>
-                  )}
+                  {/* Main summary */}
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Nos próximos <strong className="text-foreground">{approxDays} dias</strong>, média de <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+                    {summary.peakMin > summary.avgDailyMin * 1.2 && (
+                      <> Pico em <strong className="text-foreground">{peakDay.day}{!isWeeklyData ? ` (${peakDay.date})` : ''}</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</>
+                    )}
+                  </p>
 
                   {/* Target date context */}
                   {earliestTarget && totalNewRemaining > 0 && (
                     <>
                       <div className="h-px bg-border" />
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — ritmo atual: <strong className="text-foreground">~{actualNewPerDay}/dia</strong>.
+                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — ritmo atual: ~<strong className="text-foreground">{actualNewPerDay}/dia</strong>.
                       </p>
                     </>
                   )}
 
                   {/* Status: ok or overloaded */}
-                  {isBelowCapacity && (
+                  {isBelowCapacity ? (
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
-                      ✓ Seu ritmo cabe dentro da sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
+                      ✓ Cabe na sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
                     </p>
-                  )}
-                  {!isBelowCapacity && (
+                  ) : (
                     <div className="space-y-2">
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-                        {hasMaintenancePhase
-                          ? <>A média na fase intensa é ~<strong>{formatMinutes(intenseAvgMin)}</strong>, acima da sua capacidade de <strong>{formatMinutes(avgCapacity)}</strong>. Após os novos cards, estabiliza em ~<strong>{formatMinutes(maintenanceAvgMin)}</strong>.</>
-                          : <>Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.</>
-                        }
+                        Média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
