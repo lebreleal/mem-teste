@@ -168,13 +168,15 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       {!hasPlan && (
         <button
           onClick={() => navigate('/plano')}
-          className="w-full flex items-center gap-2.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3 hover:bg-primary/10 transition-colors"
+          className="w-full flex items-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3 sm:p-4 hover:bg-primary/10 transition-colors"
         >
-          <CalendarCheck className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-xs text-left">
-            <span className="font-semibold text-foreground">Defina seu plano de estudos</span>
-            <span className="text-muted-foreground"> — organize sua rotina e acompanhe seu progresso.</span>
-          </p>
+          <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <CalendarCheck className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-sm font-semibold text-foreground">Defina seu plano de estudos</p>
+            <p className="text-xs text-muted-foreground truncate">Organize sua rotina e acompanhe seu progresso</p>
+          </div>
         </button>
       )}
 
