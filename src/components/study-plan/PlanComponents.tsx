@@ -357,7 +357,7 @@ export function ForecastSimulator({
         </Dialog>
 
         {isUsingDefaults && (
-          <div className="flex items-start gap-2 text-[10px] text-primary px-2 py-1">
+          <div className="flex items-center gap-2 text-[10px] text-primary px-2 py-1">
             <div className="shrink-0 p-1 -m-1">
               <Info className="h-3.5 w-3.5" />
             </div>
@@ -497,21 +497,21 @@ export function ForecastSimulator({
               const totalNewRemaining = totalNewCards + createdInPeriod;
 
               return (
-                <div className="px-1 pt-2 space-y-1.5">
+                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
                   {/* Phase-aware explanation */}
                   {hasMaintenancePhase ? (
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                        <Layers className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
+                        <Layers className="h-3 w-3 text-primary shrink-0" />
                         <span><strong className="text-foreground">Fase intensa ({intenseDays} dias)</strong>: enquanto você introduz novos cards, estudará em média <strong className="text-foreground">{formatMinutes(intenseAvgMin)}/dia</strong>.</span>
                       </p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                        <CheckCircle2 className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
                         <span><strong className="text-foreground">Fase de manutenção ({daysOnlyReview.length} dias)</strong>: após terminar os novos cards, a carga cai para apenas revisões — cerca de <strong className="text-foreground">{formatMinutes(maintenanceAvgMin)}/dia</strong>.</span>
                       </p>
                       {summary.peakMin > intenseAvgMin * 1.2 && (
-                        <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                          <TrendingUp className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
+                          <TrendingUp className="h-3 w-3 text-primary shrink-0" />
                           <span>Pico: <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</span>
                         </p>
                       )}
@@ -528,8 +528,8 @@ export function ForecastSimulator({
 
                   {/* Target date context */}
                   {earliestTarget && totalNewRemaining > 0 && (
-                    <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                      <CalendarDays className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
+                      <CalendarDays className="h-3 w-3 text-primary shrink-0" />
                       <span>Para concluir seus <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, mantenha ao menos <strong className="text-foreground">{currentNewCards} novos cards/dia</strong>.</span>
                     </p>
                   )}
