@@ -845,20 +845,21 @@ const StudyPlan = () => {
           {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
         </p>
         <p className="text-[11px] text-muted-foreground">
-          Com {feasibilityCheck.budget} novos cards/dia e {feasibilityCheck.selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{feasibilityCheck.minDaysNeeded} dias</strong>.
+          Você tem <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> para estudar e seu limite atual é <strong>{feasibilityCheck.budget} novos cards/dia</strong> — isso levaria no mínimo <strong>{feasibilityCheck.minDaysNeeded} dias</strong>.
         </p>
+        <p className="text-[10px] font-semibold text-muted-foreground pt-1">Como resolver:</p>
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-            <Clock className="h-3 w-3 text-primary shrink-0" />
-            <span><strong>Opção 1:</strong> Aumente o limite diário de novos cards para <strong>{feasibilityCheck.neededPerDay}</strong> nas configurações do plano.</span>
+            <Layers className="h-3 w-3 text-primary shrink-0" />
+            <span>📊 Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong> (no painel "Meu Plano")</span>
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
             <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-            <span><strong>Opção 2:</strong> Estenda o prazo para pelo menos <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong>.</span>
+            <span>📅 Mudar a data limite para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong> ou posterior</span>
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
             <Clock className="h-3 w-3 text-primary shrink-0" />
-            <span><strong>Opção 3:</strong> Aumente o tempo de estudo diário nas configurações do plano.</span>
+            <span>⏱️ Estudar mais minutos/dia (no painel "Tempo de estudo diário")</span>
           </p>
         </div>
       </div>
@@ -1478,43 +1479,49 @@ const StudyPlan = () => {
                         {totalNew > 0 && (
                           <p className="text-[10px] text-muted-foreground/70">
                             {bottleneck === 'new_limit'
-                              ? <>Limitado pelo limite de <strong>{budget}</strong> novos cards/dia (seu tempo de {formatMinutes(avgDailyMin)}/dia comporta mais).</>
-                              : <>Limitado pelo tempo de estudo de <strong>{formatMinutes(avgDailyMin)}/dia</strong> (~{cardsFitByTime} novos cards cabem após revisões).</>
+                              ? <>Seu gargalo é o <strong>limite de {budget} novos cards/dia</strong>. Seu tempo de {formatMinutes(avgDailyMin)}/dia comportaria mais cards.</>
+                              : <>Seu gargalo é o <strong>tempo de estudo ({formatMinutes(avgDailyMin)}/dia)</strong>. Com as revisões, sobra espaço para ~{cardsFitByTime} novos cards/dia.</>
                             }
                           </p>
                         )}
                         
                         {willMissTarget && neededPerDay && (
-                          <div className="space-y-1.5 pt-1 border-t border-amber-200 dark:border-amber-800">
-                            <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                              ⚠️ Meta em <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> — no ritmo atual você só termina em {format(projDate, "dd/MM/yyyy")}.
+                          <div className="space-y-2 pt-1.5 border-t border-amber-200 dark:border-amber-800">
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                              ⚠️ Sua meta é <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual você só termina em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
                             </p>
-                            <p className="text-[11px] text-muted-foreground font-medium">Para cumprir a meta:</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-[10px] px-2.5 gap-1"
-                                onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
-                              >
-                                <Layers className="h-3 w-3" />
-                                Ajustar para {neededPerDay} cards/dia
-                              </Button>
-                              {neededMinPerDay && neededMinPerDay > avgDailyMin && (
+                            <p className="text-[10px] text-muted-foreground font-semibold">Escolha como resolver:</p>
+                            <div className="space-y-1.5">
+                              <div className="flex items-start gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-7 text-[10px] px-2.5 gap-1"
-                                  onClick={() => {
-                                    setEditingCapacity(true);
-                                    setTempWeekly(
-                                      Object.fromEntries((['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(d => [d, neededMinPerDay])) as WeeklyMinutes
-                                    );
-                                  }}
+                                  className="h-7 text-[10px] px-2.5 gap-1 shrink-0"
+                                  onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
                                 >
-                                  <Clock className="h-3 w-3" />
-                                  Aumentar para {formatMinutes(neededMinPerDay)}/dia
+                                  <Layers className="h-3 w-3" />
+                                  Mudar para {neededPerDay} cards/dia
                                 </Button>
+                                <span className="text-[9px] text-muted-foreground/70 pt-1">Estudar mais cards novos por dia para terminar a tempo</span>
+                              </div>
+                              {neededMinPerDay && neededMinPerDay > avgDailyMin && (
+                                <div className="flex items-start gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[10px] px-2.5 gap-1 shrink-0"
+                                    onClick={() => {
+                                      setEditingCapacity(true);
+                                      setTempWeekly(
+                                        Object.fromEntries((['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(d => [d, neededMinPerDay])) as WeeklyMinutes
+                                      );
+                                    }}
+                                  >
+                                    <Clock className="h-3 w-3" />
+                                    Mudar para {formatMinutes(neededMinPerDay)}/dia
+                                  </Button>
+                                  <span className="text-[9px] text-muted-foreground/70 pt-1">Dedicar mais tempo por dia para caber mais cards</span>
+                                </div>
                               )}
                             </div>
                           </div>
