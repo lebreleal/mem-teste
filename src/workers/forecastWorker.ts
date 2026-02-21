@@ -277,10 +277,10 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     let remainingNew = newCardsPerDay;
     for (const [deckId, dk] of deckMap) {
       if (remainingNew <= 0) break;
-      const limit = dk.daily_new_limit;
       const introduced = newCardsIntroducedPerDeck.get(deckId) || 0;
       const available = (newByDeck.get(deckId) || 0) - introduced;
-      const toIntroduce = Math.min(remainingNew, limit, Math.max(0, available));
+      // Use only the global newCardsPerDay as the cap, ignore per-deck daily_new_limit
+      const toIntroduce = Math.min(remainingNew, Math.max(0, available));
       if (toIntroduce > 0) {
         // Find new cards for this deck
         let found = 0;
