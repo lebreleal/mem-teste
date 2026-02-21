@@ -1,65 +1,101 @@
 
-## Plano: Melhorar clareza e interpretacao do simulador, dashboard e wizard
+
+## Plano: Corrigir contagem de cards novos, melhorar legenda e interpretacao do simulador
 
 ### Problemas Identificados
 
-1. **Dashboard "Conclusao estimada"**: O texto do gargalo e confuso - diz "limite de 52 novos cards/dia nao e suficiente" e ao mesmo tempo "tem tempo de sobra (39min/dia)", quando na verdade 39min nao e "de sobra". A explicacao precisa ser reescrita para ser direta e compreensivel.
+1. **Total de cards novos muda com a view (7d=210, 30d=270, 90d=60)**: O calculo `totalNewRemaining = currentNewCards * intenseDays` esta completamente errado -- ele multiplica os cards/dia pelo numero de dias com novos na simulacao, que varia conforme o horizonte. O valor correto deveria vir dos dados reais (cards com state=0 nos params do simulador).
 
-2. **Simulador (grafico 7d/30d/90d/1ano)**: A interpretacao "precisara estudar em media 1min (5 cartoes/dia)" nao faz sentido para o usuario -- os cards novos acabam rapido (em ~8 dias com 412 cards a 52/dia) e depois a carga cai drasticamente, mas o texto calcula a media incluindo todos os dias quase-vazios. Precisa explicar o que esta acontecendo de forma pedagogica.
+2. **"Cards criados/dia" nao afeta a legenda**: Quando o usuario aumenta `createdCardsPerDay`, o worker adiciona cards novos a cada dia da simulacao, mas o resumo nao reflete isso.
 
-3. **Wizard "Meta inviavel"**: Os botoes estao OK mas falta contexto explicativo sobre POR QUE e inviavel e o que cada ajuste realmente muda.
+3. **Legenda com background**: O bloco de resumo tem `bg-muted/50 border` que o usuario quer remover.
+
+4. **Info "i" pouco responsivo**: O icone e pequeno demais para toque mobile.
+
+5. **Alinhamento da legenda/interpretacao**: Precisa melhorar a visualizacao geral.
+
+---
 
 ### Solucao
 
-#### 1. Reescrever explicacao do gargalo no Dashboard (StudyPlan.tsx ~1498-1504)
+#### 1. Expor `totalNewCards` real do `useForecastSimulator`
 
-Substituir o texto generico por uma explicacao passo-a-passo clara:
+No hook `useForecastSimulator.ts`, contar os cards com `state === 0` do `paramsQuery.data.cards` e expor como `totalNewCards`:
+```typescript
+const totalNewCards = paramsQuery.data?.cards?.filter(c => c.state === 0).length ?? 0;
+// retornar no objeto de retorno
+```
 
-- **Quando gargalo = time**: "Com {avgDailyMin}/dia de estudo, apos revisar os cards pendentes (~{reviewMinToday}min), sobram apenas ~{availMinForNew}min para novos cards. Isso permite ~{cardsFitByTime} novos cards/dia, mas voce precisa de {neededPerDay}/dia para cumprir a meta."
+#### 2. Passar `totalNewCards` como prop para `ForecastSimulator`
 
-- **Quando gargalo = new_limit**: "Seu limite esta em {budget} novos cards/dia. Para cumprir a meta ate {targetDate}, voce precisaria estudar {neededPerDay} novos cards/dia."
+Em `ForecastSimulatorSection` (StudyPlan.tsx), passar o novo valor. Em `ForecastSimulator` (PlanComponents.tsx), receber como prop.
 
-Remover terminologia tecnica como "gargalo" e usar linguagem direta.
+#### 3. Corrigir calculo de `totalNewRemaining` no resumo
 
-#### 2. Melhorar interpretacao do simulador (PlanComponents.tsx ~467-520)
+Substituir `currentNewCards * intenseDays` pelo valor real:
+```typescript
+// Com createdCards: total = newCards existentes + (createdCardsPerDay * horizonDays)
+const totalNewRemaining = totalNewCards + (createdCardsPerDay * horizonDays);
+```
 
-O bloco de resumo precisa ser mais inteligente:
+Isso garante que:
+- O numero nao muda com a view (sempre reflete os cards reais)
+- `createdCardsPerDay` e somado ao total (cards que serao criados no periodo)
 
-- **Detectar fase de "consumo de novos"**: Calcular quantos dias os novos cards duram (`totalNewCards / newCardsPerDay`) e informar: "Nos primeiros {X} dias, voce estudara em media {Y}min/dia (fase intensa). Apos isso, a carga cai para apenas revisoes (~{Z}min/dia)."
+#### 4. Remover background da legenda
 
-- **Quando carga excede meta**: Alem de oferecer botoes, explicar: "Nos primeiros dias a carga sera alta porque voce esta introduzindo {N} novos cards/dia. Depois de ~{X} dias, a carga se estabiliza."
+Trocar `bg-muted/50 border` por layout limpo sem fundo:
+```typescript
+// De:
+<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+// Para:
+<div className="px-1 pt-2 space-y-1.5">
+```
 
-- **Quando tem data limite**: Adicionar: "Para concluir seus {totalNew} cards novos ate {targetDate}, mantenha ao menos {neededPerDay} novos cards/dia."
+#### 5. Melhorar responsividade do Info "i"
 
-- **Resumo contextual por periodo**: Em vez de so media geral, destacar:
-  - Dias acima da meta (se houver)  
-  - Quando a carga se estabiliza
-  - Pico vs. media
+Aumentar a area de toque do icone Info:
+```typescript
+// De:
+<Info className="h-3 w-3 shrink-0 mt-0.5" />
+// Para:
+<div className="shrink-0 p-1 -m-1">
+  <Info className="h-3.5 w-3.5" />
+</div>
+```
 
-#### 3. Wizard - adicionar contexto pedagogico (StudyPlan.tsx ~847-882)
+#### 6. Ajustar texto da legenda para ser consistente
 
-Para cada opcao de resolucao, adicionar uma mini-explicacao:
-
-- "Aumentar para X cards/dia" -> adicionar: "Voce estudara mais cards por dia, terminando em {minDaysNeeded} dias"
-- "Mudar data" -> adicionar: "Manter o ritmo atual e dar mais tempo para concluir"  
-- "Aumentar tempo de estudo" -> adicionar: "Mais tempo por dia permite encaixar mais cards novos alem das revisoes"
+- Quando ha `createdCardsPerDay > 0`, informar: "Voce tem X cards novos + Y criados/dia (Z no periodo)"
+- A contagem de cards novos sera sempre a mesma independente da view escolhida
+- O numero de dias intensos ainda pode variar com a view, mas o total de cards e fixo
 
 ---
 
 ### Detalhes Tecnicos
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas 467-520):**
-- Calcular `daysOfNewCards = Math.ceil(totalNewInPeriod / currentNewCards)` usando dados do simulador
-- Separar o resumo em 2 fases: "fase intensa" (enquanto ha novos) e "fase de manutencao" (so revisoes)
-- Usar `data.filter(d => d.newCards > 0).length` para contar dias com novos cards
-- Adicionar info de data limite se existir (consultar `plansList` que ja e prop)
-- Manter botoes de "Reduzir novos cards" e "Aumentar tempo" quando carga excede meta
+**`src/hooks/useForecastSimulator.ts` (linha ~124-133):**
+- Adicionar: `const totalNewCards = paramsQuery.data?.cards?.filter(c => c.state === 0).length ?? 0;`
+- Incluir `totalNewCards` no retorno do hook
 
-**`src/pages/StudyPlan.tsx` (linhas 1498-1504):**  
-- Reescrever o bloco de explicacao do gargalo com calculo passo-a-passo
-- Mostrar: tempo total -> tempo de revisoes -> tempo restante -> cards que cabem -> cards necessarios
-- Remover a palavra "gargalo"
+**`src/pages/StudyPlan.tsx` (ForecastSimulatorSection, linhas ~556-607):**
+- Desestruturar `totalNewCards` do `useForecastSimulator`
+- Passar como prop `totalNewCards={totalNewCards}` ao `ForecastSimulator`
+- Passar tambem `createdCardsPerDay` efetivo
 
-**`src/pages/StudyPlan.tsx` (linhas 851-882, wizard):**
-- Adicionar `<span>` descritivo abaixo de cada botao de resolucao
-- Calcular e mostrar quanto tempo levaria com cada opcao
+**`src/components/study-plan/PlanComponents.tsx` (linhas ~101-136):**
+- Adicionar `totalNewCards: number` na interface de props do `ForecastSimulator`
+
+**`src/components/study-plan/PlanComponents.tsx` (linhas ~489-493):**
+- Substituir `const totalNewRemaining = currentNewCards * intenseDays;` por:
+  ```typescript
+  const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
+  const totalNewRemaining = totalNewCards + createdInPeriod;
+  ```
+
+**`src/components/study-plan/PlanComponents.tsx` (linha ~496):**
+- Remover `bg-muted/50 border` do div wrapper do resumo
+
+**`src/components/study-plan/PlanComponents.tsx` (linhas ~358-362):**
+- Aumentar area de toque do `<Info>` icon com padding wrapper
+
