@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -205,79 +205,119 @@ export function ForecastSimulator({
         {/* Chart */}
         {data.length > 0 && !isSimulating && (
           <>
-            <ResponsiveContainer width="100%" height={160}>
-              <ComposedChart data={data} barGap={1}>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={data} barGap={0} barCategoryGap="15%">
                 <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                 <YAxis
                   tick={{ fontSize: 9 }}
                   tickLine={false}
                   axisLine={false}
-                  width={30}
+                  width={32}
                   tickFormatter={(v) => `${v}m`}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                  formatter={(value: number, name: string) => [
-                    `${value}min`,
-                    name === 'reviewMin' ? 'Revisões' : 'Novos',
-                  ]}
+                  contentStyle={{
+                    fontSize: 11,
+                    borderRadius: 10,
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--popover))',
+                    color: 'hsl(var(--popover-foreground))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  }}
+                  formatter={(value: number, name: string) => {
+                    const label = name === 'reviewMin' ? '📘 Revisões' : '📗 Novos';
+                    return [`${value}min`, label];
+                  }}
+                  labelFormatter={(label) => `📅 ${label}`}
                 />
                 <ReferenceLine
                   y={maxCapacity}
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeDasharray="4 4"
-                  strokeWidth={1}
+                  stroke="hsl(var(--primary) / 0.4)"
+                  strokeDasharray="6 3"
+                  strokeWidth={1.5}
+                  label={{
+                    value: `${maxCapacity}m`,
+                    position: 'right',
+                    fontSize: 9,
+                    fill: 'hsl(var(--muted-foreground))',
+                  }}
                 />
                 <Bar dataKey="reviewMin" stackId="a" name="reviewMin" radius={[0, 0, 0, 0]}>
-                  {data.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.overloaded ? 'hsl(0 72% 51%)' : 'hsl(var(--primary))'}
-                      opacity={entry.overloaded ? 0.85 : 1}
-                    />
-                  ))}
+                  {data.map((entry, i) => {
+                    const ratio = maxCapacity > 0 ? entry.totalMin / maxCapacity : 0;
+                    let fill = 'hsl(217 91% 60%)'; // blue
+                    if (ratio > 1.5) fill = 'hsl(0 72% 51%)'; // red
+                    else if (ratio > 1.2) fill = 'hsl(25 95% 53%)'; // orange
+                    else if (ratio > 1) fill = 'hsl(45 93% 47%)'; // amber
+                    return <Cell key={i} fill={fill} opacity={0.85} />;
+                  })}
                 </Bar>
                 <Bar dataKey="newMin" stackId="a" name="newMin" radius={[3, 3, 0, 0]}>
-                  {data.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.overloaded ? 'hsl(0 72% 65%)' : 'hsl(142 71% 45%)'}
-                      opacity={entry.overloaded ? 0.7 : 1}
-                    />
-                  ))}
+                  {data.map((entry, i) => {
+                    const ratio = maxCapacity > 0 ? entry.totalMin / maxCapacity : 0;
+                    let fill = 'hsl(152 69% 47%)'; // green
+                    if (ratio > 1.5) fill = 'hsl(0 72% 65%)';
+                    else if (ratio > 1.2) fill = 'hsl(25 95% 65%)';
+                    else if (ratio > 1) fill = 'hsl(45 93% 60%)';
+                    return <Cell key={i} fill={fill} opacity={0.75} />;
+                  })}
                 </Bar>
               </ComposedChart>
             </ResponsiveContainer>
 
             {/* Legend */}
-            <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-primary inline-block" /> Revisões
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground px-1">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
+                Revisões
               </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(142 71% 45%)' }} /> Novos
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
+                Novos
               </span>
-              <span className="flex items-center gap-1">
-                <span className="h-px w-3 border-t border-dashed border-muted-foreground inline-block" /> Capacidade
+              <span className="flex items-center gap-1.5">
+                <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--primary) / 0.4)' }} />
+                Capacidade diária
               </span>
+            </div>
+
+            {/* Color scale explanation */}
+            <div className="flex items-center gap-1 text-[9px] text-muted-foreground/70 px-1">
+              <span>Intensidade:</span>
+              <div className="flex items-center gap-0.5">
+                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
+                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(45 93% 47%)' }} />
+                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(25 95% 53%)' }} />
+                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(0 72% 51%)' }} />
+              </div>
+              <span>ok → leve → pesado → crítico</span>
             </div>
 
             {/* Summary metrics */}
             {summary && (
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                  <p className="text-[10px] text-muted-foreground">Média/dia</p>
+                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
+                  <div className="flex items-center justify-center gap-1">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground">Média/dia</p>
+                  </div>
                   <p className="text-sm font-bold">{formatMinutes(summary.avgDailyMin)}</p>
                 </div>
-                <div className="bg-muted/40 rounded-lg px-2 py-1.5">
-                  <p className="text-[10px] text-muted-foreground">Pico</p>
+                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
+                  <div className="flex items-center justify-center gap-1">
+                    <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground">Pico</p>
+                  </div>
                   <p className="text-sm font-bold">{formatMinutes(summary.peakMin)}</p>
                 </div>
                 <div className={cn(
-                  'rounded-lg px-2 py-1.5',
+                  'rounded-lg px-2 py-2 space-y-0.5',
                   summary.overloadedDays > 0 ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/40'
                 )}>
-                  <p className="text-[10px] text-muted-foreground">Sobrecarga</p>
+                  <div className="flex items-center justify-center gap-1">
+                    <Zap className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] text-muted-foreground">Sobrecarga</p>
+                  </div>
                   <p className={cn('text-sm font-bold', summary.overloadedDays > 0 && 'text-amber-600 dark:text-amber-400')}>
                     {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}
                   </p>
@@ -287,9 +327,14 @@ export function ForecastSimulator({
 
             {/* Overload warning */}
             {summary && summary.overloadedDays > 0 && (
-              <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-[11px]">
-                ⚠️ {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''} com sobrecarga prevista.
-                Pico de {formatMinutes(summary.peakMin)} em {summary.peakDate}. Considere ajustar capacidade ou novos cards/dia.
+              <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-2 text-[11px]">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Sobrecarga em {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}</p>
+                  <p className="text-amber-600/80 dark:text-amber-400/70 mt-0.5">
+                    Pico de {formatMinutes(summary.peakMin)} em {summary.peakDate}. Reduza novos cards/dia ou aumente a capacidade.
+                  </p>
+                </div>
               </div>
             )}
           </>
