@@ -47,6 +47,18 @@ export interface WeeklyCardDataPoint {
   minutes: number;
 }
 
+export interface ForecastDataPoint {
+  day: string;
+  dayKey: DayKey;
+  reviewMin: number;
+  newMin: number;
+  totalMin: number;
+  capacityMin: number;
+  overloaded: boolean;
+  reviewCards: number;
+  newCards: number;
+}
+
 export interface PlanMetrics {
   totalNew: number;
   totalReview: number;
@@ -67,6 +79,8 @@ export interface PlanMetrics {
   capacityCardsToday: number;
   projectedCompletionDate: string | null;
   weeklyCardData: WeeklyCardDataPoint[];
+  forecastData: ForecastDataPoint[];
+  dailyNewCards: number;
 }
 
 export function useStudyPlan() {
@@ -107,7 +121,6 @@ export function useStudyPlan() {
   const plans = plansQuery.data ?? [];
   const selectedPlanId = selectedIdQuery.data;
 
-  // Resolve the active plan: saved selection, or first plan
   const plan = useMemo<StudyPlan | null>(() => {
     if (plans.length === 0) return null;
     if (selectedPlanId) {
@@ -131,6 +144,7 @@ export function useStudyPlan() {
       qc.invalidateQueries({ queryKey: ['plan-metrics'] });
       qc.invalidateQueries({ queryKey: ['plan-health'] });
       qc.invalidateQueries({ queryKey: ['plan-retention'] });
+      qc.invalidateQueries({ queryKey: ['plan-forecast'] });
     },
   });
 
@@ -200,6 +214,27 @@ export function useStudyPlan() {
     staleTime: 5 * 60_000,
   });
 
+  // ─── 7-day forecast: fetch scheduled review cards ───
+  const forecastQuery = useQuery({
+    queryKey: ['plan-forecast', userId, plan?.id, plan?.deck_ids],
+    queryFn: async () => {
+      const deckIds = plan?.deck_ids ?? [];
+      if (deckIds.length === 0) return [];
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+      const { data, error } = await supabase
+        .from('cards')
+        .select('scheduled_date')
+        .in('deck_id', deckIds)
+        .eq('state', 2)
+        .lte('scheduled_date', endDate.toISOString());
+      if (error) throw error;
+      return (data ?? []) as { scheduled_date: string }[];
+    },
+    enabled: !!userId && !!plan && (plan?.deck_ids?.length ?? 0) > 0,
+    staleTime: 2 * 60_000,
+  });
+
   const computed = useMemo<PlanMetrics | null>(() => {
     if (!plan || avgQuery.data == null || !metricsQuery.data) return null;
     const raw = metricsQuery.data;
@@ -235,6 +270,52 @@ export function useStudyPlan() {
         : Math.min(totalLearning, Math.ceil(dayCapacity * reviewRatio));
       const dayNew = Math.min(Math.max(0, dayCapacity - dayReviews), totalNew);
       return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, total: dayReviews + dayNew, minutes: dayMinutes };
+    });
+
+    // ─── 7-day forecast ───
+    const forecastCards = forecastQuery.data ?? [];
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    const forecastData: ForecastDataPoint[] = Array.from({ length: 7 }, (_, i) => {
+      const dayDate = new Date(todayDate);
+      dayDate.setDate(dayDate.getDate() + i);
+      const nextDay = new Date(dayDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const dayOfWeek = dayDate.getDay();
+      const dayKey = DAY_KEYS[dayOfWeek];
+      const dayLabel = i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : DAY_LABELS[dayKey];
+      const dayCapacityMin = getMinutesForDay(plan, dayKey);
+
+      let reviewCards: number;
+      if (i === 0) {
+        // Today: all overdue + today's scheduled
+        reviewCards = totalReview + totalLearning;
+      } else {
+        // Future: count cards scheduled for that specific day
+        const dayStr = dayDate.toISOString().slice(0, 10);
+        reviewCards = forecastCards.filter(c => {
+          const sd = c.scheduled_date.slice(0, 10);
+          return sd === dayStr;
+        }).length;
+      }
+
+      const fcNewCards = dailyNewCards;
+      const fcReviewMin = Math.round((reviewCards * avg) / 60);
+      const fcNewMin = Math.round((fcNewCards * avg) / 60);
+      const fcTotalMin = fcReviewMin + fcNewMin;
+
+      return {
+        day: dayLabel,
+        dayKey,
+        reviewMin: fcReviewMin,
+        newMin: fcNewMin,
+        totalMin: fcTotalMin,
+        capacityMin: dayCapacityMin,
+        overloaded: fcTotalMin > dayCapacityMin,
+        reviewCards,
+        newCards: fcNewCards,
+      };
     });
 
     let requiredCardsPerDay: number | null = null;
@@ -279,8 +360,10 @@ export function useStudyPlan() {
       avgRetention: retentionQuery.data ?? 0.9,
       todayCapacityMinutes, capacityCardsToday,
       projectedCompletionDate, weeklyCardData,
+      forecastData,
+      dailyNewCards,
     };
-  }, [plan, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data]);
+  }, [plan, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   const calcImpact = useCallback((newMinutes: number) => {
     const avg = avgQuery.data ?? 30;
@@ -290,6 +373,29 @@ export function useStudyPlan() {
     const totalPending = (Number(raw.total_new) || 0) + (Number(raw.total_review) || 0) + (Number(raw.total_learning) || 0);
     const newCardsPerDay = Math.floor((newMinutes * 60) / avg);
 
+    // Check forecast for overloaded days at new capacity
+    const forecastCards = forecastQuery.data ?? [];
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    let peakDay: string | null = null;
+    let peakMin = 0;
+
+    for (let i = 1; i < 7; i++) {
+      const dayDate = new Date(todayDate);
+      dayDate.setDate(dayDate.getDate() + i);
+      const dayStr = dayDate.toISOString().slice(0, 10);
+      const dayOfWeek = dayDate.getDay();
+      const dayKey = DAY_KEYS[dayOfWeek];
+      const reviewCount = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
+      const dailyNew = Math.min(Math.floor((newMinutes * 60) / avg), Number(raw.total_new) || 0);
+      const totalCards = reviewCount + dailyNew;
+      const totalMin = Math.round((totalCards * avg) / 60);
+      if (totalMin > newMinutes && totalMin > peakMin) {
+        peakMin = totalMin;
+        peakDay = DAY_LABELS[dayKey];
+      }
+    }
+
     if (plan.target_date) {
       const target = new Date(plan.target_date);
       const today = new Date();
@@ -297,10 +403,10 @@ export function useStudyPlan() {
       const currentDaysRemaining = Math.max(1, Math.ceil((target.getTime() - today.getTime()) / 86400000));
       const newDaysNeeded = newCardsPerDay > 0 ? Math.ceil(totalPending / newCardsPerDay) : 9999;
       const diff = newDaysNeeded - currentDaysRemaining;
-      return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded };
+      return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded, peakDay, peakMin };
     }
-    return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null };
-  }, [plan, avgQuery.data, metricsQuery.data]);
+    return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null, peakDay, peakMin };
+  }, [plan, avgQuery.data, metricsQuery.data, forecastQuery.data]);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
@@ -308,6 +414,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['selected-plan-id'] });
+    qc.invalidateQueries({ queryKey: ['plan-forecast'] });
   }, [qc]);
 
   const createPlan = useMutation({
@@ -321,7 +428,6 @@ export function useStudyPlan() {
         weekly_minutes: input.weekly_minutes ?? null,
       } as any).select('id').single();
       if (error) throw error;
-      // Auto-select the newly created plan
       const newId = (data as any)?.id;
       if (newId) {
         await supabase.from('profiles').update({ selected_plan_id: newId } as any).eq('id', userId!);
@@ -348,7 +454,6 @@ export function useStudyPlan() {
     mutationFn: async (planId?: string) => {
       const id = planId ?? plan?.id;
       if (!id) throw new Error('No plan to delete');
-      // Clear selection if deleting the selected plan
       if (id === plan?.id) {
         await supabase.from('profiles').update({ selected_plan_id: null } as any).eq('id', userId!);
       }
