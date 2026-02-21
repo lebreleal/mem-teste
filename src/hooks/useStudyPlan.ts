@@ -395,9 +395,13 @@ export function useStudyPlan() {
     let healthStatus: 'green' | 'yellow' | 'orange' | 'red' = 'green';
     let projectedCompletionDate: string | null = null;
 
-    // The real bottleneck for completion is daily new cards limit, not time capacity
+    // Effective rate = min(card limit, cards that fit in available time after reviews)
     if (globalNewBudget > 0 && totalNew > 0) {
-      const daysForNew = Math.ceil(totalNew / globalNewBudget);
+      const availMinForNew = Math.max(0, avgDailyMinutes - reviewMinutes);
+      const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avg) : 0;
+      const effectiveRate = Math.min(globalNewBudget, cardsFitByTime);
+      const rateToUse = Math.max(1, effectiveRate);
+      const daysForNew = Math.ceil(totalNew / rateToUse);
       const projected = new Date();
       projected.setDate(projected.getDate() + daysForNew);
       projectedCompletionDate = projected.toISOString().slice(0, 10);
