@@ -1,24 +1,30 @@
 
-# Corrigir Duplicacao de Alocacao por Root ID
+
+# Corrigir Alocacao Duplicada por Roots Compartilhados Entre Planos
 
 ## Causa Raiz
 
-Tres pontos no codigo somam a alocacao do root **uma vez para cada deck filho**, multiplicando o valor. Exemplo: se um plano tem 5 filhos sob o mesmo root com alocacao 23, o sistema mostra 23 x 5 = 115 em vez de 23.
+Dois planos compartilham os mesmos decks (ex: 9 deck IDs identicos nos dois objetivos). Quando o sistema calcula a alocacao por plano para exibicao, ambos os planos somam a alocacao do root compartilhado. Resultado: plano A mostra 33, plano B mostra 45, soma = 78, mas o orcamento e apenas 25.
 
-## Bug 1: `useStudyPlan.ts` - Per-plan allocation multiplica por numero de filhos
+## Bug 1: Per-plan display conta roots compartilhados em ambos os planos
 
-**Linha 376-381**: O loop `(p.deck_ids ?? []).reduce(...)` soma `deckNewAllocation[rootId]` para cada child ID do plano. Se 3 filhos mapeiam ao mesmo root, soma 3x.
+**Arquivo**: `src/hooks/useStudyPlan.ts`, linhas 375-387
 
-**Correcao**: Deduplificar por root antes de somar:
+O loop de per-plan display soma `deckNewAllocation[rootId]` para cada plano que contem aquele root. Se root X aparece nos dois planos, ambos incluem `allocation[X]` na sua soma.
+
+**Correcao**: Manter um `Set` global de roots ja atribuidos. Cada root so e contado no primeiro plano (maior prioridade) que o reivindica:
 
 ```text
+const globalClaimedRoots = new Set<string>();
 for (const p of sortedPlans) {
   const planRoots = new Set<string>();
   let sum = 0;
   for (const id of (p.deck_ids ?? [])) {
     const rootId = findRoot(id);
-    if (!planRoots.has(rootId)) {
-      planRoots.add(rootId);
+    if (planRoots.has(rootId)) continue;
+    planRoots.add(rootId);
+    if (!globalClaimedRoots.has(rootId)) {
+      globalClaimedRoots.add(rootId);
       sum += deckNewAllocation[rootId] ?? 0;
     }
   }
@@ -26,79 +32,49 @@ for (const p of sortedPlans) {
 }
 ```
 
-## Bug 2: `studyService.ts` - Session limit multiplica por numero de deckIds
+## Bug 2: studyService nao detecta deck como parte do plano
 
-**Linha 194-197**: `deckIds` contem root + todos descendentes. O reduce soma `rootAllocation[rootId]` para cada um, multiplicando.
+**Arquivo**: `src/services/studyService.ts`, linha 134
 
-**Correcao**: Deduplificar por root:
+O check `deckIds.some(id => allPlanDeckIds.has(id))` compara os `deckIds` expandidos (root + descendentes) contra `allPlanDeckIds` que contem apenas os IDs selecionados no plano (filhos). Se o usuario estuda pelo root e o plano selecionou filhos, o root nao esta em `allPlanDeckIds`, e o check falha -- caindo no limite manual do deck.
+
+**Correcao**: Expandir `allPlanDeckIds` para incluir descendentes ANTES do check, e tambem incluir os roots dos IDs do plano:
 
 ```text
-const seenSessionRoots = new Set<string>();
-const totalForSession = deckIds.reduce((s, id) => {
+// Expandir allPlanDeckIds para incluir descendentes e roots
+const expandedPlanCheck = new Set<string>();
+for (const id of Array.from(allPlanDeckIds)) {
+  expandedPlanCheck.add(id);
+  // Adicionar root ancestor
   const rootId = findRootAncestorId(allDecks ?? [], id);
-  if (seenSessionRoots.has(rootId)) return s;
-  seenSessionRoots.add(rootId);
-  return s + (rootAllocation[rootId] ?? 0);
-}, 0);
-```
-
-## Bug 3: `studyService.ts` - Contagem e pesos por child em vez de root
-
-**Linhas 136-158**: `newPerDeck` conta cards por child deck ID, mas `allPlanDeckIds` so contem os filhos selecionados no plano (nao todos os descendentes do root). Resultado: contagem incompleta e pesos inconsistentes com useStudyPlan.
-
-**Correcao**: Agregar `newPerDeck` e `weights` por root ID, e expandir `allPlanDeckIds` para incluir descendentes:
-
-```text
-// Expandir para incluir descendentes
-const expandedPlanDeckIds = new Set<string>();
-for (const id of allPlanDeckIds) {
-  expandedPlanDeckIds.add(id);
+  expandedPlanCheck.add(rootId);
+  // Adicionar descendentes
   const descs = collectDescendantIds(allDecks ?? [], id);
-  for (const d of descs) expandedPlanDeckIds.add(d);
+  for (const d of descs) expandedPlanCheck.add(d);
 }
 
-// Buscar cards nos decks expandidos
-const { data: newCounts } = await supabase
-  .from('cards')
-  .select('deck_id')
-  .in('deck_id', Array.from(expandedPlanDeckIds))
-  .eq('state', 0);
-
-// Agregar por root
-const newPerRoot: Record<string, number> = {};
-for (const c of (newCounts ?? [])) {
-  const rootId = findRootAncestorId(allDecks ?? [], c.deck_id);
-  newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
-}
-
-// Weights por root (nao por child)
-const weights: Record<string, number> = {};
-const seenRoots = new Set<string>();
-for (const p of plansData) {
-  const daysLeft = ...;
-  for (const did of (p.deck_ids ?? [])) {
-    const rootId = findRootAncestorId(allDecks ?? [], did);
-    if (seenRoots.has(rootId)) continue;
-    seenRoots.add(rootId);
-    const remaining = newPerRoot[rootId] ?? 0;
-    if (remaining === 0) continue;
-    weights[rootId] = remaining / daysLeft;
-  }
+if (deckIds.some(id => expandedPlanCheck.has(id))) {
+  // ... continuar com a logica de alocacao
 }
 ```
+
+## Bug 3: studyService tambem duplica roots compartilhados na alocacao
+
+**Arquivo**: `src/services/studyService.ts`, mesma logica dos pesos
+
+O `seenRoots` no studyService e global entre planos (correto para pesos), mas a alocacao final nao precisa de correcao adicional porque o `totalForSession` ja esta deduplicado. Porem, precisa garantir que o check do Bug 2 funciona.
 
 ## Resumo de Arquivos
 
-| Arquivo | Linha | Bug |
-|---------|-------|-----|
-| `useStudyPlan.ts` | 376-381 | Per-plan sum multiplica por filhos do mesmo root |
-| `studyService.ts` | 194-197 | Session limit multiplica por deckIds do mesmo root |
-| `studyService.ts` | 136-158 | Contagem/pesos por child em vez de root; faltam descendentes |
+| Arquivo | Linha | Mudanca |
+|---------|-------|---------|
+| `useStudyPlan.ts` | 375-387 | Usar `globalClaimedRoots` para atribuir cada root ao primeiro plano apenas |
+| `studyService.ts` | 129-134 | Expandir `allPlanDeckIds` com roots e descendentes antes do check de pertencimento |
 
 ## Resultado Esperado
 
-1. Usuario define 40 cards/dia, 2 objetivos (fisiopato + histo)
-2. Alocacao por root: fisiopato ~23, histo ~17 (soma = 40)
-3. Per-plan display: fisiopato = 23, histo = 17 (nao mais 69/32)
-4. Dashboard carousel: fisiopato mostra 23 novos, histo mostra 17 novos
-5. Fila de estudo respeita exatamente o limite alocado por root
+1. Usuario define 25 cards/dia, 2 objetivos com decks compartilhados
+2. Roots compartilhados sao atribuidos ao objetivo de maior prioridade
+3. Per-plan display: ENARE = 15, Meu Objetivo = 10 (soma = 25, nao 78)
+4. Dashboard: cada deck raiz mostra exatamente sua cota alocada
+5. Fila de estudo reconhece corretamente que o deck pertence a um plano ativo
