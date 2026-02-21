@@ -469,6 +469,7 @@ export function ForecastSimulator({
               const avgCards = Math.round(totalCards / data.length);
               const isBelowCapacity = summary.avgDailyMin < avgCapacity;
               const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
+              const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
               return (
                 <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -484,9 +485,37 @@ export function ForecastSimulator({
                     </p>
                   )}
                   {!isBelowCapacity && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-                      ⚠️ Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>. Considere aumentar o tempo diário de estudo ou reduzir novos cards/dia.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                        Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>. Ajuste uma das opções abaixo:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2 gap-1"
+                          onClick={() => {
+                            const reduced = Math.max(1, Math.floor(currentNewCards * (avgCapacity / summary.avgDailyMin)));
+                            onNewCardsChange(reduced === defaultNewCardsPerDay ? undefined : reduced);
+                          }}
+                        >
+                          <Layers className="h-3 w-3" />
+                          Reduzir novos cards/dia
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2 gap-1"
+                          onClick={() => {
+                            setTempWeekly(currentWeekly);
+                            setEditingCapacity(true);
+                          }}
+                        >
+                          <Timer className="h-3 w-3" />
+                          Aumentar tempo de estudo
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
