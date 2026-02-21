@@ -465,29 +465,76 @@ export function ForecastSimulator({
 
             {/* Summary explanation - didactic */}
             {summary && (() => {
-              const totalCards = data.reduce((s, d) => s + d.newCards + d.learningCards + d.relearningCards + d.reviewCards, 0);
-              const avgCards = Math.round(totalCards / data.length);
+              const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
               const isBelowCapacity = summary.avgDailyMin < avgCapacity;
               const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
-              const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
+
+              // Phase analysis: intensive (new cards being introduced) vs maintenance (reviews only)
+              const daysWithNew = data.filter(d => d.newCards > 0);
+              const daysOnlyReview = data.filter(d => d.newCards === 0);
+              const intenseDays = daysWithNew.length;
+              const intenseAvgMin = intenseDays > 0
+                ? Math.round(daysWithNew.reduce((s, d) => s + d.totalMin, 0) / intenseDays)
+                : 0;
+              const maintenanceAvgMin = daysOnlyReview.length > 0
+                ? Math.round(daysOnlyReview.reduce((s, d) => s + d.totalMin, 0) / daysOnlyReview.length)
+                : 0;
+              const hasMaintenancePhase = daysOnlyReview.length >= 3 && intenseDays > 0;
+
+              // Target date info
+              const plansTarget = (plansList ?? []).filter(p => p.target_date);
+              const earliestTarget = plansTarget.length > 0
+                ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
+                : null;
+              const totalNewInPeriod = daysWithNew.reduce((s, d) => s + d.newCards, 0);
+
               return (
                 <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
-                    você precisará estudar em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}</strong> ({avgCards} cartões/dia).
-                    {summary.peakMin > summary.avgDailyMin && (
-                      <> O dia mais puxado será <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
-                    )}
-                  </p>
+                  {/* Phase-aware explanation */}
+                  {hasMaintenancePhase ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        📚 <strong className="text-foreground">Fase intensa ({intenseDays} dias)</strong>: enquanto você introduz novos cards, estudará em média <strong className="text-foreground">{formatMinutes(intenseAvgMin)}/dia</strong>.
+                      </p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        🔄 <strong className="text-foreground">Fase de manutenção ({daysOnlyReview.length} dias)</strong>: após terminar os novos cards, a carga cai para apenas revisões — cerca de <strong className="text-foreground">{formatMinutes(maintenanceAvgMin)}/dia</strong>.
+                      </p>
+                      {summary.peakMin > intenseAvgMin * 1.2 && (
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          📈 Pico: <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
+                      você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+                      {summary.peakMin > summary.avgDailyMin * 1.2 && (
+                        <> Pico em <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</>
+                      )}
+                    </p>
+                  )}
+
+                  {/* Target date context */}
+                  {earliestTarget && totalNewInPeriod > 0 && (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      🎯 Para concluir seus <strong className="text-foreground">{totalNewInPeriod} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, mantenha ao menos <strong className="text-foreground">{currentNewCards} novos cards/dia</strong>.
+                    </p>
+                  )}
+
+                  {/* Status: ok or overloaded */}
                   {isBelowCapacity && (
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
-                      ✓ Você está abaixo da sua meta diária de <strong>{formatMinutes(avgCapacity)}</strong>. Seu ritmo atual é suficiente!
+                      ✓ Seu ritmo cabe dentro da sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
                     </p>
                   )}
                   {!isBelowCapacity && (
                     <div className="space-y-2">
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-                        Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>. Ajuste uma das opções abaixo:
+                        {hasMaintenancePhase
+                          ? <>Nos primeiros <strong>{intenseDays} dias</strong> a carga será alta porque você está introduzindo <strong>{currentNewCards} novos cards/dia</strong>. Depois disso, a carga se estabiliza em ~<strong>{formatMinutes(maintenanceAvgMin)}</strong>.</>
+                          : <>Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.</>
+                        }
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
