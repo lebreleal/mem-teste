@@ -1,11 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, ChevronRight, Play, CalendarCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { DeckWithStats } from '@/types/deck';
 
 function formatMinutes(m: number) {
@@ -48,7 +46,7 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDone }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; isDone?: boolean }) {
   const navigate = useNavigate();
   const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks);
   const totalToday = pendingToday + studiedToday;
@@ -56,7 +54,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { d
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
 
   return (
-    <div className="min-w-[240px] max-w-[280px] snap-start flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm">
+    <div className={`min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm transition-opacity ${isDone ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-1">
         <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
         {objectiveName && (
@@ -98,28 +96,22 @@ interface DeckCarouselProps {
   avgSecondsPerCard?: number;
   hasPlan: boolean;
   planDeckIds?: string[];
+  planDeckOrder?: string[];
   plansByDeckId?: Record<string, string>;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, plansByDeckId }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId }: DeckCarouselProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'pending' | 'done'>('pending');
 
-  // When plan exists, show only plan decks; otherwise show all root-level non-archived decks.
-  // Plan deck_ids can contain both root and sub-deck IDs, so we need to find the
-  // root ancestor of each plan deck and show those root decks.
   const activeDecks = useMemo(() => {
     const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     if (hasPlan && planDeckIds && planDeckIds.length > 0) {
-      const planIdSet = new Set(planDeckIds);
-      // Find root ancestor of a deck
       const getRootId = (deckId: string): string | null => {
         const d = decks.find(x => x.id === deckId);
         if (!d) return null;
         if (!d.parent_deck_id) return d.id;
         return getRootId(d.parent_deck_id);
       };
-      // Collect all root IDs that have at least one descendant (or themselves) in planDeckIds
       const rootIds = new Set<string>();
       for (const pid of planDeckIds) {
         const rootId = getRootId(pid);
@@ -130,22 +122,36 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return roots;
   }, [decks, hasPlan, planDeckIds]);
 
-  const { pendingDecks, doneDecks } = useMemo(() => {
+  // Sort by planDeckOrder, then split pending first, done last
+  const sortedDecks = useMemo(() => {
     const pending: DeckWithStats[] = [];
     const done: DeckWithStats[] = [];
-    for (const deck of activeDecks) {
+
+    // Sort activeDecks by planDeckOrder position
+    const sorted = [...activeDecks].sort((a, b) => {
+      if (!planDeckOrder || planDeckOrder.length === 0) return 0;
+      const ai = planDeckOrder.indexOf(a.id);
+      const bi = planDeckOrder.indexOf(b.id);
+      const aPos = ai === -1 ? Infinity : ai;
+      const bPos = bi === -1 ? Infinity : bi;
+      return aPos - bPos;
+    });
+
+    for (const deck of sorted) {
       const { pendingToday } = getDeckTodayStats(deck, decks);
       if (pendingToday > 0) pending.push(deck);
       else done.push(deck);
     }
-    return { pendingDecks: pending, doneDecks: done };
-  }, [activeDecks, decks]);
-
-  const filteredDecks = activeTab === 'pending' ? pendingDecks : doneDecks;
+    return [...pending, ...done];
+  }, [activeDecks, decks, planDeckOrder]);
 
   if (activeDecks.length === 0) return null;
 
-  const totalPending = pendingDecks.reduce((sum, d) => sum + getDeckTodayStats(d, decks).pendingToday, 0);
+  const totalPending = sortedDecks.reduce((sum, d) => {
+    const { pendingToday } = getDeckTodayStats(d, decks);
+    return sum + pendingToday;
+  }, 0);
+  const doneCount = sortedDecks.filter(d => getDeckTodayStats(d, decks).pendingToday === 0).length;
 
   return (
     <div className="space-y-3 mb-6">
@@ -154,15 +160,9 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         <div className="flex-1">
           <h2 className="text-sm font-bold">Baralhos de hoje</h2>
           <p className="text-xs text-muted-foreground">
-            {doneDecks.length} de {activeDecks.length} concluídos · {totalPending} cards pendentes
+            {doneCount} de {activeDecks.length} concluídos · {totalPending} cards pendentes
           </p>
         </div>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pending' | 'done')}>
-          <TabsList className="h-8">
-            <TabsTrigger value="pending" className="text-[11px] px-2.5 h-7">Pendentes ({pendingDecks.length})</TabsTrigger>
-            <TabsTrigger value="done" className="text-[11px] px-2.5 h-7">Feitos ({doneDecks.length})</TabsTrigger>
-          </TabsList>
-        </Tabs>
       </div>
 
       {/* Prompt to set up study plan */}
@@ -179,18 +179,26 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         </button>
       )}
 
-      {/* Carousel */}
-      {filteredDecks.length === 0 ? (
+      {/* Carousel - unified list */}
+      {sortedDecks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-4 text-center">
-          <p className="text-sm text-muted-foreground">
-            {activeTab === 'pending' ? '🎉 Tudo concluído por hoje!' : 'Nenhum baralho concluído ainda.'}
-          </p>
+          <p className="text-sm text-muted-foreground">🎉 Tudo concluído por hoje!</p>
         </div>
       ) : (
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4 scrollbar-hide">
-          {filteredDecks.map(deck => (
-            <DeckStudyCard key={deck.id} deck={deck} allDecks={decks} avgSecondsPerCard={avgSecondsPerCard} objectiveName={plansByDeckId?.[deck.id]} />
-          ))}
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
+          {sortedDecks.map(deck => {
+            const { pendingToday } = getDeckTodayStats(deck, decks);
+            return (
+              <DeckStudyCard
+                key={deck.id}
+                deck={deck}
+                allDecks={decks}
+                avgSecondsPerCard={avgSecondsPerCard}
+                objectiveName={plansByDeckId?.[deck.id]}
+                isDone={pendingToday === 0}
+              />
+            );
+          })}
         </div>
       )}
     </div>
