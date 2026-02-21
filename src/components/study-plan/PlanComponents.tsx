@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  AlertTriangle, GripVertical, Play,
-} from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import type { ForecastDataPoint } from '@/hooks/useStudyPlan';
+import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
 import { formatMinutes, HEALTH_CONFIG } from './constants';
 
 // ─── Health Ring SVG ────────────────────────────────────
@@ -75,78 +74,231 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
   );
 }
 
-// ─── Forecast Chart ─────────────────────────────────────
-export function ForecastChart({ data }: { data: ForecastDataPoint[] }) {
+// ─── Forecast Simulator ─────────────────────────────────
+
+const VIEW_OPTIONS: { value: ForecastView; label: string }[] = [
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: '90d', label: '90d' },
+  { value: '365d', label: '1 ano' },
+];
+
+export function ForecastSimulator({
+  data, summary, isSimulating, progress, defaultNewCardsPerDay,
+  forecastView, onViewChange, newCardsOverride, onNewCardsChange,
+  hasTargetDate, isUsingDefaults,
+}: {
+  data: ForecastPoint[];
+  summary: SimulatorSummary | null;
+  isSimulating: boolean;
+  progress: number;
+  defaultNewCardsPerDay: number;
+  forecastView: ForecastView;
+  onViewChange: (v: ForecastView) => void;
+  newCardsOverride: number | undefined;
+  onNewCardsChange: (v: number | undefined) => void;
+  hasTargetDate: boolean;
+  isUsingDefaults: boolean;
+}) {
+  const [editingNewCards, setEditingNewCards] = useState(false);
+  const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const hasOverload = data.some(d => d.overloaded);
-  const overloadedDays = data.filter(d => d.overloaded);
-  const maxCapacity = Math.max(...data.map(d => d.capacityMin));
+  const maxCapacity = data.length > 0 ? Math.max(...data.map(d => d.capacityMin)) : 0;
+
+  const options = hasTargetDate
+    ? [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Até a prova' }]
+    : VIEW_OPTIONS;
+
+  const handleEditNewCards = () => {
+    setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay));
+    setEditingNewCards(true);
+  };
+
+  const handleConfirmNewCards = () => {
+    const val = parseInt(tempNewCards, 10);
+    if (!isNaN(val) && val >= 0) {
+      onNewCardsChange(val === defaultNewCardsPerDay ? undefined : val);
+    }
+    setEditingNewCards(false);
+  };
+
+  const handleResetNewCards = () => {
+    onNewCardsChange(undefined);
+    setEditingNewCards(false);
+  };
 
   return (
     <Card>
       <CardContent className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga (7 dias)</h3>
-          {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
+        {/* Header with filters */}
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga</h3>
+          {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
         </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <ComposedChart data={data} barGap={1}>
-            <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-            <YAxis
-              tick={{ fontSize: 9 }}
-              tickLine={false}
-              axisLine={false}
-              width={30}
-              tickFormatter={(v) => `${v}m`}
-            />
-            <Tooltip
-              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-              formatter={(value: number, name: string) => [
-                `${value}min`,
-                name === 'reviewMin' ? 'Revisões' : 'Novos',
-              ]}
-            />
-            <ReferenceLine
-              y={maxCapacity}
-              stroke="hsl(var(--muted-foreground))"
-              strokeDasharray="4 4"
-              strokeWidth={1}
-            />
-            <Bar dataKey="reviewMin" stackId="a" name="reviewMin" radius={[0, 0, 0, 0]}>
-              {data.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.overloaded ? 'hsl(0 72% 51%)' : 'hsl(var(--primary))'}
-                  opacity={entry.overloaded ? 0.85 : 1}
-                />
-              ))}
-            </Bar>
-            <Bar dataKey="newMin" stackId="a" name="newMin" radius={[3, 3, 0, 0]}>
-              {data.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.overloaded ? 'hsl(0 72% 65%)' : 'hsl(142 71% 45%)'}
-                  opacity={entry.overloaded ? 0.7 : 1}
-                />
-              ))}
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
-        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-sm bg-primary inline-block" /> Revisões
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(142 71% 45%)' }} /> Novos
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-px w-3 border-t border-dashed border-muted-foreground inline-block" /> Capacidade
-          </span>
+
+        {/* View chips */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onViewChange(opt.value)}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border',
+                forecastView === opt.value
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
-        {overloadedDays.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-[11px]">
-            ⚠️ Pico de carga previsto para{' '}
-            <strong>{overloadedDays.map(d => d.day).join(', ')}</strong>{' '}
-            ({formatMinutes(Math.max(...overloadedDays.map(d => d.totalMin)))}). Considere ajustar capacidade ou repriorizar objetivos.
+
+        {/* New cards per day */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">~</span>
+          {editingNewCards ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                min={0}
+                max={999}
+                value={tempNewCards}
+                onChange={e => setTempNewCards(e.target.value)}
+                className="h-6 w-16 text-xs px-1.5"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && handleConfirmNewCards()}
+              />
+              <span className="text-muted-foreground">novos/dia</span>
+              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmNewCards}>
+                <Check className="h-3 w-3" />
+              </Button>
+              {newCardsOverride != null && (
+                <button onClick={handleResetNewCards} className="text-[10px] text-primary underline">reset</button>
+              )}
+            </div>
+          ) : (
+            <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
+              <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
+              <span className="text-muted-foreground">novos cards/dia</span>
+              <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            </button>
+          )}
+        </div>
+
+        {/* Defaults indicator */}
+        {isUsingDefaults && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+            <Info className="h-3 w-3" />
+            Usando estimativas padrão (estude mais para previsões personalizadas)
+          </div>
+        )}
+
+        {/* Progress bar during simulation */}
+        {isSimulating && (
+          <div className="space-y-1">
+            <Progress value={progress} className="h-1" />
+            <p className="text-[10px] text-muted-foreground text-center">Simulando... {progress}%</p>
+          </div>
+        )}
+
+        {/* Chart */}
+        {data.length > 0 && !isSimulating && (
+          <>
+            <ResponsiveContainer width="100%" height={160}>
+              <ComposedChart data={data} barGap={1}>
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis
+                  tick={{ fontSize: 9 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={30}
+                  tickFormatter={(v) => `${v}m`}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                  formatter={(value: number, name: string) => [
+                    `${value}min`,
+                    name === 'reviewMin' ? 'Revisões' : 'Novos',
+                  ]}
+                />
+                <ReferenceLine
+                  y={maxCapacity}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="4 4"
+                  strokeWidth={1}
+                />
+                <Bar dataKey="reviewMin" stackId="a" name="reviewMin" radius={[0, 0, 0, 0]}>
+                  {data.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.overloaded ? 'hsl(0 72% 51%)' : 'hsl(var(--primary))'}
+                      opacity={entry.overloaded ? 0.85 : 1}
+                    />
+                  ))}
+                </Bar>
+                <Bar dataKey="newMin" stackId="a" name="newMin" radius={[3, 3, 0, 0]}>
+                  {data.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.overloaded ? 'hsl(0 72% 65%)' : 'hsl(142 71% 45%)'}
+                      opacity={entry.overloaded ? 0.7 : 1}
+                    />
+                  ))}
+                </Bar>
+              </ComposedChart>
+            </ResponsiveContainer>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-primary inline-block" /> Revisões
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(142 71% 45%)' }} /> Novos
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-px w-3 border-t border-dashed border-muted-foreground inline-block" /> Capacidade
+              </span>
+            </div>
+
+            {/* Summary metrics */}
+            {summary && (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-muted/40 rounded-lg px-2 py-1.5">
+                  <p className="text-[10px] text-muted-foreground">Média/dia</p>
+                  <p className="text-sm font-bold">{formatMinutes(summary.avgDailyMin)}</p>
+                </div>
+                <div className="bg-muted/40 rounded-lg px-2 py-1.5">
+                  <p className="text-[10px] text-muted-foreground">Pico</p>
+                  <p className="text-sm font-bold">{formatMinutes(summary.peakMin)}</p>
+                </div>
+                <div className={cn(
+                  'rounded-lg px-2 py-1.5',
+                  summary.overloadedDays > 0 ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/40'
+                )}>
+                  <p className="text-[10px] text-muted-foreground">Sobrecarga</p>
+                  <p className={cn('text-sm font-bold', summary.overloadedDays > 0 && 'text-amber-600 dark:text-amber-400')}>
+                    {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Overload warning */}
+            {summary && summary.overloadedDays > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-1.5 text-[11px]">
+                ⚠️ {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''} com sobrecarga prevista.
+                Pico de {formatMinutes(summary.peakMin)} em {summary.peakDate}. Considere ajustar capacidade ou novos cards/dia.
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty state */}
+        {data.length === 0 && !isSimulating && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            Nenhum dado para simular. Adicione baralhos aos seus objetivos.
           </div>
         )}
       </CardContent>
