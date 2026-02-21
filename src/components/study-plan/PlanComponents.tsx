@@ -356,9 +356,9 @@ export function ForecastSimulator({
         </Dialog>
 
         {isUsingDefaults && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
-            <Info className="h-3 w-3" />
-            Usando estimativas padrão (estude mais para previsões personalizadas)
+          <div className="flex items-start gap-1.5 text-[10px] text-primary px-2 py-1">
+            <Info className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>As previsões são baseadas em estimativas iniciais. Conforme você estuda, o algoritmo aprende seu desempenho real e ajusta automaticamente.</span>
           </div>
         )}
 
@@ -486,22 +486,29 @@ export function ForecastSimulator({
               const earliestTarget = plansTarget.length > 0
                 ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
                 : null;
-              const totalNewInPeriod = daysWithNew.reduce((s, d) => s + d.newCards, 0);
+              // Total unique new cards = sum of first day's newCards * days (approximation)
+              // Actually, we need the total remaining new cards, not sum of daily studied
+              // The correct count is: newCardsPerDay * daysWithNew (capped by what's available)
+              // But the most accurate is just currentNewCards * intenseDays (the simulation already caps it)
+              const totalNewRemaining = currentNewCards * intenseDays;
 
               return (
                 <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
                   {/* Phase-aware explanation */}
                   {hasMaintenancePhase ? (
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        📚 <strong className="text-foreground">Fase intensa ({intenseDays} dias)</strong>: enquanto você introduz novos cards, estudará em média <strong className="text-foreground">{formatMinutes(intenseAvgMin)}/dia</strong>.
+                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                        <Layers className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                        <span><strong className="text-foreground">Fase intensa ({intenseDays} dias)</strong>: enquanto você introduz novos cards, estudará em média <strong className="text-foreground">{formatMinutes(intenseAvgMin)}/dia</strong>.</span>
                       </p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        🔄 <strong className="text-foreground">Fase de manutenção ({daysOnlyReview.length} dias)</strong>: após terminar os novos cards, a carga cai para apenas revisões — cerca de <strong className="text-foreground">{formatMinutes(maintenanceAvgMin)}/dia</strong>.
+                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                        <CheckCircle2 className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                        <span><strong className="text-foreground">Fase de manutenção ({daysOnlyReview.length} dias)</strong>: após terminar os novos cards, a carga cai para apenas revisões — cerca de <strong className="text-foreground">{formatMinutes(maintenanceAvgMin)}/dia</strong>.</span>
                       </p>
                       {summary.peakMin > intenseAvgMin * 1.2 && (
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">
-                          📈 Pico: <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.
+                        <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                          <TrendingUp className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                          <span>Pico: <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</span>
                         </p>
                       )}
                     </div>
@@ -516,9 +523,10 @@ export function ForecastSimulator({
                   )}
 
                   {/* Target date context */}
-                  {earliestTarget && totalNewInPeriod > 0 && (
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      🎯 Para concluir seus <strong className="text-foreground">{totalNewInPeriod} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, mantenha ao menos <strong className="text-foreground">{currentNewCards} novos cards/dia</strong>.
+                  {earliestTarget && totalNewRemaining > 0 && (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                      <CalendarDays className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                      <span>Para concluir seus <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, mantenha ao menos <strong className="text-foreground">{currentNewCards} novos cards/dia</strong>.</span>
                     </p>
                   )}
 
