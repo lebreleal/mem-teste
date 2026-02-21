@@ -1,90 +1,87 @@
 
+# Plano: Modo Teste para Decks Bloqueados + Estrela de Avaliacao na Comunidade
 
-# Corrigir Alocacao de Cards Novos: Unificar Logica e Eliminar Divergencias
+## 1. Modo Teste para Decks de Assinantes
 
-## Problema Central
+### Problema Atual
+Quando um membro nao-assinante vê um deck bloqueado (icone de cadeado), nao ha como interagir com ele. O botao esta desabilitado.
 
-A logica de alocacao de cards novos por dia esta DUPLICADA em dois arquivos independentes:
-- `src/hooks/useStudyPlan.ts` (calcula para exibicao no dashboard/plano)
-- `src/services/studyService.ts` (calcula para a fila de estudo real)
+### Solucao
+Ao clicar no icone do deck bloqueado (Lock), abre um modal informativo explicando que o deck e exclusivo para assinantes, com duas opcoes:
+- **"Experimentar" (Modo Teste)**: carrega os cards do deck em uma sessao temporaria de estudo. Nenhum dado e salvo (sem importar deck, sem salvar review_logs, sem alterar cards).
+- **"Assinar"**: redireciona para o modal de assinatura existente.
 
-Esses dois caminhos usam fontes de dados diferentes (RPC `get_all_user_deck_stats` vs query direta na tabela `cards`) e podem divergir, causando o bug onde o display mostra um numero mas a fila entrega outro.
+O modo teste reutiliza os cards ja carregados pelo RLS (turma members can view shared deck cards) e monta uma fila local de estudo sem persistencia.
 
-## Dados Verificados
+### Detalhes Tecnicos
 
-**Perfil 06cfa099** (Histologia + Fisiopatologia):
-- Budget global: 50 cards/dia
-- Histologia (root a9c13602): 243 cards novos
-- Fisiopatologia (root b651b080): 320 cards novos
-- Alocacao esperada: ~22 Histo + ~28 Fisiopato = 50
+**Novo componente `TrialStudyModal`:**
+- Um Dialog/Drawer fullscreen que recebe `deckId` e `deckName`
+- Carrega cards via query (`cards` table, filtrado por `deck_id`)
+- Exibe o FlashCard existente em modo somente-leitura
+- Botoes de rating (Errei, Dificil, Bom, Facil) apenas avancam para o proximo card na fila local, sem chamar `submitReview`
+- Header simples com titulo + badge "Modo Teste" + botao Voltar
+- Ao terminar todos os cards ou sair, fecha o modal
 
-**Perfil 73ac68a8** (Psiquiatria + Urgencia + Ginecologia):
-- Budget global: 40 cards/dia
-- Psiquiatria: 90 novos, Urgencia: 8 novos, Ginecologia: 325 novos
-- Alocacao esperada: ~9 + ~2 + ~29 = 40
+**Alteracoes em `ContentTab.tsx`:**
+- Quando o deck e `subscriberOnly && !canImport`, ao clicar no icone Lock, abre um novo modal intermediario ("SubscriberGateDialog") em vez de nao fazer nada
+- Esse modal mostra: titulo do deck, contagem de cards, explicacao de que e exclusivo, e dois botoes: "Experimentar" e "Assinar"
+- "Experimentar" abre o `TrialStudyModal`
+- "Assinar" abre o modal de assinatura existente (setShowSubscribeModal do SubHeader, ou dispara handleSubscribe)
 
-## Solucao: Extrair Logica Compartilhada
+**Nao necessita mudancas no banco de dados** — os cards ja sao visiveis via RLS para membros da turma.
 
-### Passo 1: Criar funcao pura de alocacao em `src/lib/studyUtils.ts`
+---
 
-Extrair a logica de alocacao proporcional para uma funcao pura reutilizavel:
+## 2. Estrela de Avaliacao no Header da Comunidade
 
-```text
-function computeNewCardAllocation(params: {
-  globalBudget: number;
-  plans: { id: string; deck_ids: string[]; target_date: string | null; priority: number }[];
-  newPerRoot: Record<string, number>;  // cards novos por root ID
-  findRoot: (id: string) => string;
-}): { perDeck: Record<string, number>; perPlan: Record<string, number> }
-```
+### Problema Atual
+A avaliacao da comunidade so e acessivel pelas configuracoes. Nao ha indicador visual rapido.
 
-Esta funcao:
-- Recebe dados ja processados (sem dependencia de Supabase)
-- Calcula pesos por root (urgencia = remaining / daysLeft)
-- Distribui budget proporcionalmente com piso minimo de 5%
-- Deduplica roots compartilhados entre planos (globalClaimedRoots)
-- Retorna tanto alocacao por deck (root) quanto por plano
+### Solucao
+Adicionar uma pequena estrela ao lado do titulo da comunidade no `TurmaSubHeader`:
+- **Estrela apagada (outline)**: usuario ainda nao avaliou
+- **Estrela preenchida (filled, cor amarela/dourada)**: usuario ja avaliou
+- Nao mostra a nota numerica, apenas o icone
 
-### Passo 2: Atualizar `useStudyPlan.ts`
+Ao clicar na estrela, abre um modal compacto com:
+- Seletor de 1-5 estrelas para o usuario avaliar/reavliar
+- Campo de comentario opcional (textarea)
+- Botao "Salvar"
+- Abaixo, lista das avaliacoes de outros membros (nome, nota, comentario)
 
-Substituir a logica inline (linhas 322-390) pela chamada da funcao compartilhada, passando `perDeckNewCounts` do RPC.
+### Detalhes Tecnicos
 
-### Passo 3: Atualizar `studyService.ts`
+**Alteracoes em `TurmaSubHeader.tsx`:**
+- Importar `useMyTurmaRating` do hook existente
+- Adicionar icone `Star` do lucide-react ao lado do titulo (antes dos botoes de acao)
+- Estrela com tamanho `h-4 w-4`, cor `text-amber-400` se ja avaliou (com fill), `text-muted-foreground/40` se nao
+- Ao clicar, abre novo estado `showRating` com Dialog
 
-Substituir a logica inline (linhas 152-219) pela mesma funcao compartilhada, passando `newPerRoot` da query direta. Garantir que:
-- `expandedPlanDeckIds` inclui roots dos deck IDs do plano (nao apenas descendentes)
-- A contagem de cards novos agrega corretamente por root incluindo o proprio root
+**Novo Dialog de Rating (inline no `TurmaSubHeader`):**
+- Header: "Avaliar Comunidade"
+- 5 estrelas clicaveis para selecionar nota
+- Textarea para comentario
+- Botao "Salvar" usando `submitRating` do hook existente
+- Secao "Avaliacoes" abaixo: nova query para buscar todas as avaliacoes (`turma_ratings` com join em `profiles` via `get_public_profiles`)
 
-### Passo 4: Corrigir contagem de cards novos no `studyService.ts`
+**Nova funcao no `turmaService.ts`:**
+- `fetchAllTurmaRatings(turmaId)`: busca todas as avaliacoes com nomes dos usuarios
 
-Bug sutil: quando o plano seleciona sub-decks mas NAO o root, a `expandedPlanDeckIds` (linha 144-150) expande a partir de `allPlanDeckIds` sem incluir os roots. Isso faz com que cards diretamente no root nao sejam contados no `newPerRoot`.
+**Nova query no `useTurmaRating.ts`:**
+- `useAllTurmaRatings(turmaId)`: query habilitada apenas quando o modal esta aberto
 
-Correcao: ao expandir para contagem, incluir tambem os roots dos IDs do plano:
+**Nao necessita mudancas no banco de dados** — a tabela `turma_ratings` ja existe com colunas `rating`, `comment`, `user_id`, `turma_id`. RLS ja permite membros visualizarem ratings.
 
-```text
-const expandedPlanDeckIds = new Set<string>();
-for (const id of Array.from(allPlanDeckIds)) {
-  expandedPlanDeckIds.add(id);
-  // Incluir root ancestor para contar cards no root
-  const rootId = findRootAncestorId(allDecks ?? [], id);
-  expandedPlanDeckIds.add(rootId);
-  // Incluir descendentes
-  const descs = collectDescendantIds(allDecks ?? [], id);
-  for (const d of descs) expandedPlanDeckIds.add(d);
-}
-```
+---
 
-## Resumo de Arquivos
+## Arquivos a Criar/Modificar
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/lib/studyUtils.ts` | Adicionar `computeNewCardAllocation()` - funcao pura compartilhada |
-| `src/hooks/useStudyPlan.ts` | Substituir logica inline pela funcao compartilhada |
-| `src/services/studyService.ts` | Substituir logica inline pela funcao compartilhada + fix da expansao de IDs |
-
-## Resultado Esperado
-
-1. Display e fila de estudo usam EXATAMENTE a mesma logica de alocacao
-2. Qualquer perfil com qualquer combinacao de objetivos/decks/subdecks recebe alocacao consistente
-3. Budget global sempre respeitado (soma das alocacoes = daily_new_cards_limit)
-4. Correcoes aplicadas uma unica vez na funcao compartilhada beneficiam ambos os caminhos
+| Arquivo | Acao |
+|---|---|
+| `src/components/turma-detail/TrialStudyModal.tsx` | Criar - sessao de estudo temporaria |
+| `src/components/turma-detail/SubscriberGateDialog.tsx` | Criar - modal informativo do deck bloqueado |
+| `src/components/turma-detail/ContentTab.tsx` | Modificar - integrar gate dialog para decks bloqueados |
+| `src/components/turma-detail/TurmaSubHeader.tsx` | Modificar - adicionar estrela + modal de avaliacao |
+| `src/hooks/useTurmaRating.ts` | Modificar - adicionar query para todas as avaliacoes |
+| `src/services/turmaService.ts` | Modificar - adicionar fetchAllTurmaRatings |
