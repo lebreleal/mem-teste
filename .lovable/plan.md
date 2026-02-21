@@ -1,111 +1,120 @@
 
 
-## Plano: Corrigir legenda, cards criados no grafico e aviso de meta inviavel
+## Plano: Corrigir simulador de estudos — capacidade, consistencia e textos
 
-### Problema 1: Cards criados/dia sumiram do grafico
+### Bug 1: Tempo de estudo nao afeta o grafico
 
-O worker (`forecastWorker.ts`) cria cards com `state: 0` e adiciona ao `newByDeck`, fazendo-os entrar no pool de "novos". No grafico, eles aparecem misturados na barra "Novos" (azul) sem distincao. O usuario quer que cards criados tenham sua propria representacao visual.
+**Problema**: O worker processa TODOS os cards de revisao e TODOS os novos cards do dia, independente da capacidade (tempo de estudo). Mudar de 90min para 209min so move a linha de referencia — as barras nao mudam. O usuario espera que com mais tempo, o grafico reflita uma carga diferente (menos acumulo, mais folga para novos cards).
 
-**Solucao**: Adicionar campo `createdCards` e `createdMin` ao tipo `ForecastPoint` e ao worker, rastreando separadamente quantos dos "novos" do dia vieram do pool de criados. No grafico, nao precisa de barra separada (complicaria demais), mas na legenda e tooltip mostrar a composicao: "X novos (Y criados + Z existentes)".
+**Causa raiz**: O worker nao limita os cards novos pela capacidade disponivel apos revisoes. Revisoes sao obrigatorias (nao podem ser puladas), mas novos cards so deveriam entrar se houver tempo sobrando.
 
-**Arquivos**:
-- `src/types/forecast.ts` -- adicionar `createdCards: number` ao `ForecastPoint`
-- `src/workers/forecastWorker.ts` -- rastrear cards criados por dia separadamente no point
-- `src/components/study-plan/PlanComponents.tsx` -- tooltip e legenda mostram composicao
+**Solucao**: No worker, apos processar revisoes + aprendendo + reaprendendo, calcular minutos restantes. Limitar `newCardsPerDay` pelo que cabe no tempo disponivel:
 
----
+```text
+capacidadeRestante = capacityMin - (reviewMin + learningMin + relearningMin)
+maxNovosPorTempo = floor(capacidadeRestante * 60 / newSecsPerCard)
+novosEfetivos = min(newCardsPerDay, maxNovosPorTempo)
+```
 
-### Problema 2: Texto "Meta inviavel" confuso
+Isso faz o grafico reagir a mudancas de tempo de estudo.
 
-O texto atual diz "para dominar todos os cards ate a data" mas nao diz QUAL data. O usuario quer clareza.
-
-**Solucao**: Incluir a data limite explicitamente em TODOS os avisos de meta inviavel:
-
-**De**: "Para dominar todos os cards ate a data escolhida, seriam necessarios 206 novos cards/dia..."
-
-**Para**: "Para estudar todos os 412 cards novos ate 22/02/2026, voce precisaria de 206 novos cards/dia, o que causa burnout. Recomendamos no maximo 50/dia."
-
-**Arquivos**:
-- `src/pages/StudyPlan.tsx` -- 3 locais com aviso de meta (linhas ~856, ~1547, ~849-850)
+**Arquivo**: `src/workers/forecastWorker.ts`
 
 ---
 
-### Problema 3: Botao "Mudar" abre tela de edicao inesperada
+### Bug 2: Dashboard diz "prazo ok" mas wizard diz "meta apertada"
 
-No dashboard (linha 1555-1561), o botao "Mudar data limite" chama `startEdit(plan)` + `setStep(3)`, que abre o formulario de edicao completo do objetivo. Isso e confuso porque o usuario esperava apenas alterar a data, nao sair do dashboard.
+**Problema**: O dashboard usa `projectedCompletionDate` (baseado na taxa efetiva real) e nao aplica margem. O wizard usa `minDaysNeeded * 1.3` como margem e marca "meta apertada" quando `daysLeft < minDaysNeeded * 1.3`. Resultado: com target_date em 03/03 e projecao em 02/03, o dashboard diz OK mas o wizard diz apertada.
 
-**Solucao**: Em vez de abrir o editor completo, o botao deve alterar a data diretamente para a data sugerida (igual ao comportamento do editor de objetivo nas linhas 864-866 que faz `setTargetDate(suggestedDate)`). Ou abrir um dialog inline com calendario.
+**Solucao**: 
+1. Remover a margem de 1.3x do wizard para o check "isTight". Manter a margem apenas na sugestao de data.
+2. Na tela do wizard, usar a mesma logica do dashboard: comparar a data projetada vs target_date.
+3. Explicar melhor o proposito: "a meta serve para voce dominar todos os cards novos ANTES da data limite".
 
-A abordagem mais simples: o botao do dashboard aplica a data sugerida diretamente via mutacao (salvar no banco) em vez de abrir o editor.
+**Arquivos**: `src/pages/StudyPlan.tsx` (wizard feasibility check)
 
-**Arquivo**: `src/pages/StudyPlan.tsx` -- alterar onClick dos botoes "Mudar data limite" no dashboard (linhas ~1555 e ~1576) para aplicar a data sugerida diretamente via `updatePlan` mutation.
+---
+
+### Bug 3: Textos de "meta apertada/inviavel" confusos
+
+**Problema**: O usuario nao entende o proposito da data limite. Os textos nao explicam que o objetivo e DOMINAR (iniciar o estudo de) todos os cards novos antes da data.
+
+**Solucao**: Reformular todos os textos de meta para deixar claro:
+- "Para dominar todos os X cards novos antes de DD/MM/YYYY, voce precisaria iniciar Y cards/dia"
+- "No ritmo atual, voce termina os cards novos em DD/MM/YYYY — antes da sua data limite"
+- Adicionar texto explicativo no wizard: "A data limite indica ate quando voce quer ter INICIADO o estudo de todos os cards novos dos baralhos selecionados."
+
+**Arquivos**: `src/pages/StudyPlan.tsx`, `src/components/study-plan/PlanComponents.tsx`
+
+---
+
+### Bug 4: Data sugerida incorreta
+
+**Problema**: A data sugerida usa um cap fixo de 50/dia sem considerar a taxa efetiva real (limitada pelo tempo de estudo). Se o usuario tem 90min e cada card novo leva 30s, ele pode estudar no maximo ~X novos apos revisoes. A sugestao deveria considerar isso.
+
+**Solucao**: Calcular `effectiveRate = min(budget, cardsFitByTime)` e usar isso na sugestao de data em vez do cap fixo de 50.
+
+**Arquivos**: `src/pages/StudyPlan.tsx` (dashboard + wizard)
 
 ---
 
 ### Detalhes Tecnicos
 
-#### 1. `src/types/forecast.ts`
-Adicionar ao `ForecastPoint`:
+#### 1. `src/workers/forecastWorker.ts` — Capacidade limita novos cards
+
+Mover o calculo de minutos de revisao para ANTES da introducao de novos cards:
+
 ```typescript
-createdCards: number;  // cards que foram criados naquele dia (subset de newCards)
+// Calcular minutos de revisao/learning/relearning primeiro
+const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
+const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
+const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
+const usedMin = revMin + learnMin + relearnMin;
+const availableForNewMin = Math.max(0, capacityMin - usedMin);
+const maxNewByCapacity = Math.floor((availableForNewMin * 60) / newSecsPerCard);
+const effectiveNewLimit = Math.min(newCardsPerDay, Math.max(0, maxNewByCapacity));
+// Usar effectiveNewLimit em vez de newCardsPerDay para remainingNew
 ```
 
-#### 2. `src/workers/forecastWorker.ts`
-Rastrear `createdCardsToday` separadamente:
+Isso requer reordenar o loop: processar reviews/learning/relearning ANTES de decidir quantos novos introduzir.
+
+#### 2. `src/pages/StudyPlan.tsx` — Wizard feasibility consistente
+
 ```typescript
-// Apos "Generate newly created cards for today"
-let createdCardsToday = 0;
-if (createdCardsPerDay > 0 && day > 0) {
-  // ... logica existente ...
-  createdCardsToday = totalCreatedThisDay;
-}
-
-// No push do point:
-points.push({
-  ...existente,
-  createdCards: Math.round(createdCardsToday * scaleFactor),
-});
+// Remover margem de 1.3x do check isTight
+const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.1; // margem minima
+// Manter 1.3x apenas na sugestao de data
+const safeDays = Math.ceil(minDaysNeeded * 1.3);
 ```
 
-Tambem na agregacao semanal (linha ~400), agregar `createdCards`.
-
-#### 3. `src/components/study-plan/PlanComponents.tsx`
-
-**Tooltip** (linha ~411): Quando `d.createdCards > 0`, mostrar:
-```
-X novos (Y existentes + Z criados) -- Xmin
+Textos do wizard step 3:
+```text
+"A data limite indica ate quando voce quer ter iniciado o estudo de todos 
+os cards novos dos baralhos selecionados."
 ```
 
-**Legenda** (linha ~507): Quando `createdInPeriod > 0`, mostrar:
-```
-🎯 412 cards novos existentes + ~630 a criar (90 criados/dia x 7 dias) ate 22/02/2026
-```
+#### 3. `src/components/study-plan/PlanComponents.tsx` — Legenda com explicacao
 
-**Status**: Manter logica atual de verde/amarelo.
-
-#### 4. `src/pages/StudyPlan.tsx`
-
-**Meta inviavel** -- incluir data e total explicitos:
-```
-⚠ Para estudar todos os 412 cards novos ate 22/02/2026, voce precisaria de 206 novos/dia, o que causa burnout. Recomendamos no maximo 50/dia.
+Na legenda, quando ha target date:
+```text
+"Para dominar todos os X cards novos antes de DD/MM/YYYY, 
+voce precisa iniciar ~Y novos/dia."
 ```
 
-**Botao "Mudar"** no dashboard -- aplicar data diretamente:
+#### 4. Sugestao de data baseada em effective rate
+
+Dashboard e wizard usam a mesma formula:
 ```typescript
-onClick={() => {
-  const editablePlan = plans.find(p => p.target_date);
-  if (editablePlan) {
-    updatePlan.mutate({ id: editablePlan.id, target_date: suggestedDate.toISOString() });
-  }
-}}
+const effectiveRate = Math.min(budget, cardsFitByTime, 50); // cap de 50 p/ burnout
+const minDays = Math.ceil(totalNew / effectiveRate);
+const safeDays = Math.ceil(minDays * 1.3);
 ```
 
 ---
 
 ### Resumo de arquivos a editar
 
-1. `src/types/forecast.ts` -- adicionar `createdCards` ao ForecastPoint
-2. `src/workers/forecastWorker.ts` -- rastrear e emitir `createdCards` por dia/semana
-3. `src/components/study-plan/PlanComponents.tsx` -- tooltip e legenda com composicao
-4. `src/pages/StudyPlan.tsx` -- textos de meta inviavel com data explicita + botao Mudar aplica direto
+1. `src/workers/forecastWorker.ts` — reordenar loop: reviews primeiro, depois limitar novos pela capacidade
+2. `src/pages/StudyPlan.tsx` — consistencia de feasibility, textos claros, sugestao de data correta
+3. `src/components/study-plan/PlanComponents.tsx` — legenda e avisos com linguagem clara sobre "dominar cards antes da data"
 
