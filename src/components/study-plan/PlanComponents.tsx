@@ -233,34 +233,42 @@ export function ForecastSimulator({
         </div>
 
         {/* New cards per day */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground">~</span>
-          {editingNewCards ? (
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={0}
-                max={999}
-                value={tempNewCards}
-                onChange={e => setTempNewCards(e.target.value)}
-                className="h-6 w-16 text-xs px-1.5"
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && handleConfirmNewCards()}
-              />
-              <span className="text-muted-foreground">cards novos/dia</span>
-              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmNewCards}>
-                <Check className="h-3 w-3" />
-              </Button>
-              {newCardsOverride != null && (
-                <button onClick={handleResetNewCards} className="text-[10px] text-primary underline">reset</button>
-              )}
-            </div>
-          ) : (
-            <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
-              <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
-              <span className="text-muted-foreground">cards novos para estudar/dia</span>
-              <Pencil className="h-3 w-3 text-muted-foreground/50" />
-            </button>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">~</span>
+            {editingNewCards ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  max={999}
+                  value={tempNewCards}
+                  onChange={e => setTempNewCards(e.target.value)}
+                  className="h-6 w-16 text-xs px-1.5"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && handleConfirmNewCards()}
+                />
+                <span className="text-muted-foreground">cards novos/dia</span>
+                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmNewCards}>
+                  <Check className="h-3 w-3" />
+                </Button>
+                {newCardsOverride != null && (
+                  <button onClick={handleResetNewCards} className="text-[10px] text-primary underline">reset</button>
+                )}
+              </div>
+            ) : (
+              <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
+                <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
+                <span className="text-muted-foreground">cards novos para estudar/dia</span>
+                <Pencil className="h-3 w-3 text-muted-foreground/50" />
+              </button>
+            )}
+          </div>
+          {(newCardsOverride ?? defaultNewCardsPerDay) > 50 && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1 ml-4">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              Mais de 50 novos cards/dia pode causar burnout. Recomendamos diminuir para um ritmo sustentável.
+            </p>
           )}
         </div>
 
@@ -500,14 +508,29 @@ export function ForecastSimulator({
                   </p>
 
                   {/* Target date context */}
-                  {earliestTarget && totalNewRemaining > 0 && (
-                    <>
-                      <div className="h-px bg-border" />
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar — {createdPerDay} criados/dia × {approxDays} dias)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
-                      </p>
-                    </>
-                  )}
+                  {earliestTarget && totalNewRemaining > 0 && (() => {
+                    const neededPerDay = Math.ceil(totalNewRemaining / Math.max(1, approxDays));
+                    const isBurnout = neededPerDay > 50;
+                    const cantFinish = actualNewPerDay < neededPerDay;
+                    return (
+                      <>
+                        <div className="h-px bg-border" />
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar — {createdPerDay} criados/dia × {approxDays} dias)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
+                        </p>
+                        {isBurnout && (
+                          <p className="text-[10px] text-red-600 dark:text-red-400 font-medium leading-relaxed">
+                            ⚠ Meta inviável — para estudar todos os <strong>{totalNewRemaining} cards novos</strong> até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia e estender a data limite.
+                          </p>
+                        )}
+                        {!isBurnout && cantFinish && (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                            ⚡ Meta apertada — são necessários <strong>{neededPerDay} novos/dia</strong> para terminar até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas a simulação mostra ~<strong>{actualNewPerDay}/dia</strong>. Considere aumentar o limite de novos cards ou estender a data.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Status: ok or overloaded */}
                   {isBelowCapacity ? (
