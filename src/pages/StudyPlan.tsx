@@ -553,7 +553,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     return 7;
   }, [forecastView, hasTargetDate, plans, customTargetDate]);
 
-  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, isUsingDefaults } = useForecastSimulator({
+  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, totalNewCards, isUsingDefaults } = useForecastSimulator({
     deckIds: allDeckIds,
     horizonDays,
     newCardsPerDayOverride: newCardsOverride,
@@ -593,6 +593,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       customTargetDate={customTargetDate}
       onCustomTargetDate={setCustomTargetDate}
       isUsingDefaults={isUsingDefaults}
+      totalNewCards={totalNewCards}
       defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
       createdCardsOverride={createdCardsOverride}
       onCreatedCardsChange={setCreatedCardsOverride}
