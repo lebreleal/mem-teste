@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3 } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -193,7 +193,7 @@ export function ForecastSimulator({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Estudo</h3>
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Simulação de Estudos</h3>
           </div>
           
         </div>
@@ -384,7 +384,9 @@ export function ForecastSimulator({
                     if (!d) return null;
                     return (
                       <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1">
-                        <p className="font-semibold">📅 {d.day} — {d.date}</p>
+                        <p className="font-semibold flex items-center gap-1.5">
+                          <CalendarIcon className="h-3 w-3 text-primary" /> {d.day} — {d.date}
+                        </p>
                         <div className="space-y-0.5">
                           <p className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
@@ -403,10 +405,16 @@ export function ForecastSimulator({
                             {d.reviewCards} dominados — {d.reviewMin}min
                           </p>
                         </div>
-                        <p className={cn('pt-1 border-t font-medium', d.overloaded && 'text-red-500')}>
-                          Total: {d.totalMin}min / {d.capacityMin}min
-                          {d.overloaded && ' ⚠️'}
-                        </p>
+                        <div className="pt-1 border-t space-y-0.5">
+                          <p className="flex items-center gap-1.5 font-medium">
+                            <Layers className="h-3 w-3 text-primary" />
+                            {d.newCards + d.learningCards + d.relearningCards + d.reviewCards} cartões
+                          </p>
+                          <p className={cn('font-medium', d.overloaded && 'text-destructive')}>
+                            ⏱ {d.totalMin}min / {d.capacityMin}min
+                            {d.overloaded && ' ⚠️'}
+                          </p>
+                        </div>
                       </div>
                     );
                   }}
@@ -441,17 +449,33 @@ export function ForecastSimulator({
             </ResponsiveContainer>
 
             {/* Summary explanation - didactic */}
-            {summary && (
-              <div className="rounded-lg bg-muted/50 border px-3 py-2.5">
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
-                  você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
-                  {summary.peakMin > summary.avgDailyMin && (
-                    <> O dia mais puxado terá <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
+            {summary && (() => {
+              const totalCards = data.reduce((s, d) => s + d.newCards + d.learningCards + d.relearningCards + d.reviewCards, 0);
+              const avgCards = Math.round(totalCards / data.length);
+              const isBelowCapacity = summary.avgDailyMin < avgCapacity;
+              const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
+              return (
+                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
+                    você precisará estudar em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}</strong> ({avgCards} cartões/dia).
+                    {summary.peakMin > summary.avgDailyMin && (
+                      <> O dia mais puxado será <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
+                    )}
+                  </p>
+                  {isBelowCapacity && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
+                      ✓ Você está abaixo da sua meta diária de <strong>{formatMinutes(avgCapacity)}</strong>. Seu ritmo atual é suficiente!
+                    </p>
                   )}
-                </p>
-              </div>
-            )}
+                  {!isBelowCapacity && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                      ⚠️ Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>. Considere aumentar o tempo diário de estudo ou reduzir novos cards/dia.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Overload day dialog */}
             <Dialog open={!!overloadDialogDay} onOpenChange={() => setOverloadDialogDay(null)}>
