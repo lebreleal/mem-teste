@@ -301,7 +301,8 @@ export function useStudyPlan() {
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
-    const newMinutes = Math.round((dailyNewCards * avg) / 60);
+    const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
+    const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
     const totalPending = totalNew + totalReview + totalLearning;
@@ -460,6 +461,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
     qc.invalidateQueries({ queryKey: ['global-capacity'] });
+    qc.invalidateQueries({ queryKey: ['daily-new-cards-limit'] });
   }, [qc]);
 
   const createPlan = useMutation({
