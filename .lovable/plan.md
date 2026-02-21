@@ -1,95 +1,141 @@
 
 
-# Simulador de Carga Independente com Capacidade por Dia da Semana
+# Alinhar Estados dos Cards com o Padrao Anki
 
-## Contexto
+## Situacao Atual vs Anki
 
-Atualmente o simulador usa diretamente a capacidade global do perfil (`dailyMinutes` / `weeklyMinutes`). Qualquer mudanca exige editar a capacidade real. O usuario quer poder "brincar" com cenarios sem afetar o plano ativo.
-
-## Mudancas
-
-### 1. Adicionar campo editavel de "Tempo de estudo" ao Simulador
-
-Dentro do componente `ForecastSimulator` (em `PlanComponents.tsx`), adicionar um terceiro campo editavel logo abaixo de "cards criados/dia":
-
+```text
++-------------------+------------------+------------------+
+| Conceito          | Anki oficial     | Seu app hoje     |
++-------------------+------------------+------------------+
+| Nunca visto       | type 0 (New)     | state 0 (New)    |
+| Aprendendo 1a vez | type 1 (Learning)| state 1          |
+| Esqueceu/errando  | type 3 (Relearn) | state 1 (mesma!) |
+| Revisao programada| type 2 (Review)  | state 2          |
+| Jovem (ivl < 21d) | derivado         | nao existe       |
+| Maduro (ivl >=21d)| derivado         | nao existe       |
+| Suspenso          | queue -1         | scheduled > 50y  |
+| Enterrado         | queue -2/-3      | nao existe       |
++-------------------+------------------+------------------+
 ```
-~ 20 novos para estudar/dia [editar]
-+ 88 cards criados/dia       [editar]
-⏱ 60min/dia                  [editar] [por dia da semana]
+
+O principal bug: quando um card dominado (state 2) recebe "Errei", ele volta para `state: 1`. No Anki, isso seria `type: 3` (Relearning). Misturar os dois no mesmo state distorce completamente os tempos medios.
+
+## Plano de Mudancas
+
+### 1. Adicionar state 3 (Reaprendendo)
+
+Mudar o codigo FSRS e SM2 para que quando um card de revisao (state 2) recebe rating 1 ("Again"), ele va para **state 3** em vez de state 1.
+
+**Arquivo: `src/lib/fsrs.ts`**
+- Linha 157: mudar `state: 1` para `state: 3` no bloco "Again para relearning"
+- Atualizar a interface `FSRSOutput` para documentar state 3
+
+**Arquivo: `src/lib/sm2.ts`**
+- Mesma mudanca: quando card de revisao erra, vai para state 3
+
+### 2. Tratar state 3 como "em aprendizado" no agendamento
+
+O state 3 se comporta igual ao state 1 para fins de agendamento (usa relearning steps), mas e categorizado separadamente para estatisticas.
+
+**Arquivo: `src/lib/fsrs.ts`**
+- Adicionar bloco `if (card.state === 3)` que reutiliza a logica do state 1 mas com relearningSteps prioritariamente
+
+**Arquivo: `src/hooks/useStudySession.ts`** (e qualquer lugar que filtra state === 1)
+- Onde filtra "cards em aprendizado", incluir state 1 **ou** state 3
+
+### 3. Atualizar a query de fila de estudo
+
+Todos os lugares que fazem `state = 1` precisam incluir `state IN (1, 3)`:
+- RPCs do banco (`get_all_user_deck_stats`, `get_deck_stats`, `get_plan_metrics`)
+- Queries no frontend que filtram por state
+
+**Nova migration SQL:**
+- Atualizar as RPCs para tratar state 3 como "em aprendizado" nas contagens
+- Cards existentes com state 1 que na verdade sao relearning continuam funcionando (retrocompativel pois state 1 e 3 sao tratados igual no agendamento)
+
+### 4. Atualizar nomenclatura e categorias no app
+
+Em vez dos nomes atuais, usar:
+
+```text
++-------------------+------------------+-------------------------+
+| State             | Nome no app      | Tempo medio (simulador) |
++-------------------+------------------+-------------------------+
+| 0 (New)           | Novos            | ~30s (1a vez vendo)     |
+| 1 (Learning)      | Aprendendo       | ~15s (passos iniciais)  |
+| 3 (Relearning)    | Reaprendendo     | ~12s (erraram, voltando)|
+| 2 (Review)        | Em revisao       | ~8s (agendados)         |
+| 2 + ivl >= 21d    | Maduros          | derivado, nao precisa   |
+| frozen            | Congelados       | ja existe               |
++-------------------+------------------+-------------------------+
 ```
-
-- Por padrao, mostra a capacidade real do perfil
-- Ao editar, o usuario pode mudar o valor **apenas no simulador**
-- Um botao "por dia da semana" expande 7 sliders inline (Seg-Dom) dentro do proprio simulador
-- Isso NAO altera a capacidade real do perfil
-
-### 2. Botao "Aplicar ao meu plano"
-
-Quando o usuario editar o tempo no simulador e gostar do resultado:
-- Aparece um botao discreto "Aplicar ao meu plano" abaixo do grafico
-- Ao clicar, os valores simulados sao salvos na capacidade global real (`profiles.daily_study_minutes` e `profiles.weekly_study_minutes`)
-- Toast de confirmacao
-
-### 3. Mudancas tecnicas
 
 **Arquivo: `src/components/study-plan/PlanComponents.tsx`**
-- Adicionar estado local `editingCapacity`, `tempDailyMin`, `tempWeekly`, `editingWeeklyMode`
-- Novo campo editavel de minutos/dia com icone de relogio
-- Toggle "por dia da semana" que expande 7 inputs inline compactos
-- Botao "Aplicar ao meu plano" que chama um callback `onApplyCapacity`
-- O campo mostra um indicador visual quando o valor simulado difere do real (ex: badge "simulando")
+- Grafico mostra 4 categorias: Novos, Aprendendo, Reaprendendo, Em revisao
+- Cores distintas para cada uma
 
-**Arquivo: `src/pages/StudyPlan.tsx` (ForecastSimulatorSection)**
-- Adicionar estados `dailyMinutesOverride` e `weeklyMinutesOverride`
-- Passar os overrides ao hook `useForecastSimulator` em vez dos valores reais quando editados
-- Implementar `handleApplyCapacity` que chama `updateCapacity.mutateAsync` com os valores simulados
-- Passar `onApplyCapacity` e os valores reais como props ao `ForecastSimulator`
+**Arquivo: `src/components/deck-detail/CardList.tsx`** e `DeckDetailContext.tsx`
+- Filtros de estado incluem: Novos, Aprendendo, Reaprendendo, Em revisao, Congelados
 
-**Arquivo: `src/hooks/useForecastSimulator.ts`**
-- Ja recebe `dailyMinutes` e `weeklyMinutes` como params -- nenhuma mudanca necessaria, os overrides serao passados pelo caller
+### 5. Corrigir calculo de tempo no simulador
 
-### 4. UI do campo de capacidade no simulador
+**Nova migration SQL (update da RPC `get_forecast_params`):**
 
-Layout compacto, consistente com os campos de novos/dia e criados/dia:
-
-```
-⏱ 60min/dia [lapis]              -- modo visualizacao
-⏱ [__60__] min/dia [check]       -- modo edicao uniforme
-  [Igual todo dia] [Por dia]      -- toggle aparece ao editar
+```sql
+'timing', (
+  SELECT jsonb_build_object(
+    'avg_new_seconds',        COALESCE(AVG(dur) FILTER (WHERE pre_state = 0), 30),
+    'avg_learning_seconds',   COALESCE(AVG(dur) FILTER (WHERE pre_state = 1), 15),
+    'avg_relearning_seconds', COALESCE(AVG(dur) FILTER (WHERE pre_state = 3), 12),
+    'avg_review_seconds',     COALESCE(AVG(dur) FILTER (WHERE pre_state = 2), 8)
+  )
+  FROM (...)
+)
 ```
 
-Se "Por dia da semana":
+Porem como os `review_logs` atuais NAO salvam o state do card no momento da revisao, precisamos:
+
+**Arquivo: migration SQL** -- adicionar coluna `state` na tabela `review_logs`:
+```sql
+ALTER TABLE review_logs ADD COLUMN state integer DEFAULT NULL;
 ```
-Seg [__60__]  Ter [__60__]  Qua [__45__]
-Qui [__60__]  Sex [__30__]  Sab [__90__]
-Dom [__90__]
-[Confirmar]
-```
 
-### 5. Botao "Aplicar" aparece condicionalmente
+A partir de agora, cada review salva o state do card antes da revisao. Para dados historicos, usamos a heuristica do numero de revisoes anteriores como fallback.
 
-O botao "Aplicar ao meu plano" so aparece quando pelo menos um dos valores simulados difere dos valores reais:
-- `dailyMinutesOverride !== undefined`
-- `weeklyMinutesOverride !== undefined`
-- `newCardsOverride !== undefined`
-- `createdCardsOverride !== undefined`
+### 6. Atualizar o worker do simulador
 
-Estilo: botao outline com icone de check, posicionado abaixo do grafico/sumario.
+**Arquivo: `src/workers/forecastWorker.ts`**
+- Adicionar state 3 no `SimCard`
+- Quando um card de revisao (state 2) recebe rating 1, vai para state 3
+- Categorias de tempo separadas: novo, aprendendo, reaprendendo, em revisao
+- O `ForecastPoint` ganha campo `relearningCards` e `relearningMin`
 
-### 6. Renomear secao
+**Arquivo: `src/types/forecast.ts`**
+- Adicionar `relearningCards`, `relearningMin` ao `ForecastPoint`
+- Adicionar `avg_relearning_seconds` ao `ForecastTiming`
 
-- De: "Previsao de Carga"
-- Para: "Simulador de Carga"
+### 7. Sobre "Suspenso" e "Enterrado"
 
-## Resumo do fluxo
+- **Suspenso/Congelado**: ja existe no app (scheduled_date > 50 anos). Funciona bem, nao precisa mudar.
+- **Enterrado (Buried)**: conceito do Anki para esconder temporariamente irmaos (siblings) de um card no mesmo dia. Isso e mais relevante para decks com muitos clozes. Pode ser implementado no futuro mas nao e prioridade agora.
 
-1. Usuario abre /plano
-2. Ve o Simulador com valores reais pre-preenchidos
-3. Edita "novos/dia", "criados/dia" ou "tempo/dia" -- grafico recalcula em tempo real
-4. Se gostar, clica "Aplicar ao meu plano" -- valores salvos no perfil
-5. Se nao gostar, simplesmente sai -- nada muda
+## Resumo de impacto
+
+- **Retrocompativel**: cards existentes com state 1 continuam funcionando (o agendamento trata 1 e 3 igual)
+- **Dados historicos**: a RPC usa heuristica para dados antigos sem o campo `state` nos logs
+- **Simulador mais preciso**: 4 categorias de tempo em vez de 3
+- **Nomenclatura clara**: alinhada com o padrao Anki que os usuarios ja conhecem
 
 ## Arquivos modificados
 
-- `src/components/study-plan/PlanComponents.tsx` -- UI do simulador
-- `src/pages/StudyPlan.tsx` -- estado e callbacks de aplicacao
+- `src/lib/fsrs.ts` -- state 3 no bloco "Again"
+- `src/lib/sm2.ts` -- state 3 no bloco "Again"
+- `src/hooks/useStudySession.ts` -- incluir state 3 nas queries
+- `src/hooks/useCards.ts` -- incluir state 3
+- `src/components/study-plan/PlanComponents.tsx` -- 4 categorias
+- `src/components/deck-detail/CardList.tsx` -- filtro Reaprendendo
+- `src/components/deck-detail/DeckDetailContext.tsx` -- filtro state 3
+- `src/workers/forecastWorker.ts` -- state 3 + 4 tempos
+- `src/types/forecast.ts` -- novos campos
+- Nova migration SQL -- coluna `state` em review_logs + update RPCs
