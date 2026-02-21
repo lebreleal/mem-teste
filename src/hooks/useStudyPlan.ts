@@ -186,46 +186,51 @@ export function useStudyPlan() {
     staleTime: 5 * 60_000,
   });
 
+  // ─── Plan health: lightweight estimate using plan age + recent activity ───
   const planHealthQuery = useQuery({
     queryKey: ['plan-health', userId, plans.length],
     queryFn: async () => {
       if (plans.length === 0) return null;
-      const earliest = plans.reduce((min, p) => p.created_at < min ? p.created_at : min, plans[0].created_at);
-      const { data, error } = await supabase
+      // Only check last 14 days for consistency - much lighter than fetching all logs
+      const since = new Date();
+      since.setDate(since.getDate() - 14);
+      const { count, error } = await supabase
         .from('review_logs')
-        .select('reviewed_at')
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId!)
-        .gte('reviewed_at', earliest);
+        .gte('reviewed_at', since.toISOString());
       if (error) throw error;
-      const days = new Set<string>();
-      (data ?? []).forEach((r: any) => {
-        days.add(new Date(r.reviewed_at).toISOString().slice(0, 10));
-      });
-      const totalDays = Math.max(1, Math.ceil((Date.now() - new Date(earliest).getTime()) / 86400000));
-      return Math.min(100, Math.round((days.size / totalDays) * 100));
+      // Rough consistency: did they study at least 10 of last 14 days?
+      // Approximate by checking if they have enough reviews (avg ~5 cards/day minimum)
+      const activeDays = Math.min(14, Math.ceil((count ?? 0) / 5));
+      return Math.min(100, Math.round((activeDays / 14) * 100));
     },
     enabled: !!userId && plans.length > 0,
-    staleTime: 5 * 60_000,
+    staleTime: 10 * 60_000,
   });
 
-  // ─── 7-day forecast: fetch scheduled review cards from ALL decks ───
+  // ─── 7-day forecast: count scheduled cards per day (lightweight) ───
   const forecastQuery = useQuery({
     queryKey: ['plan-forecast', userId, allDeckIds],
     queryFn: async () => {
       if (allDeckIds.length === 0) return [];
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 7);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() + 1); // skip today (we use live metrics for today)
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
       const { data, error } = await supabase
         .from('cards')
         .select('scheduled_date')
         .in('deck_id', allDeckIds)
         .eq('state', 2)
+        .gte('scheduled_date', startDate.toISOString())
         .lte('scheduled_date', endDate.toISOString());
       if (error) throw error;
       return (data ?? []) as { scheduled_date: string }[];
     },
     enabled: !!userId && allDeckIds.length > 0,
-    staleTime: 2 * 60_000,
+    staleTime: 3 * 60_000,
   });
 
   // ─── Consolidated metrics (global) ───
