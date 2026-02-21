@@ -1,120 +1,111 @@
 
-## Plano: Corrigir legenda da simulacao de estudos
 
-### Problemas identificados
+## Plano: Corrigir legenda, cards criados no grafico e aviso de meta inviavel
 
-1. **Total de cards novos inflado**: `totalNewRemaining = totalNewCards + createdInPeriod` adiciona `90 criados/dia * N dias`, transformando 412 em 1042 (7d), 3112 (30d), 5182 (1 ano). O correto e mostrar apenas `totalNewCards` (412) como "cards novos restantes".
+### Problema 1: Cards criados/dia sumiram do grafico
 
-2. **"X dias" quando sao semanas**: Quando `horizonDays > 30`, o worker agrega os dados em semanas (S1, S2...). Mas a legenda usa `data.length` e `intenseDays` como se fossem dias. No 90d, mostra "13 dias" quando sao 13 semanas. No 1 ano, "53 dias" quando sao 53 semanas.
+O worker (`forecastWorker.ts`) cria cards com `state: 0` e adiciona ao `newByDeck`, fazendo-os entrar no pool de "novos". No grafico, eles aparecem misturados na barra "Novos" (azul) sem distincao. O usuario quer que cards criados tenham sua propria representacao visual.
 
-3. **Texto confuso em todos os cenarios**: As fases "intensa" e "manutencao" calculadas sobre dados semanais nao fazem sentido textual.
+**Solucao**: Adicionar campo `createdCards` e `createdMin` ao tipo `ForecastPoint` e ao worker, rastreando separadamente quantos dos "novos" do dia vieram do pool de criados. No grafico, nao precisa de barra separada (complicaria demais), mas na legenda e tooltip mostrar a composicao: "X novos (Y criados + Z existentes)".
 
----
-
-### Solucao
-
-#### 1. Remover `createdInPeriod` do total exibido
-
-```typescript
-// De:
-const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
-const totalNewRemaining = totalNewCards + createdInPeriod;
-
-// Para:
-const totalNewRemaining = totalNewCards;
-```
-
-O campo "cards criados/dia" ja esta visivel no slider acima. Nao faz sentido soma-lo ao total restante, pois sao cards que ainda nao existem.
-
-#### 2. Detectar se dados sao semanais e usar unidade correta
-
-```typescript
-const isWeeklyData = data.length > 0 && data[0]?.day?.startsWith('S');
-const periodLabel = isWeeklyData ? 'semanas' : 'dias';
-const periodCount = data.length;
-// Para converter semanas de volta em dias aproximados:
-const approxDays = isWeeklyData ? periodCount * 7 : periodCount;
-```
-
-Usar `approxDays` para calculos de duracao e `periodLabel` para textos.
-
-#### 3. Reescrever a legenda de forma simples e universal
-
-Remover o sistema de "fases" (intensa/manutencao) que e confuso. Substituir por um resumo direto:
-
-**Bloco principal** (sempre visivel):
-- "Nos proximos {approxDays} dias, media de {avgMin}/dia. Pico de {peakMin} em {peakDay}."
-
-**Bloco target** (quando ha data limite):
-- "Faltam {412} cards novos ate {data} -- ritmo atual: ~{actualNewPerDay}/dia."
-
-**Bloco status**:
-- Verde: "Seu ritmo cabe na meta de {capacidade}/dia."
-- Amarelo: "Media de {avg} excede sua capacidade de {cap}/dia." + botoes de ajuste.
+**Arquivos**:
+- `src/types/forecast.ts` -- adicionar `createdCards: number` ao `ForecastPoint`
+- `src/workers/forecastWorker.ts` -- rastrear cards criados por dia separadamente no point
+- `src/components/study-plan/PlanComponents.tsx` -- tooltip e legenda mostram composicao
 
 ---
 
-### Detalhes tecnicos
+### Problema 2: Texto "Meta inviavel" confuso
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas 469-596)**:
+O texto atual diz "para dominar todos os cards ate a data" mas nao diz QUAL data. O usuario quer clareza.
 
-Substituir todo o bloco da legenda:
+**Solucao**: Incluir a data limite explicitamente em TODOS os avisos de meta inviavel:
 
+**De**: "Para dominar todos os cards ate a data escolhida, seriam necessarios 206 novos cards/dia..."
+
+**Para**: "Para estudar todos os 412 cards novos ate 22/02/2026, voce precisaria de 206 novos cards/dia, o que causa burnout. Recomendamos no maximo 50/dia."
+
+**Arquivos**:
+- `src/pages/StudyPlan.tsx` -- 3 locais com aviso de meta (linhas ~856, ~1547, ~849-850)
+
+---
+
+### Problema 3: Botao "Mudar" abre tela de edicao inesperada
+
+No dashboard (linha 1555-1561), o botao "Mudar data limite" chama `startEdit(plan)` + `setStep(3)`, que abre o formulario de edicao completo do objetivo. Isso e confuso porque o usuario esperava apenas alterar a data, nao sair do dashboard.
+
+**Solucao**: Em vez de abrir o editor completo, o botao deve alterar a data diretamente para a data sugerida (igual ao comportamento do editor de objetivo nas linhas 864-866 que faz `setTargetDate(suggestedDate)`). Ou abrir um dialog inline com calendario.
+
+A abordagem mais simples: o botao do dashboard aplica a data sugerida diretamente via mutacao (salvar no banco) em vez de abrir o editor.
+
+**Arquivo**: `src/pages/StudyPlan.tsx` -- alterar onClick dos botoes "Mudar data limite" no dashboard (linhas ~1555 e ~1576) para aplicar a data sugerida diretamente via `updatePlan` mutation.
+
+---
+
+### Detalhes Tecnicos
+
+#### 1. `src/types/forecast.ts`
+Adicionar ao `ForecastPoint`:
 ```typescript
-{summary && (() => {
-  const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
-  const daysWithNewAll = data.filter(d => d.newCards > 0);
-  const actualNewPerDay = daysWithNewAll.length > 0
-    ? Math.round(daysWithNewAll.reduce((s, d) => s + d.newCards, 0) / daysWithNewAll.length)
-    : 0;
-  const isBelowCapacity = summary.avgDailyMin < avgCapacity;
-  const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
-  
-  // Detect weekly aggregation
-  const isWeeklyData = data.length > 0 && data[0]?.day?.startsWith('S');
-  const approxDays = isWeeklyData ? data.length * 7 : data.length;
-  
-  // Target
-  const plansTarget = (plansList ?? []).filter(p => p.target_date);
-  const earliestTarget = plansTarget.length > 0 ? /* same logic */ : null;
-  const totalNewRemaining = totalNewCards; // NO MORE createdInPeriod
-
-  return (
-    <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
-      {/* Main summary - always one line */}
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
-        Nos proximos <strong>{approxDays} dias</strong>, media de <strong>{formatMinutes(summary.avgDailyMin)}/dia</strong>.
-        Pico em <strong>{peakDay.day} ({peakDay.date})</strong> com <strong>{formatMinutes(summary.peakMin)}</strong>.
-      </p>
-
-      {/* Target */}
-      {earliestTarget && totalNewRemaining > 0 && (
-        <>
-          <div className="h-px bg-border" />
-          <p className="text-[10px] text-muted-foreground">
-            🎯 <strong>{totalNewRemaining} cards novos</strong> ate <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> -- ritmo atual: ~<strong>{actualNewPerDay}/dia</strong>.
-          </p>
-        </>
-      )}
-
-      {/* Status */}
-      {isBelowCapacity ? (
-        <p className="text-[11px] text-emerald-600">
-          ✓ Cabe na sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-[11px] text-amber-600">
-            Media de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.
-          </p>
-          {/* Buttons to reduce/increase */}
-        </div>
-      )}
-    </div>
-  );
-})()}
+createdCards: number;  // cards que foram criados naquele dia (subset de newCards)
 ```
 
-### Arquivos a editar
+#### 2. `src/workers/forecastWorker.ts`
+Rastrear `createdCardsToday` separadamente:
+```typescript
+// Apos "Generate newly created cards for today"
+let createdCardsToday = 0;
+if (createdCardsPerDay > 0 && day > 0) {
+  // ... logica existente ...
+  createdCardsToday = totalCreatedThisDay;
+}
 
-- `src/components/study-plan/PlanComponents.tsx` -- reescrever bloco da legenda (linhas 469-596)
+// No push do point:
+points.push({
+  ...existente,
+  createdCards: Math.round(createdCardsToday * scaleFactor),
+});
+```
+
+Tambem na agregacao semanal (linha ~400), agregar `createdCards`.
+
+#### 3. `src/components/study-plan/PlanComponents.tsx`
+
+**Tooltip** (linha ~411): Quando `d.createdCards > 0`, mostrar:
+```
+X novos (Y existentes + Z criados) -- Xmin
+```
+
+**Legenda** (linha ~507): Quando `createdInPeriod > 0`, mostrar:
+```
+🎯 412 cards novos existentes + ~630 a criar (90 criados/dia x 7 dias) ate 22/02/2026
+```
+
+**Status**: Manter logica atual de verde/amarelo.
+
+#### 4. `src/pages/StudyPlan.tsx`
+
+**Meta inviavel** -- incluir data e total explicitos:
+```
+⚠ Para estudar todos os 412 cards novos ate 22/02/2026, voce precisaria de 206 novos/dia, o que causa burnout. Recomendamos no maximo 50/dia.
+```
+
+**Botao "Mudar"** no dashboard -- aplicar data diretamente:
+```typescript
+onClick={() => {
+  const editablePlan = plans.find(p => p.target_date);
+  if (editablePlan) {
+    updatePlan.mutate({ id: editablePlan.id, target_date: suggestedDate.toISOString() });
+  }
+}}
+```
+
+---
+
+### Resumo de arquivos a editar
+
+1. `src/types/forecast.ts` -- adicionar `createdCards` ao ForecastPoint
+2. `src/workers/forecastWorker.ts` -- rastrear e emitir `createdCards` por dia/semana
+3. `src/components/study-plan/PlanComponents.tsx` -- tooltip e legenda com composicao
+4. `src/pages/StudyPlan.tsx` -- textos de meta inviavel com data explicita + botao Mudar aplica direto
+
