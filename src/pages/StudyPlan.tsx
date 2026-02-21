@@ -176,21 +176,42 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
   return (
     <>
       <Dialog open={open && !showResetConfirm} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Limpar Atraso</DialogTitle>
-            <DialogDescription>
-              Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha uma estratégia:
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-amber-500" />
+              Gerenciar Revisões Atrasadas
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Diluir em dias</p>
+
+          {/* Educational explanation */}
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+            <p className="text-sm font-medium text-foreground">O que são revisões atrasadas?</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              São <strong>{totalReview} cards</strong> que já passaram da data ideal de revisão.
+              Eles <strong>já estão incluídos</strong> na sua carga diária — quando você estuda,
+              esses cards aparecem normalmente junto com os novos.
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Se o volume está alto demais, você pode <strong>redistribuí-los</strong> ao longo de
+              vários dias para tornar a carga mais leve, ou <strong>resetar</strong> os cards
+              muito antigos para recomeçar do zero.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Redistribuir ao longo de dias
+            </p>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Move as datas de revisão para distribuir a carga uniformemente.
+            </p>
             {[3, 5, 7].map(days => {
               const perDay = Math.ceil(totalReview / days);
               const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
               return (
                 <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)} disabled={diluting}>
-                  <span>Diluir em <strong>{days} dias</strong></span>
+                  <span>{diluting ? 'Redistribuindo…' : <>Diluir em <strong>{days} dias</strong></>}</span>
                   <span className="text-xs text-muted-foreground">{perDay} cards/dia · {formatMinutes(minPerDay)}</span>
                 </Button>
               );
@@ -198,22 +219,21 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
 
             {/* Reset overdue option */}
             {overdueCount != null && overdueCount > 0 && (
-              <>
-                <div className="border-t pt-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cards esquecidos</p>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between h-auto py-3 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                    onClick={() => setShowResetConfirm(true)}
-                  >
-                    <span>Resetar <strong>{overdueCount}</strong> cards com &gt;30 dias de atraso</span>
-                    <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Cards com atraso grave voltam ao estado "novo" — como se nunca tivessem sido estudados.
-                  </p>
-                </div>
-              </>
+              <div className="border-t pt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Opção drástica</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Cards com mais de 30 dias de atraso provavelmente já foram esquecidos.
+                  Resetar faz eles voltarem como "novos" — você reestuda do zero.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between h-auto py-3 border-destructive/30 text-destructive hover:bg-destructive/5"
+                  onClick={() => setShowResetConfirm(true)}
+                >
+                  <span>Resetar <strong>{overdueCount}</strong> cards com &gt;30 dias de atraso</span>
+                  <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                </Button>
+              </div>
             )}
           </div>
         </DialogContent>

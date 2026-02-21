@@ -3,7 +3,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RotateCcw, ChevronRight } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
@@ -304,26 +304,6 @@ const Dashboard = () => {
           />
         )}
 
-        {/* Backlog banner - only show if plan has overdue reviews */}
-        {metrics && metrics.totalReview > 0 && plans.length > 0 && (
-          <button
-            onClick={() => navigate('/plano')}
-            className="w-full mb-4 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex items-center gap-3 transition-colors hover:bg-amber-100/80 dark:hover:bg-amber-950/50 text-left"
-          >
-            <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-              <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {metrics.totalReview} revisões atrasadas
-              </p>
-              <p className="text-[11px] text-amber-700/80 dark:text-amber-400/70">
-                Toque para gerenciar no seu plano de estudos
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
-          </button>
-        )}
 
         <DashboardActions
           currentFolderId={state.currentFolderId}
