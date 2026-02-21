@@ -805,7 +805,8 @@ const StudyPlan = () => {
       const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
       if (!isImpossible && !isTight) return null;
       const suggestedDate = new Date(today);
-      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
+      const suggestedDays = isTight ? Math.ceil(minDaysNeeded * 1.3) : minDaysNeeded;
+      suggestedDate.setDate(suggestedDate.getDate() + suggestedDays);
       const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
     })() : null;
