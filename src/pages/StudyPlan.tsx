@@ -4,7 +4,7 @@ import {
   ArrowLeft, CalendarCheck, BookOpen, Clock, Target, AlertTriangle,
   Pencil, Trash2, CalendarIcon, Brain,
   Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
-  GripVertical, MoreVertical, Pause, X as XIcon, Play
+  GripVertical, MoreVertical, Pause, X as XIcon, Play, Plus, ChevronDown
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +22,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -30,6 +32,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useStudyPlan, getMinutesForDay, getWeeklyAvgMinutes, DAY_LABELS, type DayKey, type WeeklyMinutes, type WeeklyCardDataPoint } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
 
@@ -171,15 +174,18 @@ function DeckStudyCard({ deck, avgSecondsPerCard }: { deck: any; avgSecondsPerCa
 const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { plan, isLoading, metrics, avgSecondsPerCard, calcImpact, createPlan, updatePlan, deletePlan } = useStudyPlan();
+  const { plans, plan, isLoading, metrics, avgSecondsPerCard, calcImpact, createPlan, updatePlan, deletePlan, selectPlan } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
+  const { isPremium } = useSubscription();
   const activeDecks = useMemo(() => (decks ?? []).filter(d => !d.is_archived), [decks]);
 
   const [step, setStep] = useState<WizardStep>(1);
   const [selectedDeckIds, setSelectedDeckIds] = useState<string[]>([]);
   const [targetDate, setTargetDate] = useState<Date | undefined>();
   const [dailyMinutes, setDailyMinutes] = useState(60);
+  const [planName, setPlanName] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
 
   const step2Metrics = useMemo(() => {
     if (selectedDeckIds.length === 0) return null;
@@ -197,45 +203,77 @@ const StudyPlan = () => {
 
   const handleConfirmPlan = async () => {
     try {
-      const input = {
-        daily_minutes: dailyMinutes,
-        deck_ids: selectedDeckIds,
-        target_date: targetDate ? format(targetDate, 'yyyy-MM-dd') : null,
-      };
-      if (isEditing) {
-        await updatePlan.mutateAsync(input);
+      const name = planName.trim() || 'Meu Plano';
+      if (isEditing && editingPlanId) {
+        await updatePlan.mutateAsync({
+          id: editingPlanId,
+          name,
+          daily_minutes: dailyMinutes,
+          deck_ids: selectedDeckIds,
+          target_date: targetDate ? format(targetDate, 'yyyy-MM-dd') : null,
+        });
         toast({ title: 'Plano atualizado!' });
       } else {
-        await createPlan.mutateAsync(input);
+        // Check plan limit for non-premium
+        if (!isPremium && plans.length >= 1) {
+          toast({ title: 'Limite atingido', description: 'Assine Premium para criar mais planos.', variant: 'destructive' });
+          return;
+        }
+        await createPlan.mutateAsync({
+          name,
+          daily_minutes: dailyMinutes,
+          deck_ids: selectedDeckIds,
+          target_date: targetDate ? format(targetDate, 'yyyy-MM-dd') : null,
+        });
         toast({ title: 'Plano criado com sucesso! 🎯' });
       }
       setIsEditing(false);
+      setEditingPlanId(null);
     } catch {
       toast({ title: 'Erro ao salvar plano', variant: 'destructive' });
     }
   };
 
-  const handleDeletePlan = async () => {
+  const handleDeletePlan = async (planId?: string) => {
     try {
-      await deletePlan.mutateAsync();
+      await deletePlan.mutateAsync(planId ?? plan?.id);
       toast({ title: 'Plano excluído' });
       setIsEditing(false);
+      setEditingPlanId(null);
       setStep(1);
       setSelectedDeckIds([]);
       setTargetDate(undefined);
       setDailyMinutes(60);
+      setPlanName('');
     } catch {
       toast({ title: 'Erro ao excluir', variant: 'destructive' });
     }
   };
 
-  const startEdit = () => {
-    if (!plan) return;
-    setSelectedDeckIds(plan.deck_ids ?? []);
-    setTargetDate(plan.target_date ? new Date(plan.target_date) : undefined);
-    setDailyMinutes(plan.daily_minutes);
+  const startEdit = (p?: any) => {
+    const target = p ?? plan;
+    if (!target) return;
+    setEditingPlanId(target.id);
+    setSelectedDeckIds(target.deck_ids ?? []);
+    setTargetDate(target.target_date ? new Date(target.target_date) : undefined);
+    setDailyMinutes(target.daily_minutes);
+    setPlanName(target.name ?? '');
     setStep(1);
     setIsEditing(true);
+  };
+
+  const startNewPlan = () => {
+    if (!isPremium && plans.length >= 1) {
+      toast({ title: 'Limite atingido', description: 'Assine Premium para criar mais planos.', variant: 'destructive' });
+      return;
+    }
+    setEditingPlanId(null);
+    setSelectedDeckIds([]);
+    setTargetDate(undefined);
+    setDailyMinutes(60);
+    setPlanName('');
+    setStep(1);
+    setIsEditing(false);
   };
 
   if (isLoading || decksLoading) {
@@ -246,17 +284,23 @@ const StudyPlan = () => {
     );
   }
 
+  // Show dashboard if we have a plan and not editing
   if (plan && !isEditing) {
     return (
       <PlanDashboard
         plan={plan}
+        plans={plans}
         metrics={metrics}
         decks={activeDecks}
         avgSecondsPerCard={avgSecondsPerCard}
         calcImpact={calcImpact}
-        onEdit={startEdit}
-        onDelete={handleDeletePlan}
+        isPremium={isPremium}
+        onEdit={() => startEdit(plan)}
+        onDelete={() => handleDeletePlan(plan.id)}
         onUpdatePlan={updatePlan.mutateAsync}
+        onSelectPlan={(id) => selectPlan.mutateAsync(id)}
+        onNewPlan={startNewPlan}
+        onEditPlan={(p) => startEdit(p)}
       />
     );
   }
@@ -266,14 +310,15 @@ const StudyPlan = () => {
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => {
-          if (isEditing) { setIsEditing(false); return; }
+          if (isEditing) { setIsEditing(false); setEditingPlanId(null); return; }
           if (step > 1) { setStep((step - 1) as WizardStep); return; }
+          if (plans.length > 0) { return; } // stay on page, they have plans
           navigate(-1);
         }}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="font-display text-lg font-bold flex-1">
-          {isEditing ? 'Editar Plano' : 'Meu Plano de Estudo'}
+          {isEditing ? 'Editar Plano' : 'Novo Plano de Estudo'}
         </h1>
         <div className="flex gap-1">
           {[1, 2, 3].map(s => (
@@ -286,8 +331,18 @@ const StudyPlan = () => {
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div>
+              <h2 className="text-xl font-bold mb-1">Nome do plano</h2>
+              <p className="text-sm text-muted-foreground">Dê um nome que identifique este plano (ex: ENAMED, Prova de Fisiologia).</p>
+            </div>
+            <Input
+              placeholder="Ex: Plano ENAMED"
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              className="text-base"
+            />
+            <div>
               <h2 className="text-xl font-bold mb-1">O que você precisa estudar?</h2>
-              <p className="text-sm text-muted-foreground">Selecione os baralhos que deseja incluir no plano.</p>
+              <p className="text-sm text-muted-foreground">Selecione baralhos ou sub-baralhos para incluir no plano.</p>
             </div>
             {activeDecks.length === 0 ? (
               <Card className="border-dashed">
@@ -306,7 +361,8 @@ const StudyPlan = () => {
                       'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
                       selectedDeckIds.includes(deck.id)
                         ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border hover:bg-muted/50'
+                        : 'border-border hover:bg-muted/50',
+                      deck.parent_deck_id && 'ml-6'
                     )}
                   >
                     <Checkbox
@@ -319,6 +375,9 @@ const StudyPlan = () => {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{deck.name}</p>
+                      {deck.parent_deck_id && (
+                        <p className="text-[10px] text-muted-foreground">Sub-baralho</p>
+                      )}
                     </div>
                   </label>
                 ))}
@@ -467,16 +526,21 @@ const HERO_GRADIENT = {
 
 interface PlanDashboardProps {
   plan: any;
+  plans: any[];
   metrics: any;
   decks: any[];
   avgSecondsPerCard: number;
   calcImpact: (m: number) => any;
+  isPremium: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onUpdatePlan: (input: any) => Promise<void>;
+  onSelectPlan: (id: string) => Promise<void>;
+  onNewPlan: () => void;
+  onEditPlan: (p: any) => void;
 }
 
-function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, onEdit, onDelete, onUpdatePlan }: PlanDashboardProps) {
+function PlanDashboard({ plan, plans, metrics, decks, avgSecondsPerCard, calcImpact, isPremium, onEdit, onDelete, onUpdatePlan, onSelectPlan, onNewPlan, onEditPlan }: PlanDashboardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showCatchUp, setShowCatchUp] = useState(false);
@@ -565,7 +629,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
 
   const handleSaveRetention = async () => {
     try {
-      // Update retention for all decks in the plan
       const deckIds = plan.deck_ids ?? [];
       const retention = tempRetention / 100;
       for (const id of deckIds) {
@@ -587,7 +650,30 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
+        <div className="flex-1 min-w-0">
+          {/* Plan Selector Dropdown */}
+          {plans.length > 1 ? (
+            <Select value={plan.id} onValueChange={(id) => onSelectPlan(id)}>
+              <SelectTrigger className="h-auto border-0 bg-transparent p-0 shadow-none font-display text-lg font-bold [&>svg]:ml-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {plans.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name || 'Meu Plano'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <h1 className="font-display text-lg font-bold truncate">{plan.name || 'Meu Plano de Estudos'}</h1>
+          )}
+        </div>
+        {(isPremium || plans.length === 0) && (
+          <Button variant="ghost" size="icon" onClick={onNewPlan} title="Novo plano">
+            <Plus className="h-5 w-5" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
           <Settings2 className="h-5 w-5" />
         </Button>
@@ -626,7 +712,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
               {/* Deck counter */}
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold">Baralhos da semana</h3>
+                  <h3 className="text-sm font-semibold">Baralhos do plano</h3>
                   <p className="text-xs text-muted-foreground">{completedCount} de {planDecks.length} concluídos</p>
                 </div>
               </div>
@@ -783,7 +869,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                 <p className="text-[11px] text-muted-foreground">Capacidade de estudo</p>
                 {editingMinutes || editingWeekly ? (
                   <div className="space-y-3 mt-1">
-                    {/* Toggle between daily/weekly */}
                     <div className="flex gap-1">
                       <Button
                         size="sm" variant={!editingWeekly ? 'default' : 'outline'}
@@ -802,7 +887,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                     </div>
 
                     {editingWeekly ? (
-                      /* Weekly editor */
                       <div className="space-y-2">
                         {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
                           <div key={day} className="flex items-center gap-2">
@@ -825,7 +909,6 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                         </div>
                       </div>
                     ) : (
-                      /* Daily editor */
                       <div className="space-y-2">
                         <div className="text-center">
                           <span className="text-lg font-bold text-primary">{formatMinutes(tempMinutes)}</span>
@@ -925,7 +1008,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Configurações do Plano</DialogTitle>
-            <DialogDescription>Editar ou excluir seu plano de estudos.</DialogDescription>
+            <DialogDescription>Gerenciar "{plan.name || 'Meu Plano'}".</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {/* Drag-and-drop reorder */}
@@ -966,7 +1049,7 @@ function PlanDashboard({ plan, metrics, decks, avgSecondsPerCard, calcImpact, on
                   <AlertDialogHeader>
                     <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Esta ação não pode ser desfeita. Seu plano de estudos será permanentemente excluído.
+                      Esta ação não pode ser desfeita. O plano "{plan.name}" será permanentemente excluído.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
