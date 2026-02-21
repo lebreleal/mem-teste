@@ -827,14 +827,11 @@ const StudyPlan = () => {
       const budget = globalCapacity.dailyNewCardsLimit;
       const minDaysNeeded = Math.ceil(selectedNewCards / budget);
       const isImpossible = daysLeft < minDaysNeeded;
-      const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
+      const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.1;
       if (!isImpossible && !isTight) return null;
       const suggestedDate = new Date(today);
-      // For burnout (neededPerDay > 50), suggest based on 50/day max; otherwise use budget with 1.3x margin
-      const neededRate = Math.ceil(selectedNewCards / daysLeft);
-      const safeDays = neededRate > 50
-        ? Math.ceil(Math.ceil(selectedNewCards / 50) * 1.3)
-        : isTight ? Math.ceil(minDaysNeeded * 1.3) : minDaysNeeded;
+      // Always use 1.3x margin for suggested date
+      const safeDays = Math.ceil(minDaysNeeded * 1.3);
       suggestedDate.setDate(suggestedDate.getDate() + safeDays);
       const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
@@ -850,8 +847,11 @@ const StudyPlan = () => {
         <p className={cn('text-xs font-semibold', feasibilityCheck.isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
           {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
         </p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          A data limite indica até quando você quer ter <strong>iniciado o estudo</strong> de todos os cards novos dos baralhos selecionados.
+        </p>
         <p className="text-[11px] text-muted-foreground">
-          Você tem <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> para estudar e seu limite atual é <strong>{feasibilityCheck.budget} novos cards/dia</strong> — isso levaria no mínimo <strong>{feasibilityCheck.minDaysNeeded} dias</strong>.
+          Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> antes de <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>, você precisaria iniciar <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{feasibilityCheck.budget}/dia</strong>.
         </p>
 
         {feasibilityCheck.neededPerDay > 50 ? (
@@ -1125,9 +1125,9 @@ const StudyPlan = () => {
                   <Target className="h-5 w-5 text-primary" />
                   <h2 className="text-xl font-bold">Data limite</h2>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Defina quando você precisa ter dominado este conteúdo.
-                </p>
+                 <p className="text-sm text-muted-foreground">
+                   A data limite indica até quando você quer ter <strong>iniciado o estudo de todos os cards novos</strong> dos baralhos selecionados. Isso garante que você domine o conteúdo antes da data.
+                 </p>
               </div>
               <Popover>
                 <PopoverTrigger asChild>
@@ -1491,8 +1491,9 @@ const StudyPlan = () => {
                     // Time-based bottleneck: how many new cards fit in remaining capacity after reviews
                     const reviewMinToday = metrics.reviewMinutes;
                     const availMinForNew = Math.max(0, avgDailyMin - reviewMinToday);
-                    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
-                    const effectiveRate = Math.min(budget, cardsFitByTime);
+                    const newSecsPerCard = avgSec > 0 ? avgSec : 30;
+                    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / newSecsPerCard) : 0;
+                    const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
                     const bottleneck: 'new_limit' | 'time' = cardsFitByTime < budget ? 'time' : 'new_limit';
                     
                     const plansWithTarget = plans.filter(p => p.target_date);
@@ -1523,8 +1524,8 @@ const StudyPlan = () => {
                           <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
                           <span>
                             {totalNew > 0
-                              ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong>. No ritmo atual ({effectiveRate}/dia), você termina em <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
-                              : <>Todos os cards novos foram concluídos! 🎉</>
+                              ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong> para dominar. No ritmo atual ({effectiveRate}/dia), você inicia todos até <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
+                              : <>Todos os cards novos foram iniciados! 🎉</>
                             }
                           </span>
                         </p>
@@ -1542,14 +1543,14 @@ const StudyPlan = () => {
                         {willMissTarget && neededPerDay && (
                           <div className="space-y-2 pt-1.5 border-t border-amber-200 dark:border-amber-800">
                             <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                              Sua meta é <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual você só termina em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
-                            </p>
+                               Para dominar todos os cards antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisaria aumentar o ritmo. No ritmo atual, só inicia todos em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
+                             </p>
 
                             {neededPerDay > 50 ? (
                               <div className="space-y-1.5">
-                                <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                                  ⚠ Meta inviável — para estudar todos os <strong>{totalNew} cards novos</strong> até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
-                                </p>
+                              <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+                                   ⚠ Meta inviável — para dominar todos os <strong>{totalNew} cards novos</strong> antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+                                 </p>
                                 <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
                                 {/* Change target date — apply suggested date directly */}
                                 <Button
@@ -1623,7 +1624,7 @@ const StudyPlan = () => {
                         
                         {!willMissTarget && earliestTarget && (
                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                            ✓ No ritmo atual, você conclui até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> (sua data limite).
+                            ✓ No ritmo atual, você domina todos os cards novos antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> (sua data limite).
                           </p>
                         )}
                         

@@ -275,11 +275,66 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       else if (c.state === 3 && c.scheduledDay <= day) dueRelearning.push(i);
     }
 
-    // Introduce new cards — EXISTING first, CREATED only after all existing are exhausted
+    // ── Step 1: Process reviews/learning/relearning FIRST to know time used ──
+    let reviewCount = 0;
+    for (const idx of dueReview) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const elapsed = Math.max(0, day - c.scheduledDay);
+      const recall = c.stability > 0 ? fsrsRetrievability(c.stability, elapsed) : 0.5;
+      const bucket = getRecallBucket(recall);
+      const rating = sampleRating(dist[bucket]);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      reviewCount++;
+    }
+
+    let learningCount = 0;
+    for (const idx of dueLearning) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.low);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      learningCount++;
+    }
+
+    let relearningCount = 0;
+    for (const idx of dueRelearning) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.mid);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      relearningCount++;
+    }
+
+    // ── Step 2: Calculate time used by reviews, then limit new cards by remaining capacity ──
+    const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
+    const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
+    const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
+    const usedMin = revMin + learnMin + relearnMin;
+    const availableForNewMin = Math.max(0, capacityMin - usedMin);
+    const maxNewByCapacity = Math.floor((availableForNewMin * 60) / (newSecsPerCard * scaleFactor));
+    const effectiveNewLimit = Math.min(newCardsPerDay, Math.max(0, maxNewByCapacity));
+
+    // ── Step 3: Introduce new cards — EXISTING first, CREATED only after all existing are exhausted ──
     let newCardsToday = 0;
     let newCreatedStudiedToday = 0;
     const newIndices: number[] = [];
-    let remainingNew = newCardsPerDay;
+    let remainingNew = effectiveNewLimit;
 
     // Pass 1: existing new cards (isCreated !== true)
     for (const [deckId, dk] of deckMap) {
@@ -324,55 +379,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       }
     }
 
-    // Process reviews
-    let reviewCount = 0;
-    for (const idx of dueReview) {
-      const c = simCards[idx];
-      const dk = deckMap.get(c.deck_id);
-      const retention = dk?.requested_retention ?? 0.9;
-      const maxInterval = dk?.max_interval ?? 36500;
-      const algo = dk?.algorithm_mode ?? 'fsrs';
-      const elapsed = Math.max(0, day - c.scheduledDay);
-      const recall = c.stability > 0 ? fsrsRetrievability(c.stability, elapsed) : 0.5;
-      const bucket = getRecallBucket(recall);
-      const rating = sampleRating(dist[bucket]);
-      simCards[idx] = algo === 'fsrs'
-        ? simulateFSRS(c, rating, day, retention, maxInterval)
-        : simulateSM2(c, rating, day, maxInterval);
-      reviewCount++;
-    }
-
-    // Process learning
-    let learningCount = 0;
-    for (const idx of dueLearning) {
-      const c = simCards[idx];
-      const dk = deckMap.get(c.deck_id);
-      const retention = dk?.requested_retention ?? 0.9;
-      const maxInterval = dk?.max_interval ?? 36500;
-      const algo = dk?.algorithm_mode ?? 'fsrs';
-      const rating = sampleRating(dist.low);
-      simCards[idx] = algo === 'fsrs'
-        ? simulateFSRS(c, rating, day, retention, maxInterval)
-        : simulateSM2(c, rating, day, maxInterval);
-      learningCount++;
-    }
-
-    // Process relearning
-    let relearningCount = 0;
-    for (const idx of dueRelearning) {
-      const c = simCards[idx];
-      const dk = deckMap.get(c.deck_id);
-      const retention = dk?.requested_retention ?? 0.9;
-      const maxInterval = dk?.max_interval ?? 36500;
-      const algo = dk?.algorithm_mode ?? 'fsrs';
-      const rating = sampleRating(dist.mid);
-      simCards[idx] = algo === 'fsrs'
-        ? simulateFSRS(c, rating, day, retention, maxInterval)
-        : simulateSM2(c, rating, day, maxInterval);
-      relearningCount++;
-    }
-
-    // Process new cards
+    // ── Step 4: Process new cards (schedule them) ──
     for (const idx of newIndices) {
       const c = simCards[idx];
       const dk = deckMap.get(c.deck_id);
@@ -386,10 +393,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // Calculate minutes
-    const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
     const newMin = Math.round((newCardsToday * newSecsPerCard * scaleFactor) / 60);
-    const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
-    const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
     const totalMin = revMin + newMin + learnMin + relearnMin;
 
     points.push({
