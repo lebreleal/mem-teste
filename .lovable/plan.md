@@ -1,24 +1,33 @@
 
 
-# Correcao do Timing na RPC get_forecast_params
+# Corrigir Terminologia: Novos / Aprendendo / Dominados
 
-## O que muda
+## Problema
 
-Atualizar a RPC `get_forecast_params` com 3 correcoes no bloco `timing`:
+Dois lugares na interface usam terminologia inconsistente com o padrao Anki:
 
-1. **Corte de sessao**: Gaps > 5 minutos (300s) entre reviews sao descartados (eram pausas/intervalos entre sessoes, nao tempo real de estudo)
-2. **Cap reduzido**: De 90s para 60s por card
-3. **Heuristica melhorada**: Para dados historicos sem `state`, usa gap > 1 dia para classificar como "dominado" (state 2) -- revisoes programadas tem gaps de dias
+1. **Pagina do Baralho (DeckStatsCard)**: Mostra "Em andamento" em vez de "Aprendendo"
+2. **Carrossel do Dashboard (DeckCarousel)**: Mostra "Novos / Revisoes / Feitos" mas deveria mostrar "Novos / Aprendendo / Dominados"
+   - Atualmente combina `reviewAvailable + learningAvailable` em um unico numero ("Revisoes")
+   - Mostra `studiedToday` como "Feitos" com icone de Layers — o que confunde, pois o usuario pensa que sao "Dominados"
 
-Nenhuma mudanca no frontend. Apenas 1 migration SQL atualizando a RPC.
+## Sobre o Simulador
 
-## Detalhes tecnicos
+Os tempos do simulador estao corretos agora:
+- Novos: 7.6s, Aprendendo: 2.8s, Dominados: 8s (fallback pois quase nao tem dados reais de state 2 ainda)
+- O grafico mostra "Dominados" ocupando mais tempo porque sao muitos cards acumulando com a repeticao espacada (20 novos/dia graduam e viram revisao). Isso e o comportamento correto do FSRS.
 
-Nova migration SQL com `CREATE OR REPLACE FUNCTION get_forecast_params` onde o bloco `timing` passa a:
+## Mudancas
 
-- Calcular `raw_gap` via `LAG()` primeiro
-- Descartar pontos com `raw_gap > 300` (gap entre sessoes)
-- Aplicar cap de 60s nos pontos validos
-- Usar `COALESCE(rl.state, heuristica)` onde a heuristica considera `raw_gap > 86400` (1 dia) para state 2
-- Manter mediana (`PERCENTILE_CONT(0.5)`) em vez de media
+### 1. DeckStatsCard.tsx (linha 69)
+- Trocar "Em andamento" por "Aprendendo"
+
+### 2. DeckCarousel.tsx (linhas 66-78)
+- Separar os 3 contadores para mostrar corretamente:
+  - SquarePlus icon: `newAvailable` = "Novos"
+  - RotateCcw icon: `learningAvailable` = "Aprendendo" (state 1 e 3)
+  - Layers icon: `reviewAvailable` = "Dominados" (state 2, que vem da repeticao espacada)
+- Remover o conceito de "Feitos" dos contadores (o progresso ja aparece na barra abaixo)
+
+Nenhuma mudanca no backend ou no simulador.
 
