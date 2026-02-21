@@ -268,9 +268,9 @@ const Dashboard = () => {
         onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
       />
 
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Quick Nav */}
-        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
+        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
           {[
             { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
