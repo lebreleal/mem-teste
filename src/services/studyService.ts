@@ -181,8 +181,9 @@ export async function fetchStudyQueue(
     }
   }
 
+  // When a plan is active, plan allocation governs completely (ignores deck's manual limit)
   const baseNewLimit = planNewLimit != null
-    ? Math.min(newLimit, planNewLimit)
+    ? planNewLimit
     : newLimit;
   const effectiveNewLimit = Math.max(0, baseNewLimit - newReviewedToday);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);

@@ -598,6 +598,12 @@ const StudyPlan = () => {
   const [showDateInfo, setShowDateInfo] = useState(false);
   const [showCapacityInfo, setShowCapacityInfo] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
+  const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
+
+  // Sync tempNewCards when globalCapacity loads/changes
+  useEffect(() => {
+    setTempNewCards(globalCapacity.dailyNewCardsLimit);
+  }, [globalCapacity.dailyNewCardsLimit]);
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
   const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
@@ -1082,18 +1088,19 @@ const StudyPlan = () => {
                     <Sparkles className="h-3 w-3" />
                     Cards novos por dia
                   </span>
-                  <span className="text-sm font-bold tabular-nums">{globalCapacity.dailyNewCardsLimit}</span>
+                  <span className="text-sm font-bold tabular-nums">{tempNewCards}</span>
                 </div>
                 <Slider
-                  value={[globalCapacity.dailyNewCardsLimit]}
+                  value={[tempNewCards]}
                   min={0}
                   max={100}
                   step={5}
+                  onValueChange={(v) => setTempNewCards(v[0])}
                   onValueCommit={(v) => {
                     updateNewCardsLimit.mutateAsync(v[0]);
                   }}
                 />
-                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 1 && (
+                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {plans.map(p => {
                       const alloc = metrics.newCardsAllocation[p.id] ?? 0;
