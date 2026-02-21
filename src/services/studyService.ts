@@ -131,8 +131,17 @@ export async function fetchStudyQueue(
         for (const id of (p.deck_ids ?? [])) allPlanDeckIds.add(id);
       }
       
-      if (deckIds.some(id => allPlanDeckIds.has(id))) {
-        // Expand plan deck IDs to include all descendants
+      // Expand allPlanDeckIds to include roots and descendants before membership check
+      const expandedPlanCheck = new Set<string>();
+      for (const id of Array.from(allPlanDeckIds)) {
+        expandedPlanCheck.add(id);
+        expandedPlanCheck.add(findRootAncestorId(allDecks ?? [], id));
+        const descs = collectDescendantIds(allDecks ?? [], id);
+        for (const d of descs) expandedPlanCheck.add(d);
+      }
+
+      if (deckIds.some(id => expandedPlanCheck.has(id))) {
+        // Expand plan deck IDs to include all descendants for counting
         const expandedPlanDeckIds = new Set<string>();
         for (const id of Array.from(allPlanDeckIds)) {
           expandedPlanDeckIds.add(id);
