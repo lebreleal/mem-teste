@@ -856,7 +856,10 @@ const StudyPlan = () => {
             onClick={() => { setTempNewCards(feasibilityCheck.neededPerDay); setShowNewCardsConfirm(true); }}
           >
             <Layers className="h-3 w-3 text-primary shrink-0" />
-            <span className="text-left">Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
+            <div className="text-left">
+              <span>Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
+              <span className="block text-muted-foreground/60 text-[9px]">Mais cards por dia — você termina em {feasibilityCheck.minDaysNeeded} dias</span>
+            </div>
           </Button>
           <Button
             size="sm"
@@ -869,7 +872,10 @@ const StudyPlan = () => {
             }}
           >
             <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-            <span className="text-left">Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+            <div className="text-left">
+              <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+              <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+            </div>
           </Button>
           <Button
             size="sm"
@@ -878,7 +884,10 @@ const StudyPlan = () => {
             onClick={() => setEditingCapacity(true)}
           >
             <Clock className="h-3 w-3 text-primary shrink-0" />
-            <span className="text-left">Aumentar tempo de estudo diário</span>
+            <div className="text-left">
+              <span>Aumentar tempo de estudo diário</span>
+              <span className="block text-muted-foreground/60 text-[9px]">Mais tempo por dia permite encaixar mais cards novos além das revisões</span>
+            </div>
           </Button>
         </div>
       </div>
@@ -1496,12 +1505,19 @@ const StudyPlan = () => {
                         </p>
                         
                         {totalNew > 0 && (
-                          <p className="text-[10px] text-muted-foreground/70">
-                            {bottleneck === 'new_limit'
-                              ? <>Seu limite de <strong>{budget} novos cards/dia</strong> não é suficiente para a meta. Você tem tempo de sobra (<strong>{formatMinutes(avgDailyMin)}/dia</strong>), mas precisa estudar mais cards.</>
-                              : <>Seu tempo de <strong>{formatMinutes(avgDailyMin)}/dia</strong> não é suficiente. Após as revisões, sobra espaço para apenas <strong>~{cardsFitByTime} novos cards/dia</strong>.</>
-                            }
-                          </p>
+                          <div className="text-[10px] text-muted-foreground/70 space-y-0.5">
+                            {bottleneck === 'new_limit' ? (
+                              <>
+                                <p>Seu limite está em <strong>{budget} novos cards/dia</strong>, mas você precisaria de <strong>{Math.ceil(totalNew / Math.max(1, (() => { const plT = plans.filter(p => p.target_date); if (!plT.length) return 999; const earliest = plT.reduce((m, p) => { const d = new Date(p.target_date!); return d < m ? d : m; }, new Date(plT[0].target_date!)); const today = new Date(); today.setHours(0,0,0,0); return Math.max(1, Math.ceil((earliest.getTime() - today.getTime()) / 86400000)); })()))}/dia</strong> para cumprir a meta.</p>
+                                <p>Você tem capacidade de estudo ({formatMinutes(avgDailyMin)}/dia), mas o limite de cards novos está baixo.</p>
+                              </>
+                            ) : (
+                              <>
+                                <p>Com <strong>{formatMinutes(avgDailyMin)}/dia</strong> de estudo, após revisar os cards pendentes (~<strong>{formatMinutes(reviewMinToday)}</strong>), sobram ~<strong>{formatMinutes(availMinForNew)}</strong> para novos cards.</p>
+                                <p>Isso permite ~<strong>{cardsFitByTime} novos cards/dia</strong>, mas você precisa de <strong>{effectiveRate < budget ? budget : effectiveRate}/dia</strong> para cumprir a meta.</p>
+                              </>
+                            )}
+                          </div>
                         )}
                         
                         {willMissTarget && neededPerDay && (
