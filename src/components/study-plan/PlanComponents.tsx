@@ -493,8 +493,12 @@ export function ForecastSimulator({
               const earliestTarget = plansTarget.length > 0
                 ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
                 : null;
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const daysUntilTarget = earliestTarget
+                ? Math.max(1, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
+                : approxDays;
               const createdPerDay = createdCardsOverride ?? defaultCreatedCardsPerDay;
-              const createdInPeriod = createdPerDay > 0 ? createdPerDay * approxDays : 0;
+              const createdInPeriod = createdPerDay > 0 ? createdPerDay * daysUntilTarget : 0;
               const totalNewRemaining = totalNewCards + createdInPeriod;
 
               return (
@@ -509,14 +513,14 @@ export function ForecastSimulator({
 
                   {/* Target date context */}
                   {earliestTarget && totalNewRemaining > 0 && (() => {
-                    const neededPerDay = Math.ceil(totalNewRemaining / Math.max(1, approxDays));
+                    const neededPerDay = Math.ceil(totalNewRemaining / Math.max(1, daysUntilTarget));
                     const isBurnout = neededPerDay > 50;
                     const cantFinish = actualNewPerDay < neededPerDay;
                     return (
                       <>
                         <div className="h-px bg-border" />
                         <p className="text-[10px] text-muted-foreground leading-relaxed">
-                          🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar — {createdPerDay} criados/dia × {approxDays} dias)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
+                          🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar — {createdPerDay} criados/dia × {daysUntilTarget} dias)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
                         </p>
                         {isBurnout && (
                           <p className="text-[10px] text-red-600 dark:text-red-400 font-medium leading-relaxed">
