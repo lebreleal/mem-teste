@@ -975,19 +975,26 @@ const StudyPlan = () => {
         {metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
             <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
-                  HEALTH_CONFIG[healthStatus].bg, HEALTH_CONFIG[healthStatus].text, HEALTH_CONFIG[healthStatus].border
-                )}>
-                  {HEALTH_CONFIG[healthStatus].label}
-                </span>
-                {metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    Consistência: {metrics.planHealthPercent}%
-                  </span>
-                )}
+              {/* Status do plano */}
+              <div className={cn('rounded-xl p-3 space-y-1', HEALTH_CONFIG[healthStatus].bg)}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{HEALTH_CONFIG[healthStatus].emoji}</span>
+                    <span className={cn('text-sm font-bold', HEALTH_CONFIG[healthStatus].text)}>
+                      {HEALTH_CONFIG[healthStatus].label}
+                    </span>
+                  </div>
+                  {metrics.planHealthPercent != null && (
+                    <span className={cn('text-xs font-semibold tabular-nums', HEALTH_CONFIG[healthStatus].text)}>
+                      {metrics.planHealthPercent}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {HEALTH_CONFIG[healthStatus].description}
+                </p>
               </div>
+
               <StudyLoadBar
                 estimatedMinutes={metrics.estimatedMinutesToday}
                 capacityMinutes={todayCapacity}
