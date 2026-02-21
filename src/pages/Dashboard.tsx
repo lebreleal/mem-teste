@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useMemo } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -46,6 +46,28 @@ const Dashboard = () => {
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { plans, allDeckIds, avgSecondsPerCard } = useStudyPlan();
+
+  // Build plansByDeckId map: rootDeckId -> highest priority objective name
+  const plansByDeckId = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!plans.length || !state.decks.length) return map;
+    const getRootId = (deckId: string): string | null => {
+      const d = state.decks.find(x => x.id === deckId);
+      if (!d) return null;
+      if (!d.parent_deck_id) return d.id;
+      return getRootId(d.parent_deck_id);
+    };
+    // plans are already sorted by priority ASC
+    for (const plan of plans) {
+      for (const deckId of (plan.deck_ids ?? [])) {
+        const rootId = getRootId(deckId);
+        if (rootId && !map[rootId]) {
+          map[rootId] = plan.name;
+        }
+      }
+    }
+    return map;
+  }, [plans, state.decks]);
 
   // Handle payment return
   useEffect(() => {
@@ -273,6 +295,7 @@ const Dashboard = () => {
             avgSecondsPerCard={avgSecondsPerCard}
             hasPlan={plans.length > 0}
             planDeckIds={allDeckIds}
+            plansByDeckId={plansByDeckId}
           />
         )}
 

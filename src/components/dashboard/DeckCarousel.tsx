@@ -48,7 +48,7 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string }) {
   const navigate = useNavigate();
   const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks);
   const totalToday = pendingToday + studiedToday;
@@ -57,7 +57,14 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard }: { deck: DeckWithSt
 
   return (
     <div className="min-w-[240px] max-w-[280px] snap-start flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm">
-      <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
+      <div className="flex items-start justify-between gap-1">
+        <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
+        {objectiveName && (
+          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 shrink-0 bg-primary/10 text-primary border-0">
+            {objectiveName}
+          </Badge>
+        )}
+      </div>
       <div className="flex gap-1.5 flex-wrap">
         {newAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5 border-blue-300 text-blue-600 dark:text-blue-400">{newAvailable} novos</Badge>}
         {reviewAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5 border-emerald-300 text-emerald-600 dark:text-emerald-400">{reviewAvailable} revisões</Badge>}
@@ -91,9 +98,10 @@ interface DeckCarouselProps {
   avgSecondsPerCard?: number;
   hasPlan: boolean;
   planDeckIds?: string[];
+  plansByDeckId?: Record<string, string>;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, plansByDeckId }: DeckCarouselProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'pending' | 'done'>('pending');
 
@@ -181,7 +189,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       ) : (
         <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4 scrollbar-hide">
           {filteredDecks.map(deck => (
-            <DeckStudyCard key={deck.id} deck={deck} allDecks={decks} avgSecondsPerCard={avgSecondsPerCard} />
+            <DeckStudyCard key={deck.id} deck={deck} allDecks={decks} avgSecondsPerCard={avgSecondsPerCard} objectiveName={plansByDeckId?.[deck.id]} />
           ))}
         </div>
       )}
