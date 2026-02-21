@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
   ChevronDown, ChevronUp, Pencil, Brain, RotateCcw, Crown, Trash2,
+  ChevronRight, Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +28,7 @@ import {
   DAY_LABELS, type StudyPlan as StudyPlanType, type DayKey, type WeeklyMinutes,
 } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
+import type { DeckWithStats } from '@/types/deck';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { useDragReorder } from '@/hooks/useDragReorder';
@@ -76,6 +78,152 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Deck Hierarchy Selector ────────────────────────────
+function DeckHierarchySelector({
+  decks, selectedDeckIds, setSelectedDeckIds, plans, editingPlanId,
+}: {
+  decks: DeckWithStats[];
+  selectedDeckIds: string[];
+  setSelectedDeckIds: React.Dispatch<React.SetStateAction<string[]>>;
+  plans: StudyPlanType[];
+  editingPlanId: string | null;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Build hierarchy: root decks first, then children
+  const rootDecks = useMemo(() => decks.filter(d => !d.parent_deck_id), [decks]);
+  const getChildren = useCallback((parentId: string) => decks.filter(d => d.parent_deck_id === parentId), [decks]);
+  const getTotalCards = useCallback((deck: DeckWithStats): number => {
+    const own = deck.new_count + deck.learning_count + deck.review_count + deck.reviewed_today;
+    const childCards = getChildren(deck.id).reduce((sum, c) => sum + getTotalCards(c), 0);
+    return own + childCards;
+  }, [getChildren]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggle = (deckId: string, checked: boolean) => {
+    // When selecting a parent, also select all descendants
+    const descendantIds = collectAllDescendants(deckId);
+    if (checked) {
+      setSelectedDeckIds(prev => [...new Set([...prev, deckId, ...descendantIds])]);
+    } else {
+      const toRemove = new Set([deckId, ...descendantIds]);
+      setSelectedDeckIds(prev => prev.filter(id => !toRemove.has(id)));
+    }
+  };
+
+  const collectAllDescendants = (parentId: string): string[] => {
+    const children = getChildren(parentId);
+    return children.flatMap(c => [c.id, ...collectAllDescendants(c.id)]);
+  };
+
+  const renderDeck = (deck: DeckWithStats, depth: number) => {
+    const children = getChildren(deck.id);
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedIds.has(deck.id);
+    const isSelected = selectedDeckIds.includes(deck.id);
+    const totalCards = getTotalCards(deck);
+    const ownCards = deck.new_count + deck.learning_count + deck.review_count + deck.reviewed_today;
+    const otherPlans = plans.filter(p => p.id !== editingPlanId && (p.deck_ids ?? []).includes(deck.id));
+
+    return (
+      <div key={deck.id}>
+        <label
+          className={cn(
+            'flex items-center gap-2 py-2.5 px-3 rounded-lg cursor-pointer transition-all',
+            isSelected
+              ? 'bg-primary/8 border border-primary/30'
+              : 'hover:bg-muted/50 border border-transparent',
+          )}
+          style={{ paddingLeft: `${12 + depth * 20}px` }}
+        >
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpand(deck.id); }}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted transition-colors"
+            >
+              <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', isExpanded && 'rotate-90')} />
+            </button>
+          )}
+          {!hasChildren && depth > 0 && (
+            <span className="w-5 shrink-0 flex items-center justify-center">
+              <span className="h-px w-3 bg-border" />
+            </span>
+          )}
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => handleToggle(deck.id, !!checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            {depth > 0 && (
+              <Layers className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className={cn(
+                  'text-sm truncate',
+                  depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
+                )}>{deck.name}</p>
+              </div>
+              {otherPlans.length > 0 && (
+                <p className="text-[9px] text-muted-foreground/70 truncate">
+                  Já em: {otherPlans.map(p => p.name).join(', ')}
+                </p>
+              )}
+            </div>
+          </div>
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0 tabular-nums">
+            {hasChildren ? `${totalCards}` : `${ownCards}`}
+            <span className="ml-0.5 text-muted-foreground/60">cards</span>
+          </Badge>
+        </label>
+        {hasChildren && isExpanded && (
+          <div className="relative">
+            <div className="absolute left-0 top-0 bottom-0" style={{ marginLeft: `${20 + depth * 20}px` }}>
+              <div className="w-px h-full bg-border/50" />
+            </div>
+            {children.map(child => renderDeck(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-1 rounded-xl border bg-card p-2">
+      <div className="flex items-center justify-between px-2 py-1.5">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs h-6 px-2"
+          onClick={() => {
+            if (selectedDeckIds.length === decks.length) {
+              setSelectedDeckIds([]);
+            } else {
+              setSelectedDeckIds(decks.map(d => d.id));
+            }
+          }}
+        >
+          {selectedDeckIds.length === decks.length ? 'Desmarcar todos' : 'Selecionar todos'}
+        </Button>
+      </div>
+      {rootDecks.map(deck => renderDeck(deck, 0))}
+    </div>
   );
 }
 
@@ -328,40 +476,13 @@ const StudyPlan = () => {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-2">
-                  {activeDecks.map(deck => {
-                    const otherPlans = plans.filter(p => p.id !== editingPlanId && (p.deck_ids ?? []).includes(deck.id));
-                    return (
-                      <label
-                        key={deck.id}
-                        className={cn(
-                          'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
-                          selectedDeckIds.includes(deck.id)
-                            ? 'border-primary bg-primary/5 shadow-sm'
-                            : 'border-border hover:bg-muted/50',
-                          deck.parent_deck_id && 'ml-6'
-                        )}
-                      >
-                        <Checkbox
-                          checked={selectedDeckIds.includes(deck.id)}
-                          onCheckedChange={(checked) => {
-                            setSelectedDeckIds(prev =>
-                              checked ? [...prev, deck.id] : prev.filter(id => id !== deck.id)
-                            );
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{deck.name}</p>
-                          {otherPlans.length > 0 && (
-                            <p className="text-[10px] text-muted-foreground">
-                              Já em: {otherPlans.map(p => p.name).join(', ')}
-                            </p>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
+                <DeckHierarchySelector
+                  decks={activeDecks}
+                  selectedDeckIds={selectedDeckIds}
+                  setSelectedDeckIds={setSelectedDeckIds}
+                  plans={plans}
+                  editingPlanId={editingPlanId}
+                />
               )}
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
