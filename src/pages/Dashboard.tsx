@@ -45,7 +45,7 @@ const Dashboard = () => {
   const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
-  const { plan, avgSecondsPerCard } = useStudyPlan();
+  const { plans, allDeckIds, avgSecondsPerCard } = useStudyPlan();
 
   // Handle payment return
   useEffect(() => {
@@ -271,8 +271,8 @@ const Dashboard = () => {
           <DeckCarousel
             decks={state.decks}
             avgSecondsPerCard={avgSecondsPerCard}
-            hasPlan={!!plan}
-            planDeckIds={plan?.deck_ids}
+            hasPlan={plans.length > 0}
+            planDeckIds={allDeckIds}
           />
         )}
 
