@@ -849,49 +849,68 @@ const StudyPlan = () => {
         <p className="text-[11px] text-muted-foreground">
           Você tem <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> para estudar e seu limite atual é <strong>{feasibilityCheck.budget} novos cards/dia</strong> — isso levaria no mínimo <strong>{feasibilityCheck.minDaysNeeded} dias</strong>.
         </p>
-        <p className="text-[10px] font-semibold text-muted-foreground pt-1">Como resolver:</p>
-        <div className="space-y-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
-            onClick={() => { setTempNewCards(feasibilityCheck.neededPerDay); setShowNewCardsConfirm(true); }}
-          >
-            <Layers className="h-3 w-3 text-primary shrink-0" />
-            <div className="text-left">
-              <span>Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
-              <span className="block text-muted-foreground/60 text-[9px]">Mais cards por dia — você termina em {feasibilityCheck.minDaysNeeded} dias</span>
+
+        {feasibilityCheck.neededPerDay > 50 ? (
+          <div className="space-y-1.5">
+            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+              ⚠ Seriam necessários <strong>{feasibilityCheck.neededPerDay} cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+            </p>
+            <p className="text-[10px] font-semibold text-muted-foreground">Recomendação:</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
+              onClick={() => {
+                if (targetDate) {
+                  setTargetDate(feasibilityCheck.suggestedDate);
+                }
+              }}
+            >
+              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+              <div className="text-left">
+                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+              </div>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold text-muted-foreground">Recomendações:</p>
+            {/* 1. Change date — primary actionable */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
+              onClick={() => {
+                if (targetDate) {
+                  setTargetDate(feasibilityCheck.suggestedDate);
+                }
+              }}
+            >
+              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+              <div className="text-left">
+                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+              </div>
+            </Button>
+            {/* 2. Increase cards — informative */}
+            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+              <Layers className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+              <div className="text-left">
+                <span>Ou aumente para <strong className="text-foreground">{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Você terminaria em {feasibilityCheck.minDaysNeeded} dias</span>
+              </div>
             </div>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
-            onClick={() => {
-              if (targetDate) {
-                setTargetDate(feasibilityCheck.suggestedDate);
-              }
-            }}
-          >
-            <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-            <div className="text-left">
-              <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
-              <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+            {/* 3. Increase study time — informative */}
+            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+              <Clock className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+              <div className="text-left">
+                <span>Ou aumente o tempo de estudo diário</span>
+                <span className="block text-muted-foreground/60 text-[9px]">Mais tempo permite encaixar mais cards novos</span>
+              </div>
             </div>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
-            onClick={() => setEditingCapacity(true)}
-          >
-            <Clock className="h-3 w-3 text-primary shrink-0" />
-            <div className="text-left">
-              <span>Aumentar tempo de estudo diário</span>
-              <span className="block text-muted-foreground/60 text-[9px]">Mais tempo por dia permite encaixar mais cards novos além das revisões</span>
-            </div>
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
     );
 

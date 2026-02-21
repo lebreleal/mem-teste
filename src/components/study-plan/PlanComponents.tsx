@@ -497,23 +497,32 @@ export function ForecastSimulator({
               const totalNewRemaining = totalNewCards + createdInPeriod;
 
               return (
-                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
                   {/* Phase-aware explanation */}
                   {hasMaintenancePhase ? (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
-                        <Layers className="h-3 w-3 text-primary shrink-0" />
-                        <span><strong className="text-foreground">Fase intensa ({intenseDays} dias)</strong>: enquanto você introduz novos cards, estudará em média <strong className="text-foreground">{formatMinutes(intenseAvgMin)}/dia</strong>.</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-[11px] font-semibold text-foreground">Fase intensa</span>
+                        <span className="text-[10px] text-muted-foreground">{intenseDays} dias · ~{formatMinutes(intenseAvgMin)}/dia</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Enquanto novos cards são introduzidos, a carga diária será maior.
                       </p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
-                        <span><strong className="text-foreground">Fase de manutenção ({daysOnlyReview.length} dias)</strong>: após terminar os novos cards, a carga cai para apenas revisões — cerca de <strong className="text-foreground">{formatMinutes(maintenanceAvgMin)}/dia</strong>.</span>
+                      <div className="h-px bg-border" />
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-[11px] font-semibold text-foreground">Fase de manutenção</span>
+                        <span className="text-[10px] text-muted-foreground">{daysOnlyReview.length} dias · ~{formatMinutes(maintenanceAvgMin)}/dia</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Após concluir os novos cards, sobram apenas revisões.
                       </p>
                       {summary.peakMin > intenseAvgMin * 1.2 && (
-                        <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
-                          <TrendingUp className="h-3 w-3 text-primary shrink-0" />
-                          <span>Pico: <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</span>
-                        </p>
+                        <>
+                          <div className="h-px bg-border" />
+                          <p className="text-[10px] text-muted-foreground">
+                            📈 Pico em <strong className="text-foreground">{peakDay.day} ({peakDay.date})</strong> — <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>
+                          </p>
+                        </>
                       )}
                     </div>
                   ) : (
@@ -528,10 +537,12 @@ export function ForecastSimulator({
 
                   {/* Target date context */}
                   {earliestTarget && totalNewRemaining > 0 && (
-                    <p className="text-[11px] text-muted-foreground leading-relaxed flex items-center gap-1.5">
-                      <CalendarDays className="h-3 w-3 text-primary shrink-0" />
-                      <span>Para concluir seus <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, mantenha ao menos <strong className="text-foreground">{currentNewCards} novos cards/dia</strong>.</span>
-                    </p>
+                    <>
+                      <div className="h-px bg-border" />
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — mantenha ao menos <strong className="text-foreground">{currentNewCards}/dia</strong>.
+                      </p>
+                    </>
                   )}
 
                   {/* Status: ok or overloaded */}
