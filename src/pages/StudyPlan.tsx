@@ -552,6 +552,7 @@ const StudyPlan = () => {
   const [showCatchUp, setShowCatchUp] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
+  const [showNewCardsConfirm, setShowNewCardsConfirm] = useState(false);
 
   // Sync tempNewCards when globalCapacity loads/changes
   useEffect(() => {
@@ -961,9 +962,9 @@ const StudyPlan = () => {
         </Button>
       </header>
 
-      <main className="container mx-auto px-4 py-3 max-w-lg space-y-3">
+      <main className="container mx-auto px-4 py-3 max-w-lg space-y-4">
 
-        {/* ═══ 1. HERO CARD (Global) ═══ */}
+        {/* ═══ 1. STATUS + CARGA DE HOJE ═══ */}
         {metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
             <CardContent className="p-4 space-y-3">
@@ -994,42 +995,6 @@ const StudyPlan = () => {
                 newMin={metrics.newMinutes}
               />
 
-              {/* Daily new cards limit */}
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-primary" />
-                    Novos cards para estudar / dia
-                  </span>
-                  <span className="text-base font-bold tabular-nums text-primary">{tempNewCards}</span>
-                </div>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
-                </p>
-                <Slider
-                  value={[tempNewCards]}
-                  min={0}
-                  max={100}
-                  step={5}
-                  onValueChange={(v) => setTempNewCards(v[0])}
-                  onValueCommit={(v) => {
-                    updateNewCardsLimit.mutateAsync(v[0]);
-                  }}
-                />
-                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {plans.map(p => {
-                      const alloc = metrics.newCardsAllocation[p.id] ?? 0;
-                      if (alloc === 0) return null;
-                      return (
-                        <Badge key={p.id} variant="outline" className="text-[9px] h-4 px-1.5 font-normal">
-                          {p.name}: {alloc}/dia
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
               {needsAttention && metrics.totalReview > 0 && (
                 <Button
                   className="w-full" size="sm"
@@ -1044,8 +1009,7 @@ const StudyPlan = () => {
           </Card>
         )}
 
-
-        {/* ═══ 2. MEUS OBJETIVOS (No "Principal" concept) ═══ */}
+        {/* ═══ 2. MEUS OBJETIVOS ═══ */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
             Meus Objetivos ({plans.length})
@@ -1067,8 +1031,6 @@ const StudyPlan = () => {
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <GripVertical className="h-4 w-4 text-muted-foreground/30 shrink-0 cursor-grab active:cursor-grabbing" />
-
-                    {/* Name and meta */}
 
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{p.name || 'Meu Objetivo'}</p>
@@ -1151,51 +1113,111 @@ const StudyPlan = () => {
           )}
         </div>
 
-        {/* ═══ 3. TEMPO DE ESTUDO DIÁRIO ═══ */}
-        <Card>
-          <CardContent className="p-4 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Tempo de Estudo Diário</h3>
-              {!editingCapacity && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                  setEditingCapacity(true);
-                  setTempWeekly(globalCapacity.weeklyMinutes ?? {
-                    mon: globalCapacity.dailyMinutes, tue: globalCapacity.dailyMinutes,
-                    wed: globalCapacity.dailyMinutes, thu: globalCapacity.dailyMinutes,
-                    fri: globalCapacity.dailyMinutes, sat: globalCapacity.dailyMinutes,
-                    sun: globalCapacity.dailyMinutes,
-                  });
-                }}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
+        {/* ═══ 3. CONFIGURAÇÕES ═══ */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Configurações</h3>
 
-            {editingCapacity ? (
-              <div className="space-y-2.5">
-                <div className="space-y-1.5">
-                  {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
-                    <div key={day} className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
-                      <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
-                      <span className={cn("text-[10px] font-semibold w-10 text-right", tempWeekly[day] === 0 && "text-muted-foreground")}>{tempWeekly[day] === 0 ? 'Folga' : formatMinutes(tempWeekly[day])}</span>
-                    </div>
-                  ))}
+          {/* New cards per day */}
+          {metrics && (
+            <Card>
+              <CardContent className="p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Novos cards por dia
+                  </span>
+                  <span className="text-base font-bold tabular-nums text-primary">{tempNewCards}</span>
                 </div>
-                <p className="text-[10px] text-center text-muted-foreground">
-                  Média: <span className="font-semibold text-foreground">{Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7)}min/dia</span>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
                 </p>
-                <div className="flex gap-1">
-                  <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); }}>Cancelar</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <Slider
+                  value={[tempNewCards]}
+                  min={0}
+                  max={100}
+                  step={5}
+                  onValueChange={(v) => setTempNewCards(v[0])}
+                />
+                {tempNewCards !== globalCapacity.dailyNewCardsLimit && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={() => setShowNewCardsConfirm(true)}
+                    >
+                      Confirmar ({tempNewCards} cards/dia)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {plans.map(p => {
+                      const alloc = metrics.newCardsAllocation[p.id] ?? 0;
+                      if (alloc === 0) return null;
+                      return (
+                        <Badge key={p.id} variant="outline" className="text-[9px] h-4 px-1.5 font-normal">
+                          {p.name}: {alloc}/dia
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Daily study time */}
+          <Card>
+            <CardContent className="p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-emerald-500" />
+                  Tempo de estudo diário
+                </span>
+                {!editingCapacity && (
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                    setEditingCapacity(true);
+                    setTempWeekly(globalCapacity.weeklyMinutes ?? {
+                      mon: globalCapacity.dailyMinutes, tue: globalCapacity.dailyMinutes,
+                      wed: globalCapacity.dailyMinutes, thu: globalCapacity.dailyMinutes,
+                      fri: globalCapacity.dailyMinutes, sat: globalCapacity.dailyMinutes,
+                      sun: globalCapacity.dailyMinutes,
+                    });
+                  }}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+
+              {editingCapacity ? (
+                <div className="space-y-2.5">
+                  <div className="space-y-1.5">
+                    {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
+                      <div key={day} className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
+                        <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
+                        <span className={cn("text-[10px] font-semibold w-10 text-right", tempWeekly[day] === 0 && "text-muted-foreground")}>{tempWeekly[day] === 0 ? 'Folga' : formatMinutes(tempWeekly[day])}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-center text-muted-foreground">
+                    Média: <span className="font-semibold text-foreground">{Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7)}min/dia</span>
+                  </p>
+                  <div className="flex gap-1">
+                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); }}>Cancelar</Button>
+                  </div>
                 </div>
-                <div className="flex-1">
+              ) : (
+                <div>
                   <p className="text-sm font-semibold">
                     {isUsingWeekly
                       ? <>{formatMinutes(todayCapacity)} hoje <span className="text-muted-foreground font-normal text-xs">(média {formatMinutes(getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes))}/dia)</span></>
@@ -1203,16 +1225,16 @@ const StudyPlan = () => {
                     }
                   </p>
                   {metrics?.projectedCompletionDate && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                       <CalendarIcon className="h-3 w-3" />
-                      Conclusão estimada de todos os cards: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
+                      Conclusão estimada: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
                     </p>
                   )}
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
         <ForecastSimulatorSection
@@ -1222,6 +1244,33 @@ const StudyPlan = () => {
           plans={plans}
           updateCapacity={updateCapacity}
         />
+
+        {/* ═══ MODAL: Confirmar alteração de novos cards ═══ */}
+        <AlertDialog open={showNewCardsConfirm} onOpenChange={setShowNewCardsConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Alterar limite de novos cards?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <span className="block">
+                  Você está alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
+                </span>
+                <span className="block text-amber-600 dark:text-amber-400">
+                  ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                updateNewCardsLimit.mutateAsync(tempNewCards);
+                setShowNewCardsConfirm(false);
+                toast({ title: 'Limite atualizado!', description: `Agora você estudará ${tempNewCards} novos cards por dia.` });
+              }}>
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </main>
 
