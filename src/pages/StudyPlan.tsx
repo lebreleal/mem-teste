@@ -1521,52 +1521,66 @@ const StudyPlan = () => {
                             <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
                               Sua meta é <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual você só termina em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
                             </p>
-                            <p className="text-[10px] text-muted-foreground font-semibold">Escolha como resolver:</p>
-                            <div className="space-y-1.5">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
-                                onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
-                              >
-                                <Layers className="h-3 w-3 shrink-0" />
-                                <span className="text-left">Aumentar para <strong>{neededPerDay} cards/dia</strong> <span className="text-muted-foreground">(manter tempo de {formatMinutes(avgDailyMin)})</span></span>
-                              </Button>
-                              {neededMinPerDay && neededMinPerDay > avgDailyMin && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
-                                    onClick={() => {
-                                      setEditingCapacity(true);
-                                      setTempWeekly(
-                                        Object.fromEntries((['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(d => [d, neededMinPerDay])) as WeeklyMinutes
-                                      );
-                                    }}
-                                  >
+
+                            {neededPerDay > 50 ? (
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+                                  ⚠ Meta inviável — seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+                                </p>
+                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
+                                {/* Change target date — primary action */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
+                                  onClick={() => {
+                                    const editablePlan = plans.find(p => p.target_date);
+                                    if (editablePlan) {
+                                      startEdit(editablePlan);
+                                      setStep(3);
+                                    }
+                                  }}
+                                >
+                                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                                  <span className="text-left">Mudar data limite para uma data mais realista</span>
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendações:</p>
+
+                                {/* 1. Change target date — primary actionable button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
+                                  onClick={() => {
+                                    const editablePlan = plans.find(p => p.target_date);
+                                    if (editablePlan) {
+                                      startEdit(editablePlan);
+                                      setStep(3);
+                                    }
+                                  }}
+                                >
+                                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                                  <span className="text-left">Mudar data limite</span>
+                                </Button>
+
+                                {/* 2. Increase cards/day — informative only */}
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+                                  <Layers className="h-3 w-3 shrink-0" />
+                                  <span>Aumentar para <strong className="text-foreground">{neededPerDay} cards/dia</strong> <span>(manter tempo de {formatMinutes(avgDailyMin)})</span></span>
+                                </div>
+
+                                {/* 3. Increase study time — informative only */}
+                                {neededMinPerDay && neededMinPerDay > avgDailyMin && (
+                                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
                                     <Clock className="h-3 w-3 shrink-0" />
-                                    <span className="text-left">Aumentar para <strong>{formatMinutes(neededMinPerDay)}/dia</strong> <span className="text-muted-foreground">(manter {budget} cards/dia)</span></span>
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
-                                    onClick={async () => {
-                                      setTempNewCards(neededPerDay);
-                                      await updateNewCardsLimit.mutateAsync(neededPerDay);
-                                      await updateCapacity.mutateAsync({
-                                        daily_study_minutes: neededMinPerDay,
-                                        weekly_study_minutes: Object.fromEntries((['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(d => [d, neededMinPerDay])) as WeeklyMinutes,
-                                      });
-                                      toast({ title: 'Ajustes aplicados!', description: `${neededPerDay} cards/dia + ${formatMinutes(neededMinPerDay)}/dia de estudo.` });
-                                    }}
-                                  >
-                                    <Sparkles className="h-3 w-3 shrink-0" />
-                                    <span className="text-left">Aplicar ambos: <strong>{neededPerDay} cards + {formatMinutes(neededMinPerDay)}/dia</strong></span>
-                                  </Button>
-                                </>
-                              )}
-                            </div>
+                                    <span>Aumentar para <strong className="text-foreground">{formatMinutes(neededMinPerDay)}/dia</strong> <span>(manter {budget} cards/dia)</span></span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                         
