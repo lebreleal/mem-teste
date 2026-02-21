@@ -408,7 +408,7 @@ export function ForecastSimulator({
                         <div className="space-y-0.5">
                           <p className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                            {d.newCards} novos — {d.newMin}min
+                            {d.newCards} novos{d.createdCards > 0 ? <span className="text-muted-foreground"> ({d.newCards - d.createdCards} existentes + {d.createdCards} criados)</span> : ''} — {d.newMin}min
                           </p>
                           <p className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
@@ -504,7 +504,7 @@ export function ForecastSimulator({
                     <>
                       <div className="h-px bg-border" />
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> ({totalNewCards} existentes + {createdInPeriod} a criar)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
+                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar — {createdPerDay} criados/dia × {approxDays} dias)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
                       </p>
                     </>
                   )}
