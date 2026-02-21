@@ -5,7 +5,7 @@ import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
   ChevronDown, ChevronUp, Pencil, Brain, RotateCcw, Crown, Trash2,
   ChevronRight, Layers, Sparkles, HelpCircle, Info, FolderTree,
-  Library, GraduationCap, Lightbulb, X,
+  Library, GraduationCap, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -194,41 +194,6 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
   );
 }
 
-// ─── Info Modal ──────────────────────────────────────────
-function InfoModal({ open, onOpenChange, title, children }: {
-  open: boolean; onOpenChange: (v: boolean) => void; title: string; children: React.ReactNode;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Lightbulb className="h-4 w-4 text-primary" />
-            {title}
-          </DialogTitle>
-        </DialogHeader>
-        <DialogDescription asChild>
-          <div className="text-sm text-muted-foreground space-y-2">
-            {children}
-          </div>
-        </DialogDescription>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Info Button (inline) ───────────────────────────────
-function InfoButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center justify-center h-4 w-4 rounded-full text-muted-foreground/60 hover:text-primary transition-colors"
-    >
-      <Sparkles className="h-3.5 w-3.5" />
-    </button>
-  );
-}
 
 // ─── Deck Hierarchy Selector ────────────────────────────
 function DeckHierarchySelector({
@@ -241,7 +206,7 @@ function DeckHierarchySelector({
   editingPlanId: string | null;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showHierarchyInfo, setShowHierarchyInfo] = useState(false);
+  
 
   const rootDecks = useMemo(() => decks.filter(d => !d.parent_deck_id), [decks]);
   const getChildren = useCallback((parentId: string) => decks.filter(d => d.parent_deck_id === parentId), [decks]);
@@ -400,12 +365,9 @@ function DeckHierarchySelector({
     <div className="space-y-1.5">
       {/* Header with info */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
-          </span>
-          <InfoButton onClick={() => setShowHierarchyInfo(true)} />
-        </div>
+        <span className="text-xs font-medium text-muted-foreground">
+          {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
+        </span>
         <Button
           type="button"
           variant="ghost"
@@ -431,14 +393,6 @@ function DeckHierarchySelector({
         )}
       </div>
 
-      {/* Hierarchy Info Modal */}
-      <InfoModal open={showHierarchyInfo} onOpenChange={setShowHierarchyInfo} title="Como funciona a hierarquia?">
-        <p>📚 <strong>Baralho pai</strong> pode ter seus próprios cards únicos, além dos que estão nos filhos.</p>
-        <p>📂 <strong>Sub-baralhos</strong> são coleções dentro de um pai. Selecionar um filho <em>não</em> seleciona o pai automaticamente.</p>
-        <p>⬇️ <strong>Cascata para baixo:</strong> Selecionar um pai marca todos os filhos. Desmarcar um pai desmarca todos os filhos.</p>
-        <p>🔢 <strong>Contagem:</strong> "próprios" mostra cards exclusivos do pai. O total inclui todos os descendentes.</p>
-        <p>🔗 <strong>Compartilhados:</strong> Baralhos podem pertencer a múltiplos objetivos. Estudar um card atualiza o progresso em todos.</p>
-      </InfoModal>
     </div>
   );
 }
@@ -602,9 +556,6 @@ const StudyPlan = () => {
   );
   const [expandedObjective, setExpandedObjective] = useState<string | null>(null);
   const [showCatchUp, setShowCatchUp] = useState(false);
-  const [showNameInfo, setShowNameInfo] = useState(false);
-  const [showDateInfo, setShowDateInfo] = useState(false);
-  const [showCapacityInfo, setShowCapacityInfo] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
 
@@ -622,20 +573,6 @@ const StudyPlan = () => {
     metrics ? Math.min(100, Math.round(metrics.planHealthPercent ?? 80)) : 50
   );
 
-  // Step 2 preview metrics
-  const step2Metrics = useMemo(() => {
-    if (selectedDeckIds.length === 0) return null;
-    const avg = avgSecondsPerCard;
-    const cardsPerDay = Math.floor((globalCapacity.dailyMinutes * 60) / avg);
-    const cardsPerWeek = cardsPerDay * 7;
-    let daysLeft: number | null = null;
-    if (targetDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
-    }
-    return { cardsPerDay, cardsPerWeek, daysLeft, avgSeconds: avg };
-  }, [selectedDeckIds, globalCapacity.dailyMinutes, targetDate, avgSecondsPerCard]);
 
   // Capacity impact
   const impactMessage = useMemo(() => {
@@ -800,32 +737,45 @@ const StudyPlan = () => {
         </header>
 
         <main className="container mx-auto px-4 py-6 max-w-lg">
+          {/* ─── STEP 1: Nome ─── */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              {/* Name */}
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <GraduationCap className="h-5 w-5 text-primary" />
                   <h2 className="text-xl font-bold">Nome do objetivo</h2>
-                  <InfoButton onClick={() => setShowNameInfo(true)} />
                 </div>
-                <p className="text-sm text-muted-foreground">Um nome curto para identificar esta meta (ex: ENARE 2026).</p>
+                <p className="text-sm text-muted-foreground">
+                  Dê um nome curto para identificar esta meta. Pode ser o nome de uma prova, matéria ou concurso (ex: ENARE 2026, Residência USP).
+                </p>
               </div>
               <Input
                 placeholder="Ex: ENARE 2026"
                 value={planName}
                 onChange={(e) => setPlanName(e.target.value)}
                 className="text-base"
+                autoFocus
               />
+              <Button
+                className="w-full" size="lg"
+                disabled={!planName.trim()}
+                onClick={() => setStep(2)}
+              >
+                Continuar
+              </Button>
+            </div>
+          )}
 
-              {/* Decks */}
+          {/* ─── STEP 2: Baralhos ─── */}
+          {step === 2 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Library className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Baralhos</h2>
+                  <h2 className="text-xl font-bold">Selecione os baralhos</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Escolha quais baralhos fazem parte deste objetivo. Um baralho pai tem seus próprios cards — selecionar filhos não inclui os cards do pai.
+                  Escolha quais baralhos fazem parte deste objetivo. Selecionar um sub-baralho não inclui automaticamente os cards do pai — cada nível é independente. Baralhos podem pertencer a múltiplos objetivos.
                 </p>
               </div>
               {activeDecks.length === 0 ? (
@@ -845,35 +795,44 @@ const StudyPlan = () => {
                   editingPlanId={editingPlanId}
                 />
               )}
+              <Button
+                className="w-full" size="lg"
+                disabled={selectedDeckIds.length === 0}
+                onClick={() => setStep(3)}
+              >
+                Continuar
+              </Button>
+            </div>
+          )}
 
-              {/* Target date */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
+          {/* ─── STEP 3: Data limite + Confirmar ─── */}
+          {step === 3 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
                   <Target className="h-5 w-5 text-primary" />
-                  <label className="text-sm font-medium">Data limite</label>
-                  <Badge variant="outline" className="text-[9px] h-4 px-1.5">Opcional</Badge>
-                  <InfoButton onClick={() => setShowDateInfo(true)} />
+                  <h2 className="text-xl font-bold">Data limite</h2>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Se você tem uma prova ou prazo, defina aqui. O sistema calculará se seu ritmo é suficiente.
+                <p className="text-sm text-muted-foreground">
+                  Defina quando você precisa ter dominado este conteúdo. O sistema usará essa data para calcular se o seu ritmo de estudo é suficiente e distribuir os cards novos de forma inteligente.
                 </p>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-                {targetDate && (
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setTargetDate(undefined)}>
-                    Remover data
-                  </Button>
-                )}
               </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              {targetDate && (
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setTargetDate(undefined)}>
+                  Alterar data
+                </Button>
+              )}
 
               {/* Feasibility warning */}
               {targetDate && selectedDeckIds.length > 0 && (() => {
@@ -911,93 +870,10 @@ const StudyPlan = () => {
                 );
               })()}
 
-              <Button className="w-full" size="lg" disabled={selectedDeckIds.length === 0} onClick={() => setStep(2)}>
-                Continuar
-              </Button>
-
-              {/* Info Modals */}
-              <InfoModal open={showNameInfo} onOpenChange={setShowNameInfo} title="O que é um objetivo?">
-                <p>🎯 Um <strong>objetivo</strong> agrupa baralhos que você quer estudar para uma mesma meta (ex: uma prova, uma matéria).</p>
-                <p>📊 O sistema calcula automaticamente quantos cards por dia você precisa estudar para atingir sua meta no prazo.</p>
-                <p>🔄 Baralhos podem pertencer a vários objetivos. Estudar um card conta para todos os objetivos que o contêm.</p>
-              </InfoModal>
-              <InfoModal open={showDateInfo} onOpenChange={setShowDateInfo} title="Para que serve a data limite?">
-                <p>📅 A <strong>data limite</strong> representa quando você precisa ter dominado o conteúdo (ex: dia da prova).</p>
-                <p>🚦 Com ela, o sistema indica se seu ritmo está <strong className="text-emerald-500">no caminho</strong> ou <strong className="text-destructive">atrasado</strong>.</p>
-                <p>💡 Sem data, o sistema ainda funciona — apenas não calcula a urgência.</p>
-              </InfoModal>
-            </div>
-          )}
-
-          {step === 2 && step2Metrics && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div>
-                <h2 className="text-xl font-bold mb-1">Aqui está o que calculamos</h2>
-                <p className="text-sm text-muted-foreground">Com base nos seus baralhos e tempo médio por card.</p>
-              </div>
-              <Card>
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Tempo médio por card</p>
-                      <p className="font-bold">{Math.round(step2Metrics.avgSeconds)}s</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-2xl font-bold text-primary">{step2Metrics.cardsPerDay}</p>
-                      <p className="text-xs text-muted-foreground">cards/dia</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-2xl font-bold text-primary">{step2Metrics.cardsPerWeek}</p>
-                      <p className="text-xs text-muted-foreground">cards/semana</p>
-                    </div>
-                  </div>
-                  {targetDate && step2Metrics.daysLeft && (
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                      <p className="text-sm">📅 <strong>{step2Metrics.daysLeft} dias</strong> até {format(targetDate, "dd/MM/yyyy")}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              <Button className="w-full" size="lg" onClick={() => setStep(3)}>Continuar</Button>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                   <Clock className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Capacidade de estudo</h2>
-                  <InfoButton onClick={() => setShowCapacityInfo(true)} />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Sua capacidade diária atual é <strong>{formatMinutes(globalCapacity.dailyMinutes)}</strong>.
-                  Ela é compartilhada entre todos os seus objetivos.
-                </p>
-              </div>
-              <Card>
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm font-semibold">{formatMinutes(globalCapacity.dailyMinutes)}/dia</p>
-                      <p className="text-xs text-muted-foreground">Capacidade global compartilhada</p>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    💡 Você pode ajustar sua capacidade a qualquer momento no dashboard do plano.
-                  </p>
-                </CardContent>
-              </Card>
               <Button
                 className="w-full" size="lg"
                 onClick={handleConfirmPlan}
-                disabled={createPlan.isPending || updatePlan.isPending}
+                disabled={!targetDate || createPlan.isPending || updatePlan.isPending}
               >
                 {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações ✨' : 'Criar objetivo ✨'}
               </Button>
@@ -1030,12 +906,6 @@ const StudyPlan = () => {
                   </AlertDialogContent>
                 </AlertDialog>
               )}
-              <InfoModal open={showCapacityInfo} onOpenChange={setShowCapacityInfo} title="O que é a capacidade global?">
-                <p>⏱️ A <strong>capacidade</strong> é quanto tempo por dia você quer dedicar ao estudo total.</p>
-                <p>🎯 Ela é dividida entre todos os objetivos por ordem de prioridade — o Objetivo 1 recebe cards novos primeiro.</p>
-                <p>📈 Revisões sempre têm prioridade sobre cards novos, independente do objetivo.</p>
-                <p>🔧 Você pode personalizar por dia da semana no dashboard do plano.</p>
-              </InfoModal>
             </div>
           )}
         </main>
