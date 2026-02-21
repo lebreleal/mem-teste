@@ -271,9 +271,10 @@ export interface PlanDashboardProps {
   onSelectPlan: (id: string) => Promise<void>;
   onNewPlan: () => void;
   onEditPlan: (p: any) => void;
+  onBack?: () => void;
 }
 
-export function PlanDashboard({ plan, plans, metrics, decks, avgSecondsPerCard, calcImpact, isPremium, onEdit, onDelete, onUpdatePlan, onSelectPlan, onNewPlan }: PlanDashboardProps) {
+export function PlanDashboard({ plan, plans, metrics, decks, avgSecondsPerCard, calcImpact, isPremium, onEdit, onDelete, onUpdatePlan, onSelectPlan, onNewPlan, onBack }: PlanDashboardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showCatchUp, setShowCatchUp] = useState(false);
@@ -396,7 +397,7 @@ export function PlanDashboard({ plan, plans, metrics, decks, avgSecondsPerCard, 
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+        <Button variant="ghost" size="icon" onClick={() => onBack ? onBack() : navigate('/dashboard')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1 min-w-0">
