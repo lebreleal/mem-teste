@@ -1,39 +1,22 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft, CalendarCheck, BookOpen, Clock, Target, AlertTriangle,
-  Pencil, Trash2, CalendarIcon, Brain,
-  Flame, TrendingUp, RotateCcw, Heart, ChevronRight, Settings2,
-  GripVertical, MoreVertical, Pause, X as XIcon, Play, Plus, ChevronDown
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { useDragReorder } from '@/hooks/useDragReorder';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
-} from '@/components/ui/alert-dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { ArrowLeft, BookOpen, Clock, Target, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
-import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useStudyPlan, getMinutesForDay, getWeeklyAvgMinutes, DAY_LABELS, type DayKey, type WeeklyMinutes, type WeeklyCardDataPoint } from '@/hooks/useStudyPlan';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
+import { PlanDashboard } from '@/components/study-plan/PlanDashboard';
+import { formatMinutes, SLIDER_MARKS } from '@/components/study-plan/constants';
 import BottomNav from '@/components/BottomNav';
 
 type WizardStep = 1 | 2 | 3;
