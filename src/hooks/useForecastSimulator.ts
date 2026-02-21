@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,17 +42,10 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     staleTime: 5 * 60_000,
   });
 
-  const defaultNewCardsPerDay = useMemo(() => {
-    const decks = paramsQuery.data?.decks;
-    if (!decks || decks.length === 0) return 20;
-    const totalLimit = decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
-    const isNewAccount = (paramsQuery.data?.total_reviews_90d ?? 0) < 50;
-    return isNewAccount ? Math.min(totalLimit, 30) : totalLimit;
-  }, [paramsQuery.data?.decks, paramsQuery.data?.total_reviews_90d]);
+  const defaultNewCardsPerDay = 30;
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
-  const isNewAccount = (paramsQuery.data?.total_reviews_90d ?? 0) < 50;
-  const defaultCreatedCardsPerDay = isNewAccount ? 0 : (paramsQuery.data?.avg_new_cards_per_day ?? 0);
+  const defaultCreatedCardsPerDay = 0;
   const createdCardsPerDay = createdCardsPerDayOverride ?? defaultCreatedCardsPerDay;
 
   // Create / terminate worker
