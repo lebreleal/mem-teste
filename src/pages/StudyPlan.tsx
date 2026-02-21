@@ -406,8 +406,11 @@ function DeckHierarchySelector({
 
           {/* Card count */}
           <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums shrink-0">
-            {hasChildren ? ownCards : totalCards}
-            <span className="ml-0.5 text-muted-foreground/60">cards</span>
+            {hasChildren && isExpanded ? (
+              <>{ownCards}<span className="ml-0.5 text-muted-foreground/60">próprios</span></>
+            ) : (
+              <>{hasChildren ? totalCards : ownCards}<span className="ml-0.5 text-muted-foreground/60">cards</span></>
+            )}
           </Badge>
         </label>
 
