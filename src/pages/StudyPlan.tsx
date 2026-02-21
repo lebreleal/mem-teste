@@ -853,7 +853,7 @@ const StudyPlan = () => {
         {feasibilityCheck.neededPerDay > 50 ? (
           <div className="space-y-1.5">
             <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-              ⚠ Seriam necessários <strong>{feasibilityCheck.neededPerDay} cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+              ⚠ Para dominar todos os cards até a data escolhida, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
             </p>
             <p className="text-[10px] font-semibold text-muted-foreground">Recomendação:</p>
             <Button
@@ -1544,7 +1544,7 @@ const StudyPlan = () => {
                             {neededPerDay > 50 ? (
                               <div className="space-y-1.5">
                                 <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                                  ⚠ Meta inviável — seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+                                  ⚠ Meta inviável — para dominar todos os cards até a data, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
                                 </p>
                                 <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
                                 {/* Change target date — primary action */}
