@@ -89,7 +89,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
       title: `Meta: ${perDay} revisões/dia por ${days} dias`,
       description: `Isso levará ~${formatMinutes(minPerDay)} extra por dia. Comece agora!`,
     });
-    navigate('/study');
+    navigate('/dashboard');
   };
 
   const handleResetOverdue = async () => {
@@ -972,42 +972,48 @@ const StudyPlan = () => {
         </Button>
       </header>
 
-      <main className="container mx-auto px-4 py-3 max-w-lg space-y-4">
+      <main className="container mx-auto px-4 py-3 max-w-2xl space-y-4">
 
         {/* ═══ 1. STATUS + CARGA DE HOJE ═══ */}
         {metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
-            <CardContent className="p-4 space-y-3">
-              {/* Status do plano */}
-              <div className={cn('rounded-xl p-3 space-y-1', HEALTH_CONFIG[healthStatus].bg)}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{HEALTH_CONFIG[healthStatus].emoji}</span>
-                    <span className={cn('text-sm font-bold', HEALTH_CONFIG[healthStatus].text)}>
-                      {HEALTH_CONFIG[healthStatus].label}
-                    </span>
+            <CardContent className="p-4 md:p-5 space-y-3">
+              {/* Desktop: side-by-side status + load | Mobile: stacked */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Status do plano */}
+                <div className={cn('rounded-xl p-3 space-y-1', HEALTH_CONFIG[healthStatus].bg)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{HEALTH_CONFIG[healthStatus].emoji}</span>
+                      <span className={cn('text-sm font-bold', HEALTH_CONFIG[healthStatus].text)}>
+                        {HEALTH_CONFIG[healthStatus].label}
+                      </span>
+                    </div>
+                    {metrics.planHealthPercent != null && (
+                      <span className={cn('text-xs font-semibold tabular-nums', HEALTH_CONFIG[healthStatus].text)}>
+                        {metrics.planHealthPercent}%
+                      </span>
+                    )}
                   </div>
-                  {metrics.planHealthPercent != null && (
-                    <span className={cn('text-xs font-semibold tabular-nums', HEALTH_CONFIG[healthStatus].text)}>
-                      {metrics.planHealthPercent}%
-                    </span>
-                  )}
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {HEALTH_CONFIG[healthStatus].description}
+                  </p>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  {HEALTH_CONFIG[healthStatus].description}
-                </p>
-              </div>
 
-              <StudyLoadBar
-                estimatedMinutes={metrics.estimatedMinutesToday}
-                capacityMinutes={todayCapacity}
-                reviewMin={metrics.reviewMinutes}
-                newMin={metrics.newMinutes}
-              />
+                {/* Carga de hoje */}
+                <div className="flex flex-col justify-center">
+                  <StudyLoadBar
+                    estimatedMinutes={metrics.estimatedMinutesToday}
+                    capacityMinutes={todayCapacity}
+                    reviewMin={metrics.reviewMinutes}
+                    newMin={metrics.newMinutes}
+                  />
+                </div>
+              </div>
 
               {metrics.totalReview > 0 && (
                 <Button
-                  className="w-full" size="sm"
+                  className="w-full md:w-auto" size="sm"
                   variant={healthStatus === 'red' || healthStatus === 'orange' ? 'destructive' : 'outline'}
                   onClick={() => setShowCatchUp(true)}
                 >
