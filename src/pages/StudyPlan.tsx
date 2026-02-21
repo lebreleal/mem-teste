@@ -480,6 +480,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
 }) {
   const { forecastView, setForecastView } = useForecastView();
   const [newCardsOverride, setNewCardsOverride] = useState<number | undefined>();
+  const [createdCardsOverride, setCreatedCardsOverride] = useState<number | undefined>();
   const hasTargetDate = plans.some(p => p.target_date);
 
   const horizonDays = useMemo(() => {
@@ -498,10 +499,11 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     return 7;
   }, [forecastView, hasTargetDate, plans]);
 
-  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, isUsingDefaults } = useForecastSimulator({
+  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, isUsingDefaults } = useForecastSimulator({
     deckIds: allDeckIds,
     horizonDays,
     newCardsPerDayOverride: newCardsOverride,
+    createdCardsPerDayOverride: createdCardsOverride,
     dailyMinutes,
     weeklyMinutes,
     enabled: allDeckIds.length > 0,
@@ -518,6 +520,9 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       onViewChange={handleViewChange} newCardsOverride={newCardsOverride}
       onNewCardsChange={setNewCardsOverride} hasTargetDate={hasTargetDate}
       isUsingDefaults={isUsingDefaults}
+      defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
+      createdCardsOverride={createdCardsOverride}
+      onCreatedCardsChange={setCreatedCardsOverride}
     />
   );
 }

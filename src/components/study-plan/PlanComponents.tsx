@@ -87,6 +87,7 @@ export function ForecastSimulator({
   data, summary, isSimulating, progress, defaultNewCardsPerDay,
   forecastView, onViewChange, newCardsOverride, onNewCardsChange,
   hasTargetDate, isUsingDefaults,
+  defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -99,9 +100,14 @@ export function ForecastSimulator({
   onNewCardsChange: (v: number | undefined) => void;
   hasTargetDate: boolean;
   isUsingDefaults: boolean;
+  defaultCreatedCardsPerDay: number;
+  createdCardsOverride: number | undefined;
+  onCreatedCardsChange: (v: number | undefined) => void;
 }) {
   const [editingNewCards, setEditingNewCards] = useState(false);
   const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
+  const [editingCreatedCards, setEditingCreatedCards] = useState(false);
+  const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
   const hasOverload = data.some(d => d.overloaded);
   const maxCapacity = data.length > 0 ? Math.max(...data.map(d => d.capacityMin)) : 0;
 
@@ -125,6 +131,24 @@ export function ForecastSimulator({
   const handleResetNewCards = () => {
     onNewCardsChange(undefined);
     setEditingNewCards(false);
+  };
+
+  const handleEditCreatedCards = () => {
+    setTempCreatedCards(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
+    setEditingCreatedCards(true);
+  };
+
+  const handleConfirmCreatedCards = () => {
+    const val = parseInt(tempCreatedCards, 10);
+    if (!isNaN(val) && val >= 0) {
+      onCreatedCardsChange(val === defaultCreatedCardsPerDay ? undefined : val);
+    }
+    setEditingCreatedCards(false);
+  };
+
+  const handleResetCreatedCards = () => {
+    onCreatedCardsChange(undefined);
+    setEditingCreatedCards(false);
   };
 
   return (
@@ -186,7 +210,38 @@ export function ForecastSimulator({
           )}
         </div>
 
-        {/* Defaults indicator */}
+        {/* Created cards per day */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">+</span>
+          {editingCreatedCards ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                min={0}
+                max={9999}
+                value={tempCreatedCards}
+                onChange={e => setTempCreatedCards(e.target.value)}
+                className="h-6 w-16 text-xs px-1.5"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && handleConfirmCreatedCards()}
+              />
+              <span className="text-muted-foreground">criados/dia</span>
+              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmCreatedCards}>
+                <Check className="h-3 w-3" />
+              </Button>
+              {createdCardsOverride != null && (
+                <button onClick={handleResetCreatedCards} className="text-[10px] text-primary underline">reset</button>
+              )}
+            </div>
+          ) : (
+            <button onClick={handleEditCreatedCards} className="flex items-center gap-1 hover:text-primary transition-colors">
+              <span className="font-medium text-foreground">{createdCardsOverride ?? defaultCreatedCardsPerDay}</span>
+              <span className="text-muted-foreground">cards criados/dia</span>
+              <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            </button>
+          )}
+        </div>
+
         {isUsingDefaults && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
             <Info className="h-3 w-3" />

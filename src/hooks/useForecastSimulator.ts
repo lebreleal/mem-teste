@@ -9,6 +9,7 @@ export interface UseForecastSimulatorOptions {
   deckIds: string[];
   horizonDays: number;
   newCardsPerDayOverride?: number;
+  createdCardsPerDayOverride?: number;
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
   enabled?: boolean;
@@ -17,7 +18,7 @@ export interface UseForecastSimulatorOptions {
 export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { deckIds, horizonDays, newCardsPerDayOverride, dailyMinutes, weeklyMinutes, enabled = true } = options;
+  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, enabled = true } = options;
 
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -47,6 +48,9 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     return decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
   }, [paramsQuery.data?.decks]);
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
+
+  const defaultCreatedCardsPerDay = paramsQuery.data?.avg_new_cards_per_day ?? 0;
+  const createdCardsPerDay = createdCardsPerDayOverride ?? defaultCreatedCardsPerDay;
 
   // Create / terminate worker
   useEffect(() => {
@@ -87,6 +91,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       params,
       horizonDays,
       newCardsPerDay,
+      createdCardsPerDay,
       dailyMinutes,
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
     };
@@ -94,7 +99,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, dailyMinutes, weeklyMinutes]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes]);
 
   // Debounced trigger
   useEffect(() => {
@@ -110,6 +115,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     isSimulating,
     progress,
     defaultNewCardsPerDay,
+    defaultCreatedCardsPerDay,
     isLoading: paramsQuery.isLoading,
     isUsingDefaults: (paramsQuery.data?.total_reviews_90d ?? 0) < 50,
   };
