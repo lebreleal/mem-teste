@@ -314,12 +314,6 @@ function DeckHierarchySelector({
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Icon based on depth */}
-          {depth === 0 ? (
-            <Library className="h-4 w-4 text-primary/70 shrink-0" />
-          ) : (
-            <FolderTree className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
-          )}
 
           {/* Name and meta */}
           <div className="flex-1 min-w-0">
@@ -763,6 +757,35 @@ const StudyPlan = () => {
               >
                 Continuar
               </Button>
+
+              {isEditing && editingPlanId && (
+                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                        handleDeletePlan(editingPlanId);
+                        setView('home');
+                        setIsEditing(false);
+                        setEditingPlanId(null);
+                      }}>
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           )}
 
@@ -770,12 +793,9 @@ const StudyPlan = () => {
           {step === 2 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Library className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Selecione os baralhos</h2>
-                </div>
+                <h2 className="text-xl font-bold mb-1">Selecione os baralhos</h2>
                 <p className="text-sm text-muted-foreground">
-                  Escolha quais baralhos fazem parte deste objetivo. Selecionar um sub-baralho não inclui automaticamente os cards do pai — cada nível é independente. Baralhos podem pertencer a múltiplos objetivos.
+                  Escolha quais baralhos fazem parte deste objetivo.
                 </p>
               </div>
               {activeDecks.length === 0 ? (
@@ -829,7 +849,8 @@ const StudyPlan = () => {
                 </PopoverContent>
               </Popover>
               {targetDate && (
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setTargetDate(undefined)}>
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setTargetDate(undefined)}>
+                  <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
                   Alterar data
                 </Button>
               )}
@@ -875,37 +896,8 @@ const StudyPlan = () => {
                 onClick={handleConfirmPlan}
                 disabled={!targetDate || createPlan.isPending || updatePlan.isPending}
               >
-                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações ✨' : 'Criar objetivo ✨'}
+                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar objetivo'}
               </Button>
-
-              {isEditing && editingPlanId && (
-                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
-                        handleDeletePlan(editingPlanId);
-                        setView('home');
-                        setIsEditing(false);
-                        setEditingPlanId(null);
-                      }}>
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
             </div>
           )}
         </main>
@@ -1038,43 +1030,20 @@ const StudyPlan = () => {
                   </div>
                 )}
               </div>
-              {needsAttention && (
+              {needsAttention && metrics.totalReview > 0 && (
                 <Button
                   className="w-full" size="sm"
                   variant={healthStatus === 'red' ? 'destructive' : 'default'}
-                  onClick={() => {
-                    if (metrics.totalReview > 20) setShowCatchUp(true);
-                    else { setEditingCapacity(true); setTempMinutes(globalCapacity.dailyMinutes); }
-                  }}
+                  onClick={() => setShowCatchUp(true)}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  {metrics.totalReview > 20 ? 'Resolver Atraso' : 'Ajustar Plano'}
+                  Resolver Atraso ({metrics.totalReview} revisões)
                 </Button>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Backlog banner - above objectives */}
-        {!needsAttention && metrics && metrics.totalReview > 0 && (
-          <button
-            onClick={() => setShowCatchUp(true)}
-            className="w-full rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex items-center gap-3 transition-colors hover:bg-amber-100/80 dark:hover:bg-amber-950/50 text-left"
-          >
-            <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-              <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {metrics.totalReview} revisões atrasadas
-              </p>
-              <p className="text-[11px] text-amber-700/80 dark:text-amber-400/70">
-                Redistribua em dias ou resete cards antigos
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
-          </button>
-        )}
 
         {/* ═══ 2. MEUS OBJETIVOS (No "Principal" concept) ═══ */}
         <div className="space-y-2">
