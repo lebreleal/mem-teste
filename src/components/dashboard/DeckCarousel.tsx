@@ -64,20 +64,17 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDon
         )}
       </div>
       <div className="flex items-center gap-3 text-xs">
-        <div className="flex items-center gap-1 text-muted-foreground">
+        <div className="flex items-center gap-1 text-muted-foreground" title="Novos">
           <SquarePlus className="h-3.5 w-3.5" />
           <span className="font-semibold text-foreground">{newAvailable}</span>
-          <span>Novos</span>
         </div>
-        <div className="flex items-center gap-1 text-muted-foreground">
+        <div className="flex items-center gap-1 text-muted-foreground" title="Revisões">
           <RotateCcw className="h-3.5 w-3.5 text-green-500" />
           <span className="font-semibold text-foreground">{reviewAvailable + learningAvailable}</span>
-          <span>Revisões</span>
         </div>
-        <div className="flex items-center gap-1 text-muted-foreground">
+        <div className="flex items-center gap-1 text-muted-foreground" title="Feitos">
           <Layers className="h-3.5 w-3.5 text-primary" />
           <span className="font-semibold text-foreground">{studiedToday}</span>
-          <span>Feitos</span>
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
