@@ -1,97 +1,133 @@
 
 
-# Ajustes no Simulador de Previsao: Defaults, Capacidade por Dia da Semana, e Dias com 0min
+# Distribuicao Inteligente de Cards Novos por Dia
 
-## 1. Defaults fixos para novos cards e cards criados
+## Conceito
+
+O usuario define um orcamento global de "cards novos por dia" (ex: 30) no Meu Plano. O algoritmo distribui esses 30 cards entre todos os decks dos objetivos ativos, proporcionalmente ao numero de cards novos restantes e urgencia (prazo).
+
+Exemplo: Deck A tem 900 cards novos (prazo em 30 dias), Deck B tem 100 cards novos (prazo em 30 dias). Com 30 novos/dia:
+- Deck A recebe 27/dia (90%)
+- Deck B recebe 3/dia (10%)
+
+Isso so afeta cards novos (state 0). Revisoes (state 2) e aprendizado (state 1/3) continuam sendo governados inteiramente pelo algoritmo SRS.
+
+## Mudancas Necessarias
+
+### 1. Novo campo no perfil: `daily_new_cards_limit`
+
+Adicionar coluna na tabela `profiles` (default 30). Esse e o orcamento global do usuario.
+
+### 2. Algoritmo de alocacao proporcional
+
+**Arquivo:** `src/hooks/useStudyPlan.ts` (ja tem `newCardsAllocation` parcial)
+
+Refatorar a logica de alocacao (linhas 259-272) para considerar:
+
+```text
+Para cada objetivo (ordenado por prioridade):
+  peso = cards_novos_restantes_no_deck / dias_restantes_ate_prazo
+  Se nao tem prazo: peso = cards_novos_restantes / 90 (default)
+
+Normalizar pesos e distribuir o orcamento global proporcionalmente.
+Garantir minimo de 1 card/dia por deck ativo (se houver cards novos).
+```
+
+### 3. Aplicar alocacao na fila de estudo
+
+**Arquivo:** `src/services/studyService.ts`
+
+Na funcao `fetchStudyQueue`, ao calcular `effectiveNewLimit`:
+- Buscar o `daily_new_cards_limit` do perfil
+- Buscar a alocacao calculada para aquele deck especifico
+- Usar `Math.min(deckConfig.daily_new_limit, allocatedForThisDeck)` — o menor entre o limite manual do deck e a alocacao do plano
+
+Isso garante que:
+- Se o usuario ajustou manualmente um deck para 5/dia, isso e respeitado
+- Se nao ajustou, o plano governa
+
+### 4. UI no Meu Plano
+
+**Arquivo:** `src/pages/StudyPlan.tsx`
+
+Adicionar um controle de "Cards novos por dia" (slider ou input) no hero card, ao lado do tempo de estudo. Exibir a distribuicao resultante por objetivo (ex: "Anatomia: 18/dia, Fisiologia: 12/dia").
+
+### 5. Reflexo no simulador
 
 **Arquivo:** `src/hooks/useForecastSimulator.ts`
 
-Substituir a logica complexa de calculo de defaults por valores fixos recomendados:
+O simulador ja recebe `newCardsPerDay` como parametro. Conectar ao novo campo `daily_new_cards_limit` do perfil como default, em vez do hardcoded 30.
 
-- `defaultNewCardsPerDay` = **30** (fixo, independente do numero de decks ou reviews)
-- `defaultCreatedCardsPerDay` = **0** (fixo, o usuario ajusta manualmente)
+## Fluxo do usuario
 
-Isso elimina os problemas de 88, 880, 214 que apareciam antes.
+1. Usuario cria objetivos com decks e prazos
+2. Define "30 cards novos/dia" no Meu Plano (ou aceita o default)
+3. O sistema calcula automaticamente: Deck A = 18/dia, Deck B = 12/dia
+4. Na sessao de estudo, cada deck recebe sua cota calculada
+5. Se o usuario quiser ajustar manualmente um deck especifico, pode fazer nas configuracoes do deck (override)
 
-## 2. Capacidade: sempre abrir no modo "por dia da semana"
+## O que NAO muda
 
-**Arquivo:** `src/components/study-plan/PlanComponents.tsx`
+- Revisoes e reaprendizado continuam 100% governados pelo SRS
+- Limites de revisao por deck (`daily_review_limit`) nao sao afetados
+- Decks fora de objetivos continuam usando seu `daily_new_limit` local
+- Compatibilidade total com o comportamento atual para quem nao usa o planejador
 
-- Quando abrir o modal de editar tempo de estudo, `weeklyMode` inicia como **true** (sempre por dia da semana)
-- Remover o toggle "Igual todo dia" / "Por dia da semana" -- o padrao sempre sera por dia da semana
-- Renomear o label do botao de `"Xmin/dia de estudo"` para `"Tempo de estudo diario"`
-- No modal: titulo muda para **"Tempo de Estudo Diario"**
-- Exibir o valor medio calculado (ex: "Media: 26min/dia") abaixo dos sliders
+## Sequencia de implementacao
 
-## 3. Comportamento com 0min em um dia (como o Anki faz)
-
-**Arquivo:** `src/workers/forecastWorker.ts`
-
-O Anki nao tem conceito de "capacidade diaria" -- ele simplesmente mostra os cards devidos. No nosso caso, se o usuario definir 0min para um dia:
-
-- O simulador continua contabilizando os cards devidos naquele dia (para previsao realista)
-- Mas o `capacityMin` sera 0, ou seja, o dia ficara "sobrecarregado" visualmente
-- Na pratica, os cards que nao foram revisados naquele dia acumulam para o proximo dia (ja e o comportamento atual -- cards com `scheduledDay <= day` sao coletados)
-
-Nao e necessario mudar a logica do worker. O comportamento ja esta correto: cards devidos se acumulam. Precisamos apenas garantir que o grafico exiba isso corretamente.
-
-## 4. Remover ReferenceLine unica e usar capacidade por ponto
-
-**Arquivo:** `src/components/study-plan/PlanComponents.tsx`
-
-O problema: a `ReferenceLine` atual usa `maxCapacity` (o maior valor entre todos os dias), mas com tempos diferentes por dia ela fica enganosa. O Anki nao usa linha de referencia.
-
-Solucao: **Remover a ReferenceLine fixa** e, em vez disso, manter apenas o indicador de sobrecarga (icone "!") que ja funciona. O tooltip ja mostra "Total: Xmin / Ymin capacidade".
-
-Se todos os dias tiverem o mesmo tempo, adicionar de volta uma ReferenceLine sutil. Se forem diferentes, nao exibir linha.
-
-## 5. Corrigir icone de sobrecarga (escala/posicionamento)
-
-**Arquivo:** `src/components/study-plan/PlanComponents.tsx`
-
-O icone "!" pode ficar cortado quando a barra e muito alta ou o chart tem escala automatica. Corrigir:
-
-- Garantir que o `YAxis` tenha `domain` com margem superior para acomodar o icone: `domain={[0, (max: number) => Math.ceil(max * 1.15)]}`
-- Ajustar posicao do icone para `y - 10` em vez de `y - 8`
-
-## 6. Resumo das mudancas por arquivo
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/hooks/useForecastSimulator.ts` | Defaults fixos: 30 novos, 0 criados |
-| `src/components/study-plan/PlanComponents.tsx` | Modal sempre "por dia da semana", remover toggle, renomear labels, remover ReferenceLine com weekly variavel, corrigir escala do icone |
+1. Migration: adicionar `daily_new_cards_limit` em `profiles`
+2. Refatorar `newCardsAllocation` em `useStudyPlan.ts`
+3. Integrar alocacao em `fetchStudyQueue`
+4. Adicionar controle na UI do Meu Plano
+5. Conectar ao simulador
 
 ## Detalhes tecnicos
 
-### useForecastSimulator.ts
+### Migration SQL
 
-```typescript
-// Substituir linhas 45-56 por:
-const defaultNewCardsPerDay = 30;
-const defaultCreatedCardsPerDay = 0;
+```text
+ALTER TABLE profiles
+ADD COLUMN daily_new_cards_limit integer NOT NULL DEFAULT 30;
 ```
 
-### PlanComponents.tsx -- Modal de capacidade
+### Algoritmo de alocacao (pseudocodigo)
 
-- `setWeeklyMode(true)` ao abrir (sempre)
-- Remover os botoes de toggle "Igual todo dia" / "Por dia da semana"
-- Titulo: "Tempo de Estudo Diario"
-- Slider min de 0 (para permitir 0min no domingo)
-- Exibir media calculada: `Media: ${avg}min/dia`
+```text
+function allocateNewCards(plans, totalBudget):
+  weights = {}
+  for plan in plans (sorted by priority):
+    for deckId in plan.deck_ids:
+      newRemaining = countNewCards(deckId)
+      if newRemaining == 0: continue
+      daysLeft = plan.target_date 
+        ? daysBetween(today, plan.target_date) 
+        : 90
+      daysLeft = max(1, daysLeft)
+      weights[deckId] = newRemaining / daysLeft
 
-### PlanComponents.tsx -- Grafico
+  totalWeight = sum(weights.values())
+  if totalWeight == 0: return {}
 
-- Condicionar ReferenceLine: so exibir se todos os `capacityMin` nos dados forem iguais
-- Adicionar `domain` no YAxis com margem de 15%
-- Atualizar label da legenda: manter "Tempo de estudo por dia" quando a ReferenceLine existir
+  allocation = {}
+  remaining = totalBudget
+  for deckId in weights (sorted by weight desc):
+    share = round(totalBudget * weights[deckId] / totalWeight)
+    share = max(1, min(share, remaining))
+    allocation[deckId] = share
+    remaining -= share
 
-### PlanComponents.tsx -- Label do botao de capacidade
-
-De:
+  return allocation
 ```
-<span className="font-medium">{currentDailyMin}min/dia</span>
-<span className="text-muted-foreground">de estudo</span>
-```
 
-Para: exibir o resumo do weekly (ex: "Seg 30min, Ter 30min, ... Dom 0min") ou a media se nao houver weekly.
+### Integracao em fetchStudyQueue
+
+Na funcao existente, antes de `const newCards = cards.filter(...)`:
+
+```text
+// Se usuario tem plano ativo, usar alocacao do plano
+// Senao, usar daily_new_limit do deck (comportamento atual)
+const effectiveNewLimit = userHasPlan 
+  ? Math.min(deckConfig.daily_new_limit, planAllocation[deckId] ?? deckConfig.daily_new_limit)
+  : Math.max(0, newLimit - newReviewedToday);
+```
 
