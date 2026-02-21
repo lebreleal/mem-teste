@@ -55,6 +55,8 @@ const CardList = () => {
 
   const frozenCount = allCards.filter(c => isFrozenCard(c)).length;
 
+  const relearningCount = allCards.filter(c => c.state === 3 && !isFrozenCard(c)).length;
+
   const stateOptions = isQuickReview
     ? [
         { value: 'all', label: 'Todos' },
@@ -66,7 +68,8 @@ const CardList = () => {
     : [
         { value: 'all', label: 'Todos' },
         { value: 'new', label: 'Novos' },
-        { value: 'learning', label: 'Em andamento' },
+        { value: 'learning', label: 'Aprendendo' },
+        ...(relearningCount > 0 ? [{ value: 'relearning', label: 'Reaprendendo' }] : []),
         { value: 'mastered', label: 'Dominados' },
         ...(frozenCount > 0 ? [{ value: 'frozen', label: '❄️ Congelados' }] : []),
       ];
@@ -92,7 +95,8 @@ const CardList = () => {
     if (value === 'frozen') return frozenCount;
     if (value === 'new') return allCards.filter(c => c.state === 0 && !isFrozenCard(c)).length;
     if (value === 'learning') return allCards.filter(c => c.state === 1 && !isFrozenCard(c)).length;
-    return allCards.filter(c => c.state >= 2 && !isFrozenCard(c)).length;
+    if (value === 'relearning') return allCards.filter(c => c.state === 3 && !isFrozenCard(c)).length;
+    return allCards.filter(c => c.state === 2 && !isFrozenCard(c)).length;
   };
 
   return (
@@ -184,10 +188,10 @@ const CardList = () => {
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{actualNewCount}</strong> Não estudados
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{actualNewCount}</strong> Novos
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#47c700' }} /> <strong className="text-foreground">{learningCount}</strong> Em andamento
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#47c700' }} /> <strong className="text-foreground">{learningCount}</strong> Aprendendo
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-primary" /> <strong className="text-foreground">{totalReviewStateCards}</strong> Dominados

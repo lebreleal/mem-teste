@@ -62,11 +62,11 @@ function simulateFSRS(card: SimCard, rating: number, currentDay: number, retenti
     const interval = fsrsStabilityToInterval(s, retention, maxInterval);
     return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + interval };
   }
-  if (card.state === 1) {
+  if (card.state === 1 || card.state === 3) {
     const s = card.stability > 0 ? card.stability : fsrsInitStability(rating);
     const d = card.difficulty > 0 ? fsrsNextDifficulty(card.difficulty, rating) : fsrsInitDifficulty(rating);
-    if (rating === 1) return { ...card, stability: Math.max(s * 0.5, 0.1), difficulty: d, state: 1, scheduledDay: currentDay };
-    if (rating === 2) return { ...card, stability: s, difficulty: d, state: 1, scheduledDay: currentDay };
+    if (rating === 1) return { ...card, stability: Math.max(s * 0.5, 0.1), difficulty: d, state: card.state, scheduledDay: currentDay };
+    if (rating === 2) return { ...card, stability: s, difficulty: d, state: card.state, scheduledDay: currentDay };
     const interval = fsrsStabilityToInterval(s, retention, maxInterval);
     return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1) };
   }
@@ -76,7 +76,7 @@ function simulateFSRS(card: SimCard, rating: number, currentDay: number, retenti
   const d = fsrsNextDifficulty(card.difficulty, rating);
   if (rating === 1) {
     const s = fsrsNextForgetStability(card.difficulty, card.stability, r);
-    return { ...card, stability: s, difficulty: d, state: 1, scheduledDay: currentDay };
+    return { ...card, stability: s, difficulty: d, state: 3, scheduledDay: currentDay };
   }
   const s = fsrsNextRecallStability(card.difficulty, card.stability, r, rating);
   const interval = fsrsStabilityToInterval(s, retention, maxInterval);
@@ -88,10 +88,10 @@ function simulateSM2(card: SimCard, rating: number, currentDay: number, maxInter
   let ef = card.stability > 0 ? card.stability : 2.5;
   let reps = Math.round(card.difficulty);
 
-  if (card.state === 0 || card.state === 1) {
+  if (card.state === 0 || card.state === 1 || card.state === 3) {
     if (rating <= 2) {
       const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-      return { ...card, stability: newEF, difficulty: 0, state: 1, scheduledDay: currentDay };
+      return { ...card, stability: newEF, difficulty: 0, state: card.state === 0 ? 1 : card.state, scheduledDay: currentDay };
     }
     const interval = rating === 4 ? 4 : 1;
     const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
@@ -101,7 +101,7 @@ function simulateSM2(card: SimCard, rating: number, currentDay: number, maxInter
   // Review
   const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
   if (rating === 1) {
-    return { ...card, stability: newEF, difficulty: 0, state: 1, scheduledDay: currentDay };
+    return { ...card, stability: newEF, difficulty: 0, state: 3, scheduledDay: currentDay };
   }
   let interval: number;
   if (reps <= 0) interval = 1;
@@ -222,6 +222,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   const newSecsPerCard = timing?.avg_new_seconds || 30;
   const reviewSecsPerCard = timing?.avg_review_seconds || 8;
   const learningSecsPerCard = timing?.avg_learning_seconds || 15;
+  const relearningSecsPerCard = (timing as any)?.avg_relearning_seconds || 12;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
@@ -255,10 +256,12 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     // Collect due cards
     const dueReview: number[] = [];
     const dueLearning: number[] = [];
+    const dueRelearning: number[] = [];
     for (let i = 0; i < simCards.length; i++) {
       const c = simCards[i];
       if (c.state === 2 && c.scheduledDay <= day) dueReview.push(i);
       else if (c.state === 1 && c.scheduledDay <= day) dueLearning.push(i);
+      else if (c.state === 3 && c.scheduledDay <= day) dueRelearning.push(i);
     }
 
     // Introduce new cards
@@ -319,6 +322,21 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       learningCount++;
     }
 
+    // Process relearning
+    let relearningCount = 0;
+    for (const idx of dueRelearning) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.mid);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      relearningCount++;
+    }
+
     // Process new cards
     for (const idx of newIndices) {
       const c = simCards[idx];
@@ -336,15 +354,18 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
     const newMin = Math.round((newCardsToday * newSecsPerCard * scaleFactor) / 60);
     const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
-    const totalMin = revMin + newMin + learnMin;
+    const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
+    const totalMin = revMin + newMin + learnMin + relearnMin;
 
     points.push({
       date, day: dayLabel,
       reviewCards: Math.round(reviewCount * scaleFactor),
       newCards: Math.round(newCardsToday * scaleFactor),
       learningCards: Math.round(learningCount * scaleFactor),
+      relearningCards: Math.round(relearningCount * scaleFactor),
       reviewMin: revMin,
       learningMin: learnMin,
+      relearningMin: relearnMin,
       newMin,
       totalMin,
       capacityMin,
@@ -362,8 +383,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     finalPoints = weeks.map((week, wi) => {
       const avgReviewMin = Math.round(week.reduce((s, p) => s + p.reviewMin, 0) / week.length);
       const avgLearningMin = Math.round(week.reduce((s, p) => s + p.learningMin, 0) / week.length);
+      const avgRelearningMin = Math.round(week.reduce((s, p) => s + p.relearningMin, 0) / week.length);
       const avgNewMin = Math.round(week.reduce((s, p) => s + p.newMin, 0) / week.length);
-      const avgTotal = avgReviewMin + avgLearningMin + avgNewMin;
+      const avgTotal = avgReviewMin + avgLearningMin + avgRelearningMin + avgNewMin;
       const avgCap = Math.round(week.reduce((s, p) => s + p.capacityMin, 0) / week.length);
       return {
         date: week[0].date,
@@ -371,8 +393,10 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
         reviewCards: Math.round(week.reduce((s, p) => s + p.reviewCards, 0) / week.length),
         newCards: Math.round(week.reduce((s, p) => s + p.newCards, 0) / week.length),
         learningCards: Math.round(week.reduce((s, p) => s + p.learningCards, 0) / week.length),
+        relearningCards: Math.round(week.reduce((s, p) => s + p.relearningCards, 0) / week.length),
         reviewMin: avgReviewMin,
         learningMin: avgLearningMin,
+        relearningMin: avgRelearningMin,
         newMin: avgNewMin,
         totalMin: avgTotal,
         capacityMin: avgCap,

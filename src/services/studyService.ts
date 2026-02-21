@@ -77,7 +77,7 @@ export async function fetchStudyQueue(
       .from('cards')
       .select('*')
       .in('deck_id', deckIds)
-      .or(`state.eq.0,state.eq.1,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
+      .or(`state.eq.0,state.eq.1,state.eq.3,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
       .order('created_at', { ascending: true }),
     supabase
       .from('cards')
@@ -111,7 +111,7 @@ export async function fetchStudyQueue(
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
-  const learningCards = cards.filter(c => c.state === 1);
+  const learningCards = cards.filter(c => c.state === 1 || c.state === 3);
   const reviewCards = cards.filter(c => c.state === 2).slice(0, effectiveReviewLimit);
 
   // Shuffle only applies to new + review cards; learning cards always go first (they cut the line when ready)
@@ -214,7 +214,8 @@ export async function submitCardReview(
       stability: result.stability,
       difficulty: result.difficulty,
       scheduled_date: result.scheduled_date,
-    });
+      state: card.state,
+    } as any);
   if (logError) throw logError;
 
   return result;

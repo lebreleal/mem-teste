@@ -4,7 +4,7 @@
 export interface FSRSCard {
   stability: number;
   difficulty: number;
-  state: number; // 0=new, 1=learning, 2=review
+  state: number; // 0=new, 1=learning, 2=review, 3=relearning
   scheduled_date: string;
 }
 
@@ -119,21 +119,23 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
   }
 
-  if (card.state === 1) {
-    // Learning card
+  if (card.state === 1 || card.state === 3) {
+    // Learning or Relearning card (state 3 = relearning, behaves like learning for scheduling)
     const s = card.stability > 0 ? card.stability : initStability(w, rating);
     const d = card.difficulty > 0 ? nextDifficulty(w, card.difficulty, rating) : initDifficulty(w, rating);
+    const keepState = card.state; // preserve 1 or 3
 
     if (rating === 1) {
       const stepMinutes = relearningSteps[0] ?? learningSteps[0] ?? 1;
       const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: Math.max(s * 0.5, 0.1), difficulty: d, state: 1, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      return { stability: Math.max(s * 0.5, 0.1), difficulty: d, state: keepState, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
     }
 
     if (rating === 2) {
-      const stepMinutes = learningSteps.length > 1 ? learningSteps[1] : (learningSteps[0] ?? 10);
+      const steps = card.state === 3 ? relearningSteps : learningSteps;
+      const stepMinutes = steps.length > 1 ? steps[1] : (steps[0] ?? 10);
       const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: s, difficulty: d, state: 1, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      return { stability: s, difficulty: d, state: keepState, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
     }
 
     // Good or Easy → graduate to review
@@ -154,7 +156,7 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     const s = nextForgetStability(w, card.difficulty, card.stability, r);
     const stepMinutes = relearningSteps[0] ?? 10;
     const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-    return { stability: s, difficulty: d, state: 1, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+    return { stability: s, difficulty: d, state: 3, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
   }
 
   // Hard, Good, Easy → recall

@@ -1028,6 +1028,7 @@ export type Database = {
           reviewed_at: string
           scheduled_date: string
           stability: number
+          state: number | null
           user_id: string
         }
         Insert: {
@@ -1038,6 +1039,7 @@ export type Database = {
           reviewed_at?: string
           scheduled_date?: string
           stability?: number
+          state?: number | null
           user_id: string
         }
         Update: {
@@ -1048,6 +1050,7 @@ export type Database = {
           reviewed_at?: string
           scheduled_date?: string
           stability?: number
+          state?: number | null
           user_id?: string
         }
         Relationships: [

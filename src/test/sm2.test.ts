@@ -133,7 +133,7 @@ describe('SM-2 Algorithm - Review Cards (state=2)', () => {
   it('16. Again on review → lapse to learning', () => {
     const card = makeCard({ state: 2, stability: 2.5, difficulty: 1, scheduled_date: new Date(Date.now() - 86400000).toISOString() });
     const r = sm2Schedule(card, 1, params);
-    expect(r.state).toBe(1);
+    expect(r.state).toBe(3); // relearning state
     expect(r.difficulty).toBe(0); // reps reset
   });
 
