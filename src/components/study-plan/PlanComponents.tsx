@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp, Timer, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2 } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,6 +126,7 @@ export function ForecastSimulator({
   const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
+  const [overloadDialogDay, setOverloadDialogDay] = useState<ForecastPoint | null>(null);
   
   // Capacity editing state
   const [editingCapacity, setEditingCapacity] = useState(false);
@@ -459,82 +460,89 @@ export function ForecastSimulator({
                     fill: 'hsl(var(--muted-foreground))',
                   }}
                 />
-                {/* Stacked bars: bottom=review (green), mid=relearning (purple), mid=learning (amber), top=new (blue) */}
+                {/* Stacked bars */}
                 <Bar dataKey="reviewMin" stackId="a" name="Dominados" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="relearningMin" stackId="a" name="Reaprendendo" fill="hsl(280 67% 55%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="learningMin" stackId="a" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.85} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="newMin" stackId="a" name="Novos" fill="hsl(217 91% 60%)" opacity={0.85} radius={[3, 3, 0, 0]} />
+                <Bar
+                  dataKey="newMin"
+                  stackId="a"
+                  name="Novos"
+                  fill="hsl(217 91% 60%)"
+                  opacity={0.85}
+                  radius={[3, 3, 0, 0]}
+                  shape={(props: any) => {
+                    const { x, y, width, height, payload } = props;
+                    const d = payload as ForecastPoint;
+                    return (
+                      <g>
+                        <rect x={x} y={y} width={width} height={height} fill={props.fill} opacity={0.85} rx={3} ry={3} />
+                        {d.overloaded && (
+                          <g
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); setOverloadDialogDay(d); }}
+                          >
+                            <circle cx={x + width / 2} cy={y - 8} r={6} fill="hsl(38 92% 50%)" />
+                            <text x={x + width / 2} y={y - 4.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">!</text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  }}
+                />
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Legend */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground px-1">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                Novos
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
-                Aprendendo
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />
-                Reaprendendo
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
-                Dominados
-              </span>
+            {/* Legend - only capacity line */}
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
               <span className="flex items-center gap-1.5">
                 <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
-                Capacidade
+                Tempo de estudo por dia
               </span>
             </div>
 
-            {/* Summary metrics */}
+            {/* Summary metrics - compact inline */}
             {summary && (
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
-                  <div className="flex items-center justify-center gap-1">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Média/dia</p>
-                  </div>
-                  <p className="text-sm font-bold">{formatMinutes(summary.avgDailyMin)}</p>
-                </div>
-                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
-                  <div className="flex items-center justify-center gap-1">
-                    <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Pico</p>
-                  </div>
-                  <p className="text-sm font-bold">{formatMinutes(summary.peakMin)}</p>
-                </div>
-                <div className={cn(
-                  'rounded-lg px-2 py-2 space-y-0.5',
-                  summary.overloadedDays > 0 ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/40'
-                )}>
-                  <div className="flex items-center justify-center gap-1">
-                    <Zap className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Sobrecarga</p>
-                  </div>
-                  <p className={cn('text-sm font-bold', summary.overloadedDays > 0 && 'text-amber-600 dark:text-amber-400')}>
-                    {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}
-                  </p>
-                </div>
+              <div className="flex items-center gap-3 text-xs px-1">
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  Média <span className="font-semibold text-foreground">{formatMinutes(summary.avgDailyMin)}</span>
+                </span>
+                <span className="text-border">·</span>
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <TrendingUp className="h-3 w-3" />
+                  Pico <span className="font-semibold text-foreground">{formatMinutes(summary.peakMin)}</span>
+                </span>
               </div>
             )}
 
-            {/* Overload warning */}
-            {summary && summary.overloadedDays > 0 && (
-              <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-2 text-[11px]">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Sobrecarga em {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}</p>
-                  <p className="text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-                    Pico de {formatMinutes(summary.peakMin)} em {summary.peakDate}. Reduza novos cards/dia ou aumente a capacidade.
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Overload day dialog */}
+            <Dialog open={!!overloadDialogDay} onOpenChange={() => setOverloadDialogDay(null)}>
+              <DialogContent className="max-w-xs">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Dia sobrecarregado
+                  </DialogTitle>
+                  <DialogDescription asChild>
+                    <div className="space-y-2 pt-1">
+                      {overloadDialogDay && (
+                        <>
+                          <p className="text-sm">
+                            Em <span className="font-semibold">{overloadDialogDay.day} ({overloadDialogDay.date})</span>, a carga estimada é de{' '}
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">{formatMinutes(overloadDialogDay.totalMin)}</span>, 
+                            mas sua capacidade é de <span className="font-semibold">{formatMinutes(overloadDialogDay.capacityMin)}</span>.
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Nesse dia você precisará estudar mais do que o planejado. Considere reduzir novos cards/dia ou aumentar seu tempo de estudo.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </DialogDescription>
+                </DialogHeader>
+              </DialogContent>
+            </Dialog>
           </>
         )}
 
