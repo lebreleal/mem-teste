@@ -242,10 +242,20 @@ const Dashboard = () => {
 
   const handleBulkDelete = async () => {
     const ids = Array.from(state.selectedDeckIds);
-    // Check if any selected deck is shared in a community
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', ids);
+    // Collect selected IDs + all their sub-deck IDs recursively
+    const allRelatedIds = new Set(ids);
+    const collectChildren = (parentIds: string[]) => {
+      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
+      children.forEach(c => { allRelatedIds.add(c.id); });
+      if (children.length > 0) collectChildren(children.map(c => c.id));
+    };
+    collectChildren(ids);
+
+    // Check if any selected or child deck is shared in a community
+    const allIds = Array.from(allRelatedIds);
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds);
     const communityLinkedIds = new Set((turmaRefs ?? []).map((r: any) => r.deck_id));
-    const blocked = ids.filter(id => communityLinkedIds.has(id));
+    const blocked = allIds.filter(id => communityLinkedIds.has(id));
     if (blocked.length > 0) {
       const blockedNames = blocked.map(id => state.decks.find(d => d.id === id)?.name ?? id).join(', ');
       setCommunityBlockTarget({ id: blocked[0], name: blockedNames, type: 'deck' });
