@@ -330,11 +330,6 @@ function DeckHierarchySelector({
 
           {/* Card counts */}
           <div className="flex items-center gap-1 shrink-0">
-            {hasChildren && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 tabular-nums border-muted-foreground/20">
-                {ownCards} próprios
-              </Badge>
-            )}
             <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums">
               {totalCards}
               <span className="ml-0.5 text-muted-foreground/60">cards</span>
