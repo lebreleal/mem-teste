@@ -132,29 +132,41 @@ export async function fetchStudyQueue(
       }
       
       if (deckIds.some(id => allPlanDeckIds.has(id))) {
-        // Count new cards per deck in plans
+        // Expand plan deck IDs to include all descendants
+        const expandedPlanDeckIds = new Set<string>();
+        for (const id of Array.from(allPlanDeckIds)) {
+          expandedPlanDeckIds.add(id);
+          const descs = collectDescendantIds(allDecks ?? [], id);
+          for (const d of descs) expandedPlanDeckIds.add(d);
+        }
+
+        // Count new cards across expanded decks, aggregate by root
         const { data: newCounts } = await supabase
           .from('cards')
           .select('deck_id')
-          .in('deck_id', Array.from(allPlanDeckIds))
+          .in('deck_id', Array.from(expandedPlanDeckIds))
           .eq('state', 0);
         
-        const newPerDeck: Record<string, number> = {};
+        const newPerRoot: Record<string, number> = {};
         for (const c of (newCounts ?? []) as any[]) {
-          newPerDeck[c.deck_id] = (newPerDeck[c.deck_id] ?? 0) + 1;
+          const rootId = findRootAncestorId(allDecks ?? [], c.deck_id);
+          newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
         }
 
-        // Calculate weights: newRemaining / daysLeft
+        // Calculate weights by root (deduplicated)
         const weights: Record<string, number> = {};
+        const seenRoots = new Set<string>();
         for (const p of plansData as any[]) {
           const daysLeft = p.target_date
             ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
             : 90;
           for (const did of (p.deck_ids ?? []) as string[]) {
-            if (weights[did] != null) continue;
-            const remaining = newPerDeck[did] ?? 0;
+            const rootId = findRootAncestorId(allDecks ?? [], did);
+            if (seenRoots.has(rootId)) continue;
+            seenRoots.add(rootId);
+            const remaining = newPerRoot[rootId] ?? 0;
             if (remaining === 0) continue;
-            weights[did] = remaining / daysLeft;
+            weights[rootId] = remaining / daysLeft;
           }
         }
 
@@ -168,7 +180,7 @@ export async function fetchStudyQueue(
           for (const [did, w] of sorted) {
             const rawShare = Math.max(1, Math.round(globalLimit * (w / totalWeight)));
             const floored = Math.max(minShare, rawShare);
-            const cappedToNew = Math.min(floored, newPerDeck[did] ?? 0);
+            const cappedToNew = Math.min(floored, newPerRoot[did] ?? 0);
             allocation[did] = cappedToNew;
             totalAllocated += cappedToNew;
           }
@@ -184,16 +196,14 @@ export async function fetchStudyQueue(
               excess -= trim;
             }
           }
-          // Resolve allocation to root IDs before summing for this session
-          const rootAllocation: Record<string, number> = {};
-          for (const [did, count] of Object.entries(allocation)) {
-            const rootId = findRootAncestorId(allDecks ?? [], did);
-            rootAllocation[rootId] = (rootAllocation[rootId] ?? 0) + count;
-          }
-          // Sum allocation for all deckIds in this study session (resolve each to root)
+          // allocation is already keyed by rootId (weights were computed by root)
+          // Deduplicate by root when summing for this session
+          const seenSessionRoots = new Set<string>();
           const totalForSession = deckIds.reduce((s, id) => {
             const rootId = findRootAncestorId(allDecks ?? [], id);
-            return s + (rootAllocation[rootId] ?? 0);
+            if (seenSessionRoots.has(rootId)) return s;
+            seenSessionRoots.add(rootId);
+            return s + (allocation[rootId] ?? 0);
           }, 0);
           if (totalForSession > 0) {
             planNewLimit = totalForSession;
