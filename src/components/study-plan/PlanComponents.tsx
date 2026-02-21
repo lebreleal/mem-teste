@@ -102,7 +102,7 @@ export function ForecastSimulator({
   data, summary, isSimulating, progress, defaultNewCardsPerDay,
   forecastView, onViewChange, newCardsOverride, onNewCardsChange,
   hasTargetDate, plans: plansList, customTargetDate, onCustomTargetDate, isUsingDefaults,
-  defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
+  totalNewCards, defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
   realDailyMinutes, realWeeklyMinutes,
   dailyMinutesOverride, weeklyMinutesOverride,
   onDailyMinutesChange, onWeeklyMinutesChange,
@@ -122,6 +122,7 @@ export function ForecastSimulator({
   customTargetDate?: Date | null;
   onCustomTargetDate?: (d: Date | null) => void;
   isUsingDefaults: boolean;
+  totalNewCards: number;
   defaultCreatedCardsPerDay: number;
   createdCardsOverride: number | undefined;
   onCreatedCardsChange: (v: number | undefined) => void;
@@ -356,8 +357,10 @@ export function ForecastSimulator({
         </Dialog>
 
         {isUsingDefaults && (
-          <div className="flex items-start gap-1.5 text-[10px] text-primary px-2 py-1">
-            <Info className="h-3 w-3 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 text-[10px] text-primary px-2 py-1">
+            <div className="shrink-0 p-1 -m-1">
+              <Info className="h-3.5 w-3.5" />
+            </div>
             <span>As previsões são baseadas em estimativas iniciais. Conforme você estuda, o algoritmo aprende seu desempenho real e ajusta automaticamente.</span>
           </div>
         )}
@@ -490,10 +493,11 @@ export function ForecastSimulator({
               // Actually, we need the total remaining new cards, not sum of daily studied
               // The correct count is: newCardsPerDay * daysWithNew (capped by what's available)
               // But the most accurate is just currentNewCards * intenseDays (the simulation already caps it)
-              const totalNewRemaining = currentNewCards * intenseDays;
+              const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
+              const totalNewRemaining = totalNewCards + createdInPeriod;
 
               return (
-                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <div className="px-1 pt-2 space-y-1.5">
                   {/* Phase-aware explanation */}
                   {hasMaintenancePhase ? (
                     <div className="space-y-1">

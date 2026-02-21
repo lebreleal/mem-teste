@@ -121,6 +121,8 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     return () => clearTimeout(debounceRef.current);
   }, [runSimulation, enabled]);
 
+  const totalNewCards = paramsQuery.data?.cards?.filter(c => c.state === 0).length ?? 0;
+
   return {
     data: result?.points ?? [],
     summary: result?.summary ?? null,
@@ -128,6 +130,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     progress,
     defaultNewCardsPerDay,
     defaultCreatedCardsPerDay,
+    totalNewCards,
     isLoading: paramsQuery.isLoading,
     isUsingDefaults: (paramsQuery.data?.total_reviews_90d ?? 0) < 50,
   };
