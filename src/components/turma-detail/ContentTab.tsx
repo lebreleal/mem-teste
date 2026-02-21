@@ -542,11 +542,21 @@ const ContentTab = () => {
                         onClick={() => { const id = personalDeckId || (alreadyOwns ? td.deck_id : null); if (id) navigate(`/decks/${id}`, { state: { from: 'community', turmaId } }); }}>
                         <LogIn className="h-3.5 w-3.5" />
                       </Button>
+                    ) : subscriberOnly && !canImport ? (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Visualizar / Experimentar"
+                          onClick={() => setGateDeck(td)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled title="Exclusivo para assinantes">
+                          <Lock className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     ) : (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={subscriberOnly && !canImport ? "Conteúdo exclusivo" : "Adicionar à coleção"}
-                        onClick={() => { if (subscriberOnly && !canImport) { setGateDeck(td); return; } setConfirmImportItem({ type: 'deck', data: td }); }}
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
+                        onClick={() => setConfirmImportItem({ type: 'deck', data: td })}
                         disabled={importLogic.addToCollection.isPending}>
-                        {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {td.allow_download && !inCollection && canImport && (
