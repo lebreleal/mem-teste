@@ -506,7 +506,7 @@ export function ForecastSimulator({
                         <span className="text-[10px] text-muted-foreground">{intenseDays} dias · ~{formatMinutes(intenseAvgMin)}/dia</span>
                       </div>
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        Enquanto novos cards são introduzidos, a carga diária será maior.
+                        Enquanto há cards novos (nunca vistos) sendo estudados, a carga diária será maior.
                       </p>
                       <div className="h-px bg-border" />
                       <div className="flex items-baseline justify-between">
