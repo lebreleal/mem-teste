@@ -234,22 +234,22 @@ function DeckHierarchySelector({
   };
 
   // Selection logic:
-  // - Selecting a PARENT cascades DOWN (selects all descendants)
-  // - Selecting CHILDREN does NOT auto-select parent
-  // - Deselecting a PARENT cascades DOWN (deselects all descendants)
-  // - Deselecting a CHILD only deselects that child (and its descendants)
+  // - Each deck is toggled independently (no cascade)
+  // - User can select parent without children, or children without parent
   const handleToggle = (deckId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedDeckIds(prev => [...new Set([...prev, deckId])]);
+    } else {
+      setSelectedDeckIds(prev => prev.filter(id => id !== deckId));
+    }
+  };
+
+  // Select/deselect a parent AND all its descendants at once
+  const handleToggleWithDescendants = (deckId: string, checked: boolean) => {
     const descendantIds = collectAllDescendants(deckId);
     if (checked) {
       setSelectedDeckIds(prev => [...new Set([...prev, deckId, ...descendantIds])]);
-      // Auto-expand when selecting a parent with children
-      if (descendantIds.length > 0) {
-        setExpandedIds(prev => {
-          const next = new Set(prev);
-          next.add(deckId);
-          return next;
-        });
-      }
+      setExpandedIds(prev => { const next = new Set(prev); next.add(deckId); return next; });
     } else {
       const toRemove = new Set([deckId, ...descendantIds]);
       setSelectedDeckIds(prev => prev.filter(id => !toRemove.has(id)));
@@ -272,12 +272,16 @@ function DeckHierarchySelector({
     const children = getChildren(deck.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedIds.has(deck.id);
-    const checkState = getCheckState(deck.id);
     const isSelected = selectedDeckIds.includes(deck.id);
     const ownCards = getOwnCards(deck);
     const descendantCards = getDescendantCards(deck);
     const totalCards = ownCards + descendantCards;
     const otherPlans = plans.filter(p => p.id !== editingPlanId && (p.deck_ids ?? []).includes(deck.id));
+
+    // For parents: check if ALL descendants are selected
+    const allDescendants = hasChildren ? collectAllDescendants(deck.id) : [];
+    const allDescendantsSelected = hasChildren && allDescendants.length > 0 && allDescendants.every(id => selectedDeckIds.includes(id));
+    const someDescendantsSelected = hasChildren && allDescendants.some(id => selectedDeckIds.includes(id));
 
     return (
       <div key={deck.id}>
@@ -309,18 +313,19 @@ function DeckHierarchySelector({
 
           {/* Checkbox */}
           <Checkbox
-            checked={checkState === 'indeterminate' ? 'indeterminate' : !!checkState}
+            checked={isSelected}
             onCheckedChange={(checked) => handleToggle(deck.id, !!checked)}
             onClick={(e) => e.stopPropagation()}
           />
 
-
           {/* Name and meta */}
           <div className="flex-1 min-w-0">
-            <p className={cn(
-              'text-sm truncate',
-              depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
-            )}>{deck.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className={cn(
+                'text-sm truncate',
+                depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
+              )}>{deck.name}</p>
+            </div>
             {otherPlans.length > 0 && (
               <p className="text-[9px] text-primary/60 truncate">
                 Compartilhado: {otherPlans.map(p => p.name).join(', ')}
@@ -328,21 +333,31 @@ function DeckHierarchySelector({
             )}
           </div>
 
-          {/* Card counts */}
-          <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums">
-              {totalCards}
-              <span className="ml-0.5 text-muted-foreground/60">cards</span>
-            </Badge>
-          </div>
+          {/* Card count */}
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums shrink-0">
+            {hasChildren ? ownCards : totalCards}
+            <span className="ml-0.5 text-muted-foreground/60">cards</span>
+          </Badge>
         </label>
 
-        {/* Children */}
+        {/* Select all children shortcut for parent decks */}
         {hasChildren && isExpanded && (
           <div className="relative">
             <div className="absolute top-0 bottom-0" style={{ left: `${20 + depth * 24}px` }}>
               <div className="w-px h-full bg-border/40" />
             </div>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-[10px] text-primary hover:text-primary/80 font-medium py-1 transition-colors"
+              style={{ paddingLeft: `${36 + depth * 24}px` }}
+              onClick={() => {
+                const allSelected = isSelected && allDescendantsSelected;
+                handleToggleWithDescendants(deck.id, !allSelected);
+              }}
+            >
+              {isSelected && allDescendantsSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+              <span className="text-muted-foreground font-normal">({totalCards} cards)</span>
+            </button>
             {children.map(child => renderDeck(child, depth + 1))}
           </div>
         )}
