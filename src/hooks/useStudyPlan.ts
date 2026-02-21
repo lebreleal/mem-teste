@@ -171,6 +171,28 @@ export function useStudyPlan() {
     enabled: !!userId && allDeckIds.length > 0,
   });
 
+  // ─── Per-deck new card counts for proportional allocation ───
+  const perDeckStatsQuery = useQuery({
+    queryKey: ['per-deck-new-counts', userId, allDeckIds],
+    queryFn: async () => {
+      if (allDeckIds.length === 0) return {} as Record<string, number>;
+      const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      const rows = (data as any[]) ?? [];
+      // Only include decks that belong to objectives
+      const deckIdSet = new Set(allDeckIds);
+      for (const row of rows) {
+        if (deckIdSet.has(row.deck_id)) {
+          map[row.deck_id] = Number(row.new_count) || 0;
+        }
+      }
+      return map;
+    },
+    enabled: !!userId && allDeckIds.length > 0,
+    staleTime: 2 * 60_000,
+  });
+
   const retentionQuery = useQuery({
     queryKey: ['plan-retention', allDeckIds],
     queryFn: async () => {
@@ -237,7 +259,7 @@ export function useStudyPlan() {
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (plans.length === 0 || avgQuery.data == null || !metricsQuery.data) return null;
+    if (plans.length === 0 || avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
     const avg = avgQuery.data;
 
@@ -258,13 +280,14 @@ export function useStudyPlan() {
     const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
-    // ─── Smart new card allocation (proportional by urgency) ───
+    // ─── Smart new card allocation (proportional by actual new card counts) ───
     const globalNewBudget = globalCapacity.dailyNewCardsLimit;
     const newCardsAllocation: Record<string, number> = {};
     const deckNewAllocation: Record<string, number> = {};
+    const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
-    // Calculate weight per deck: newRemaining / daysLeft
-    const deckWeights: { deckId: string; weight: number }[] = [];
+    // Calculate weight per deck using ACTUAL new card count per deck
+    const deckWeights: { deckId: string; newCount: number; weight: number }[] = [];
     const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     const seenDecks = new Set<string>();
     for (const p of sortedPlans) {
@@ -274,11 +297,9 @@ export function useStudyPlan() {
       for (const deckId of (p.deck_ids ?? [])) {
         if (seenDecks.has(deckId)) continue;
         seenDecks.add(deckId);
-        // Estimate new cards per deck proportionally (we only have totalNew globally)
-        const deckCount = allDeckIds.length || 1;
-        const estNewInDeck = Math.round(totalNew / deckCount);
-        if (estNewInDeck === 0) continue;
-        deckWeights.push({ deckId, weight: estNewInDeck / daysLeft });
+        const actualNew = perDeckNewCounts[deckId] ?? 0;
+        if (actualNew === 0) { deckNewAllocation[deckId] = 0; continue; }
+        deckWeights.push({ deckId, newCount: actualNew, weight: actualNew / daysLeft });
       }
     }
 
@@ -404,7 +425,7 @@ export function useStudyPlan() {
       projectedCompletionDate, weeklyCardData,
       forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
-  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
+  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {

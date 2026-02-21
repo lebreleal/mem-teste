@@ -44,10 +44,10 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const state = useDashboardState();
+  const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
+  const state = useDashboardState(metrics?.deckNewAllocation);
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
-  const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
   const { decks: allDecks } = useDecks();
 
   // Carousel helpers
