@@ -62,6 +62,7 @@ export interface ForecastPoint {
   newCards: number;
   learningCards: number;
   reviewMin: number;
+  learningMin: number;
   newMin: number;
   totalMin: number;
   capacityMin: number;
