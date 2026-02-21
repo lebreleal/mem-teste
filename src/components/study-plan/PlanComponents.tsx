@@ -185,7 +185,7 @@ export function ForecastSimulator({
       <CardContent className="p-4 space-y-3">
         {/* Header with filters */}
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Simulador de Carga</h3>
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Tempo de Estudo</h3>
           {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
         </div>
 
@@ -403,7 +403,7 @@ export function ForecastSimulator({
                   tickLine={false}
                   axisLine={false}
                   width={32}
-                  tickFormatter={(v) => `${v}m`}
+                  tickFormatter={(v) => `${v}min`}
                 />
                 <Tooltip
                   contentStyle={{
