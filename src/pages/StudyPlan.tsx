@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
   ChevronDown, ChevronUp, Pencil, Brain, RotateCcw, Crown, Trash2,
-  ChevronRight, Layers,
+  ChevronRight, Layers, Sparkles, HelpCircle, Info, FolderTree,
+  Library, GraduationCap, Lightbulb, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -81,6 +82,42 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard }: {
   );
 }
 
+// ─── Info Modal ──────────────────────────────────────────
+function InfoModal({ open, onOpenChange, title, children }: {
+  open: boolean; onOpenChange: (v: boolean) => void; title: string; children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Lightbulb className="h-4 w-4 text-primary" />
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+        <DialogDescription asChild>
+          <div className="text-sm text-muted-foreground space-y-2">
+            {children}
+          </div>
+        </DialogDescription>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Info Button (inline) ───────────────────────────────
+function InfoButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center justify-center h-4 w-4 rounded-full text-muted-foreground/60 hover:text-primary transition-colors"
+    >
+      <Sparkles className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 // ─── Deck Hierarchy Selector ────────────────────────────
 function DeckHierarchySelector({
   decks, selectedDeckIds, setSelectedDeckIds, plans, editingPlanId,
@@ -92,15 +129,19 @@ function DeckHierarchySelector({
   editingPlanId: string | null;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showHierarchyInfo, setShowHierarchyInfo] = useState(false);
 
-  // Build hierarchy: root decks first, then children
   const rootDecks = useMemo(() => decks.filter(d => !d.parent_deck_id), [decks]);
   const getChildren = useCallback((parentId: string) => decks.filter(d => d.parent_deck_id === parentId), [decks]);
-  const getTotalCards = useCallback((deck: DeckWithStats): number => {
-    const own = deck.new_count + deck.learning_count + deck.review_count + deck.reviewed_today;
-    const childCards = getChildren(deck.id).reduce((sum, c) => sum + getTotalCards(c), 0);
-    return own + childCards;
-  }, [getChildren]);
+
+  const getOwnCards = useCallback((deck: DeckWithStats): number => {
+    return deck.new_count + deck.learning_count + deck.review_count + deck.reviewed_today;
+  }, []);
+
+  const getDescendantCards = useCallback((deck: DeckWithStats): number => {
+    const children = getChildren(deck.id);
+    return children.reduce((sum, c) => sum + getOwnCards(c) + getDescendantCards(c), 0);
+  }, [getChildren, getOwnCards]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -110,88 +151,131 @@ function DeckHierarchySelector({
     });
   };
 
+  const collectAllDescendants = (parentId: string): string[] => {
+    const children = getChildren(parentId);
+    return children.flatMap(c => [c.id, ...collectAllDescendants(c.id)]);
+  };
+
+  // Selection logic:
+  // - Selecting a PARENT cascades DOWN (selects all descendants)
+  // - Selecting CHILDREN does NOT auto-select parent
+  // - Deselecting a PARENT cascades DOWN (deselects all descendants)
+  // - Deselecting a CHILD only deselects that child (and its descendants)
   const handleToggle = (deckId: string, checked: boolean) => {
-    // When selecting a parent, also select all descendants
     const descendantIds = collectAllDescendants(deckId);
     if (checked) {
       setSelectedDeckIds(prev => [...new Set([...prev, deckId, ...descendantIds])]);
+      // Auto-expand when selecting a parent with children
+      if (descendantIds.length > 0) {
+        setExpandedIds(prev => {
+          const next = new Set(prev);
+          next.add(deckId);
+          return next;
+        });
+      }
     } else {
       const toRemove = new Set([deckId, ...descendantIds]);
       setSelectedDeckIds(prev => prev.filter(id => !toRemove.has(id)));
     }
   };
 
-  const collectAllDescendants = (parentId: string): string[] => {
-    const children = getChildren(parentId);
-    return children.flatMap(c => [c.id, ...collectAllDescendants(c.id)]);
+  // Check state: true, false, or indeterminate (some descendants selected)
+  const getCheckState = (deckId: string): boolean | 'indeterminate' => {
+    const isSelected = selectedDeckIds.includes(deckId);
+    const descendants = collectAllDescendants(deckId);
+    if (descendants.length === 0) return isSelected;
+    
+    const selectedDescendants = descendants.filter(id => selectedDeckIds.includes(id));
+    if (isSelected && selectedDescendants.length === descendants.length) return true;
+    if (isSelected || selectedDescendants.length > 0) return 'indeterminate';
+    return false;
   };
 
   const renderDeck = (deck: DeckWithStats, depth: number) => {
     const children = getChildren(deck.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedIds.has(deck.id);
+    const checkState = getCheckState(deck.id);
     const isSelected = selectedDeckIds.includes(deck.id);
-    const totalCards = getTotalCards(deck);
-    const ownCards = deck.new_count + deck.learning_count + deck.review_count + deck.reviewed_today;
+    const ownCards = getOwnCards(deck);
+    const descendantCards = getDescendantCards(deck);
+    const totalCards = ownCards + descendantCards;
     const otherPlans = plans.filter(p => p.id !== editingPlanId && (p.deck_ids ?? []).includes(deck.id));
 
     return (
       <div key={deck.id}>
         <label
           className={cn(
-            'flex items-center gap-2 py-2.5 px-3 rounded-lg cursor-pointer transition-all',
+            'flex items-center gap-2 py-2.5 px-3 rounded-lg cursor-pointer transition-all group',
             isSelected
-              ? 'bg-primary/8 border border-primary/30'
+              ? 'bg-primary/8 border border-primary/20'
               : 'hover:bg-muted/50 border border-transparent',
           )}
-          style={{ paddingLeft: `${12 + depth * 20}px` }}
+          style={{ paddingLeft: `${12 + depth * 24}px` }}
         >
-          {hasChildren && (
+          {/* Expand/collapse or connector */}
+          {hasChildren ? (
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleExpand(deck.id); }}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted transition-colors"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', isExpanded && 'rotate-90')} />
+              <ChevronRight className={cn('h-3.5 w-3.5 transition-transform duration-200', isExpanded && 'rotate-90')} />
             </button>
-          )}
-          {!hasChildren && depth > 0 && (
+          ) : depth > 0 ? (
             <span className="w-5 shrink-0 flex items-center justify-center">
-              <span className="h-px w-3 bg-border" />
+              <span className="h-px w-3 bg-border/60" />
             </span>
+          ) : (
+            <span className="w-5 shrink-0" />
           )}
+
+          {/* Checkbox */}
           <Checkbox
-            checked={isSelected}
+            checked={checkState === 'indeterminate' ? 'indeterminate' : !!checkState}
             onCheckedChange={(checked) => handleToggle(deck.id, !!checked)}
             onClick={(e) => e.stopPropagation()}
           />
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            {depth > 0 && (
-              <Layers className="h-3 w-3 text-muted-foreground shrink-0" />
+
+          {/* Icon based on depth */}
+          {depth === 0 ? (
+            <Library className="h-4 w-4 text-primary/70 shrink-0" />
+          ) : (
+            <FolderTree className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+          )}
+
+          {/* Name and meta */}
+          <div className="flex-1 min-w-0">
+            <p className={cn(
+              'text-sm truncate',
+              depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
+            )}>{deck.name}</p>
+            {otherPlans.length > 0 && (
+              <p className="text-[9px] text-primary/60 truncate">
+                Compartilhado: {otherPlans.map(p => p.name).join(', ')}
+              </p>
             )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className={cn(
-                  'text-sm truncate',
-                  depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
-                )}>{deck.name}</p>
-              </div>
-              {otherPlans.length > 0 && (
-                <p className="text-[9px] text-muted-foreground/70 truncate">
-                  Já em: {otherPlans.map(p => p.name).join(', ')}
-                </p>
-              )}
-            </div>
           </div>
-          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0 tabular-nums">
-            {hasChildren ? `${totalCards}` : `${ownCards}`}
-            <span className="ml-0.5 text-muted-foreground/60">cards</span>
-          </Badge>
+
+          {/* Card counts */}
+          <div className="flex items-center gap-1 shrink-0">
+            {hasChildren && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 tabular-nums border-muted-foreground/20">
+                {ownCards} próprios
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums">
+              {totalCards}
+              <span className="ml-0.5 text-muted-foreground/60">cards</span>
+            </Badge>
+          </div>
         </label>
+
+        {/* Children */}
         {hasChildren && isExpanded && (
           <div className="relative">
-            <div className="absolute left-0 top-0 bottom-0" style={{ marginLeft: `${20 + depth * 20}px` }}>
-              <div className="w-px h-full bg-border/50" />
+            <div className="absolute top-0 bottom-0" style={{ left: `${20 + depth * 24}px` }}>
+              <div className="w-px h-full bg-border/40" />
             </div>
             {children.map(child => renderDeck(child, depth + 1))}
           </div>
@@ -201,11 +285,15 @@ function DeckHierarchySelector({
   };
 
   return (
-    <div className="space-y-1 rounded-xl border bg-card p-2">
-      <div className="flex items-center justify-between px-2 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
-        </span>
+    <div className="space-y-1.5">
+      {/* Header with info */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
+          </span>
+          <InfoButton onClick={() => setShowHierarchyInfo(true)} />
+        </div>
         <Button
           type="button"
           variant="ghost"
@@ -219,10 +307,26 @@ function DeckHierarchySelector({
             }
           }}
         >
-          {selectedDeckIds.length === decks.length ? 'Desmarcar todos' : 'Selecionar todos'}
+          {selectedDeckIds.length === decks.length ? 'Limpar' : 'Todos'}
         </Button>
       </div>
-      {rootDecks.map(deck => renderDeck(deck, 0))}
+
+      {/* Deck list */}
+      <div className="rounded-xl border bg-card p-2 space-y-0.5">
+        {rootDecks.map(deck => renderDeck(deck, 0))}
+        {rootDecks.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">Nenhum baralho encontrado</p>
+        )}
+      </div>
+
+      {/* Hierarchy Info Modal */}
+      <InfoModal open={showHierarchyInfo} onOpenChange={setShowHierarchyInfo} title="Como funciona a hierarquia?">
+        <p>📚 <strong>Baralho pai</strong> pode ter seus próprios cards únicos, além dos que estão nos filhos.</p>
+        <p>📂 <strong>Sub-baralhos</strong> são coleções dentro de um pai. Selecionar um filho <em>não</em> seleciona o pai automaticamente.</p>
+        <p>⬇️ <strong>Cascata para baixo:</strong> Selecionar um pai marca todos os filhos. Desmarcar um pai desmarca todos os filhos.</p>
+        <p>🔢 <strong>Contagem:</strong> "próprios" mostra cards exclusivos do pai. O total inclui todos os descendentes.</p>
+        <p>🔗 <strong>Compartilhados:</strong> Baralhos podem pertencer a múltiplos objetivos. Estudar um card atualiza o progresso em todos.</p>
+      </InfoModal>
     </div>
   );
 }
@@ -262,6 +366,9 @@ const StudyPlan = () => {
   );
   const [expandedObjective, setExpandedObjective] = useState<string | null>(null);
   const [showCatchUp, setShowCatchUp] = useState(false);
+  const [showNameInfo, setShowNameInfo] = useState(false);
+  const [showDateInfo, setShowDateInfo] = useState(false);
+  const [showCapacityInfo, setShowCapacityInfo] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
@@ -453,9 +560,14 @@ const StudyPlan = () => {
         <main className="container mx-auto px-4 py-6 max-w-lg">
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Name */}
               <div>
-                <h2 className="text-xl font-bold mb-1">Nome do objetivo</h2>
-                <p className="text-sm text-muted-foreground">Dê um nome que identifique este objetivo (ex: ENARE 2026, Farmacologia).</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <GraduationCap className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Nome do objetivo</h2>
+                  <InfoButton onClick={() => setShowNameInfo(true)} />
+                </div>
+                <p className="text-sm text-muted-foreground">Um nome curto para identificar esta meta (ex: ENARE 2026).</p>
               </div>
               <Input
                 placeholder="Ex: ENARE 2026"
@@ -463,9 +575,16 @@ const StudyPlan = () => {
                 onChange={(e) => setPlanName(e.target.value)}
                 className="text-base"
               />
+
+              {/* Decks */}
               <div>
-                <h2 className="text-xl font-bold mb-1">Baralhos deste objetivo</h2>
-                <p className="text-sm text-muted-foreground">Selecione os baralhos que fazem parte deste objetivo.</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <Library className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Baralhos</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Escolha quais baralhos fazem parte deste objetivo. Um baralho pai tem seus próprios cards — selecionar filhos não inclui os cards do pai.
+                </p>
               </div>
               {activeDecks.length === 0 ? (
                 <Card className="border-dashed">
@@ -484,16 +603,23 @@ const StudyPlan = () => {
                   editingPlanId={editingPlanId}
                 />
               )}
+
+              {/* Target date */}
               <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  Data limite <span className="text-muted-foreground font-normal">(ex: prova)</span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  <label className="text-sm font-medium">Data limite</label>
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5">Opcional</Badge>
+                  <InfoButton onClick={() => setShowDateInfo(true)} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se você tem uma prova ou prazo, defina aqui. O sistema calculará se seu ritmo é suficiente.
+                </p>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
                       <CalendarIcon className="h-4 w-4 mr-2" />
-                      {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data (opcional)'}
+                      {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -506,9 +632,22 @@ const StudyPlan = () => {
                   </Button>
                 )}
               </div>
+
               <Button className="w-full" size="lg" disabled={selectedDeckIds.length === 0} onClick={() => setStep(2)}>
                 Continuar
               </Button>
+
+              {/* Info Modals */}
+              <InfoModal open={showNameInfo} onOpenChange={setShowNameInfo} title="O que é um objetivo?">
+                <p>🎯 Um <strong>objetivo</strong> agrupa baralhos que você quer estudar para uma mesma meta (ex: uma prova, uma matéria).</p>
+                <p>📊 O sistema calcula automaticamente quantos cards por dia você precisa estudar para atingir sua meta no prazo.</p>
+                <p>🔄 Baralhos podem pertencer a vários objetivos. Estudar um card conta para todos os objetivos que o contêm.</p>
+              </InfoModal>
+              <InfoModal open={showDateInfo} onOpenChange={setShowDateInfo} title="Para que serve a data limite?">
+                <p>📅 A <strong>data limite</strong> representa quando você precisa ter dominado o conteúdo (ex: dia da prova).</p>
+                <p>🚦 Com ela, o sistema indica se seu ritmo está <strong className="text-emerald-500">no caminho</strong> ou <strong className="text-destructive">atrasado</strong>.</p>
+                <p>💡 Sem data, o sistema ainda funciona — apenas não calcula a urgência.</p>
+              </InfoModal>
             </div>
           )}
 
@@ -553,7 +692,11 @@ const StudyPlan = () => {
           {step === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
-                <h2 className="text-xl font-bold mb-1">Capacidade global</h2>
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Capacidade global</h2>
+                  <InfoButton onClick={() => setShowCapacityInfo(true)} />
+                </div>
                 <p className="text-sm text-muted-foreground">
                   Sua capacidade diária atual é <strong>{formatMinutes(globalCapacity.dailyMinutes)}</strong>.
                   Ela é compartilhada entre todos os seus objetivos.
@@ -562,16 +705,14 @@ const StudyPlan = () => {
               <Card>
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-emerald-500" />
-                    </div>
+                    <Clock className="h-5 w-5 text-primary" />
                     <div>
                       <p className="text-sm font-semibold">{formatMinutes(globalCapacity.dailyMinutes)}/dia</p>
                       <p className="text-xs text-muted-foreground">Capacidade global compartilhada</p>
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    💡 Você pode ajustar sua capacidade a qualquer momento no dashboard do plano, após criar o objetivo.
+                    💡 Você pode ajustar sua capacidade a qualquer momento no dashboard do plano.
                   </p>
                 </CardContent>
               </Card>
@@ -582,6 +723,12 @@ const StudyPlan = () => {
               >
                 {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações ✨' : 'Criar objetivo ✨'}
               </Button>
+              <InfoModal open={showCapacityInfo} onOpenChange={setShowCapacityInfo} title="O que é a capacidade global?">
+                <p>⏱️ A <strong>capacidade</strong> é quanto tempo por dia você quer dedicar ao estudo total.</p>
+                <p>🎯 Ela é dividida entre todos os objetivos por ordem de prioridade — o Objetivo 1 recebe cards novos primeiro.</p>
+                <p>📈 Revisões sempre têm prioridade sobre cards novos, independente do objetivo.</p>
+                <p>🔧 Você pode personalizar por dia da semana no dashboard do plano.</p>
+              </InfoModal>
             </div>
           )}
         </main>
