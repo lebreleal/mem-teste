@@ -856,6 +856,10 @@ const StudyPlan = () => {
             <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
             <span><strong>Opção 2:</strong> Estenda o prazo para pelo menos <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong>.</span>
           </p>
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <Clock className="h-3 w-3 text-primary shrink-0" />
+            <span><strong>Opção 3:</strong> Aumente o tempo de estudo diário nas configurações do plano.</span>
+          </p>
         </div>
       </div>
     );
@@ -1426,9 +1430,17 @@ const StudyPlan = () => {
                   {metrics?.projectedCompletionDate && (() => {
                     const totalNew = metrics.totalNew;
                     const budget = globalCapacity.dailyNewCardsLimit;
+                    const avgSec = metrics.avgSecondsPerCard;
                     const projDate = new Date(metrics.projectedCompletionDate);
+                    const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
                     
-                    // Check if any plan has a target_date before projectedCompletionDate
+                    // Time-based bottleneck: how many new cards fit in remaining capacity after reviews
+                    const reviewMinToday = metrics.reviewMinutes;
+                    const availMinForNew = Math.max(0, avgDailyMin - reviewMinToday);
+                    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
+                    const effectiveRate = Math.min(budget, cardsFitByTime);
+                    const bottleneck: 'new_limit' | 'time' = cardsFitByTime < budget ? 'time' : 'new_limit';
+                    
                     const plansWithTarget = plans.filter(p => p.target_date);
                     const earliestTarget = plansWithTarget.length > 0
                       ? plansWithTarget.reduce((min, p) => {
@@ -1443,6 +1455,8 @@ const StudyPlan = () => {
                       ? Math.max(1, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
                       : null;
                     const neededPerDay = daysUntilTarget ? Math.ceil(totalNew / daysUntilTarget) : null;
+                    // Time needed if we increase new cards to neededPerDay
+                    const neededMinPerDay = neededPerDay ? Math.ceil((neededPerDay * avgSec) / 60) + reviewMinToday : null;
                     
                     return (
                       <div className={cn(
@@ -1455,28 +1469,54 @@ const StudyPlan = () => {
                           <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
                           <span>
                             {totalNew > 0
-                              ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong>. No ritmo atual ({budget}/dia), você termina em <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
+                              ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong>. No ritmo atual ({effectiveRate}/dia), você termina em <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
                               : <>Todos os cards novos foram concluídos! 🎉</>
                             }
                           </span>
                         </p>
                         
+                        {totalNew > 0 && (
+                          <p className="text-[10px] text-muted-foreground/70">
+                            {bottleneck === 'new_limit'
+                              ? <>Limitado pelo limite de <strong>{budget}</strong> novos cards/dia (seu tempo de {formatMinutes(avgDailyMin)}/dia comporta mais).</>
+                              : <>Limitado pelo tempo de estudo de <strong>{formatMinutes(avgDailyMin)}/dia</strong> (~{cardsFitByTime} novos cards cabem após revisões).</>
+                            }
+                          </p>
+                        )}
+                        
                         {willMissTarget && neededPerDay && (
-                          <div className="space-y-1">
+                          <div className="space-y-1.5 pt-1 border-t border-amber-200 dark:border-amber-800">
                             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                              ⚠️ Sua meta é <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual você só termina em {format(projDate, "dd/MM/yyyy")}.
+                              ⚠️ Meta em <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> — no ritmo atual você só termina em {format(projDate, "dd/MM/yyyy")}.
                             </p>
-                            <p className="text-[11px] text-muted-foreground">
-                              Para cumprir a meta, aumente para pelo menos <strong className="text-foreground">{neededPerDay} novos cards/dia</strong>.
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 text-[10px] px-2 mt-0.5"
-                              onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
-                            >
-                              Ajustar para {neededPerDay}/dia
-                            </Button>
+                            <p className="text-[11px] text-muted-foreground font-medium">Para cumprir a meta:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px] px-2.5 gap-1"
+                                onClick={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
+                              >
+                                <Layers className="h-3 w-3" />
+                                Ajustar para {neededPerDay} cards/dia
+                              </Button>
+                              {neededMinPerDay && neededMinPerDay > avgDailyMin && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] px-2.5 gap-1"
+                                  onClick={() => {
+                                    setEditingCapacity(true);
+                                    setTempWeekly(
+                                      Object.fromEntries((['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(d => [d, neededMinPerDay])) as WeeklyMinutes
+                                    );
+                                  }}
+                                >
+                                  <Clock className="h-3 w-3" />
+                                  Aumentar para {formatMinutes(neededMinPerDay)}/dia
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         )}
                         
@@ -1487,15 +1527,21 @@ const StudyPlan = () => {
                         )}
                         
                         {!earliestTarget && totalNew > 0 && (
-                          <p className="text-[10px] text-muted-foreground/70">
-                            Limitado por {budget} novos cards/dia.{' '}
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
                             <button
-                              className="text-primary underline hover:text-primary/80 transition-colors"
+                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
                               onClick={() => { setTempNewCards(budget); setShowNewCardsConfirm(true); }}
                             >
-                              Alterar limite
+                              Alterar limite de cards
                             </button>
-                          </p>
+                            <span className="text-[10px] text-muted-foreground/40">•</span>
+                            <button
+                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
+                              onClick={() => setEditingCapacity(true)}
+                            >
+                              Alterar tempo de estudo
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
