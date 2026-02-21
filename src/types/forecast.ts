@@ -36,6 +36,7 @@ export interface ForecastTiming {
   avg_new_seconds: number;
   avg_review_seconds: number;
   avg_learning_seconds: number;
+  avg_relearning_seconds: number;
 }
 
 export interface ForecastParams {
@@ -62,8 +63,10 @@ export interface ForecastPoint {
   reviewCards: number;
   newCards: number;
   learningCards: number;
+  relearningCards: number;
   reviewMin: number;
   learningMin: number;
+  relearningMin: number;
   newMin: number;
   totalMin: number;
   capacityMin: number;

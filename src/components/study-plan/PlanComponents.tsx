@@ -72,7 +72,7 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
         />
       </div>
       <p className="text-[10px] text-muted-foreground">
-        {formatMinutes(reviewMin)} revisões + {formatMinutes(newMin)} novos
+        {formatMinutes(reviewMin)} dominados + {formatMinutes(newMin)} novos
       </p>
     </div>
   );
@@ -431,8 +431,12 @@ export function ForecastSimulator({
                             {d.learningCards} aprendendo — {d.learningMin}min
                           </p>
                           <p className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />
+                            {d.relearningCards} reaprendendo — {d.relearningMin}min
+                          </p>
+                          <p className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
-                            {d.reviewCards} revisões — {d.reviewMin}min
+                            {d.reviewCards} dominados — {d.reviewMin}min
                           </p>
                         </div>
                         <p className={cn('pt-1 border-t font-medium', d.overloaded && 'text-red-500')}>
@@ -455,8 +459,9 @@ export function ForecastSimulator({
                     fill: 'hsl(var(--muted-foreground))',
                   }}
                 />
-                {/* Stacked bars: bottom=review (green), mid=learning (amber), top=new (blue) */}
-                <Bar dataKey="reviewMin" stackId="a" name="Revisões" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
+                {/* Stacked bars: bottom=review (green), mid=relearning (purple), mid=learning (amber), top=new (blue) */}
+                <Bar dataKey="reviewMin" stackId="a" name="Dominados" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="relearningMin" stackId="a" name="Reaprendendo" fill="hsl(280 67% 55%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="learningMin" stackId="a" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="newMin" stackId="a" name="Novos" fill="hsl(217 91% 60%)" opacity={0.85} radius={[3, 3, 0, 0]} />
               </ComposedChart>
@@ -473,8 +478,12 @@ export function ForecastSimulator({
                 Aprendendo
               </span>
               <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />
+                Reaprendendo
+              </span>
+              <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
-                Revisões
+                Dominados
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
