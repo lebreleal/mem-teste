@@ -242,6 +242,15 @@ const Dashboard = () => {
 
   const handleBulkDelete = async () => {
     const ids = Array.from(state.selectedDeckIds);
+    // Check if any selected deck is shared in a community
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', ids);
+    const communityLinkedIds = new Set((turmaRefs ?? []).map((r: any) => r.deck_id));
+    const blocked = ids.filter(id => communityLinkedIds.has(id));
+    if (blocked.length > 0) {
+      const blockedNames = blocked.map(id => state.decks.find(d => d.id === id)?.name ?? id).join(', ');
+      setCommunityBlockTarget({ id: blocked[0], name: blockedNames, type: 'deck' });
+      return;
+    }
     try {
       await bulkDeleteDecks(ids);
       toast({ title: `${ids.length} baralho(s) excluído(s)!` });
