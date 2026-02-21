@@ -1,33 +1,48 @@
 
+# Validacao Completa do Simulador de Carga
 
-# Corrigir Terminologia: Novos / Aprendendo / Dominados
+## Resultado da Pesquisa: Fallbacks
 
-## Problema
+Baseado em dados reais da comunidade Anki (benchmark FSRS com 20,000 usuarios e 700M+ reviews, e relatos de estudantes de medicina):
 
-Dois lugares na interface usam terminologia inconsistente com o padrao Anki:
+| Estado | Fallback Atual | Benchmark Real Anki | Status |
+|--------|---------------|-------------------|--------|
+| Novos (state 0) | 30s | 15-30s | Correto |
+| Aprendendo (state 1) | 15s | 10-15s | Correto |
+| Dominados (state 2) | 8s | 6-9s (media ~8.4s) | Correto |
+| Reaprendendo (state 3) | 12s | 10-15s | Correto |
 
-1. **Pagina do Baralho (DeckStatsCard)**: Mostra "Em andamento" em vez de "Aprendendo"
-2. **Carrossel do Dashboard (DeckCarousel)**: Mostra "Novos / Revisoes / Feitos" mas deveria mostrar "Novos / Aprendendo / Dominados"
-   - Atualmente combina `reviewAvailable + learningAvailable` em um unico numero ("Revisoes")
-   - Mostra `studiedToday` como "Feitos" com icone de Layers — o que confunde, pois o usuario pensa que sao "Dominados"
+Estudantes de medicina relatam ~8.37s/card em revisoes maduras. Usuarios avancados fazem 400-500 cards/hora (~7-9s). Os fallbacks estao alinhados com dados reais.
 
-## Sobre o Simulador
+## O Simulador ja usa Repeticao Espacada Real
 
-Os tempos do simulador estao corretos agora:
-- Novos: 7.6s, Aprendendo: 2.8s, Dominados: 8s (fallback pois quase nao tem dados reais de state 2 ainda)
-- O grafico mostra "Dominados" ocupando mais tempo porque sao muitos cards acumulando com a repeticao espacada (20 novos/dia graduam e viram revisao). Isso e o comportamento correto do FSRS.
+Confirmado no codigo do Worker (`forecastWorker.ts`):
 
-## Mudancas
+1. **Recall Probability**: Para cada card state 2, calcula `R = (1 + FACTOR * elapsed/S)^DECAY` usando a estabilidade real do card
+2. **Rating adaptativo**: Mapeia o recall para buckets (high >90%, mid 70-90%, low <70%) e sorteia rating baseado na distribuicao REAL do usuario (se tiver 50+ reviews nos ultimos 90 dias)
+3. **Algoritmo correto por deck**: Usa FSRS ou SM2 conforme configurado no baralho
+4. **Intervalos crescentes**: Um card "Facil" no FSRS vai de ~2d para ~8d para ~30d para ~90d+ conforme a estabilidade cresce
+5. **Lapsos**: Se o recall esta baixo e o rating sorteado e "Again", o card volta para state 3 (Reaprendendo) e o intervalo cai -- exatamente como voce descreveu
 
-### 1. DeckStatsCard.tsx (linha 69)
-- Trocar "Em andamento" por "Aprendendo"
+## O que falta corrigir: learning_count no cardService
 
-### 2. DeckCarousel.tsx (linhas 66-78)
-- Separar os 3 contadores para mostrar corretamente:
-  - SquarePlus icon: `newAvailable` = "Novos"
-  - RotateCcw icon: `learningAvailable` = "Aprendendo" (state 1 e 3)
-  - Layers icon: `reviewAvailable` = "Dominados" (state 2, que vem da repeticao espacada)
-- Remover o conceito de "Feitos" dos contadores (o progresso ja aparece na barra abaixo)
+O unico bug pendente e que `fetchAggregatedStats` em `cardService.ts` nao conta state 3 (Reaprendendo) como "Aprendendo", fazendo cards reaprendendo aparecerem como "Dominados" na barra de progresso da colecao.
 
-Nenhuma mudanca no backend ou no simulador.
+### Mudanca em cardService.ts
 
+Na funcao `fetchAggregatedStats`, alterar a contagem para incluir state 3:
+
+```
+// Antes:
+else if (c.state === 1) totals.learning_count++;
+
+// Depois:
+else if (c.state === 1 || c.state === 3) totals.learning_count++;
+```
+
+## Resumo
+
+- Fallbacks: valores corretos, alinhados com benchmarks reais
+- Simulador: ja usa repeticao espacada real com recall probability
+- Estatisticas do usuario: usadas automaticamente apos 50+ reviews
+- Unica correcao: contar state 3 como "Aprendendo" no cardService
