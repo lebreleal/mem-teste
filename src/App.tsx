@@ -50,6 +50,7 @@ const ExamResults = lazyRetry(() => import("./pages/ExamResults"));
 const ActivityView = lazyRetry(() => import("./pages/ActivityView"));
 const Feedback = lazyRetry(() => import("./pages/Feedback"));
 const Performance = lazyRetry(() => import("./pages/Performance"));
+const StudyPlan = lazyRetry(() => import("./pages/StudyPlan"));
 const Missions = lazyRetry(() => import("./pages/Missions"));
 const AIAgent = lazyRetry(() => import("./pages/AIAgent"));
 const AdminIA = lazyRetry(() => import("./pages/AdminIA"));
@@ -107,6 +108,7 @@ const App = () => (
                 <Route path="/exam/:examId/results" element={<ProtectedRoute><ExamResults /></ProtectedRoute>} />
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
                 <Route path="/planejamento" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
+                <Route path="/plano" element={<ProtectedRoute><StudyPlan /></ProtectedRoute>} />
                 <Route path="/missoes" element={<ProtectedRoute><Missions /></ProtectedRoute>} />
                 <Route path="/ia" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />

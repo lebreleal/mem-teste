@@ -124,7 +124,7 @@ describe('FSRS Algorithm - Review Cards (state=2)', () => {
   it('16. Again on review → relearning (state=1)', () => {
     const card = makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() });
     const r = fsrsSchedule(card, 1, params);
-    expect(r.state).toBe(1);
+    expect(r.state).toBe(3); // relearning state
     expect(r.interval_days).toBe(0);
   });
 

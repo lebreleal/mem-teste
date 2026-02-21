@@ -6,7 +6,7 @@ export type Rating = 1 | 2 | 3 | 4;
 export interface SM2Card {
   stability: number;   // used as EFactor (ease factor), min 1.3
   difficulty: number;  // used as repetition count
-  state: number;       // 0=new, 1=learning, 2=review
+  state: number;       // 0=new, 1=learning, 2=review, 3=relearning
   scheduled_date: string;
 }
 
@@ -72,7 +72,7 @@ export function sm2Schedule(card: SM2Card, rating: Rating, params: SM2Params = D
   let ef = card.stability > 0 ? card.stability : 2.5;
   let reps = Math.round(card.difficulty);
 
-  if (card.state === 0 || card.state === 1) {
+  if (card.state === 0 || card.state === 1 || card.state === 3) {
     // New or Learning card
     if (rating === 1) {
       // Again: stay in learning, reset reps, use first step
@@ -126,14 +126,14 @@ export function sm2Schedule(card: SM2Card, rating: Rating, params: SM2Params = D
 
   // Review card (state === 2)
   if (rating === 1) {
-    // Lapse (Again): back to learning
+    // Lapse (Again): back to relearning (state 3)
     const stepMinutes = learningSteps[0] ?? 1;
     const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
     const newEF = calculateEFactor(ef, quality);
     return {
       stability: Math.max(1.3, newEF),
       difficulty: 0, // reset reps
-      state: 1,
+      state: 3,
       scheduled_date: scheduledDate.toISOString(),
       interval_days: 0,
     };

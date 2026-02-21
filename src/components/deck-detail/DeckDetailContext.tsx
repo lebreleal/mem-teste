@@ -306,7 +306,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const totalCards = allCards.length;
   const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
-  const learningCount = stats?.learning_count ?? 0;
+  const learningCount = (stats?.learning_count ?? 0);
   const newReviewedToday = rootTotals.newReviewed;
   const newGraduatedToday = rootTotals.newGraduated;
   const reviewedToday = rootTotals.reviewed;
@@ -368,7 +368,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (stateFilter === 'frozen') result = result.filter(c => isFrozenCard(c));
       else if (stateFilter === 'new') result = result.filter(c => c.state === 0 && !isFrozenCard(c));
       else if (stateFilter === 'learning') result = result.filter(c => c.state === 1 && !isFrozenCard(c));
-      else if (stateFilter === 'mastered') result = result.filter(c => c.state >= 2 && !isFrozenCard(c));
+      else if (stateFilter === 'relearning') result = result.filter(c => c.state === 3 && !isFrozenCard(c));
+      else if (stateFilter === 'mastered') result = result.filter(c => c.state === 2 && !isFrozenCard(c));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -394,7 +395,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       return { label: 'Entendi', color: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40' };
     }
     if (card.state === 0) return { label: 'Novo', color: 'text-muted-foreground bg-muted' };
-    if (card.state === 1) {
+    if (card.state === 1 || card.state === 3) {
       const due = new Date(card.scheduled_date);
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

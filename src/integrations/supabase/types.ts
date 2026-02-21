@@ -940,8 +940,10 @@ export type Database = {
           daily_cards_studied: number
           daily_energy_earned: number
           daily_free_gradings: number
+          daily_study_minutes: number
           email: string
           energy: number
+          forecast_view: string
           id: string
           is_banned: boolean
           last_energy_recharge: string | null
@@ -951,9 +953,11 @@ export type Database = {
           name: string
           onboarding_completed: boolean
           premium_expires_at: string | null
+          selected_plan_id: string | null
           successful_cards_counter: number
           tier_last_evaluated: string | null
           updated_at: string
+          weekly_study_minutes: Json | null
         }
         Insert: {
           created_at?: string
@@ -961,8 +965,10 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_study_minutes?: number
           email?: string
           energy?: number
+          forecast_view?: string
           id: string
           is_banned?: boolean
           last_energy_recharge?: string | null
@@ -972,9 +978,11 @@ export type Database = {
           name?: string
           onboarding_completed?: boolean
           premium_expires_at?: string | null
+          selected_plan_id?: string | null
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_study_minutes?: Json | null
         }
         Update: {
           created_at?: string
@@ -982,8 +990,10 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_study_minutes?: number
           email?: string
           energy?: number
+          forecast_view?: string
           id?: string
           is_banned?: boolean
           last_energy_recharge?: string | null
@@ -993,11 +1003,21 @@ export type Database = {
           name?: string
           onboarding_completed?: boolean
           premium_expires_at?: string | null
+          selected_plan_id?: string | null
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_study_minutes?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_selected_plan_id_fkey"
+            columns: ["selected_plan_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       review_logs: {
         Row: {
@@ -1008,6 +1028,7 @@ export type Database = {
           reviewed_at: string
           scheduled_date: string
           stability: number
+          state: number | null
           user_id: string
         }
         Insert: {
@@ -1018,6 +1039,7 @@ export type Database = {
           reviewed_at?: string
           scheduled_date?: string
           stability?: number
+          state?: number | null
           user_id: string
         }
         Update: {
@@ -1028,6 +1050,7 @@ export type Database = {
           reviewed_at?: string
           scheduled_date?: string
           stability?: number
+          state?: number | null
           user_id?: string
         }
         Relationships: [
@@ -1036,6 +1059,53 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_plans: {
+        Row: {
+          created_at: string
+          daily_minutes: number
+          deck_ids: string[]
+          id: string
+          name: string
+          priority: number
+          target_date: string | null
+          updated_at: string
+          user_id: string
+          weekly_minutes: Json | null
+        }
+        Insert: {
+          created_at?: string
+          daily_minutes?: number
+          deck_ids?: string[]
+          id?: string
+          name?: string
+          priority?: number
+          target_date?: string | null
+          updated_at?: string
+          user_id: string
+          weekly_minutes?: Json | null
+        }
+        Update: {
+          created_at?: string
+          daily_minutes?: number
+          deck_ids?: string[]
+          id?: string
+          name?: string
+          priority?: number
+          target_date?: string | null
+          updated_at?: string
+          user_id?: string
+          weekly_minutes?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2047,6 +2117,7 @@ export type Database = {
           reviewed_today: number
         }[]
       }
+      get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
       get_community_full_preview: {
         Args: { p_turma_id: string }
         Returns: Json
@@ -2066,7 +2137,19 @@ export type Database = {
           reviewed_today: number
         }[]
       }
+      get_forecast_params: {
+        Args: { p_deck_ids: string[]; p_user_id: string }
+        Returns: Json
+      }
       get_marketplace_fee: { Args: { tier: number }; Returns: number }
+      get_plan_metrics: {
+        Args: { p_deck_ids: string[]; p_user_id: string }
+        Returns: {
+          total_learning: number
+          total_new: number
+          total_review: number
+        }[]
+      }
       get_public_profiles: {
         Args: { p_user_ids: string[] }
         Returns: {

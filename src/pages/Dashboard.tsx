@@ -3,12 +3,14 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2 } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useMemo, useCallback } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
+import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -43,6 +45,47 @@ const Dashboard = () => {
   const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
+  const { plans, allDeckIds, avgSecondsPerCard } = useStudyPlan();
+
+  // Helper: find root ancestor of a deck
+  const getRootId = useCallback((deckId: string): string | null => {
+    const d = state.decks.find(x => x.id === deckId);
+    if (!d) return null;
+    if (!d.parent_deck_id) return d.id;
+    return getRootId(d.parent_deck_id);
+  }, [state.decks]);
+
+  // Build plansByDeckId map: rootDeckId -> highest priority objective name
+  const plansByDeckId = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!plans.length || !state.decks.length) return map;
+    for (const plan of plans) {
+      for (const deckId of (plan.deck_ids ?? [])) {
+        const rootId = getRootId(deckId);
+        if (rootId && !map[rootId]) {
+          map[rootId] = plan.name;
+        }
+      }
+    }
+    return map;
+  }, [plans, state.decks, getRootId]);
+
+  // Build planDeckOrder: ordered list of root deck IDs by objective priority then deck order within objective
+  const planDeckOrder = useMemo(() => {
+    if (!plans.length || !state.decks.length) return [] as string[];
+    const order: string[] = [];
+    const seen = new Set<string>();
+    for (const plan of plans) {
+      for (const deckId of (plan.deck_ids ?? [])) {
+        const rootId = getRootId(deckId);
+        if (rootId && !seen.has(rootId)) {
+          seen.add(rootId);
+          order.push(rootId);
+        }
+      }
+    }
+    return order;
+  }, [plans, state.decks, getRootId]);
 
   // Handle payment return
   useEffect(() => {
@@ -242,11 +285,12 @@ const Dashboard = () => {
 
       <main className="container mx-auto px-4 py-6">
         {/* Quick Nav */}
-        <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
+        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3 md:gap-4 md:max-w-lg md:mx-auto">
           {[
             { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
+            { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
               <div className="relative">
@@ -261,6 +305,18 @@ const Dashboard = () => {
             </button>
           ))}
         </div>
+
+        {/* Deck Carousel - Today's study cards */}
+        {!state.isLoading && state.decks.length > 0 && (
+          <DeckCarousel
+            decks={state.decks}
+            avgSecondsPerCard={avgSecondsPerCard}
+            hasPlan={plans.length > 0}
+            planDeckIds={allDeckIds}
+            planDeckOrder={planDeckOrder}
+            plansByDeckId={plansByDeckId}
+          />
+        )}
 
         <DashboardActions
           currentFolderId={state.currentFolderId}

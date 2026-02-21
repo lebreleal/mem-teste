@@ -1,0 +1,442 @@
+/**
+ * Web Worker for Forecast Simulation.
+ * Runs FSRS/SM2 simulation off the main thread.
+ */
+
+import type {
+  SimulatorInput, SimulatorResult, ForecastPoint, ForecastCard,
+  ForecastDeckConfig, RatingBucket, RatingDistribution, WorkerMessage, WorkerResponse,
+} from '../types/forecast';
+
+// ─── Inline pure scheduling functions (no DOM deps) ────
+
+const DECAY = -0.5;
+const FACTOR = 19 / 81;
+
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
+
+// FSRS
+const DEFAULT_W = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61];
+
+function fsrsRetrievability(stability: number, elapsedDays: number): number {
+  if (stability <= 0) return 0;
+  return Math.pow(1 + FACTOR * elapsedDays / stability, DECAY);
+}
+
+function fsrsInitStability(rating: number): number { return Math.max(DEFAULT_W[rating - 1], 0.1); }
+function fsrsInitDifficulty(rating: number): number { return clamp(DEFAULT_W[4] - Math.exp(DEFAULT_W[5] * (rating - 1)) + 1, 1, 10); }
+
+function fsrsNextDifficulty(d: number, rating: number): number {
+  const newD = d - DEFAULT_W[6] * (rating - 3);
+  return clamp(DEFAULT_W[7] * fsrsInitDifficulty(4) + (1 - DEFAULT_W[7]) * newD, 1, 10);
+}
+
+function fsrsNextRecallStability(d: number, s: number, r: number, rating: number): number {
+  const hp = rating === 2 ? DEFAULT_W[15] : 1;
+  const eb = rating === 4 ? DEFAULT_W[16] : 1;
+  return s * (1 + Math.exp(DEFAULT_W[8]) * (11 - d) * Math.pow(s, -DEFAULT_W[9]) * (Math.exp((1 - r) * DEFAULT_W[10]) - 1) * hp * eb);
+}
+
+function fsrsNextForgetStability(d: number, s: number, r: number): number {
+  return Math.max(0.1, DEFAULT_W[11] * Math.pow(d, -DEFAULT_W[12]) * (Math.pow(s + 1, DEFAULT_W[13]) - 1) * Math.exp((1 - r) * DEFAULT_W[14]));
+}
+
+function fsrsStabilityToInterval(s: number, retention: number, maxInterval: number): number {
+  return clamp(Math.round(s / FACTOR * (Math.pow(retention, 1 / DECAY) - 1)), 1, maxInterval);
+}
+
+interface SimCard {
+  deck_id: string;
+  state: number;
+  stability: number;
+  difficulty: number;
+  scheduledDay: number; // days from simulation start
+}
+
+function simulateFSRS(card: SimCard, rating: number, currentDay: number, retention: number, maxInterval: number): SimCard {
+  const w = DEFAULT_W;
+  if (card.state === 0) {
+    const s = fsrsInitStability(rating);
+    const d = fsrsInitDifficulty(rating);
+    if (rating <= 2) return { ...card, stability: s, difficulty: d, state: 1, scheduledDay: currentDay }; // stays in learning
+    const interval = fsrsStabilityToInterval(s, retention, maxInterval);
+    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + interval };
+  }
+  if (card.state === 1 || card.state === 3) {
+    const s = card.stability > 0 ? card.stability : fsrsInitStability(rating);
+    const d = card.difficulty > 0 ? fsrsNextDifficulty(card.difficulty, rating) : fsrsInitDifficulty(rating);
+    if (rating === 1) return { ...card, stability: Math.max(s * 0.5, 0.1), difficulty: d, state: card.state, scheduledDay: currentDay };
+    if (rating === 2) return { ...card, stability: s, difficulty: d, state: card.state, scheduledDay: currentDay };
+    const interval = fsrsStabilityToInterval(s, retention, maxInterval);
+    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1) };
+  }
+  // Review
+  const elapsed = Math.max(0, currentDay - card.scheduledDay);
+  const r = fsrsRetrievability(card.stability, elapsed);
+  const d = fsrsNextDifficulty(card.difficulty, rating);
+  if (rating === 1) {
+    const s = fsrsNextForgetStability(card.difficulty, card.stability, r);
+    return { ...card, stability: s, difficulty: d, state: 3, scheduledDay: currentDay };
+  }
+  const s = fsrsNextRecallStability(card.difficulty, card.stability, r, rating);
+  const interval = fsrsStabilityToInterval(s, retention, maxInterval);
+  return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1) };
+}
+
+function simulateSM2(card: SimCard, rating: number, currentDay: number, maxInterval: number): SimCard {
+  const quality = rating === 1 ? 1 : rating === 2 ? 2 : rating === 3 ? 3 : 5;
+  let ef = card.stability > 0 ? card.stability : 2.5;
+  let reps = Math.round(card.difficulty);
+
+  if (card.state === 0 || card.state === 1 || card.state === 3) {
+    if (rating <= 2) {
+      const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+      return { ...card, stability: newEF, difficulty: 0, state: card.state === 0 ? 1 : card.state, scheduledDay: currentDay };
+    }
+    const interval = rating === 4 ? 4 : 1;
+    const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+    return { ...card, stability: newEF, difficulty: 1, state: 2, scheduledDay: currentDay + Math.min(interval, maxInterval) };
+  }
+
+  // Review
+  const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+  if (rating === 1) {
+    return { ...card, stability: newEF, difficulty: 0, state: 3, scheduledDay: currentDay };
+  }
+  let interval: number;
+  if (reps <= 0) interval = 1;
+  else if (reps === 1) interval = 6;
+  else {
+    const prevInterval = Math.max(1, currentDay - card.scheduledDay);
+    interval = Math.round(prevInterval * newEF);
+  }
+  if (rating === 2) interval = Math.max(1, Math.round(interval * 0.8));
+  if (rating === 4) interval = Math.round(interval * 1.3);
+  interval = clamp(interval, 1, maxInterval);
+  return { ...card, stability: newEF, difficulty: reps + 1, state: 2, scheduledDay: currentDay + interval };
+}
+
+// ─── Rating Distribution ────────────────────────────────
+
+const DEFAULT_DISTRIBUTION: RatingDistribution = {
+  high: { again: 5, hard: 10, good: 75, easy: 10, total: 100 },
+  mid:  { again: 15, hard: 25, good: 50, easy: 10, total: 100 },
+  low:  { again: 30, hard: 30, good: 35, easy: 5, total: 100 },
+};
+
+function sampleRating(bucket: RatingBucket): number {
+  const t = bucket.again + bucket.hard + bucket.good + bucket.easy;
+  if (t === 0) return 3;
+  const r = Math.random() * t;
+  if (r < bucket.again) return 1;
+  if (r < bucket.again + bucket.hard) return 2;
+  if (r < bucket.again + bucket.hard + bucket.good) return 3;
+  return 4;
+}
+
+function getRecallBucket(recall: number): 'high' | 'mid' | 'low' {
+  if (recall >= 0.9) return 'high';
+  if (recall >= 0.7) return 'mid';
+  return 'low';
+}
+
+// ─── Main Simulation ────────────────────────────────────
+
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+const DAY_LABELS: Record<string, string> = { mon: 'Seg', tue: 'Ter', wed: 'Qua', thu: 'Qui', fri: 'Sex', sat: 'Sáb', sun: 'Dom' };
+
+function getCapacityForDay(dayIndex: number, startDate: Date, dailyMin: number, weeklyMin: Record<string, number> | null): number {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + dayIndex);
+  const dow = d.getDay();
+  const key = DAY_KEYS[dow];
+  if (weeklyMin && weeklyMin[key] != null) return weeklyMin[key];
+  return dailyMin;
+}
+
+function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day: string } {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + dayIndex);
+  const dateStr = d.toISOString().slice(0, 10);
+  const dow = d.getDay();
+  const key = DAY_KEYS[dow];
+  if (dayIndex === 0) return { date: dateStr, day: 'Hoje' };
+  if (dayIndex === 1) return { date: dateStr, day: 'Amanhã' };
+  return { date: dateStr, day: DAY_LABELS[key] || key };
+}
+
+let cancelled = false;
+
+function runSimulation(input: SimulatorInput): SimulatorResult {
+  cancelled = false;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes } = input;
+  const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
+
+  const useAdaptive = total_reviews_90d >= 50;
+  const dist: RatingDistribution = {
+    high: (useAdaptive && rating_distribution?.high?.total) ? rating_distribution.high as RatingBucket : DEFAULT_DISTRIBUTION.high,
+    mid: (useAdaptive && rating_distribution?.mid?.total) ? rating_distribution.mid as RatingBucket : DEFAULT_DISTRIBUTION.mid,
+    low: (useAdaptive && rating_distribution?.low?.total) ? rating_distribution.low as RatingBucket : DEFAULT_DISTRIBUTION.low,
+  };
+
+  const deckMap = new Map<string, ForecastDeckConfig>();
+  for (const dk of decks) deckMap.set(dk.id, dk);
+
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0);
+
+  // Convert cards to SimCards
+  const now = startDate.getTime();
+  let simCards: SimCard[] = (rawCards || []).map(c => {
+    const schedMs = new Date(c.scheduled_date).getTime();
+    const scheduledDay = Math.round((schedMs - now) / 86400000);
+    return { deck_id: c.deck_id, state: c.state, stability: c.stability, difficulty: c.difficulty, scheduledDay };
+  });
+
+  // Sampling for large sets
+  const scaleFactor = (simCards.length > 3000 && horizonDays > 90) ? simCards.length / 2000 : 1;
+  if (scaleFactor > 1) {
+    // Proportional sampling by deck/state
+    const sampled: SimCard[] = [];
+    const groups = new Map<string, SimCard[]>();
+    for (const c of simCards) {
+      const key = `${c.deck_id}:${c.state}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(c);
+    }
+    for (const [, group] of groups) {
+      const take = Math.max(1, Math.round(group.length / scaleFactor));
+      for (let i = 0; i < take; i++) {
+        sampled.push(group[Math.floor(Math.random() * group.length)]);
+      }
+    }
+    simCards = sampled;
+  }
+
+  // Count new cards available per deck
+  const newByDeck = new Map<string, number>();
+  for (const c of simCards) {
+    if (c.state === 0) newByDeck.set(c.deck_id, (newByDeck.get(c.deck_id) || 0) + 1);
+  }
+
+  const newSecsPerCard = timing?.avg_new_seconds || 30;
+  const reviewSecsPerCard = timing?.avg_review_seconds || 8;
+  const learningSecsPerCard = timing?.avg_learning_seconds || 15;
+  const relearningSecsPerCard = (timing as any)?.avg_relearning_seconds || 12;
+
+  const points: ForecastPoint[] = [];
+  const newCardsIntroducedPerDeck = new Map<string, number>();
+  let lastProgress = -1;
+
+  for (let day = 0; day < horizonDays; day++) {
+    if (cancelled) break;
+
+    // Generate newly created cards for today (spread across decks)
+    if (createdCardsPerDay > 0 && day > 0) {
+      const deckIds = Array.from(deckMap.keys());
+      const perDeck = Math.max(1, Math.round(createdCardsPerDay / deckIds.length));
+      for (const deckId of deckIds) {
+        for (let c = 0; c < perDeck; c++) {
+          simCards.push({ deck_id: deckId, state: 0, stability: 0, difficulty: 0, scheduledDay: day });
+          newByDeck.set(deckId, (newByDeck.get(deckId) || 0) + 1);
+        }
+      }
+    }
+
+    // Progress reporting
+    const pct = Math.floor((day / horizonDays) * 100);
+    if (pct >= lastProgress + 10) {
+      lastProgress = pct;
+      self.postMessage({ type: 'progress', progress: pct } as WorkerResponse);
+    }
+
+    const capacityMin = getCapacityForDay(day, startDate, dailyMinutes, weeklyMinutes);
+    const { date, day: dayLabel } = formatDayLabel(day, startDate);
+
+    // Collect due cards
+    const dueReview: number[] = [];
+    const dueLearning: number[] = [];
+    const dueRelearning: number[] = [];
+    for (let i = 0; i < simCards.length; i++) {
+      const c = simCards[i];
+      if (c.state === 2 && c.scheduledDay <= day) dueReview.push(i);
+      else if (c.state === 1 && c.scheduledDay <= day) dueLearning.push(i);
+      else if (c.state === 3 && c.scheduledDay <= day) dueRelearning.push(i);
+    }
+
+    // Introduce new cards
+    let newCardsToday = 0;
+    const newIndices: number[] = [];
+    let remainingNew = newCardsPerDay;
+    for (const [deckId, dk] of deckMap) {
+      if (remainingNew <= 0) break;
+      const limit = dk.daily_new_limit;
+      const introduced = newCardsIntroducedPerDeck.get(deckId) || 0;
+      const available = (newByDeck.get(deckId) || 0) - introduced;
+      const toIntroduce = Math.min(remainingNew, limit, Math.max(0, available));
+      if (toIntroduce > 0) {
+        // Find new cards for this deck
+        let found = 0;
+        for (let i = 0; i < simCards.length && found < toIntroduce; i++) {
+          if (simCards[i].state === 0 && simCards[i].deck_id === deckId) {
+            newIndices.push(i);
+            found++;
+          }
+        }
+        newCardsIntroducedPerDeck.set(deckId, introduced + found);
+        newCardsToday += found;
+        remainingNew -= found;
+      }
+    }
+
+    // Process reviews
+    let reviewCount = 0;
+    for (const idx of dueReview) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const elapsed = Math.max(0, day - c.scheduledDay);
+      const recall = c.stability > 0 ? fsrsRetrievability(c.stability, elapsed) : 0.5;
+      const bucket = getRecallBucket(recall);
+      const rating = sampleRating(dist[bucket]);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      reviewCount++;
+    }
+
+    // Process learning
+    let learningCount = 0;
+    for (const idx of dueLearning) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.low);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      learningCount++;
+    }
+
+    // Process relearning
+    let relearningCount = 0;
+    for (const idx of dueRelearning) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.mid);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+      relearningCount++;
+    }
+
+    // Process new cards
+    for (const idx of newIndices) {
+      const c = simCards[idx];
+      const dk = deckMap.get(c.deck_id);
+      const retention = dk?.requested_retention ?? 0.9;
+      const maxInterval = dk?.max_interval ?? 36500;
+      const algo = dk?.algorithm_mode ?? 'fsrs';
+      const rating = sampleRating(dist.low);
+      simCards[idx] = algo === 'fsrs'
+        ? simulateFSRS(c, rating, day, retention, maxInterval)
+        : simulateSM2(c, rating, day, maxInterval);
+    }
+
+    // Calculate minutes
+    const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
+    const newMin = Math.round((newCardsToday * newSecsPerCard * scaleFactor) / 60);
+    const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
+    const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
+    const totalMin = revMin + newMin + learnMin + relearnMin;
+
+    points.push({
+      date, day: dayLabel,
+      reviewCards: Math.round(reviewCount * scaleFactor),
+      newCards: Math.round(newCardsToday * scaleFactor),
+      learningCards: Math.round(learningCount * scaleFactor),
+      relearningCards: Math.round(relearningCount * scaleFactor),
+      reviewMin: revMin,
+      learningMin: learnMin,
+      relearningMin: relearnMin,
+      newMin,
+      totalMin,
+      capacityMin,
+      overloaded: totalMin > capacityMin,
+    });
+  }
+
+  // Aggregate weekly for long horizons
+  let finalPoints = points;
+  if (horizonDays > 30) {
+    const weeks: ForecastPoint[][] = [];
+    for (let i = 0; i < points.length; i += 7) {
+      weeks.push(points.slice(i, i + 7));
+    }
+    finalPoints = weeks.map((week, wi) => {
+      const avgReviewMin = Math.round(week.reduce((s, p) => s + p.reviewMin, 0) / week.length);
+      const avgLearningMin = Math.round(week.reduce((s, p) => s + p.learningMin, 0) / week.length);
+      const avgRelearningMin = Math.round(week.reduce((s, p) => s + p.relearningMin, 0) / week.length);
+      const avgNewMin = Math.round(week.reduce((s, p) => s + p.newMin, 0) / week.length);
+      const avgTotal = avgReviewMin + avgLearningMin + avgRelearningMin + avgNewMin;
+      const avgCap = Math.round(week.reduce((s, p) => s + p.capacityMin, 0) / week.length);
+      return {
+        date: week[0].date,
+        day: `S${wi + 1}`,
+        reviewCards: Math.round(week.reduce((s, p) => s + p.reviewCards, 0) / week.length),
+        newCards: Math.round(week.reduce((s, p) => s + p.newCards, 0) / week.length),
+        learningCards: Math.round(week.reduce((s, p) => s + p.learningCards, 0) / week.length),
+        relearningCards: Math.round(week.reduce((s, p) => s + p.relearningCards, 0) / week.length),
+        reviewMin: avgReviewMin,
+        learningMin: avgLearningMin,
+        relearningMin: avgRelearningMin,
+        newMin: avgNewMin,
+        totalMin: avgTotal,
+        capacityMin: avgCap,
+        overloaded: avgTotal > avgCap,
+      };
+    });
+  }
+
+  // Summary
+  let peakMin = 0, peakDate = '';
+  let totalMin = 0, overloadedDays = 0;
+  for (const p of points) {
+    totalMin += p.totalMin;
+    if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
+    if (p.overloaded) overloadedDays++;
+  }
+
+  return {
+    points: finalPoints,
+    summary: {
+      avgDailyMin: Math.round(totalMin / Math.max(1, points.length)),
+      peakMin,
+      peakDate,
+      overloadedDays,
+    },
+  };
+}
+
+// ─── Worker message handler ─────────────────────────────
+self.onmessage = (e: MessageEvent<WorkerMessage>) => {
+  if (e.data.type === 'cancel') {
+    cancelled = true;
+    return;
+  }
+  if (e.data.type === 'run' && e.data.input) {
+    try {
+      const result = runSimulation(e.data.input);
+      self.postMessage({ type: 'result', result } as WorkerResponse);
+    } catch (err: any) {
+      self.postMessage({ type: 'error', error: err.message || 'Simulation error' } as WorkerResponse);
+    }
+  }
+};

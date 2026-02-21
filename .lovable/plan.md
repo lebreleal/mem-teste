@@ -1,72 +1,141 @@
 
 
-# Explicacao IA direto no Chat
+# Alinhar Estados dos Cards com o Padrao Anki
 
-## Situacao Atual
+## Situacao Atual vs Anki
 
-Quando voce clica em "Explicar assunto com IA", a explicacao aparece num cartaozinho inline abaixo do card de estudo. Isso tem dois problemas:
-- A formatacao fica apertada (max-h-[40vh], texto pequeno)
-- Se surgir uma duvida durante a leitura, voce precisa abrir o chat separadamente e perder a explicacao
+```text
++-------------------+------------------+------------------+
+| Conceito          | Anki oficial     | Seu app hoje     |
++-------------------+------------------+------------------+
+| Nunca visto       | type 0 (New)     | state 0 (New)    |
+| Aprendendo 1a vez | type 1 (Learning)| state 1          |
+| Esqueceu/errando  | type 3 (Relearn) | state 1 (mesma!) |
+| Revisao programada| type 2 (Review)  | state 2          |
+| Jovem (ivl < 21d) | derivado         | nao existe       |
+| Maduro (ivl >=21d)| derivado         | nao existe       |
+| Suspenso          | queue -1         | scheduled > 50y  |
+| Enterrado         | queue -2/-3      | nao existe       |
++-------------------+------------------+------------------+
+```
 
-## O que vai mudar
+O principal bug: quando um card dominado (state 2) recebe "Errei", ele volta para `state: 1`. No Anki, isso seria `type: 3` (Relearning). Misturar os dois no mesmo state distorce completamente os tempos medios.
 
-Ao clicar em "Explicar assunto com IA", o sistema vai abrir o **StudyChatModal** diretamente e a explicacao vai aparecer como a primeira mensagem do assistente, com streaming em tempo real. Depois que terminar, voce pode continuar perguntando duvidas ali mesmo, sem perder o contexto.
+## Plano de Mudancas
 
-O fluxo dos outros modos (dica/hint antes de virar, e explicacao de alternativas no multipla escolha) continua inline como esta hoje -- so o "Explicar assunto" muda.
+### 1. Adicionar state 3 (Reaprendendo)
 
-## Fluxo novo
+Mudar o codigo FSRS e SM2 para que quando um card de revisao (state 2) recebe rating 1 ("Again"), ele va para **state 3** em vez de state 1.
 
-1. Usuario vira o card
-2. Clica em "Explicar assunto com IA"
-3. O ChatModal abre imediatamente
-4. A explicacao aparece como primeira mensagem do assistente (streaming)
-5. Ao terminar, o usuario pode digitar perguntas de follow-up no mesmo chat
+**Arquivo: `src/lib/fsrs.ts`**
+- Linha 157: mudar `state: 1` para `state: 3` no bloco "Again para relearning"
+- Atualizar a interface `FSRSOutput` para documentar state 3
 
-## Detalhes Tecnicos
+**Arquivo: `src/lib/sm2.ts`**
+- Mesma mudanca: quando card de revisao erra, vai para state 3
 
-### 1. StudyChatModal - aceitar mensagem inicial (StudyChatModal.tsx)
+### 2. Tratar state 3 como "em aprendizado" no agendamento
 
-Adicionar uma nova prop `initialAssistantMessage` que, quando presente:
-- Insere a mensagem como primeira mensagem do assistente ao abrir
-- Permite que o usuario continue a conversa normalmente depois
+O state 3 se comporta igual ao state 1 para fins de agendamento (usa relearning steps), mas e categorizado separadamente para estatisticas.
 
-Tambem adicionar prop `onStreamExplain` -- uma funcao que o modal chama ao abrir para disparar o streaming da explicacao. Isso permite que o modal controle o streaming internamente.
+**Arquivo: `src/lib/fsrs.ts`**
+- Adicionar bloco `if (card.state === 3)` que reutiliza a logica do state 1 mas com relearningSteps prioritariamente
 
-Alternativa mais simples: o modal recebe `streamingExplainResponse` (string que vai crescendo) e `isExplainStreaming` como props, e renderiza como primeira mensagem do assistente enquanto faz streaming. Quando o streaming termina, a mensagem fica fixa e o usuario pode continuar.
+**Arquivo: `src/hooks/useStudySession.ts`** (e qualquer lugar que filtra state === 1)
+- Onde filtra "cards em aprendizado", incluir state 1 **ou** state 3
 
-### 2. FlashCard.tsx - redirecionar "Explicar assunto" para o chat
+### 3. Atualizar a query de fila de estudo
 
-- O botao "Explicar assunto com IA" (linhas 860-872) em vez de chamar `onTutorRequest({ action: 'explain' })` inline, vai chamar uma nova callback `onOpenExplainChat`
-- Remover a renderizacao inline do `explainResponse` para cards basicos/cloze (linhas 721-735) -- a explicacao agora vive no chat
+Todos os lugares que fazem `state = 1` precisam incluir `state IN (1, 3)`:
+- RPCs do banco (`get_all_user_deck_stats`, `get_deck_stats`, `get_plan_metrics`)
+- Queries no frontend que filtram por state
 
-### 3. Study.tsx - orquestrar o fluxo
+**Nova migration SQL:**
+- Atualizar as RPCs para tratar state 3 como "em aprendizado" nas contagens
+- Cards existentes com state 1 que na verdade sao relearning continuam funcionando (retrocompativel pois state 1 e 3 sao tratados igual no agendamento)
 
-- Quando `onOpenExplainChat` e chamado:
-  1. Abrir o `StudyChatModal` (`setChatOpen(true)`)
-  2. Disparar o tutor request com action `explain`
-  3. Passar o `explainResponse` (que ja faz streaming) como prop para o `StudyChatModal`
-- O `StudyChatModal` renderiza o `explainResponse` como primeira mensagem do assistente
-- Quando o streaming termina, o usuario pode enviar mensagens normais
+### 4. Atualizar nomenclatura e categorias no app
 
-### 4. Mudancas no StudyChatModal
+Em vez dos nomes atuais, usar:
 
-- Nova prop: `streamingResponse?: string | null` -- conteudo da explicacao em streaming
-- Nova prop: `isStreamingResponse?: boolean` -- se esta fazendo streaming
-- Quando `streamingResponse` existe e o modal abre:
-  - Renderizar como primeira mensagem do assistente (role: assistant)
-  - Mostrar cursor de loading enquanto `isStreamingResponse` for true
-  - Quando streaming terminar, converter para mensagem fixa no array `messages`
-  - A partir dai, usuario pode continuar conversando normalmente (cada mensagem nova custa creditos como hoje)
-- Manter a formatacao rica do chat (ReactMarkdown com prose classes) que ja e bem melhor que o inline
+```text
++-------------------+------------------+-------------------------+
+| State             | Nome no app      | Tempo medio (simulador) |
++-------------------+------------------+-------------------------+
+| 0 (New)           | Novos            | ~30s (1a vez vendo)     |
+| 1 (Learning)      | Aprendendo       | ~15s (passos iniciais)  |
+| 3 (Relearning)    | Reaprendendo     | ~12s (erraram, voltando)|
+| 2 (Review)        | Em revisao       | ~8s (agendados)         |
+| 2 + ivl >= 21d    | Maduros          | derivado, nao precisa   |
+| frozen            | Congelados       | ja existe               |
++-------------------+------------------+-------------------------+
+```
 
-### 5. Ajuste de formatacao no chat (bonus)
+**Arquivo: `src/components/study-plan/PlanComponents.tsx`**
+- Grafico mostra 4 categorias: Novos, Aprendendo, Reaprendendo, Em revisao
+- Cores distintas para cada uma
 
-- Adicionar classes de prose mais generosas no chat para melhorar a leitura de explicacoes longas
-- Garantir que listas, titulos, codigo e paragrafos fiquem bem formatados
+**Arquivo: `src/components/deck-detail/CardList.tsx`** e `DeckDetailContext.tsx`
+- Filtros de estado incluem: Novos, Aprendendo, Reaprendendo, Em revisao, Congelados
 
-### Arquivos a editar
+### 5. Corrigir calculo de tempo no simulador
 
-1. `src/components/StudyChatModal.tsx` -- novas props de streaming, logica de mensagem inicial
-2. `src/components/FlashCard.tsx` -- botao "Explicar assunto" chama nova callback em vez de inline; remover renderizacao inline do explain para basic/cloze
-3. `src/pages/Study.tsx` -- passar explainResponse e isStreaming para o StudyChatModal; abrir chat ao clicar explicar
+**Nova migration SQL (update da RPC `get_forecast_params`):**
 
+```sql
+'timing', (
+  SELECT jsonb_build_object(
+    'avg_new_seconds',        COALESCE(AVG(dur) FILTER (WHERE pre_state = 0), 30),
+    'avg_learning_seconds',   COALESCE(AVG(dur) FILTER (WHERE pre_state = 1), 15),
+    'avg_relearning_seconds', COALESCE(AVG(dur) FILTER (WHERE pre_state = 3), 12),
+    'avg_review_seconds',     COALESCE(AVG(dur) FILTER (WHERE pre_state = 2), 8)
+  )
+  FROM (...)
+)
+```
+
+Porem como os `review_logs` atuais NAO salvam o state do card no momento da revisao, precisamos:
+
+**Arquivo: migration SQL** -- adicionar coluna `state` na tabela `review_logs`:
+```sql
+ALTER TABLE review_logs ADD COLUMN state integer DEFAULT NULL;
+```
+
+A partir de agora, cada review salva o state do card antes da revisao. Para dados historicos, usamos a heuristica do numero de revisoes anteriores como fallback.
+
+### 6. Atualizar o worker do simulador
+
+**Arquivo: `src/workers/forecastWorker.ts`**
+- Adicionar state 3 no `SimCard`
+- Quando um card de revisao (state 2) recebe rating 1, vai para state 3
+- Categorias de tempo separadas: novo, aprendendo, reaprendendo, em revisao
+- O `ForecastPoint` ganha campo `relearningCards` e `relearningMin`
+
+**Arquivo: `src/types/forecast.ts`**
+- Adicionar `relearningCards`, `relearningMin` ao `ForecastPoint`
+- Adicionar `avg_relearning_seconds` ao `ForecastTiming`
+
+### 7. Sobre "Suspenso" e "Enterrado"
+
+- **Suspenso/Congelado**: ja existe no app (scheduled_date > 50 anos). Funciona bem, nao precisa mudar.
+- **Enterrado (Buried)**: conceito do Anki para esconder temporariamente irmaos (siblings) de um card no mesmo dia. Isso e mais relevante para decks com muitos clozes. Pode ser implementado no futuro mas nao e prioridade agora.
+
+## Resumo de impacto
+
+- **Retrocompativel**: cards existentes com state 1 continuam funcionando (o agendamento trata 1 e 3 igual)
+- **Dados historicos**: a RPC usa heuristica para dados antigos sem o campo `state` nos logs
+- **Simulador mais preciso**: 4 categorias de tempo em vez de 3
+- **Nomenclatura clara**: alinhada com o padrao Anki que os usuarios ja conhecem
+
+## Arquivos modificados
+
+- `src/lib/fsrs.ts` -- state 3 no bloco "Again"
+- `src/lib/sm2.ts` -- state 3 no bloco "Again"
+- `src/hooks/useStudySession.ts` -- incluir state 3 nas queries
+- `src/hooks/useCards.ts` -- incluir state 3
+- `src/components/study-plan/PlanComponents.tsx` -- 4 categorias
+- `src/components/deck-detail/CardList.tsx` -- filtro Reaprendendo
+- `src/components/deck-detail/DeckDetailContext.tsx` -- filtro state 3
+- `src/workers/forecastWorker.ts` -- state 3 + 4 tempos
+- `src/types/forecast.ts` -- novos campos
+- Nova migration SQL -- coluna `state` em review_logs + update RPCs
