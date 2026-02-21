@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import type { ForecastView, ForecastParams, SimulatorInput, SimulatorResult, WorkerMessage, WorkerResponse } from '@/types/forecast';
@@ -116,6 +116,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
 export function useForecastView() {
   const { user } = useAuth();
   const userId = user?.id;
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ['forecast-view', userId],
@@ -134,11 +135,13 @@ export function useForecastView() {
 
   const setView = useCallback(async (view: ForecastView) => {
     if (!userId) return;
+    // Update cache immediately so UI responds instantly
+    queryClient.setQueryData(['forecast-view', userId], view);
     await supabase
       .from('profiles')
       .update({ forecast_view: view } as any)
       .eq('id', userId);
-  }, [userId]);
+  }, [userId, queryClient]);
 
   return { forecastView: query.data ?? '7d', setForecastView: setView };
 }
