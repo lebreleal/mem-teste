@@ -1,16 +1,18 @@
 /**
- * Community info sub-header: turma name, settings, members, invite, subscribe.
+ * Community info sub-header: turma name, settings, members, invite, subscribe, rating.
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -42,6 +44,29 @@ const TurmaSubHeader = ({
   const { toast } = useToast();
   const [showMembers, setShowMembers] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+
+  // Rating
+  const { myRating, submitRating } = useMyTurmaRating(turmaId);
+  const { data: allRatings = [] } = useAllTurmaRatings(turmaId, showRating);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratingInited, setRatingInited] = useState(false);
+
+  const openRatingDialog = () => {
+    setRatingValue(myRating?.rating ?? 0);
+    setRatingComment(myRating?.comment ?? '');
+    setRatingInited(true);
+    setShowRating(true);
+  };
+
+  const handleSaveRating = () => {
+    if (ratingValue < 1) return;
+    submitRating.mutate({ rating: ratingValue, comment: ratingComment }, {
+      onSuccess: () => { toast({ title: 'Avaliação salva!' }); },
+      onError: () => toast({ title: 'Erro ao salvar', variant: 'destructive' }),
+    });
+  };
 
   return (
     <>
@@ -51,8 +76,15 @@ const TurmaSubHeader = ({
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate('/turmas')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 flex items-center gap-1.5">
               <h1 className="font-display text-lg font-bold text-foreground truncate">{turmaName}</h1>
+              <button
+                onClick={openRatingDialog}
+                className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
+                title={myRating ? 'Sua avaliação' : 'Avaliar comunidade'}
+              >
+                <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
+              </button>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {showCrown && !isSubscriber && !isAdmin && (
@@ -136,6 +168,64 @@ const TurmaSubHeader = ({
               <Crown className="h-4 w-4" />
               {subscribing ? 'Processando...' : (activeSubscription && isSubscriber) ? 'Assinatura ativa' : subscriptionPrice > 0 ? `Assinar por ${subscriptionPrice} créditos` : 'Assinar Gratuitamente'}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rating Dialog */}
+      <Dialog open={showRating} onOpenChange={setShowRating}>
+        <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-amber-400" /> Avaliar Comunidade
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4">
+            {/* Star selector */}
+            <div className="flex items-center justify-center gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} onClick={() => setRatingValue(n)} className="p-1 transition-transform hover:scale-110">
+                  <Star className={`h-7 w-7 ${n <= ratingValue ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+                </button>
+              ))}
+            </div>
+
+            {/* Comment */}
+            <Textarea
+              placeholder="Comentário (opcional)"
+              value={ratingComment}
+              onChange={e => setRatingComment(e.target.value)}
+              className="resize-none"
+              rows={2}
+            />
+
+            <Button
+              className="w-full"
+              onClick={handleSaveRating}
+              disabled={ratingValue < 1 || submitRating.isPending}
+            >
+              {submitRating.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+
+            {/* All ratings */}
+            {allRatings.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avaliações</p>
+                {allRatings.map((r: any) => (
+                  <div key={r.id} className="rounded-lg bg-muted/50 p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">{r.user_name}</span>
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <Star key={n} className={`h-3 w-3 ${n <= r.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/20'}`} />
+                        ))}
+                      </div>
+                    </div>
+                    {r.comment && <p className="text-xs text-muted-foreground">{r.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
