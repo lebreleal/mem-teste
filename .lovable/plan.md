@@ -1,77 +1,107 @@
 
-# Corrigir Slider de Cards Novos e Refletir Globalmente
+# Corrigir Distribuicao Global de Cards Novos no Dashboard e Graficos
 
 ## Problemas Identificados
 
-1. **Slider nao funciona visualmente**: Usa `onValueCommit` sem estado local, entao ao arrastar nada muda na tela ate soltar
-2. **Limite global nao reflete no estudo**: No `fetchStudyQueue`, o limite por deck (`daily_new_limit = 15`) ainda limita o resultado com `Math.min(newLimit, planNewLimit)` -- ou seja, se o deck tem 15 e o plano aloca 20, o deck fica em 15
-3. **Falta feedback**: O usuario muda o slider mas nao entende o impacto
+1. **Dashboard nao reflete o limite global**: O `DeckCarousel.tsx` e o `useDashboardState.ts` usam `deck.daily_new_limit` (limite manual do deck, ex: 15 ou 20) para calcular quantos cards novos mostrar. Quando o usuario define 30 globais no slider do "Meu Plano", o dashboard continua mostrando "0/15 cards" porque usa o limite do deck.
 
-## Solucao
+2. **Slider nao atualiza o grafico de previsao**: Quando o usuario muda o slider de "Cards novos por dia" no hero card, o `ForecastSimulator` nao e notificado da mudanca. O slider muda `daily_new_cards_limit` no perfil, mas o simulador usa `newCardsOverride` (estado local separado) que nao esta conectado ao slider do hero.
 
-### 1. Corrigir Slider (visual + funcional)
+3. **Tempo estimado incorreto**: O calculo de `newMinutes` no `useStudyPlan.ts` usa `dailyNewCards = Math.min(globalNewBudget, totalNew)` que pode estar correto, mas o `estimatedMinutesToday` nao respeita a capacidade de tempo — pode mostrar mais minutos do que o usuario tem disponivel.
 
-**Arquivo:** `src/pages/StudyPlan.tsx`
+## Mudancas Necessarias
 
-- Adicionar estado local `tempNewCards` para controlar o slider durante o drag
-- Usar `onValueChange` para atualizar visualmente em tempo real
-- Usar `onValueCommit` para persistir no banco
+### 1. Dashboard: Usar limite global quando ha plano ativo
 
-### 2. Limite global governa quando ha plano ativo
+**Arquivos:** `src/components/dashboard/DeckCarousel.tsx` e `src/components/dashboard/useDashboardState.ts`
 
-**Arquivo:** `src/services/studyService.ts`
+Quando o usuario tem um plano ativo e o deck pertence ao plano, substituir `deck.daily_new_limit` pela alocacao calculada pelo plano. Para isso:
 
-Quando o deck pertence a um plano ativo, o `daily_new_limit` do deck e **ignorado** em favor da alocacao calculada pelo plano. A logica muda de:
+- Passar a alocacao por deck (`deckNewAllocation`) do `useStudyPlan` para o `DeckCarousel`
+- No `getDeckTodayStats`, usar `deckNewAllocation[deck.id]` quando disponivel, senao usar `deck.daily_new_limit`
+- Mesma logica no `useDashboardState.ts` -> `getAggregateStats`
 
-```
-effectiveNewLimit = Math.min(deckConfig.daily_new_limit, planAllocation)
-```
-
-Para:
-
-```
-effectiveNewLimit = planAllocation  // plano governa completamente
-```
-
-Isso garante que o slider global de 30 cards/dia realmente distribua 30 cards entre os decks, sem ser limitado pelos 15 ou 20 configurados manualmente em cada deck.
-
-Para decks **fora** de qualquer plano, o `daily_new_limit` do deck continua funcionando normalmente.
-
-### 3. Mostrar distribuicao clara na UI
+### 2. Conectar slider do hero ao grafico de previsao
 
 **Arquivo:** `src/pages/StudyPlan.tsx`
 
-Abaixo do slider, exibir a distribuicao resultante de forma mais clara:
+O slider "Cards novos por dia" no hero card atualiza `daily_new_cards_limit` no perfil. Mas o `ForecastSimulatorSection` tem seu proprio `newCardsOverride`. Quando o slider do hero muda, o grafico precisa recalcular. A solucao:
 
-```
-Cards novos por dia: [====30====]
+- Apos `updateNewCardsLimit.mutateAsync(v[0])`, invalidar tambem a query `daily-new-cards-limit` que o `useForecastSimulator` usa
+- Isso fara o simulador re-buscar o valor atualizado e recalcular
 
-Distribuicao automatica:
-  Anatomia (900 restantes, 30d) → 18/dia
-  Fisiologia (100 restantes, 30d) → 3/dia
-  Sem plano: usa limite do deck
-```
-
-### 4. Corrigir alocacao no hook (usar contagem real por deck)
+### 3. Corrigir calculo de tempo
 
 **Arquivo:** `src/hooks/useStudyPlan.ts`
 
-Atualmente a estimativa de cards novos por deck e imprecisa (divide totalNew igualmente). Buscar a contagem real de cards novos por deck usando uma query adicional agrupada por `deck_id`.
+O `newMinutes` deve respeitar a capacidade restante apos revisoes:
+- Atualmente: `newMinutes = (dailyNewCards * avg) / 60` (pode exceder capacidade)
+- Corrigir: `newMinutes = Math.min((dailyNewCards * avg) / 60, todayCapacityMinutes - reviewMinutes)`
+
+Alem disso, `estimatedMinutesToday` deve ser `reviewMinutes + newMinutes` capped pela capacidade real.
 
 ---
 
-## Mudancas por arquivo
+## Detalhes Tecnicos
+
+### DeckCarousel.tsx - Mudanca na funcao `getDeckTodayStats`
+
+Adicionar parametro opcional `planAllocation`:
+
+```text
+function getDeckTodayStats(deck, allDecks, planAllocation?) {
+  const dailyNewLimit = planAllocation?.[deck.id] ?? deck.daily_new_limit ?? 20;
+  // ... resto igual
+}
+```
+
+Propagar `planAllocation` via props no `DeckCarousel` e `DeckStudyCard`.
+
+### useDashboardState.ts - Mesma logica
+
+Na funcao `getAggregateStats`, aceitar `planAllocation` e usar quando disponivel:
+
+```text
+const dailyNewLimit = planAllocation?.[rootDeck.id] ?? rootDeck.daily_new_limit ?? 20;
+```
+
+### StudyPlan.tsx - Invalidar query do simulador
+
+No `onValueCommit` do slider:
+
+```text
+onValueCommit={(v) => {
+  updateNewCardsLimit.mutateAsync(v[0]).then(() => {
+    queryClient.invalidateQueries({ queryKey: ['daily-new-cards-limit'] });
+  });
+}}
+```
+
+### useStudyPlan.ts - Corrigir newMinutes
+
+```text
+const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
+const dailyNewCards = Math.min(globalNewBudget, totalNew);
+const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
+const estimatedMinutesToday = reviewMinutes + newMinutes;
+```
+
+---
+
+## Resumo de arquivos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `StudyPlan.tsx` | Estado local para slider + distribuicao visual melhorada |
-| `studyService.ts` | Remover `Math.min(newLimit, planNewLimit)` -- plano governa quando ativo |
-| `useStudyPlan.ts` | Buscar contagem real de novos por deck (nao estimar com divisao igual) |
+| `DeckCarousel.tsx` | Aceitar e usar `planAllocation` no calculo de cards novos |
+| `useDashboardState.ts` | Aceitar e usar `planAllocation` no `getAggregateStats` |
+| `StudyPlan.tsx` | Invalidar query do simulador ao mudar slider + passar `deckNewAllocation` ao dashboard |
+| `useStudyPlan.ts` | Cap `newMinutes` pela capacidade restante apos revisoes |
+| `Dashboard.tsx` | Passar `deckNewAllocation` do `useStudyPlan` para `DeckCarousel` |
 
-## Fluxo apos mudancas
+## Fluxo esperado apos as mudancas
 
-1. Usuario arrasta slider para 40 → ve "40" em tempo real
-2. Solta o slider → persiste no banco
-3. Distribuicao recalcula: Anatomia 36/dia, Fisiologia 4/dia
-4. Na sessao de estudo, Anatomia recebe exatamente 36 cards novos (sem ser limitado pelo antigo "15" do deck)
-5. Decks sem plano continuam usando seu limite manual
+1. Usuario define 30 cards novos/dia no slider do Meu Plano
+2. O slider atualiza o perfil e invalida queries relacionadas
+3. O grafico de previsao recalcula com o novo valor
+4. No dashboard, cada deck mostra a cota calculada (ex: Deck A: 18 novos, Deck B: 12 novos)
+5. O tempo estimado reflete corretamente o total sem exceder a capacidade diaria
