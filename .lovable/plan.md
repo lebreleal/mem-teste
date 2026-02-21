@@ -1,131 +1,117 @@
 
+# Corrigir Propagacao de Alocacao: Deck Filho para Deck Pai (Root)
 
-# Prazo Inteligente: Aviso de Viabilidade e Distribuicao Equilibrada
+## Problema Raiz
 
-## Como o prazo funciona
+Quando o usuario seleciona um **deck filho** no objetivo, o sistema armazena a alocacao com a chave do deck filho (ex: `deckNewAllocation["child-123"] = 25`). Porem, o Dashboard e o Carousel buscam pela chave do **deck raiz** (`planAllocation["parent-456"]`), que nao existe no mapa. Resultado: cai no fallback `deck.daily_new_limit` (20).
 
-O peso de cada deck na distribuicao e calculado como `cards_novos / dias_ate_prazo`. Decks com prazo mais proximo recebem mais cards novos por dia. Isso e intencional — urgencia importa.
+## Solucao
 
-**Problema**: quando o prazo e impossivel (ex: 300 cards, prova amanha), o sistema nao avisa e a distribuicao fica absurda (38 vs 2).
+Resolver os IDs dos decks filhos para seus ancestrais raiz (root) e agregar as alocacoes no nivel do root. Isso deve acontecer em dois lugares:
 
-## Mudancas
+1. **Dashboard.tsx** - ja possui `allDecks` com hierarquia e `getRootId()` helper
+2. **studyService.ts** - mesma logica na fila de estudo
 
-### 1. Aviso de viabilidade no wizard (ao definir prazo)
+### Mudanca 1: `src/pages/Dashboard.tsx`
 
-**Arquivo:** `src/pages/StudyPlan.tsx`
-
-Quando o usuario seleciona uma data limite no Step 1:
-- Calcular `total_new_cards / dias_restantes` usando o budget global
-- Se `cards_necessarios > budget_global`, mostrar um banner de aviso:
+Criar um `rootAllocation` que agrega `deckNewAllocation` no nivel do root ancestor antes de passar para `useDashboardState` e `DeckCarousel`.
 
 ```text
-[Aviso amarelo/vermelho]
-"Com 40 novos cards/dia e 300 cards restantes, voce precisaria de pelo menos 8 dias.
- A data selecionada (amanha) e insuficiente."
+// Apos obter metrics?.deckNewAllocation:
+const rootAllocation = useMemo(() => {
+  const raw = metrics?.deckNewAllocation;
+  if (!raw || !allDecks) return raw;
+  const result: Record<string, number> = {};
+  for (const [deckId, count] of Object.entries(raw)) {
+    const rootId = getRootId(deckId) ?? deckId;
+    result[rootId] = (result[rootId] ?? 0) + count;
+  }
+  return result;
+}, [metrics?.deckNewAllocation, allDecks, getRootId]);
 
-Sugestao: "Data minima viavel: DD/MM/YYYY"
+// Passar rootAllocation em vez de metrics?.deckNewAllocation:
+const state = useDashboardState(rootAllocation);
+// ...
+<DeckCarousel planAllocation={rootAllocation} ... />
 ```
 
-- O aviso NAO bloqueia a criacao — o usuario pode criar mesmo assim
-- Cores: amarelo se `dias_necessarios > dias_disponiveis * 0.7`, vermelho se totalmente inviavel
+### Mudanca 2: `src/services/studyService.ts`
 
-### 2. Aviso de viabilidade no card do objetivo (dashboard)
-
-**Arquivo:** `src/pages/StudyPlan.tsx` (secao de objetivos no dashboard)
-
-No card de cada objetivo com prazo, quando `coveragePercent < 50`:
-- Mostrar badge "Meta inviavel" com icone de alerta
-- Texto explicativo: "Voce precisaria de X cards/dia, mas seu limite e Y"
-- Botao "Ajustar prazo" que abre o editor do objetivo
-
-### 3. Manter formula com urgencia, mas com piso minimo
-
-**Arquivos:** `src/hooks/useStudyPlan.ts` e `src/services/studyService.ts`
-
-A formula `remaining / daysLeft` esta correta, mas quando um deck tem prazo muito curto, ele "rouba" quase todo o budget. Solucao: garantir um **piso minimo** para cada deck (ex: pelo menos 1 card/dia ou 5% do budget, o que for maior).
+Na funcao `fetchStudyQueue`, apos calcular `allocation` (keyed por deck IDs do plano), resolver para root IDs antes de somar `totalForSession`:
 
 ```text
-// Em useStudyPlan.ts e studyService.ts
-const minShare = Math.max(1, Math.ceil(globalNewBudget * 0.05));
-
-// Apos calcular shares proporcionais:
-for (const entry of allocations) {
-  entry.share = Math.max(minShare, entry.share);
+// Resolver allocation para root IDs
+const rootAllocation: Record<string, number> = {};
+for (const [did, count] of Object.entries(allocation)) {
+  const rootId = findRootAncestorId(allDecks ?? [], did);
+  rootAllocation[rootId] = (rootAllocation[rootId] ?? 0) + count;
 }
-// Recalcular para nao exceder budget total
-```
 
-Isso garante que mesmo com Prova Histo tendo prazo amanha, Fisiopato ainda recebe pelo menos 2 cards/dia (5% de 40 = 2).
-
-### 4. Corrigir reset de atrasados (scheduled_date)
-
-**Arquivo:** `src/pages/StudyPlan.tsx`
-
-Na funcao `handleResetOverdue`, adicionar `scheduled_date`:
-
-```text
-.update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() })
-```
-
-E invalidar queries apos o reset:
-
-```text
-queryClient.invalidateQueries({ queryKey: ['plan-metrics'] });
-queryClient.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
-queryClient.invalidateQueries({ queryKey: ['study-queue'] });
-```
-
-## Detalhes tecnicos
-
-### Calculo de viabilidade no wizard (Step 1)
-
-```text
-// Apos selecionar data e decks:
-const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
-  const deck = activeDecks.find(d => d.id === id);
-  return sum + (deck?.new_count ?? 0);
+// Usar rootAllocation para determinar o limite da sessao
+const totalForSession = deckIds.reduce((s, id) => {
+  const rootId = findRootAncestorId(allDecks ?? [], id);
+  return s + (rootAllocation[rootId] ?? 0);
 }, 0);
-const daysLeft = Math.max(1, Math.ceil((targetDate - today) / 86400000));
-const minDaysNeeded = Math.ceil(selectedNewCards / globalCapacity.dailyNewCardsLimit);
-const isViable = daysLeft >= minDaysNeeded;
 ```
 
-### Piso minimo na distribuicao
+Nota: `findRootAncestorId` ja existe em `studyUtils.ts` e e importado no `studyService.ts`.
+
+### Mudanca 3: `src/hooks/useStudyPlan.ts`
+
+Tambem precisa buscar a hierarquia de decks para resolver child para root no proprio hook, para que o `deckNewAllocation` retornado ja contenha entradas de root. Isso garante consistencia em todos os consumidores.
+
+Adicionar uma query leve para buscar `id, parent_deck_id` de todos os decks do usuario:
 
 ```text
-// useStudyPlan.ts - apos calcular shares proporcionais
-const minPerDeck = Math.max(1, Math.ceil(globalNewBudget * 0.05));
-let totalAllocated = 0;
-for (const entry of sorted) {
-  const rawShare = Math.round(globalNewBudget * (entry.weight / totalWeight));
-  entry.share = Math.max(minPerDeck, rawShare);
-  totalAllocated += entry.share;
-}
-// Se excedeu o budget, reduzir do maior
-if (totalAllocated > globalNewBudget) {
-  const excess = totalAllocated - globalNewBudget;
-  sorted[0].share -= excess;
-}
+const deckHierarchyQuery = useQuery({
+  queryKey: ['deck-hierarchy', userId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('decks')
+      .select('id, parent_deck_id')
+      .eq('user_id', userId!);
+    return data ?? [];
+  },
+  enabled: !!userId,
+  staleTime: 5 * 60_000,
+});
 ```
 
-### Mesma logica em studyService.ts
+Usar essa hierarquia para:
+1. Ao buscar `perDeckNewCounts`, incluir tambem os decks descendentes dos selecionados (pois `get_all_user_deck_stats` retorna por deck, nao por arvore)
+2. Ao montar `deckNewAllocation`, agregar as alocacoes sob o root ID
 
-Aplicar o mesmo piso minimo na funcao `fetchStudyQueue` para consistencia.
+```text
+// Helper para encontrar root
+const findRoot = (id: string): string => {
+  const deck = deckHierarchy.find(d => d.id === id);
+  if (!deck || !deck.parent_deck_id) return id;
+  return findRoot(deck.parent_deck_id);
+};
 
-## Resumo de arquivos
+// Apos calcular deckNewAllocation por deck IDs do plano,
+// agregar para root:
+const rootedAllocation: Record<string, number> = {};
+for (const [did, count] of Object.entries(deckNewAllocation)) {
+  const rootId = findRoot(did);
+  rootedAllocation[rootId] = (rootedAllocation[rootId] ?? 0) + count;
+}
+// Substituir deckNewAllocation por rootedAllocation
+```
+
+## Resumo de Arquivos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `StudyPlan.tsx` | Aviso de viabilidade no wizard + no dashboard + fix reset |
-| `useStudyPlan.ts` | Piso minimo na distribuicao proporcional |
-| `studyService.ts` | Mesma logica de piso minimo para consistencia |
+| `useStudyPlan.ts` | Buscar hierarquia de decks; agregar alocacao no nivel root; incluir descendentes ao contar new cards |
+| `Dashboard.tsx` | Resolver deckNewAllocation para root IDs antes de passar para carousel e state |
+| `studyService.ts` | Resolver allocation para root IDs ao calcular totalForSession |
 
-## Resultado esperado
+## Resultado Esperado
 
-1. Usuario cria objetivo com 300 cards e prazo amanha
-2. Wizard mostra: "Meta inviavel. Data minima viavel: 28/02/2026 (8 dias)"
-3. Usuario pode criar mesmo assim, mas fica ciente
-4. No dashboard, objetivo mostra badge "Meta inviavel"
-5. Distribuicao: Histo recebe maioria mas Fisiopato mantém pelo menos 2 cards/dia
-6. Reset de atrasados funciona corretamente
-
+1. Usuario seleciona deck filho "Histologia" no objetivo
+2. Sistema calcula alocacao: "Histologia" = 25 cards/dia
+3. Resolve para root: "Deck Pai" = 25 cards/dia
+4. Dashboard mostra "Deck Pai" com 25 novos/dia (nao mais 20)
+5. Fila de estudo respeita o limite de 25 para toda a hierarquia do Deck Pai
+6. Configuracao manual do deck (20) e ignorada quando plano esta ativo
