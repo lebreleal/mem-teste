@@ -1055,30 +1055,25 @@ const StudyPlan = () => {
         {metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
             <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-4">
-                <HealthRing percent={ringPercent} status={healthStatus} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
-                      HEALTH_CONFIG[healthStatus].bg, HEALTH_CONFIG[healthStatus].text, HEALTH_CONFIG[healthStatus].border
-                    )}>
-                      {HEALTH_CONFIG[healthStatus].label}
-                    </span>
-                    {metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Consistência: {metrics.planHealthPercent}%
-                      </span>
-                    )}
-                  </div>
-                  <StudyLoadBar
-                    estimatedMinutes={metrics.estimatedMinutesToday}
-                    capacityMinutes={todayCapacity}
-                    reviewMin={metrics.reviewMinutes}
-                    newMin={metrics.newMinutes}
-                  />
-                </div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                  HEALTH_CONFIG[healthStatus].bg, HEALTH_CONFIG[healthStatus].text, HEALTH_CONFIG[healthStatus].border
+                )}>
+                  {HEALTH_CONFIG[healthStatus].label}
+                </span>
+                {metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    Consistência: {metrics.planHealthPercent}%
+                  </span>
+                )}
               </div>
+              <StudyLoadBar
+                estimatedMinutes={metrics.estimatedMinutesToday}
+                capacityMinutes={todayCapacity}
+                reviewMin={metrics.reviewMinutes}
+                newMin={metrics.newMinutes}
+              />
               {needsAttention && (
                 <Button
                   className="w-full" size="sm"

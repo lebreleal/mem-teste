@@ -195,7 +195,7 @@ export function ForecastSimulator({
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga</h3>
           </div>
-          {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+          
         </div>
 
         {/* View chips */}
@@ -436,24 +436,6 @@ export function ForecastSimulator({
                   fill="hsl(217 91% 60%)"
                   opacity={0.85}
                   radius={[3, 3, 0, 0]}
-                  shape={(props: any) => {
-                    const { x, y, width, height, payload } = props;
-                    const d = payload as ForecastPoint;
-                    return (
-                      <g>
-                        <rect x={x} y={y} width={width} height={height} fill={props.fill} opacity={0.85} rx={3} ry={3} />
-                        {d.overloaded && (
-                          <g
-                            style={{ cursor: 'pointer' }}
-                            onClick={(e) => { e.stopPropagation(); setOverloadDialogDay(d); }}
-                          >
-                            <circle cx={x + width / 2} cy={y - 10} r={6} fill="hsl(38 92% 50%)" />
-                            <text x={x + width / 2} y={y - 6.5} textAnchor="middle" fontSize={8} fontWeight="bold" fill="white">!</text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -466,9 +448,6 @@ export function ForecastSimulator({
                   você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
                   {summary.peakMin > summary.avgDailyMin && (
                     <> O dia mais puxado terá <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
-                  )}
-                  {hasOverload && (
-                    <> Dias com <span className="text-amber-600 dark:text-amber-400 font-semibold">⚠</span> ultrapassam seu tempo disponível — reduza novos cards ou aumente seu tempo.</>
                   )}
                 </p>
               </div>
