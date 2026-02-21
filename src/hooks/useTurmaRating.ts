@@ -21,8 +21,17 @@ export const useMyTurmaRating = (turmaId: string) => {
       queryClient.invalidateQueries({ queryKey: ['my-turma-rating', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['turmas'] });
       queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['all-turma-ratings', turmaId] });
     },
   });
 
   return { myRating: ratingQuery.data, submitRating };
+};
+
+export const useAllTurmaRatings = (turmaId: string, enabled: boolean) => {
+  return useQuery({
+    queryKey: ['all-turma-ratings', turmaId],
+    queryFn: () => turmaService.fetchAllTurmaRatings(turmaId),
+    enabled: enabled && !!turmaId,
+  });
 };

@@ -1,7 +1,3 @@
-/**
- * Service layer for turmas (communities), members, hierarchy, exams, and ratings.
- */
-
 import { supabase } from '@/integrations/supabase/client';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 import type {
@@ -25,6 +21,36 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
   const { data: turmas } = await supabase
     .from('turmas').select('*').or(`id.in.(${turmaIds.join(',')}),owner_id.eq.${userId}`);
   return (turmas ?? []) as Turma[];
+}
+
+export async function fetchTurma(turmaId: string): Promise<Turma | null> {
+  const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
+  return data as Turma | null;
+}
+
+export async function fetchTurmaMembersWithStats(turmaId: string): Promise<TurmaMemberWithStats[]> {
+  const { data: members } = await supabase.from('turma_members').select('user_id, role').eq('turma_id', turmaId);
+  if (!members) return [];
+  const userIds = members.map(m => (m as any).user_id);
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+  if (!profiles) return [];
+
+  const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const results: TurmaMemberWithStats[] = [];
+
+  for (const profile of profiles) {
+    const p = profile as any;
+    const { data: logs } = await supabase.from('review_logs').select('reviewed_at').eq('user_id', p.id)
+      .gte('reviewed_at', thirtyDaysAgo.toISOString()).order('reviewed_at', { ascending: false });
+    const totalReviews = logs?.length ?? 0;
+    const lastStudy = logs && logs.length > 0 ? new Date(logs[0].reviewed_at) : null;
+    const streak = logs ? calculateStreak(logs.map(l => l.reviewed_at)) : 0;
+    const mascotState = getMascotState(lastStudy);
+
+    results.push({ user_id: p.id, user_name: p.name || 'Anônimo', user_email: '', streak, energy: 0, mascot_state: mascotState, total_reviews: totalReviews });
+  }
+  results.sort((a, b) => b.total_reviews - a.total_reviews);
+  return results;
 }
 
 export async function createTurma(userId: string, name: string, description?: string) {
@@ -309,13 +335,9 @@ export async function addQuestionsFromDeck(examId: string, deckId: string, count
 export async function publishTurmaExam(examId: string, params: { isMarketplace?: boolean; price?: number }) {
   const { count } = await supabase.from('turma_exam_questions').select('*', { count: 'exact', head: true }).eq('exam_id', examId);
   const { error } = await supabase.from('turma_exams').update({
-    is_published: true, is_marketplace: params.isMarketplace || false, price: params.price || 0, total_questions: count || 0,
+    is_published: true, is_marketplace: params.isMarketplace ?? false,
+    price: params.price ?? 0, total_questions: count ?? 0,
   } as any).eq('id', examId);
-  if (error) throw error;
-}
-
-export async function deleteTurmaExam(examId: string) {
-  const { error } = await supabase.rpc('delete_turma_exam_cascade', { p_exam_id: examId } as any);
   if (error) throw error;
 }
 
@@ -324,49 +346,74 @@ export async function toggleExamSubscribersOnly(examId: string, subscribersOnly:
   if (error) throw error;
 }
 
-// ── Turma Exam Attempts ──
-
-export async function fetchTurmaExamAttempts(examId: string, userId: string): Promise<TurmaExamAttempt[]> {
-  const { data } = await supabase.from('turma_exam_attempts').select('*').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
-  return (data ?? []) as TurmaExamAttempt[];
+export async function deleteTurmaExam(examId: string) {
+  await supabase.from('turma_exam_questions').delete().eq('exam_id', examId);
+  const { error } = await supabase.from('turma_exams').delete().eq('id', examId);
+  if (error) throw error;
 }
 
-export async function startTurmaExamAttempt(examId: string, userId: string, totalPoints: number) {
-  const { data, error } = await supabase.from('turma_exam_attempts').insert({ exam_id: examId, user_id: userId, total_points: totalPoints } as any).select().single();
-  if (error) throw error; return data;
+export async function startTurmaExamAttempt(examId: string, userId: string, totalPoints?: number): Promise<TurmaExamAttempt> {
+  let tp = totalPoints;
+  if (tp === undefined) {
+    const { data: questions } = await supabase.from('turma_exam_questions').select('points').eq('exam_id', examId);
+    tp = (questions ?? []).reduce((sum: number, q: any) => sum + (q.points || 1), 0);
+  }
+  const { data, error } = await supabase.from('turma_exam_attempts').insert({ exam_id: examId, user_id: userId, total_points: tp } as any).select().single();
+  if (error) throw error;
+  return data as TurmaExamAttempt;
+}
+
+export async function submitTurmaExamAnswers(attemptId: string, answers: { questionId: string; userAnswer?: string; selectedIndices?: number[] }[]) {
+  const inserts = answers.map(a => ({ attempt_id: attemptId, question_id: a.questionId, user_answer: a.userAnswer ?? null, selected_indices: a.selectedIndices ?? null }));
+  const { error } = await supabase.from('turma_exam_answers').insert(inserts as any);
+  if (error) throw error;
 }
 
 export async function submitTurmaExamAnswer(params: { attemptId: string; questionId: string; userAnswer?: string; selectedIndices?: number[]; scoredPoints: number }) {
   const { error } = await supabase.from('turma_exam_answers').insert({
-    attempt_id: params.attemptId, question_id: params.questionId, user_answer: params.userAnswer || null,
-    selected_indices: params.selectedIndices || null, scored_points: params.scoredPoints, is_graded: true,
+    attempt_id: params.attemptId, question_id: params.questionId,
+    user_answer: params.userAnswer ?? null, selected_indices: params.selectedIndices ?? null,
+    scored_points: params.scoredPoints, is_graded: true,
   } as any);
   if (error) throw error;
 }
 
 export async function completeTurmaExamAttempt(attemptId: string, scoredPoints: number) {
-  const { error } = await supabase.from('turma_exam_attempts').update({
-    status: 'completed', scored_points: scoredPoints, completed_at: new Date().toISOString(),
-  } as any).eq('id', attemptId);
+  const { error } = await supabase.from('turma_exam_attempts').update({ status: 'completed', completed_at: new Date().toISOString(), scored_points: scoredPoints } as any).eq('id', attemptId);
   if (error) throw error;
 }
 
+export async function fetchTurmaExamAttempts(examId: string, userId: string): Promise<TurmaExamAttempt[]> {
+  const { data, error } = await supabase.from('turma_exam_attempts').select('*').eq('exam_id', examId).eq('user_id', userId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as TurmaExamAttempt[];
+}
+
+export async function fetchMyAttempts(examId: string, userId: string): Promise<TurmaExamAttempt[]> {
+  return fetchTurmaExamAttempts(examId, userId);
+}
+
+export async function fetchAttemptAnswers(attemptId: string) {
+  const { data, error } = await supabase.from('turma_exam_answers').select('*').eq('attempt_id', attemptId);
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function restartTurmaExam(examId: string, userId: string) {
-  // Delete all answers for user's attempts on this exam
-  const { data: attempts } = await supabase
-    .from('turma_exam_attempts').select('id').eq('exam_id', examId).eq('user_id', userId);
+  // Delete all previous attempts for this user on this exam
+  const { data: attempts } = await supabase.from('turma_exam_attempts').select('id').eq('exam_id', examId).eq('user_id', userId);
   if (attempts && attempts.length > 0) {
     const attemptIds = attempts.map((a: any) => a.id);
     await supabase.from('turma_exam_answers').delete().in('attempt_id', attemptIds);
-    await supabase.from('turma_exam_attempts').delete().in('id', attemptIds);
+    await supabase.from('turma_exam_attempts').delete().eq('exam_id', examId).eq('user_id', userId);
   }
 }
 
-// ── Rating ──
+// ── Turma Ratings ──
 
 export async function fetchMyTurmaRating(turmaId: string, userId: string) {
   const { data } = await supabase.from('turma_ratings').select('*').eq('turma_id', turmaId).eq('user_id', userId).maybeSingle();
-  return data as { id: string; rating: number; comment: string | null } | null;
+  return data as any;
 }
 
 export async function submitTurmaRating(turmaId: string, userId: string, rating: number, comment?: string, existingId?: string) {
@@ -377,6 +424,22 @@ export async function submitTurmaRating(turmaId: string, userId: string, rating:
     const { error } = await supabase.from('turma_ratings').insert({ turma_id: turmaId, user_id: userId, rating, comment: comment ?? '' } as any);
     if (error) throw error;
   }
+}
+
+export async function fetchAllTurmaRatings(turmaId: string) {
+  const { data: ratings } = await supabase
+    .from('turma_ratings')
+    .select('*')
+    .eq('turma_id', turmaId)
+    .order('created_at', { ascending: false });
+  if (!ratings || ratings.length === 0) return [];
+  const userIds = [...new Set(ratings.map((r: any) => r.user_id))];
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+  return ratings.map((r: any) => ({
+    ...r,
+    user_name: profileMap.get(r.user_id) ?? 'Anônimo',
+  }));
 }
 
 // ── Community Preview ──

@@ -34,6 +34,8 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
+import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
 const PdfCanvasViewer = lazy(() => import('@/components/lesson-detail/PdfCanvasViewer'));
 
 const formatFileSize = (bytes: number) => {
@@ -86,6 +88,8 @@ const ContentTab = () => {
   const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
+  const [gateDeck, setGateDeck] = useState<any>(null);
+  const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
 
   // ── Data derivation ──
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
@@ -539,9 +543,9 @@ const ContentTab = () => {
                         <LogIn className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
-                        onClick={() => { if (subscriberOnly && !canImport) return; setConfirmImportItem({ type: 'deck', data: td }); }}
-                        disabled={importLogic.addToCollection.isPending || (subscriberOnly && !canImport)}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={subscriberOnly && !canImport ? "Conteúdo exclusivo" : "Adicionar à coleção"}
+                        onClick={() => { if (subscriberOnly && !canImport) { setGateDeck(td); return; } setConfirmImportItem({ type: 'deck', data: td }); }}
+                        disabled={importLogic.addToCollection.isPending}>
                         {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
                     )}
@@ -871,6 +875,32 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Subscriber Gate Dialog */}
+      <SubscriberGateDialog
+        open={!!gateDeck}
+        onOpenChange={open => !open && setGateDeck(null)}
+        deckName={gateDeck?.deck_name || ''}
+        cardCount={gateDeck?.card_count ?? 0}
+        onTrial={() => {
+          const deck = gateDeck;
+          setGateDeck(null);
+          setTrialDeck({ deckId: deck.deck_id, deckName: deck.deck_name });
+        }}
+        onSubscribe={() => {
+          setGateDeck(null);
+          // Trigger subscribe flow from context
+          ctx.handleSubscribe?.();
+        }}
+      />
+
+      {/* Trial Study Modal */}
+      <TrialStudyModal
+        open={!!trialDeck}
+        onOpenChange={open => !open && setTrialDeck(null)}
+        deckId={trialDeck?.deckId || ''}
+        deckName={trialDeck?.deckName || ''}
+      />
     </div>
   );
 };
