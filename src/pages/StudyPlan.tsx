@@ -791,20 +791,177 @@ const StudyPlan = () => {
   // ─── WIZARD VIEW ──────────────────────────────────────
   // ═══════════════════════════════════════════════════════
   if (view === 'wizard') {
+    // Feasibility check helper
+    const feasibilityCheck = targetDate && selectedDeckIds.length > 0 ? (() => {
+      const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
+        const deck = activeDecks.find(d => d.id === id);
+        return sum + (deck?.new_count ?? 0);
+      }, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
+      const budget = globalCapacity.dailyNewCardsLimit;
+      const minDaysNeeded = Math.ceil(selectedNewCards / budget);
+      const isImpossible = daysLeft < minDaysNeeded;
+      const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
+      if (!isImpossible && !isTight) return null;
+      const suggestedDate = new Date(today);
+      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
+      const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
+      return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
+    })() : null;
+
+    const feasibilityBlock = feasibilityCheck && (
+      <div className={cn(
+        'rounded-lg border p-3 space-y-2',
+        feasibilityCheck.isImpossible
+          ? 'border-destructive/50 bg-destructive/5'
+          : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
+      )}>
+        <p className={cn('text-xs font-semibold', feasibilityCheck.isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
+          {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Com {feasibilityCheck.budget} novos cards/dia e {feasibilityCheck.selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{feasibilityCheck.minDaysNeeded} dias</strong>.
+        </p>
+        <div className="space-y-1">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <Clock className="h-3 w-3 text-primary shrink-0" />
+            <span><strong>Opção 1:</strong> Aumente o limite diário de novos cards para <strong>{feasibilityCheck.neededPerDay}</strong> nas configurações do plano.</span>
+          </p>
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+            <span><strong>Opção 2:</strong> Estenda o prazo para pelo menos <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong>.</span>
+          </p>
+        </div>
+      </div>
+    );
+
+    // ─── EDIT MODE: Show all fields at once ───
+    if (isEditing) {
+      return (
+        <div className="min-h-screen bg-background pb-24">
+          <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => { setView('home'); setIsEditing(false); setEditingPlanId(null); }}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="font-display text-lg font-bold flex-1">Editar Objetivo</h1>
+          </header>
+
+          <main className="container mx-auto px-4 py-6 max-w-2xl space-y-6">
+            {/* Nome */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Nome do objetivo</h2>
+              </div>
+              <Input
+                placeholder="Ex: ENARE 2026"
+                value={planName}
+                onChange={(e) => setPlanName(e.target.value)}
+                className="text-base"
+              />
+            </div>
+
+            {/* Baralhos */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Baralhos</h2>
+              </div>
+              {activeDecks.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="p-6 text-center space-y-3">
+                    <BookOpen className="h-10 w-10 text-muted-foreground mx-auto" />
+                    <p className="text-sm text-muted-foreground">Você ainda não tem baralhos.</p>
+                    <Button onClick={() => navigate('/dashboard')}>Criar baralho</Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <DeckHierarchySelector
+                  decks={activeDecks}
+                  selectedDeckIds={selectedDeckIds}
+                  setSelectedDeckIds={setSelectedDeckIds}
+                  plans={plans}
+                  editingPlanId={editingPlanId}
+                />
+              )}
+            </div>
+
+            {/* Data limite */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Data limite</h2>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              {feasibilityBlock}
+            </div>
+
+            {/* Save */}
+            <Button
+              className="w-full" size="lg"
+              onClick={handleConfirmPlan}
+              disabled={!planName.trim() || selectedDeckIds.length === 0 || !targetDate || updatePlan.isPending}
+            >
+              {updatePlan.isPending ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+
+            {/* Delete */}
+            {editingPlanId && (
+              <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                      handleDeletePlan(editingPlanId);
+                      setView('home');
+                      setIsEditing(false);
+                      setEditingPlanId(null);
+                    }}>
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </main>
+          <BottomNav />
+        </div>
+      );
+    }
+
+    // ─── CREATE MODE: Step-by-step wizard ───
     return (
       <div className="min-h-screen bg-background pb-24">
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => {
             if (step > 1) { setStep((step - 1) as WizardStep); return; }
             setView('home');
-            setIsEditing(false);
-            setEditingPlanId(null);
           }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="font-display text-lg font-bold flex-1">
-            {isEditing ? 'Editar Objetivo' : 'Novo Objetivo de Estudo'}
-          </h1>
+          <h1 className="font-display text-lg font-bold flex-1">Novo Objetivo de Estudo</h1>
           <div className="flex gap-1">
             {[1, 2, 3].map(s => (
               <div key={s} className={cn('h-1.5 w-6 rounded-full transition-colors', s <= step ? 'bg-primary' : 'bg-muted')} />
@@ -839,35 +996,6 @@ const StudyPlan = () => {
               >
                 Continuar
               </Button>
-
-              {isEditing && editingPlanId && (
-                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
-                        handleDeletePlan(editingPlanId);
-                        setView('home');
-                        setIsEditing(false);
-                        setEditingPlanId(null);
-                      }}>
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
             </div>
           )}
 
@@ -916,7 +1044,7 @@ const StudyPlan = () => {
                   <h2 className="text-xl font-bold">Data limite</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Defina quando você precisa ter dominado este conteúdo. O sistema usará essa data para calcular se o seu ritmo de estudo é suficiente e distribuir os cards novos de forma inteligente.
+                  Defina quando você precisa ter dominado este conteúdo.
                 </p>
               </div>
               <Popover>
@@ -930,55 +1058,15 @@ const StudyPlan = () => {
                   <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
-              {targetDate && (
-                <Button variant="outline" size="sm" className="text-xs" onClick={() => setTargetDate(undefined)}>
-                  <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
-                  Alterar data
-                </Button>
-              )}
 
-              {/* Feasibility warning */}
-              {targetDate && selectedDeckIds.length > 0 && (() => {
-                const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
-                  const deck = activeDecks.find(d => d.id === id);
-                  return sum + (deck?.new_count ?? 0);
-                }, 0);
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
-                const budget = globalCapacity.dailyNewCardsLimit;
-                const minDaysNeeded = Math.ceil(selectedNewCards / budget);
-                const isImpossible = daysLeft < minDaysNeeded;
-                const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
-                if (!isImpossible && !isTight) return null;
-                const suggestedDate = new Date(today);
-                suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
-                return (
-                  <div className={cn(
-                    'rounded-lg border p-3 space-y-1',
-                    isImpossible
-                      ? 'border-destructive/50 bg-destructive/5'
-                      : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
-                  )}>
-                    <p className={cn('text-xs font-semibold', isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
-                      {isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Com {budget} novos cards/dia e {selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{minDaysNeeded} dias</strong>.
-                      {isImpossible && <> A data selecionada ({daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}) é insuficiente.</>}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      📅 Data mínima viável: <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong>
-                    </p>
-                  </div>
-                );
-              })()}
+              {feasibilityBlock}
 
               <Button
                 className="w-full" size="lg"
                 onClick={handleConfirmPlan}
-                disabled={!targetDate || createPlan.isPending || updatePlan.isPending}
+                disabled={!targetDate || createPlan.isPending}
               >
-                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar objetivo'}
+                {createPlan.isPending ? 'Salvando...' : 'Criar objetivo'}
               </Button>
             </div>
           )}
