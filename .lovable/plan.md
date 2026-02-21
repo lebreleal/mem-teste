@@ -1,74 +1,120 @@
 
+## Plano: Corrigir legenda da simulacao de estudos
 
-## Plano: Corrigir simulacao ignorando limite por deck e melhorar legenda
+### Problemas identificados
 
-### Problema 1: Simulacao mostra 20 cards novos em vez de 100
+1. **Total de cards novos inflado**: `totalNewRemaining = totalNewCards + createdInPeriod` adiciona `90 criados/dia * N dias`, transformando 412 em 1042 (7d), 3112 (30d), 5182 (1 ano). O correto e mostrar apenas `totalNewCards` (412) como "cards novos restantes".
 
-**Causa raiz**: No Web Worker (`forecastWorker.ts`, linha 280-283), o codigo faz:
-```
-const limit = dk.daily_new_limit;  // limite individual do deck (ex: 20)
-const toIntroduce = Math.min(remainingNew, limit, available);
-```
+2. **"X dias" quando sao semanas**: Quando `horizonDays > 30`, o worker agrega os dados em semanas (S1, S2...). Mas a legenda usa `data.length` e `intenseDays` como se fossem dias. No 90d, mostra "13 dias" quando sao 13 semanas. No 1 ano, "53 dias" quando sao 53 semanas.
 
-Isso significa que mesmo com o slider em 100, se o deck tem `daily_new_limit = 20`, so 20 cards sao introduzidos. O slider do simulador deveria ser o limite global, ignorando o limite individual de cada deck.
+3. **Texto confuso em todos os cenarios**: As fases "intensa" e "manutencao" calculadas sobre dados semanais nao fazem sentido textual.
 
-**Correcao**: Quando o usuario define `newCardsPerDay` no simulador, distribuir proporcionalmente entre os decks sem respeitar o `dk.daily_new_limit`. O limite global do slider e o unico teto.
+---
+
+### Solucao
+
+#### 1. Remover `createdInPeriod` do total exibido
 
 ```typescript
 // De:
-const toIntroduce = Math.min(remainingNew, limit, Math.max(0, available));
+const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
+const totalNewRemaining = totalNewCards + createdInPeriod;
+
 // Para:
-const toIntroduce = Math.min(remainingNew, Math.max(0, available));
+const totalNewRemaining = totalNewCards;
 ```
 
-Isso permite que o simulador use exatamente o valor que o usuario definiu (100), distribuindo entre todos os decks disponíveis.
+O campo "cards criados/dia" ja esta visivel no slider acima. Nao faz sentido soma-lo ao total restante, pois sao cards que ainda nao existem.
+
+#### 2. Detectar se dados sao semanais e usar unidade correta
+
+```typescript
+const isWeeklyData = data.length > 0 && data[0]?.day?.startsWith('S');
+const periodLabel = isWeeklyData ? 'semanas' : 'dias';
+const periodCount = data.length;
+// Para converter semanas de volta em dias aproximados:
+const approxDays = isWeeklyData ? periodCount * 7 : periodCount;
+```
+
+Usar `approxDays` para calculos de duracao e `periodLabel` para textos.
+
+#### 3. Reescrever a legenda de forma simples e universal
+
+Remover o sistema de "fases" (intensa/manutencao) que e confuso. Substituir por um resumo direto:
+
+**Bloco principal** (sempre visivel):
+- "Nos proximos {approxDays} dias, media de {avgMin}/dia. Pico de {peakMin} em {peakDay}."
+
+**Bloco target** (quando ha data limite):
+- "Faltam {412} cards novos ate {data} -- ritmo atual: ~{actualNewPerDay}/dia."
+
+**Bloco status**:
+- Verde: "Seu ritmo cabe na meta de {capacidade}/dia."
+- Amarelo: "Media de {avg} excede sua capacidade de {cap}/dia." + botoes de ajuste.
 
 ---
 
-### Problema 2: Legenda confusa ao selecionar "Escolher data" com 90d/1h
+### Detalhes tecnicos
 
-A legenda usa `currentNewCards` (o valor do slider) para dizer "mantenha ao menos X/dia", mas o grafico mostra um valor diferente (o real que cabe no tempo). Alem disso, quando sobrecarga, o texto e confuso.
+**`src/components/study-plan/PlanComponents.tsx` (linhas 469-596)**:
 
-**Correcoes na legenda** (`PlanComponents.tsx`):
+Substituir todo o bloco da legenda:
 
-1. **Usar o valor real da simulacao** em vez do slider: calcular `actualNewPerDay` como a media de `newCards` nos dias com novos do array `data`.
-
-2. **Texto mais claro quando sobrecarregado**: Em vez de "a carga sera alta porque voce esta introduzindo X novos cards/dia", mostrar: "Com X novos/dia, a media fica em ~Y min. Sua capacidade e Z min."
-
-3. **Texto do target mais preciso**: Mostrar quantos dias intensos restam e o ritmo real, nao o do slider.
-
----
-
-### Detalhes Tecnicos
-
-**`src/workers/forecastWorker.ts` (linha 280-283)**:
 ```typescript
-// Remover o cap de dk.daily_new_limit na simulacao
-// O newCardsPerDay ja e o limite global definido pelo usuario
-let remainingNew = newCardsPerDay;
-for (const [deckId, dk] of deckMap) {
-  if (remainingNew <= 0) break;
-  const introduced = newCardsIntroducedPerDeck.get(deckId) || 0;
-  const available = (newByDeck.get(deckId) || 0) - introduced;
-  const toIntroduce = Math.min(remainingNew, Math.max(0, available));
-  // ... resto igual
-}
+{summary && (() => {
+  const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
+  const daysWithNewAll = data.filter(d => d.newCards > 0);
+  const actualNewPerDay = daysWithNewAll.length > 0
+    ? Math.round(daysWithNewAll.reduce((s, d) => s + d.newCards, 0) / daysWithNewAll.length)
+    : 0;
+  const isBelowCapacity = summary.avgDailyMin < avgCapacity;
+  const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
+  
+  // Detect weekly aggregation
+  const isWeeklyData = data.length > 0 && data[0]?.day?.startsWith('S');
+  const approxDays = isWeeklyData ? data.length * 7 : data.length;
+  
+  // Target
+  const plansTarget = (plansList ?? []).filter(p => p.target_date);
+  const earliestTarget = plansTarget.length > 0 ? /* same logic */ : null;
+  const totalNewRemaining = totalNewCards; // NO MORE createdInPeriod
+
+  return (
+    <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
+      {/* Main summary - always one line */}
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        Nos proximos <strong>{approxDays} dias</strong>, media de <strong>{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+        Pico em <strong>{peakDay.day} ({peakDay.date})</strong> com <strong>{formatMinutes(summary.peakMin)}</strong>.
+      </p>
+
+      {/* Target */}
+      {earliestTarget && totalNewRemaining > 0 && (
+        <>
+          <div className="h-px bg-border" />
+          <p className="text-[10px] text-muted-foreground">
+            🎯 <strong>{totalNewRemaining} cards novos</strong> ate <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> -- ritmo atual: ~<strong>{actualNewPerDay}/dia</strong>.
+          </p>
+        </>
+      )}
+
+      {/* Status */}
+      {isBelowCapacity ? (
+        <p className="text-[11px] text-emerald-600">
+          ✓ Cabe na sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-[11px] text-amber-600">
+            Media de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.
+          </p>
+          {/* Buttons to reduce/increase */}
+        </div>
+      )}
+    </div>
+  );
+})()}
 ```
 
-**`src/components/study-plan/PlanComponents.tsx` (linha ~470-560)**:
+### Arquivos a editar
 
-1. Calcular o ritmo real da simulacao:
-```typescript
-const actualNewPerDay = intenseDays > 0
-  ? Math.round(daysWithNew.reduce((s, d) => s + d.newCards, 0) / intenseDays)
-  : 0;
-```
-
-2. No bloco de target (linha ~543), usar `actualNewPerDay` no texto.
-
-3. No bloco de sobrecarga (linha ~557-558), simplificar:
-```typescript
-// Se sobrecarregado com fase de manutencao:
-<>A media na fase intensa e ~{formatMinutes(intenseAvgMin)}, acima da sua capacidade de {formatMinutes(avgCapacity)}. Apos os novos cards, estabiliza em ~{formatMinutes(maintenanceAvgMin)}.</>
-```
-
+- `src/components/study-plan/PlanComponents.tsx` -- reescrever bloco da legenda (linhas 469-596)
