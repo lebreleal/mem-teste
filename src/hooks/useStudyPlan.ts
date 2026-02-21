@@ -156,22 +156,6 @@ export function useStudyPlan() {
     staleTime: 5 * 60_000,
   });
 
-  // ─── Metrics using ALL deck_ids (consolidated) ───
-  const metricsQuery = useQuery({
-    queryKey: ['plan-metrics', userId, allDeckIds],
-    queryFn: async () => {
-      if (allDeckIds.length === 0) return { total_new: 0, total_review: 0, total_learning: 0 };
-      const { data, error } = await supabase.rpc('get_plan_metrics' as any, {
-        p_user_id: userId,
-        p_deck_ids: allDeckIds,
-      });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      return row ?? { total_new: 0, total_review: 0, total_learning: 0 };
-    },
-    enabled: !!userId && allDeckIds.length > 0,
-  });
-
   // ─── Deck hierarchy for child→root resolution ───
   const deckHierarchyQuery = useQuery({
     queryKey: ['deck-hierarchy', userId],
@@ -208,6 +192,22 @@ export function useStudyPlan() {
     for (const id of allDeckIds) collectDescendants(id);
     return Array.from(result);
   }, [allDeckIds, deckHierarchy]);
+
+  // ─── Metrics using ALL deck_ids including descendants (consolidated) ───
+  const metricsQuery = useQuery({
+    queryKey: ['plan-metrics', userId, expandedDeckIds],
+    queryFn: async () => {
+      if (expandedDeckIds.length === 0) return { total_new: 0, total_review: 0, total_learning: 0 };
+      const { data, error } = await supabase.rpc('get_plan_metrics' as any, {
+        p_user_id: userId,
+        p_deck_ids: expandedDeckIds,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row ?? { total_new: 0, total_review: 0, total_learning: 0 };
+    },
+    enabled: !!userId && expandedDeckIds.length > 0,
+  });
 
   // ─── Per-deck new card counts for proportional allocation ───
   const perDeckStatsQuery = useQuery({

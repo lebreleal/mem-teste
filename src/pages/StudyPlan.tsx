@@ -851,15 +851,15 @@ const StudyPlan = () => {
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
             <Layers className="h-3 w-3 text-primary shrink-0" />
-            <span>📊 Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong> (no painel "Meu Plano")</span>
+            <span>Aumentar para <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong> (em "Meu Plano" → Configurações)</span>
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
             <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-            <span>📅 Mudar a data limite para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong> ou posterior</span>
+            <span>Mudar a data limite para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong> ou posterior</span>
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
             <Clock className="h-3 w-3 text-primary shrink-0" />
-            <span>⏱️ Estudar mais minutos/dia (no painel "Tempo de estudo diário")</span>
+            <span>Estudar mais minutos/dia (em "Meu Plano" → Tempo de estudo diário)</span>
           </p>
         </div>
       </div>
@@ -1529,7 +1529,7 @@ const StudyPlan = () => {
                         
                         {!willMissTarget && earliestTarget && (
                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                            ✓ No ritmo atual, você conclui antes da meta de {format(earliestTarget, "dd/MM/yyyy")}.
+                            ✓ No ritmo atual, você conclui até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong> (sua data limite).
                           </p>
                         )}
                         
