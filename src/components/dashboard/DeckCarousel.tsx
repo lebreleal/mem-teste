@@ -83,7 +83,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDon
         <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
           <Play className="h-3 w-3 mr-1" /> Estudar
         </Button>
-        <Button size="icon" variant="outline" className="h-8 w-8 rounded-full shrink-0" onClick={() => navigate(`/deck/${deck.id}`)}>
+        <Button size="icon" variant="outline" className="h-8 w-8 rounded-full shrink-0" onClick={() => navigate(`/decks/${deck.id}`)}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -185,7 +185,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
           <p className="text-sm text-muted-foreground">🎉 Tudo concluído por hoje!</p>
         </div>
       ) : (
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
+        <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
           {sortedDecks.map(deck => {
             const { pendingToday } = getDeckTodayStats(deck, decks);
             return (
