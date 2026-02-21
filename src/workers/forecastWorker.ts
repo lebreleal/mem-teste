@@ -169,7 +169,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, dailyMinutes, weeklyMinutes } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -229,6 +229,18 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
 
   for (let day = 0; day < horizonDays; day++) {
     if (cancelled) break;
+
+    // Generate newly created cards for today (spread across decks)
+    if (createdCardsPerDay > 0 && day > 0) {
+      const deckIds = Array.from(deckMap.keys());
+      const perDeck = Math.max(1, Math.round(createdCardsPerDay / deckIds.length));
+      for (const deckId of deckIds) {
+        for (let c = 0; c < perDeck; c++) {
+          simCards.push({ deck_id: deckId, state: 0, stability: 0, difficulty: 0, scheduledDay: day });
+          newByDeck.set(deckId, (newByDeck.get(deckId) || 0) + 1);
+        }
+      }
+    }
 
     // Progress reporting
     const pct = Math.floor((day / horizonDays) * 100);

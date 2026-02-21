@@ -51,6 +51,7 @@ export interface SimulatorInput {
   params: ForecastParams;
   horizonDays: number;
   newCardsPerDay: number;
+  createdCardsPerDay: number;
   dailyMinutes: number;
   weeklyMinutes: Record<string, number> | null;
 }
