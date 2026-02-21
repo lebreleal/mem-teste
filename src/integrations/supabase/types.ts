@@ -951,6 +951,7 @@ export type Database = {
           name: string
           onboarding_completed: boolean
           premium_expires_at: string | null
+          selected_plan_id: string | null
           successful_cards_counter: number
           tier_last_evaluated: string | null
           updated_at: string
@@ -972,6 +973,7 @@ export type Database = {
           name?: string
           onboarding_completed?: boolean
           premium_expires_at?: string | null
+          selected_plan_id?: string | null
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
@@ -993,11 +995,20 @@ export type Database = {
           name?: string
           onboarding_completed?: boolean
           premium_expires_at?: string | null
+          selected_plan_id?: string | null
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_selected_plan_id_fkey"
+            columns: ["selected_plan_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       review_logs: {
         Row: {

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
@@ -14,6 +14,7 @@ export const DAY_LABELS: Record<DayKey, string> = {
 export interface StudyPlan {
   id: string;
   user_id: string;
+  name: string;
   daily_minutes: number;
   weekly_minutes: WeeklyMinutes | null;
   deck_ids: string[];
@@ -73,18 +74,64 @@ export function useStudyPlan() {
   const qc = useQueryClient();
   const userId = user?.id;
 
-  const planQuery = useQuery({
-    queryKey: ['study-plan', userId],
+  // ─── Fetch ALL plans for the user ───
+  const plansQuery = useQuery({
+    queryKey: ['study-plans', userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('study_plans' as any)
         .select('*')
         .eq('user_id', userId!)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data as unknown as StudyPlan) ?? null;
+      return (data as unknown as StudyPlan[]) ?? [];
     },
     enabled: !!userId,
+  });
+
+  // ─── Fetch selected_plan_id from profile ───
+  const selectedIdQuery = useQuery({
+    queryKey: ['selected-plan-id', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('selected_plan_id')
+        .eq('id', userId!)
+        .single();
+      if (error) throw error;
+      return (data as any)?.selected_plan_id as string | null;
+    },
+    enabled: !!userId,
+  });
+
+  const plans = plansQuery.data ?? [];
+  const selectedPlanId = selectedIdQuery.data;
+
+  // Resolve the active plan: saved selection, or first plan
+  const plan = useMemo<StudyPlan | null>(() => {
+    if (plans.length === 0) return null;
+    if (selectedPlanId) {
+      const found = plans.find(p => p.id === selectedPlanId);
+      if (found) return found;
+    }
+    return plans[0];
+  }, [plans, selectedPlanId]);
+
+  // ─── Select a different plan ───
+  const selectPlan = useMutation({
+    mutationFn: async (planId: string) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ selected_plan_id: planId } as any)
+        .eq('id', userId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['selected-plan-id'] });
+      qc.invalidateQueries({ queryKey: ['plan-metrics'] });
+      qc.invalidateQueries({ queryKey: ['plan-health'] });
+      qc.invalidateQueries({ queryKey: ['plan-retention'] });
+    },
   });
 
   const avgQuery = useQuery({
@@ -99,9 +146,9 @@ export function useStudyPlan() {
   });
 
   const metricsQuery = useQuery({
-    queryKey: ['plan-metrics', userId, planQuery.data?.deck_ids],
+    queryKey: ['plan-metrics', userId, plan?.deck_ids],
     queryFn: async () => {
-      const deckIds = planQuery.data?.deck_ids ?? [];
+      const deckIds = plan?.deck_ids ?? [];
       if (deckIds.length === 0) return { total_new: 0, total_review: 0, total_learning: 0 };
       const { data, error } = await supabase.rpc('get_plan_metrics' as any, {
         p_user_id: userId,
@@ -111,13 +158,13 @@ export function useStudyPlan() {
       const row = Array.isArray(data) ? data[0] : data;
       return row ?? { total_new: 0, total_review: 0, total_learning: 0 };
     },
-    enabled: !!userId && !!planQuery.data,
+    enabled: !!userId && !!plan,
   });
 
   const retentionQuery = useQuery({
-    queryKey: ['plan-retention', planQuery.data?.deck_ids],
+    queryKey: ['plan-retention', plan?.deck_ids],
     queryFn: async () => {
-      const deckIds = planQuery.data?.deck_ids ?? [];
+      const deckIds = plan?.deck_ids ?? [];
       if (deckIds.length === 0) return 0.9;
       const { data, error } = await supabase
         .from('decks')
@@ -128,14 +175,13 @@ export function useStudyPlan() {
       const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
-    enabled: !!planQuery.data && (planQuery.data?.deck_ids?.length ?? 0) > 0,
+    enabled: !!plan && (plan?.deck_ids?.length ?? 0) > 0,
     staleTime: 5 * 60_000,
   });
 
   const planHealthQuery = useQuery({
-    queryKey: ['plan-health', userId, planQuery.data?.created_at],
+    queryKey: ['plan-health', userId, plan?.created_at],
     queryFn: async () => {
-      const plan = planQuery.data;
       if (!plan) return null;
       const { data, error } = await supabase
         .from('review_logs')
@@ -150,45 +196,40 @@ export function useStudyPlan() {
       const totalDays = Math.max(1, Math.ceil((Date.now() - new Date(plan.created_at).getTime()) / 86400000));
       return Math.min(100, Math.round((days.size / totalDays) * 100));
     },
-    enabled: !!userId && !!planQuery.data,
+    enabled: !!userId && !!plan,
     staleTime: 5 * 60_000,
   });
 
   const computed = useMemo<PlanMetrics | null>(() => {
-    const plan = planQuery.data;
-    const avg = avgQuery.data;
+    if (!plan || avgQuery.data == null || !metricsQuery.data) return null;
     const raw = metricsQuery.data;
-    if (!plan || avg == null || !raw) return null;
+    const avg = avgQuery.data;
 
     const totalNew = Number(raw.total_new) || 0;
     const totalReview = Number(raw.total_review) || 0;
     const totalLearning = Number(raw.total_learning) || 0;
-    const avgSec = avg;
 
-    // Today's capacity from weekly or daily
     const todayCapacityMinutes = getMinutesForDay(plan);
     const avgDailyMinutes = getWeeklyAvgMinutes(plan);
 
-    const cardsPerDay = Math.floor((avgDailyMinutes * 60) / avgSec);
-    const capacityCardsToday = Math.floor((todayCapacityMinutes * 60) / avgSec);
+    const cardsPerDay = Math.floor((avgDailyMinutes * 60) / avg);
+    const capacityCardsToday = Math.floor((todayCapacityMinutes * 60) / avg);
     const cardsPerWeek = cardsPerDay * 7;
 
-    // Estimate minutes today — prioritize reviews, fill remaining with new cards
     const estimatedReviewsToday = totalReview > 0
       ? Math.min(totalReview, capacityCardsToday)
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-    const reviewMinutes = Math.round((estimatedReviewsToday * avgSec) / 60);
+    const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
     const dailyNewCards = Math.min(remainingCapacity, totalNew);
-    const newMinutes = Math.round((dailyNewCards * avgSec) / 60);
+    const newMinutes = Math.round((dailyNewCards * avg) / 60);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
-    // Weekly card data for chart
     const totalPending = totalNew + totalReview + totalLearning;
     const reviewRatio = totalPending > 0 ? (totalReview + totalLearning) / totalPending : 0.3;
     const weeklyCardData: WeeklyCardDataPoint[] = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(dayKey => {
       const dayMinutes = getMinutesForDay(plan, dayKey);
-      const dayCapacity = Math.floor((dayMinutes * 60) / avgSec);
+      const dayCapacity = Math.floor((dayMinutes * 60) / avg);
       const dayReviews = totalReview > 0
         ? Math.min(totalReview, dayCapacity)
         : Math.min(totalLearning, Math.ceil(dayCapacity * reviewRatio));
@@ -202,9 +243,6 @@ export function useStudyPlan() {
     let healthStatus: 'green' | 'yellow' | 'orange' | 'red' = 'green';
     let projectedCompletionDate: string | null = null;
 
-    // totalPending already declared above
-
-    // Projected completion based on capacity
     if (cardsPerDay > 0 && totalPending > 0) {
       const daysNeeded = Math.ceil(totalPending / cardsPerDay);
       const projected = new Date();
@@ -232,31 +270,19 @@ export function useStudyPlan() {
     }
 
     return {
-      totalNew,
-      totalReview,
-      totalLearning,
-      avgSecondsPerCard: avgSec,
-      cardsPerDay,
-      cardsPerWeek,
-      requiredCardsPerDay,
-      daysRemaining,
-      coveragePercent,
-      healthStatus,
-      estimatedMinutesToday,
-      reviewMinutes,
-      newMinutes,
+      totalNew, totalReview, totalLearning,
+      avgSecondsPerCard: avg,
+      cardsPerDay, cardsPerWeek,
+      requiredCardsPerDay, daysRemaining, coveragePercent, healthStatus,
+      estimatedMinutesToday, reviewMinutes, newMinutes,
       planHealthPercent: planHealthQuery.data ?? null,
       avgRetention: retentionQuery.data ?? 0.9,
-      todayCapacityMinutes,
-      capacityCardsToday,
-      projectedCompletionDate,
-      weeklyCardData,
+      todayCapacityMinutes, capacityCardsToday,
+      projectedCompletionDate, weeklyCardData,
     };
-  }, [planQuery.data, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data]);
+  }, [plan, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data]);
 
-  /** Calculate impact of changing daily minutes */
-  const calcImpact = (newMinutes: number) => {
-    const plan = planQuery.data;
+  const calcImpact = useCallback((newMinutes: number) => {
     const avg = avgQuery.data ?? 30;
     const raw = metricsQuery.data;
     if (!plan || !raw) return null;
@@ -274,56 +300,74 @@ export function useStudyPlan() {
       return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded };
     }
     return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null };
-  };
+  }, [plan, avgQuery.data, metricsQuery.data]);
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['study-plan'] });
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['study-plans'] });
     qc.invalidateQueries({ queryKey: ['plan-metrics'] });
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
-  };
+    qc.invalidateQueries({ queryKey: ['selected-plan-id'] });
+  }, [qc]);
 
   const createPlan = useMutation({
-    mutationFn: async (input: { daily_minutes: number; deck_ids: string[]; target_date: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
-      const { error } = await supabase.from('study_plans' as any).insert({
+    mutationFn: async (input: { name: string; daily_minutes: number; deck_ids: string[]; target_date: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
+      const { data, error } = await supabase.from('study_plans' as any).insert({
         user_id: userId,
+        name: input.name,
         daily_minutes: input.daily_minutes,
         deck_ids: input.deck_ids,
         target_date: input.target_date,
         weekly_minutes: input.weekly_minutes ?? null,
-      } as any);
+      } as any).select('id').single();
       if (error) throw error;
+      // Auto-select the newly created plan
+      const newId = (data as any)?.id;
+      if (newId) {
+        await supabase.from('profiles').update({ selected_plan_id: newId } as any).eq('id', userId!);
+      }
     },
     onSuccess: invalidate,
   });
 
   const updatePlan = useMutation({
-    mutationFn: async (input: { daily_minutes?: number; deck_ids?: string[]; target_date?: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
+    mutationFn: async (input: { id?: string; name?: string; daily_minutes?: number; deck_ids?: string[]; target_date?: string | null; weekly_minutes?: WeeklyMinutes | null }) => {
+      const planId = input.id ?? plan?.id;
+      if (!planId) throw new Error('No plan to update');
+      const { id: _id, ...rest } = input;
       const { error } = await supabase
         .from('study_plans' as any)
-        .update(input as any)
-        .eq('user_id', userId!);
+        .update(rest as any)
+        .eq('id', planId);
       if (error) throw error;
     },
     onSuccess: invalidate,
   });
 
   const deletePlan = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from('study_plans' as any).delete().eq('user_id', userId!);
+    mutationFn: async (planId?: string) => {
+      const id = planId ?? plan?.id;
+      if (!id) throw new Error('No plan to delete');
+      // Clear selection if deleting the selected plan
+      if (id === plan?.id) {
+        await supabase.from('profiles').update({ selected_plan_id: null } as any).eq('id', userId!);
+      }
+      const { error } = await supabase.from('study_plans' as any).delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: invalidate,
   });
 
   return {
-    plan: planQuery.data ?? null,
-    isLoading: planQuery.isLoading,
+    plans,
+    plan,
+    isLoading: plansQuery.isLoading || selectedIdQuery.isLoading,
     metrics: computed,
     avgSecondsPerCard: avgQuery.data ?? 30,
     calcImpact,
     createPlan,
     updatePlan,
     deletePlan,
+    selectPlan,
   };
 }
