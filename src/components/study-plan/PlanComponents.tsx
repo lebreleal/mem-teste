@@ -469,6 +469,11 @@ export function ForecastSimulator({
             {/* Summary explanation - didactic */}
             {summary && (() => {
               const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
+              // Calculate actual new cards/day from simulation data (may differ from slider due to time constraints)
+              const daysWithNewAll = data.filter(d => d.newCards > 0);
+              const actualNewPerDay = daysWithNewAll.length > 0
+                ? Math.round(daysWithNewAll.reduce((s, d) => s + d.newCards, 0) / daysWithNewAll.length)
+                : 0;
               const isBelowCapacity = summary.avgDailyMin < avgCapacity;
               const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
 
@@ -540,7 +545,7 @@ export function ForecastSimulator({
                     <>
                       <div className="h-px bg-border" />
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — mantenha ao menos <strong className="text-foreground">{currentNewCards}/dia</strong>.
+                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — ritmo atual: <strong className="text-foreground">~{actualNewPerDay}/dia</strong>.
                       </p>
                     </>
                   )}
@@ -555,7 +560,7 @@ export function ForecastSimulator({
                     <div className="space-y-2">
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
                         {hasMaintenancePhase
-                          ? <>Nos primeiros <strong>{intenseDays} dias</strong> a carga será alta porque você está introduzindo <strong>{currentNewCards} novos cards/dia</strong>. Depois disso, a carga se estabiliza em ~<strong>{formatMinutes(maintenanceAvgMin)}</strong>.</>
+                          ? <>A média na fase intensa é ~<strong>{formatMinutes(intenseAvgMin)}</strong>, acima da sua capacidade de <strong>{formatMinutes(avgCapacity)}</strong>. Após os novos cards, estabiliza em ~<strong>{formatMinutes(maintenanceAvgMin)}</strong>.</>
                           : <>Sua média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.</>
                         }
                       </p>
