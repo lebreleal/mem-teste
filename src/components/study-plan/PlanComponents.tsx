@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, GripVertical, Play,
@@ -154,9 +155,9 @@ export function ForecastChart({ data }: { data: ForecastDataPoint[] }) {
 }
 
 // ─── Compact Deck Row ─────────────────────────────────
-export function CompactDeckRow({ deck, avgSecondsPerCard, handlers, showGrip = true }: {
+export const CompactDeckRow = React.forwardRef<HTMLDivElement, {
   deck: any; avgSecondsPerCard: number; handlers?: any; showGrip?: boolean;
-}) {
+}>(({ deck, avgSecondsPerCard, handlers, showGrip = true }, ref) => {
   const navigate = useNavigate();
   const newAvail = Math.max(0, Math.min((deck.daily_new_limit ?? 20) - (deck.new_graduated_today ?? 0), deck.new_count ?? 0));
   const reviewCards = deck.review_count ?? 0;
@@ -169,6 +170,7 @@ export function CompactDeckRow({ deck, avgSecondsPerCard, handlers, showGrip = t
 
   return (
     <div
+      ref={ref}
       {...(handlers ?? {})}
       className={cn(
         'flex items-center gap-2 p-2.5 rounded-xl border bg-card transition-all',
@@ -207,4 +209,5 @@ export function CompactDeckRow({ deck, avgSecondsPerCard, handlers, showGrip = t
       </div>
     </div>
   );
-}
+});
+CompactDeckRow.displayName = 'CompactDeckRow';
