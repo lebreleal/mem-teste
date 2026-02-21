@@ -1,79 +1,74 @@
 
-## Plano: Corrigir contagem de cards novos, restaurar background da legenda e alinhar icones
 
-### Problemas
+## Plano: Corrigir simulacao ignorando limite por deck e melhorar legenda
 
-1. **Total de cards novos errado (177 em vez de 412)**: O `totalNewCards` vem de `paramsQuery.data?.cards?.filter(c => c.state === 0)` que so conta cards no estado "novo" (`state === 0`). Porem os cards dos objetivos incluem cards em outros estados (learning, relearning) que tambem precisam ser estudados. O valor correto e usar o `totalNew` do `useStudyPlan` (que vem do RPC `get_plan_metrics`), que ja conta todos os cards novos restantes nos decks dos objetivos.
+### Problema 1: Simulacao mostra 20 cards novos em vez de 100
 
-2. **"Cards criados/dia" nao afeta legenda**: O `createdInPeriod` e somado ao total, mas o texto nao explica isso separadamente.
+**Causa raiz**: No Web Worker (`forecastWorker.ts`, linha 280-283), o codigo faz:
+```
+const limit = dk.daily_new_limit;  // limite individual do deck (ex: 20)
+const toIntroduce = Math.min(remainingNew, limit, available);
+```
 
-3. **Background removido da legenda**: O usuario quer o background de volta.
+Isso significa que mesmo com o slider em 100, se o deck tem `daily_new_limit = 20`, so 20 cards sao introduzidos. O slider do simulador deveria ser o limite global, ignorando o limite individual de cada deck.
 
-4. **Icones desalinhados**: Os icones na legenda e no informativo precisam estar centralizados verticalmente.
+**Correcao**: Quando o usuario define `newCardsPerDay` no simulador, distribuir proporcionalmente entre os decks sem respeitar o `dk.daily_new_limit`. O limite global do slider e o unico teto.
 
-5. **Explicacao do dashboard confusa**: O bloco de "Conclusao estimada" mostra texto confuso quando a meta esta em risco.
+```typescript
+// De:
+const toIntroduce = Math.min(remainingNew, limit, Math.max(0, available));
+// Para:
+const toIntroduce = Math.min(remainingNew, Math.max(0, available));
+```
 
-### Solucao
+Isso permite que o simulador use exatamente o valor que o usuario definiu (100), distribuindo entre todos os decks disponíveis.
 
-#### 1. Usar `totalNew` real dos objetivos em vez de `totalNewCards` do simulador
+---
 
-O `totalNewCards` do simulador filtra `state === 0` dos `ForecastParams.cards` -- isso pode nao incluir todos os cards. O valor correto ja existe no `useStudyPlan` como `metrics.totalNew` (412). Passar esse valor como prop ao `ForecastSimulator`.
+### Problema 2: Legenda confusa ao selecionar "Escolher data" com 90d/1h
 
-**`src/pages/StudyPlan.tsx`**:
-- Trocar `totalNewCards={totalNewCards}` por `totalNewCards={metrics?.totalNew ?? totalNewCards}` para usar o valor real dos objetivos.
+A legenda usa `currentNewCards` (o valor do slider) para dizer "mantenha ao menos X/dia", mas o grafico mostra um valor diferente (o real que cabe no tempo). Alem disso, quando sobrecarga, o texto e confuso.
 
-#### 2. Restaurar background da legenda
+**Correcoes na legenda** (`PlanComponents.tsx`):
 
-**`src/components/study-plan/PlanComponents.tsx` (linha ~500)**:
-- Trocar `<div className="px-1 pt-2 space-y-1.5">` de volta para `<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">`
+1. **Usar o valor real da simulacao** em vez do slider: calcular `actualNewPerDay` como a media de `newCards` nos dias com novos do array `data`.
 
-#### 3. Centralizar icones na legenda e no informativo
+2. **Texto mais claro quando sobrecarregado**: Em vez de "a carga sera alta porque voce esta introduzindo X novos cards/dia", mostrar: "Com X novos/dia, a media fica em ~Y min. Sua capacidade e Z min."
 
-**`src/components/study-plan/PlanComponents.tsx`** (linhas ~504-533):
-- Trocar `flex items-start` por `flex items-center` nos paragrafos com icones
-- Remover `mt-0.5` dos icones (ja que items-center centraliza)
+3. **Texto do target mais preciso**: Mostrar quantos dias intensos restam e o ritmo real, nao o do slider.
 
-**Info banner (linhas ~359-365)**:
-- Trocar `flex items-start` por `flex items-center`
-
-#### 4. Melhorar explicacao quando "createdCardsPerDay > 0"
-
-No texto da legenda, quando ha cards criados/dia, separar: "Voce tem X cards novos nos seus objetivos + Y sendo criados/dia"
-
-#### 5. Simplificar explicacao do dashboard
-
-No bloco de conclusao estimada (`StudyPlan.tsx` linhas ~1508-1521), simplificar o texto:
-- Gargalo de tempo: "Seu tempo de estudo ({X}min/dia) permite ~{Y} novos cards/dia apos as revisoes."
-- Gargalo de limite: "Seu limite atual e {X} novos cards/dia. Para cumprir a meta, precisaria de {Y}/dia."
+---
 
 ### Detalhes Tecnicos
 
-**`src/pages/StudyPlan.tsx` (linha ~594)**:
+**`src/workers/forecastWorker.ts` (linha 280-283)**:
 ```typescript
-// De:
-totalNewCards={totalNewCards}
-// Para:
-totalNewCards={metrics?.totalNew ?? totalNewCards}
+// Remover o cap de dk.daily_new_limit na simulacao
+// O newCardsPerDay ja e o limite global definido pelo usuario
+let remainingNew = newCardsPerDay;
+for (const [deckId, dk] of deckMap) {
+  if (remainingNew <= 0) break;
+  const introduced = newCardsIntroducedPerDeck.get(deckId) || 0;
+  const available = (newByDeck.get(deckId) || 0) - introduced;
+  const toIntroduce = Math.min(remainingNew, Math.max(0, available));
+  // ... resto igual
+}
 ```
 
-**`src/components/study-plan/PlanComponents.tsx` (linha ~500)**:
+**`src/components/study-plan/PlanComponents.tsx` (linha ~470-560)**:
+
+1. Calcular o ritmo real da simulacao:
 ```typescript
-// De:
-<div className="px-1 pt-2 space-y-1.5">
-// Para:
-<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+const actualNewPerDay = intenseDays > 0
+  ? Math.round(daysWithNew.reduce((s, d) => s + d.newCards, 0) / intenseDays)
+  : 0;
 ```
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~504, 508, 513, 531)**:
-Todas as linhas com `flex items-start gap-1.5` -> `flex items-center gap-1.5` e remover `mt-0.5` dos icones.
+2. No bloco de target (linha ~543), usar `actualNewPerDay` no texto.
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~359-360)**:
+3. No bloco de sobrecarga (linha ~557-558), simplificar:
 ```typescript
-// De:
-<div className="flex items-start gap-2 text-[10px] text-primary px-2 py-1">
-// Para:
-<div className="flex items-center gap-2 text-[10px] text-primary px-2 py-1">
+// Se sobrecarregado com fase de manutencao:
+<>A media na fase intensa e ~{formatMinutes(intenseAvgMin)}, acima da sua capacidade de {formatMinutes(avgCapacity)}. Apos os novos cards, estabiliza em ~{formatMinutes(maintenanceAvgMin)}.</>
 ```
 
-**`src/pages/StudyPlan.tsx` (linhas ~1509-1521)**:
-Simplificar texto do gargalo removendo explicacoes redundantes e usando frases diretas.
