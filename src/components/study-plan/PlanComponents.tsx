@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
 import type { WeeklyMinutes, DayKey } from '@/hooks/useStudyPlan';
@@ -98,7 +101,7 @@ const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 export function ForecastSimulator({
   data, summary, isSimulating, progress, defaultNewCardsPerDay,
   forecastView, onViewChange, newCardsOverride, onNewCardsChange,
-  hasTargetDate, isUsingDefaults,
+  hasTargetDate, plans: plansList, customTargetDate, onCustomTargetDate, isUsingDefaults,
   defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
   realDailyMinutes, realWeeklyMinutes,
   dailyMinutesOverride, weeklyMinutesOverride,
@@ -115,6 +118,9 @@ export function ForecastSimulator({
   newCardsOverride: number | undefined;
   onNewCardsChange: (v: number | undefined) => void;
   hasTargetDate: boolean;
+  plans?: { id: string; name: string; target_date: string | null }[];
+  customTargetDate?: Date | null;
+  onCustomTargetDate?: (d: Date | null) => void;
   isUsingDefaults: boolean;
   defaultCreatedCardsPerDay: number;
   createdCardsOverride: number | undefined;
@@ -133,6 +139,7 @@ export function ForecastSimulator({
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
   const [overloadDialogDay, setOverloadDialogDay] = useState<ForecastPoint | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   // Capacity editing state
   const [editingCapacity, setEditingCapacity] = useState(false);
@@ -146,9 +153,9 @@ export function ForecastSimulator({
   const hasOverload = data.some(d => d.overloaded);
   const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
 
-  const options = hasTargetDate
-    ? [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Até a prova' }]
-    : VIEW_OPTIONS;
+  const options = [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Escolher data' }];
+
+  const plansWithDate = (plansList ?? []).filter(p => p.target_date);
 
   const handleEditNewCards = () => {
     setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay));
@@ -203,7 +210,13 @@ export function ForecastSimulator({
           {options.map(opt => (
             <button
               key={opt.value}
-              onClick={() => onViewChange(opt.value)}
+              onClick={() => {
+                if (opt.value === 'target') {
+                  setShowDatePicker(true);
+                } else {
+                  onViewChange(opt.value);
+                }
+              }}
               className={cn(
                 'px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border',
                 forecastView === opt.value
@@ -211,7 +224,9 @@ export function ForecastSimulator({
                   : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
               )}
             >
-              {opt.label}
+              {opt.value === 'target' && forecastView === 'target' && customTargetDate
+                ? format(customTargetDate, "dd/MM/yy")
+                : opt.label}
             </button>
           ))}
         </div>
@@ -502,6 +517,62 @@ export function ForecastSimulator({
                     </div>
                   </DialogDescription>
                 </DialogHeader>
+              </DialogContent>
+            </Dialog>
+
+            {/* Date picker dialog for "Escolher data" */}
+            <Dialog open={showDatePicker} onOpenChange={setShowDatePicker}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Escolher data
+                  </DialogTitle>
+                  <DialogDescription>
+                    Simule a carga de estudos até uma data específica.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 pt-1">
+                  {plansWithDate.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">Datas dos objetivos</p>
+                      {plansWithDate.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            const d = new Date(p.target_date!);
+                            onCustomTargetDate?.(d);
+                            onViewChange('target');
+                            setShowDatePicker(false);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                        >
+                          <span className="truncate font-medium">{p.name}</span>
+                          <span className="text-muted-foreground text-xs shrink-0">
+                            {format(new Date(p.target_date!), "dd/MM/yyyy")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Data personalizada</p>
+                    <Calendar
+                      mode="single"
+                      selected={customTargetDate ?? undefined}
+                      onSelect={(d) => {
+                        if (d) {
+                          onCustomTargetDate?.(d);
+                          onViewChange('target');
+                          setShowDatePicker(false);
+                        }
+                      }}
+                      disabled={(date) => date < new Date()}
+                      className={cn("p-3 pointer-events-auto rounded-lg border")}
+                      locale={ptBR}
+                    />
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
           </>
