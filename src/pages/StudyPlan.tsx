@@ -921,8 +921,8 @@ const StudyPlan = () => {
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Clock className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Capacidade global</h2>
+                   <Clock className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Capacidade de estudo</h2>
                   <InfoButton onClick={() => setShowCapacityInfo(true)} />
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -1176,11 +1176,11 @@ const StudyPlan = () => {
           )}
         </div>
 
-        {/* ═══ 3. CAPACIDADE DIÁRIA GLOBAL ═══ */}
+        {/* ═══ 3. CAPACIDADE DIÁRIA DE ESTUDO ═══ */}
         <Card>
           <CardContent className="p-4 space-y-2.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Capacidade Diária Global</h3>
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Capacidade Diária de Estudo</h3>
               {!editingCapacity && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
                   setEditingCapacity(true);
@@ -1260,8 +1260,9 @@ const StudyPlan = () => {
                     }
                   </p>
                   {metrics?.projectedCompletionDate && (
-                    <p className="text-[10px] text-muted-foreground">
-                      📅 Conclusão estimada: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <CalendarIcon className="h-3 w-3" />
+                      Conclusão estimada de todos os cards: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
                     </p>
                   )}
                 </div>

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
 import type { WeeklyMinutes, DayKey } from '@/hooks/useStudyPlan';
@@ -220,7 +222,7 @@ export function ForecastSimulator({
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleConfirmNewCards()}
               />
-              <span className="text-muted-foreground">novos/dia</span>
+              <span className="text-muted-foreground">cards novos/dia</span>
               <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmNewCards}>
                 <Check className="h-3 w-3" />
               </Button>
@@ -231,7 +233,7 @@ export function ForecastSimulator({
           ) : (
             <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
               <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
-              <span className="text-muted-foreground">novos para estudar/dia</span>
+              <span className="text-muted-foreground">cards novos para estudar/dia</span>
               <Pencil className="h-3 w-3 text-muted-foreground/50" />
             </button>
           )}
@@ -252,7 +254,7 @@ export function ForecastSimulator({
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleConfirmCreatedCards()}
               />
-              <span className="text-muted-foreground">criados/dia</span>
+              <span className="text-muted-foreground">cards criados/dia</span>
               <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmCreatedCards}>
                 <Check className="h-3 w-3" />
               </Button>
@@ -272,103 +274,108 @@ export function ForecastSimulator({
         {/* Study time / capacity */}
         <div className="flex items-center gap-2 text-xs">
           <Timer className="h-3 w-3 text-muted-foreground" />
-          {editingCapacity ? (
-            <div className="space-y-2 flex-1">
-              {!weeklyMode ? (
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    type="number"
-                    min={5}
-                    max={720}
-                    value={tempDailyMin}
-                    onChange={e => setTempDailyMin(e.target.value)}
-                    className="h-6 w-16 text-xs px-1.5"
-                    autoFocus
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        const val = parseInt(tempDailyMin, 10);
-                        if (!isNaN(val) && val >= 5) {
-                          onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
-                          onWeeklyMinutesChange(undefined);
-                        }
-                        setEditingCapacity(false);
-                      }
-                    }}
-                  />
-                  <span className="text-muted-foreground">min/dia</span>
-                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => {
-                    const val = parseInt(tempDailyMin, 10);
-                    if (!isNaN(val) && val >= 5) {
-                      onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
-                      onWeeklyMinutesChange(undefined);
-                    }
-                    setEditingCapacity(false);
-                  }}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {DAY_ORDER.map(dk => (
-                      <div key={dk} className="flex items-center gap-1">
-                        <span className="text-[10px] text-muted-foreground w-6">{DAY_LABELS[dk]}</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={720}
-                          value={tempWeekly[dk]}
-                          onChange={e => setTempWeekly(prev => ({ ...prev, [dk]: parseInt(e.target.value, 10) || 0 }))}
-                          className="h-6 w-12 text-xs px-1"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => {
-                    onWeeklyMinutesChange(tempWeekly);
-                    const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
-                    onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
-                    setEditingCapacity(false);
-                  }}>
-                    <Check className="h-3 w-3 mr-1" /> Confirmar
-                  </Button>
-                </div>
-              )}
+          <button onClick={() => {
+            setTempDailyMin(String(currentDailyMin));
+            setWeeklyMode(!!weeklyMinutesOverride || !!realWeeklyMinutes);
+            setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: currentDailyMin, tue: currentDailyMin, wed: currentDailyMin, thu: currentDailyMin, fri: currentDailyMin, sat: currentDailyMin, sun: currentDailyMin });
+            setEditingCapacity(true);
+          }} className="flex items-center gap-1 hover:text-primary transition-colors">
+            <span className="font-medium text-foreground">{currentDailyMin}min/dia</span>
+            <span className="text-muted-foreground">de estudo</span>
+            {weeklyMinutesOverride && <span className="text-muted-foreground">(por dia)</span>}
+            <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            {isCapacityOverridden && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+            )}
+          </button>
+        </div>
+
+        {/* Capacity edit modal */}
+        <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Timer className="h-4 w-4 text-primary" />
+                Tempo de estudo (simulação)
+              </DialogTitle>
+              <DialogDescription>
+                Ajuste o tempo diário para simular o impacto na sua carga. Isso não altera seu plano real.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
               <div className="flex gap-1">
                 <button
-                  className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors', !weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
+                  className={cn('text-xs px-3 py-1.5 rounded-full border transition-colors flex-1', !weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
                   onClick={() => setWeeklyMode(false)}
                 >
                   Igual todo dia
                 </button>
                 <button
-                  className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors', weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
+                  className={cn('text-xs px-3 py-1.5 rounded-full border transition-colors flex-1', weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
                   onClick={() => {
                     setWeeklyMode(true);
                     const base = parseInt(tempDailyMin, 10) || realDailyMinutes;
                     setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: base, tue: base, wed: base, thu: base, fri: base, sat: base, sun: base });
                   }}
                 >
-                  Por dia
+                  Por dia da semana
                 </button>
               </div>
-            </div>
-          ) : (
-            <button onClick={() => {
-              setTempDailyMin(String(currentDailyMin));
-              setWeeklyMode(!!weeklyMinutesOverride || !!realWeeklyMinutes);
-              setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: currentDailyMin, tue: currentDailyMin, wed: currentDailyMin, thu: currentDailyMin, fri: currentDailyMin, sat: currentDailyMin, sun: currentDailyMin });
-              setEditingCapacity(true);
-            }} className="flex items-center gap-1 hover:text-primary transition-colors">
-              <span className="font-medium text-foreground">{currentDailyMin}min/dia</span>
-              {weeklyMinutesOverride && <span className="text-muted-foreground">(por dia)</span>}
-              <Pencil className="h-3 w-3 text-muted-foreground/50" />
-              {isCapacityOverridden && (
-                <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+
+              {!weeklyMode ? (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-primary">{formatMinutes(parseInt(tempDailyMin, 10) || 0)}</p>
+                    <p className="text-xs text-muted-foreground">por dia</p>
+                  </div>
+                  <Slider
+                    value={[parseInt(tempDailyMin, 10) || 15]}
+                    onValueChange={([v]) => setTempDailyMin(String(v))}
+                    min={15} max={240} step={15}
+                    className="py-2"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground px-1">
+                    {[15, 30, 60, 120, 180, 240].map(m => (
+                      <span key={m} className={cn(parseInt(tempDailyMin, 10) === m && 'text-primary font-bold')}>{formatMinutes(m)}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {DAY_ORDER.map(dk => (
+                    <div key={dk} className="flex items-center gap-2">
+                      <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
+                      <Slider
+                        value={[tempWeekly[dk]]}
+                        onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
+                        min={0} max={240} step={15}
+                        className="flex-1"
+                      />
+                      <span className="text-xs font-semibold w-10 text-right">{formatMinutes(tempWeekly[dk])}</span>
+                    </div>
+                  ))}
+                </div>
               )}
-            </button>
-          )}
-        </div>
+
+              <Button className="w-full" onClick={() => {
+                if (weeklyMode) {
+                  onWeeklyMinutesChange(tempWeekly);
+                  const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
+                  onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
+                } else {
+                  const val = parseInt(tempDailyMin, 10);
+                  if (!isNaN(val) && val >= 5) {
+                    onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
+                    onWeeklyMinutesChange(undefined);
+                  }
+                }
+                setEditingCapacity(false);
+              }}>
+                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {isUsingDefaults && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
