@@ -372,12 +372,18 @@ export function useStudyPlan() {
       }
     }
 
-    // Also aggregate per-plan for display
+    // Also aggregate per-plan for display (deduplicate by root to avoid multiplying)
     for (const p of sortedPlans) {
-      newCardsAllocation[p.id] = (p.deck_ids ?? []).reduce((s, id) => {
+      const planRoots = new Set<string>();
+      let sum = 0;
+      for (const id of (p.deck_ids ?? [])) {
         const rootId = findRoot(id);
-        return s + (deckNewAllocation[rootId] ?? 0);
-      }, 0);
+        if (!planRoots.has(rootId)) {
+          planRoots.add(rootId);
+          sum += deckNewAllocation[rootId] ?? 0;
+        }
+      }
+      newCardsAllocation[p.id] = sum;
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
