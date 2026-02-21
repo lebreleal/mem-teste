@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
   ChevronDown, ChevronUp, Pencil, Brain, RotateCcw, Crown, Trash2,
   ChevronRight, Layers, Sparkles, HelpCircle, Info, FolderTree,
-  Library, GraduationCap, Lightbulb, X,
+  Library, GraduationCap, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -61,6 +62,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
 }) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [overdueCount, setOverdueCount] = useState<number | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -79,15 +81,66 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
       .then(({ count }) => setOverdueCount(count ?? 0));
   }, [open, allDeckIds]);
 
-  const handleDilute = (days: number) => {
-    const perDay = Math.ceil(totalReview / days);
-    const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+  const [diluting, setDiluting] = useState(false);
+
+  const handleDilute = async (days: number) => {
+    if (allDeckIds.length === 0) return;
+    setDiluting(true);
+
+    // Fetch all overdue review cards for the plan's decks
+    const { data: overdueCards, error: fetchErr } = await supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', allDeckIds)
+      .eq('state', 2)
+      .lte('scheduled_date', new Date().toISOString())
+      .order('scheduled_date', { ascending: true });
+
+    if (fetchErr || !overdueCards || overdueCards.length === 0) {
+      setDiluting(false);
+      onOpenChange(false);
+      if (fetchErr) toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
+      return;
+    }
+
+    // Distribute cards across `days` days, starting today
+    const perDay = Math.ceil(overdueCards.length / days);
+    let hasError = false;
+
+    for (let d = 0; d < days && !hasError; d++) {
+      const batch = overdueCards.slice(d * perDay, (d + 1) * perDay);
+      if (batch.length === 0) break;
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + d);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const { error: upErr } = await supabase
+        .from('cards')
+        .update({ scheduled_date: targetDate.toISOString() } as any)
+        .in('id', batch.map(c => c.id));
+
+      if (upErr) hasError = true;
+    }
+
+    setDiluting(false);
     onOpenChange(false);
-    toast({
-      title: `Meta: ${perDay} revisões/dia por ${days} dias`,
-      description: `Isso levará ~${formatMinutes(minPerDay)} extra por dia. Comece agora!`,
-    });
-    navigate('/study');
+
+    if (hasError) {
+      toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
+    } else {
+      const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+      toast({
+        title: `${overdueCards.length} revisões redistribuídas em ${days} dias`,
+        description: `~${perDay} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
+      });
+    }
+
+    // Invalidate to update UI
+    qc.invalidateQueries({ queryKey: ['plan-metrics'] });
+    qc.invalidateQueries({ queryKey: ['study-queue'] });
+    qc.invalidateQueries({ queryKey: ['decks'] });
+    qc.invalidateQueries({ queryKey: ['deck-stats'] });
+    qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
   };
 
   const handleResetOverdue = async () => {
@@ -98,7 +151,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
     
     const { error } = await supabase
       .from('cards')
-      .update({ state: 0, stability: 0, difficulty: 0 } as any)
+      .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
       .in('deck_id', allDeckIds)
       .eq('state', 2)
       .lt('scheduled_date', cutoff.toISOString());
@@ -110,6 +163,12 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
     if (error) {
       toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
     } else {
+      // Invalidate relevant queries so dashboard updates
+      qc.invalidateQueries({ queryKey: ['plan-metrics'] });
+      qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
+      qc.invalidateQueries({ queryKey: ['study-queue'] });
+      qc.invalidateQueries({ queryKey: ['decks'] });
+      qc.invalidateQueries({ queryKey: ['deck-stats'] });
       toast({ title: `${overdueCount} cards resetados`, description: 'Eles voltaram ao estado "novo" e serão reapresentados gradualmente.' });
     }
   };
@@ -117,21 +176,42 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
   return (
     <>
       <Dialog open={open && !showResetConfirm} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Limpar Atraso</DialogTitle>
-            <DialogDescription>
-              Você tem <strong>{totalReview}</strong> revisões pendentes. Escolha uma estratégia:
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-amber-500" />
+              Gerenciar Revisões Atrasadas
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Diluir em dias</p>
+
+          {/* Educational explanation */}
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+            <p className="text-sm font-medium text-foreground">O que são revisões atrasadas?</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              São <strong>{totalReview} cards</strong> que já passaram da data ideal de revisão.
+              Eles <strong>já estão incluídos</strong> na sua carga diária — quando você estuda,
+              esses cards aparecem normalmente junto com os novos.
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Se o volume está alto demais, você pode <strong>redistribuí-los</strong> ao longo de
+              vários dias para tornar a carga mais leve, ou <strong>resetar</strong> os cards
+              muito antigos para recomeçar do zero.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Redistribuir ao longo de dias
+            </p>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Move as datas de revisão para distribuir a carga uniformemente.
+            </p>
             {[3, 5, 7].map(days => {
               const perDay = Math.ceil(totalReview / days);
               const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
               return (
-                <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)}>
-                  <span>Diluir em <strong>{days} dias</strong></span>
+                <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)} disabled={diluting}>
+                  <span>{diluting ? 'Redistribuindo…' : <>Diluir em <strong>{days} dias</strong></>}</span>
                   <span className="text-xs text-muted-foreground">{perDay} cards/dia · {formatMinutes(minPerDay)}</span>
                 </Button>
               );
@@ -139,22 +219,21 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
 
             {/* Reset overdue option */}
             {overdueCount != null && overdueCount > 0 && (
-              <>
-                <div className="border-t pt-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cards esquecidos</p>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between h-auto py-3 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                    onClick={() => setShowResetConfirm(true)}
-                  >
-                    <span>Resetar <strong>{overdueCount}</strong> cards com &gt;30 dias de atraso</span>
-                    <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Cards com atraso grave voltam ao estado "novo" — como se nunca tivessem sido estudados.
-                  </p>
-                </div>
-              </>
+              <div className="border-t pt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Opção drástica</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Cards com mais de 30 dias de atraso provavelmente já foram esquecidos.
+                  Resetar faz eles voltarem como "novos" — você reestuda do zero.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between h-auto py-3 border-destructive/30 text-destructive hover:bg-destructive/5"
+                  onClick={() => setShowResetConfirm(true)}
+                >
+                  <span>Resetar <strong>{overdueCount}</strong> cards com &gt;30 dias de atraso</span>
+                  <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                </Button>
+              </div>
             )}
           </div>
         </DialogContent>
@@ -186,41 +265,6 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
   );
 }
 
-// ─── Info Modal ──────────────────────────────────────────
-function InfoModal({ open, onOpenChange, title, children }: {
-  open: boolean; onOpenChange: (v: boolean) => void; title: string; children: React.ReactNode;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Lightbulb className="h-4 w-4 text-primary" />
-            {title}
-          </DialogTitle>
-        </DialogHeader>
-        <DialogDescription asChild>
-          <div className="text-sm text-muted-foreground space-y-2">
-            {children}
-          </div>
-        </DialogDescription>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Info Button (inline) ───────────────────────────────
-function InfoButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center justify-center h-4 w-4 rounded-full text-muted-foreground/60 hover:text-primary transition-colors"
-    >
-      <Sparkles className="h-3.5 w-3.5" />
-    </button>
-  );
-}
 
 // ─── Deck Hierarchy Selector ────────────────────────────
 function DeckHierarchySelector({
@@ -233,7 +277,7 @@ function DeckHierarchySelector({
   editingPlanId: string | null;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showHierarchyInfo, setShowHierarchyInfo] = useState(false);
+  
 
   const rootDecks = useMemo(() => decks.filter(d => !d.parent_deck_id), [decks]);
   const getChildren = useCallback((parentId: string) => decks.filter(d => d.parent_deck_id === parentId), [decks]);
@@ -261,22 +305,22 @@ function DeckHierarchySelector({
   };
 
   // Selection logic:
-  // - Selecting a PARENT cascades DOWN (selects all descendants)
-  // - Selecting CHILDREN does NOT auto-select parent
-  // - Deselecting a PARENT cascades DOWN (deselects all descendants)
-  // - Deselecting a CHILD only deselects that child (and its descendants)
+  // - Each deck is toggled independently (no cascade)
+  // - User can select parent without children, or children without parent
   const handleToggle = (deckId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedDeckIds(prev => [...new Set([...prev, deckId])]);
+    } else {
+      setSelectedDeckIds(prev => prev.filter(id => id !== deckId));
+    }
+  };
+
+  // Select/deselect a parent AND all its descendants at once
+  const handleToggleWithDescendants = (deckId: string, checked: boolean) => {
     const descendantIds = collectAllDescendants(deckId);
     if (checked) {
       setSelectedDeckIds(prev => [...new Set([...prev, deckId, ...descendantIds])]);
-      // Auto-expand when selecting a parent with children
-      if (descendantIds.length > 0) {
-        setExpandedIds(prev => {
-          const next = new Set(prev);
-          next.add(deckId);
-          return next;
-        });
-      }
+      setExpandedIds(prev => { const next = new Set(prev); next.add(deckId); return next; });
     } else {
       const toRemove = new Set([deckId, ...descendantIds]);
       setSelectedDeckIds(prev => prev.filter(id => !toRemove.has(id)));
@@ -299,12 +343,16 @@ function DeckHierarchySelector({
     const children = getChildren(deck.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedIds.has(deck.id);
-    const checkState = getCheckState(deck.id);
     const isSelected = selectedDeckIds.includes(deck.id);
     const ownCards = getOwnCards(deck);
     const descendantCards = getDescendantCards(deck);
     const totalCards = ownCards + descendantCards;
     const otherPlans = plans.filter(p => p.id !== editingPlanId && (p.deck_ids ?? []).includes(deck.id));
+
+    // For parents: check if ALL descendants are selected
+    const allDescendants = hasChildren ? collectAllDescendants(deck.id) : [];
+    const allDescendantsSelected = hasChildren && allDescendants.length > 0 && allDescendants.every(id => selectedDeckIds.includes(id));
+    const someDescendantsSelected = hasChildren && allDescendants.some(id => selectedDeckIds.includes(id));
 
     return (
       <div key={deck.id}>
@@ -336,24 +384,19 @@ function DeckHierarchySelector({
 
           {/* Checkbox */}
           <Checkbox
-            checked={checkState === 'indeterminate' ? 'indeterminate' : !!checkState}
+            checked={isSelected}
             onCheckedChange={(checked) => handleToggle(deck.id, !!checked)}
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Icon based on depth */}
-          {depth === 0 ? (
-            <Library className="h-4 w-4 text-primary/70 shrink-0" />
-          ) : (
-            <FolderTree className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
-          )}
-
           {/* Name and meta */}
           <div className="flex-1 min-w-0">
-            <p className={cn(
-              'text-sm truncate',
-              depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
-            )}>{deck.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className={cn(
+                'text-sm truncate',
+                depth === 0 ? 'font-semibold' : 'font-medium text-muted-foreground',
+              )}>{deck.name}</p>
+            </div>
             {otherPlans.length > 0 && (
               <p className="text-[9px] text-primary/60 truncate">
                 Compartilhado: {otherPlans.map(p => p.name).join(', ')}
@@ -361,26 +404,31 @@ function DeckHierarchySelector({
             )}
           </div>
 
-          {/* Card counts */}
-          <div className="flex items-center gap-1 shrink-0">
-            {hasChildren && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 tabular-nums border-muted-foreground/20">
-                {ownCards} próprios
-              </Badge>
-            )}
-            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums">
-              {totalCards}
-              <span className="ml-0.5 text-muted-foreground/60">cards</span>
-            </Badge>
-          </div>
+          {/* Card count */}
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums shrink-0">
+            {hasChildren ? ownCards : totalCards}
+            <span className="ml-0.5 text-muted-foreground/60">cards</span>
+          </Badge>
         </label>
 
-        {/* Children */}
+        {/* Select all children shortcut for parent decks */}
         {hasChildren && isExpanded && (
           <div className="relative">
             <div className="absolute top-0 bottom-0" style={{ left: `${20 + depth * 24}px` }}>
               <div className="w-px h-full bg-border/40" />
             </div>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-[10px] text-primary hover:text-primary/80 font-medium py-1 transition-colors"
+              style={{ paddingLeft: `${36 + depth * 24}px` }}
+              onClick={() => {
+                const allSelected = isSelected && allDescendantsSelected;
+                handleToggleWithDescendants(deck.id, !allSelected);
+              }}
+            >
+              {isSelected && allDescendantsSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+              <span className="text-muted-foreground font-normal">({totalCards} cards)</span>
+            </button>
             {children.map(child => renderDeck(child, depth + 1))}
           </div>
         )}
@@ -392,12 +440,9 @@ function DeckHierarchySelector({
     <div className="space-y-1.5">
       {/* Header with info */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
-          </span>
-          <InfoButton onClick={() => setShowHierarchyInfo(true)} />
-        </div>
+        <span className="text-xs font-medium text-muted-foreground">
+          {selectedDeckIds.length} selecionado{selectedDeckIds.length !== 1 ? 's' : ''}
+        </span>
         <Button
           type="button"
           variant="ghost"
@@ -423,14 +468,6 @@ function DeckHierarchySelector({
         )}
       </div>
 
-      {/* Hierarchy Info Modal */}
-      <InfoModal open={showHierarchyInfo} onOpenChange={setShowHierarchyInfo} title="Como funciona a hierarquia?">
-        <p>📚 <strong>Baralho pai</strong> pode ter seus próprios cards únicos, além dos que estão nos filhos.</p>
-        <p>📂 <strong>Sub-baralhos</strong> são coleções dentro de um pai. Selecionar um filho <em>não</em> seleciona o pai automaticamente.</p>
-        <p>⬇️ <strong>Cascata para baixo:</strong> Selecionar um pai marca todos os filhos. Desmarcar um pai desmarca todos os filhos.</p>
-        <p>🔢 <strong>Contagem:</strong> "próprios" mostra cards exclusivos do pai. O total inclui todos os descendentes.</p>
-        <p>🔗 <strong>Compartilhados:</strong> Baralhos podem pertencer a múltiplos objetivos. Estudar um card atualiza o progresso em todos.</p>
-      </InfoModal>
     </div>
   );
 }
@@ -568,7 +605,7 @@ const StudyPlan = () => {
   const { toast } = useToast();
   const {
     plans, allDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
-    calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, reorderObjectives,
+    calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
   const { isPremium } = useSubscription();
@@ -594,10 +631,14 @@ const StudyPlan = () => {
   );
   const [expandedObjective, setExpandedObjective] = useState<string | null>(null);
   const [showCatchUp, setShowCatchUp] = useState(false);
-  const [showNameInfo, setShowNameInfo] = useState(false);
-  const [showDateInfo, setShowDateInfo] = useState(false);
-  const [showCapacityInfo, setShowCapacityInfo] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
+  const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
+  const [showNewCardsConfirm, setShowNewCardsConfirm] = useState(false);
+
+  // Sync tempNewCards when globalCapacity loads/changes
+  useEffect(() => {
+    setTempNewCards(globalCapacity.dailyNewCardsLimit);
+  }, [globalCapacity.dailyNewCardsLimit]);
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
   const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
@@ -608,20 +649,6 @@ const StudyPlan = () => {
     metrics ? Math.min(100, Math.round(metrics.planHealthPercent ?? 80)) : 50
   );
 
-  // Step 2 preview metrics
-  const step2Metrics = useMemo(() => {
-    if (selectedDeckIds.length === 0) return null;
-    const avg = avgSecondsPerCard;
-    const cardsPerDay = Math.floor((globalCapacity.dailyMinutes * 60) / avg);
-    const cardsPerWeek = cardsPerDay * 7;
-    let daysLeft: number | null = null;
-    if (targetDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
-    }
-    return { cardsPerDay, cardsPerWeek, daysLeft, avgSeconds: avg };
-  }, [selectedDeckIds, globalCapacity.dailyMinutes, targetDate, avgSecondsPerCard]);
 
   // Capacity impact
   const impactMessage = useMemo(() => {
@@ -785,33 +812,72 @@ const StudyPlan = () => {
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-6 max-w-lg">
+        <main className="container mx-auto px-4 py-6 max-w-2xl">
+          {/* ─── STEP 1: Nome ─── */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              {/* Name */}
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <GraduationCap className="h-5 w-5 text-primary" />
                   <h2 className="text-xl font-bold">Nome do objetivo</h2>
-                  <InfoButton onClick={() => setShowNameInfo(true)} />
                 </div>
-                <p className="text-sm text-muted-foreground">Um nome curto para identificar esta meta (ex: ENARE 2026).</p>
+                <p className="text-sm text-muted-foreground">
+                  Dê um nome curto para identificar esta meta. Pode ser o nome de uma prova, matéria ou concurso (ex: ENARE 2026, Residência USP).
+                </p>
               </div>
               <Input
                 placeholder="Ex: ENARE 2026"
                 value={planName}
                 onChange={(e) => setPlanName(e.target.value)}
                 className="text-base"
+                autoFocus
               />
+              <Button
+                className="w-full" size="lg"
+                disabled={!planName.trim()}
+                onClick={() => setStep(2)}
+              >
+                Continuar
+              </Button>
 
-              {/* Decks */}
+              {isEditing && editingPlanId && (
+                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                        handleDeletePlan(editingPlanId);
+                        setView('home');
+                        setIsEditing(false);
+                        setEditingPlanId(null);
+                      }}>
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          )}
+
+          {/* ─── STEP 2: Baralhos ─── */}
+          {step === 2 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Library className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Baralhos</h2>
-                </div>
+                <h2 className="text-xl font-bold mb-1">Selecione os baralhos</h2>
                 <p className="text-sm text-muted-foreground">
-                  Escolha quais baralhos fazem parte deste objetivo. Um baralho pai tem seus próprios cards — selecionar filhos não inclui os cards do pai.
+                  Escolha quais baralhos fazem parte deste objetivo.
                 </p>
               </div>
               {activeDecks.length === 0 ? (
@@ -831,132 +897,89 @@ const StudyPlan = () => {
                   editingPlanId={editingPlanId}
                 />
               )}
-
-              {/* Target date */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-primary" />
-                  <label className="text-sm font-medium">Data limite</label>
-                  <Badge variant="outline" className="text-[9px] h-4 px-1.5">Opcional</Badge>
-                  <InfoButton onClick={() => setShowDateInfo(true)} />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Se você tem uma prova ou prazo, defina aqui. O sistema calculará se seu ritmo é suficiente.
-                </p>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-                {targetDate && (
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setTargetDate(undefined)}>
-                    Remover data
-                  </Button>
-                )}
-              </div>
-
-              <Button className="w-full" size="lg" disabled={selectedDeckIds.length === 0} onClick={() => setStep(2)}>
+              <Button
+                className="w-full" size="lg"
+                disabled={selectedDeckIds.length === 0}
+                onClick={() => setStep(3)}
+              >
                 Continuar
               </Button>
-
-              {/* Info Modals */}
-              <InfoModal open={showNameInfo} onOpenChange={setShowNameInfo} title="O que é um objetivo?">
-                <p>🎯 Um <strong>objetivo</strong> agrupa baralhos que você quer estudar para uma mesma meta (ex: uma prova, uma matéria).</p>
-                <p>📊 O sistema calcula automaticamente quantos cards por dia você precisa estudar para atingir sua meta no prazo.</p>
-                <p>🔄 Baralhos podem pertencer a vários objetivos. Estudar um card conta para todos os objetivos que o contêm.</p>
-              </InfoModal>
-              <InfoModal open={showDateInfo} onOpenChange={setShowDateInfo} title="Para que serve a data limite?">
-                <p>📅 A <strong>data limite</strong> representa quando você precisa ter dominado o conteúdo (ex: dia da prova).</p>
-                <p>🚦 Com ela, o sistema indica se seu ritmo está <strong className="text-emerald-500">no caminho</strong> ou <strong className="text-destructive">atrasado</strong>.</p>
-                <p>💡 Sem data, o sistema ainda funciona — apenas não calcula a urgência.</p>
-              </InfoModal>
             </div>
           )}
 
-          {step === 2 && step2Metrics && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-              <div>
-                <h2 className="text-xl font-bold mb-1">Aqui está o que calculamos</h2>
-                <p className="text-sm text-muted-foreground">Com base nos seus baralhos e tempo médio por card.</p>
-              </div>
-              <Card>
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Tempo médio por card</p>
-                      <p className="font-bold">{Math.round(step2Metrics.avgSeconds)}s</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-2xl font-bold text-primary">{step2Metrics.cardsPerDay}</p>
-                      <p className="text-xs text-muted-foreground">cards/dia</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-2xl font-bold text-primary">{step2Metrics.cardsPerWeek}</p>
-                      <p className="text-xs text-muted-foreground">cards/semana</p>
-                    </div>
-                  </div>
-                  {targetDate && step2Metrics.daysLeft && (
-                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                      <p className="text-sm">📅 <strong>{step2Metrics.daysLeft} dias</strong> até {format(targetDate, "dd/MM/yyyy")}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              <Button className="w-full" size="lg" onClick={() => setStep(3)}>Continuar</Button>
-            </div>
-          )}
-
+          {/* ─── STEP 3: Data limite + Confirmar ─── */}
           {step === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                   <Clock className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Capacidade de estudo</h2>
-                  <InfoButton onClick={() => setShowCapacityInfo(true)} />
+                  <Target className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Data limite</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Sua capacidade diária atual é <strong>{formatMinutes(globalCapacity.dailyMinutes)}</strong>.
-                  Ela é compartilhada entre todos os seus objetivos.
+                  Defina quando você precisa ter dominado este conteúdo. O sistema usará essa data para calcular se o seu ritmo de estudo é suficiente e distribuir os cards novos de forma inteligente.
                 </p>
               </div>
-              <Card>
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm font-semibold">{formatMinutes(globalCapacity.dailyMinutes)}/dia</p>
-                      <p className="text-xs text-muted-foreground">Capacidade global compartilhada</p>
-                    </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              {targetDate && (
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setTargetDate(undefined)}>
+                  <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
+                  Alterar data
+                </Button>
+              )}
+
+              {/* Feasibility warning */}
+              {targetDate && selectedDeckIds.length > 0 && (() => {
+                const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
+                  const deck = activeDecks.find(d => d.id === id);
+                  return sum + (deck?.new_count ?? 0);
+                }, 0);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
+                const budget = globalCapacity.dailyNewCardsLimit;
+                const minDaysNeeded = Math.ceil(selectedNewCards / budget);
+                const isImpossible = daysLeft < minDaysNeeded;
+                const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
+                if (!isImpossible && !isTight) return null;
+                const suggestedDate = new Date(today);
+                suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
+                return (
+                  <div className={cn(
+                    'rounded-lg border p-3 space-y-1',
+                    isImpossible
+                      ? 'border-destructive/50 bg-destructive/5'
+                      : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
+                  )}>
+                    <p className={cn('text-xs font-semibold', isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
+                      {isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Com {budget} novos cards/dia e {selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{minDaysNeeded} dias</strong>.
+                      {isImpossible && <> A data selecionada ({daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}) é insuficiente.</>}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      📅 Data mínima viável: <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong>
+                    </p>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    💡 Você pode ajustar sua capacidade a qualquer momento no dashboard do plano.
-                  </p>
-                </CardContent>
-              </Card>
+                );
+              })()}
+
               <Button
                 className="w-full" size="lg"
                 onClick={handleConfirmPlan}
-                disabled={createPlan.isPending || updatePlan.isPending}
+                disabled={!targetDate || createPlan.isPending || updatePlan.isPending}
               >
-                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações ✨' : 'Criar objetivo ✨'}
+                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar objetivo'}
               </Button>
-              <InfoModal open={showCapacityInfo} onOpenChange={setShowCapacityInfo} title="O que é a capacidade global?">
-                <p>⏱️ A <strong>capacidade</strong> é quanto tempo por dia você quer dedicar ao estudo total.</p>
-                <p>🎯 Ela é dividida entre todos os objetivos por ordem de prioridade — o Objetivo 1 recebe cards novos primeiro.</p>
-                <p>📈 Revisões sempre têm prioridade sobre cards novos, independente do objetivo.</p>
-                <p>🔧 Você pode personalizar por dia da semana no dashboard do plano.</p>
-              </InfoModal>
             </div>
           )}
         </main>
@@ -979,18 +1002,18 @@ const StudyPlan = () => {
           </Button>
           <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
         </header>
-        <main className="container mx-auto px-4 py-4 max-w-lg">
-          <div className="flex flex-col items-center justify-center py-16 space-y-4">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Target className="h-8 w-8 text-primary" />
+        <main className="container mx-auto px-4 py-4 max-w-2xl">
+          <div className="flex flex-col items-center justify-center py-12 sm:py-16 space-y-5 text-center">
+            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Target className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
             </div>
-            <div className="text-center space-y-1">
-              <h2 className="text-lg font-bold">Nenhum objetivo criado</h2>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Crie objetivos de estudo para organizar sua rotina e acompanhar seu progresso.
+            <div className="space-y-2 max-w-sm">
+              <h2 className="text-lg sm:text-xl font-bold">Nenhum objetivo criado</h2>
+              <p className="text-sm text-muted-foreground">
+                Crie objetivos de estudo para organizar sua rotina e acompanhar seu progresso até suas provas.
               </p>
             </div>
-            <Button size="lg" onClick={startNewPlan}>
+            <Button size="lg" onClick={startNewPlan} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" /> Criar meu primeiro objetivo
             </Button>
           </div>
@@ -1020,28 +1043,36 @@ const StudyPlan = () => {
         </Button>
       </header>
 
-      <main className="container mx-auto px-4 py-3 max-w-lg space-y-3">
+      <main className="container mx-auto px-4 py-3 max-w-2xl space-y-4">
 
-        {/* ═══ 1. HERO CARD (Global) ═══ */}
+        {/* ═══ 1. STATUS + CARGA DE HOJE ═══ */}
         {metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-4">
-                <HealthRing percent={ringPercent} status={healthStatus} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
-                      HEALTH_CONFIG[healthStatus].bg, HEALTH_CONFIG[healthStatus].text, HEALTH_CONFIG[healthStatus].border
-                    )}>
-                      {HEALTH_CONFIG[healthStatus].icon} {HEALTH_CONFIG[healthStatus].label}
-                    </span>
-                    {metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        Consistência: {metrics.planHealthPercent}%
+            <CardContent className="p-4 md:p-5 space-y-3">
+              {/* Desktop: side-by-side status + load | Mobile: stacked */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Status do plano */}
+                <div className={cn('rounded-xl p-3 space-y-1', HEALTH_CONFIG[healthStatus].bg)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{HEALTH_CONFIG[healthStatus].emoji}</span>
+                      <span className={cn('text-sm font-bold', HEALTH_CONFIG[healthStatus].text)}>
+                        {HEALTH_CONFIG[healthStatus].label}
+                      </span>
+                    </div>
+                    {metrics.planHealthPercent != null && (
+                      <span className={cn('text-xs font-semibold tabular-nums', HEALTH_CONFIG[healthStatus].text)}>
+                        {metrics.planHealthPercent}%
                       </span>
                     )}
                   </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {HEALTH_CONFIG[healthStatus].description}
+                  </p>
+                </div>
+
+                {/* Carga de hoje */}
+                <div className="flex flex-col justify-center">
                   <StudyLoadBar
                     estimatedMinutes={metrics.estimatedMinutesToday}
                     capacityMinutes={todayCapacity}
@@ -1050,24 +1081,22 @@ const StudyPlan = () => {
                   />
                 </div>
               </div>
-              {needsAttention && (
+
+              {metrics.totalReview > 0 && (
                 <Button
-                  className="w-full" size="sm"
-                  variant={healthStatus === 'red' ? 'destructive' : 'default'}
-                  onClick={() => {
-                    if (metrics.totalReview > 20) setShowCatchUp(true);
-                    else { setEditingCapacity(true); setTempMinutes(globalCapacity.dailyMinutes); }
-                  }}
+                  className="w-full md:w-auto" size="sm"
+                  variant={healthStatus === 'red' || healthStatus === 'orange' ? 'destructive' : 'outline'}
+                  onClick={() => setShowCatchUp(true)}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  {metrics.totalReview > 20 ? 'Resolver Atraso' : 'Ajustar Plano'}
+                  {metrics.totalReview} revisões atrasadas
                 </Button>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* ═══ 2. MEUS OBJETIVOS (No "Principal" concept) ═══ */}
+        {/* ═══ 2. MEUS OBJETIVOS ═══ */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
             Meus Objetivos ({plans.length})
@@ -1090,8 +1119,6 @@ const StudyPlan = () => {
                   <div className="flex items-center gap-2">
                     <GripVertical className="h-4 w-4 text-muted-foreground/30 shrink-0 cursor-grab active:cursor-grabbing" />
 
-                    {/* Name and meta */}
-
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{p.name || 'Meu Objetivo'}</p>
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
@@ -1105,6 +1132,26 @@ const StudyPlan = () => {
                       </div>
                     </div>
 
+                    {/* Infeasible badge */}
+                    {hasTarget && (() => {
+                      const pNewCards = (p.deck_ids ?? []).reduce((sum, id) => {
+                        const deck = activeDecks.find(d => d.id === id);
+                        return sum + (deck?.new_count ?? 0);
+                      }, 0);
+                      const today = new Date(); today.setHours(0, 0, 0, 0);
+                      const dLeft = Math.max(1, Math.ceil((new Date(p.target_date!).getTime() - today.getTime()) / 86400000));
+                      const needed = Math.ceil(pNewCards / dLeft);
+                      const budget = globalCapacity.dailyNewCardsLimit;
+                      if (needed > budget) {
+                        return (
+                          <Badge variant="destructive" className="text-[9px] h-4 px-1.5 shrink-0">
+                            Meta inviável
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     <div className="flex items-center gap-0.5 shrink-0">
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); startEdit(p); }}>
                         <Pencil className="h-3 w-3 text-muted-foreground" />
@@ -1115,7 +1162,7 @@ const StudyPlan = () => {
                     </div>
                   </div>
 
-                  {/* Expanded: show decks + delete */}
+                  {/* Expanded: show decks */}
                   {isExpanded && (
                     <div className="pt-1 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
                       <ObjectiveDecksExpanded
@@ -1124,29 +1171,6 @@ const StudyPlan = () => {
                         avgSecondsPerCard={avgSecondsPerCard}
                         updatePlan={updatePlan}
                       />
-                      <div className="flex gap-1 pt-1">
-                        <AlertDialog open={deletingPlanId === p.id} onOpenChange={(open) => setDeletingPlanId(open ? p.id : null)}>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive text-[10px] h-6 px-2">
-                              <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                O objetivo "{p.name}" será permanentemente excluído. Seus baralhos não serão afetados.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDeletePlan(p.id)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -1176,83 +1200,111 @@ const StudyPlan = () => {
           )}
         </div>
 
-        {/* ═══ 3. CAPACIDADE DIÁRIA DE ESTUDO ═══ */}
-        <Card>
-          <CardContent className="p-4 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Capacidade Diária de Estudo</h3>
-              {!editingCapacity && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                  setEditingCapacity(true);
-                  setTempMinutes(globalCapacity.dailyMinutes);
-                  setEditingWeekly(isUsingWeekly);
-                  setTempWeekly(globalCapacity.weeklyMinutes ?? { mon: 60, tue: 60, wed: 60, thu: 60, fri: 60, sat: 60, sun: 60 });
-                }}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
+        {/* ═══ 3. CONFIGURAÇÕES ═══ */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Configurações</h3>
 
-            {editingCapacity ? (
-              <div className="space-y-2.5">
-                <div className="flex gap-1">
-                  <Button size="sm" variant={!editingWeekly ? 'default' : 'outline'} className="h-6 text-[10px] flex-1" onClick={() => setEditingWeekly(false)}>
-                    Igual todo dia
-                  </Button>
-                  <Button size="sm" variant={editingWeekly ? 'default' : 'outline'} className="h-6 text-[10px] flex-1" onClick={() => setEditingWeekly(true)}>
-                    Por dia da semana
-                  </Button>
+          {/* New cards per day */}
+          {metrics && (
+            <Card>
+              <CardContent className="p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Novos cards por dia
+                  </span>
+                  <span className="text-base font-bold tabular-nums text-primary">{tempNewCards}</span>
                 </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
+                </p>
+                <Slider
+                  value={[tempNewCards]}
+                  min={0}
+                  max={100}
+                  step={5}
+                  onValueChange={(v) => setTempNewCards(v[0])}
+                />
+                {tempNewCards !== globalCapacity.dailyNewCardsLimit && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs flex-1"
+                      onClick={() => setShowNewCardsConfirm(true)}
+                    >
+                      Confirmar ({tempNewCards} cards/dia)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {plans.map(p => {
+                      const alloc = metrics.newCardsAllocation[p.id] ?? 0;
+                      if (alloc === 0) return null;
+                      return (
+                        <Badge key={p.id} variant="outline" className="text-[9px] h-4 px-1.5 font-normal">
+                          {p.name}: {alloc}/dia
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-                {editingWeekly ? (
+          {/* Daily study time */}
+          <Card>
+            <CardContent className="p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-emerald-500" />
+                  Tempo de estudo diário
+                </span>
+                {!editingCapacity && (
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                    setEditingCapacity(true);
+                    setTempWeekly(globalCapacity.weeklyMinutes ?? {
+                      mon: globalCapacity.dailyMinutes, tue: globalCapacity.dailyMinutes,
+                      wed: globalCapacity.dailyMinutes, thu: globalCapacity.dailyMinutes,
+                      fri: globalCapacity.dailyMinutes, sat: globalCapacity.dailyMinutes,
+                      sun: globalCapacity.dailyMinutes,
+                    });
+                  }}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+
+              {editingCapacity ? (
+                <div className="space-y-2.5">
                   <div className="space-y-1.5">
                     {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
                       <div key={day} className="flex items-center gap-1.5">
                         <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
                         <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
-                        <span className="text-[10px] font-semibold w-10 text-right">{formatMinutes(tempWeekly[day])}</span>
+                        <span className={cn("text-[10px] font-semibold w-10 text-right", tempWeekly[day] === 0 && "text-muted-foreground")}>{tempWeekly[day] === 0 ? 'Folga' : formatMinutes(tempWeekly[day])}</span>
                       </div>
                     ))}
-                    <div className="flex gap-1 pt-1">
-                      <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingWeekly(false); setEditingCapacity(false); }}>Cancelar</Button>
-                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-center">
-                      <p className="text-3xl font-bold text-primary">{formatMinutes(tempMinutes)}</p>
-                      <p className="text-[10px] text-muted-foreground">por dia</p>
-                    </div>
-                    <Slider value={[tempMinutes]} onValueChange={([v]) => setTempMinutes(v)} min={15} max={240} step={15} className="py-2" />
-                    <div className="flex justify-between text-[9px] text-muted-foreground px-1">
-                      {SLIDER_MARKS.map(m => (
-                        <span key={m} className={cn(tempMinutes === m && 'text-primary font-bold')}>{formatMinutes(m)}</span>
-                      ))}
-                    </div>
-                    {impactMessage && (
-                      <div className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[10px]',
-                        impactMessage.tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
-                        impactMessage.tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400',
-                        impactMessage.tone === 'neutral' && 'bg-muted text-muted-foreground',
-                      )}>
-                        💡 {impactMessage.text}
-                      </div>
-                    )}
-                    <div className="flex gap-1">
-                      <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveCapacity}>Salvar</Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); setTempMinutes(globalCapacity.dailyMinutes); }}>Cancelar</Button>
-                    </div>
+                  <p className="text-[10px] text-center text-muted-foreground">
+                    Média: <span className="font-semibold text-foreground">{Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7)}min/dia</span>
+                  </p>
+                  <div className="flex gap-1">
+                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); }}>Cancelar</Button>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                  <Clock className="h-3.5 w-3.5 text-emerald-500" />
                 </div>
-                <div className="flex-1">
+              ) : (
+                <div>
                   <p className="text-sm font-semibold">
                     {isUsingWeekly
                       ? <>{formatMinutes(todayCapacity)} hoje <span className="text-muted-foreground font-normal text-xs">(média {formatMinutes(getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes))}/dia)</span></>
@@ -1260,16 +1312,16 @@ const StudyPlan = () => {
                     }
                   </p>
                   {metrics?.projectedCompletionDate && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                       <CalendarIcon className="h-3 w-3" />
-                      Conclusão estimada de todos os cards: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
+                      Conclusão estimada: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
                     </p>
                   )}
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
         <ForecastSimulatorSection
@@ -1280,12 +1332,33 @@ const StudyPlan = () => {
           updateCapacity={updateCapacity}
         />
 
-        {/* Clear backlog */}
-        {!needsAttention && metrics && metrics.totalReview > 0 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCatchUp(true)}>
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Limpar Atraso ({metrics.totalReview} revisões)
-          </Button>
-        )}
+        {/* ═══ MODAL: Confirmar alteração de novos cards ═══ */}
+        <AlertDialog open={showNewCardsConfirm} onOpenChange={setShowNewCardsConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Alterar limite de novos cards?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <span className="block">
+                  Você está alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
+                </span>
+                <span className="block text-amber-600 dark:text-amber-400">
+                  ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                updateNewCardsLimit.mutateAsync(tempNewCards);
+                setShowNewCardsConfirm(false);
+                toast({ title: 'Limite atualizado!', description: `Agora você estudará ${tempNewCards} novos cards por dia.` });
+              }}>
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </main>
 
       {/* Dialogs */}

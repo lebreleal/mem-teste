@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo, useCallback } from 'react';
+import { computeNewCardAllocation } from '@/lib/studyUtils';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
@@ -90,6 +91,7 @@ export interface PlanMetrics {
   forecastData: ForecastDataPoint[];
   dailyNewCards: number;
   newCardsAllocation: Record<string, number>;
+  deckNewAllocation: Record<string, number>;
 }
 
 export function useStudyPlan() {
@@ -118,20 +120,21 @@ export function useStudyPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes')
+        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit')
         .eq('id', userId!)
         .single();
       if (error) throw error;
       return {
         dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
         weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
+        dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
       };
     },
     enabled: !!userId,
   });
 
   const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null };
+  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30 };
 
   // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
   const allDeckIds = useMemo(() => {
@@ -167,6 +170,67 @@ export function useStudyPlan() {
       return row ?? { total_new: 0, total_review: 0, total_learning: 0 };
     },
     enabled: !!userId && allDeckIds.length > 0,
+  });
+
+  // ─── Deck hierarchy for child→root resolution ───
+  const deckHierarchyQuery = useQuery({
+    queryKey: ['deck-hierarchy', userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('decks')
+        .select('id, parent_deck_id')
+        .eq('user_id', userId!);
+      return data ?? [];
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+  });
+  const deckHierarchy = deckHierarchyQuery.data ?? [];
+
+  const findRoot = useCallback((id: string): string => {
+    const deck = deckHierarchy.find(d => d.id === id);
+    if (!deck || !deck.parent_deck_id) return id;
+    return findRoot(deck.parent_deck_id);
+  }, [deckHierarchy]);
+
+  // Collect descendant IDs for plan decks (so we count new cards across the whole tree)
+  const expandedDeckIds = useMemo(() => {
+    if (deckHierarchy.length === 0) return allDeckIds;
+    const result = new Set<string>(allDeckIds);
+    const collectDescendants = (parentId: string) => {
+      for (const d of deckHierarchy) {
+        if (d.parent_deck_id === parentId && !result.has(d.id)) {
+          result.add(d.id);
+          collectDescendants(d.id);
+        }
+      }
+    };
+    for (const id of allDeckIds) collectDescendants(id);
+    return Array.from(result);
+  }, [allDeckIds, deckHierarchy]);
+
+  // ─── Per-deck new card counts for proportional allocation ───
+  const perDeckStatsQuery = useQuery({
+    queryKey: ['per-deck-new-counts', userId, expandedDeckIds],
+    queryFn: async () => {
+      if (allDeckIds.length === 0) return {} as Record<string, number>;
+      const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      const rows = (data as any[]) ?? [];
+      // Include decks that belong to objectives OR are descendants of objective decks
+      const expandedSet = new Set(expandedDeckIds);
+      for (const row of rows) {
+        if (expandedSet.has(row.deck_id)) {
+          // Aggregate under root ancestor
+          const rootId = findRoot(row.deck_id);
+          map[rootId] = (map[rootId] ?? 0) + (Number(row.new_count) || 0);
+        }
+      }
+      return map;
+    },
+    enabled: !!userId && allDeckIds.length > 0,
+    staleTime: 2 * 60_000,
   });
 
   const retentionQuery = useQuery({
@@ -235,7 +299,7 @@ export function useStudyPlan() {
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (plans.length === 0 || avgQuery.data == null || !metricsQuery.data) return null;
+    if (plans.length === 0 || avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
     const avg = avgQuery.data;
 
@@ -256,21 +320,23 @@ export function useStudyPlan() {
     const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
-    // ─── Priority-based new card allocation ───
-    const newCardsAllocation: Record<string, number> = {};
-    let allocRemaining = remainingCapacity;
-    const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    for (const p of sortedPlans) {
-      if (allocRemaining <= 0) { newCardsAllocation[p.id] = 0; continue; }
-      const planDeckCount = (p.deck_ids ?? []).length;
-      const totalDeckCount = allDeckIds.length || 1;
-      const planNewEstimate = Math.round(totalNew * (planDeckCount / totalDeckCount));
-      const allocated = Math.min(allocRemaining, planNewEstimate);
-      newCardsAllocation[p.id] = allocated;
-      allocRemaining -= allocated;
-    }
-    const dailyNewCards = Math.min(remainingCapacity, totalNew);
-    const newMinutes = Math.round((dailyNewCards * avg) / 60);
+    // ─── Smart new card allocation (shared pure function) ───
+    const globalNewBudget = globalCapacity.dailyNewCardsLimit;
+    const perDeckNewCounts = perDeckStatsQuery.data ?? {};
+
+    const allocation = computeNewCardAllocation({
+      globalBudget: globalNewBudget,
+      plans: plans.map(p => ({ id: p.id, deck_ids: p.deck_ids, target_date: p.target_date, priority: p.priority })),
+      newPerRoot: perDeckNewCounts,
+      findRoot,
+    });
+
+    const deckNewAllocation = allocation.perDeck;
+    const newCardsAllocation = allocation.perPlan;
+
+    const dailyNewCards = Math.min(globalNewBudget, totalNew);
+    const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
+    const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
     const totalPending = totalNew + totalReview + totalLearning;
@@ -370,9 +436,9 @@ export function useStudyPlan() {
       avgRetention: retentionQuery.data ?? 0.9,
       todayCapacityMinutes, capacityCardsToday,
       projectedCompletionDate, weeklyCardData,
-      forecastData, dailyNewCards, newCardsAllocation,
+      forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
-  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
+  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {
@@ -429,6 +495,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
     qc.invalidateQueries({ queryKey: ['global-capacity'] });
+    qc.invalidateQueries({ queryKey: ['daily-new-cards-limit'] });
   }, [qc]);
 
   const createPlan = useMutation({
@@ -469,13 +536,28 @@ export function useStudyPlan() {
 
   // ─── Global capacity mutations (profile-level) ───
   const updateCapacity = useMutation({
-    mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => {
+    mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null; daily_new_cards_limit?: number }) => {
+      const updateData: any = {
+        daily_study_minutes: input.daily_study_minutes,
+        weekly_study_minutes: input.weekly_study_minutes ?? null,
+      };
+      if (input.daily_new_cards_limit != null) {
+        updateData.daily_new_cards_limit = input.daily_new_cards_limit;
+      }
       const { error } = await supabase
         .from('profiles')
-        .update({
-          daily_study_minutes: input.daily_study_minutes,
-          weekly_study_minutes: input.weekly_study_minutes ?? null,
-        } as any)
+        .update(updateData)
+        .eq('id', userId!);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const updateNewCardsLimit = useMutation({
+    mutationFn: async (limit: number) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ daily_new_cards_limit: limit } as any)
         .eq('id', userId!);
       if (error) throw error;
     },
@@ -505,6 +587,7 @@ export function useStudyPlan() {
     updatePlan,
     deletePlan,
     updateCapacity,
+    updateNewCardsLimit,
     reorderObjectives,
   };
 }

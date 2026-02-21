@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp, Timer, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3 } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,8 +56,10 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-xs text-muted-foreground">Carga de hoje</span>
-        <span className="text-lg font-bold text-foreground">{formatMinutes(estimatedMinutes)}</span>
+        <span className="text-xs text-muted-foreground">Tempo de estudo hoje</span>
+        <span className="text-lg font-bold text-foreground">
+          {estimatedMinutes === 0 ? 'Sem estudo hoje' : formatMinutes(estimatedMinutes)}
+        </span>
       </div>
       <div className="relative h-2 rounded-full overflow-hidden bg-muted">
         <div className="absolute inset-0 flex">
@@ -71,9 +73,13 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
           style={{ left: `${Math.min(percent, 99)}%` }}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        {formatMinutes(reviewMin)} dominados + {formatMinutes(newMin)} novos
-      </p>
+      {estimatedMinutes === 0 ? (
+        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ Nenhuma revisão pendente</p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">
+          {formatMinutes(reviewMin)} de revisões + {formatMinutes(newMin)} de cards novos — dentro do seu limite de {formatMinutes(capacityMinutes)}
+        </p>
+      )}
     </div>
   );
 }
@@ -126,19 +132,19 @@ export function ForecastSimulator({
   const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
+  const [overloadDialogDay, setOverloadDialogDay] = useState<ForecastPoint | null>(null);
   
   // Capacity editing state
   const [editingCapacity, setEditingCapacity] = useState(false);
-  const [tempDailyMin, setTempDailyMin] = useState(String(dailyMinutesOverride ?? realDailyMinutes));
-  const [weeklyMode, setWeeklyMode] = useState(false);
   const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(
     weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes, fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes }
   );
   
-  const currentDailyMin = dailyMinutesOverride ?? realDailyMinutes;
+  const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes, fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes };
+  const currentAvgMin = Math.round(DAY_ORDER.reduce((s, d) => s + (currentWeekly[d] || 0), 0) / 7);
   const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
   const hasOverload = data.some(d => d.overloaded);
-  const maxCapacity = data.length > 0 ? Math.max(...data.map(d => d.capacityMin)) : 0;
+  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
 
   const options = hasTargetDate
     ? [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Até a prova' }]
@@ -185,8 +191,11 @@ export function ForecastSimulator({
       <CardContent className="p-4 space-y-3">
         {/* Header with filters */}
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Simulador de Carga</h3>
-          {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+          <div className="flex items-center gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Estudo</h3>
+          </div>
+          
         </div>
 
         {/* View chips */}
@@ -275,14 +284,11 @@ export function ForecastSimulator({
         <div className="flex items-center gap-2 text-xs">
           <Timer className="h-3 w-3 text-muted-foreground" />
           <button onClick={() => {
-            setTempDailyMin(String(currentDailyMin));
-            setWeeklyMode(!!weeklyMinutesOverride || !!realWeeklyMinutes);
-            setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: currentDailyMin, tue: currentDailyMin, wed: currentDailyMin, thu: currentDailyMin, fri: currentDailyMin, sat: currentDailyMin, sun: currentDailyMin });
+            setTempWeekly(currentWeekly);
             setEditingCapacity(true);
           }} className="flex items-center gap-1 hover:text-primary transition-colors">
-            <span className="font-medium text-foreground">{currentDailyMin}min/dia</span>
-            <span className="text-muted-foreground">de estudo</span>
-            {weeklyMinutesOverride && <span className="text-muted-foreground">(por dia)</span>}
+            <span className="font-medium text-foreground">Tempo de estudo diário</span>
+            <span className="text-muted-foreground">(média {currentAvgMin}min)</span>
             <Pencil className="h-3 w-3 text-muted-foreground/50" />
             {isCapacityOverridden && (
               <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
@@ -290,85 +296,42 @@ export function ForecastSimulator({
           </button>
         </div>
 
-        {/* Capacity edit modal */}
+        {/* Capacity edit modal - always weekly */}
         <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Timer className="h-4 w-4 text-primary" />
-                Tempo de estudo (simulação)
+                Tempo de Estudo Diário
               </DialogTitle>
               <DialogDescription>
-                Ajuste o tempo diário para simular o impacto na sua carga. Isso não altera seu plano real.
+                Defina quanto tempo estudar em cada dia da semana. Coloque 0 para dias de folga.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 pt-2">
-              <div className="flex gap-1">
-                <button
-                  className={cn('text-xs px-3 py-1.5 rounded-full border transition-colors flex-1', !weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
-                  onClick={() => setWeeklyMode(false)}
-                >
-                  Igual todo dia
-                </button>
-                <button
-                  className={cn('text-xs px-3 py-1.5 rounded-full border transition-colors flex-1', weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
-                  onClick={() => {
-                    setWeeklyMode(true);
-                    const base = parseInt(tempDailyMin, 10) || realDailyMinutes;
-                    setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: base, tue: base, wed: base, thu: base, fri: base, sat: base, sun: base });
-                  }}
-                >
-                  Por dia da semana
-                </button>
+              <div className="space-y-2">
+                {DAY_ORDER.map(dk => (
+                  <div key={dk} className="flex items-center gap-2">
+                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
+                    <Slider
+                      value={[tempWeekly[dk]]}
+                      onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
+                      min={0} max={240} step={15}
+                      className="flex-1"
+                    />
+                    <span className={cn("text-xs font-semibold w-10 text-right", tempWeekly[dk] === 0 && "text-muted-foreground")}>{tempWeekly[dk] === 0 ? 'Folga' : formatMinutes(tempWeekly[dk])}</span>
+                  </div>
+                ))}
               </div>
 
-              {!weeklyMode ? (
-                <div className="space-y-3">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-primary">{formatMinutes(parseInt(tempDailyMin, 10) || 0)}</p>
-                    <p className="text-xs text-muted-foreground">por dia</p>
-                  </div>
-                  <Slider
-                    value={[parseInt(tempDailyMin, 10) || 15]}
-                    onValueChange={([v]) => setTempDailyMin(String(v))}
-                    min={15} max={240} step={15}
-                    className="py-2"
-                  />
-                  <div className="flex justify-between text-[9px] text-muted-foreground px-1">
-                    {[15, 30, 60, 120, 180, 240].map(m => (
-                      <span key={m} className={cn(parseInt(tempDailyMin, 10) === m && 'text-primary font-bold')}>{formatMinutes(m)}</span>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {DAY_ORDER.map(dk => (
-                    <div key={dk} className="flex items-center gap-2">
-                      <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
-                      <Slider
-                        value={[tempWeekly[dk]]}
-                        onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
-                        min={0} max={240} step={15}
-                        className="flex-1"
-                      />
-                      <span className="text-xs font-semibold w-10 text-right">{formatMinutes(tempWeekly[dk])}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="text-xs text-center text-muted-foreground">
+                Média: <span className="font-semibold text-foreground">{Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7)}min/dia</span>
+              </p>
 
               <Button className="w-full" onClick={() => {
-                if (weeklyMode) {
-                  onWeeklyMinutesChange(tempWeekly);
-                  const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
-                  onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
-                } else {
-                  const val = parseInt(tempDailyMin, 10);
-                  if (!isNaN(val) && val >= 5) {
-                    onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
-                    onWeeklyMinutesChange(undefined);
-                  }
-                }
+                onWeeklyMinutesChange(tempWeekly);
+                const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
+                onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
                 setEditingCapacity(false);
               }}>
                 <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
@@ -403,7 +366,8 @@ export function ForecastSimulator({
                   tickLine={false}
                   axisLine={false}
                   width={32}
-                  tickFormatter={(v) => `${v}m`}
+                  tickFormatter={(v) => `${v}min`}
+                  domain={[0, (max: number) => Math.ceil(max * 1.15)]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -447,94 +411,75 @@ export function ForecastSimulator({
                     );
                   }}
                 />
-                <ReferenceLine
-                  y={maxCapacity}
-                  stroke="hsl(var(--muted-foreground) / 0.4)"
-                  strokeDasharray="6 3"
-                  strokeWidth={1.5}
-                  label={{
-                    value: `${maxCapacity}m`,
-                    position: 'right',
-                    fontSize: 9,
-                    fill: 'hsl(var(--muted-foreground))',
-                  }}
-                />
-                {/* Stacked bars: bottom=review (green), mid=relearning (purple), mid=learning (amber), top=new (blue) */}
+                {avgCapacity > 0 && (
+                  <ReferenceLine
+                    y={avgCapacity}
+                    stroke="hsl(var(--muted-foreground) / 0.4)"
+                    strokeDasharray="6 3"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `${avgCapacity}m`,
+                      position: 'right',
+                      fontSize: 9,
+                      fill: 'hsl(var(--muted-foreground))',
+                    }}
+                  />
+                )}
+                {/* Stacked bars */}
                 <Bar dataKey="reviewMin" stackId="a" name="Dominados" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="relearningMin" stackId="a" name="Reaprendendo" fill="hsl(280 67% 55%)" opacity={0.85} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="learningMin" stackId="a" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.85} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="newMin" stackId="a" name="Novos" fill="hsl(217 91% 60%)" opacity={0.85} radius={[3, 3, 0, 0]} />
+                <Bar
+                  dataKey="newMin"
+                  stackId="a"
+                  name="Novos"
+                  fill="hsl(217 91% 60%)"
+                  opacity={0.85}
+                  radius={[3, 3, 0, 0]}
+                />
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Legend */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground px-1">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                Novos
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
-                Aprendendo
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />
-                Reaprendendo
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
-                Dominados
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
-                Capacidade
-              </span>
-            </div>
-
-            {/* Summary metrics */}
+            {/* Summary explanation - didactic */}
             {summary && (
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
-                  <div className="flex items-center justify-center gap-1">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Média/dia</p>
-                  </div>
-                  <p className="text-sm font-bold">{formatMinutes(summary.avgDailyMin)}</p>
-                </div>
-                <div className="bg-muted/40 rounded-lg px-2 py-2 space-y-0.5">
-                  <div className="flex items-center justify-center gap-1">
-                    <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Pico</p>
-                  </div>
-                  <p className="text-sm font-bold">{formatMinutes(summary.peakMin)}</p>
-                </div>
-                <div className={cn(
-                  'rounded-lg px-2 py-2 space-y-0.5',
-                  summary.overloadedDays > 0 ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/40'
-                )}>
-                  <div className="flex items-center justify-center gap-1">
-                    <Zap className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-[10px] text-muted-foreground">Sobrecarga</p>
-                  </div>
-                  <p className={cn('text-sm font-bold', summary.overloadedDays > 0 && 'text-amber-600 dark:text-amber-400')}>
-                    {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}
-                  </p>
-                </div>
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
+                  você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+                  {summary.peakMin > summary.avgDailyMin && (
+                    <> O dia mais puxado terá <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
+                  )}
+                </p>
               </div>
             )}
 
-            {/* Overload warning */}
-            {summary && summary.overloadedDays > 0 && (
-              <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-lg px-3 py-2 text-[11px]">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Sobrecarga em {summary.overloadedDays} dia{summary.overloadedDays !== 1 ? 's' : ''}</p>
-                  <p className="text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-                    Pico de {formatMinutes(summary.peakMin)} em {summary.peakDate}. Reduza novos cards/dia ou aumente a capacidade.
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Overload day dialog */}
+            <Dialog open={!!overloadDialogDay} onOpenChange={() => setOverloadDialogDay(null)}>
+              <DialogContent className="max-w-xs">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Dia sobrecarregado
+                  </DialogTitle>
+                  <DialogDescription asChild>
+                    <div className="space-y-2 pt-1">
+                      {overloadDialogDay && (
+                        <>
+                          <p className="text-sm">
+                            Em <span className="font-semibold">{overloadDialogDay.day} ({overloadDialogDay.date})</span>, a carga estimada é de{' '}
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">{formatMinutes(overloadDialogDay.totalMin)}</span>, 
+                            mas sua capacidade é de <span className="font-semibold">{formatMinutes(overloadDialogDay.capacityMin)}</span>.
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Nesse dia você precisará estudar mais do que o planejado. Considere reduzir novos cards/dia ou aumentar seu tempo de estudo.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </DialogDescription>
+                </DialogHeader>
+              </DialogContent>
+            </Dialog>
           </>
         )}
 

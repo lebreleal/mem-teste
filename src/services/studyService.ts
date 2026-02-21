@@ -6,7 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
-import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId, computeNewCardAllocation } from '@/lib/studyUtils';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
@@ -107,7 +107,98 @@ export async function fetchStudyQueue(
     }
   }
 
-  const effectiveNewLimit = Math.max(0, newLimit - newReviewedToday);
+  // Fetch plan allocation for smart new card distribution
+  let planNewLimit: number | undefined;
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('daily_new_cards_limit')
+    .eq('id', userId)
+    .single();
+
+  {
+    const globalLimit = (profileData as any)?.daily_new_cards_limit ?? 30;
+    // Fetch all study plans to compute allocation
+    const { data: plansData } = await supabase
+      .from('study_plans')
+      .select('deck_ids, target_date, priority')
+      .eq('user_id', userId)
+      .order('priority', { ascending: true });
+    
+    if (plansData && plansData.length > 0) {
+      // Check if this deck belongs to any plan
+      const allPlanDeckIds = new Set<string>();
+      for (const p of plansData as any[]) {
+        for (const id of (p.deck_ids ?? [])) allPlanDeckIds.add(id);
+      }
+      
+      // Expand allPlanDeckIds to include roots and descendants before membership check
+      const expandedPlanCheck = new Set<string>();
+      for (const id of Array.from(allPlanDeckIds)) {
+        expandedPlanCheck.add(id);
+        expandedPlanCheck.add(findRootAncestorId(allDecks ?? [], id));
+        const descs = collectDescendantIds(allDecks ?? [], id);
+        for (const d of descs) expandedPlanCheck.add(d);
+      }
+
+      if (deckIds.some(id => expandedPlanCheck.has(id))) {
+        // Expand plan deck IDs to include roots AND descendants for counting
+        const expandedPlanDeckIds = new Set<string>();
+        for (const id of Array.from(allPlanDeckIds)) {
+          expandedPlanDeckIds.add(id);
+          // Include root ancestor to count cards on root
+          const rootId = findRootAncestorId(allDecks ?? [], id);
+          expandedPlanDeckIds.add(rootId);
+          // Include descendants
+          const descs = collectDescendantIds(allDecks ?? [], id);
+          for (const d of descs) expandedPlanDeckIds.add(d);
+        }
+
+        // Count new cards across expanded decks, aggregate by root
+        const { data: newCounts } = await supabase
+          .from('cards')
+          .select('deck_id')
+          .in('deck_id', Array.from(expandedPlanDeckIds))
+          .eq('state', 0);
+        
+        const newPerRoot: Record<string, number> = {};
+        for (const c of (newCounts ?? []) as any[]) {
+          const rootId = findRootAncestorId(allDecks ?? [], c.deck_id);
+          newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
+        }
+
+        // Use shared allocation function
+        const allocation = computeNewCardAllocation({
+          globalBudget: globalLimit,
+          plans: (plansData as any[]).map((p: any) => ({
+            id: p.deck_ids?.join(',') ?? '',
+            deck_ids: p.deck_ids ?? [],
+            target_date: p.target_date,
+            priority: p.priority ?? 0,
+          })),
+          newPerRoot,
+          findRoot: (id: string) => findRootAncestorId(allDecks ?? [], id),
+        });
+
+        // Sum allocation for this session's deck roots (deduplicated)
+        const seenSessionRoots = new Set<string>();
+        const totalForSession = deckIds.reduce((s, id) => {
+          const rootId = findRootAncestorId(allDecks ?? [], id);
+          if (seenSessionRoots.has(rootId)) return s;
+          seenSessionRoots.add(rootId);
+          return s + (allocation.perDeck[rootId] ?? 0);
+        }, 0);
+        if (totalForSession > 0) {
+          planNewLimit = totalForSession;
+        }
+      }
+    }
+  }
+
+  // When a plan is active, plan allocation governs completely (ignores deck's manual limit)
+  const baseNewLimit = planNewLimit != null
+    ? planNewLimit
+    : newLimit;
+  const effectiveNewLimit = Math.max(0, baseNewLimit - newReviewedToday);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);

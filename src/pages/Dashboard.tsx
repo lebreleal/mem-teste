@@ -5,12 +5,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, lazy, Suspense, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import DeckCarousel from '@/components/dashboard/DeckCarousel';
+import { useDecks } from '@/hooks/useDecks';
+
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -32,6 +33,7 @@ import DeckList from '@/components/dashboard/DeckList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
+import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,51 +44,34 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const state = useDashboardState();
+  const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
+  // deckNewAllocation is already keyed by root IDs from useStudyPlan
+  const state = useDashboardState(metrics?.deckNewAllocation);
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
-  const { plans, allDeckIds, avgSecondsPerCard } = useStudyPlan();
+  const { decks: allDecks } = useDecks();
 
-  // Helper: find root ancestor of a deck
-  const getRootId = useCallback((deckId: string): string | null => {
-    const d = state.decks.find(x => x.id === deckId);
-    if (!d) return null;
-    if (!d.parent_deck_id) return d.id;
-    return getRootId(d.parent_deck_id);
-  }, [state.decks]);
-
-  // Build plansByDeckId map: rootDeckId -> highest priority objective name
+  // Carousel helpers
+  const hasPlan = plans.length > 0;
+  const planDeckIds = allDeckIds;
+  const planDeckOrder = useMemo(() => {
+    return plans.flatMap(p => p.deck_ids ?? []);
+  }, [plans]);
   const plansByDeckId = useMemo(() => {
     const map: Record<string, string> = {};
-    if (!plans.length || !state.decks.length) return map;
-    for (const plan of plans) {
-      for (const deckId of (plan.deck_ids ?? [])) {
-        const rootId = getRootId(deckId);
-        if (rootId && !map[rootId]) {
-          map[rootId] = plan.name;
-        }
+    for (const p of plans) {
+      for (const id of (p.deck_ids ?? [])) {
+        if (!map[id]) map[id] = p.name;
       }
     }
     return map;
-  }, [plans, state.decks, getRootId]);
-
-  // Build planDeckOrder: ordered list of root deck IDs by objective priority then deck order within objective
-  const planDeckOrder = useMemo(() => {
-    if (!plans.length || !state.decks.length) return [] as string[];
-    const order: string[] = [];
-    const seen = new Set<string>();
-    for (const plan of plans) {
-      for (const deckId of (plan.deck_ids ?? [])) {
-        const rootId = getRootId(deckId);
-        if (rootId && !seen.has(rootId)) {
-          seen.add(rootId);
-          order.push(rootId);
-        }
-      }
-    }
-    return order;
-  }, [plans, state.decks, getRootId]);
-
+  }, [plans]);
+  const getRootId = useCallback((deckId: string): string | null => {
+    const d = (allDecks ?? []).find(x => x.id === deckId);
+    if (!d) return null;
+    if (!d.parent_deck_id) return d.id;
+    return getRootId(d.parent_deck_id);
+  }, [allDecks]);
   // Handle payment return
   useEffect(() => {
     const payment = searchParams.get('payment');
@@ -306,17 +291,19 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Deck Carousel - Today's study cards */}
-        {!state.isLoading && state.decks.length > 0 && (
+        {/* Study deck carousel */}
+        {allDecks && allDecks.length > 0 && (
           <DeckCarousel
-            decks={state.decks}
+            decks={allDecks}
             avgSecondsPerCard={avgSecondsPerCard}
-            hasPlan={plans.length > 0}
-            planDeckIds={allDeckIds}
+            hasPlan={hasPlan}
+            planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
+            planAllocation={metrics?.deckNewAllocation}
           />
         )}
+
 
         <DashboardActions
           currentFolderId={state.currentFolderId}

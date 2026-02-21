@@ -1,141 +1,90 @@
 
 
-# Alinhar Estados dos Cards com o Padrao Anki
+# Corrigir Alocacao de Cards Novos: Unificar Logica e Eliminar Divergencias
 
-## Situacao Atual vs Anki
+## Problema Central
 
-```text
-+-------------------+------------------+------------------+
-| Conceito          | Anki oficial     | Seu app hoje     |
-+-------------------+------------------+------------------+
-| Nunca visto       | type 0 (New)     | state 0 (New)    |
-| Aprendendo 1a vez | type 1 (Learning)| state 1          |
-| Esqueceu/errando  | type 3 (Relearn) | state 1 (mesma!) |
-| Revisao programada| type 2 (Review)  | state 2          |
-| Jovem (ivl < 21d) | derivado         | nao existe       |
-| Maduro (ivl >=21d)| derivado         | nao existe       |
-| Suspenso          | queue -1         | scheduled > 50y  |
-| Enterrado         | queue -2/-3      | nao existe       |
-+-------------------+------------------+------------------+
-```
+A logica de alocacao de cards novos por dia esta DUPLICADA em dois arquivos independentes:
+- `src/hooks/useStudyPlan.ts` (calcula para exibicao no dashboard/plano)
+- `src/services/studyService.ts` (calcula para a fila de estudo real)
 
-O principal bug: quando um card dominado (state 2) recebe "Errei", ele volta para `state: 1`. No Anki, isso seria `type: 3` (Relearning). Misturar os dois no mesmo state distorce completamente os tempos medios.
+Esses dois caminhos usam fontes de dados diferentes (RPC `get_all_user_deck_stats` vs query direta na tabela `cards`) e podem divergir, causando o bug onde o display mostra um numero mas a fila entrega outro.
 
-## Plano de Mudancas
+## Dados Verificados
 
-### 1. Adicionar state 3 (Reaprendendo)
+**Perfil 06cfa099** (Histologia + Fisiopatologia):
+- Budget global: 50 cards/dia
+- Histologia (root a9c13602): 243 cards novos
+- Fisiopatologia (root b651b080): 320 cards novos
+- Alocacao esperada: ~22 Histo + ~28 Fisiopato = 50
 
-Mudar o codigo FSRS e SM2 para que quando um card de revisao (state 2) recebe rating 1 ("Again"), ele va para **state 3** em vez de state 1.
+**Perfil 73ac68a8** (Psiquiatria + Urgencia + Ginecologia):
+- Budget global: 40 cards/dia
+- Psiquiatria: 90 novos, Urgencia: 8 novos, Ginecologia: 325 novos
+- Alocacao esperada: ~9 + ~2 + ~29 = 40
 
-**Arquivo: `src/lib/fsrs.ts`**
-- Linha 157: mudar `state: 1` para `state: 3` no bloco "Again para relearning"
-- Atualizar a interface `FSRSOutput` para documentar state 3
+## Solucao: Extrair Logica Compartilhada
 
-**Arquivo: `src/lib/sm2.ts`**
-- Mesma mudanca: quando card de revisao erra, vai para state 3
+### Passo 1: Criar funcao pura de alocacao em `src/lib/studyUtils.ts`
 
-### 2. Tratar state 3 como "em aprendizado" no agendamento
-
-O state 3 se comporta igual ao state 1 para fins de agendamento (usa relearning steps), mas e categorizado separadamente para estatisticas.
-
-**Arquivo: `src/lib/fsrs.ts`**
-- Adicionar bloco `if (card.state === 3)` que reutiliza a logica do state 1 mas com relearningSteps prioritariamente
-
-**Arquivo: `src/hooks/useStudySession.ts`** (e qualquer lugar que filtra state === 1)
-- Onde filtra "cards em aprendizado", incluir state 1 **ou** state 3
-
-### 3. Atualizar a query de fila de estudo
-
-Todos os lugares que fazem `state = 1` precisam incluir `state IN (1, 3)`:
-- RPCs do banco (`get_all_user_deck_stats`, `get_deck_stats`, `get_plan_metrics`)
-- Queries no frontend que filtram por state
-
-**Nova migration SQL:**
-- Atualizar as RPCs para tratar state 3 como "em aprendizado" nas contagens
-- Cards existentes com state 1 que na verdade sao relearning continuam funcionando (retrocompativel pois state 1 e 3 sao tratados igual no agendamento)
-
-### 4. Atualizar nomenclatura e categorias no app
-
-Em vez dos nomes atuais, usar:
+Extrair a logica de alocacao proporcional para uma funcao pura reutilizavel:
 
 ```text
-+-------------------+------------------+-------------------------+
-| State             | Nome no app      | Tempo medio (simulador) |
-+-------------------+------------------+-------------------------+
-| 0 (New)           | Novos            | ~30s (1a vez vendo)     |
-| 1 (Learning)      | Aprendendo       | ~15s (passos iniciais)  |
-| 3 (Relearning)    | Reaprendendo     | ~12s (erraram, voltando)|
-| 2 (Review)        | Em revisao       | ~8s (agendados)         |
-| 2 + ivl >= 21d    | Maduros          | derivado, nao precisa   |
-| frozen            | Congelados       | ja existe               |
-+-------------------+------------------+-------------------------+
+function computeNewCardAllocation(params: {
+  globalBudget: number;
+  plans: { id: string; deck_ids: string[]; target_date: string | null; priority: number }[];
+  newPerRoot: Record<string, number>;  // cards novos por root ID
+  findRoot: (id: string) => string;
+}): { perDeck: Record<string, number>; perPlan: Record<string, number> }
 ```
 
-**Arquivo: `src/components/study-plan/PlanComponents.tsx`**
-- Grafico mostra 4 categorias: Novos, Aprendendo, Reaprendendo, Em revisao
-- Cores distintas para cada uma
+Esta funcao:
+- Recebe dados ja processados (sem dependencia de Supabase)
+- Calcula pesos por root (urgencia = remaining / daysLeft)
+- Distribui budget proporcionalmente com piso minimo de 5%
+- Deduplica roots compartilhados entre planos (globalClaimedRoots)
+- Retorna tanto alocacao por deck (root) quanto por plano
 
-**Arquivo: `src/components/deck-detail/CardList.tsx`** e `DeckDetailContext.tsx`
-- Filtros de estado incluem: Novos, Aprendendo, Reaprendendo, Em revisao, Congelados
+### Passo 2: Atualizar `useStudyPlan.ts`
 
-### 5. Corrigir calculo de tempo no simulador
+Substituir a logica inline (linhas 322-390) pela chamada da funcao compartilhada, passando `perDeckNewCounts` do RPC.
 
-**Nova migration SQL (update da RPC `get_forecast_params`):**
+### Passo 3: Atualizar `studyService.ts`
 
-```sql
-'timing', (
-  SELECT jsonb_build_object(
-    'avg_new_seconds',        COALESCE(AVG(dur) FILTER (WHERE pre_state = 0), 30),
-    'avg_learning_seconds',   COALESCE(AVG(dur) FILTER (WHERE pre_state = 1), 15),
-    'avg_relearning_seconds', COALESCE(AVG(dur) FILTER (WHERE pre_state = 3), 12),
-    'avg_review_seconds',     COALESCE(AVG(dur) FILTER (WHERE pre_state = 2), 8)
-  )
-  FROM (...)
-)
+Substituir a logica inline (linhas 152-219) pela mesma funcao compartilhada, passando `newPerRoot` da query direta. Garantir que:
+- `expandedPlanDeckIds` inclui roots dos deck IDs do plano (nao apenas descendentes)
+- A contagem de cards novos agrega corretamente por root incluindo o proprio root
+
+### Passo 4: Corrigir contagem de cards novos no `studyService.ts`
+
+Bug sutil: quando o plano seleciona sub-decks mas NAO o root, a `expandedPlanDeckIds` (linha 144-150) expande a partir de `allPlanDeckIds` sem incluir os roots. Isso faz com que cards diretamente no root nao sejam contados no `newPerRoot`.
+
+Correcao: ao expandir para contagem, incluir tambem os roots dos IDs do plano:
+
+```text
+const expandedPlanDeckIds = new Set<string>();
+for (const id of Array.from(allPlanDeckIds)) {
+  expandedPlanDeckIds.add(id);
+  // Incluir root ancestor para contar cards no root
+  const rootId = findRootAncestorId(allDecks ?? [], id);
+  expandedPlanDeckIds.add(rootId);
+  // Incluir descendentes
+  const descs = collectDescendantIds(allDecks ?? [], id);
+  for (const d of descs) expandedPlanDeckIds.add(d);
+}
 ```
 
-Porem como os `review_logs` atuais NAO salvam o state do card no momento da revisao, precisamos:
+## Resumo de Arquivos
 
-**Arquivo: migration SQL** -- adicionar coluna `state` na tabela `review_logs`:
-```sql
-ALTER TABLE review_logs ADD COLUMN state integer DEFAULT NULL;
-```
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/lib/studyUtils.ts` | Adicionar `computeNewCardAllocation()` - funcao pura compartilhada |
+| `src/hooks/useStudyPlan.ts` | Substituir logica inline pela funcao compartilhada |
+| `src/services/studyService.ts` | Substituir logica inline pela funcao compartilhada + fix da expansao de IDs |
 
-A partir de agora, cada review salva o state do card antes da revisao. Para dados historicos, usamos a heuristica do numero de revisoes anteriores como fallback.
+## Resultado Esperado
 
-### 6. Atualizar o worker do simulador
-
-**Arquivo: `src/workers/forecastWorker.ts`**
-- Adicionar state 3 no `SimCard`
-- Quando um card de revisao (state 2) recebe rating 1, vai para state 3
-- Categorias de tempo separadas: novo, aprendendo, reaprendendo, em revisao
-- O `ForecastPoint` ganha campo `relearningCards` e `relearningMin`
-
-**Arquivo: `src/types/forecast.ts`**
-- Adicionar `relearningCards`, `relearningMin` ao `ForecastPoint`
-- Adicionar `avg_relearning_seconds` ao `ForecastTiming`
-
-### 7. Sobre "Suspenso" e "Enterrado"
-
-- **Suspenso/Congelado**: ja existe no app (scheduled_date > 50 anos). Funciona bem, nao precisa mudar.
-- **Enterrado (Buried)**: conceito do Anki para esconder temporariamente irmaos (siblings) de um card no mesmo dia. Isso e mais relevante para decks com muitos clozes. Pode ser implementado no futuro mas nao e prioridade agora.
-
-## Resumo de impacto
-
-- **Retrocompativel**: cards existentes com state 1 continuam funcionando (o agendamento trata 1 e 3 igual)
-- **Dados historicos**: a RPC usa heuristica para dados antigos sem o campo `state` nos logs
-- **Simulador mais preciso**: 4 categorias de tempo em vez de 3
-- **Nomenclatura clara**: alinhada com o padrao Anki que os usuarios ja conhecem
-
-## Arquivos modificados
-
-- `src/lib/fsrs.ts` -- state 3 no bloco "Again"
-- `src/lib/sm2.ts` -- state 3 no bloco "Again"
-- `src/hooks/useStudySession.ts` -- incluir state 3 nas queries
-- `src/hooks/useCards.ts` -- incluir state 3
-- `src/components/study-plan/PlanComponents.tsx` -- 4 categorias
-- `src/components/deck-detail/CardList.tsx` -- filtro Reaprendendo
-- `src/components/deck-detail/DeckDetailContext.tsx` -- filtro state 3
-- `src/workers/forecastWorker.ts` -- state 3 + 4 tempos
-- `src/types/forecast.ts` -- novos campos
-- Nova migration SQL -- coluna `state` em review_logs + update RPCs
+1. Display e fila de estudo usam EXATAMENTE a mesma logica de alocacao
+2. Qualquer perfil com qualquer combinacao de objetivos/decks/subdecks recebe alocacao consistente
+3. Budget global sempre respeitado (soma das alocacoes = daily_new_cards_limit)
+4. Correcoes aplicadas uma unica vez na funcao compartilhada beneficiam ambos os caminhos
