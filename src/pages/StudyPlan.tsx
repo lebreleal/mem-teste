@@ -1005,14 +1005,14 @@ const StudyPlan = () => {
                 newMin={metrics.newMinutes}
               />
 
-              {needsAttention && metrics.totalReview > 0 && (
+              {metrics.totalReview > 0 && (
                 <Button
                   className="w-full" size="sm"
-                  variant={healthStatus === 'red' ? 'destructive' : 'default'}
+                  variant={healthStatus === 'red' || healthStatus === 'orange' ? 'destructive' : 'outline'}
                   onClick={() => setShowCatchUp(true)}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Resolver Atraso ({metrics.totalReview} revisões)
+                  {metrics.totalReview} revisões atrasadas
                 </Button>
               )}
             </CardContent>

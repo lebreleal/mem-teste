@@ -304,8 +304,8 @@ const Dashboard = () => {
           />
         )}
 
-        {/* Backlog banner */}
-        {metrics && metrics.totalReview > 0 && (
+        {/* Backlog banner - only show if plan has overdue reviews */}
+        {metrics && metrics.totalReview > 0 && plans.length > 0 && (
           <button
             onClick={() => navigate('/plano')}
             className="w-full mb-4 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex items-center gap-3 transition-colors hover:bg-amber-100/80 dark:hover:bg-amber-950/50 text-left"
@@ -318,7 +318,7 @@ const Dashboard = () => {
                 {metrics.totalReview} revisões atrasadas
               </p>
               <p className="text-[11px] text-amber-700/80 dark:text-amber-400/70">
-                Redistribua em dias ou resete cards antigos
+                Toque para gerenciar no seu plano de estudos
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
