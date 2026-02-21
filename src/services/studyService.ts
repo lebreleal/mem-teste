@@ -107,7 +107,84 @@ export async function fetchStudyQueue(
     }
   }
 
-  const effectiveNewLimit = Math.max(0, newLimit - newReviewedToday);
+  // Fetch plan allocation for smart new card distribution
+  let planNewLimit: number | undefined;
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('daily_new_cards_limit')
+    .eq('id', userId)
+    .single();
+
+  {
+    const globalLimit = (profileData as any)?.daily_new_cards_limit ?? 30;
+    // Fetch all study plans to compute allocation
+    const { data: plansData } = await supabase
+      .from('study_plans')
+      .select('deck_ids, target_date, priority')
+      .eq('user_id', userId)
+      .order('priority', { ascending: true });
+    
+    if (plansData && plansData.length > 0) {
+      // Check if this deck belongs to any plan
+      const allPlanDeckIds = new Set<string>();
+      for (const p of plansData as any[]) {
+        for (const id of (p.deck_ids ?? [])) allPlanDeckIds.add(id);
+      }
+      
+      if (deckIds.some(id => allPlanDeckIds.has(id))) {
+        // Count new cards per deck in plans
+        const { data: newCounts } = await supabase
+          .from('cards')
+          .select('deck_id')
+          .in('deck_id', Array.from(allPlanDeckIds))
+          .eq('state', 0);
+        
+        const newPerDeck: Record<string, number> = {};
+        for (const c of (newCounts ?? []) as any[]) {
+          newPerDeck[c.deck_id] = (newPerDeck[c.deck_id] ?? 0) + 1;
+        }
+
+        // Calculate weights: newRemaining / daysLeft
+        const weights: Record<string, number> = {};
+        for (const p of plansData as any[]) {
+          const daysLeft = p.target_date
+            ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
+            : 90;
+          for (const did of (p.deck_ids ?? []) as string[]) {
+            if (weights[did] != null) continue;
+            const remaining = newPerDeck[did] ?? 0;
+            if (remaining === 0) continue;
+            weights[did] = remaining / daysLeft;
+          }
+        }
+
+        const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0);
+        if (totalWeight > 0) {
+          // Find allocation for the current deck(s)
+          let budgetRemaining = globalLimit;
+          const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
+          const allocation: Record<string, number> = {};
+          for (const [did, w] of sorted) {
+            if (budgetRemaining <= 0) { allocation[did] = 0; continue; }
+            const share = Math.max(1, Math.round(globalLimit * (w / totalWeight)));
+            const capped = Math.min(share, budgetRemaining);
+            allocation[did] = capped;
+            budgetRemaining -= capped;
+          }
+          // Sum allocation for all deckIds in this study session
+          const totalForSession = deckIds.reduce((s, id) => s + (allocation[id] ?? 0), 0);
+          if (totalForSession > 0) {
+            planNewLimit = totalForSession;
+          }
+        }
+      }
+    }
+  }
+
+  const baseNewLimit = planNewLimit != null
+    ? Math.min(newLimit, planNewLimit)
+    : newLimit;
+  const effectiveNewLimit = Math.max(0, baseNewLimit - newReviewedToday);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);

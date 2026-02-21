@@ -42,7 +42,23 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     staleTime: 5 * 60_000,
   });
 
-  const defaultNewCardsPerDay = 30;
+  // Fetch daily_new_cards_limit from profile
+  const profileLimitQuery = useQuery({
+    queryKey: ['daily-new-cards-limit', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('daily_new_cards_limit')
+        .eq('id', userId!)
+        .single();
+      if (error) throw error;
+      return (data as any)?.daily_new_cards_limit as number ?? 30;
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+  });
+
+  const defaultNewCardsPerDay = profileLimitQuery.data ?? 30;
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
   const defaultCreatedCardsPerDay = 0;

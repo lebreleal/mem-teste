@@ -568,7 +568,7 @@ const StudyPlan = () => {
   const { toast } = useToast();
   const {
     plans, allDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
-    calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, reorderObjectives,
+    calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
   const { isPremium } = useSubscription();
@@ -1074,6 +1074,39 @@ const StudyPlan = () => {
                 reviewMin={metrics.reviewMinutes}
                 newMin={metrics.newMinutes}
               />
+
+              {/* Daily new cards limit */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3" />
+                    Cards novos por dia
+                  </span>
+                  <span className="text-sm font-bold tabular-nums">{globalCapacity.dailyNewCardsLimit}</span>
+                </div>
+                <Slider
+                  value={[globalCapacity.dailyNewCardsLimit]}
+                  min={0}
+                  max={100}
+                  step={5}
+                  onValueCommit={(v) => {
+                    updateNewCardsLimit.mutateAsync(v[0]);
+                  }}
+                />
+                {metrics.deckNewAllocation && Object.keys(metrics.deckNewAllocation).length > 1 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {plans.map(p => {
+                      const alloc = metrics.newCardsAllocation[p.id] ?? 0;
+                      if (alloc === 0) return null;
+                      return (
+                        <Badge key={p.id} variant="outline" className="text-[9px] h-4 px-1.5 font-normal">
+                          {p.name}: {alloc}/dia
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               {needsAttention && (
                 <Button
                   className="w-full" size="sm"
