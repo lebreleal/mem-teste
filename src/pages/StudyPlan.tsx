@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, BookOpen, Clock, Target, CalendarIcon, Plus, GripVertical,
@@ -61,6 +62,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
 }) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [overdueCount, setOverdueCount] = useState<number | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -98,7 +100,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
     
     const { error } = await supabase
       .from('cards')
-      .update({ state: 0, stability: 0, difficulty: 0 } as any)
+      .update({ state: 0, stability: 0, difficulty: 0, scheduled_date: new Date().toISOString() } as any)
       .in('deck_id', allDeckIds)
       .eq('state', 2)
       .lt('scheduled_date', cutoff.toISOString());
@@ -110,6 +112,12 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
     if (error) {
       toast({ title: 'Erro ao resetar cards', description: error.message, variant: 'destructive' });
     } else {
+      // Invalidate relevant queries so dashboard updates
+      qc.invalidateQueries({ queryKey: ['plan-metrics'] });
+      qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
+      qc.invalidateQueries({ queryKey: ['study-queue'] });
+      qc.invalidateQueries({ queryKey: ['decks'] });
+      qc.invalidateQueries({ queryKey: ['deck-stats'] });
       toast({ title: `${overdueCount} cards resetados`, description: 'Eles voltaram ao estado "novo" e serão reapresentados gradualmente.' });
     }
   };
@@ -867,6 +875,42 @@ const StudyPlan = () => {
                 )}
               </div>
 
+              {/* Feasibility warning */}
+              {targetDate && selectedDeckIds.length > 0 && (() => {
+                const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
+                  const deck = activeDecks.find(d => d.id === id);
+                  return sum + (deck?.new_count ?? 0);
+                }, 0);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
+                const budget = globalCapacity.dailyNewCardsLimit;
+                const minDaysNeeded = Math.ceil(selectedNewCards / budget);
+                const isImpossible = daysLeft < minDaysNeeded;
+                const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
+                if (!isImpossible && !isTight) return null;
+                const suggestedDate = new Date(today);
+                suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
+                return (
+                  <div className={cn(
+                    'rounded-lg border p-3 space-y-1',
+                    isImpossible
+                      ? 'border-destructive/50 bg-destructive/5'
+                      : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
+                  )}>
+                    <p className={cn('text-xs font-semibold', isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
+                      {isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Com {budget} novos cards/dia e {selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{minDaysNeeded} dias</strong>.
+                      {isImpossible && <> A data selecionada ({daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}) é insuficiente.</>}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      📅 Data mínima viável: <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong>
+                    </p>
+                  </div>
+                );
+              })()}
+
               <Button className="w-full" size="lg" disabled={selectedDeckIds.length === 0} onClick={() => setStep(2)}>
                 Continuar
               </Button>
@@ -1192,6 +1236,26 @@ const StudyPlan = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Infeasible badge */}
+                    {hasTarget && (() => {
+                      const pNewCards = (p.deck_ids ?? []).reduce((sum, id) => {
+                        const deck = activeDecks.find(d => d.id === id);
+                        return sum + (deck?.new_count ?? 0);
+                      }, 0);
+                      const today = new Date(); today.setHours(0, 0, 0, 0);
+                      const dLeft = Math.max(1, Math.ceil((new Date(p.target_date!).getTime() - today.getTime()) / 86400000));
+                      const needed = Math.ceil(pNewCards / dLeft);
+                      const budget = globalCapacity.dailyNewCardsLimit;
+                      if (needed > budget) {
+                        return (
+                          <Badge variant="destructive" className="text-[9px] h-4 px-1.5 shrink-0">
+                            Meta inviável
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     <div className="flex items-center gap-0.5 shrink-0">
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); startEdit(p); }}>

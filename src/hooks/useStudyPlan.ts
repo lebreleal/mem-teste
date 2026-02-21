@@ -305,14 +305,28 @@ export function useStudyPlan() {
 
     const totalWeight = deckWeights.reduce((s, d) => s + d.weight, 0);
     if (totalWeight > 0) {
-      let remaining = globalNewBudget;
+      const minShare = Math.max(1, Math.ceil(globalNewBudget * 0.05));
       const sorted = [...deckWeights].sort((a, b) => b.weight - a.weight);
-      for (const { deckId, weight } of sorted) {
-        if (remaining <= 0) { deckNewAllocation[deckId] = 0; continue; }
-        const share = Math.max(1, Math.round(globalNewBudget * (weight / totalWeight)));
-        const capped = Math.min(share, remaining);
-        deckNewAllocation[deckId] = capped;
-        remaining -= capped;
+      // First pass: calculate raw shares with minimum floor
+      let totalAllocated = 0;
+      for (const { deckId, weight, newCount } of sorted) {
+        const rawShare = Math.max(1, Math.round(globalNewBudget * (weight / totalWeight)));
+        const floored = Math.max(minShare, rawShare);
+        const cappedToNew = Math.min(floored, newCount); // never exceed actual new cards
+        deckNewAllocation[deckId] = cappedToNew;
+        totalAllocated += cappedToNew;
+      }
+      // Second pass: if total exceeds budget, trim from the largest
+      if (totalAllocated > globalNewBudget) {
+        let excess = totalAllocated - globalNewBudget;
+        for (const { deckId } of sorted) {
+          if (excess <= 0) break;
+          const current = deckNewAllocation[deckId];
+          const canTrim = Math.max(0, current - minShare);
+          const trim = Math.min(canTrim, excess);
+          deckNewAllocation[deckId] = current - trim;
+          excess -= trim;
+        }
       }
     }
 

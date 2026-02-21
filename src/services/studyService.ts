@@ -160,16 +160,29 @@ export async function fetchStudyQueue(
 
         const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0);
         if (totalWeight > 0) {
-          // Find allocation for the current deck(s)
-          let budgetRemaining = globalLimit;
+          const minShare = Math.max(1, Math.ceil(globalLimit * 0.05));
           const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
           const allocation: Record<string, number> = {};
+          let totalAllocated = 0;
+          // First pass: raw shares with minimum floor
           for (const [did, w] of sorted) {
-            if (budgetRemaining <= 0) { allocation[did] = 0; continue; }
-            const share = Math.max(1, Math.round(globalLimit * (w / totalWeight)));
-            const capped = Math.min(share, budgetRemaining);
-            allocation[did] = capped;
-            budgetRemaining -= capped;
+            const rawShare = Math.max(1, Math.round(globalLimit * (w / totalWeight)));
+            const floored = Math.max(minShare, rawShare);
+            const cappedToNew = Math.min(floored, newPerDeck[did] ?? 0);
+            allocation[did] = cappedToNew;
+            totalAllocated += cappedToNew;
+          }
+          // Second pass: trim excess from largest
+          if (totalAllocated > globalLimit) {
+            let excess = totalAllocated - globalLimit;
+            for (const [did] of sorted) {
+              if (excess <= 0) break;
+              const current = allocation[did];
+              const canTrim = Math.max(0, current - minShare);
+              const trim = Math.min(canTrim, excess);
+              allocation[did] = current - trim;
+              excess -= trim;
+            }
           }
           // Sum allocation for all deckIds in this study session
           const totalForSession = deckIds.reduce((s, id) => s + (allocation[id] ?? 0), 0);
