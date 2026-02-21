@@ -40,14 +40,14 @@ Deno.serve(async (req) => {
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
 
     let prompt: string;
-    let maxTokens = 200;
+    let maxTokens = 8000;
     if (action === "explain-mc") {
       const optionsList = (mcOptions || []).map((opt: string, i: number) => `${i === correctIndex ? "✅" : "❌"} ${String.fromCharCode(65 + i)}) ${opt}`).join("\n");
-      prompt = `Você é um tutor educacional. O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nExplique:\n1. Por que a resposta correta está certa (1-2 frases)\n2. Por que CADA alternativa incorreta está errada (1 frase cada)\n\nResponda na mesma língua da pergunta. Seja conciso.`;
-      maxTokens = 500;
+      prompt = `O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## ✅ Resposta Correta\nExplique por que a alternativa correta está certa (2-3 frases detalhadas).\n\n---\n\n## ❌ Alternativas Incorretas\nPara CADA alternativa incorreta, crie um sub-tópico:\n\n### Alternativa X)\nExplique por que está errada (1-2 frases).\n\n---\n\n## 💡 Dica de Estudo\nUma dica prática para lembrar a resposta correta.\n\nResponda na mesma língua da pergunta. Use parágrafos bem separados.`;
+      maxTokens = 8000;
     } else if (action === "explain") {
-      prompt = `Você é um professor universitário experiente. O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nResponda nesta estrutura:\n1. **Referência utilizada**: Informe a referência acadêmica que você usou para elaborar esta explicação (1-2 livros ou fontes clássicas da área). Escreva no formato: "Baseado em: [Nome do livro/autor]". Não sugira leitura — afirme que foi a fonte consultada.\n2. **Explicação**: Explique o conceito de forma didática e completa, como se estivesse dando aula particular. Use analogias e exemplos práticos.\n3. **Conexão com o card**: Relacione sua explicação diretamente com a pergunta/resposta do card.\n\nResponda na mesma língua do card. Seja completo, didático e claro, tudo pra conseguir entender o conteúdo do baralho, pois às vezes precisamos saber um conteúdo chave antes de conseguir entender o conteúdo.`;
-      maxTokens = 800;
+      prompt = `O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## 📚 Referência\nInforme a referência acadêmica consultada (1-2 livros ou fontes clássicas da área).\nFormato: "Baseado em: [Nome do livro/autor]"\n\n---\n\n## 📖 Explicação\nExplique o conceito de forma didática e completa, como uma aula particular.\n- Use analogias e exemplos práticos\n- Separe em parágrafos distintos\n- Destaque termos-chave em **negrito**\n- Se relevante, use listas para organizar sub-conceitos\n\n---\n\n## 🔗 Conexão com o Card\nRelacione a explicação diretamente com a pergunta/resposta do card, mostrando como o conceito se aplica.\n\nResponda na mesma língua do card. Seja completo, didático e claro. Use parágrafos bem separados com espaçamento entre seções.`;
+      maxTokens = 8000;
     } else {
       if (promptConfig?.user_prompt_template) {
         prompt = promptConfig.user_prompt_template.replace("{{front}}", cleanFront).replace("{{backHint}}", cleanBack ? `(The answer is: ${cleanBack} - but DO NOT reveal this. Give a hint instead.)` : "");
@@ -56,8 +56,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    const antiPreamblePrompt = "Você é um tutor educacional direto e objetivo. PROIBIDO: saudações, elogios, preâmbulos, \"Olá\", \"Ótima pergunta\", \"Excelente iniciativa\". Vá direto ao conteúdo. Use Markdown para formatação.";
-    const systemPrompt = promptConfig?.system_prompt || antiPreamblePrompt;
+    const antiPreamblePrompt = `REGRAS OBRIGATÓRIAS (violação = falha):
+1. COMECE IMEDIATAMENTE pelo conteúdo. A PRIMEIRA palavra da resposta DEVE ser sobre o assunto.
+2. PROIBIDO TERMINANTEMENTE: "Olá", "Oi", "Que bom", "Ótima pergunta", "Excelente", "Legal que você", "Parabéns", "Fico feliz", qualquer saudação, elogio ou comentário sobre o aluno.
+3. PROIBIDO qualquer frase motivacional ou encorajamento como "continue assim", "você está no caminho certo", "boa sorte".
+4. NÃO faça preâmbulos. NÃO cumprimente. NÃO elogie. NÃO comente sobre a pergunta. VÁ DIRETO ao conteúdo.
+5. Use Markdown para formatação. Seja didático e completo.
+6. Você é um tutor educacional. Responda SOMENTE o conteúdo acadêmico solicitado.`;
+    // ALWAYS prepend anti-preamble rules, then append DB prompt if any
+    const dbPrompt = promptConfig?.system_prompt ? `\n\nInstruções adicionais:\n${promptConfig.system_prompt}` : '';
+    const systemPrompt = antiPreamblePrompt + dbPrompt;
 
     // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
     const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);

@@ -56,7 +56,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const [targetCardCount, setTargetCardCount] = useState(0);
 
   // Generation
-  const [genProgress, setGenProgress] = useState<GenProgress>({ current: 0, total: 0, creditsUsed: 0 });
+  const [genProgress, setGenProgress] = useState<GenProgress>({ current: 0, total: 0, creditsUsed: 0, startedAt: 0, lastBatchMs: 0, avgBatchMs: 0 });
 
   // Review
   const [cards, setCards] = useState<GeneratedCard[]>([]);
@@ -81,7 +81,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     setStep('upload'); setDeckName(''); setInputMode(null); setFileName(''); setRawText('');
     setPages([]); setLoadProgress({ current: 0, total: 0 });
     setDetailLevel('standard'); setCardFormats(['qa', 'cloze', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
-    setGenProgress({ current: 0, total: 0, creditsUsed: 0 });
+    setGenProgress({ current: 0, total: 0, creditsUsed: 0, startedAt: 0, lastBatchMs: 0, avgBatchMs: 0 });
     setCards([]); setEditingIdx(null);
     setIsLoading(false); setIsSaving(false);
     isBackgroundRef.current = false;
@@ -293,7 +293,10 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     }
 
     const totalBatches = textBatches.length;
-    setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0 });
+    const genStartedAt = Date.now();
+    let completedGroups = 0;
+    let totalGroupMs = 0;
+    setGenProgress({ current: 0, total: totalBatches, creditsUsed: 0, startedAt: genStartedAt, lastBatchMs: 0, avgBatchMs: 0 });
     const allCards: GeneratedCard[] = [];
 
     const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
@@ -305,6 +308,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
       const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
+      const groupStart = Date.now();
 
       const groupPromises = group.map((batch, gi) => {
         const batchIndex = i + gi;
@@ -348,8 +352,13 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         }
       }
 
+      const groupDuration = Date.now() - groupStart;
+      completedGroups++;
+      totalGroupMs += groupDuration;
+      const avgMs = Math.round(totalGroupMs / completedGroups);
+
       const completedBatches = Math.min(i + CONCURRENT_BATCHES, totalBatches);
-      const progress = { current: completedBatches, total: totalBatches, creditsUsed: totalEnergyCost };
+      const progress: GenProgress = { current: completedBatches, total: totalBatches, creditsUsed: totalEnergyCost, startedAt: genStartedAt, lastBatchMs: groupDuration, avgBatchMs: avgMs };
       setGenProgress(progress);
       if (isBackgroundRef.current && pendingIdRef.current) {
         updatePending(pendingIdRef.current, { progress: { current: completedBatches, total: totalBatches } });

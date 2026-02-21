@@ -3,7 +3,7 @@
  * History is lost on close. Uses the same ai-chat edge function.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Brain, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,9 +29,21 @@ interface StudyChatModalProps {
   onOpenChange: (open: boolean) => void;
   /** Optional context from the current card */
   cardContext?: { front: string; back: string };
+  /** External streaming response (e.g. from ai-tutor explain) shown as first assistant message */
+  streamingResponse?: string | null;
+  /** Whether the external streaming is still in progress */
+  isStreamingResponse?: boolean;
+  /** Called when the streaming response has been consumed into local messages */
+  onClearStreaming?: () => void;
+  /** When this key changes, messages are reset (e.g. card change) */
+  resetKey?: string | number;
+  /** Callback to inform parent whether the chat has messages */
+  onHasMessagesChange?: (has: boolean) => void;
+  /** Ref that parent can call to clear messages (for re-explain) */
+  clearRef?: MutableRefObject<(() => void) | null>;
 }
 
-const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps) => {
+const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, isStreamingResponse, onClearStreaming, resetKey, onHasMessagesChange, clearRef }: StudyChatModalProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { energy } = useEnergy();
@@ -44,19 +56,57 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
 
   const cost = getCost(BASE_COST);
 
-  // Reset messages when modal closes
+  // Only reset streaming state when modal closes (preserve messages)
   useEffect(() => {
     if (!open) {
-      setMessages([]);
-      setInput('');
       setIsStreaming(false);
     }
   }, [open]);
 
+  // Absorb external streaming response into local messages
+  const absorbedRef = useRef<string | null>(null);
+
+  // Reset messages when card changes (resetKey)
   useEffect(() => {
-    if (scrollRef.current) {
+    setMessages([]);
+    setInput('');
+    setIsStreaming(false);
+    absorbedRef.current = null;
+  }, [resetKey]);
+
+  // Expose clear function to parent via ref
+  useEffect(() => {
+    if (clearRef) {
+      clearRef.current = () => {
+        setMessages([]);
+        absorbedRef.current = null;
+      };
+    }
+  }, [clearRef]);
+
+  // Notify parent about messages state
+  useEffect(() => {
+    onHasMessagesChange?.(messages.length > 0);
+  }, [messages.length, onHasMessagesChange]);
+
+  useEffect(() => {
+    if (!open) return; // Don't reset absorbedRef on close - preserve tracking
+    if (streamingResponse && !isStreamingResponse && absorbedRef.current !== streamingResponse) {
+      // Streaming finished — append as a new assistant message (don't replace old ones)
+      absorbedRef.current = streamingResponse;
+      setMessages(prev => [...prev, { role: 'assistant', content: streamingResponse }]);
+      onClearStreaming?.();
+    }
+  }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
+
+  // Auto-scroll: only when user sends a new message (not on streaming updates)
+  const lastUserMsgCount = useRef(0);
+  useEffect(() => {
+    const userMsgCount = messages.filter(m => m.role === 'user').length;
+    if (scrollRef.current && userMsgCount > lastUserMsgCount.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    lastUserMsgCount.current = userMsgCount;
   }, [messages]);
 
   const handleSend = useCallback(async () => {
@@ -113,10 +163,11 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
       const decoder = new TextDecoder();
       let assistantContent = '';
       let textBuffer = '';
+      let streamDone = false;
 
       setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -132,7 +183,10 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
           if (!line.startsWith('data: ')) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') {
+            streamDone = true;
+            break;
+          }
 
           try {
             const parsed = JSON.parse(jsonStr);
@@ -152,6 +206,21 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
             textBuffer = line + '\n' + textBuffer;
             break;
           }
+        }
+      }
+
+      // Flush any remaining buffer content
+      if (textBuffer.trim()) {
+        const remaining = textBuffer.trim();
+        if (remaining.startsWith('data: ') && remaining.slice(6).trim() !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(remaining.slice(6).trim());
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m));
+            }
+          } catch {}
         }
       }
     } catch (e: any) {
@@ -200,12 +269,12 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.length === 0 && (
+            {messages.length === 0 && !streamingResponse && !isStreamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
                 <Brain className="h-10 w-10 mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
                 <p className="text-xs mt-1 leading-relaxed">O chat está contextualizado com o conteúdo do cartão que você está estudando</p>
-                <p className="text-[11px] mt-2 opacity-60">O histórico será perdido ao fechar</p>
+                <p className="text-[11px] mt-2 opacity-60">O histórico é mantido enquanto estiver neste card</p>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -217,7 +286,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
                 }`}>
                   {msg.role === 'assistant' ? (
                     msg.content ? (
-                      <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+                      <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     ) : (
@@ -233,6 +302,34 @@ const StudyChatModal = ({ open, onOpenChange, cardContext }: StudyChatModalProps
                 </div>
               </div>
             ))}
+            {/* Loading indicator when AI is thinking but no content yet */}
+            {isStreamingResponse && !streamingResponse && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
+                  <div className="flex items-center gap-2 py-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/60" />
+                    <span className="text-xs text-muted-foreground">Gerando explicação...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Live streaming response at the end */}
+            {streamingResponse && absorbedRef.current !== streamingResponse && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
+                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-3 [&_hr]:border-border/60 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
+                    <ReactMarkdown>{streamingResponse}</ReactMarkdown>
+                    {isStreamingResponse && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input */}

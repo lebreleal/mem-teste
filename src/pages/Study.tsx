@@ -60,6 +60,9 @@ const Study = () => {
   const [mcExplainResponse, setMcExplainResponse] = useState<string | null>(null);
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [explainInChat, setExplainInChat] = useState<string | false>(false);
+  const [chatHasMessages, setChatHasMessages] = useState(false);
+  const chatClearRef = useRef<(() => void) | null>(null);
 
   // Undo state: store the previous queue snapshot + reviewCount + card DB state
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -151,6 +154,14 @@ const Study = () => {
     };
   }, []);
 
+  // Open chat modal when first streaming content arrives for explain-in-chat
+  const activeStreamingResponse = explainInChat === 'explain-mc' ? mcExplainResponse : explainInChat === 'explain' ? explainResponse : null;
+  useEffect(() => {
+    if (explainInChat && activeStreamingResponse && !chatOpen) {
+      setChatOpen(true);
+    }
+  }, [explainInChat, activeStreamingResponse, chatOpen]);
+
   const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
     if (!currentCard || energy < TUTOR_COST) return;
     if (tutorAbortRef.current) tutorAbortRef.current.abort();
@@ -198,7 +209,8 @@ const Study = () => {
       let content = '';
       let textBuffer = '';
 
-      while (true) {
+      let streamDone = false;
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
         textBuffer += decoder.decode(value, { stream: true });
@@ -211,7 +223,7 @@ const Study = () => {
           if (line.startsWith(':') || line.trim() === '') continue;
           if (!line.startsWith('data: ')) continue;
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') { streamDone = true; break; }
           try {
             const parsed = JSON.parse(jsonStr);
             const delta = parsed.choices?.[0]?.delta?.content;
@@ -224,6 +236,25 @@ const Study = () => {
             textBuffer = line + '\n' + textBuffer;
             break;
           }
+        }
+      }
+
+      // Flush any remaining buffer
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              content += delta;
+              setter(content);
+            }
+          } catch { /* ignore partial leftovers */ }
         }
       }
 
@@ -491,6 +522,17 @@ const Study = () => {
             mcExplainResponse={mcExplainResponse}
             canUndo={!!undoSnapshot}
             onUndo={handleUndo}
+            onOpenExplainChat={(options) => {
+              const action = options?.action || 'explain';
+              // Reset response states
+              if (action === 'explain') setExplainResponse(null);
+              if (action === 'explain-mc') setMcExplainResponse(null);
+              setExplainInChat(action);
+              // Clear old messages for fresh explanation
+              chatClearRef.current?.();
+              // Don't open modal yet — it opens when content arrives (via useEffect)
+              handleTutorRequest(options || { action: 'explain' });
+            }}
             actions={
               <StudyCardActions
                 card={currentCard}
@@ -512,6 +554,7 @@ const Study = () => {
                   });
                 }}
                 onOpenChat={() => setChatOpen(true)}
+                chatHasMessages={chatHasMessages}
               />
             }
           />
@@ -523,6 +566,12 @@ const Study = () => {
           open={chatOpen}
           onOpenChange={setChatOpen}
           cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
+          streamingResponse={explainInChat ? activeStreamingResponse : undefined}
+          isStreamingResponse={explainInChat ? isTutorLoading : false}
+          onClearStreaming={() => setExplainInChat(false)}
+          resetKey={cardKey}
+          onHasMessagesChange={setChatHasMessages}
+          clearRef={chatClearRef}
         />
       </Suspense>
     </div>

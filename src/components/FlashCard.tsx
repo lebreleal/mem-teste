@@ -56,6 +56,8 @@ interface FlashCardProps {
   actions?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
+  /** Opens the chat modal with the explain streaming */
+  onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
 }
 
 interface MultipleChoiceData {
@@ -158,6 +160,7 @@ const MultipleChoiceCard = ({
   scheduledDate,
   canUndo,
   onUndo,
+  onOpenExplainChat,
 }: {
   frontContent: string;
   backContent: string;
@@ -178,6 +181,7 @@ const MultipleChoiceCard = ({
   scheduledDate: string;
   canUndo?: boolean;
   onUndo?: () => void;
+  onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -343,40 +347,6 @@ const MultipleChoiceCard = ({
               </div>
             </div>
           )}
-
-          {/* AI Subject Explanation (after answering) */}
-          {explainResponse && answered && (
-            <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <BookOpen className="h-4 w-4 text-primary" />
-                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação do Assunto</span>
-                {explainResponse && <TtsButton text={extractExplanationSection(explainResponse)} isStreaming={isTutorLoading} />}
-              </div>
-              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
-                  <ReactMarkdown>{explainResponse}</ReactMarkdown>
-                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* AI Alternatives Explanation (after answering) */}
-          {mcExplainResponse && answered && (
-            <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="font-display font-semibold text-primary text-xs uppercase tracking-wider">Explicação das Alternativas</span>
-                {mcExplainResponse && <TtsButton text={mcExplainResponse} isStreaming={isTutorLoading} />}
-              </div>
-              <div className="max-h-[40vh] overflow-y-auto scrollbar-hide">
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" style={{ overflowWrap: 'anywhere' }}>
-                  <ReactMarkdown>{mcExplainResponse}</ReactMarkdown>
-                  {isTutorLoading && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 align-middle rounded-sm" />}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -426,10 +396,10 @@ const MultipleChoiceCard = ({
           </div>
         ) : (
           <>
-            {/* Explain subject button */}
-            {onTutorRequest && !explainResponse && (
+            {/* Explain subject button — opens chat */}
+            {onOpenExplainChat && (
               <button
-                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onTutorRequest({ action: 'explain' }); }}
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain'); onOpenExplainChat({ action: 'explain' }); }}
                 disabled={!canUseTutor || isTutorLoading}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                   canUseTutor
@@ -437,14 +407,14 @@ const MultipleChoiceCard = ({
                     : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                 }`}
               >
-                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                {loadingAction === 'explain' && isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
               </button>
             )}
 
-            {/* Explain alternatives button */}
-            {onTutorRequest && !mcExplainResponse && (
+            {/* Explain alternatives button — opens chat */}
+            {onOpenExplainChat && (
               <button
-                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onTutorRequest({
+                onClick={() => { if (!canUseTutor) return; setLoadingAction('explain-mc'); onOpenExplainChat({
                   action: 'explain-mc',
                   mcOptions: mcData.options,
                   correctIndex: mcData.correctIndex,
@@ -487,7 +457,7 @@ const FlashCard = ({
   frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
-  canUndo, onUndo,
+  canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
   const [peekingFront, setPeekingFront] = useState(false);
@@ -545,6 +515,7 @@ const FlashCard = ({
         scheduledDate={scheduledDate}
         canUndo={canUndo}
         onUndo={onUndo}
+        onOpenExplainChat={onOpenExplainChat}
       />
     );
   }
@@ -717,8 +688,8 @@ const FlashCard = ({
             </div>
           )}
 
-          {/* Tutor explain response - show after flip */}
-          {explainResponse && flipped && (
+          {/* Tutor explain response - show after flip (only if no onOpenExplainChat, i.e. fallback) */}
+          {explainResponse && flipped && !onOpenExplainChat && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen className="h-4 w-4 text-primary" />
@@ -856,10 +827,10 @@ const FlashCard = ({
               </div>
             ) : (
               <>
-                {/* Explain button for basic/cloze/occlusion */}
-                {onTutorRequest && !explainResponse && (
+                {/* Explain button for basic/cloze/occlusion — opens chat modal */}
+                {onOpenExplainChat && (
                   <button
-                    onClick={() => canUseTutor ? onTutorRequest({ action: 'explain' }) : undefined}
+                    onClick={() => canUseTutor ? onOpenExplainChat({ action: 'explain' }) : undefined}
                     disabled={!canUseTutor || isTutorLoading}
                     className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] ${
                       canUseTutor
@@ -867,7 +838,7 @@ const FlashCard = ({
                         : 'border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                     }`}
                   >
-                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar assunto com IA</>}
+                    {isTutorLoading ? <TutorLoadingAnimation /> : <><BookOpen className="h-3.5 w-3.5" /> Explicar conteúdo</>}
                   </button>
                 )}
 

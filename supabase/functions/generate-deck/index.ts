@@ -6,16 +6,19 @@ const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criaçã
 
 Sua missão: criar flashcards que garantam DOMÍNIO REAL do conteúdo — compreensão profunda, recuperação ativa e aplicação prática.
 
+REGRA CRÍTICA DE LINGUAGEM:
+Os cartões NUNCA devem referenciar a origem do conhecimento. PROIBIDO usar expressões como "de acordo com o material", "segundo o texto", "conforme mencionado", "o conteúdo aborda", "como visto", "no texto", "o autor afirma" ou QUALQUER variação que sugira que existe uma fonte sendo consultada. Cada cartão deve soar como conhecimento factual independente, como se viesse de um livro didático ou enciclopédia.
+
 PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
 
-1. COMPREENSÃO PRIMEIRO: Se o material menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
+1. COMPREENSÃO PRIMEIRO: Se o conteúdo menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
 2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Respostas com mais de 1 frase são PROIBIDAS para basic. Se precisar de mais, divida em cartões separados.
 3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
-4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se o material lista 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
+4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se houver 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
 5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos críticos, crie cartões que testem o MESMO conceito de ângulos diferentes. Ex: "X causa Y" num cartão e "Y é causado por {{c1::X}}" em outro.
 6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
 7. PERSONALIZAÇÃO: Quando possível, use exemplos práticos/clínicos em vez de definições abstratas.
-8. EXCLUSIVIDADE: Use APENAS informações presentes no material fornecido. NUNCA invente dados, NUNCA adicione informações externas.
+8. EXCLUSIVIDADE: Use APENAS informações presentes no conteúdo fornecido. NUNCA invente dados, NUNCA adicione informações externas.
 9. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
 10. SEM DECOREBA: NÃO faça perguntas que podem ser respondidas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
 
@@ -25,11 +28,12 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Cards que agrupam múltiplos conceitos
 ❌ Múltipla escolha com distratores absurdos/inventados
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
-❌ Cards que copiam frases inteiras do material sem reformulação
+❌ Cards que copiam frases inteiras do texto sem reformulação
+❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
 
 MÉTODO ATIVO (obrigatório):
 - INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
-- CONEXÕES: Crie cards que conectam conceitos entre si do mesmo material ("Como X se relaciona com Y?").
+- CONEXÕES: Crie cards que conectam conceitos entre si ("Como X se relaciona com Y?").
 - APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos em vez de definições abstratas.
 - CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").
 
@@ -38,8 +42,8 @@ Responda APENAS com o JSON solicitado, sem texto adicional.`;
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
-    case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no material. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
-    default: return "COBERTURA COMPLETA: Crie cartões para TODOS os tópicos, conceitos e mecanismos presentes no material. NÃO pule NENHUM tema, NENHUM conceito mencionado. Se o material menciona um assunto, DEVE haver pelo menos um cartão sobre ele. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
+    case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no conteúdo. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
+    default: return "COBERTURA COMPLETA: Crie cartões para TODOS os tópicos, conceitos e mecanismos presentes no conteúdo. NÃO pule NENHUM tema, NENHUM conceito mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
   }
 }
 
@@ -234,19 +238,20 @@ Deno.serve(async (req) => {
 REGRAS OBRIGATÓRIAS:
 - ${countInstruction}
 - ${getDetailInstruction(detail)}
-- TUDO em PORTUGUÊS (ou na língua do material).
+- TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 - Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
 - SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
 - Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
-- CRUCIAL: Use SOMENTE informações que estão EXPLICITAMENTE no material abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se o material é insuficiente, crie menos cartões.
-- ORDEM: Os cartões DEVEM seguir a ORDEM CRONOLÓGICA do material. O primeiro cartão deve ser sobre o primeiro conceito que aparece no texto, e o último cartão sobre o último conceito. NUNCA embaralhe a ordem.
+- PROIBIDO referenciar a fonte nos cartões. NUNCA use "de acordo com", "segundo o texto", "conforme mencionado", "como visto no conteúdo", "o autor afirma" ou QUALQUER variação. Escreva como FATO DIRETO, sem indicar origem.
+- Use SOMENTE informações presentes no conteúdo abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se insuficiente, crie menos cartões.
+- ORDEM: Os cartões DEVEM seguir a ordem dos tópicos no conteúdo. NUNCA embaralhe a ordem.
 - EVITE LISTAS: Se uma resposta teria múltiplos itens, crie cartões separados para cada item.
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
 ${getFormatInstructions(formats)}
 
-MATERIAL DO ESTUDANTE (base ÚNICA para os cartões):
+CONTEÚDO-BASE (use APENAS isto para gerar os cartões):
 ---
 ${trimmedContent}
 ---
