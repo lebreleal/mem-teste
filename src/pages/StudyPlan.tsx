@@ -812,7 +812,7 @@ const StudyPlan = () => {
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-6 max-w-lg">
+        <main className="container mx-auto px-4 py-6 max-w-2xl">
           {/* ─── STEP 1: Nome ─── */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -1002,18 +1002,18 @@ const StudyPlan = () => {
           </Button>
           <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
         </header>
-        <main className="container mx-auto px-4 py-4 max-w-lg">
-          <div className="flex flex-col items-center justify-center py-16 space-y-4">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Target className="h-8 w-8 text-primary" />
+        <main className="container mx-auto px-4 py-4 max-w-2xl">
+          <div className="flex flex-col items-center justify-center py-12 sm:py-16 space-y-5 text-center">
+            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Target className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
             </div>
-            <div className="text-center space-y-1">
-              <h2 className="text-lg font-bold">Nenhum objetivo criado</h2>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Crie objetivos de estudo para organizar sua rotina e acompanhar seu progresso.
+            <div className="space-y-2 max-w-sm">
+              <h2 className="text-lg sm:text-xl font-bold">Nenhum objetivo criado</h2>
+              <p className="text-sm text-muted-foreground">
+                Crie objetivos de estudo para organizar sua rotina e acompanhar seu progresso até suas provas.
               </p>
             </div>
-            <Button size="lg" onClick={startNewPlan}>
+            <Button size="lg" onClick={startNewPlan} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" /> Criar meu primeiro objetivo
             </Button>
           </div>
