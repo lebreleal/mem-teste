@@ -104,3 +104,108 @@ export function getLocalMidnight(daysFromNow: number): Date {
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
+// ─── Shared new-card allocation logic ───
+
+export interface AllocationPlan {
+  id: string;
+  deck_ids: string[];
+  target_date: string | null;
+  priority: number;
+}
+
+export interface AllocationParams {
+  globalBudget: number;
+  plans: AllocationPlan[];
+  newPerRoot: Record<string, number>;
+  findRoot: (id: string) => string;
+}
+
+export interface AllocationResult {
+  perDeck: Record<string, number>;
+  perPlan: Record<string, number>;
+}
+
+/**
+ * Compute proportional new-card allocation across plans and decks.
+ * Pure function — no Supabase dependency.
+ *
+ * - Aggregates deck IDs to root ancestors
+ * - Weights by urgency (remaining / daysLeft)
+ * - Distributes globalBudget with 5% minimum floor per root
+ * - Deduplicates roots shared between plans (first/highest-priority wins)
+ */
+export function computeNewCardAllocation(params: AllocationParams): AllocationResult {
+  const { globalBudget, plans, newPerRoot, findRoot } = params;
+  const perDeck: Record<string, number> = {};
+  const perPlan: Record<string, number> = {};
+
+  const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+
+  // Build weights per root (deduplicated across all plans)
+  const weights: { rootId: string; weight: number }[] = [];
+  const seenRoots = new Set<string>();
+
+  for (const p of sortedPlans) {
+    const daysLeft = p.target_date
+      ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000))
+      : 90;
+    for (const did of (p.deck_ids ?? [])) {
+      const rootId = findRoot(did);
+      if (seenRoots.has(rootId)) continue;
+      seenRoots.add(rootId);
+      const remaining = newPerRoot[rootId] ?? 0;
+      if (remaining === 0) { perDeck[rootId] = 0; continue; }
+      weights.push({ rootId, weight: remaining / daysLeft });
+    }
+  }
+
+  const totalWeight = weights.reduce((s, w) => s + w.weight, 0);
+
+  if (totalWeight > 0) {
+    const minShare = Math.max(1, Math.ceil(globalBudget * 0.05));
+    const sorted = [...weights].sort((a, b) => b.weight - a.weight);
+
+    // First pass: raw shares with minimum floor
+    let totalAllocated = 0;
+    for (const { rootId, weight } of sorted) {
+      const rawShare = Math.max(1, Math.round(globalBudget * (weight / totalWeight)));
+      const floored = Math.max(minShare, rawShare);
+      const cappedToNew = Math.min(floored, newPerRoot[rootId] ?? 0);
+      perDeck[rootId] = cappedToNew;
+      totalAllocated += cappedToNew;
+    }
+
+    // Second pass: trim excess from largest
+    if (totalAllocated > globalBudget) {
+      let excess = totalAllocated - globalBudget;
+      for (const { rootId } of sorted) {
+        if (excess <= 0) break;
+        const current = perDeck[rootId];
+        const canTrim = Math.max(0, current - minShare);
+        const trim = Math.min(canTrim, excess);
+        perDeck[rootId] = current - trim;
+        excess -= trim;
+      }
+    }
+  }
+
+  // Aggregate per-plan: each root claimed by first (highest-priority) plan only
+  const globalClaimedRoots = new Set<string>();
+  for (const p of sortedPlans) {
+    const planRoots = new Set<string>();
+    let sum = 0;
+    for (const id of (p.deck_ids ?? [])) {
+      const rootId = findRoot(id);
+      if (planRoots.has(rootId)) continue;
+      planRoots.add(rootId);
+      if (!globalClaimedRoots.has(rootId)) {
+        globalClaimedRoots.add(rootId);
+        sum += perDeck[rootId] ?? 0;
+      }
+    }
+    perPlan[p.id] = sum;
+  }
+
+  return { perDeck, perPlan };
+}
