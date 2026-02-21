@@ -459,18 +459,33 @@ export function ForecastSimulator({
               </div>
             )}
 
-            {/* Summary metrics - compact inline */}
+            {/* Summary explanation - didactic */}
             {summary && (
-              <div className="flex items-center gap-3 text-xs px-1">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  Média <span className="font-semibold text-foreground">{formatMinutes(summary.avgDailyMin)}</span>
-                </span>
-                <span className="text-border">·</span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <TrendingUp className="h-3 w-3" />
-                  Pico <span className="font-semibold text-foreground">{formatMinutes(summary.peakMin)}</span>
-                </span>
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  📊 Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
+                  você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+                  {summary.peakMin > summary.avgDailyMin && (
+                    <> O dia mais puxado terá <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
+                  )}
+                  {hasOverload && (
+                    <> Dias com <span className="text-amber-600 dark:text-amber-400 font-semibold">!</span> ultrapassam seu tempo disponível — considere reduzir novos cards ou aumentar seu tempo de estudo.</>
+                  )}
+                </p>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />Novos
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />Aprendendo
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />Reaprendendo
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />Dominados
+                  </span>
+                </div>
               </div>
             )}
 
