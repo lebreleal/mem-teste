@@ -51,6 +51,7 @@ interface SimCard {
   stability: number;
   difficulty: number;
   scheduledDay: number; // days from simulation start
+  lastReviewedDay: number; // day of last review (for correct elapsed calculation)
 }
 
 function simulateFSRS(card: SimCard, rating: number, currentDay: number, retention: number, maxInterval: number): SimCard {
@@ -58,29 +59,29 @@ function simulateFSRS(card: SimCard, rating: number, currentDay: number, retenti
   if (card.state === 0) {
     const s = fsrsInitStability(rating);
     const d = fsrsInitDifficulty(rating);
-    if (rating <= 2) return { ...card, stability: s, difficulty: d, state: 1, scheduledDay: currentDay }; // stays in learning
+    if (rating <= 2) return { ...card, stability: s, difficulty: d, state: 1, scheduledDay: currentDay, lastReviewedDay: currentDay };
     const interval = fsrsStabilityToInterval(s, retention, maxInterval);
-    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + interval };
+    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + interval, lastReviewedDay: currentDay };
   }
   if (card.state === 1 || card.state === 3) {
     const s = card.stability > 0 ? card.stability : fsrsInitStability(rating);
     const d = card.difficulty > 0 ? fsrsNextDifficulty(card.difficulty, rating) : fsrsInitDifficulty(rating);
-    if (rating === 1) return { ...card, stability: Math.max(s * 0.5, 0.1), difficulty: d, state: card.state, scheduledDay: currentDay };
-    if (rating === 2) return { ...card, stability: s, difficulty: d, state: card.state, scheduledDay: currentDay };
+    if (rating === 1) return { ...card, stability: Math.max(s * 0.5, 0.1), difficulty: d, state: card.state, scheduledDay: currentDay, lastReviewedDay: currentDay };
+    if (rating === 2) return { ...card, stability: s, difficulty: d, state: card.state, scheduledDay: currentDay, lastReviewedDay: currentDay };
     const interval = fsrsStabilityToInterval(s, retention, maxInterval);
-    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1) };
+    return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1), lastReviewedDay: currentDay };
   }
-  // Review
-  const elapsed = Math.max(0, currentDay - card.scheduledDay);
+  // Review — use elapsed since LAST REVIEW, not since scheduled date
+  const elapsed = Math.max(1, currentDay - card.lastReviewedDay);
   const r = fsrsRetrievability(card.stability, elapsed);
   const d = fsrsNextDifficulty(card.difficulty, rating);
   if (rating === 1) {
     const s = fsrsNextForgetStability(card.difficulty, card.stability, r);
-    return { ...card, stability: s, difficulty: d, state: 3, scheduledDay: currentDay };
+    return { ...card, stability: s, difficulty: d, state: 3, scheduledDay: currentDay, lastReviewedDay: currentDay };
   }
   const s = fsrsNextRecallStability(card.difficulty, card.stability, r, rating);
   const interval = fsrsStabilityToInterval(s, retention, maxInterval);
-  return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1) };
+  return { ...card, stability: s, difficulty: d, state: 2, scheduledDay: currentDay + Math.max(interval, 1), lastReviewedDay: currentDay };
 }
 
 function simulateSM2(card: SimCard, rating: number, currentDay: number, maxInterval: number): SimCard {
@@ -91,29 +92,29 @@ function simulateSM2(card: SimCard, rating: number, currentDay: number, maxInter
   if (card.state === 0 || card.state === 1 || card.state === 3) {
     if (rating <= 2) {
       const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-      return { ...card, stability: newEF, difficulty: 0, state: card.state === 0 ? 1 : card.state, scheduledDay: currentDay };
+      return { ...card, stability: newEF, difficulty: 0, state: card.state === 0 ? 1 : card.state, scheduledDay: currentDay, lastReviewedDay: currentDay };
     }
     const interval = rating === 4 ? 4 : 1;
     const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
-    return { ...card, stability: newEF, difficulty: 1, state: 2, scheduledDay: currentDay + Math.min(interval, maxInterval) };
+    return { ...card, stability: newEF, difficulty: 1, state: 2, scheduledDay: currentDay + Math.min(interval, maxInterval), lastReviewedDay: currentDay };
   }
 
-  // Review
+  // Review — use elapsed since LAST REVIEW for correct interval growth
   const newEF = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
   if (rating === 1) {
-    return { ...card, stability: newEF, difficulty: 0, state: 3, scheduledDay: currentDay };
+    return { ...card, stability: newEF, difficulty: 0, state: 3, scheduledDay: currentDay, lastReviewedDay: currentDay };
   }
   let interval: number;
   if (reps <= 0) interval = 1;
   else if (reps === 1) interval = 6;
   else {
-    const prevInterval = Math.max(1, currentDay - card.scheduledDay);
+    const prevInterval = Math.max(1, currentDay - card.lastReviewedDay);
     interval = Math.round(prevInterval * newEF);
   }
   if (rating === 2) interval = Math.max(1, Math.round(interval * 0.8));
   if (rating === 4) interval = Math.round(interval * 1.3);
   interval = clamp(interval, 1, maxInterval);
-  return { ...card, stability: newEF, difficulty: reps + 1, state: 2, scheduledDay: currentDay + interval };
+  return { ...card, stability: newEF, difficulty: reps + 1, state: 2, scheduledDay: currentDay + interval, lastReviewedDay: currentDay };
 }
 
 // ─── Rating Distribution ────────────────────────────────
@@ -190,7 +191,12 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   let simCards: SimCard[] = (rawCards || []).map(c => {
     const schedMs = new Date(c.scheduled_date).getTime();
     const scheduledDay = Math.round((schedMs - now) / 86400000);
-    return { deck_id: c.deck_id, state: c.state, stability: c.stability, difficulty: c.difficulty, scheduledDay };
+    // Estimate lastReviewedDay from current stability/interval for existing cards
+    const estimatedInterval = c.stability > 0
+      ? fsrsStabilityToInterval(c.stability, 0.9, 36500)
+      : 1;
+    const lastReviewedDay = scheduledDay - estimatedInterval;
+    return { deck_id: c.deck_id, state: c.state, stability: c.stability, difficulty: c.difficulty, scheduledDay, lastReviewedDay };
   });
 
   // Sampling for large sets
@@ -237,7 +243,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       const perDeck = Math.max(1, Math.round(createdCardsPerDay / deckIds.length));
       for (const deckId of deckIds) {
         for (let c = 0; c < perDeck; c++) {
-          simCards.push({ deck_id: deckId, state: 0, stability: 0, difficulty: 0, scheduledDay: day });
+          simCards.push({ deck_id: deckId, state: 0, stability: 0, difficulty: 0, scheduledDay: day, lastReviewedDay: day });
           newByDeck.set(deckId, (newByDeck.get(deckId) || 0) + 1);
         }
       }
