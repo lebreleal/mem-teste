@@ -485,7 +485,9 @@ export function ForecastSimulator({
               const earliestTarget = plansTarget.length > 0
                 ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
                 : null;
-              const totalNewRemaining = totalNewCards;
+              const createdPerDay = createdCardsOverride ?? defaultCreatedCardsPerDay;
+              const createdInPeriod = createdPerDay > 0 ? createdPerDay * approxDays : 0;
+              const totalNewRemaining = totalNewCards + createdInPeriod;
 
               return (
                 <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
@@ -502,7 +504,7 @@ export function ForecastSimulator({
                     <>
                       <div className="h-px bg-border" />
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong> até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — ritmo atual: ~<strong className="text-foreground">{actualNewPerDay}/dia</strong>.
+                        🎯 <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> ({totalNewCards} existentes + {createdInPeriod} a criar)</> : ''} até <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong> — estudando ~<strong className="text-foreground">{actualNewPerDay} novos/dia</strong> na simulação.
                       </p>
                     </>
                   )}
