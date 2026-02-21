@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, ChevronRight, Play, CalendarCheck } from 'lucide-react';
+import { Clock, ChevronRight, Play, CalendarCheck, SquarePlus, RotateCcw, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -63,11 +63,22 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDon
           </Badge>
         )}
       </div>
-      <div className="flex gap-1.5 flex-wrap">
-        {newAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5 border-blue-300 text-blue-600 dark:text-blue-400">{newAvailable} novos</Badge>}
-        {reviewAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5 border-emerald-300 text-emerald-600 dark:text-emerald-400">{reviewAvailable} revisões</Badge>}
-        {learningAvailable > 0 && <Badge variant="outline" className="text-[10px] h-5 border-amber-300 text-amber-600 dark:text-amber-400">{learningAvailable} aprendendo</Badge>}
-        {pendingToday === 0 && <Badge variant="secondary" className="text-[10px] h-5">✓ Concluído</Badge>}
+      <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <SquarePlus className="h-3.5 w-3.5" />
+          <span className="font-semibold text-foreground">{newAvailable}</span>
+          <span>Novos</span>
+        </div>
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <RotateCcw className="h-3.5 w-3.5 text-green-500" />
+          <span className="font-semibold text-foreground">{reviewAvailable + learningAvailable}</span>
+          <span>Revisões</span>
+        </div>
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <Layers className="h-3.5 w-3.5 text-primary" />
+          <span className="font-semibold text-foreground">{studiedToday}</span>
+          <span>Feitos</span>
+        </div>
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{pendingToday > 0 ? 'Inicie seu estudo' : 'Tudo em dia!'}</span>
