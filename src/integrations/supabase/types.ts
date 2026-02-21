@@ -940,6 +940,7 @@ export type Database = {
           daily_cards_studied: number
           daily_energy_earned: number
           daily_free_gradings: number
+          daily_study_minutes: number
           email: string
           energy: number
           id: string
@@ -955,6 +956,7 @@ export type Database = {
           successful_cards_counter: number
           tier_last_evaluated: string | null
           updated_at: string
+          weekly_study_minutes: Json | null
         }
         Insert: {
           created_at?: string
@@ -962,6 +964,7 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_study_minutes?: number
           email?: string
           energy?: number
           id: string
@@ -977,6 +980,7 @@ export type Database = {
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_study_minutes?: Json | null
         }
         Update: {
           created_at?: string
@@ -984,6 +988,7 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_study_minutes?: number
           email?: string
           energy?: number
           id?: string
@@ -999,6 +1004,7 @@ export type Database = {
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_study_minutes?: Json | null
         }
         Relationships: [
           {
@@ -1058,6 +1064,7 @@ export type Database = {
           deck_ids: string[]
           id: string
           name: string
+          priority: number
           target_date: string | null
           updated_at: string
           user_id: string
@@ -1069,6 +1076,7 @@ export type Database = {
           deck_ids?: string[]
           id?: string
           name?: string
+          priority?: number
           target_date?: string | null
           updated_at?: string
           user_id: string
@@ -1080,6 +1088,7 @@ export type Database = {
           deck_ids?: string[]
           id?: string
           name?: string
+          priority?: number
           target_date?: string | null
           updated_at?: string
           user_id?: string
