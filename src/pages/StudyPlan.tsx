@@ -475,13 +475,20 @@ function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePl
 }
 
 // ─── Forecast Simulator Section (extracted to use hooks) ──
-function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans }: {
+function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity }: {
   allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; plans: StudyPlanType[];
+  updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
 }) {
   const { forecastView, setForecastView } = useForecastView();
+  const { toast } = useToast();
   const [newCardsOverride, setNewCardsOverride] = useState<number | undefined>();
   const [createdCardsOverride, setCreatedCardsOverride] = useState<number | undefined>();
+  const [dailyMinutesOverride, setDailyMinutesOverride] = useState<number | undefined>();
+  const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
   const hasTargetDate = plans.some(p => p.target_date);
+
+  const effectiveDailyMin = dailyMinutesOverride ?? dailyMinutes;
+  const effectiveWeeklyMin = weeklyMinutesOverride ?? weeklyMinutes;
 
   const horizonDays = useMemo(() => {
     if (forecastView === '7d') return 7;
@@ -504,14 +511,31 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     horizonDays,
     newCardsPerDayOverride: newCardsOverride,
     createdCardsPerDayOverride: createdCardsOverride,
-    dailyMinutes,
-    weeklyMinutes,
+    dailyMinutes: effectiveDailyMin,
+    weeklyMinutes: effectiveWeeklyMin,
     enabled: allDeckIds.length > 0,
   });
 
   const handleViewChange = useCallback((v: ForecastView) => {
     setForecastView(v);
   }, [setForecastView]);
+
+  const hasAnyOverride = newCardsOverride !== undefined || createdCardsOverride !== undefined || dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
+
+  const handleApplyCapacity = useCallback(async () => {
+    try {
+      await updateCapacity.mutateAsync({
+        daily_study_minutes: effectiveDailyMin,
+        weekly_study_minutes: weeklyMinutesOverride ?? null,
+      });
+      // Clear overrides after applying
+      setDailyMinutesOverride(undefined);
+      setWeeklyMinutesOverride(undefined);
+      toast({ title: 'Capacidade atualizada!', description: 'Os valores simulados foram aplicados ao seu plano.' });
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    }
+  }, [effectiveDailyMin, weeklyMinutesOverride, updateCapacity, toast]);
 
   return (
     <ForecastSimulator
@@ -523,6 +547,14 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
       createdCardsOverride={createdCardsOverride}
       onCreatedCardsChange={setCreatedCardsOverride}
+      realDailyMinutes={dailyMinutes}
+      realWeeklyMinutes={weeklyMinutes}
+      dailyMinutesOverride={dailyMinutesOverride}
+      weeklyMinutesOverride={weeklyMinutesOverride}
+      onDailyMinutesChange={setDailyMinutesOverride}
+      onWeeklyMinutesChange={setWeeklyMinutesOverride}
+      onApplyCapacity={handleApplyCapacity}
+      hasAnyOverride={hasAnyOverride}
     />
   );
 }
@@ -1244,6 +1276,7 @@ const StudyPlan = () => {
           dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes}
           plans={plans}
+          updateCapacity={updateCapacity}
         />
 
         {/* Clear backlog */}
