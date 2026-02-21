@@ -526,6 +526,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
   const [createdCardsOverride, setCreatedCardsOverride] = useState<number | undefined>();
   const [dailyMinutesOverride, setDailyMinutesOverride] = useState<number | undefined>();
   const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
+  const [customTargetDate, setCustomTargetDate] = useState<Date | null>(null);
   const hasTargetDate = plans.some(p => p.target_date);
 
   const effectiveDailyMin = dailyMinutesOverride ?? dailyMinutes;
@@ -536,16 +537,21 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     if (forecastView === '30d') return 30;
     if (forecastView === '90d') return 90;
     if (forecastView === '365d') return 365;
-    if (forecastView === 'target' && hasTargetDate) {
-      const earliest = plans.filter(p => p.target_date).reduce((min, p) => {
-        const d = new Date(p.target_date!);
-        return d < min ? d : min;
-      }, new Date(plans.filter(p => p.target_date)[0].target_date!));
-      const today = new Date(); today.setHours(0,0,0,0);
-      return Math.max(7, Math.ceil((earliest.getTime() - today.getTime()) / 86400000));
+    if (forecastView === 'target') {
+      const targetDateToUse = customTargetDate
+        ?? (hasTargetDate
+          ? plans.filter(p => p.target_date).reduce((min, p) => {
+              const d = new Date(p.target_date!);
+              return d < min ? d : min;
+            }, new Date(plans.filter(p => p.target_date)[0].target_date!))
+          : null);
+      if (targetDateToUse) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        return Math.max(7, Math.ceil((targetDateToUse.getTime() - today.getTime()) / 86400000));
+      }
     }
     return 7;
-  }, [forecastView, hasTargetDate, plans]);
+  }, [forecastView, hasTargetDate, plans, customTargetDate]);
 
   const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, isUsingDefaults } = useForecastSimulator({
     deckIds: allDeckIds,
@@ -569,7 +575,6 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
         daily_study_minutes: effectiveDailyMin,
         weekly_study_minutes: weeklyMinutesOverride ?? null,
       });
-      // Clear overrides after applying
       setDailyMinutesOverride(undefined);
       setWeeklyMinutesOverride(undefined);
       toast({ title: 'Capacidade atualizada!', description: 'Os valores simulados foram aplicados ao seu plano.' });
@@ -584,6 +589,9 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       defaultNewCardsPerDay={defaultNewCardsPerDay} forecastView={forecastView}
       onViewChange={handleViewChange} newCardsOverride={newCardsOverride}
       onNewCardsChange={setNewCardsOverride} hasTargetDate={hasTargetDate}
+      plans={plans.map(p => ({ id: p.id, name: p.name, target_date: p.target_date }))}
+      customTargetDate={customTargetDate}
+      onCustomTargetDate={setCustomTargetDate}
       isUsingDefaults={isUsingDefaults}
       defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
       createdCardsOverride={createdCardsOverride}
@@ -797,10 +805,21 @@ const StudyPlan = () => {
   if (view === 'wizard') {
     // Feasibility check helper
     const feasibilityCheck = targetDate && selectedDeckIds.length > 0 ? (() => {
-      const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
-        const deck = activeDecks.find(d => d.id === id);
-        return sum + (deck?.new_count ?? 0);
-      }, 0);
+      // Recursive helper: sum new_count of a deck + all its descendants
+      const getNewCardsRecursive = (deckId: string): number => {
+        const deck = activeDecks.find(d => d.id === deckId);
+        const own = deck?.new_count ?? 0;
+        const children = activeDecks.filter(d => d.parent_deck_id === deckId);
+        return own + children.reduce((s, c) => s + getNewCardsRecursive(c.id), 0);
+      };
+      // Only count from roots of selection to avoid double-counting
+      const selectedNewCards = selectedDeckIds
+        .filter(id => {
+          const deck = activeDecks.find(d => d.id === id);
+          // Skip if parent is also selected (parent already counts this deck)
+          return !deck?.parent_deck_id || !selectedDeckIds.includes(deck.parent_deck_id);
+        })
+        .reduce((sum, id) => sum + getNewCardsRecursive(id), 0);
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
       const budget = globalCapacity.dailyNewCardsLimit;
@@ -1405,10 +1424,21 @@ const StudyPlan = () => {
                     }
                   </p>
                   {metrics?.projectedCompletionDate && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <CalendarIcon className="h-3 w-3" />
-                      Conclusão estimada: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
-                    </p>
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <CalendarIcon className="h-3 w-3" />
+                        Conclusão estimada dos novos cards: <strong className="text-foreground">{format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}</strong>
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/70">
+                        Limitado por {globalCapacity.dailyNewCardsLimit} novos cards/dia.{' '}
+                        <button
+                          className="text-primary underline hover:text-primary/80 transition-colors"
+                          onClick={() => { setTempNewCards(globalCapacity.dailyNewCardsLimit); setShowNewCardsConfirm(true); }}
+                        >
+                          Aumentar limite
+                        </button>
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

@@ -395,10 +395,11 @@ export function useStudyPlan() {
     let healthStatus: 'green' | 'yellow' | 'orange' | 'red' = 'green';
     let projectedCompletionDate: string | null = null;
 
-    if (cardsPerDay > 0 && totalPending > 0) {
-      const daysNeeded = Math.ceil(totalPending / cardsPerDay);
+    // The real bottleneck for completion is daily new cards limit, not time capacity
+    if (globalNewBudget > 0 && totalNew > 0) {
+      const daysForNew = Math.ceil(totalNew / globalNewBudget);
       const projected = new Date();
-      projected.setDate(projected.getDate() + daysNeeded);
+      projected.setDate(projected.getDate() + daysForNew);
       projectedCompletionDate = projected.toISOString().slice(0, 10);
     }
 
