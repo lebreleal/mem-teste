@@ -449,12 +449,12 @@ export function ForecastSimulator({
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Legend - only when ReferenceLine is shown */}
+            {/* Legend */}
             {avgCapacity > 0 && (
               <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
                 <span className="flex items-center gap-1.5">
                   <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
-                  Tempo de estudo por dia ({avgCapacity}min)
+                  Tempo de estudo por dia
                 </span>
               </div>
             )}
