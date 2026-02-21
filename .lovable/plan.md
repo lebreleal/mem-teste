@@ -1,53 +1,47 @@
 
-# Corrigir Grafico de Previsao de Carga
+# Corrigir Valor Padrao de "Novos Cards/Dia" no Simulador
 
 ## Problema
-O grafico atual mostra apenas 2 barras (Revisoes e Novos) e muda a cor de tudo para vermelho/laranja quando ha sobrecarga. Resultado: impossivel distinguir o que e o que. A intensidade por cor "sobrescreve" a identidade de cada tipo de card.
 
-## Solucao: 3 Barras com Cores Fixas + Indicador de Sobrecarga Separado
+O simulador usa `avg_new_cards_per_day` do RPC `get_forecast_params` como valor padrao para "novos cards/dia". Esse valor (~88) representa a **media de cards criados** (via IA, importacao manual, etc.), nao a quantidade que o usuario **quer estudar por dia**.
 
-Seguindo o padrao do Anki e apps de SRS consolidados, cada tipo de card tera sua cor fixa e permanente:
+Resultado: o grafico simula 88 cards novos entrando na sessao de estudo diariamente, gerando uma carga absurda e irreal. O correto seria usar a soma dos `daily_new_limit` dos decks ativos.
 
-- **Novos** -- Azul (`hsl(217 91% 60%)`) -- cards nunca vistos
-- **Aprendendo** -- Laranja/Amber (`hsl(38 92% 50%)`) -- cards em fase de aprendizado (state=1)
-- **Revisao** -- Verde (`hsl(152 69% 47%)`) -- cards dominados sendo revisados (state=2)
-- **Capacidade diaria** -- Linha tracejada horizontal (ja existe)
+## Solucao
 
-A sobrecarga sera indicada de forma separada, sem alterar as cores das barras:
-- Uma marca vermelha sutil (ponto ou borda superior) nos dias que ultrapassam a capacidade
-- O fundo da coluna fica com um leve tom vermelho quando excede
+### 1. Calcular o limite real a partir dos decks
 
-## Mudancas Tecnicas
+Em vez de usar `avg_new_cards_per_day` do RPC, calcular o valor padrao somando o `daily_new_limit` de cada deck ativo nos objetivos. Esse campo ja existe nos dados do `ForecastDeckConfig`.
 
-### 1. Worker (`src/workers/forecastWorker.ts`)
-- Linha 334: Separar `learningMin` em campo proprio em vez de somar com `reviewMin`
-- Adicionar `learningMin` ao `ForecastPoint`
+**Arquivo**: `src/hooks/useForecastSimulator.ts`
 
-### 2. Tipos (`src/types/forecast.ts`)
-- Adicionar `learningMin: number` ao `ForecastPoint`
+Mudanca na linha 44:
+```typescript
+// ANTES (errado - media de criacao)
+const defaultNewCardsPerDay = paramsQuery.data?.avg_new_cards_per_day ?? 40;
 
-### 3. Grafico (`src/components/study-plan/PlanComponents.tsx`)
-- Trocar de 2 barras empilhadas para 3: `newMin`, `learningMin`, `reviewMin`
-- Cores fixas por tipo (nunca mudam com sobrecarga)
-- Tooltip mostrando os 3 tipos com contagem de cards + minutos
-- Legenda clara: quadrado colorido + nome + descricao curta
-- Remover a escala de intensidade confusa (ok/leve/pesado/critico)
-- Nos dias com sobrecarga, adicionar um pequeno indicador vermelho no topo da barra (marcador sutil)
-
-### 4. Legenda simplificada
-```
-[azul] Novos (cards nunca vistos)
-[laranja] Aprendendo (em fase de memorizacao)
-[verde] Revisao (cards dominados)
-[--- tracejado] Capacidade diaria
+// DEPOIS (correto - soma dos limites diarios dos decks)
+const defaultNewCardsPerDay = useMemo(() => {
+  const decks = paramsQuery.data?.decks;
+  if (!decks || decks.length === 0) return 20;
+  return decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
+}, [paramsQuery.data?.decks]);
 ```
 
-### 5. Tooltip melhorado
-Ao passar o mouse em uma barra:
-```
-Seg 24/02
-  12 novos -- 6min
-  8 aprendendo -- 2min
-  45 revisoes -- 6min
-  Total: 14min / 30min capacidade
-```
+### 2. Renomear o label no grafico para clareza
+
+**Arquivo**: `src/components/study-plan/PlanComponents.tsx`
+
+Alterar o label do campo editavel de "novos cards/dia" para deixar claro que se refere a cards novos **para estudar**, nao criados:
+- De: `novos cards/dia`
+- Para: `novos para estudar/dia`
+
+### 3. Opcional -- Manter o RPC valor como referencia
+
+O campo `avg_new_cards_per_day` do RPC pode continuar existindo para fins de analise, mas nao sera mais usado como padrao do simulador. Se no futuro quisermos mostrar "voce cria em media X cards/dia", ele estara disponivel.
+
+## Resumo do Impacto
+
+- O grafico vai mostrar uma carga realista (ex: 20-40 novos/dia em vez de 88)
+- O usuario pode continuar editando o valor manualmente via o campo editavel
+- O simulador ja respeita o `daily_new_limit` por deck internamente (linha 258 do worker), entao a mudanca e apenas no valor padrao exibido e enviado ao worker
