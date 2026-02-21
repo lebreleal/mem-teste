@@ -1,141 +1,100 @@
 
 
-# Alinhar Estados dos Cards com o Padrao Anki
+# Corrigir Calculo de Tempo por Card (Outliers Inflando a Media)
 
-## Situacao Atual vs Anki
+## Problema Encontrado
 
-```text
-+-------------------+------------------+------------------+
-| Conceito          | Anki oficial     | Seu app hoje     |
-+-------------------+------------------+------------------+
-| Nunca visto       | type 0 (New)     | state 0 (New)    |
-| Aprendendo 1a vez | type 1 (Learning)| state 1          |
-| Esqueceu/errando  | type 3 (Relearn) | state 1 (mesma!) |
-| Revisao programada| type 2 (Review)  | state 2          |
-| Jovem (ivl < 21d) | derivado         | nao existe       |
-| Maduro (ivl >=21d)| derivado         | nao existe       |
-| Suspenso          | queue -1         | scheduled > 50y  |
-| Enterrado         | queue -2/-3      | nao existe       |
-+-------------------+------------------+------------------+
-```
+A RPC `get_forecast_params` usa `AVG(dur)` para calcular o tempo medio por card. Porem, o `dur` e calculado como a diferenca entre dois `reviewed_at` consecutivos, com cap de 300 segundos (5 minutos).
 
-O principal bug: quando um card dominado (state 2) recebe "Errei", ele volta para `state: 1`. No Anki, isso seria `type: 3` (Relearning). Misturar os dois no mesmo state distorce completamente os tempos medios.
-
-## Plano de Mudancas
-
-### 1. Adicionar state 3 (Reaprendendo)
-
-Mudar o codigo FSRS e SM2 para que quando um card de revisao (state 2) recebe rating 1 ("Again"), ele va para **state 3** em vez de state 1.
-
-**Arquivo: `src/lib/fsrs.ts`**
-- Linha 157: mudar `state: 1` para `state: 3` no bloco "Again para relearning"
-- Atualizar a interface `FSRSOutput` para documentar state 3
-
-**Arquivo: `src/lib/sm2.ts`**
-- Mesma mudanca: quando card de revisao erra, vai para state 3
-
-### 2. Tratar state 3 como "em aprendizado" no agendamento
-
-O state 3 se comporta igual ao state 1 para fins de agendamento (usa relearning steps), mas e categorizado separadamente para estatisticas.
-
-**Arquivo: `src/lib/fsrs.ts`**
-- Adicionar bloco `if (card.state === 3)` que reutiliza a logica do state 1 mas com relearningSteps prioritariamente
-
-**Arquivo: `src/hooks/useStudySession.ts`** (e qualquer lugar que filtra state === 1)
-- Onde filtra "cards em aprendizado", incluir state 1 **ou** state 3
-
-### 3. Atualizar a query de fila de estudo
-
-Todos os lugares que fazem `state = 1` precisam incluir `state IN (1, 3)`:
-- RPCs do banco (`get_all_user_deck_stats`, `get_deck_stats`, `get_plan_metrics`)
-- Queries no frontend que filtram por state
-
-**Nova migration SQL:**
-- Atualizar as RPCs para tratar state 3 como "em aprendizado" nas contagens
-- Cards existentes com state 1 que na verdade sao relearning continuam funcionando (retrocompativel pois state 1 e 3 sao tratados igual no agendamento)
-
-### 4. Atualizar nomenclatura e categorias no app
-
-Em vez dos nomes atuais, usar:
+Seus dados reais mostram o problema:
 
 ```text
-+-------------------+------------------+-------------------------+
-| State             | Nome no app      | Tempo medio (simulador) |
-+-------------------+------------------+-------------------------+
-| 0 (New)           | Novos            | ~30s (1a vez vendo)     |
-| 1 (Learning)      | Aprendendo       | ~15s (passos iniciais)  |
-| 3 (Relearning)    | Reaprendendo     | ~12s (erraram, voltando)|
-| 2 (Review)        | Em revisao       | ~8s (agendados)         |
-| 2 + ivl >= 21d    | Maduros          | derivado, nao precisa   |
-| frozen            | Congelados       | ja existe               |
-+-------------------+------------------+-------------------------+
++----------+----------+-----------+--------+
+| Estado   | Media    | Mediana   | Maximo |
++----------+----------+-----------+--------+
+| Novos    | 47.6s    | 16.1s     | 300s   |
+| Aprend.  | 55.8s    | 15.2s     | 300s   |
+| Revisao  | 108.5s   | 15.0s     | 300s   |
++----------+----------+-----------+--------+
 ```
 
-**Arquivo: `src/components/study-plan/PlanComponents.tsx`**
-- Grafico mostra 4 categorias: Novos, Aprendendo, Reaprendendo, Em revisao
-- Cores distintas para cada uma
+A media e distorcida por momentos em que voce pausou, saiu do app, ou demorou entre cards. A **mediana** (16s) reflete melhor o tempo real de resposta.
 
-**Arquivo: `src/components/deck-detail/CardList.tsx`** e `DeckDetailContext.tsx`
-- Filtros de estado incluem: Novos, Aprendendo, Reaprendendo, Em revisao, Congelados
+## Solucao
 
-### 5. Corrigir calculo de tempo no simulador
+Duas mudancas na RPC `get_forecast_params`:
 
-**Nova migration SQL (update da RPC `get_forecast_params`):**
+### 1. Reduzir o cap de 300s para 90s
+
+Nenhuma resposta real de flashcard leva 5 minutos. Um cap de 90 segundos ja e generoso.
+
+### 2. Usar percentil 50 (mediana) em vez de media
+
+Trocar `AVG(dur)` por `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur)` para ignorar outliers naturalmente.
+
+### Resultado esperado com os dados atuais
+
+Com essas mudancas, os tempos vao cair de ~50-100s para ~12-16s por card, que e o tempo real de resposta.
+
+```text
++----------+-----------+-----------+
+| Estado   | Antes     | Depois    |
++----------+-----------+-----------+
+| Novos    | 47.6s     | ~16s      |
+| Aprend.  | 55.8s     | ~15s      |
+| Reapr.   | (n/a)     | ~12s      |
+| Revisao  | 108.5s    | ~15s      |
++----------+-----------+-----------+
+```
+
+## Mudanca tecnica
+
+**Arquivo: Nova migration SQL** (update da RPC `get_forecast_params`)
+
+Bloco `timing` atualizado:
 
 ```sql
 'timing', (
   SELECT jsonb_build_object(
-    'avg_new_seconds',        COALESCE(AVG(dur) FILTER (WHERE pre_state = 0), 30),
-    'avg_learning_seconds',   COALESCE(AVG(dur) FILTER (WHERE pre_state = 1), 15),
-    'avg_relearning_seconds', COALESCE(AVG(dur) FILTER (WHERE pre_state = 3), 12),
-    'avg_review_seconds',     COALESCE(AVG(dur) FILTER (WHERE pre_state = 2), 8)
+    'avg_new_seconds',
+      COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur) FILTER (WHERE pre_state = 0), 30),
+    'avg_review_seconds',
+      COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur) FILTER (WHERE pre_state = 2), 8),
+    'avg_learning_seconds',
+      COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur) FILTER (WHERE pre_state = 1), 15),
+    'avg_relearning_seconds',
+      COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur) FILTER (WHERE pre_state = 3), 12)
   )
-  FROM (...)
+  FROM (
+    SELECT
+      LEAST(90, GREATEST(1, EXTRACT(EPOCH FROM (rl.reviewed_at -
+        LAG(rl.reviewed_at) OVER (PARTITION BY rl.user_id ORDER BY rl.reviewed_at)
+      )))) AS dur,
+      COALESCE(
+        rl.state,
+        CASE
+          WHEN NOT EXISTS (
+            SELECT 1 FROM review_logs rl2
+            WHERE rl2.card_id = rl.card_id AND rl2.reviewed_at < rl.reviewed_at
+          ) THEN 0
+          WHEN (SELECT COUNT(*) FROM review_logs rl3
+                WHERE rl3.card_id = rl.card_id AND rl3.reviewed_at < rl.reviewed_at) < 3 THEN 1
+          ELSE 2
+        END
+      ) AS pre_state
+    FROM review_logs rl
+    WHERE rl.user_id = p_user_id AND rl.reviewed_at > now() - interval '30 days'
+  ) sub WHERE dur IS NOT NULL
 )
 ```
 
-Porem como os `review_logs` atuais NAO salvam o state do card no momento da revisao, precisamos:
+Mudancas vs versao atual:
+- `LEAST(300, ...)` vira `LEAST(90, ...)` -- cap mais realista
+- `AVG(dur)` vira `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur)` -- mediana em vez de media
 
-**Arquivo: migration SQL** -- adicionar coluna `state` na tabela `review_logs`:
-```sql
-ALTER TABLE review_logs ADD COLUMN state integer DEFAULT NULL;
-```
+## Impacto
 
-A partir de agora, cada review salva o state do card antes da revisao. Para dados historicos, usamos a heuristica do numero de revisoes anteriores como fallback.
+- Apenas 1 arquivo: nova migration SQL atualizando a RPC
+- Nenhuma mudanca no frontend (os campos retornados sao os mesmos)
+- Os tempos no simulador vao refletir imediatamente o tempo real de resposta do usuario
 
-### 6. Atualizar o worker do simulador
-
-**Arquivo: `src/workers/forecastWorker.ts`**
-- Adicionar state 3 no `SimCard`
-- Quando um card de revisao (state 2) recebe rating 1, vai para state 3
-- Categorias de tempo separadas: novo, aprendendo, reaprendendo, em revisao
-- O `ForecastPoint` ganha campo `relearningCards` e `relearningMin`
-
-**Arquivo: `src/types/forecast.ts`**
-- Adicionar `relearningCards`, `relearningMin` ao `ForecastPoint`
-- Adicionar `avg_relearning_seconds` ao `ForecastTiming`
-
-### 7. Sobre "Suspenso" e "Enterrado"
-
-- **Suspenso/Congelado**: ja existe no app (scheduled_date > 50 anos). Funciona bem, nao precisa mudar.
-- **Enterrado (Buried)**: conceito do Anki para esconder temporariamente irmaos (siblings) de um card no mesmo dia. Isso e mais relevante para decks com muitos clozes. Pode ser implementado no futuro mas nao e prioridade agora.
-
-## Resumo de impacto
-
-- **Retrocompativel**: cards existentes com state 1 continuam funcionando (o agendamento trata 1 e 3 igual)
-- **Dados historicos**: a RPC usa heuristica para dados antigos sem o campo `state` nos logs
-- **Simulador mais preciso**: 4 categorias de tempo em vez de 3
-- **Nomenclatura clara**: alinhada com o padrao Anki que os usuarios ja conhecem
-
-## Arquivos modificados
-
-- `src/lib/fsrs.ts` -- state 3 no bloco "Again"
-- `src/lib/sm2.ts` -- state 3 no bloco "Again"
-- `src/hooks/useStudySession.ts` -- incluir state 3 nas queries
-- `src/hooks/useCards.ts` -- incluir state 3
-- `src/components/study-plan/PlanComponents.tsx` -- 4 categorias
-- `src/components/deck-detail/CardList.tsx` -- filtro Reaprendendo
-- `src/components/deck-detail/DeckDetailContext.tsx` -- filtro state 3
-- `src/workers/forecastWorker.ts` -- state 3 + 4 tempos
-- `src/types/forecast.ts` -- novos campos
-- Nova migration SQL -- coluna `state` em review_logs + update RPCs
