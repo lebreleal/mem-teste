@@ -951,6 +951,35 @@ const StudyPlan = () => {
               >
                 {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações ✨' : 'Criar objetivo ✨'}
               </Button>
+
+              {isEditing && editingPlanId && (
+                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                        handleDeletePlan(editingPlanId);
+                        setView('home');
+                        setIsEditing(false);
+                        setEditingPlanId(null);
+                      }}>
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               <InfoModal open={showCapacityInfo} onOpenChange={setShowCapacityInfo} title="O que é a capacidade global?">
                 <p>⏱️ A <strong>capacidade</strong> é quanto tempo por dia você quer dedicar ao estudo total.</p>
                 <p>🎯 Ela é dividida entre todos os objetivos por ordem de prioridade — o Objetivo 1 recebe cards novos primeiro.</p>
@@ -1067,6 +1096,13 @@ const StudyPlan = () => {
           </Card>
         )}
 
+        {/* Clear backlog - above objectives */}
+        {!needsAttention && metrics && metrics.totalReview > 0 && (
+          <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCatchUp(true)}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Limpar Atraso ({metrics.totalReview} revisões)
+          </Button>
+        )}
+
         {/* ═══ 2. MEUS OBJETIVOS (No "Principal" concept) ═══ */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
@@ -1115,7 +1151,7 @@ const StudyPlan = () => {
                     </div>
                   </div>
 
-                  {/* Expanded: show decks + delete */}
+                  {/* Expanded: show decks */}
                   {isExpanded && (
                     <div className="pt-1 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
                       <ObjectiveDecksExpanded
@@ -1124,29 +1160,6 @@ const StudyPlan = () => {
                         avgSecondsPerCard={avgSecondsPerCard}
                         updatePlan={updatePlan}
                       />
-                      <div className="flex gap-1 pt-1">
-                        <AlertDialog open={deletingPlanId === p.id} onOpenChange={(open) => setDeletingPlanId(open ? p.id : null)}>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive text-[10px] h-6 px-2">
-                              <Trash2 className="h-3 w-3 mr-1" /> Excluir
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                O objetivo "{p.name}" será permanentemente excluído. Seus baralhos não serão afetados.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleDeletePlan(p.id)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -1176,17 +1189,20 @@ const StudyPlan = () => {
           )}
         </div>
 
-        {/* ═══ 3. CAPACIDADE DIÁRIA DE ESTUDO ═══ */}
+        {/* ═══ 3. TEMPO DE ESTUDO DIÁRIO ═══ */}
         <Card>
           <CardContent className="p-4 space-y-2.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Capacidade Diária de Estudo</h3>
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Tempo de Estudo Diário</h3>
               {!editingCapacity && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
                   setEditingCapacity(true);
-                  setTempMinutes(globalCapacity.dailyMinutes);
-                  setEditingWeekly(isUsingWeekly);
-                  setTempWeekly(globalCapacity.weeklyMinutes ?? { mon: 60, tue: 60, wed: 60, thu: 60, fri: 60, sat: 60, sun: 60 });
+                  setTempWeekly(globalCapacity.weeklyMinutes ?? {
+                    mon: globalCapacity.dailyMinutes, tue: globalCapacity.dailyMinutes,
+                    wed: globalCapacity.dailyMinutes, thu: globalCapacity.dailyMinutes,
+                    fri: globalCapacity.dailyMinutes, sat: globalCapacity.dailyMinutes,
+                    sun: globalCapacity.dailyMinutes,
+                  });
                 }}>
                   <Pencil className="h-3 w-3" />
                 </Button>
@@ -1195,57 +1211,22 @@ const StudyPlan = () => {
 
             {editingCapacity ? (
               <div className="space-y-2.5">
-                <div className="flex gap-1">
-                  <Button size="sm" variant={!editingWeekly ? 'default' : 'outline'} className="h-6 text-[10px] flex-1" onClick={() => setEditingWeekly(false)}>
-                    Igual todo dia
-                  </Button>
-                  <Button size="sm" variant={editingWeekly ? 'default' : 'outline'} className="h-6 text-[10px] flex-1" onClick={() => setEditingWeekly(true)}>
-                    Por dia da semana
-                  </Button>
+                <div className="space-y-1.5">
+                  {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
+                    <div key={day} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
+                      <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
+                      <span className={cn("text-[10px] font-semibold w-10 text-right", tempWeekly[day] === 0 && "text-muted-foreground")}>{tempWeekly[day] === 0 ? 'Folga' : formatMinutes(tempWeekly[day])}</span>
+                    </div>
+                  ))}
                 </div>
-
-                {editingWeekly ? (
-                  <div className="space-y-1.5">
-                    {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
-                      <div key={day} className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
-                        <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
-                        <span className="text-[10px] font-semibold w-10 text-right">{formatMinutes(tempWeekly[day])}</span>
-                      </div>
-                    ))}
-                    <div className="flex gap-1 pt-1">
-                      <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingWeekly(false); setEditingCapacity(false); }}>Cancelar</Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-center">
-                      <p className="text-3xl font-bold text-primary">{formatMinutes(tempMinutes)}</p>
-                      <p className="text-[10px] text-muted-foreground">por dia</p>
-                    </div>
-                    <Slider value={[tempMinutes]} onValueChange={([v]) => setTempMinutes(v)} min={15} max={240} step={15} className="py-2" />
-                    <div className="flex justify-between text-[9px] text-muted-foreground px-1">
-                      {SLIDER_MARKS.map(m => (
-                        <span key={m} className={cn(tempMinutes === m && 'text-primary font-bold')}>{formatMinutes(m)}</span>
-                      ))}
-                    </div>
-                    {impactMessage && (
-                      <div className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[10px]',
-                        impactMessage.tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
-                        impactMessage.tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400',
-                        impactMessage.tone === 'neutral' && 'bg-muted text-muted-foreground',
-                      )}>
-                        💡 {impactMessage.text}
-                      </div>
-                    )}
-                    <div className="flex gap-1">
-                      <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveCapacity}>Salvar</Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); setTempMinutes(globalCapacity.dailyMinutes); }}>Cancelar</Button>
-                    </div>
-                  </div>
-                )}
+                <p className="text-[10px] text-center text-muted-foreground">
+                  Média: <span className="font-semibold text-foreground">{Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7)}min/dia</span>
+                </p>
+                <div className="flex gap-1">
+                  <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); }}>Cancelar</Button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -1280,12 +1261,6 @@ const StudyPlan = () => {
           updateCapacity={updateCapacity}
         />
 
-        {/* Clear backlog */}
-        {!needsAttention && metrics && metrics.totalReview > 0 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCatchUp(true)}>
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Limpar Atraso ({metrics.totalReview} revisões)
-          </Button>
-        )}
       </main>
 
       {/* Dialogs */}

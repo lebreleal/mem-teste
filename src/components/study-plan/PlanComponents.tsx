@@ -138,8 +138,7 @@ export function ForecastSimulator({
   const currentAvgMin = Math.round(DAY_ORDER.reduce((s, d) => s + (currentWeekly[d] || 0), 0) / 7);
   const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
   const hasOverload = data.some(d => d.overloaded);
-  const allCapacitiesSame = data.length > 0 && data.every(d => d.capacityMin === data[0].capacityMin);
-  const maxCapacity = data.length > 0 ? Math.max(...data.map(d => d.capacityMin)) : 0;
+  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
 
   const options = hasTargetDate
     ? [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Até a prova' }]
@@ -403,14 +402,14 @@ export function ForecastSimulator({
                     );
                   }}
                 />
-                {allCapacitiesSame && maxCapacity > 0 && (
+                {avgCapacity > 0 && (
                   <ReferenceLine
-                    y={maxCapacity}
+                    y={avgCapacity}
                     stroke="hsl(var(--muted-foreground) / 0.4)"
                     strokeDasharray="6 3"
                     strokeWidth={1.5}
                     label={{
-                      value: `${maxCapacity}m`,
+                      value: `${avgCapacity}m`,
                       position: 'right',
                       fontSize: 9,
                       fill: 'hsl(var(--muted-foreground))',
@@ -451,11 +450,11 @@ export function ForecastSimulator({
             </ResponsiveContainer>
 
             {/* Legend - only when ReferenceLine is shown */}
-            {allCapacitiesSame && maxCapacity > 0 && (
+            {avgCapacity > 0 && (
               <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
                 <span className="flex items-center gap-1.5">
                   <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
-                  Tempo de estudo por dia
+                  Tempo de estudo por dia ({avgCapacity}min)
                 </span>
               </div>
             )}
