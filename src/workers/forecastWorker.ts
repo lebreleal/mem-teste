@@ -225,10 +225,11 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     if (c.state === 0) newByDeck.set(c.deck_id, (newByDeck.get(c.deck_id) || 0) + 1);
   }
 
-  const newSecsPerCard = timing?.avg_new_seconds || 30;
-  const reviewSecsPerCard = timing?.avg_review_seconds || 8;
-  const learningSecsPerCard = timing?.avg_learning_seconds || 15;
-  const relearningSecsPerCard = (timing as any)?.avg_relearning_seconds || 12;
+  const useAdaptiveTiming = useAdaptive; // total_reviews_90d >= 50
+  const newSecsPerCard = (useAdaptiveTiming && timing?.avg_new_seconds) ? timing.avg_new_seconds : 30;
+  const reviewSecsPerCard = (useAdaptiveTiming && timing?.avg_review_seconds) ? timing.avg_review_seconds : 8;
+  const learningSecsPerCard = (useAdaptiveTiming && timing?.avg_learning_seconds) ? timing.avg_learning_seconds : 15;
+  const relearningSecsPerCard = (useAdaptiveTiming && (timing as any)?.avg_relearning_seconds) ? (timing as any).avg_relearning_seconds : 12;
 
   const points: ForecastPoint[] = [];
   const newCardsIntroducedPerDeck = new Map<string, number>();
