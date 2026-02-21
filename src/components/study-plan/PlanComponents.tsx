@@ -56,7 +56,7 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-xs text-muted-foreground">Carga de hoje</span>
+        <span className="text-xs text-muted-foreground">Tempo de estudo hoje</span>
         <span className="text-lg font-bold text-foreground">
           {estimatedMinutes === 0 ? 'Sem estudo hoje' : formatMinutes(estimatedMinutes)}
         </span>
@@ -77,7 +77,7 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
         <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ Nenhuma revisão pendente</p>
       ) : (
         <p className="text-[10px] text-muted-foreground">
-          {formatMinutes(reviewMin)} dominados + {formatMinutes(newMin)} novos
+          {formatMinutes(reviewMin)} de revisões + {formatMinutes(newMin)} de cards novos — dentro do seu limite de {formatMinutes(capacityMinutes)}
         </p>
       )}
     </div>
@@ -193,7 +193,7 @@ export function ForecastSimulator({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga</h3>
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Estudo</h3>
           </div>
           
         </div>
