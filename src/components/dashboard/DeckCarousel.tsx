@@ -32,9 +32,9 @@ function getAggregateRaw(deck: DeckWithStats, allDecks: DeckWithStats[]): { new_
 }
 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits */
-function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
+function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], planAllocation?: Record<string, number>) {
   const raw = getAggregateRaw(deck, allDecks);
-  const dailyNewLimit = deck.daily_new_limit ?? 20;
+  const dailyNewLimit = planAllocation?.[deck.id] ?? deck.daily_new_limit ?? 20;
   const dailyReviewLimit = deck.daily_review_limit ?? 100;
 
   const newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
@@ -46,9 +46,9 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDone }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; isDone?: boolean }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, isDone, planAllocation }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; isDone?: boolean; planAllocation?: Record<string, number> }) {
   const navigate = useNavigate();
-  const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks);
+  const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks, planAllocation);
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
@@ -106,9 +106,10 @@ interface DeckCarouselProps {
   planDeckIds?: string[];
   planDeckOrder?: string[];
   plansByDeckId?: Record<string, string>;
+  planAllocation?: Record<string, number>;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, planAllocation }: DeckCarouselProps) {
   const navigate = useNavigate();
 
   const activeDecks = useMemo(() => {
@@ -146,7 +147,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     });
 
     for (const deck of sorted) {
-      const { pendingToday } = getDeckTodayStats(deck, decks);
+      const { pendingToday } = getDeckTodayStats(deck, decks, planAllocation);
       if (pendingToday > 0) pending.push(deck);
       else done.push(deck);
     }
@@ -156,10 +157,10 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   if (activeDecks.length === 0) return null;
 
   const totalPending = sortedDecks.reduce((sum, d) => {
-    const { pendingToday } = getDeckTodayStats(d, decks);
+    const { pendingToday } = getDeckTodayStats(d, decks, planAllocation);
     return sum + pendingToday;
   }, 0);
-  const doneCount = sortedDecks.filter(d => getDeckTodayStats(d, decks).pendingToday === 0).length;
+  const doneCount = sortedDecks.filter(d => getDeckTodayStats(d, decks, planAllocation).pendingToday === 0).length;
 
   return (
     <div className="space-y-3 mb-6">
@@ -185,7 +186,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       ) : (
         <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
           {sortedDecks.map(deck => {
-            const { pendingToday } = getDeckTodayStats(deck, decks);
+            const { pendingToday } = getDeckTodayStats(deck, decks, planAllocation);
             return (
               <DeckStudyCard
                 key={deck.id}
@@ -194,6 +195,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
                 avgSecondsPerCard={avgSecondsPerCard}
                 objectiveName={plansByDeckId?.[deck.id]}
                 isDone={pendingToday === 0}
+                planAllocation={planAllocation}
               />
             );
           })}

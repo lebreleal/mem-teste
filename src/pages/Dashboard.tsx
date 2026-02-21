@@ -299,6 +299,7 @@ const Dashboard = () => {
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
+            planAllocation={metrics?.deckNewAllocation}
           />
         )}
 
