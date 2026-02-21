@@ -81,15 +81,66 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
       .then(({ count }) => setOverdueCount(count ?? 0));
   }, [open, allDeckIds]);
 
-  const handleDilute = (days: number) => {
-    const perDay = Math.ceil(totalReview / days);
-    const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+  const [diluting, setDiluting] = useState(false);
+
+  const handleDilute = async (days: number) => {
+    if (allDeckIds.length === 0) return;
+    setDiluting(true);
+
+    // Fetch all overdue review cards for the plan's decks
+    const { data: overdueCards, error: fetchErr } = await supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', allDeckIds)
+      .eq('state', 2)
+      .lte('scheduled_date', new Date().toISOString())
+      .order('scheduled_date', { ascending: true });
+
+    if (fetchErr || !overdueCards || overdueCards.length === 0) {
+      setDiluting(false);
+      onOpenChange(false);
+      if (fetchErr) toast({ title: 'Erro ao buscar cards', variant: 'destructive' });
+      return;
+    }
+
+    // Distribute cards across `days` days, starting today
+    const perDay = Math.ceil(overdueCards.length / days);
+    let hasError = false;
+
+    for (let d = 0; d < days && !hasError; d++) {
+      const batch = overdueCards.slice(d * perDay, (d + 1) * perDay);
+      if (batch.length === 0) break;
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + d);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const { error: upErr } = await supabase
+        .from('cards')
+        .update({ scheduled_date: targetDate.toISOString() } as any)
+        .in('id', batch.map(c => c.id));
+
+      if (upErr) hasError = true;
+    }
+
+    setDiluting(false);
     onOpenChange(false);
-    toast({
-      title: `Meta: ${perDay} revisões/dia por ${days} dias`,
-      description: `Isso levará ~${formatMinutes(minPerDay)} extra por dia. Comece agora!`,
-    });
-    navigate('/dashboard');
+
+    if (hasError) {
+      toast({ title: 'Erro ao redistribuir alguns cards', variant: 'destructive' });
+    } else {
+      const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
+      toast({
+        title: `${overdueCards.length} revisões redistribuídas em ${days} dias`,
+        description: `~${perDay} cards/dia · ${formatMinutes(minPerDay)} extra por dia`,
+      });
+    }
+
+    // Invalidate to update UI
+    qc.invalidateQueries({ queryKey: ['plan-metrics'] });
+    qc.invalidateQueries({ queryKey: ['study-queue'] });
+    qc.invalidateQueries({ queryKey: ['decks'] });
+    qc.invalidateQueries({ queryKey: ['deck-stats'] });
+    qc.invalidateQueries({ queryKey: ['per-deck-new-counts'] });
   };
 
   const handleResetOverdue = async () => {
@@ -138,7 +189,7 @@ function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, all
               const perDay = Math.ceil(totalReview / days);
               const minPerDay = Math.round((perDay * avgSecondsPerCard) / 60);
               return (
-                <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)}>
+                <Button key={days} variant="outline" className="w-full justify-between h-auto py-3" onClick={() => handleDilute(days)} disabled={diluting}>
                   <span>Diluir em <strong>{days} dias</strong></span>
                   <span className="text-xs text-muted-foreground">{perDay} cards/dia · {formatMinutes(minPerDay)}</span>
                 </Button>
