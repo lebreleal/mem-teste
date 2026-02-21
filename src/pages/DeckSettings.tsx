@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +22,7 @@ import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
   Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
   RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail,
+  Shuffle, BookOpen, Mail, Info,
 } from 'lucide-react';
 
 // ── Settings row component ──────────────────────────────────────
@@ -66,8 +67,21 @@ const DeckSettings = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { duplicateDeck, archiveDeck } = useDecks();
+  const { duplicateDeck, archiveDeck, decks } = useDecks();
   const queryClient = useQueryClient();
+  const { metrics: planMetrics } = useStudyPlan();
+
+  // Resolve root ancestor for plan detection
+  const rootId = (() => {
+    if (!decks.length || !deckId) return deckId;
+    let currentId = deckId;
+    while (true) {
+      const d = decks.find(dk => dk.id === currentId);
+      if (!d?.parent_deck_id) return currentId;
+      currentId = d.parent_deck_id;
+    }
+  })();
+  const isPlanControlled = !!(planMetrics?.deckNewAllocation?.[rootId ?? ''] > 0);
 
   // Deck data
   const [name, setName] = useState('');
@@ -345,7 +359,7 @@ const DeckSettings = () => {
           <SettingsRow
             icon={<BookOpen className="h-5 w-5" />}
             label="Configurações de estudo"
-            subtitle={parentDeckId ? 'Herdado do baralho pai' : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
+            subtitle={parentDeckId ? 'Herdado do baralho pai' : isPlanControlled ? `Limite de novos definido pelo Plano (${planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia)` : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
             onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
           />
           <SettingsRow
@@ -550,13 +564,22 @@ const DeckSettings = () => {
             <DialogTitle className="font-display">Configurações de Estudo</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
+            {isPlanControlled && (
+              <div className="flex items-start gap-2.5 rounded-lg bg-accent/50 border border-border/60 p-3">
+                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  O limite de novos cartões deste baralho está sendo definido automaticamente pelo seu <strong>Plano de Estudos</strong> ({planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia). Para usar o limite manual, remova este baralho dos seus objetivos.
+                </p>
+              </div>
+            )}
             <div className="flex items-center justify-between">
-              <Label>Novos cartões por dia</Label>
+              <Label className={isPlanControlled ? 'text-muted-foreground' : ''}>Novos cartões por dia</Label>
               <Input
                 type="number" min={0} max={999}
-                value={dailyNewLimit}
+                value={isPlanControlled ? (planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0) : dailyNewLimit}
                 onChange={(e) => setDailyNewLimit(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 text-right font-semibold"
+                disabled={isPlanControlled}
               />
             </div>
             <Separator />
