@@ -163,16 +163,6 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
 
   return (
     <div className="space-y-3 mb-6">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1">
-          <h2 className="text-sm font-bold">Baralhos de hoje</h2>
-          <p className="text-xs text-muted-foreground">
-            {doneCount} de {activeDecks.length} concluídos · {totalPending} cards pendentes
-          </p>
-        </div>
-      </div>
-
       {/* Prompt to set up study plan */}
       {!hasPlan && (
         <button

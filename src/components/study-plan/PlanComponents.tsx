@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3 } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,7 +57,9 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-xs text-muted-foreground">Carga de hoje</span>
-        <span className="text-lg font-bold text-foreground">{formatMinutes(estimatedMinutes)}</span>
+        <span className="text-lg font-bold text-foreground">
+          {estimatedMinutes === 0 ? 'Sem estudo hoje' : formatMinutes(estimatedMinutes)}
+        </span>
       </div>
       <div className="relative h-2 rounded-full overflow-hidden bg-muted">
         <div className="absolute inset-0 flex">
@@ -71,9 +73,13 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
           style={{ left: `${Math.min(percent, 99)}%` }}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        {formatMinutes(reviewMin)} dominados + {formatMinutes(newMin)} novos
-      </p>
+      {estimatedMinutes === 0 ? (
+        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ Nenhuma revisão pendente</p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">
+          {formatMinutes(reviewMin)} dominados + {formatMinutes(newMin)} novos
+        </p>
+      )}
     </div>
   );
 }
@@ -185,7 +191,10 @@ export function ForecastSimulator({
       <CardContent className="p-4 space-y-3">
         {/* Header with filters */}
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Tempo de Estudo</h3>
+          <div className="flex items-center gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga</h3>
+          </div>
           {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
         </div>
 
@@ -449,43 +458,19 @@ export function ForecastSimulator({
               </ComposedChart>
             </ResponsiveContainer>
 
-            {/* Legend */}
-            {avgCapacity > 0 && (
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
-                  Tempo de estudo por dia
-                </span>
-              </div>
-            )}
-
             {/* Summary explanation - didactic */}
             {summary && (
-              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5">
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  📊 Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
+                  Nos próximos <strong className="text-foreground">{data.length} dias</strong>, 
                   você estudará em média <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
                   {summary.peakMin > summary.avgDailyMin && (
                     <> O dia mais puxado terá <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> de estudo.</>
                   )}
                   {hasOverload && (
-                    <> Dias com <span className="text-amber-600 dark:text-amber-400 font-semibold">!</span> ultrapassam seu tempo disponível — considere reduzir novos cards ou aumentar seu tempo de estudo.</>
+                    <> Dias com <span className="text-amber-600 dark:text-amber-400 font-semibold">⚠</span> ultrapassam seu tempo disponível — reduza novos cards ou aumente seu tempo.</>
                   )}
                 </p>
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />Novos
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />Aprendendo
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />Reaprendendo
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />Dominados
-                  </span>
-                </div>
               </div>
             )}
 

@@ -1063,7 +1063,7 @@ const StudyPlan = () => {
                       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
                       HEALTH_CONFIG[healthStatus].bg, HEALTH_CONFIG[healthStatus].text, HEALTH_CONFIG[healthStatus].border
                     )}>
-                      {HEALTH_CONFIG[healthStatus].icon} {HEALTH_CONFIG[healthStatus].label}
+                      {HEALTH_CONFIG[healthStatus].label}
                     </span>
                     {metrics.planHealthPercent != null && metrics.planHealthPercent < 80 && (
                       <span className="text-[10px] text-muted-foreground">
