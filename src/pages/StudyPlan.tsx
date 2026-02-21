@@ -331,6 +331,45 @@ function DeckHierarchySelector({
   );
 }
 
+// ─── Objective Decks Expanded (with drag reorder) ───────
+function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePlan }: {
+  plan: StudyPlanType;
+  activeDecks: DeckWithStats[];
+  avgSecondsPerCard: number;
+  updatePlan: ReturnType<typeof useStudyPlan>['updatePlan'];
+}) {
+  const deckItems = useMemo(() =>
+    (plan.deck_ids ?? [])
+      .map(id => activeDecks.find(d => d.id === id))
+      .filter((d): d is DeckWithStats => !!d),
+    [plan.deck_ids, activeDecks]
+  );
+
+  const { getHandlers, displayItems } = useDragReorder({
+    items: deckItems,
+    getId: (d) => d.id,
+    onReorder: (reordered) => {
+      updatePlan.mutateAsync({ id: plan.id, deck_ids: reordered.map(d => d.id) });
+    },
+  });
+
+  return (
+    <>
+      {displayItems.map(deck => {
+        const handlers = getHandlers(deck);
+        return (
+          <div key={deck.id} {...handlers} className={handlers.className}>
+            <CompactDeckRow deck={deck} avgSecondsPerCard={avgSecondsPerCard} showGrip={true} />
+          </div>
+        );
+      })}
+      {deckItems.length === 0 && (
+        <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum baralho associado</p>
+      )}
+    </>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════
 // ─── MAIN PAGE ──────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
@@ -862,14 +901,7 @@ const StudyPlan = () => {
                   <div className="flex items-center gap-2">
                     <GripVertical className="h-4 w-4 text-muted-foreground/30 shrink-0 cursor-grab active:cursor-grabbing" />
 
-                    {/* Health dot */}
-                    <div className={cn(
-                      'h-2.5 w-2.5 rounded-full shrink-0',
-                      objHealth === 'green' && 'bg-emerald-500',
-                      objHealth === 'yellow' && 'bg-amber-500',
-                      objHealth === 'orange' && 'bg-orange-500',
-                      objHealth === 'red' && 'bg-red-500',
-                    )} />
+                    {/* Name and meta */}
 
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{p.name || 'Meu Objetivo'}</p>
@@ -897,14 +929,12 @@ const StudyPlan = () => {
                   {/* Expanded: show decks + delete */}
                   {isExpanded && (
                     <div className="pt-1 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {(p.deck_ids ?? []).map((id: string) => {
-                        const deck = activeDecks.find(d => d.id === id);
-                        if (!deck) return null;
-                        return <CompactDeckRow key={deck.id} deck={deck} avgSecondsPerCard={avgSecondsPerCard} showGrip={false} />;
-                      })}
-                      {(p.deck_ids ?? []).length === 0 && (
-                        <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum baralho associado</p>
-                      )}
+                      <ObjectiveDecksExpanded
+                        plan={p}
+                        activeDecks={activeDecks}
+                        avgSecondsPerCard={avgSecondsPerCard}
+                        updatePlan={updatePlan}
+                      />
                       <div className="flex gap-1 pt-1">
                         <AlertDialog open={deletingPlanId === p.id} onOpenChange={(open) => setDeletingPlanId(open ? p.id : null)}>
                           <AlertDialogTrigger asChild>
