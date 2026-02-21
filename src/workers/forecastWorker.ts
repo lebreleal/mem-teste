@@ -331,7 +331,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       reviewCards: Math.round(reviewCount * scaleFactor),
       newCards: Math.round(newCardsToday * scaleFactor),
       learningCards: Math.round(learningCount * scaleFactor),
-      reviewMin: revMin + learnMin,
+      reviewMin: revMin,
+      learningMin: learnMin,
       newMin,
       totalMin,
       capacityMin,
@@ -348,8 +349,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
     finalPoints = weeks.map((week, wi) => {
       const avgReviewMin = Math.round(week.reduce((s, p) => s + p.reviewMin, 0) / week.length);
+      const avgLearningMin = Math.round(week.reduce((s, p) => s + p.learningMin, 0) / week.length);
       const avgNewMin = Math.round(week.reduce((s, p) => s + p.newMin, 0) / week.length);
-      const avgTotal = avgReviewMin + avgNewMin;
+      const avgTotal = avgReviewMin + avgLearningMin + avgNewMin;
       const avgCap = Math.round(week.reduce((s, p) => s + p.capacityMin, 0) / week.length);
       return {
         date: week[0].date,
@@ -358,6 +360,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
         newCards: Math.round(week.reduce((s, p) => s + p.newCards, 0) / week.length),
         learningCards: Math.round(week.reduce((s, p) => s + p.learningCards, 0) / week.length),
         reviewMin: avgReviewMin,
+        learningMin: avgLearningMin,
         newMin: avgNewMin,
         totalMin: avgTotal,
         capacityMin: avgCap,

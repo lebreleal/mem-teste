@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, Cell } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -224,15 +224,38 @@ export function ForecastSimulator({
                     color: 'hsl(var(--popover-foreground))',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                   }}
-                  formatter={(value: number, name: string) => {
-                    const label = name === 'reviewMin' ? '📘 Revisões' : '📗 Novos';
-                    return [`${value}min`, label];
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0]?.payload as ForecastPoint;
+                    if (!d) return null;
+                    return (
+                      <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1">
+                        <p className="font-semibold">📅 {d.day} — {d.date}</p>
+                        <div className="space-y-0.5">
+                          <p className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
+                            {d.newCards} novos — {d.newMin}min
+                          </p>
+                          <p className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
+                            {d.learningCards} aprendendo — {d.learningMin}min
+                          </p>
+                          <p className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
+                            {d.reviewCards} revisões — {d.reviewMin}min
+                          </p>
+                        </div>
+                        <p className={cn('pt-1 border-t font-medium', d.overloaded && 'text-red-500')}>
+                          Total: {d.totalMin}min / {d.capacityMin}min
+                          {d.overloaded && ' ⚠️'}
+                        </p>
+                      </div>
+                    );
                   }}
-                  labelFormatter={(label) => `📅 ${label}`}
                 />
                 <ReferenceLine
                   y={maxCapacity}
-                  stroke="hsl(var(--primary) / 0.4)"
+                  stroke="hsl(var(--muted-foreground) / 0.4)"
                   strokeDasharray="6 3"
                   strokeWidth={1.5}
                   label={{
@@ -242,26 +265,10 @@ export function ForecastSimulator({
                     fill: 'hsl(var(--muted-foreground))',
                   }}
                 />
-                <Bar dataKey="reviewMin" stackId="a" name="reviewMin" radius={[0, 0, 0, 0]}>
-                  {data.map((entry, i) => {
-                    const ratio = maxCapacity > 0 ? entry.totalMin / maxCapacity : 0;
-                    let fill = 'hsl(217 91% 60%)'; // blue
-                    if (ratio > 1.5) fill = 'hsl(0 72% 51%)'; // red
-                    else if (ratio > 1.2) fill = 'hsl(25 95% 53%)'; // orange
-                    else if (ratio > 1) fill = 'hsl(45 93% 47%)'; // amber
-                    return <Cell key={i} fill={fill} opacity={0.85} />;
-                  })}
-                </Bar>
-                <Bar dataKey="newMin" stackId="a" name="newMin" radius={[3, 3, 0, 0]}>
-                  {data.map((entry, i) => {
-                    const ratio = maxCapacity > 0 ? entry.totalMin / maxCapacity : 0;
-                    let fill = 'hsl(152 69% 47%)'; // green
-                    if (ratio > 1.5) fill = 'hsl(0 72% 65%)';
-                    else if (ratio > 1.2) fill = 'hsl(25 95% 65%)';
-                    else if (ratio > 1) fill = 'hsl(45 93% 60%)';
-                    return <Cell key={i} fill={fill} opacity={0.75} />;
-                  })}
-                </Bar>
+                {/* Stacked bars: bottom=review (green), mid=learning (amber), top=new (blue) */}
+                <Bar dataKey="reviewMin" stackId="a" name="Revisões" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="learningMin" stackId="a" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.85} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="newMin" stackId="a" name="Novos" fill="hsl(217 91% 60%)" opacity={0.85} radius={[3, 3, 0, 0]} />
               </ComposedChart>
             </ResponsiveContainer>
 
@@ -269,28 +276,20 @@ export function ForecastSimulator({
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground px-1">
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                Revisões
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
                 Novos
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--primary) / 0.4)' }} />
-                Capacidade diária
+                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
+                Aprendendo
               </span>
-            </div>
-
-            {/* Color scale explanation */}
-            <div className="flex items-center gap-1 text-[9px] text-muted-foreground/70 px-1">
-              <span>Intensidade:</span>
-              <div className="flex items-center gap-0.5">
-                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(45 93% 47%)' }} />
-                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(25 95% 53%)' }} />
-                <span className="h-2 w-4 rounded-sm inline-block" style={{ background: 'hsl(0 72% 51%)' }} />
-              </div>
-              <span>ok → leve → pesado → crítico</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
+                Revisões
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-px w-4 border-t-2 border-dashed inline-block" style={{ borderColor: 'hsl(var(--muted-foreground) / 0.4)' }} />
+                Capacidade
+              </span>
             </div>
 
             {/* Summary metrics */}
