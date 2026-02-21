@@ -5,11 +5,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RotateCcw, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
+import { useDecks } from '@/hooks/useDecks';
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -32,6 +33,7 @@ import DeckList from '@/components/dashboard/DeckList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
+import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,8 +48,29 @@ const Dashboard = () => {
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
+  const { decks: allDecks } = useDecks();
 
-
+  // Carousel helpers
+  const hasPlan = plans.length > 0;
+  const planDeckIds = allDeckIds;
+  const planDeckOrder = useMemo(() => {
+    return plans.flatMap(p => p.deck_ids ?? []);
+  }, [plans]);
+  const plansByDeckId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of plans) {
+      for (const id of (p.deck_ids ?? [])) {
+        if (!map[id]) map[id] = p.name;
+      }
+    }
+    return map;
+  }, [plans]);
+  const getRootId = useCallback((deckId: string): string | null => {
+    const d = (allDecks ?? []).find(x => x.id === deckId);
+    if (!d) return null;
+    if (!d.parent_deck_id) return d.id;
+    return getRootId(d.parent_deck_id);
+  }, [allDecks]);
   // Handle payment return
   useEffect(() => {
     const payment = searchParams.get('payment');
@@ -266,6 +289,18 @@ const Dashboard = () => {
             </button>
           ))}
         </div>
+
+        {/* Study deck carousel */}
+        {allDecks && allDecks.length > 0 && (
+          <DeckCarousel
+            decks={allDecks}
+            avgSecondsPerCard={avgSecondsPerCard}
+            hasPlan={hasPlan}
+            planDeckIds={planDeckIds}
+            planDeckOrder={planDeckOrder}
+            plansByDeckId={plansByDeckId}
+          />
+        )}
 
         {/* Backlog banner */}
         {metrics && metrics.totalReview > 0 && (
