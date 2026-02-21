@@ -1082,14 +1082,17 @@ const StudyPlan = () => {
               />
 
               {/* Daily new cards limit */}
-              <div className="space-y-2 pt-1">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Sparkles className="h-3 w-3" />
-                    Cards novos por dia
+                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Novos cards para estudar / dia
                   </span>
-                  <span className="text-sm font-bold tabular-nums">{tempNewCards}</span>
+                  <span className="text-base font-bold tabular-nums text-primary">{tempNewCards}</span>
                 </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
+                </p>
                 <Slider
                   value={[tempNewCards]}
                   min={0}
