@@ -239,6 +239,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     if (cancelled) break;
 
     // Generate newly created cards for today (spread across decks)
+    let createdCardsToday = 0;
     if (createdCardsPerDay > 0 && day > 0) {
       const deckIds = Array.from(deckMap.keys());
       const perDeck = Math.max(1, Math.round(createdCardsPerDay / deckIds.length));
@@ -246,6 +247,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
         for (let c = 0; c < perDeck; c++) {
           simCards.push({ deck_id: deckId, state: 0, stability: 0, difficulty: 0, scheduledDay: day, lastReviewedDay: day });
           newByDeck.set(deckId, (newByDeck.get(deckId) || 0) + 1);
+          createdCardsToday++;
         }
       }
     }
@@ -377,6 +379,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       totalMin,
       capacityMin,
       overloaded: totalMin > capacityMin,
+      createdCards: Math.round(createdCardsToday * scaleFactor),
     });
   }
 
@@ -408,6 +411,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
         totalMin: avgTotal,
         capacityMin: avgCap,
         overloaded: avgTotal > avgCap,
+        createdCards: Math.round(week.reduce((s, p) => s + p.createdCards, 0) / week.length),
       };
     });
   }

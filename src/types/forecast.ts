@@ -71,6 +71,7 @@ export interface ForecastPoint {
   totalMin: number;
   capacityMin: number;
   overloaded: boolean;
+  createdCards: number;
 }
 
 export interface SimulatorSummary {

@@ -853,7 +853,7 @@ const StudyPlan = () => {
         {feasibilityCheck.neededPerDay > 50 ? (
           <div className="space-y-1.5">
             <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-              ⚠ Para dominar todos os cards até a data escolhida, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+              ⚠ Meta inviável — para estudar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> até <strong>{format(targetDate, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
             </p>
             <p className="text-[10px] font-semibold text-muted-foreground">Recomendação:</p>
             <Button
@@ -1544,10 +1544,10 @@ const StudyPlan = () => {
                             {neededPerDay > 50 ? (
                               <div className="space-y-1.5">
                                 <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                                  ⚠ Meta inviável — para dominar todos os cards até a data, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
+                                  ⚠ Meta inviável — para estudar todos os <strong>{totalNew} cards novos</strong> até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>, o que causa burnout. Recomendamos no máximo 50/dia.
                                 </p>
                                 <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
-                                {/* Change target date — primary action */}
+                                {/* Change target date — apply suggested date directly */}
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1555,29 +1555,35 @@ const StudyPlan = () => {
                                   onClick={() => {
                                     const editablePlan = plans.find(p => p.target_date);
                                     if (editablePlan) {
-                                      startEdit(editablePlan);
-                                      setStep(3);
+                                      const minDays = Math.ceil(totalNew / 50);
+                                      const suggested = new Date();
+                                      suggested.setDate(suggested.getDate() + Math.ceil(minDays * 1.3));
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: suggested.toISOString() });
+                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
                                     }
                                   }}
                                 >
                                   <CalendarIcon className="h-3 w-3 shrink-0" />
-                                  <span className="text-left">Mudar data limite para uma data mais realista</span>
+                                  <span className="text-left">Mudar para uma data viável automaticamente</span>
                                 </Button>
                               </div>
                             ) : (
                               <div className="space-y-1.5">
                                 <p className="text-[10px] text-muted-foreground font-semibold">Recomendações:</p>
 
-                                {/* 1. Change target date — primary actionable button */}
+                                {/* 1. Change target date — apply suggested date directly */}
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
                                   onClick={() => {
                                     const editablePlan = plans.find(p => p.target_date);
-                                    if (editablePlan) {
-                                      startEdit(editablePlan);
-                                      setStep(3);
+                                    if (editablePlan && neededPerDay && daysUntilTarget) {
+                                      const minDays = Math.ceil(totalNew / neededPerDay);
+                                      const suggested = new Date();
+                                      suggested.setDate(suggested.getDate() + Math.ceil(minDays * 1.3));
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: suggested.toISOString() });
+                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
                                     }
                                   }}
                                 >
