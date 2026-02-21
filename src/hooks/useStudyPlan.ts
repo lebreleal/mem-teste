@@ -89,6 +89,7 @@ export interface PlanMetrics {
   weeklyCardData: WeeklyCardDataPoint[];
   forecastData: ForecastDataPoint[];
   dailyNewCards: number;
+  newCardsAllocation: Record<string, number>;
 }
 
 export function useStudyPlan() {
@@ -249,6 +250,20 @@ export function useStudyPlan() {
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
     const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
+
+    // ─── Priority-based new card allocation ───
+    const newCardsAllocation: Record<string, number> = {};
+    let allocRemaining = remainingCapacity;
+    const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    for (const p of sortedPlans) {
+      if (allocRemaining <= 0) { newCardsAllocation[p.id] = 0; continue; }
+      const planDeckCount = (p.deck_ids ?? []).length;
+      const totalDeckCount = allDeckIds.length || 1;
+      const planNewEstimate = Math.round(totalNew * (planDeckCount / totalDeckCount));
+      const allocated = Math.min(allocRemaining, planNewEstimate);
+      newCardsAllocation[p.id] = allocated;
+      allocRemaining -= allocated;
+    }
     const dailyNewCards = Math.min(remainingCapacity, totalNew);
     const newMinutes = Math.round((dailyNewCards * avg) / 60);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
@@ -350,7 +365,7 @@ export function useStudyPlan() {
       avgRetention: retentionQuery.data ?? 0.9,
       todayCapacityMinutes, capacityCardsToday,
       projectedCompletionDate, weeklyCardData,
-      forecastData, dailyNewCards,
+      forecastData, dailyNewCards, newCardsAllocation,
     };
   }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
