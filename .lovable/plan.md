@@ -1,101 +1,79 @@
 
+## Plano: Corrigir contagem de cards novos, restaurar background da legenda e alinhar icones
 
-## Plano: Corrigir contagem de cards novos, melhorar legenda e interpretacao do simulador
+### Problemas
 
-### Problemas Identificados
+1. **Total de cards novos errado (177 em vez de 412)**: O `totalNewCards` vem de `paramsQuery.data?.cards?.filter(c => c.state === 0)` que so conta cards no estado "novo" (`state === 0`). Porem os cards dos objetivos incluem cards em outros estados (learning, relearning) que tambem precisam ser estudados. O valor correto e usar o `totalNew` do `useStudyPlan` (que vem do RPC `get_plan_metrics`), que ja conta todos os cards novos restantes nos decks dos objetivos.
 
-1. **Total de cards novos muda com a view (7d=210, 30d=270, 90d=60)**: O calculo `totalNewRemaining = currentNewCards * intenseDays` esta completamente errado -- ele multiplica os cards/dia pelo numero de dias com novos na simulacao, que varia conforme o horizonte. O valor correto deveria vir dos dados reais (cards com state=0 nos params do simulador).
+2. **"Cards criados/dia" nao afeta legenda**: O `createdInPeriod` e somado ao total, mas o texto nao explica isso separadamente.
 
-2. **"Cards criados/dia" nao afeta a legenda**: Quando o usuario aumenta `createdCardsPerDay`, o worker adiciona cards novos a cada dia da simulacao, mas o resumo nao reflete isso.
+3. **Background removido da legenda**: O usuario quer o background de volta.
 
-3. **Legenda com background**: O bloco de resumo tem `bg-muted/50 border` que o usuario quer remover.
+4. **Icones desalinhados**: Os icones na legenda e no informativo precisam estar centralizados verticalmente.
 
-4. **Info "i" pouco responsivo**: O icone e pequeno demais para toque mobile.
-
-5. **Alinhamento da legenda/interpretacao**: Precisa melhorar a visualizacao geral.
-
----
+5. **Explicacao do dashboard confusa**: O bloco de "Conclusao estimada" mostra texto confuso quando a meta esta em risco.
 
 ### Solucao
 
-#### 1. Expor `totalNewCards` real do `useForecastSimulator`
+#### 1. Usar `totalNew` real dos objetivos em vez de `totalNewCards` do simulador
 
-No hook `useForecastSimulator.ts`, contar os cards com `state === 0` do `paramsQuery.data.cards` e expor como `totalNewCards`:
-```typescript
-const totalNewCards = paramsQuery.data?.cards?.filter(c => c.state === 0).length ?? 0;
-// retornar no objeto de retorno
-```
+O `totalNewCards` do simulador filtra `state === 0` dos `ForecastParams.cards` -- isso pode nao incluir todos os cards. O valor correto ja existe no `useStudyPlan` como `metrics.totalNew` (412). Passar esse valor como prop ao `ForecastSimulator`.
 
-#### 2. Passar `totalNewCards` como prop para `ForecastSimulator`
+**`src/pages/StudyPlan.tsx`**:
+- Trocar `totalNewCards={totalNewCards}` por `totalNewCards={metrics?.totalNew ?? totalNewCards}` para usar o valor real dos objetivos.
 
-Em `ForecastSimulatorSection` (StudyPlan.tsx), passar o novo valor. Em `ForecastSimulator` (PlanComponents.tsx), receber como prop.
+#### 2. Restaurar background da legenda
 
-#### 3. Corrigir calculo de `totalNewRemaining` no resumo
+**`src/components/study-plan/PlanComponents.tsx` (linha ~500)**:
+- Trocar `<div className="px-1 pt-2 space-y-1.5">` de volta para `<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">`
 
-Substituir `currentNewCards * intenseDays` pelo valor real:
-```typescript
-// Com createdCards: total = newCards existentes + (createdCardsPerDay * horizonDays)
-const totalNewRemaining = totalNewCards + (createdCardsPerDay * horizonDays);
-```
+#### 3. Centralizar icones na legenda e no informativo
 
-Isso garante que:
-- O numero nao muda com a view (sempre reflete os cards reais)
-- `createdCardsPerDay` e somado ao total (cards que serao criados no periodo)
+**`src/components/study-plan/PlanComponents.tsx`** (linhas ~504-533):
+- Trocar `flex items-start` por `flex items-center` nos paragrafos com icones
+- Remover `mt-0.5` dos icones (ja que items-center centraliza)
 
-#### 4. Remover background da legenda
+**Info banner (linhas ~359-365)**:
+- Trocar `flex items-start` por `flex items-center`
 
-Trocar `bg-muted/50 border` por layout limpo sem fundo:
-```typescript
-// De:
-<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
-// Para:
-<div className="px-1 pt-2 space-y-1.5">
-```
+#### 4. Melhorar explicacao quando "createdCardsPerDay > 0"
 
-#### 5. Melhorar responsividade do Info "i"
+No texto da legenda, quando ha cards criados/dia, separar: "Voce tem X cards novos nos seus objetivos + Y sendo criados/dia"
 
-Aumentar a area de toque do icone Info:
-```typescript
-// De:
-<Info className="h-3 w-3 shrink-0 mt-0.5" />
-// Para:
-<div className="shrink-0 p-1 -m-1">
-  <Info className="h-3.5 w-3.5" />
-</div>
-```
+#### 5. Simplificar explicacao do dashboard
 
-#### 6. Ajustar texto da legenda para ser consistente
-
-- Quando ha `createdCardsPerDay > 0`, informar: "Voce tem X cards novos + Y criados/dia (Z no periodo)"
-- A contagem de cards novos sera sempre a mesma independente da view escolhida
-- O numero de dias intensos ainda pode variar com a view, mas o total de cards e fixo
-
----
+No bloco de conclusao estimada (`StudyPlan.tsx` linhas ~1508-1521), simplificar o texto:
+- Gargalo de tempo: "Seu tempo de estudo ({X}min/dia) permite ~{Y} novos cards/dia apos as revisoes."
+- Gargalo de limite: "Seu limite atual e {X} novos cards/dia. Para cumprir a meta, precisaria de {Y}/dia."
 
 ### Detalhes Tecnicos
 
-**`src/hooks/useForecastSimulator.ts` (linha ~124-133):**
-- Adicionar: `const totalNewCards = paramsQuery.data?.cards?.filter(c => c.state === 0).length ?? 0;`
-- Incluir `totalNewCards` no retorno do hook
+**`src/pages/StudyPlan.tsx` (linha ~594)**:
+```typescript
+// De:
+totalNewCards={totalNewCards}
+// Para:
+totalNewCards={metrics?.totalNew ?? totalNewCards}
+```
 
-**`src/pages/StudyPlan.tsx` (ForecastSimulatorSection, linhas ~556-607):**
-- Desestruturar `totalNewCards` do `useForecastSimulator`
-- Passar como prop `totalNewCards={totalNewCards}` ao `ForecastSimulator`
-- Passar tambem `createdCardsPerDay` efetivo
+**`src/components/study-plan/PlanComponents.tsx` (linha ~500)**:
+```typescript
+// De:
+<div className="px-1 pt-2 space-y-1.5">
+// Para:
+<div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+```
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~101-136):**
-- Adicionar `totalNewCards: number` na interface de props do `ForecastSimulator`
+**`src/components/study-plan/PlanComponents.tsx` (linhas ~504, 508, 513, 531)**:
+Todas as linhas com `flex items-start gap-1.5` -> `flex items-center gap-1.5` e remover `mt-0.5` dos icones.
 
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~489-493):**
-- Substituir `const totalNewRemaining = currentNewCards * intenseDays;` por:
-  ```typescript
-  const createdInPeriod = (createdCardsOverride ?? defaultCreatedCardsPerDay) * data.length;
-  const totalNewRemaining = totalNewCards + createdInPeriod;
-  ```
+**`src/components/study-plan/PlanComponents.tsx` (linhas ~359-360)**:
+```typescript
+// De:
+<div className="flex items-start gap-2 text-[10px] text-primary px-2 py-1">
+// Para:
+<div className="flex items-center gap-2 text-[10px] text-primary px-2 py-1">
+```
 
-**`src/components/study-plan/PlanComponents.tsx` (linha ~496):**
-- Remover `bg-muted/50 border` do div wrapper do resumo
-
-**`src/components/study-plan/PlanComponents.tsx` (linhas ~358-362):**
-- Aumentar area de toque do `<Info>` icon com padding wrapper
-
+**`src/pages/StudyPlan.tsx` (linhas ~1509-1521)**:
+Simplificar texto do gargalo removendo explicacoes redundantes e usando frases diretas.
