@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, Zap, TrendingUp, Timer, CheckCircle2 } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
+import type { WeeklyMinutes, DayKey } from '@/hooks/useStudyPlan';
+import { DAY_LABELS } from '@/hooks/useStudyPlan';
 import { formatMinutes, HEALTH_CONFIG } from './constants';
 
 // ─── Health Ring SVG ────────────────────────────────────
@@ -83,11 +85,17 @@ const VIEW_OPTIONS: { value: ForecastView; label: string }[] = [
   { value: '365d', label: '1 ano' },
 ];
 
+const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
 export function ForecastSimulator({
   data, summary, isSimulating, progress, defaultNewCardsPerDay,
   forecastView, onViewChange, newCardsOverride, onNewCardsChange,
   hasTargetDate, isUsingDefaults,
   defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
+  realDailyMinutes, realWeeklyMinutes,
+  dailyMinutesOverride, weeklyMinutesOverride,
+  onDailyMinutesChange, onWeeklyMinutesChange,
+  onApplyCapacity, hasAnyOverride,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -103,11 +111,30 @@ export function ForecastSimulator({
   defaultCreatedCardsPerDay: number;
   createdCardsOverride: number | undefined;
   onCreatedCardsChange: (v: number | undefined) => void;
+  realDailyMinutes: number;
+  realWeeklyMinutes: WeeklyMinutes | null;
+  dailyMinutesOverride: number | undefined;
+  weeklyMinutesOverride: WeeklyMinutes | undefined;
+  onDailyMinutesChange: (v: number | undefined) => void;
+  onWeeklyMinutesChange: (v: WeeklyMinutes | undefined) => void;
+  onApplyCapacity: () => void;
+  hasAnyOverride: boolean;
 }) {
   const [editingNewCards, setEditingNewCards] = useState(false);
   const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
+  
+  // Capacity editing state
+  const [editingCapacity, setEditingCapacity] = useState(false);
+  const [tempDailyMin, setTempDailyMin] = useState(String(dailyMinutesOverride ?? realDailyMinutes));
+  const [weeklyMode, setWeeklyMode] = useState(false);
+  const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(
+    weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes, fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes }
+  );
+  
+  const currentDailyMin = dailyMinutesOverride ?? realDailyMinutes;
+  const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
   const hasOverload = data.some(d => d.overloaded);
   const maxCapacity = data.length > 0 ? Math.max(...data.map(d => d.capacityMin)) : 0;
 
@@ -156,7 +183,7 @@ export function ForecastSimulator({
       <CardContent className="p-4 space-y-3">
         {/* Header with filters */}
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Previsão de Carga</h3>
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Simulador de Carga</h3>
           {hasOverload && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
         </div>
 
@@ -238,6 +265,107 @@ export function ForecastSimulator({
               <span className="font-medium text-foreground">{createdCardsOverride ?? defaultCreatedCardsPerDay}</span>
               <span className="text-muted-foreground">cards criados/dia</span>
               <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            </button>
+          )}
+        </div>
+
+        {/* Study time / capacity */}
+        <div className="flex items-center gap-2 text-xs">
+          <Timer className="h-3 w-3 text-muted-foreground" />
+          {editingCapacity ? (
+            <div className="space-y-2 flex-1">
+              {!weeklyMode ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={5}
+                    max={720}
+                    value={tempDailyMin}
+                    onChange={e => setTempDailyMin(e.target.value)}
+                    className="h-6 w-16 text-xs px-1.5"
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(tempDailyMin, 10);
+                        if (!isNaN(val) && val >= 5) {
+                          onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
+                          onWeeklyMinutesChange(undefined);
+                        }
+                        setEditingCapacity(false);
+                      }
+                    }}
+                  />
+                  <span className="text-muted-foreground">min/dia</span>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => {
+                    const val = parseInt(tempDailyMin, 10);
+                    if (!isNaN(val) && val >= 5) {
+                      onDailyMinutesChange(val === realDailyMinutes ? undefined : val);
+                      onWeeklyMinutesChange(undefined);
+                    }
+                    setEditingCapacity(false);
+                  }}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {DAY_ORDER.map(dk => (
+                      <div key={dk} className="flex items-center gap-1">
+                        <span className="text-[10px] text-muted-foreground w-6">{DAY_LABELS[dk]}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={720}
+                          value={tempWeekly[dk]}
+                          onChange={e => setTempWeekly(prev => ({ ...prev, [dk]: parseInt(e.target.value, 10) || 0 }))}
+                          className="h-6 w-12 text-xs px-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => {
+                    onWeeklyMinutesChange(tempWeekly);
+                    const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
+                    onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
+                    setEditingCapacity(false);
+                  }}>
+                    <Check className="h-3 w-3 mr-1" /> Confirmar
+                  </Button>
+                </div>
+              )}
+              <div className="flex gap-1">
+                <button
+                  className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors', !weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
+                  onClick={() => setWeeklyMode(false)}
+                >
+                  Igual todo dia
+                </button>
+                <button
+                  className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors', weeklyMode ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-muted hover:bg-muted')}
+                  onClick={() => {
+                    setWeeklyMode(true);
+                    const base = parseInt(tempDailyMin, 10) || realDailyMinutes;
+                    setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: base, tue: base, wed: base, thu: base, fri: base, sat: base, sun: base });
+                  }}
+                >
+                  Por dia
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => {
+              setTempDailyMin(String(currentDailyMin));
+              setWeeklyMode(!!weeklyMinutesOverride || !!realWeeklyMinutes);
+              setTempWeekly(weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: currentDailyMin, tue: currentDailyMin, wed: currentDailyMin, thu: currentDailyMin, fri: currentDailyMin, sat: currentDailyMin, sun: currentDailyMin });
+              setEditingCapacity(true);
+            }} className="flex items-center gap-1 hover:text-primary transition-colors">
+              <span className="font-medium text-foreground">{currentDailyMin}min/dia</span>
+              {weeklyMinutesOverride && <span className="text-muted-foreground">(por dia)</span>}
+              <Pencil className="h-3 w-3 text-muted-foreground/50" />
+              {isCapacityOverridden && (
+                <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+              )}
             </button>
           )}
         </div>
@@ -392,6 +520,13 @@ export function ForecastSimulator({
               </div>
             )}
           </>
+        )}
+
+        {/* Apply button */}
+        {hasAnyOverride && !isSimulating && data.length > 0 && (
+          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onApplyCapacity}>
+            <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar ao meu plano
+          </Button>
         )}
 
         {/* Empty state */}
