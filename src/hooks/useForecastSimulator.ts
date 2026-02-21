@@ -45,11 +45,14 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const defaultNewCardsPerDay = useMemo(() => {
     const decks = paramsQuery.data?.decks;
     if (!decks || decks.length === 0) return 20;
-    return decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
-  }, [paramsQuery.data?.decks]);
+    const totalLimit = decks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0);
+    const isNewAccount = (paramsQuery.data?.total_reviews_90d ?? 0) < 50;
+    return isNewAccount ? Math.min(totalLimit, 30) : totalLimit;
+  }, [paramsQuery.data?.decks, paramsQuery.data?.total_reviews_90d]);
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
-  const defaultCreatedCardsPerDay = paramsQuery.data?.avg_new_cards_per_day ?? 0;
+  const isNewAccount = (paramsQuery.data?.total_reviews_90d ?? 0) < 50;
+  const defaultCreatedCardsPerDay = isNewAccount ? 0 : (paramsQuery.data?.avg_new_cards_per_day ?? 0);
   const createdCardsPerDay = createdCardsPerDayOverride ?? defaultCreatedCardsPerDay;
 
   // Create / terminate worker
