@@ -210,7 +210,7 @@ export function useStudyPlan() {
 
   // ─── Per-deck new card counts for proportional allocation ───
   const perDeckStatsQuery = useQuery({
-    queryKey: ['per-deck-new-counts', userId, allDeckIds],
+    queryKey: ['per-deck-new-counts', userId, expandedDeckIds],
     queryFn: async () => {
       if (allDeckIds.length === 0) return {} as Record<string, number>;
       const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
@@ -374,7 +374,10 @@ export function useStudyPlan() {
 
     // Also aggregate per-plan for display
     for (const p of sortedPlans) {
-      newCardsAllocation[p.id] = (p.deck_ids ?? []).reduce((s, id) => s + (deckNewAllocation[id] ?? 0), 0);
+      newCardsAllocation[p.id] = (p.deck_ids ?? []).reduce((s, id) => {
+        const rootId = findRoot(id);
+        return s + (deckNewAllocation[rootId] ?? 0);
+      }, 0);
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
