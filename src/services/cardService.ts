@@ -146,7 +146,7 @@ export async function fetchAggregatedStats(deckIds: string[]) {
 
   for (const c of allCards) {
     if (c.state === 0) totals.new_count++;
-    else if (c.state === 1) totals.learning_count++;
+    else if (c.state === 1 || c.state === 3) totals.learning_count++;
     else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
   }
 
