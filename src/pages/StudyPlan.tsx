@@ -516,9 +516,10 @@ function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePl
 }
 
 // ─── Forecast Simulator Section (extracted to use hooks) ──
-function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity }: {
+function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity, metricsTotalNew }: {
   allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; plans: StudyPlanType[];
   updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
+  metricsTotalNew?: number;
 }) {
   const { forecastView, setForecastView } = useForecastView();
   const { toast } = useToast();
@@ -593,7 +594,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       customTargetDate={customTargetDate}
       onCustomTargetDate={setCustomTargetDate}
       isUsingDefaults={isUsingDefaults}
-      totalNewCards={totalNewCards}
+      totalNewCards={metricsTotalNew ?? totalNewCards}
       defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
       createdCardsOverride={createdCardsOverride}
       onCreatedCardsChange={setCreatedCardsOverride}
@@ -1508,15 +1509,9 @@ const StudyPlan = () => {
                         {totalNew > 0 && (
                           <div className="text-[10px] text-muted-foreground/70 space-y-0.5">
                             {bottleneck === 'new_limit' ? (
-                              <>
-                                <p>Seu limite está em <strong>{budget} novos cards/dia</strong>, mas você precisaria de <strong>{Math.ceil(totalNew / Math.max(1, (() => { const plT = plans.filter(p => p.target_date); if (!plT.length) return 999; const earliest = plT.reduce((m, p) => { const d = new Date(p.target_date!); return d < m ? d : m; }, new Date(plT[0].target_date!)); const today = new Date(); today.setHours(0,0,0,0); return Math.max(1, Math.ceil((earliest.getTime() - today.getTime()) / 86400000)); })()))}/dia</strong> para cumprir a meta.</p>
-                                <p>Você tem capacidade de estudo ({formatMinutes(avgDailyMin)}/dia), mas o limite de cards novos está baixo.</p>
-                              </>
+                              <p>Seu limite atual é <strong>{budget} novos cards/dia</strong>. Aumente o limite para acelerar o progresso.</p>
                             ) : (
-                              <>
-                                <p>Com <strong>{formatMinutes(avgDailyMin)}/dia</strong> de estudo, após revisar os cards pendentes (~<strong>{formatMinutes(reviewMinToday)}</strong>), sobram ~<strong>{formatMinutes(availMinForNew)}</strong> para novos cards.</p>
-                                <p>Isso permite ~<strong>{cardsFitByTime} novos cards/dia</strong>, mas você precisa de <strong>{effectiveRate < budget ? budget : effectiveRate}/dia</strong> para cumprir a meta.</p>
-                              </>
+                              <p>Seu tempo de estudo (<strong>{formatMinutes(avgDailyMin)}/dia</strong>) permite ~<strong>{cardsFitByTime} novos cards/dia</strong> após as revisões.</p>
                             )}
                           </div>
                         )}
@@ -1614,6 +1609,7 @@ const StudyPlan = () => {
           weeklyMinutes={globalCapacity.weeklyMinutes}
           plans={plans}
           updateCapacity={updateCapacity}
+          metricsTotalNew={metrics?.totalNew}
         />
 
         {/* ═══ MODAL: Confirmar alteração de novos cards ═══ */}
