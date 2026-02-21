@@ -1,117 +1,104 @@
 
-# Corrigir Propagacao de Alocacao: Deck Filho para Deck Pai (Root)
+# Corrigir Duplicacao de Alocacao por Root ID
 
-## Problema Raiz
+## Causa Raiz
 
-Quando o usuario seleciona um **deck filho** no objetivo, o sistema armazena a alocacao com a chave do deck filho (ex: `deckNewAllocation["child-123"] = 25`). Porem, o Dashboard e o Carousel buscam pela chave do **deck raiz** (`planAllocation["parent-456"]`), que nao existe no mapa. Resultado: cai no fallback `deck.daily_new_limit` (20).
+Tres pontos no codigo somam a alocacao do root **uma vez para cada deck filho**, multiplicando o valor. Exemplo: se um plano tem 5 filhos sob o mesmo root com alocacao 23, o sistema mostra 23 x 5 = 115 em vez de 23.
 
-## Solucao
+## Bug 1: `useStudyPlan.ts` - Per-plan allocation multiplica por numero de filhos
 
-Resolver os IDs dos decks filhos para seus ancestrais raiz (root) e agregar as alocacoes no nivel do root. Isso deve acontecer em dois lugares:
+**Linha 376-381**: O loop `(p.deck_ids ?? []).reduce(...)` soma `deckNewAllocation[rootId]` para cada child ID do plano. Se 3 filhos mapeiam ao mesmo root, soma 3x.
 
-1. **Dashboard.tsx** - ja possui `allDecks` com hierarquia e `getRootId()` helper
-2. **studyService.ts** - mesma logica na fila de estudo
-
-### Mudanca 1: `src/pages/Dashboard.tsx`
-
-Criar um `rootAllocation` que agrega `deckNewAllocation` no nivel do root ancestor antes de passar para `useDashboardState` e `DeckCarousel`.
+**Correcao**: Deduplificar por root antes de somar:
 
 ```text
-// Apos obter metrics?.deckNewAllocation:
-const rootAllocation = useMemo(() => {
-  const raw = metrics?.deckNewAllocation;
-  if (!raw || !allDecks) return raw;
-  const result: Record<string, number> = {};
-  for (const [deckId, count] of Object.entries(raw)) {
-    const rootId = getRootId(deckId) ?? deckId;
-    result[rootId] = (result[rootId] ?? 0) + count;
+for (const p of sortedPlans) {
+  const planRoots = new Set<string>();
+  let sum = 0;
+  for (const id of (p.deck_ids ?? [])) {
+    const rootId = findRoot(id);
+    if (!planRoots.has(rootId)) {
+      planRoots.add(rootId);
+      sum += deckNewAllocation[rootId] ?? 0;
+    }
   }
-  return result;
-}, [metrics?.deckNewAllocation, allDecks, getRootId]);
-
-// Passar rootAllocation em vez de metrics?.deckNewAllocation:
-const state = useDashboardState(rootAllocation);
-// ...
-<DeckCarousel planAllocation={rootAllocation} ... />
+  newCardsAllocation[p.id] = sum;
+}
 ```
 
-### Mudanca 2: `src/services/studyService.ts`
+## Bug 2: `studyService.ts` - Session limit multiplica por numero de deckIds
 
-Na funcao `fetchStudyQueue`, apos calcular `allocation` (keyed por deck IDs do plano), resolver para root IDs antes de somar `totalForSession`:
+**Linha 194-197**: `deckIds` contem root + todos descendentes. O reduce soma `rootAllocation[rootId]` para cada um, multiplicando.
+
+**Correcao**: Deduplificar por root:
 
 ```text
-// Resolver allocation para root IDs
-const rootAllocation: Record<string, number> = {};
-for (const [did, count] of Object.entries(allocation)) {
-  const rootId = findRootAncestorId(allDecks ?? [], did);
-  rootAllocation[rootId] = (rootAllocation[rootId] ?? 0) + count;
-}
-
-// Usar rootAllocation para determinar o limite da sessao
+const seenSessionRoots = new Set<string>();
 const totalForSession = deckIds.reduce((s, id) => {
   const rootId = findRootAncestorId(allDecks ?? [], id);
+  if (seenSessionRoots.has(rootId)) return s;
+  seenSessionRoots.add(rootId);
   return s + (rootAllocation[rootId] ?? 0);
 }, 0);
 ```
 
-Nota: `findRootAncestorId` ja existe em `studyUtils.ts` e e importado no `studyService.ts`.
+## Bug 3: `studyService.ts` - Contagem e pesos por child em vez de root
 
-### Mudanca 3: `src/hooks/useStudyPlan.ts`
+**Linhas 136-158**: `newPerDeck` conta cards por child deck ID, mas `allPlanDeckIds` so contem os filhos selecionados no plano (nao todos os descendentes do root). Resultado: contagem incompleta e pesos inconsistentes com useStudyPlan.
 
-Tambem precisa buscar a hierarquia de decks para resolver child para root no proprio hook, para que o `deckNewAllocation` retornado ja contenha entradas de root. Isso garante consistencia em todos os consumidores.
-
-Adicionar uma query leve para buscar `id, parent_deck_id` de todos os decks do usuario:
+**Correcao**: Agregar `newPerDeck` e `weights` por root ID, e expandir `allPlanDeckIds` para incluir descendentes:
 
 ```text
-const deckHierarchyQuery = useQuery({
-  queryKey: ['deck-hierarchy', userId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('decks')
-      .select('id, parent_deck_id')
-      .eq('user_id', userId!);
-    return data ?? [];
-  },
-  enabled: !!userId,
-  staleTime: 5 * 60_000,
-});
-```
-
-Usar essa hierarquia para:
-1. Ao buscar `perDeckNewCounts`, incluir tambem os decks descendentes dos selecionados (pois `get_all_user_deck_stats` retorna por deck, nao por arvore)
-2. Ao montar `deckNewAllocation`, agregar as alocacoes sob o root ID
-
-```text
-// Helper para encontrar root
-const findRoot = (id: string): string => {
-  const deck = deckHierarchy.find(d => d.id === id);
-  if (!deck || !deck.parent_deck_id) return id;
-  return findRoot(deck.parent_deck_id);
-};
-
-// Apos calcular deckNewAllocation por deck IDs do plano,
-// agregar para root:
-const rootedAllocation: Record<string, number> = {};
-for (const [did, count] of Object.entries(deckNewAllocation)) {
-  const rootId = findRoot(did);
-  rootedAllocation[rootId] = (rootedAllocation[rootId] ?? 0) + count;
+// Expandir para incluir descendentes
+const expandedPlanDeckIds = new Set<string>();
+for (const id of allPlanDeckIds) {
+  expandedPlanDeckIds.add(id);
+  const descs = collectDescendantIds(allDecks ?? [], id);
+  for (const d of descs) expandedPlanDeckIds.add(d);
 }
-// Substituir deckNewAllocation por rootedAllocation
+
+// Buscar cards nos decks expandidos
+const { data: newCounts } = await supabase
+  .from('cards')
+  .select('deck_id')
+  .in('deck_id', Array.from(expandedPlanDeckIds))
+  .eq('state', 0);
+
+// Agregar por root
+const newPerRoot: Record<string, number> = {};
+for (const c of (newCounts ?? [])) {
+  const rootId = findRootAncestorId(allDecks ?? [], c.deck_id);
+  newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
+}
+
+// Weights por root (nao por child)
+const weights: Record<string, number> = {};
+const seenRoots = new Set<string>();
+for (const p of plansData) {
+  const daysLeft = ...;
+  for (const did of (p.deck_ids ?? [])) {
+    const rootId = findRootAncestorId(allDecks ?? [], did);
+    if (seenRoots.has(rootId)) continue;
+    seenRoots.add(rootId);
+    const remaining = newPerRoot[rootId] ?? 0;
+    if (remaining === 0) continue;
+    weights[rootId] = remaining / daysLeft;
+  }
+}
 ```
 
 ## Resumo de Arquivos
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `useStudyPlan.ts` | Buscar hierarquia de decks; agregar alocacao no nivel root; incluir descendentes ao contar new cards |
-| `Dashboard.tsx` | Resolver deckNewAllocation para root IDs antes de passar para carousel e state |
-| `studyService.ts` | Resolver allocation para root IDs ao calcular totalForSession |
+| Arquivo | Linha | Bug |
+|---------|-------|-----|
+| `useStudyPlan.ts` | 376-381 | Per-plan sum multiplica por filhos do mesmo root |
+| `studyService.ts` | 194-197 | Session limit multiplica por deckIds do mesmo root |
+| `studyService.ts` | 136-158 | Contagem/pesos por child em vez de root; faltam descendentes |
 
 ## Resultado Esperado
 
-1. Usuario seleciona deck filho "Histologia" no objetivo
-2. Sistema calcula alocacao: "Histologia" = 25 cards/dia
-3. Resolve para root: "Deck Pai" = 25 cards/dia
-4. Dashboard mostra "Deck Pai" com 25 novos/dia (nao mais 20)
-5. Fila de estudo respeita o limite de 25 para toda a hierarquia do Deck Pai
-6. Configuracao manual do deck (20) e ignorada quando plano esta ativo
+1. Usuario define 40 cards/dia, 2 objetivos (fisiopato + histo)
+2. Alocacao por root: fisiopato ~23, histo ~17 (soma = 40)
+3. Per-plan display: fisiopato = 23, histo = 17 (nao mais 69/32)
+4. Dashboard carousel: fisiopato mostra 23 novos, histo mostra 17 novos
+5. Fila de estudo respeita exatamente o limite alocado por root
