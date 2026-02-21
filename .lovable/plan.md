@@ -1,69 +1,53 @@
 
+# Corrigir Grafico de Previsao de Carga
 
-# Correcoes e Melhorias no Plano de Estudos
+## Problema
+O grafico atual mostra apenas 2 barras (Revisoes e Novos) e muda a cor de tudo para vermelho/laranja quando ha sobrecarga. Resultado: impossivel distinguir o que e o que. A intensidade por cor "sobrescreve" a identidade de cada tipo de card.
 
-## 1. Bug do Filtro de Visualizacao (7d/30d/90d/1 ano)
+## Solucao: 3 Barras com Cores Fixas + Indicador de Sobrecarga Separado
 
-**Causa raiz**: O hook `useForecastView` salva a preferencia no banco mas nao atualiza o cache local do React Query. Como o `staleTime` esta configurado como `Infinity`, a query nunca refaz o fetch, entao a UI fica presa no filtro anterior.
+Seguindo o padrao do Anki e apps de SRS consolidados, cada tipo de card tera sua cor fixa e permanente:
 
-**Correcao**: Atualizar o cache local imediatamente ao mudar o filtro, usando `queryClient.setQueryData`, alem de salvar no banco.
+- **Novos** -- Azul (`hsl(217 91% 60%)`) -- cards nunca vistos
+- **Aprendendo** -- Laranja/Amber (`hsl(38 92% 50%)`) -- cards em fase de aprendizado (state=1)
+- **Revisao** -- Verde (`hsl(152 69% 47%)`) -- cards dominados sendo revisados (state=2)
+- **Capacidade diaria** -- Linha tracejada horizontal (ja existe)
 
-**Arquivo**: `src/hooks/useForecastSimulator.ts`
+A sobrecarga sera indicada de forma separada, sem alterar as cores das barras:
+- Uma marca vermelha sutil (ponto ou borda superior) nos dias que ultrapassam a capacidade
+- O fundo da coluna fica com um leve tom vermelho quando excede
 
----
+## Mudancas Tecnicas
 
-## 2. Remover Secao "Baralhos por Objetivo"
+### 1. Worker (`src/workers/forecastWorker.ts`)
+- Linha 334: Separar `learningMin` em campo proprio em vez de somar com `reviewMin`
+- Adicionar `learningMin` ao `ForecastPoint`
 
-A secao entre as linhas 1142-1163 do `StudyPlan.tsx` e redundante -- os objetivos ja expandem para mostrar os baralhos com drag-and-drop. Sera removida completamente.
+### 2. Tipos (`src/types/forecast.ts`)
+- Adicionar `learningMin: number` ao `ForecastPoint`
 
-**Arquivo**: `src/pages/StudyPlan.tsx`
+### 3. Grafico (`src/components/study-plan/PlanComponents.tsx`)
+- Trocar de 2 barras empilhadas para 3: `newMin`, `learningMin`, `reviewMin`
+- Cores fixas por tipo (nunca mudam com sobrecarga)
+- Tooltip mostrando os 3 tipos com contagem de cards + minutos
+- Legenda clara: quadrado colorido + nome + descricao curta
+- Remover a escala de intensidade confusa (ok/leve/pesado/critico)
+- Nos dias com sobrecarga, adicionar um pequeno indicador vermelho no topo da barra (marcador sutil)
 
----
+### 4. Legenda simplificada
+```
+[azul] Novos (cards nunca vistos)
+[laranja] Aprendendo (em fase de memorizacao)
+[verde] Revisao (cards dominados)
+[--- tracejado] Capacidade diaria
+```
 
-## 3. Melhorar o Botao "Limpar Atraso"
-
-### Problema Atual
-O dialog mostra opcoes de diluicao (3, 5 ou 7 dias) mas nenhuma delas faz nada -- apenas fecha o dialog.
-
-### Nova Implementacao: Sistema de Catch-Up Inteligente
-
-Quando o usuario tem revisoes atrasadas, o sistema oferece duas estrategias:
-
-**Opcao A -- Diluir em X dias**:
-- Distribui as revisoes pendentes ao longo de 3, 5 ou 7 dias
-- Aumenta temporariamente o `daily_review_limit` dos decks envolvidos para acomodar o extra
-- Mostra o impacto: "Voce precisara de +Xmin/dia durante Y dias"
-
-**Opcao B -- Resetar cards atrasados**:
-- Cards com atraso severo (scheduled_date > 30 dias atras) podem ter seu estado resetado para "novo"
-- Isso e util quando a pessoa parou de estudar por muito tempo e os cards estao praticamente esquecidos
-- Mostra quantos cards serao afetados antes de confirmar
-
-**Implementacao tecnica**:
-
-Para a Opcao A (diluir), a acao sera:
-- Calcular `extra_per_day = ceil(totalReview / diasEscolhidos)`
-- Temporariamente aumentar a capacidade diaria do usuario (salvar no perfil um campo `catch_up_extra_minutes` com data de expiracao)
-- Alternativa mais simples: apenas mostrar a recomendacao e navegar para a sessao de estudo
-
-Para a Opcao B (resetar atrasados graves):
-- Executar um UPDATE nos cards com `state = 2` e `scheduled_date < now() - interval 'X days'`, setando `state = 0, stability = 0, difficulty = 0`
-- Isso e uma acao destrutiva e requer confirmacao dupla
-
-**Decisao de implementacao**: Comecar com a abordagem simples -- o botao de diluicao navega direto para a sessao de estudo com um toast explicando a meta diaria. O reset de cards atrasados sera uma opcao adicional no dialog.
-
----
-
-## Secao Tecnica -- Arquivos Modificados
-
-### `src/hooks/useForecastSimulator.ts`
-- Adicionar `useQueryClient` ao `useForecastView`
-- No `setView`, chamar `queryClient.setQueryData(['forecast-view', userId], view)` para atualizar o cache imediatamente
-
-### `src/pages/StudyPlan.tsx`
-- Remover linhas 1142-1163 (secao "Baralhos por Objetivo")
-- Atualizar `CatchUpDialog` para ter acoes reais:
-  - Botao "Diluir em X dias": mostra toast com meta diaria e navega para estudo
-  - Botao "Resetar cards esquecidos" (> 30 dias atrasados): executa UPDATE via Supabase
-- Adicionar estado e logica para contar cards com atraso grave
-
+### 5. Tooltip melhorado
+Ao passar o mouse em uma barra:
+```
+Seg 24/02
+  12 novos -- 6min
+  8 aprendendo -- 2min
+  45 revisoes -- 6min
+  Total: 14min / 30min capacidade
+```
