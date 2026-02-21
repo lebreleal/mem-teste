@@ -943,6 +943,7 @@ export type Database = {
           daily_study_minutes: number
           email: string
           energy: number
+          forecast_view: string
           id: string
           is_banned: boolean
           last_energy_recharge: string | null
@@ -967,6 +968,7 @@ export type Database = {
           daily_study_minutes?: number
           email?: string
           energy?: number
+          forecast_view?: string
           id: string
           is_banned?: boolean
           last_energy_recharge?: string | null
@@ -991,6 +993,7 @@ export type Database = {
           daily_study_minutes?: number
           email?: string
           energy?: number
+          forecast_view?: string
           id?: string
           is_banned?: boolean
           last_energy_recharge?: string | null
@@ -2130,6 +2133,10 @@ export type Database = {
           review_count: number
           reviewed_today: number
         }[]
+      }
+      get_forecast_params: {
+        Args: { p_deck_ids: string[]; p_user_id: string }
+        Returns: Json
       }
       get_marketplace_fee: { Args: { tier: number }; Returns: number }
       get_plan_metrics: {

@@ -33,7 +33,9 @@ import type { DeckWithStats } from '@/types/deck';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { useDragReorder } from '@/hooks/useDragReorder';
-import { HealthRing, StudyLoadBar, ForecastChart, CompactDeckRow } from '@/components/study-plan/PlanComponents';
+import { HealthRing, StudyLoadBar, ForecastSimulator, CompactDeckRow } from '@/components/study-plan/PlanComponents';
+import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimulator';
+import type { ForecastView } from '@/types/forecast';
 import { formatMinutes, SLIDER_MARKS, HEALTH_CONFIG, HERO_GRADIENT } from '@/components/study-plan/constants';
 import BottomNav from '@/components/BottomNav';
 
@@ -370,6 +372,54 @@ function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePl
   );
 }
 
+// ─── Forecast Simulator Section (extracted to use hooks) ──
+function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans }: {
+  allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; plans: StudyPlanType[];
+}) {
+  const { forecastView, setForecastView } = useForecastView();
+  const [newCardsOverride, setNewCardsOverride] = useState<number | undefined>();
+  const hasTargetDate = plans.some(p => p.target_date);
+
+  const horizonDays = useMemo(() => {
+    if (forecastView === '7d') return 7;
+    if (forecastView === '30d') return 30;
+    if (forecastView === '90d') return 90;
+    if (forecastView === '365d') return 365;
+    if (forecastView === 'target' && hasTargetDate) {
+      const earliest = plans.filter(p => p.target_date).reduce((min, p) => {
+        const d = new Date(p.target_date!);
+        return d < min ? d : min;
+      }, new Date(plans.filter(p => p.target_date)[0].target_date!));
+      const today = new Date(); today.setHours(0,0,0,0);
+      return Math.max(7, Math.ceil((earliest.getTime() - today.getTime()) / 86400000));
+    }
+    return 7;
+  }, [forecastView, hasTargetDate, plans]);
+
+  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, isUsingDefaults } = useForecastSimulator({
+    deckIds: allDeckIds,
+    horizonDays,
+    newCardsPerDayOverride: newCardsOverride,
+    dailyMinutes,
+    weeklyMinutes,
+    enabled: allDeckIds.length > 0,
+  });
+
+  const handleViewChange = useCallback((v: ForecastView) => {
+    setForecastView(v);
+  }, [setForecastView]);
+
+  return (
+    <ForecastSimulator
+      data={data} summary={summary} isSimulating={isSimulating} progress={progress}
+      defaultNewCardsPerDay={defaultNewCardsPerDay} forecastView={forecastView}
+      onViewChange={handleViewChange} newCardsOverride={newCardsOverride}
+      onNewCardsChange={setNewCardsOverride} hasTargetDate={hasTargetDate}
+      isUsingDefaults={isUsingDefaults}
+    />
+  );
+}
+
 // ═══════════════════════════════════════════════════════════
 // ─── MAIN PAGE ──────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
@@ -378,7 +428,7 @@ const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
-    plans, globalCapacity, isLoading, metrics, avgSecondsPerCard,
+    plans, allDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, reorderObjectives,
   } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
@@ -1081,10 +1131,13 @@ const StudyPlan = () => {
           </CardContent>
         </Card>
 
-        {/* ═══ 4. PREVISÃO DE CARGA CONSOLIDADA ═══ */}
-        {metrics?.forecastData && metrics.forecastData.length > 0 && (
-          <ForecastChart data={metrics.forecastData} />
-        )}
+        {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
+        <ForecastSimulatorSection
+          allDeckIds={allDeckIds}
+          dailyMinutes={globalCapacity.dailyMinutes}
+          weeklyMinutes={globalCapacity.weeklyMinutes}
+          plans={plans}
+        />
 
         {/* ═══ 5. BARALHOS POR OBJETIVO ═══ */}
         <div className="space-y-3">
