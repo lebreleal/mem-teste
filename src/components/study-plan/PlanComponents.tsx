@@ -180,7 +180,7 @@ export function ForecastSimulator({
           ) : (
             <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
               <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
-              <span className="text-muted-foreground">novos cards/dia</span>
+              <span className="text-muted-foreground">novos para estudar/dia</span>
               <Pencil className="h-3 w-3 text-muted-foreground/50" />
             </button>
           )}
