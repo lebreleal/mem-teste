@@ -404,14 +404,15 @@ function DeckHierarchySelector({
             )}
           </div>
 
-          {/* Card count */}
-          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums shrink-0">
+          {/* Card count - icon + number like community folder previews */}
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums shrink-0">
+            <Layers className="h-3 w-3" />
             {hasChildren && isExpanded ? (
-              <>{ownCards}<span className="ml-0.5 text-muted-foreground/60">próprios</span></>
+              <>{ownCards} <span className="text-[10px]">cards próprios</span></>
             ) : (
-              <>{hasChildren ? totalCards : ownCards}<span className="ml-0.5 text-muted-foreground/60">cards</span></>
+              <>{hasChildren ? totalCards : ownCards}</>
             )}
-          </Badge>
+          </span>
         </label>
 
         {/* Select all children shortcut for parent decks */}
