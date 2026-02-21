@@ -6,7 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
-import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId, computeNewCardAllocation } from '@/lib/studyUtils';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
@@ -141,10 +141,14 @@ export async function fetchStudyQueue(
       }
 
       if (deckIds.some(id => expandedPlanCheck.has(id))) {
-        // Expand plan deck IDs to include all descendants for counting
+        // Expand plan deck IDs to include roots AND descendants for counting
         const expandedPlanDeckIds = new Set<string>();
         for (const id of Array.from(allPlanDeckIds)) {
           expandedPlanDeckIds.add(id);
+          // Include root ancestor to count cards on root
+          const rootId = findRootAncestorId(allDecks ?? [], id);
+          expandedPlanDeckIds.add(rootId);
+          // Include descendants
           const descs = collectDescendantIds(allDecks ?? [], id);
           for (const d of descs) expandedPlanDeckIds.add(d);
         }
@@ -162,61 +166,29 @@ export async function fetchStudyQueue(
           newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
         }
 
-        // Calculate weights by root (deduplicated)
-        const weights: Record<string, number> = {};
-        const seenRoots = new Set<string>();
-        for (const p of plansData as any[]) {
-          const daysLeft = p.target_date
-            ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
-            : 90;
-          for (const did of (p.deck_ids ?? []) as string[]) {
-            const rootId = findRootAncestorId(allDecks ?? [], did);
-            if (seenRoots.has(rootId)) continue;
-            seenRoots.add(rootId);
-            const remaining = newPerRoot[rootId] ?? 0;
-            if (remaining === 0) continue;
-            weights[rootId] = remaining / daysLeft;
-          }
-        }
+        // Use shared allocation function
+        const allocation = computeNewCardAllocation({
+          globalBudget: globalLimit,
+          plans: (plansData as any[]).map((p: any) => ({
+            id: p.deck_ids?.join(',') ?? '',
+            deck_ids: p.deck_ids ?? [],
+            target_date: p.target_date,
+            priority: p.priority ?? 0,
+          })),
+          newPerRoot,
+          findRoot: (id: string) => findRootAncestorId(allDecks ?? [], id),
+        });
 
-        const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0);
-        if (totalWeight > 0) {
-          const minShare = Math.max(1, Math.ceil(globalLimit * 0.05));
-          const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
-          const allocation: Record<string, number> = {};
-          let totalAllocated = 0;
-          // First pass: raw shares with minimum floor
-          for (const [did, w] of sorted) {
-            const rawShare = Math.max(1, Math.round(globalLimit * (w / totalWeight)));
-            const floored = Math.max(minShare, rawShare);
-            const cappedToNew = Math.min(floored, newPerRoot[did] ?? 0);
-            allocation[did] = cappedToNew;
-            totalAllocated += cappedToNew;
-          }
-          // Second pass: trim excess from largest
-          if (totalAllocated > globalLimit) {
-            let excess = totalAllocated - globalLimit;
-            for (const [did] of sorted) {
-              if (excess <= 0) break;
-              const current = allocation[did];
-              const canTrim = Math.max(0, current - minShare);
-              const trim = Math.min(canTrim, excess);
-              allocation[did] = current - trim;
-              excess -= trim;
-            }
-          }
-          // allocation is already keyed by rootId (weights were computed by root)
-          // Deduplicate by root when summing for this session
-          const seenSessionRoots = new Set<string>();
-          const totalForSession = deckIds.reduce((s, id) => {
-            const rootId = findRootAncestorId(allDecks ?? [], id);
-            if (seenSessionRoots.has(rootId)) return s;
-            seenSessionRoots.add(rootId);
-            return s + (allocation[rootId] ?? 0);
-          }, 0);
-          if (totalForSession > 0) {
-            planNewLimit = totalForSession;
-          }
+        // Sum allocation for this session's deck roots (deduplicated)
+        const seenSessionRoots = new Set<string>();
+        const totalForSession = deckIds.reduce((s, id) => {
+          const rootId = findRootAncestorId(allDecks ?? [], id);
+          if (seenSessionRoots.has(rootId)) return s;
+          seenSessionRoots.add(rootId);
+          return s + (allocation.perDeck[rootId] ?? 0);
+        }, 0);
+        if (totalForSession > 0) {
+          planNewLimit = totalForSession;
         }
       }
     }

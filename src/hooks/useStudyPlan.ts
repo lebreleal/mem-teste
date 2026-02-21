@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useMemo, useCallback } from 'react';
+import { computeNewCardAllocation } from '@/lib/studyUtils';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
@@ -319,75 +320,19 @@ export function useStudyPlan() {
     const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
-    // ─── Smart new card allocation (proportional by actual new card counts) ───
+    // ─── Smart new card allocation (shared pure function) ───
     const globalNewBudget = globalCapacity.dailyNewCardsLimit;
-    const newCardsAllocation: Record<string, number> = {};
-    const deckNewAllocation: Record<string, number> = {};
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
-    // Calculate weight per deck using ACTUAL new card count per deck
-    // Resolve all plan deck IDs to their root ancestors for consistent keying
-    const deckWeights: { deckId: string; newCount: number; weight: number }[] = [];
-    const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-    const seenRoots = new Set<string>();
-    for (const p of sortedPlans) {
-      const daysLeft = p.target_date
-        ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
-        : 90;
-      for (const deckId of (p.deck_ids ?? [])) {
-        const rootId = findRoot(deckId);
-        if (seenRoots.has(rootId)) continue;
-        seenRoots.add(rootId);
-        // perDeckNewCounts is already keyed by root (aggregated above)
-        const actualNew = perDeckNewCounts[rootId] ?? 0;
-        if (actualNew === 0) { deckNewAllocation[rootId] = 0; continue; }
-        deckWeights.push({ deckId: rootId, newCount: actualNew, weight: actualNew / daysLeft });
-      }
-    }
+    const allocation = computeNewCardAllocation({
+      globalBudget: globalNewBudget,
+      plans: plans.map(p => ({ id: p.id, deck_ids: p.deck_ids, target_date: p.target_date, priority: p.priority })),
+      newPerRoot: perDeckNewCounts,
+      findRoot,
+    });
 
-    const totalWeight = deckWeights.reduce((s, d) => s + d.weight, 0);
-    if (totalWeight > 0) {
-      const minShare = Math.max(1, Math.ceil(globalNewBudget * 0.05));
-      const sorted = [...deckWeights].sort((a, b) => b.weight - a.weight);
-      // First pass: calculate raw shares with minimum floor
-      let totalAllocated = 0;
-      for (const { deckId, weight, newCount } of sorted) {
-        const rawShare = Math.max(1, Math.round(globalNewBudget * (weight / totalWeight)));
-        const floored = Math.max(minShare, rawShare);
-        const cappedToNew = Math.min(floored, newCount); // never exceed actual new cards
-        deckNewAllocation[deckId] = cappedToNew;
-        totalAllocated += cappedToNew;
-      }
-      // Second pass: if total exceeds budget, trim from the largest
-      if (totalAllocated > globalNewBudget) {
-        let excess = totalAllocated - globalNewBudget;
-        for (const { deckId } of sorted) {
-          if (excess <= 0) break;
-          const current = deckNewAllocation[deckId];
-          const canTrim = Math.max(0, current - minShare);
-          const trim = Math.min(canTrim, excess);
-          deckNewAllocation[deckId] = current - trim;
-          excess -= trim;
-        }
-      }
-    }
-
-    // Also aggregate per-plan for display — each root is claimed by the first (highest priority) plan only
-    const globalClaimedRoots = new Set<string>();
-    for (const p of sortedPlans) {
-      const planRoots = new Set<string>();
-      let sum = 0;
-      for (const id of (p.deck_ids ?? [])) {
-        const rootId = findRoot(id);
-        if (planRoots.has(rootId)) continue;
-        planRoots.add(rootId);
-        if (!globalClaimedRoots.has(rootId)) {
-          globalClaimedRoots.add(rootId);
-          sum += deckNewAllocation[rootId] ?? 0;
-        }
-      }
-      newCardsAllocation[p.id] = sum;
-    }
+    const deckNewAllocation = allocation.perDeck;
+    const newCardsAllocation = allocation.perPlan;
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
