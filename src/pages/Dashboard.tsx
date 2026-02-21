@@ -3,14 +3,14 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RotateCcw, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, lazy, Suspense, useMemo, useCallback } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import DeckCarousel from '@/components/dashboard/DeckCarousel';
+
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -45,47 +45,8 @@ const Dashboard = () => {
   const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
-  const { plans, allDeckIds, avgSecondsPerCard } = useStudyPlan();
+  const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
 
-  // Helper: find root ancestor of a deck
-  const getRootId = useCallback((deckId: string): string | null => {
-    const d = state.decks.find(x => x.id === deckId);
-    if (!d) return null;
-    if (!d.parent_deck_id) return d.id;
-    return getRootId(d.parent_deck_id);
-  }, [state.decks]);
-
-  // Build plansByDeckId map: rootDeckId -> highest priority objective name
-  const plansByDeckId = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (!plans.length || !state.decks.length) return map;
-    for (const plan of plans) {
-      for (const deckId of (plan.deck_ids ?? [])) {
-        const rootId = getRootId(deckId);
-        if (rootId && !map[rootId]) {
-          map[rootId] = plan.name;
-        }
-      }
-    }
-    return map;
-  }, [plans, state.decks, getRootId]);
-
-  // Build planDeckOrder: ordered list of root deck IDs by objective priority then deck order within objective
-  const planDeckOrder = useMemo(() => {
-    if (!plans.length || !state.decks.length) return [] as string[];
-    const order: string[] = [];
-    const seen = new Set<string>();
-    for (const plan of plans) {
-      for (const deckId of (plan.deck_ids ?? [])) {
-        const rootId = getRootId(deckId);
-        if (rootId && !seen.has(rootId)) {
-          seen.add(rootId);
-          order.push(rootId);
-        }
-      }
-    }
-    return order;
-  }, [plans, state.decks, getRootId]);
 
   // Handle payment return
   useEffect(() => {
@@ -306,16 +267,25 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Deck Carousel - Today's study cards */}
-        {!state.isLoading && state.decks.length > 0 && (
-          <DeckCarousel
-            decks={state.decks}
-            avgSecondsPerCard={avgSecondsPerCard}
-            hasPlan={plans.length > 0}
-            planDeckIds={allDeckIds}
-            planDeckOrder={planDeckOrder}
-            plansByDeckId={plansByDeckId}
-          />
+        {/* Backlog banner */}
+        {metrics && metrics.totalReview > 0 && (
+          <button
+            onClick={() => navigate('/plano')}
+            className="w-full mb-4 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex items-center gap-3 transition-colors hover:bg-amber-100/80 dark:hover:bg-amber-950/50 text-left"
+          >
+            <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+              <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {metrics.totalReview} revisões atrasadas
+              </p>
+              <p className="text-[11px] text-amber-700/80 dark:text-amber-400/70">
+                Redistribua em dias ou resete cards antigos
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
+          </button>
         )}
 
         <DashboardActions
