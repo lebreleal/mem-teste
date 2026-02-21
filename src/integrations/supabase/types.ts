@@ -940,6 +940,7 @@ export type Database = {
           daily_cards_studied: number
           daily_energy_earned: number
           daily_free_gradings: number
+          daily_new_cards_limit: number
           daily_study_minutes: number
           email: string
           energy: number
@@ -965,6 +966,7 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_new_cards_limit?: number
           daily_study_minutes?: number
           email?: string
           energy?: number
@@ -990,6 +992,7 @@ export type Database = {
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
+          daily_new_cards_limit?: number
           daily_study_minutes?: number
           email?: string
           energy?: number

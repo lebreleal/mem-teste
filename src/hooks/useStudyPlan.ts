@@ -90,6 +90,7 @@ export interface PlanMetrics {
   forecastData: ForecastDataPoint[];
   dailyNewCards: number;
   newCardsAllocation: Record<string, number>;
+  deckNewAllocation: Record<string, number>;
 }
 
 export function useStudyPlan() {
@@ -118,20 +119,21 @@ export function useStudyPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes')
+        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit')
         .eq('id', userId!)
         .single();
       if (error) throw error;
       return {
         dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
         weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
+        dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
       };
     },
     enabled: !!userId,
   });
 
   const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null };
+  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30 };
 
   // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
   const allDeckIds = useMemo(() => {
@@ -256,20 +258,49 @@ export function useStudyPlan() {
     const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
-    // ─── Priority-based new card allocation ───
+    // ─── Smart new card allocation (proportional by urgency) ───
+    const globalNewBudget = globalCapacity.dailyNewCardsLimit;
     const newCardsAllocation: Record<string, number> = {};
-    let allocRemaining = remainingCapacity;
+    const deckNewAllocation: Record<string, number> = {};
+
+    // Calculate weight per deck: newRemaining / daysLeft
+    const deckWeights: { deckId: string; weight: number }[] = [];
     const sortedPlans = [...plans].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    const seenDecks = new Set<string>();
     for (const p of sortedPlans) {
-      if (allocRemaining <= 0) { newCardsAllocation[p.id] = 0; continue; }
-      const planDeckCount = (p.deck_ids ?? []).length;
-      const totalDeckCount = allDeckIds.length || 1;
-      const planNewEstimate = Math.round(totalNew * (planDeckCount / totalDeckCount));
-      const allocated = Math.min(allocRemaining, planNewEstimate);
-      newCardsAllocation[p.id] = allocated;
-      allocRemaining -= allocated;
+      const daysLeft = p.target_date
+        ? Math.max(1, Math.ceil((new Date(p.target_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000))
+        : 90;
+      for (const deckId of (p.deck_ids ?? [])) {
+        if (seenDecks.has(deckId)) continue;
+        seenDecks.add(deckId);
+        // Estimate new cards per deck proportionally (we only have totalNew globally)
+        const deckCount = allDeckIds.length || 1;
+        const estNewInDeck = Math.round(totalNew / deckCount);
+        if (estNewInDeck === 0) continue;
+        deckWeights.push({ deckId, weight: estNewInDeck / daysLeft });
+      }
     }
-    const dailyNewCards = Math.min(remainingCapacity, totalNew);
+
+    const totalWeight = deckWeights.reduce((s, d) => s + d.weight, 0);
+    if (totalWeight > 0) {
+      let remaining = globalNewBudget;
+      const sorted = [...deckWeights].sort((a, b) => b.weight - a.weight);
+      for (const { deckId, weight } of sorted) {
+        if (remaining <= 0) { deckNewAllocation[deckId] = 0; continue; }
+        const share = Math.max(1, Math.round(globalNewBudget * (weight / totalWeight)));
+        const capped = Math.min(share, remaining);
+        deckNewAllocation[deckId] = capped;
+        remaining -= capped;
+      }
+    }
+
+    // Also aggregate per-plan for display
+    for (const p of sortedPlans) {
+      newCardsAllocation[p.id] = (p.deck_ids ?? []).reduce((s, id) => s + (deckNewAllocation[id] ?? 0), 0);
+    }
+
+    const dailyNewCards = Math.min(globalNewBudget, totalNew);
     const newMinutes = Math.round((dailyNewCards * avg) / 60);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
@@ -370,7 +401,7 @@ export function useStudyPlan() {
       avgRetention: retentionQuery.data ?? 0.9,
       todayCapacityMinutes, capacityCardsToday,
       projectedCompletionDate, weeklyCardData,
-      forecastData, dailyNewCards, newCardsAllocation,
+      forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
   }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
@@ -469,13 +500,28 @@ export function useStudyPlan() {
 
   // ─── Global capacity mutations (profile-level) ───
   const updateCapacity = useMutation({
-    mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => {
+    mutationFn: async (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null; daily_new_cards_limit?: number }) => {
+      const updateData: any = {
+        daily_study_minutes: input.daily_study_minutes,
+        weekly_study_minutes: input.weekly_study_minutes ?? null,
+      };
+      if (input.daily_new_cards_limit != null) {
+        updateData.daily_new_cards_limit = input.daily_new_cards_limit;
+      }
       const { error } = await supabase
         .from('profiles')
-        .update({
-          daily_study_minutes: input.daily_study_minutes,
-          weekly_study_minutes: input.weekly_study_minutes ?? null,
-        } as any)
+        .update(updateData)
+        .eq('id', userId!);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const updateNewCardsLimit = useMutation({
+    mutationFn: async (limit: number) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ daily_new_cards_limit: limit } as any)
         .eq('id', userId!);
       if (error) throw error;
     },
@@ -505,6 +551,7 @@ export function useStudyPlan() {
     updatePlan,
     deletePlan,
     updateCapacity,
+    updateNewCardsLimit,
     reorderObjectives,
   };
 }
