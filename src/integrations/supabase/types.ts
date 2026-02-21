@@ -1057,6 +1057,7 @@ export type Database = {
           daily_minutes: number
           deck_ids: string[]
           id: string
+          name: string
           target_date: string | null
           updated_at: string
           user_id: string
@@ -1067,6 +1068,7 @@ export type Database = {
           daily_minutes?: number
           deck_ids?: string[]
           id?: string
+          name?: string
           target_date?: string | null
           updated_at?: string
           user_id: string
@@ -1077,6 +1079,7 @@ export type Database = {
           daily_minutes?: number
           deck_ids?: string[]
           id?: string
+          name?: string
           target_date?: string | null
           updated_at?: string
           user_id?: string
@@ -1086,7 +1089,7 @@ export type Database = {
           {
             foreignKeyName: "study_plans_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
