@@ -211,7 +211,7 @@ function formatCompletionDate(dateStr: string): string {
 }
 
 // ─── Simplified Chart Tooltip ──────────────────────────
-function SimulatorTooltip({ active, payload }: any) {
+function SimulatorTooltip({ active, payload, summary }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as ForecastPoint;
   if (!d) return null;
@@ -232,6 +232,15 @@ function SimulatorTooltip({ active, payload }: any) {
       <p className="text-muted-foreground">
         {formatMinutes(d.totalMin)} de estudo
       </p>
+      {summary && (
+        <>
+          <div className="h-px bg-border" />
+          <div className="space-y-0.5 text-muted-foreground">
+            <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
+            <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -583,7 +592,7 @@ export function ForecastSimulator({
                   width={32}
                   domain={[0, (max: number) => Math.ceil(max * 1.15)]}
                 />
-                <Tooltip content={<SimulatorTooltip />} />
+                <Tooltip content={<SimulatorTooltip summary={summary} />} />
                 {/* Stacked bars: review, new, learning */}
                 <Bar
                   dataKey="reviewCards"
@@ -613,38 +622,18 @@ export function ForecastSimulator({
             </ResponsiveContainer>
           )}
 
-          {/* Mini-legend + averages */}
+          {/* Mini-legend */}
           {chartData.length > 0 && !isSimulating && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
-                </span>
-              </div>
-              {summary && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5">
-                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Seg-Sex </span>
-                      <span className="font-semibold text-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5">
-                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">7 dias </span>
-                      <span className="font-semibold text-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+            <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
+              </span>
             </div>
           )}
 
