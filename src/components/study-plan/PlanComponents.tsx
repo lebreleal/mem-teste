@@ -510,15 +510,6 @@ export function ForecastSimulator({
 
   return (
     <div className="space-y-3">
-      {/* Block 1: Progress Summary */}
-      {!isSimulating && data.length > 0 && (
-        <ProgressSummaryCard
-          data={data}
-          summary={summary}
-          totalNewCards={totalNewCards}
-          plans={plansList}
-        />
-      )}
 
       {/* Block 2: Chart */}
       <Card>
