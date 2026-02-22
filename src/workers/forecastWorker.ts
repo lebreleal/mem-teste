@@ -165,10 +165,17 @@ function getNewCardsLimitForDay(dayIndex: number, startDate: Date, dailyLimit: n
   return dailyLimit;
 }
 
+function formatLocalDate(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day: string } {
   const d = new Date(startDate);
   d.setDate(d.getDate() + dayIndex);
-  const dateStr = d.toISOString().slice(0, 10);
+  const dateStr = formatLocalDate(d);
   const dow = d.getDay();
   const key = DAY_KEYS[dow];
   if (dayIndex === 0) return { date: dateStr, day: 'Hoje' };
