@@ -83,9 +83,9 @@ export function findRootAncestorId(
  */
 export function getNextReadyIndex(queue: { state: number; scheduled_date: string }[]): number {
   const now = Date.now();
-  // 1) Learning cards (state 1) with expired timer cut the line
+  // 1) Learning/relearning cards (state 1 or 3) with expired timer cut the line
   for (let i = 0; i < queue.length; i++) {
-    if (queue[i].state === 1) {
+    if (queue[i].state === 1 || queue[i].state === 3) {
       const scheduledTime = new Date(queue[i].scheduled_date).getTime();
       if (scheduledTime <= now) return i;
     }
@@ -94,7 +94,7 @@ export function getNextReadyIndex(queue: { state: number; scheduled_date: string
   for (let i = 0; i < queue.length; i++) {
     if (queue[i].state === 0 || queue[i].state === 2) return i;
   }
-  return -1; // All remaining cards are learning and waiting
+  return -1; // All remaining cards are learning/relearning and waiting
 }
 
 /** Get local midnight N days from now (for day-based intervals). */

@@ -104,7 +104,7 @@ const Study = () => {
   useEffect(() => {
     const now = Date.now();
     const futureTimes = localQueue
-      .filter(c => c.state === 1)
+      .filter(c => c.state === 1 || c.state === 3)
       .map(c => new Date(c.scheduled_date).getTime())
       .filter(t => t > now);
     if (futureTimes.length === 0) return;
