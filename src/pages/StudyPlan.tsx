@@ -1428,7 +1428,11 @@ const StudyPlan = () => {
                     <Sparkles className="h-3.5 w-3.5 text-primary" />
                     Novos cards por dia
                   </span>
-                  <span className="text-base font-bold tabular-nums text-primary">{tempNewCards}</span>
+                  <span className="text-base font-bold tabular-nums text-primary">
+                    {editingWeeklyNewCards && tempWeeklyNewCards
+                      ? getWeeklyAvgNewCardsGlobal(tempNewCards, tempWeeklyNewCards)
+                      : tempNewCards}
+                  </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
