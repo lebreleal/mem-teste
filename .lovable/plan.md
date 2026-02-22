@@ -1,153 +1,92 @@
 
-## Refatoracao completa: Simulador de Estudos
 
-### Diagnostico do problema atual
+## Correções do Simulador de Estudos
 
-O simulador atual e confuso porque mistura muitas preocupacoes em um unico componente denso:
-- Controles de edicao (cards novos/dia, criados/dia, tempo de estudo) misturados com o grafico
-- Legenda complexa com tooltip cheio de numeros que nao ajudam o aluno
-- Barras empilhadas por "estado" (novos, aprendendo, reaprendendo, dominados) que nao comunicam o progresso real
-- O aluno quer saber: **"quando vou terminar?"** e **"to no ritmo certo?"** — nao detalhes de estados FSRS
+### Problemas encontrados
 
-### O que alunos de Anki realmente valorizam
+1. **Progresso calculado errado**: O `ProgressSummaryCard` soma `newCards` de todos os pontos do gráfico como "cards estudados", mas esses são cards novos **projetados** para serem estudados no futuro. O card deveria mostrar quantos cards novos o usuário já dominou vs. total.
 
-1. **"Future Due" simplificado**: quantos cards vou revisar por dia no futuro
-2. **Projecao de conclusao**: quando vou terminar todos os novos cards
-3. **Carga sustentavel**: estou estudando demais ou de menos?
-4. **Feedback imediato**: se eu mudar algo, o que acontece?
+2. **Sem legenda no gráfico**: As barras azul e vermelha não têm nenhuma explicação visual. O usuário não sabe o que significam.
 
-### Nova arquitetura da secao
+3. **Ícones inconsistentes**: Os controles usam caracteres de texto (`~`, `+`) como ícones em vez de ícones Lucide, ficando fora do padrão visual.
 
-A secao sera dividida em **3 blocos visuais claros** em vez de 1 componente monolitico:
+4. **Reset escondido**: O botão "reset" só aparece durante a edição. Deveria mostrar quando há override ativo, mesmo fora do modo edição.
 
-```text
-+-----------------------------------------------+
-|  RESUMO DO PROGRESSO                           |
-|  [===========================------]  78%      |
-|  312 de 400 cards iniciados                    |
-|  Previsao de conclusao: 15/04/2026             |
-|  Status: Em dia                                |
-+-----------------------------------------------+
+5. **Data de conclusão pode quebrar**: A comparação entre `parseSimDate` (de string) e `earliestTarget` (Date) pode falhar em agregação semanal.
 
-+-----------------------------------------------+
-|  CARGA DIARIA PREVISTA          [7d|30d|90d]   |
-|                                                |
-|  [Grafico de barras simples]                   |
-|  Eixo Y = minutos                              |
-|  Cor unica (gradiente) + linha de capacidade   |
-|  Tooltip: "Seg 24/02 - 45min (32 revisoes,     |
-|            8 novos)"                           |
-|                                                |
-|  --- 60min capacidade ---                      |
-+-----------------------------------------------+
+### Correções planejadas
 
-+-----------------------------------------------+
-|  AJUSTES DA SIMULACAO                          |
-|  Cards novos/dia:     [10] [editar]            |
-|  Cards criados/dia:   [0]  [editar]            |
-|  Tempo de estudo:     60min [editar]           |
-|  [Aplicar ao meu plano]                        |
-+-----------------------------------------------+
+#### 1. Corrigir calculo do ProgressSummaryCard
+
+O progresso real precisa vir dos dados do simulador: o total de cards novos (`totalNewCards`) vs quantos serão completados dentro do horizonte da simulação.
+
+- O `pct` será calculado corretamente: se a simulação mostra que todos os novos serão estudados dentro do período, o percentual é 100%. Se não, mostra a proporção.
+- A data de conclusão será o último ponto da simulação onde `newCards > 0`, formatado para exibição.
+
+#### 2. Adicionar mini-legenda ao gráfico
+
+Abaixo do gráfico, adicionar uma linha simples:
+
+```
+● Dentro da capacidade   ● Excedente   --- Média
 ```
 
-### Detalhes tecnicos de implementacao
+Usando divs com as mesmas cores das barras (azul e vermelho) e um tracejado para a linha de referência.
 
-#### 1. Novo componente: `ProgressSummaryCard`
+#### 3. Trocar ícones de texto por Lucide
 
-Substitui a legenda confusa. Mostra:
-- Barra de progresso total (cards novos ja iniciados / total)
-- Data prevista de conclusao (calculada pelo simulador)
-- Status simples com cor (emoji + texto)
-- Se ha meta: distancia ate a meta vs projecao
+- `~` por `Layers` (cards novos para estudar)
+- `+` por `Plus` (cards criados)
 
-Dados vem do `summary` + `totalNewCards` + `data` existentes.
+#### 4. Mostrar badge "simulando" fora do modo edição
 
-#### 2. Grafico simplificado
+Quando há override ativo, mostrar o badge "simulando" e um botão "reset" inline ao lado do valor, mesmo sem clicar para editar.
 
-**Remover**: barras empilhadas por estado (reviewMin, learningMin, relearningMin, newMin separados).
+#### 5. Robustez da data de conclusão
 
-**Substituir por**: barra unica `totalMin` com gradiente azul. O tooltip mostra o breakdown mas o grafico visual e limpo — uma barra por dia/semana.
+Usar `parseSimDate` com fallback e garantir que funciona tanto com formato diário (`22/02/26`) quanto semanal.
 
-- Manter a `ReferenceLine` de capacidade media
-- Barras que excedem a capacidade ficam com cor vermelha/laranja
-- Tooltip simplificado: data, total de minutos, breakdown resumido em 2 linhas
+### Arquivo a editar
 
-#### 3. Painel de controles separado
+**`src/components/study-plan/PlanComponents.tsx`**:
 
-Mover todos os controles editaveis (cards novos/dia, criados/dia, tempo de estudo) para um card separado abaixo do grafico. Isso desacopla a visualizacao da configuracao.
+- `ProgressSummaryCard`: corrigir cálculo de `pct` e `studied`
+- Após o `ResponsiveContainer`, adicionar mini-legenda com 3 itens (azul, vermelho, tracejado)
+- `ControlRow`: trocar `icon: string` por `icon: React.ReactNode` e usar componentes Lucide
+- `ControlRow`: mostrar badge + reset quando `isOverridden && !editing`
+- `SimulationControls`: atualizar chamadas de `ControlRow` com ícones Lucide
 
-- Layout em lista vertical simples
-- Cada controle: label + valor + botao editar
-- Botao "Aplicar ao meu plano" permanece no final
+### Detalhes técnicos
 
-#### 4. Arquivos a editar
-
-**`src/components/study-plan/PlanComponents.tsx`** — Refatorar o componente `ForecastSimulator`:
-- Extrair `ProgressSummaryCard` (novo sub-componente)
-- Simplificar o grafico para barra unica `totalMin`
-- Extrair `SimulationControls` (novo sub-componente)
-- Simplificar tooltip para 3-4 linhas max
-- Remover modais internos de sobrecarga (informacao ja visivel no resumo)
-
-**`src/workers/forecastWorker.ts`** — Nenhuma mudanca na logica de simulacao. Apenas garantir que os dados `totalMin` ja existem (ja existem).
-
-**`src/pages/StudyPlan.tsx`** — Nenhuma mudanca estrutural. O `ForecastSimulatorSection` continua passando os mesmos props. A refatoracao e 100% visual.
-
-#### 5. Novo tooltip do grafico
-
-```text
-Seg, 24 de fev
-────────────────
-45min de estudo
-  32 revisoes · 8 novos · 5 aprendendo
-
-Capacidade: 60min ✓
+**Mini-legenda do gráfico** (adicionada logo abaixo do `ResponsiveContainer`):
+```tsx
+<div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+  <span className="flex items-center gap-1">
+    <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Dentro da capacidade
+  </span>
+  <span className="flex items-center gap-1">
+    <span className="h-2 w-2 rounded-sm bg-[hsl(0_84%_60%)] opacity-75" /> Excedente
+  </span>
+  <span className="flex items-center gap-1">
+    <span className="h-3 w-3 border-t border-dashed border-muted-foreground/40" /> Média
+  </span>
+</div>
 ```
 
-Quando excede:
-```text
-Seg, 24 de fev
-────────────────
-78min de estudo
-  45 revisoes · 20 novos · 13 aprendendo
-
-Capacidade: 60min ⚠ +18min
-```
-
-#### 6. Cores do grafico
-
-- Barra normal: `hsl(217 91% 60%)` (azul primario) com opacity 0.8
-- Barra sobrecarregada: parte que excede em `hsl(0 84% 60%)` (vermelho)
-- Linha de capacidade: pontilhada cinza (mantida)
-
-Implementacao: usar 2 barras empilhadas — `withinCapacity` e `overCapacity` — em vez de 4 estados.
-
-#### 7. ProgressSummaryCard — detalhes
-
+**Cálculo corrigido do progresso**:
 ```typescript
-// Dados derivados:
-const totalNew = totalNewCards;
-const studied = totalNew - remainingNew; // cards com state > 0
-const pct = totalNew > 0 ? Math.round((studied / totalNew) * 100) : 100;
-
-// Projecao: ultimo dia do simulador onde ainda ha newCards > 0
-const lastNewDay = data.findLast(d => d.newCards > 0);
-const completionDate = lastNewDay?.date;
+// totalNewInSim = soma de newCards previstos na simulação
+// Isso representa quantos dos totalNewCards serão estudados no período
+const willStudy = Math.min(totalNewCards, totalNewInSim);
+const pct = totalNewCards > 0 ? Math.min(100, Math.round((willStudy / totalNewCards) * 100)) : 100;
 ```
 
-Exibe:
-- Barra de progresso visual (Progress component)
-- `312 de 400 cards iniciados (78%)`
-- `Conclusao prevista: 15/04/2026` ou `Voce domina tudo ate DD/MM`
-- Badge de status: "Em dia" / "Meta apertada" / "Meta inviavel"
-
-### Resumo
-
-| O que muda | Antes | Depois |
-|---|---|---|
-| Layout | 1 card com tudo | 3 cards separados |
-| Grafico | 4 barras empilhadas por estado | 1 barra unica (totalMin) |
-| Tooltip | 8+ linhas com detalhes FSRS | 3-4 linhas simples |
-| Controles | Misturados no topo do grafico | Card separado abaixo |
-| Progresso | Escondido na legenda | Card dedicado no topo |
-| Sobrecarga | Modal popup | Cor vermelha na barra |
+**ControlRow melhorado** — quando `isOverridden && !editing`, mostra o valor com badge "simulando" e botão reset ao lado:
+```tsx
+{isOverridden && !editing && (
+  <>
+    <Badge variant="outline" className="text-[9px] h-4 px-1 border-primary/40 text-primary">simulando</Badge>
+    <button onClick={onReset} className="text-[10px] text-primary underline">reset</button>
+  </>
+)}
+```
