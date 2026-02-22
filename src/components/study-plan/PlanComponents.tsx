@@ -706,7 +706,7 @@ export function ForecastSimulator({
             <div className="relative z-10">
               <ResponsiveContainer width="100%" height={180}>
                 <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                   <YAxis
                     tick={{ fontSize: 9 }}
                     tickLine={false}
