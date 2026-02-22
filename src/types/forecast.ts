@@ -79,6 +79,8 @@ export interface ForecastPoint {
 
 export interface SimulatorSummary {
   avgDailyMin: number;
+  avgWeekdayMin: number;
+  avgAllDaysMin: number;
   peakMin: number;
   peakDate: string;
   overloadedDays: number;

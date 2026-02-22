@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle, Briefcase } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -613,18 +613,38 @@ export function ForecastSimulator({
             </ResponsiveContainer>
           )}
 
-          {/* Mini-legend */}
+          {/* Mini-legend + averages */}
           {chartData.length > 0 && !isSimulating && (
-            <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
-              </span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
+                </span>
+              </div>
+              {summary && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5">
+                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Seg-Sex </span>
+                      <span className="font-semibold text-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5">
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">7 dias </span>
+                      <span className="font-semibold text-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

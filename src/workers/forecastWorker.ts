@@ -471,16 +471,31 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   // Summary
   let peakMin = 0, peakDate = '';
   let totalMin = 0, overloadedDays = 0;
-  for (const p of points) {
+  let weekdayMin = 0, weekdayCount = 0;
+  let allDaysMin = 0, allDaysCount = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     totalMin += p.totalMin;
     if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
     if (p.overloaded) overloadedDays++;
+    // Weekday vs all days
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const dow = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    allDaysMin += p.totalMin;
+    allDaysCount++;
+    if (dow >= 1 && dow <= 5) {
+      weekdayMin += p.totalMin;
+      weekdayCount++;
+    }
   }
 
   return {
     points: finalPoints,
     summary: {
       avgDailyMin: Math.round(totalMin / Math.max(1, points.length)),
+      avgWeekdayMin: Math.round(weekdayMin / Math.max(1, weekdayCount)),
+      avgAllDaysMin: Math.round(allDaysMin / Math.max(1, allDaysCount)),
       peakMin,
       peakDate,
       overloadedDays,
