@@ -179,7 +179,7 @@ function ProgressSummaryCard({ data, summary, totalNewCards, plans }: {
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             Média de <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
             {summary.peakMin > summary.avgDailyMin * 1.2 && (
-              <> Pico de <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> em <strong className="text-foreground">{formatCompletionDate(summary.peakDate)}</strong>.</>
+              <> Pico de <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> em <strong className="text-foreground">{summary.peakDate}</strong>.</>
             )}
           </p>
         )}
@@ -219,7 +219,7 @@ function SimulatorTooltip({ active, payload }: any) {
 
   return (
     <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px]">
-      <p className="font-semibold">{d.day} — {formatCompletionDate(d.date)}</p>
+      <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
       <p className="font-medium text-sm">{formatMinutes(d.totalMin)} de estudo</p>
       <p className="text-muted-foreground">
