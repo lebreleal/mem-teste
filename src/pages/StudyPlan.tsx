@@ -112,22 +112,7 @@ function WhatCanIDoDialog({ open, onOpenChange, totalNew, neededPerDay, budget, 
             </Button>
           </div>
 
-          {/* Option 3: Increase time */}
-          {neededMinPerDay > avgDailyMin && (
-            <div className="rounded-lg border p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-primary shrink-0" />
-                <p className="text-sm font-semibold">Aumentar tempo de estudo</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Aumentar de <strong>{formatMinutes(avgDailyMin)}</strong> para <strong>{formatMinutes(neededMinPerDay)}/dia</strong> — mais tempo permite encaixar mais cards novos após as revisões.
-              </p>
-              <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { onGoToCapacity(); onOpenChange(false); }}>
-                <Clock className="h-3 w-3 mr-1.5" />
-                Ajustar tempo de estudo
-              </Button>
-            </div>
-          )}
+          {/* Option 3: Increase time – removed per user request */}
         </div>
       </DialogContent>
     </Dialog>
@@ -928,7 +913,7 @@ const StudyPlan = () => {
       const isTight = !isImpossible && daysLeft === minDaysNeeded;
       if (!isImpossible && !isTight) return null;
       const suggestedDate = new Date(today);
-      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded - 1); // today counts as day 1
+      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded); // +1 day margin so it's comfortable after applying
       const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
     })() : null;
