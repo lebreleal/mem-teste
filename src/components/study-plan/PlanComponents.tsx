@@ -2,8 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle } from 'lucide-react';
+import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
@@ -215,19 +216,21 @@ function SimulatorTooltip({ active, payload }: any) {
   const d = payload[0]?.payload as ForecastPoint;
   if (!d) return null;
 
-  const overAmount = d.totalMin - d.capacityMin;
+  const totalCards = d.reviewCards + d.newCards + d.learningCards + d.relearningCards;
 
   return (
     <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px]">
       <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
-      <p className="font-medium text-sm">{formatMinutes(d.totalMin)} de estudo</p>
-      <p className="text-muted-foreground">
-        {d.reviewCards} revisões · {d.newCards} novos · {d.learningCards + d.relearningCards} aprendendo
-      </p>
+      <p className="font-medium text-sm">{totalCards} cards</p>
+      <div className="space-y-0.5 text-muted-foreground">
+        <p>{d.reviewCards} revisões</p>
+        <p>{d.newCards} novos</p>
+        <p>{d.learningCards + d.relearningCards} aprendendo</p>
+      </div>
       <div className="h-px bg-border" />
-      <p className={cn('font-medium', d.overloaded ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')}>
-        Capacidade: {formatMinutes(d.capacityMin)} {d.overloaded ? `⚠ +${formatMinutes(overAmount)}` : '✓'}
+      <p className="text-muted-foreground">
+        {formatMinutes(d.totalMin)} de estudo
       </p>
     </div>
   );
@@ -499,13 +502,13 @@ export function ForecastSimulator({
   const options = [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Escolher data' }];
   const plansWithDate = (plansList ?? []).filter(p => p.target_date);
 
-  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
+  
 
-  // Prepare chart data with withinCapacity and overCapacity
+  // Prepare chart data with card counts by type
   const chartData = data.map(d => ({
     ...d,
-    withinCapacity: Math.min(d.totalMin, d.capacityMin),
-    overCapacity: Math.max(0, d.totalMin - d.capacityMin),
+    totalCards: d.reviewCards + d.newCards + d.learningCards + d.relearningCards,
+    learningTotal: d.learningCards + d.relearningCards,
   }));
 
   return (
@@ -514,10 +517,25 @@ export function ForecastSimulator({
       {/* Block 2: Chart */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {/* Header */}
+          {/* Header with info tooltip */}
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Carga Diária Prevista</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="w-64 text-xs space-y-1.5 p-3">
+                <p className="font-semibold text-foreground">Tipos de cards</p>
+                <div className="space-y-1 text-muted-foreground">
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] mr-1.5" /><strong className="text-foreground">Revisão:</strong> Cards já estudados que voltam para reforço.</p>
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] mr-1.5" /><strong className="text-foreground">Novos:</strong> Cards que você nunca estudou.</p>
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] mr-1.5" /><strong className="text-foreground">Aprendendo:</strong> Cards em fase inicial de memorização.</p>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* View chips */}
@@ -564,38 +582,31 @@ export function ForecastSimulator({
                   tickLine={false}
                   axisLine={false}
                   width={32}
-                  tickFormatter={(v) => `${v}min`}
                   domain={[0, (max: number) => Math.ceil(max * 1.15)]}
                 />
                 <Tooltip content={<SimulatorTooltip />} />
-                {avgCapacity > 0 && (
-                  <ReferenceLine
-                    y={avgCapacity}
-                    stroke="hsl(var(--muted-foreground) / 0.4)"
-                    strokeDasharray="6 3"
-                    strokeWidth={1.5}
-                    label={{
-                      value: `${avgCapacity}m`,
-                      position: 'right',
-                      fontSize: 9,
-                      fill: 'hsl(var(--muted-foreground))',
-                    }}
-                  />
-                )}
-                {/* Two stacked bars: within capacity (blue) + over capacity (red) */}
+                {/* Stacked bars: review, new, learning */}
                 <Bar
-                  dataKey="withinCapacity"
-                  stackId="load"
-                  name="Dentro da capacidade"
+                  dataKey="reviewCards"
+                  stackId="cards"
+                  name="Revisões"
                   fill="hsl(217 91% 60%)"
                   opacity={0.8}
                   radius={[0, 0, 0, 0]}
                 />
                 <Bar
-                  dataKey="overCapacity"
-                  stackId="load"
-                  name="Excedente"
-                  fill="hsl(0 84% 60%)"
+                  dataKey="newCards"
+                  stackId="cards"
+                  name="Novos"
+                  fill="hsl(142 71% 45%)"
+                  opacity={0.8}
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="learningTotal"
+                  stackId="cards"
+                  name="Aprendendo"
+                  fill="hsl(38 92% 50%)"
                   opacity={0.75}
                   radius={[3, 3, 0, 0]}
                 />
@@ -607,13 +618,13 @@ export function ForecastSimulator({
           {chartData.length > 0 && !isSimulating && (
             <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Dentro da capacidade
+                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(0_84%_60%)] opacity-75" /> Excedente
+                <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 border-t border-dashed border-muted-foreground/40" /> Média
+                <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
               </span>
             </div>
           )}
