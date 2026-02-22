@@ -1,54 +1,33 @@
 
 
-## Reduzir consumo do AI Tutor mantendo qualidade
+## Correcao: Media no tooltip baseada na semana visivel
 
-### Problema raiz
-
-O `max_tokens` esta fixo em **8000** para todas as acoes do tutor (hint, explain, explain-mc). Isso causa:
-
-1. O modelo Gemini tende a preencher o espaco disponivel, gerando respostas enormes
-2. O log estima completion como `8000 * 0.7 = 5600 tokens` por chamada, inflando metricas
-3. O prompt pede "seja completo" sem impor limite de tamanho
+### Problema
+O tooltip mostra as medias "Seg-Sex" e "7 dias" vindas do `summary` global (media do ano inteiro = ~11min/dia). Quando o usuario olha a semana S5 que tem 7h1min total, espera ver ~60min/dia, nao 11min.
 
 ### Solucao
+No componente `SimulatorTooltip`, quando o ponto exibido e uma semana agregada (horizonte > 30d), calcular a media **localmente a partir dos dados daquele ponto** em vez de usar o `summary` global.
 
-Ajustar `max_tokens` por tipo de acao e adicionar instrucao de concisao nos prompts.
+### Mudanca
 
-| Acao | max_tokens atual | max_tokens novo | Motivo |
-|------|-----------------|-----------------|--------|
-| hint (padrao) | 8000 | 800 | Sao 3 frases curtas |
-| explain | 8000 | 3000 | Explicacao estruturada mas focada |
-| explain-mc | 8000 | 2500 | Menos alternativas = menos texto |
+**Arquivo: `src/components/study-plan/PlanComponents.tsx`**
 
-### Mudancas no prompt
+Na funcao `SimulatorTooltip` (linha ~214):
 
-Adicionar ao final de cada prompt de explain/explain-mc uma instrucao de concisao:
+- Detectar se o ponto e uma semana agregada (ex: `d.day` comeca com "S" ou o `date` contem " - ")
+- Se for semana agregada:
+  - Media 7 dias = `Math.round(d.totalMin / 7)`
+  - Media Seg-Sex = `Math.round(d.totalMin / 5)` (aproximacao, pois a semana tem ~5 dias uteis)
+- Se for ponto diario: manter o `summary` global normalmente (ou simplesmente nao mostrar medias, ja que e um unico dia)
 
-- **explain**: "Seja objetivo. Limite a explicacao a no maximo 400 palavras no total."
-- **explain-mc**: "Seja direto. Limite cada explicacao de alternativa a 1-2 frases. Total maximo: 350 palavras."
-- **hint**: ja tem "Keep it under 3 sentences" - ok
+Logica:
 
-### Estimativa de log mais realista
+```text
+Se ponto e semanal (agregado):
+  avg7dias = totalMin / 7
+  avgSegSex = totalMin / 5
+Senao:
+  usar summary global (ou ocultar medias)
+```
 
-Mudar a formula de estimativa de `maxTokens * 0.7` para `maxTokens * 0.5`, que reflete melhor o uso real (o modelo raramente usa 70% do limite).
-
-### Detalhes tecnicos
-
-**Arquivo: `supabase/functions/ai-tutor/index.ts`**
-
-1. **Linhas 43-57** - Ajustar `maxTokens` por acao:
-   - Default (hint): `maxTokens = 800`
-   - `explain`: `maxTokens = 3000`
-   - `explain-mc`: `maxTokens = 2500`
-
-2. **Linhas 46-50** - Adicionar instrucao de limite de palavras nos prompts de explain e explain-mc
-
-3. **Linha 72** - Mudar fator de estimativa de `0.7` para `0.5`
-
-### Impacto esperado
-
-- Reducao de **60-75%** no consumo de tokens por chamada
-- Respostas mais focadas e diretas (melhor UX, menos scroll)
-- Metricas de custo mais precisas nos logs
-- Qualidade mantida: as secoes obrigatorias (Referencia, Explicacao, Conexao) continuam no prompt, so limitamos a verbosidade
-
+Isso resolve o problema sem precisar alterar o Worker, o hook ou a estrutura de dados.
