@@ -885,7 +885,7 @@ const StudyPlan = () => {
               </div>
             </Button>
           </div>
-        ) : (
+        ) : feasibilityCheck.neededPerDay > feasibilityCheck.budget ? (
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold text-muted-foreground">Recomendações:</p>
             {/* 1. Change date — primary actionable */}
@@ -922,7 +922,7 @@ const StudyPlan = () => {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     );
 
