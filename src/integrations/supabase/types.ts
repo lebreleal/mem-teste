@@ -958,6 +958,7 @@ export type Database = {
           successful_cards_counter: number
           tier_last_evaluated: string | null
           updated_at: string
+          weekly_new_cards: Json | null
           weekly_study_minutes: Json | null
         }
         Insert: {
@@ -984,6 +985,7 @@ export type Database = {
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_new_cards?: Json | null
           weekly_study_minutes?: Json | null
         }
         Update: {
@@ -1010,6 +1012,7 @@ export type Database = {
           successful_cards_counter?: number
           tier_last_evaluated?: string | null
           updated_at?: string
+          weekly_new_cards?: Json | null
           weekly_study_minutes?: Json | null
         }
         Relationships: [
