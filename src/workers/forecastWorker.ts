@@ -433,27 +433,30 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       weeks.push(points.slice(i, i + 7));
     }
     finalPoints = weeks.map((week, wi) => {
-      const avgReviewMin = Math.round(week.reduce((s, p) => s + p.reviewMin, 0) / week.length);
-      const avgLearningMin = Math.round(week.reduce((s, p) => s + p.learningMin, 0) / week.length);
-      const avgRelearningMin = Math.round(week.reduce((s, p) => s + p.relearningMin, 0) / week.length);
-      const avgNewMin = Math.round(week.reduce((s, p) => s + p.newMin, 0) / week.length);
-      const avgTotal = avgReviewMin + avgLearningMin + avgRelearningMin + avgNewMin;
-      const avgCap = Math.round(week.reduce((s, p) => s + p.capacityMin, 0) / week.length);
+      const sumReviewMin = week.reduce((s, p) => s + p.reviewMin, 0);
+      const sumLearningMin = week.reduce((s, p) => s + p.learningMin, 0);
+      const sumRelearningMin = week.reduce((s, p) => s + p.relearningMin, 0);
+      const sumNewMin = week.reduce((s, p) => s + p.newMin, 0);
+      const sumTotal = sumReviewMin + sumLearningMin + sumRelearningMin + sumNewMin;
+      const sumCap = week.reduce((s, p) => s + p.capacityMin, 0);
+      const firstDate = week[0].date;
+      const lastDate = week[week.length - 1].date;
+      const dateRange = week.length === 1 ? firstDate : `${firstDate} – ${lastDate}`;
       return {
-        date: week[0].date,
+        date: dateRange,
         day: `S${wi + 1}`,
-        reviewCards: Math.round(week.reduce((s, p) => s + p.reviewCards, 0) / week.length),
-        newCards: Math.round(week.reduce((s, p) => s + p.newCards, 0) / week.length),
-        learningCards: Math.round(week.reduce((s, p) => s + p.learningCards, 0) / week.length),
-        relearningCards: Math.round(week.reduce((s, p) => s + p.relearningCards, 0) / week.length),
-        reviewMin: avgReviewMin,
-        learningMin: avgLearningMin,
-        relearningMin: avgRelearningMin,
-        newMin: avgNewMin,
-        totalMin: avgTotal,
-        capacityMin: avgCap,
-        overloaded: avgTotal > avgCap,
-        createdCards: Math.round(week.reduce((s, p) => s + p.createdCards, 0) / week.length),
+        reviewCards: week.reduce((s, p) => s + p.reviewCards, 0),
+        newCards: week.reduce((s, p) => s + p.newCards, 0),
+        learningCards: week.reduce((s, p) => s + p.learningCards, 0),
+        relearningCards: week.reduce((s, p) => s + p.relearningCards, 0),
+        reviewMin: sumReviewMin,
+        learningMin: sumLearningMin,
+        relearningMin: sumRelearningMin,
+        newMin: sumNewMin,
+        totalMin: sumTotal,
+        capacityMin: sumCap,
+        overloaded: sumTotal > sumCap,
+        createdCards: week.reduce((s, p) => s + p.createdCards, 0),
       };
     });
   }
