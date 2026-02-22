@@ -592,7 +592,6 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
   const [dailyMinutesOverride, setDailyMinutesOverride] = useState<number | undefined>();
   const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
   const [customTargetDate, setCustomTargetDate] = useState<Date | null>(null);
-  const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
   const hasTargetDate = plans.some(p => p.target_date);
   // Find the latest (max) target date across all plans for created cards scoping
   const latestTargetDate = useMemo(() => {
@@ -608,15 +607,6 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
   const effectiveWeeklyMin = weeklyMinutesOverride ?? weeklyMinutes;
 
   const horizonDays = useMemo(() => {
-    // When an objective is selected, auto-set horizon to its target date
-    if (selectedObjectiveId) {
-      const selectedPlan = plans.find(p => p.id === selectedObjectiveId);
-      if (selectedPlan?.target_date) {
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const target = new Date(selectedPlan.target_date + 'T00:00:00');
-        return Math.max(7, Math.ceil((target.getTime() - today.getTime()) / 86400000));
-      }
-    }
     if (forecastView === '7d') return 7;
     if (forecastView === '30d') return 30;
     if (forecastView === '90d') return 90;
@@ -635,7 +625,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
       }
     }
     return 7;
-  }, [forecastView, hasTargetDate, plans, customTargetDate, selectedObjectiveId]);
+  }, [forecastView, hasTargetDate, plans, customTargetDate]);
 
   const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, totalNewCards, isUsingDefaults } = useForecastSimulator({
     deckIds: allDeckIds,
@@ -651,21 +641,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
 
   const handleViewChange = useCallback((v: ForecastView) => {
     setForecastView(v);
-    // When switching to a fixed view, clear objective filter
-    if (v !== 'target') setSelectedObjectiveId(null);
   }, [setForecastView]);
-
-  const handleObjectiveFilter = useCallback((id: string | null) => {
-    setSelectedObjectiveId(id);
-    // When selecting an objective with a target date, switch view to 'target' to show its horizon
-    if (id) {
-      const plan = plans.find(p => p.id === id);
-      if (plan?.target_date) {
-        setForecastView('target');
-        setCustomTargetDate(new Date(plan.target_date + 'T00:00:00'));
-      }
-    }
-  }, [plans, setForecastView]);
 
   const hasAnyOverride = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined || createdCardsOverride !== undefined || dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
 
@@ -708,8 +684,6 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
       realWeeklyNewCards={weeklyNewCards}
       weeklyNewCardsOverride={weeklyNewCardsOverride}
       onWeeklyNewCardsChange={setWeeklyNewCardsOverride}
-      selectedObjectiveId={selectedObjectiveId}
-      onObjectiveFilter={handleObjectiveFilter}
     />
   );
 }
