@@ -335,7 +335,7 @@ export function useStudyPlan() {
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
     // ─── Smart new card allocation (shared pure function) ───
-    const globalNewBudget = globalCapacity.dailyNewCardsLimit;
+    const globalNewBudget = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
     const allocation = computeNewCardAllocation({
@@ -358,10 +358,11 @@ export function useStudyPlan() {
     const weeklyCardData: WeeklyCardDataPoint[] = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(dayKey => {
       const dayMinutes = getMinutesForDayGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes, dayKey);
       const dayCapacity = Math.floor((dayMinutes * 60) / avg);
+      const dayNewLimit = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards, dayKey);
       const dayReviews = totalReview > 0
         ? Math.min(totalReview, dayCapacity)
         : Math.min(totalLearning, Math.ceil(dayCapacity * reviewRatio));
-      const dayNew = Math.min(Math.max(0, dayCapacity - dayReviews), totalNew);
+      const dayNew = Math.min(Math.min(Math.max(0, dayCapacity - dayReviews), totalNew), dayNewLimit);
       return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, total: dayReviews + dayNew, minutes: dayMinutes };
     });
 
@@ -388,7 +389,7 @@ export function useStudyPlan() {
         reviewCards = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
       }
 
-      const fcNewCards = dailyNewCards;
+      const fcNewCards = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards, dayKey);
       const fcReviewMin = Math.round((reviewCards * avg) / 60);
       const fcNewMin = Math.round((fcNewCards * avg) / 60);
       const fcTotalMin = fcReviewMin + fcNewMin;

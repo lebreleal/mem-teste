@@ -1356,7 +1356,7 @@ const StudyPlan = () => {
                       const today = new Date(); today.setHours(0, 0, 0, 0);
                       const dLeft = Math.max(1, Math.ceil((new Date(p.target_date!).getTime() - today.getTime()) / 86400000));
                       const needed = Math.ceil(pNewCards / dLeft);
-                      const budget = globalCapacity.dailyNewCardsLimit;
+                      const budget = getWeeklyAvgNewCardsGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
                       if (needed > budget) {
                         return (
                           <Badge variant="destructive" className="text-[9px] h-4 px-1.5 shrink-0">
@@ -1428,9 +1428,11 @@ const StudyPlan = () => {
                     <Sparkles className="h-3.5 w-3.5 text-primary" />
                     Novos cards por dia
                   </span>
-                  <span className="text-base font-bold tabular-nums text-primary">
-                    {tempNewCards}
-                  </span>
+                  {!(editingWeeklyNewCards || globalCapacity.weeklyNewCards) && (
+                    <span className="text-base font-bold tabular-nums text-primary">
+                      {tempNewCards}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.

@@ -111,12 +111,17 @@ export async function fetchStudyQueue(
   let planNewLimit: number | undefined;
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('daily_new_cards_limit')
+    .select('daily_new_cards_limit, weekly_new_cards')
     .eq('id', userId)
     .single();
 
   {
-    const globalLimit = (profileData as any)?.daily_new_cards_limit ?? 30;
+    const rawLimit = (profileData as any)?.daily_new_cards_limit ?? 30;
+    const weeklyNewCards = (profileData as any)?.weekly_new_cards as Record<string, number> | null;
+    // Use per-day limit based on current day of week
+    const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+    const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
+    const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawLimit;
     // Fetch all study plans to compute allocation
     const { data: plansData } = await supabase
       .from('study_plans')
