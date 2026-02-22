@@ -474,7 +474,6 @@ export function ForecastSimulator({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
-  selectedObjectiveId, onObjectiveFilter,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -505,8 +504,6 @@ export function ForecastSimulator({
   realWeeklyNewCards: WeeklyNewCards | null;
   weeklyNewCardsOverride: WeeklyNewCards | undefined;
   onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
-  selectedObjectiveId?: string | null;
-  onObjectiveFilter?: (id: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -596,17 +593,6 @@ export function ForecastSimulator({
     }).filter(l => l.dayLabel !== null);
   }, [plansWithDate, chartData]);
 
-  // Filter objective lines when a specific objective is selected
-  const visibleObjectiveLines = React.useMemo(() => {
-    if (!selectedObjectiveId) return objectiveLines;
-    return objectiveLines.filter(ol => {
-      const plan = plansWithDate.find(p => p.name === ol.name);
-      return plan?.id === selectedObjectiveId;
-    });
-  }, [objectiveLines, selectedObjectiveId, plansWithDate]);
-
-  // Check if we have multiple plans to show the filter
-  const showObjectiveFilter = (plansList ?? []).length > 1;
 
   return (
     <div className="space-y-3">
@@ -661,37 +647,6 @@ export function ForecastSimulator({
             ))}
           </div>
 
-          {/* Objective filter */}
-          {showObjectiveFilter && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-muted-foreground mr-0.5">Objetivo:</span>
-              <button
-                onClick={() => onObjectiveFilter?.(null)}
-                className={cn(
-                  'px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border',
-                  !selectedObjectiveId
-                    ? 'bg-primary/10 text-primary border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
-                )}
-              >
-                Todos
-              </button>
-              {(plansList ?? []).map((p, i) => (
-                <button
-                  key={p.id}
-                  onClick={() => onObjectiveFilter?.(selectedObjectiveId === p.id ? null : p.id)}
-                  className={cn(
-                    'px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border truncate max-w-[120px]',
-                    selectedObjectiveId === p.id
-                      ? 'bg-primary/10 text-primary border-primary/30'
-                      : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
-                  )}
-                >
-                  {p.name || `Objetivo ${i + 1}`}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Simulation progress */}
           {isSimulating && (
@@ -718,7 +673,7 @@ export function ForecastSimulator({
                   <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
-                  {visibleObjectiveLines.map(ol => (
+                  {objectiveLines.map(ol => (
                     <ReferenceLine
                       key={ol.name}
                       x={ol.dayLabel!}
@@ -745,7 +700,7 @@ export function ForecastSimulator({
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
               </span>
-              {visibleObjectiveLines.map(ol => (
+              {objectiveLines.map(ol => (
                 <span key={ol.name} className="flex items-center gap-1">
                   <span className="h-3 w-0 border-l-2 border-dashed" style={{ borderColor: ol.color }} />
                   <span className="truncate max-w-[80px]">{ol.name}</span>
