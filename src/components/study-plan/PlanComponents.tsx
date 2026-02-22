@@ -514,24 +514,18 @@ export function ForecastSimulator({
                   {/* Target date context */}
                    {earliestTarget && totalNewRemaining > 0 && (() => {
                     const neededPerDay = Math.ceil(totalNewRemaining / Math.max(1, daysUntilTarget));
-                    const isBurnout = neededPerDay > 50;
                     const cantFinish = actualNewPerDay < neededPerDay;
                     return (
                       <>
                         <div className="h-px bg-border" />
                         <p className="text-[10px] text-muted-foreground leading-relaxed">
-                           🎯 Para dominar todos os <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar)</> : ''} antes de <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisa iniciar ~<strong className="text-foreground">{neededPerDay} novos/dia</strong>. A simulação mostra ~<strong className="text-foreground">{actualNewPerDay}/dia</strong>.
-                        </p>
-                        {isBurnout && (
-                          <p className="text-[10px] text-red-600 dark:text-red-400 font-medium leading-relaxed">
-                            ⚠ Meta inviável — seriam necessários <strong>{neededPerDay} novos/dia</strong> para dominar todo o conteúdo a tempo, o que causa burnout. Recomendamos no máximo 50/dia e estender a data limite.
-                          </p>
-                        )}
-                        {!isBurnout && cantFinish && (
-                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
-                            ⚡ Meta apertada — são necessários <strong>{neededPerDay} novos/dia</strong> para dominar o conteúdo até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas a simulação mostra ~<strong>{actualNewPerDay}/dia</strong>. Aumente o limite de novos cards ou o tempo de estudo.
-                          </p>
-                        )}
+                           🎯 Para dominar todos os <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar)</> : ''} antes de <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisa estudar ~<strong className="text-foreground">{neededPerDay} novos/dia</strong>. A simulação mostra ~<strong className="text-foreground">{actualNewPerDay}/dia</strong>.
+                         </p>
+                         {cantFinish && (
+                           <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                             ⚡ Meta apertada — são necessários <strong>{neededPerDay} novos/dia</strong> para dominar o conteúdo até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas a simulação mostra ~<strong>{actualNewPerDay}/dia</strong>. Aumente o limite de novos cards ou o tempo de estudo.
+                           </p>
+                         )}
                       </>
                     );
                   })()}
