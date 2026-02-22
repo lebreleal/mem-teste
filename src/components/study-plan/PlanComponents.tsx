@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -87,7 +87,349 @@ export function StudyLoadBar({ estimatedMinutes, capacityMinutes, reviewMin, new
   );
 }
 
-// ─── Forecast Simulator ─────────────────────────────────
+// ─── Progress Summary Card ──────────────────────────────
+function ProgressSummaryCard({ data, summary, totalNewCards, plans }: {
+  data: ForecastPoint[];
+  summary: SimulatorSummary | null;
+  totalNewCards: number;
+  plans?: { id: string; name: string; target_date: string | null }[];
+}) {
+  // Calculate progress: how many new cards have been "started" (will be studied within the simulation)
+  const lastNewDay = data.length > 0 ? [...data].reverse().find(d => d.newCards > 0) : null;
+  const completionDate = lastNewDay?.date ?? null;
+  
+  // Remaining new cards at the end of simulation
+  const totalNewInSim = data.reduce((s, d) => s + d.newCards, 0);
+  const studied = Math.min(totalNewCards, totalNewInSim);
+  const pct = totalNewCards > 0 ? Math.min(100, Math.round((studied / totalNewCards) * 100)) : 100;
+
+  // Target date comparison
+  const earliestTarget = (plans ?? []).filter(p => p.target_date).reduce<Date | null>((min, p) => {
+    const d = new Date(p.target_date!);
+    return !min || d < min ? d : min;
+  }, null);
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const daysUntilTarget = earliestTarget
+    ? Math.max(0, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
+    : null;
+
+  // Status determination
+  let status: 'green' | 'yellow' | 'red' = 'green';
+  let statusLabel = 'Em dia';
+  let statusEmoji = '✓';
+
+  if (earliestTarget && completionDate) {
+    const completionParsed = parseSimDate(completionDate);
+    if (completionParsed && completionParsed > earliestTarget) {
+      status = 'red';
+      statusLabel = 'Meta inviável';
+      statusEmoji = '⚠';
+    } else if (daysUntilTarget !== null && daysUntilTarget <= 7) {
+      status = 'yellow';
+      statusLabel = 'Meta apertada';
+      statusEmoji = '!';
+    }
+  }
+
+  if (totalNewCards === 0) return null;
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-1.5">
+          <Target className="h-3.5 w-3.5 text-muted-foreground" />
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Resumo do Progresso</h3>
+        </div>
+
+        {/* Progress bar */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              <strong className="text-foreground">{totalNewCards}</strong> cards novos para dominar
+            </span>
+            <span className="text-sm font-bold text-foreground">{pct}%</span>
+          </div>
+          <Progress value={pct} className="h-2.5" />
+        </div>
+
+        {/* Completion date + status */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {completionDate && (
+            <p className="text-xs text-muted-foreground">
+              Conclusão prevista: <strong className="text-foreground">{completionDate}</strong>
+            </p>
+          )}
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] h-5 px-2',
+              status === 'green' && 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+              status === 'yellow' && 'border-amber-500/30 text-amber-600 dark:text-amber-400',
+              status === 'red' && 'border-red-500/30 text-red-600 dark:text-red-400',
+            )}
+          >
+            {statusEmoji} {statusLabel}
+          </Badge>
+        </div>
+
+        {/* Summary stats */}
+        {summary && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Média de <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
+            {summary.peakMin > summary.avgDailyMin * 1.2 && (
+              <> Pico de <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong> em <strong className="text-foreground">{summary.peakDate}</strong>.</>
+            )}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Helper to parse "dd/MM/yy" or "dd/MM/yyyy" dates from simulation
+function parseSimDate(dateStr: string): Date | null {
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  let year = parseInt(parts[2], 10);
+  if (year < 100) year += 2000;
+  return new Date(year, month, day);
+}
+
+// ─── Simplified Chart Tooltip ──────────────────────────
+function SimulatorTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as ForecastPoint;
+  if (!d) return null;
+
+  const overAmount = d.totalMin - d.capacityMin;
+
+  return (
+    <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px]">
+      <p className="font-semibold">{d.day} — {d.date}</p>
+      <div className="h-px bg-border" />
+      <p className="font-medium text-sm">{formatMinutes(d.totalMin)} de estudo</p>
+      <p className="text-muted-foreground">
+        {d.reviewCards} revisões · {d.newCards} novos · {d.learningCards + d.relearningCards} aprendendo
+      </p>
+      <div className="h-px bg-border" />
+      <p className={cn('font-medium', d.overloaded ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')}>
+        Capacidade: {formatMinutes(d.capacityMin)} {d.overloaded ? `⚠ +${formatMinutes(overAmount)}` : '✓'}
+      </p>
+    </div>
+  );
+}
+
+// ─── Simulation Controls Card ──────────────────────────
+function SimulationControls({
+  defaultNewCardsPerDay, newCardsOverride, onNewCardsChange,
+  defaultCreatedCardsPerDay, createdCardsOverride, onCreatedCardsChange,
+  realDailyMinutes, realWeeklyMinutes,
+  dailyMinutesOverride, weeklyMinutesOverride,
+  onDailyMinutesChange, onWeeklyMinutesChange,
+  onApplyCapacity, hasAnyOverride, isSimulating,
+  isUsingDefaults,
+}: {
+  defaultNewCardsPerDay: number;
+  newCardsOverride: number | undefined;
+  onNewCardsChange: (v: number | undefined) => void;
+  defaultCreatedCardsPerDay: number;
+  createdCardsOverride: number | undefined;
+  onCreatedCardsChange: (v: number | undefined) => void;
+  realDailyMinutes: number;
+  realWeeklyMinutes: WeeklyMinutes | null;
+  dailyMinutesOverride: number | undefined;
+  weeklyMinutesOverride: WeeklyMinutes | undefined;
+  onDailyMinutesChange: (v: number | undefined) => void;
+  onWeeklyMinutesChange: (v: WeeklyMinutes | undefined) => void;
+  onApplyCapacity: () => void;
+  hasAnyOverride: boolean;
+  isSimulating: boolean;
+  isUsingDefaults: boolean;
+}) {
+  const [editingNewCards, setEditingNewCards] = useState(false);
+  const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
+  const [editingCreatedCards, setEditingCreatedCards] = useState(false);
+  const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
+  const [editingCapacity, setEditingCapacity] = useState(false);
+
+  const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+  const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? {
+    mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes,
+    fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes,
+  };
+  const currentAvgMin = Math.round(DAY_ORDER.reduce((s, d) => s + (currentWeekly[d] || 0), 0) / 7);
+  const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
+
+  const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(currentWeekly);
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-1.5">
+          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Ajustes da Simulação</h3>
+        </div>
+
+        {isUsingDefaults && (
+          <div className="flex items-center gap-2 text-[10px] text-primary">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span>Baseado em estimativas iniciais. Conforme você estuda, o algoritmo ajusta automaticamente.</span>
+          </div>
+        )}
+
+        {/* New cards per day */}
+        <ControlRow
+          icon="~"
+          label="cards novos para estudar/dia"
+          value={newCardsOverride ?? defaultNewCardsPerDay}
+          defaultValue={defaultNewCardsPerDay}
+          editing={editingNewCards}
+          tempValue={tempNewCards}
+          onEdit={() => { setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay)); setEditingNewCards(true); }}
+          onTempChange={setTempNewCards}
+          onConfirm={() => {
+            const val = parseInt(tempNewCards, 10);
+            if (!isNaN(val) && val >= 0) onNewCardsChange(val === defaultNewCardsPerDay ? undefined : val);
+            setEditingNewCards(false);
+          }}
+          onReset={() => { onNewCardsChange(undefined); setEditingNewCards(false); }}
+          isOverridden={newCardsOverride != null}
+        />
+
+        {/* Created cards per day */}
+        <ControlRow
+          icon="+"
+          label="cards criados/dia"
+          value={createdCardsOverride ?? defaultCreatedCardsPerDay}
+          defaultValue={defaultCreatedCardsPerDay}
+          editing={editingCreatedCards}
+          tempValue={tempCreatedCards}
+          onEdit={() => { setTempCreatedCards(String(createdCardsOverride ?? defaultCreatedCardsPerDay)); setEditingCreatedCards(true); }}
+          onTempChange={setTempCreatedCards}
+          onConfirm={() => {
+            const val = parseInt(tempCreatedCards, 10);
+            if (!isNaN(val) && val >= 0) onCreatedCardsChange(val === defaultCreatedCardsPerDay ? undefined : val);
+            setEditingCreatedCards(false);
+          }}
+          onReset={() => { onCreatedCardsChange(undefined); setEditingCreatedCards(false); }}
+          isOverridden={createdCardsOverride != null}
+        />
+
+        {/* Study time */}
+        <div className="flex items-center gap-2 text-xs">
+          <Timer className="h-3 w-3 text-muted-foreground" />
+          <button
+            onClick={() => { setTempWeekly(currentWeekly); setEditingCapacity(true); }}
+            className="flex items-center gap-1 hover:text-primary transition-colors"
+          >
+            <span className="font-medium text-foreground">Tempo de estudo diário</span>
+            <span className="text-muted-foreground">(média {currentAvgMin}min)</span>
+            <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            {isCapacityOverridden && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+            )}
+          </button>
+        </div>
+
+        {/* Capacity edit modal */}
+        <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Timer className="h-4 w-4 text-primary" />
+                Tempo de Estudo Diário
+              </DialogTitle>
+              <DialogDescription>
+                Defina quanto tempo estudar em cada dia da semana. Coloque 0 para dias de folga.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                {DAY_ORDER.map(dk => (
+                  <div key={dk} className="flex items-center gap-2">
+                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
+                    <Slider
+                      value={[tempWeekly[dk]]}
+                      onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
+                      min={0} max={240} step={15}
+                      className="flex-1"
+                    />
+                    <span className={cn("text-xs font-semibold w-10 text-right", tempWeekly[dk] === 0 && "text-muted-foreground")}>
+                      {tempWeekly[dk] === 0 ? 'Folga' : formatMinutes(tempWeekly[dk])}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                Média: <span className="font-semibold text-foreground">{Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7)}min/dia</span>
+              </p>
+              <Button className="w-full" onClick={() => {
+                onWeeklyMinutesChange(tempWeekly);
+                const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
+                onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
+                setEditingCapacity(false);
+              }}>
+                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Apply button */}
+        {hasAnyOverride && !isSimulating && (
+          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onApplyCapacity}>
+            <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar ao meu plano
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Control Row (reusable inline editor) ──────────────
+function ControlRow({ icon, label, value, defaultValue, editing, tempValue, onEdit, onTempChange, onConfirm, onReset, isOverridden }: {
+  icon: string; label: string; value: number; defaultValue: number;
+  editing: boolean; tempValue: string;
+  onEdit: () => void; onTempChange: (v: string) => void; onConfirm: () => void; onReset: () => void;
+  isOverridden: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-muted-foreground">{icon}</span>
+      {editing ? (
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number" min={0} max={9999}
+            value={tempValue}
+            onChange={e => onTempChange(e.target.value)}
+            className="h-6 w-16 text-xs px-1.5"
+            autoFocus
+            onKeyDown={e => e.key === 'Enter' && onConfirm()}
+          />
+          <span className="text-muted-foreground">{label}</span>
+          <Button size="icon" variant="ghost" className="h-5 w-5" onClick={onConfirm}>
+            <Check className="h-3 w-3" />
+          </Button>
+          {isOverridden && (
+            <button onClick={onReset} className="text-[10px] text-primary underline">reset</button>
+          )}
+        </div>
+      ) : (
+        <button onClick={onEdit} className="flex items-center gap-1 hover:text-primary transition-colors">
+          <span className="font-medium text-foreground">{value}</span>
+          <span className="text-muted-foreground">{label}</span>
+          <Pencil className="h-3 w-3 text-muted-foreground/50" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Forecast Simulator (refactored: 3 blocks) ─────────
 
 const VIEW_OPTIONS: { value: ForecastView; label: string }[] = [
   { value: '7d', label: '7d' },
@@ -95,8 +437,6 @@ const VIEW_OPTIONS: { value: ForecastView; label: string }[] = [
   { value: '90d', label: '90d' },
   { value: '365d', label: '1 ano' },
 ];
-
-const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export function ForecastSimulator({
   data, summary, isSimulating, progress, defaultNewCardsPerDay,
@@ -135,257 +475,79 @@ export function ForecastSimulator({
   onApplyCapacity: () => void;
   hasAnyOverride: boolean;
 }) {
-  const [editingNewCards, setEditingNewCards] = useState(false);
-  const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
-  const [editingCreatedCards, setEditingCreatedCards] = useState(false);
-  const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
-  const [overloadDialogDay, setOverloadDialogDay] = useState<ForecastPoint | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
-  // Capacity editing state
-  const [editingCapacity, setEditingCapacity] = useState(false);
-  const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(
-    weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes, fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes }
-  );
-  
-  const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? { mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes, fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes };
-  const currentAvgMin = Math.round(DAY_ORDER.reduce((s, d) => s + (currentWeekly[d] || 0), 0) / 7);
-  const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
-  const hasOverload = data.some(d => d.overloaded);
-  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
 
   const options = [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Escolher data' }];
-
   const plansWithDate = (plansList ?? []).filter(p => p.target_date);
 
-  const handleEditNewCards = () => {
-    setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay));
-    setEditingNewCards(true);
-  };
+  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
 
-  const handleConfirmNewCards = () => {
-    const val = parseInt(tempNewCards, 10);
-    if (!isNaN(val) && val >= 0) {
-      onNewCardsChange(val === defaultNewCardsPerDay ? undefined : val);
-    }
-    setEditingNewCards(false);
-  };
-
-  const handleResetNewCards = () => {
-    onNewCardsChange(undefined);
-    setEditingNewCards(false);
-  };
-
-  const handleEditCreatedCards = () => {
-    setTempCreatedCards(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
-    setEditingCreatedCards(true);
-  };
-
-  const handleConfirmCreatedCards = () => {
-    const val = parseInt(tempCreatedCards, 10);
-    if (!isNaN(val) && val >= 0) {
-      onCreatedCardsChange(val === defaultCreatedCardsPerDay ? undefined : val);
-    }
-    setEditingCreatedCards(false);
-  };
-
-  const handleResetCreatedCards = () => {
-    onCreatedCardsChange(undefined);
-    setEditingCreatedCards(false);
-  };
+  // Prepare chart data with withinCapacity and overCapacity
+  const chartData = data.map(d => ({
+    ...d,
+    withinCapacity: Math.min(d.totalMin, d.capacityMin),
+    overCapacity: Math.max(0, d.totalMin - d.capacityMin),
+  }));
 
   return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        {/* Header with filters */}
-        <div className="flex items-center justify-between gap-2">
+    <div className="space-y-3">
+      {/* Block 1: Progress Summary */}
+      {!isSimulating && data.length > 0 && (
+        <ProgressSummaryCard
+          data={data}
+          summary={summary}
+          totalNewCards={totalNewCards}
+          plans={plansList}
+        />
+      )}
+
+      {/* Block 2: Chart */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          {/* Header */}
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Simulação de Estudos</h3>
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Carga Diária Prevista</h3>
           </div>
-          
-        </div>
 
-        {/* View chips */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                if (opt.value === 'target') {
-                  setShowDatePicker(true);
-                } else {
-                  onViewChange(opt.value);
-                }
-              }}
-              className={cn(
-                'px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border',
-                forecastView === opt.value
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
-              )}
-            >
-              {opt.value === 'target' && forecastView === 'target' && customTargetDate
-                ? format(customTargetDate, "dd/MM/yy")
-                : opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* New cards per day */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">~</span>
-            {editingNewCards ? (
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  min={0}
-                  max={999}
-                  value={tempNewCards}
-                  onChange={e => setTempNewCards(e.target.value)}
-                  className="h-6 w-16 text-xs px-1.5"
-                  autoFocus
-                  onKeyDown={e => e.key === 'Enter' && handleConfirmNewCards()}
-                />
-                <span className="text-muted-foreground">cards novos/dia</span>
-                <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmNewCards}>
-                  <Check className="h-3 w-3" />
-                </Button>
-                {newCardsOverride != null && (
-                  <button onClick={handleResetNewCards} className="text-[10px] text-primary underline">reset</button>
+          {/* View chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {options.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  if (opt.value === 'target') {
+                    setShowDatePicker(true);
+                  } else {
+                    onViewChange(opt.value);
+                  }
+                }}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border',
+                  forecastView === opt.value
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
                 )}
-              </div>
-            ) : (
-              <button onClick={handleEditNewCards} className="flex items-center gap-1 hover:text-primary transition-colors">
-                <span className="font-medium text-foreground">{newCardsOverride ?? defaultNewCardsPerDay}</span>
-                <span className="text-muted-foreground">cards novos para estudar/dia</span>
-                <Pencil className="h-3 w-3 text-muted-foreground/50" />
+              >
+                {opt.value === 'target' && forecastView === 'target' && customTargetDate
+                  ? format(customTargetDate, "dd/MM/yy")
+                  : opt.label}
               </button>
-            )}
+            ))}
           </div>
-          {(newCardsOverride ?? defaultNewCardsPerDay) > 50 && (
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1 ml-4">
-              <AlertTriangle className="h-3 w-3 shrink-0" />
-              Mais de 50 novos cards/dia pode causar burnout. Recomendamos diminuir para um ritmo sustentável.
-            </p>
+
+          {/* Simulation progress */}
+          {isSimulating && (
+            <div className="space-y-1">
+              <Progress value={progress} className="h-1" />
+              <p className="text-[10px] text-muted-foreground text-center">Simulando... {progress}%</p>
+            </div>
           )}
-        </div>
 
-        {/* Created cards per day */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground">+</span>
-          {editingCreatedCards ? (
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={0}
-                max={9999}
-                value={tempCreatedCards}
-                onChange={e => setTempCreatedCards(e.target.value)}
-                className="h-6 w-16 text-xs px-1.5"
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && handleConfirmCreatedCards()}
-              />
-              <span className="text-muted-foreground">cards criados/dia</span>
-              <Button size="icon" variant="ghost" className="h-5 w-5" onClick={handleConfirmCreatedCards}>
-                <Check className="h-3 w-3" />
-              </Button>
-              {createdCardsOverride != null && (
-                <button onClick={handleResetCreatedCards} className="text-[10px] text-primary underline">reset</button>
-              )}
-            </div>
-          ) : (
-            <button onClick={handleEditCreatedCards} className="flex items-center gap-1 hover:text-primary transition-colors">
-              <span className="font-medium text-foreground">{createdCardsOverride ?? defaultCreatedCardsPerDay}</span>
-              <span className="text-muted-foreground">cards criados/dia</span>
-              <Pencil className="h-3 w-3 text-muted-foreground/50" />
-            </button>
-          )}
-        </div>
-
-        {/* Study time / capacity */}
-        <div className="flex items-center gap-2 text-xs">
-          <Timer className="h-3 w-3 text-muted-foreground" />
-          <button onClick={() => {
-            setTempWeekly(currentWeekly);
-            setEditingCapacity(true);
-          }} className="flex items-center gap-1 hover:text-primary transition-colors">
-            <span className="font-medium text-foreground">Tempo de estudo diário</span>
-            <span className="text-muted-foreground">(média {currentAvgMin}min)</span>
-            <Pencil className="h-3 w-3 text-muted-foreground/50" />
-            {isCapacityOverridden && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
-            )}
-          </button>
-        </div>
-
-        {/* Capacity edit modal - always weekly */}
-        <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <Timer className="h-4 w-4 text-primary" />
-                Tempo de Estudo Diário
-              </DialogTitle>
-              <DialogDescription>
-                Defina quanto tempo estudar em cada dia da semana. Coloque 0 para dias de folga.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                {DAY_ORDER.map(dk => (
-                  <div key={dk} className="flex items-center gap-2">
-                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
-                    <Slider
-                      value={[tempWeekly[dk]]}
-                      onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
-                      min={0} max={240} step={15}
-                      className="flex-1"
-                    />
-                    <span className={cn("text-xs font-semibold w-10 text-right", tempWeekly[dk] === 0 && "text-muted-foreground")}>{tempWeekly[dk] === 0 ? 'Folga' : formatMinutes(tempWeekly[dk])}</span>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-xs text-center text-muted-foreground">
-                Média: <span className="font-semibold text-foreground">{Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7)}min/dia</span>
-              </p>
-
-              <Button className="w-full" onClick={() => {
-                onWeeklyMinutesChange(tempWeekly);
-                const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
-                onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
-                setEditingCapacity(false);
-              }}>
-                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {isUsingDefaults && (
-          <div className="flex items-center gap-2 text-[10px] text-primary px-2 py-1">
-            <div className="shrink-0 p-1 -m-1">
-              <Info className="h-3.5 w-3.5" />
-            </div>
-            <span>As previsões são baseadas em estimativas iniciais. Conforme você estuda, o algoritmo aprende seu desempenho real e ajusta automaticamente.</span>
-          </div>
-        )}
-
-        {/* Progress bar during simulation */}
-        {isSimulating && (
-          <div className="space-y-1">
-            <Progress value={progress} className="h-1" />
-            <p className="text-[10px] text-muted-foreground text-center">Simulando... {progress}%</p>
-          </div>
-        )}
-
-        {/* Chart */}
-        {data.length > 0 && !isSimulating && (
-          <>
+          {/* Chart */}
+          {chartData.length > 0 && !isSimulating && (
             <ResponsiveContainer width="100%" height={180}>
-              <ComposedChart data={data} barGap={0} barCategoryGap="15%">
+              <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
                 <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                 <YAxis
                   tick={{ fontSize: 9 }}
@@ -395,56 +557,7 @@ export function ForecastSimulator({
                   tickFormatter={(v) => `${v}min`}
                   domain={[0, (max: number) => Math.ceil(max * 1.15)]}
                 />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 11,
-                    borderRadius: 10,
-                    border: '1px solid hsl(var(--border))',
-                    background: 'hsl(var(--popover))',
-                    color: 'hsl(var(--popover-foreground))',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  }}
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0]?.payload as ForecastPoint;
-                    if (!d) return null;
-                    return (
-                      <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1">
-                        <p className="font-semibold flex items-center gap-1.5">
-                          <CalendarIcon className="h-3 w-3 text-primary" /> {d.day} — {d.date}
-                        </p>
-                        <div className="space-y-0.5">
-                          <p className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(217 91% 60%)' }} />
-                            {d.newCards} novos{d.createdCards > 0 ? <span className="text-muted-foreground"> ({d.newCards - d.createdCards} existentes + {d.createdCards} criados)</span> : ''} — {d.newMin}min
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(38 92% 50%)' }} />
-                            {d.learningCards} aprendendo — {d.learningMin}min
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(280 67% 55%)' }} />
-                            {d.relearningCards} reaprendendo — {d.relearningMin}min
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-sm inline-block" style={{ background: 'hsl(152 69% 47%)' }} />
-                            {d.reviewCards} dominados — {d.reviewMin}min
-                          </p>
-                        </div>
-                        <div className="pt-1 border-t space-y-0.5">
-                          <p className="flex items-center gap-1.5 font-medium">
-                            <Layers className="h-3 w-3 text-primary" />
-                            {d.newCards + d.learningCards + d.relearningCards + d.reviewCards} cartões
-                          </p>
-                          <p className={cn('font-medium', d.overloaded && 'text-destructive')}>
-                            ⏱ {d.totalMin}min / {d.capacityMin}min
-                            {d.overloaded && ' ⚠️'}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
+                <Tooltip content={<SimulatorTooltip />} />
                 {avgCapacity > 0 && (
                   <ReferenceLine
                     y={avgCapacity}
@@ -459,220 +572,112 @@ export function ForecastSimulator({
                     }}
                   />
                 )}
-                {/* Stacked bars */}
-                <Bar dataKey="reviewMin" stackId="a" name="Dominados" fill="hsl(152 69% 47%)" opacity={0.85} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="relearningMin" stackId="a" name="Reaprendendo" fill="hsl(280 67% 55%)" opacity={0.85} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="learningMin" stackId="a" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.85} radius={[0, 0, 0, 0]} />
+                {/* Two stacked bars: within capacity (blue) + over capacity (red) */}
                 <Bar
-                  dataKey="newMin"
-                  stackId="a"
-                  name="Novos"
+                  dataKey="withinCapacity"
+                  stackId="load"
+                  name="Dentro da capacidade"
                   fill="hsl(217 91% 60%)"
-                  opacity={0.85}
+                  opacity={0.8}
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="overCapacity"
+                  stackId="load"
+                  name="Excedente"
+                  fill="hsl(0 84% 60%)"
+                  opacity={0.75}
                   radius={[3, 3, 0, 0]}
                 />
               </ComposedChart>
             </ResponsiveContainer>
+          )}
 
-            {/* Summary explanation */}
-            {summary && data.length > 0 && (() => {
-              const currentNewCards = newCardsOverride ?? defaultNewCardsPerDay;
-              const daysWithNewAll = data.filter(d => d.newCards > 0);
-              const actualNewPerDay = daysWithNewAll.length > 0
-                ? Math.round(daysWithNewAll.reduce((s, d) => s + d.newCards, 0) / daysWithNewAll.length)
-                : 0;
-              const isBelowCapacity = summary.avgDailyMin < avgCapacity;
-              const peakDay = data.reduce((max, d) => d.totalMin > max.totalMin ? d : max, data[0]);
+          {/* Empty state */}
+          {data.length === 0 && !isSimulating && (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              Nenhum dado para simular. Adicione baralhos aos seus objetivos.
+            </div>
+          )}
 
-              // Detect weekly aggregation (worker uses S1, S2... labels for 90d+)
-              const isWeeklyData = data[0]?.day?.startsWith('S');
-              const approxDays = isWeeklyData ? data.length * 7 : data.length;
-
-              // Target date info
-              const plansTarget = (plansList ?? []).filter(p => p.target_date);
-              const earliestTarget = plansTarget.length > 0
-                ? plansTarget.reduce((min, p) => { const d = new Date(p.target_date!); return d < min ? d : min; }, new Date(plansTarget[0].target_date!))
-                : null;
-              const today = new Date(); today.setHours(0, 0, 0, 0);
-              const daysUntilTarget = earliestTarget
-                ? Math.max(1, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
-                : approxDays;
-              const createdPerDay = createdCardsOverride ?? defaultCreatedCardsPerDay;
-              const createdInPeriod = createdPerDay > 0 ? createdPerDay * daysUntilTarget : 0;
-              const totalNewRemaining = totalNewCards + createdInPeriod;
-
-              return (
-                <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-2">
-                  {/* Main summary */}
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Nos próximos <strong className="text-foreground">{approxDays} dias</strong>, média de <strong className="text-foreground">{formatMinutes(summary.avgDailyMin)}/dia</strong>.
-                    {summary.peakMin > summary.avgDailyMin * 1.2 && (
-                      <> Pico em <strong className="text-foreground">{peakDay.day}{!isWeeklyData ? ` (${peakDay.date})` : ''}</strong> com <strong className="text-foreground">{formatMinutes(summary.peakMin)}</strong>.</>
-                    )}
-                  </p>
-
-                  {/* Target date context */}
-                   {earliestTarget && totalNewRemaining > 0 && (() => {
-                    const neededPerDay = Math.ceil(totalNewRemaining / Math.max(1, daysUntilTarget));
-                    const cantFinish = actualNewPerDay < neededPerDay;
-                    return (
-                      <>
-                        <div className="h-px bg-border" />
-                        <p className="text-[10px] text-muted-foreground leading-relaxed">
-                           🎯 Para dominar todos os <strong className="text-foreground">{totalNewRemaining} cards novos</strong>{createdInPeriod > 0 ? <> (<strong>{totalNewCards}</strong> existentes + <strong>~{createdInPeriod}</strong> a criar)</> : ''} antes de <strong className="text-foreground">{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisa estudar ~<strong className="text-foreground">{neededPerDay} novos/dia</strong>. A simulação mostra ~<strong className="text-foreground">{actualNewPerDay}/dia</strong>.
-                         </p>
-                         {cantFinish && (
-                           <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
-                             ⚡ Meta apertada — são necessários <strong>{neededPerDay} novos/dia</strong> para dominar o conteúdo até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas a simulação mostra ~<strong>{actualNewPerDay}/dia</strong>. Aumente o limite de novos cards ou o tempo de estudo.
-                           </p>
-                         )}
-                      </>
-                    );
-                  })()}
-
-                  {/* Status: ok or overloaded */}
-                  {isBelowCapacity ? (
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 leading-relaxed">
-                      ✓ Cabe na sua meta de <strong>{formatMinutes(avgCapacity)}/dia</strong>.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-                        Média de <strong>{formatMinutes(summary.avgDailyMin)}</strong> excede sua meta de <strong>{formatMinutes(avgCapacity)}</strong>.
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-[10px] px-2 gap-1"
-                          onClick={() => {
-                            const reduced = Math.max(1, Math.floor(currentNewCards * (avgCapacity / summary.avgDailyMin)));
-                            onNewCardsChange(reduced === defaultNewCardsPerDay ? undefined : reduced);
-                          }}
-                        >
-                          <Layers className="h-3 w-3" />
-                          Reduzir novos cards/dia
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-[10px] px-2 gap-1"
-                          onClick={() => {
-                            setTempWeekly(currentWeekly);
-                            setEditingCapacity(true);
-                          }}
-                        >
-                          <Timer className="h-3 w-3" />
-                          Aumentar tempo de estudo
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Overload day dialog */}
-            <Dialog open={!!overloadDialogDay} onOpenChange={() => setOverloadDialogDay(null)}>
-              <DialogContent className="max-w-xs">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-base">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    Dia sobrecarregado
-                  </DialogTitle>
-                  <DialogDescription asChild>
-                    <div className="space-y-2 pt-1">
-                      {overloadDialogDay && (
-                        <>
-                          <p className="text-sm">
-                            Em <span className="font-semibold">{overloadDialogDay.day} ({overloadDialogDay.date})</span>, a carga estimada é de{' '}
-                            <span className="font-semibold text-amber-600 dark:text-amber-400">{formatMinutes(overloadDialogDay.totalMin)}</span>, 
-                            mas sua capacidade é de <span className="font-semibold">{formatMinutes(overloadDialogDay.capacityMin)}</span>.
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Nesse dia você precisará estudar mais do que o planejado. Considere reduzir novos cards/dia ou aumentar seu tempo de estudo.
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </DialogDescription>
-                </DialogHeader>
-              </DialogContent>
-            </Dialog>
-
-            {/* Date picker dialog for "Escolher data" */}
-            <Dialog open={showDatePicker} onOpenChange={setShowDatePicker}>
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-base">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                    Escolher data
-                  </DialogTitle>
-                  <DialogDescription>
-                    Simule a carga de estudos até uma data específica.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 pt-1">
-                  {plansWithDate.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">Datas dos objetivos</p>
-                      {plansWithDate.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            const d = new Date(p.target_date!);
-                            onCustomTargetDate?.(d);
-                            onViewChange('target');
-                            setShowDatePicker(false);
-                          }}
-                          className="w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                        >
-                          <span className="truncate font-medium">{p.name}</span>
-                          <span className="text-muted-foreground text-xs shrink-0">
-                            {format(new Date(p.target_date!), "dd/MM/yyyy")}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          {/* Date picker dialog */}
+          <Dialog open={showDatePicker} onOpenChange={setShowDatePicker}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  Escolher data
+                </DialogTitle>
+                <DialogDescription>
+                  Simule a carga de estudos até uma data específica.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 pt-1">
+                {plansWithDate.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">Data personalizada</p>
-                    <Calendar
-                      mode="single"
-                      selected={customTargetDate ?? undefined}
-                      onSelect={(d) => {
-                        if (d) {
+                    <p className="text-xs font-medium text-muted-foreground">Datas dos objetivos</p>
+                    {plansWithDate.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          const d = new Date(p.target_date!);
                           onCustomTargetDate?.(d);
                           onViewChange('target');
                           setShowDatePicker(false);
-                        }
-                      }}
-                      disabled={(date) => date < new Date()}
-                      className={cn("p-3 pointer-events-auto rounded-lg border")}
-                      locale={ptBR}
-                    />
+                        }}
+                        className="w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <span className="truncate font-medium">{p.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">
+                          {format(new Date(p.target_date!), "dd/MM/yyyy")}
+                        </span>
+                      </button>
+                    ))}
                   </div>
+                )}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Data personalizada</p>
+                  <Calendar
+                    mode="single"
+                    selected={customTargetDate ?? undefined}
+                    onSelect={(d) => {
+                      if (d) {
+                        onCustomTargetDate?.(d);
+                        onViewChange('target');
+                        setShowDatePicker(false);
+                      }
+                    }}
+                    disabled={(date) => date < new Date()}
+                    className={cn("p-3 pointer-events-auto rounded-lg border")}
+                    locale={ptBR}
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
-          </>
-        )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
 
-        {/* Apply button */}
-        {hasAnyOverride && !isSimulating && data.length > 0 && (
-          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onApplyCapacity}>
-            <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar ao meu plano
-          </Button>
-        )}
-
-        {/* Empty state */}
-        {data.length === 0 && !isSimulating && (
-          <div className="text-center py-6 text-sm text-muted-foreground">
-            Nenhum dado para simular. Adicione baralhos aos seus objetivos.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {/* Block 3: Simulation Controls */}
+      <SimulationControls
+        defaultNewCardsPerDay={defaultNewCardsPerDay}
+        newCardsOverride={newCardsOverride}
+        onNewCardsChange={onNewCardsChange}
+        defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
+        createdCardsOverride={createdCardsOverride}
+        onCreatedCardsChange={onCreatedCardsChange}
+        realDailyMinutes={realDailyMinutes}
+        realWeeklyMinutes={realWeeklyMinutes}
+        dailyMinutesOverride={dailyMinutesOverride}
+        weeklyMinutesOverride={weeklyMinutesOverride}
+        onDailyMinutesChange={onDailyMinutesChange}
+        onWeeklyMinutesChange={onWeeklyMinutesChange}
+        onApplyCapacity={onApplyCapacity}
+        hasAnyOverride={hasAnyOverride}
+        isSimulating={isSimulating}
+        isUsingDefaults={isUsingDefaults}
+      />
+    </div>
   );
 }
 
