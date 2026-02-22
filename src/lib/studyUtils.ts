@@ -162,7 +162,10 @@ export function computeNewCardAllocation(params: AllocationParams): AllocationRe
 
   const totalWeight = weights.reduce((s, w) => s + w.weight, 0);
 
-  if (totalWeight > 0) {
+  if (globalBudget <= 0) {
+    // Zero budget day — all roots get 0
+    for (const { rootId } of weights) perDeck[rootId] = 0;
+  } else if (totalWeight > 0) {
     const minShare = Math.max(1, Math.ceil(globalBudget * 0.05));
     const sorted = [...weights].sort((a, b) => b.weight - a.weight);
 

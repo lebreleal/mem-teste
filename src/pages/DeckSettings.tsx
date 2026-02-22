@@ -81,7 +81,7 @@ const DeckSettings = () => {
       currentId = d.parent_deck_id;
     }
   })();
-  const isPlanControlled = !!(planMetrics?.deckNewAllocation?.[rootId ?? ''] > 0);
+  const isPlanControlled = planMetrics?.deckNewAllocation?.[rootId ?? ''] != null;
 
   // Deck data
   const [name, setName] = useState('');

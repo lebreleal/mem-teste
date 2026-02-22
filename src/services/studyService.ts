@@ -192,9 +192,7 @@ export async function fetchStudyQueue(
           seenSessionRoots.add(rootId);
           return s + (allocation.perDeck[rootId] ?? 0);
         }, 0);
-        if (totalForSession > 0) {
-          planNewLimit = totalForSession;
-        }
+        planNewLimit = totalForSession;
       }
     }
   }
