@@ -529,6 +529,15 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
   const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
   const [customTargetDate, setCustomTargetDate] = useState<Date | null>(null);
   const hasTargetDate = plans.some(p => p.target_date);
+  // Find the latest (max) target date across all plans for created cards scoping
+  const latestTargetDate = useMemo(() => {
+    const plansWithDate = plans.filter(p => p.target_date);
+    if (plansWithDate.length === 0) return null;
+    return plansWithDate.reduce((max, p) => {
+      const d = p.target_date!;
+      return d > max ? d : max;
+    }, plansWithDate[0].target_date!);
+  }, [plans]);
 
   const effectiveDailyMin = dailyMinutesOverride ?? dailyMinutes;
   const effectiveWeeklyMin = weeklyMinutesOverride ?? weeklyMinutes;
@@ -562,6 +571,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
     enabled: allDeckIds.length > 0,
+    latestTargetDate,
   });
 
   const handleViewChange = useCallback((v: ForecastView) => {
@@ -618,7 +628,7 @@ const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
-    plans, allDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
+    plans, allDeckIds, expandedDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
@@ -1654,7 +1664,7 @@ const StudyPlan = () => {
 
         {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
         <ForecastSimulatorSection
-          allDeckIds={allDeckIds}
+          allDeckIds={expandedDeckIds}
           dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes}
           plans={plans}
