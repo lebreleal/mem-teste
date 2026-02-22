@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, ChevronRight, Play, CalendarCheck, SquarePlus, RotateCcw, Layers } from 'lucide-react';
+import { Clock, ChevronRight, Play, CalendarCheck, SquarePlus, RotateCcw, Layers, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -174,7 +174,10 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       {/* Carousel - unified list */}
       {sortedDecks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-4 text-center">
-          <p className="text-sm text-muted-foreground">🎉 Tudo concluído por hoje!</p>
+          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            Nenhuma revisão pendente!
+          </p>
         </div>
       ) : (
         <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">

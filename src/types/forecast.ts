@@ -55,6 +55,7 @@ export interface SimulatorInput {
   createdCardsPerDay: number;
   dailyMinutes: number;
   weeklyMinutes: Record<string, number> | null;
+  weeklyNewCards: Record<string, number> | null;
   /** Day index (0-based from today) after which to stop adding created cards. null = no limit */
   createdCardsStopDay: number | null;
 }
@@ -78,6 +79,8 @@ export interface ForecastPoint {
 
 export interface SimulatorSummary {
   avgDailyMin: number;
+  avgWeekdayMin: number;
+  avgAllDaysMin: number;
   peakMin: number;
   peakDate: string;
   overloadedDays: number;

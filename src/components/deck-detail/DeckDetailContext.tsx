@@ -306,7 +306,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   // ─── Plan-controlled limits ────────────
   const { metrics: planMetrics } = useStudyPlan();
   const planAllocationForRoot = planMetrics?.deckNewAllocation?.[rootId];
-  const isPlanControlled = planAllocationForRoot != null && planAllocationForRoot > 0;
+  const isPlanControlled = planAllocationForRoot != null;
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';

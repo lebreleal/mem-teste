@@ -12,6 +12,7 @@ export interface UseForecastSimulatorOptions {
   createdCardsPerDayOverride?: number;
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
+  weeklyNewCards?: Record<string, number> | null;
   enabled?: boolean;
   /** Latest target date across all objectives — used to stop adding created cards */
   latestTargetDate?: string | null;
@@ -20,7 +21,7 @@ export interface UseForecastSimulatorOptions {
 export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, enabled = true, latestTargetDate } = options;
+  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, weeklyNewCards, enabled = true, latestTargetDate } = options;
 
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -117,13 +118,14 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       createdCardsPerDay,
       dailyMinutes,
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
+      weeklyNewCards: weeklyNewCards as Record<string, number> | null ?? null,
       createdCardsStopDay,
     };
 
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, latestTargetDate]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, latestTargetDate]);
 
   // Debounced trigger
   useEffect(() => {

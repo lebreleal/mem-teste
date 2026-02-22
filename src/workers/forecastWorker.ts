@@ -156,10 +156,26 @@ function getCapacityForDay(dayIndex: number, startDate: Date, dailyMin: number, 
   return dailyMin;
 }
 
+function getNewCardsLimitForDay(dayIndex: number, startDate: Date, dailyLimit: number, weeklyNewCards: Record<string, number> | null): number {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + dayIndex);
+  const dow = d.getDay();
+  const key = DAY_KEYS[dow];
+  if (weeklyNewCards && weeklyNewCards[key] != null) return weeklyNewCards[key];
+  return dailyLimit;
+}
+
+function formatLocalDate(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day: string } {
   const d = new Date(startDate);
   d.setDate(d.getDate() + dayIndex);
-  const dateStr = d.toISOString().slice(0, 10);
+  const dateStr = formatLocalDate(d);
   const dow = d.getDay();
   const key = DAY_KEYS[dow];
   if (dayIndex === 0) return { date: dateStr, day: 'Hoje' };
@@ -171,7 +187,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, createdCardsStopDay } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -330,7 +346,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const usedMin = revMin + learnMin + relearnMin;
     const availableForNewMin = Math.max(0, capacityMin - usedMin);
     const maxNewByCapacity = Math.floor((availableForNewMin * 60) / (newSecsPerCard * scaleFactor));
-    const effectiveNewLimit = Math.min(newCardsPerDay, Math.max(0, maxNewByCapacity));
+    const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
+    const effectiveNewLimit = Math.min(dayNewCardsLimit, Math.max(0, maxNewByCapacity));
 
     // ── Step 3: Introduce new cards — EXISTING first, CREATED only after all existing are exhausted ──
     let newCardsToday = 0;
@@ -423,27 +440,30 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       weeks.push(points.slice(i, i + 7));
     }
     finalPoints = weeks.map((week, wi) => {
-      const avgReviewMin = Math.round(week.reduce((s, p) => s + p.reviewMin, 0) / week.length);
-      const avgLearningMin = Math.round(week.reduce((s, p) => s + p.learningMin, 0) / week.length);
-      const avgRelearningMin = Math.round(week.reduce((s, p) => s + p.relearningMin, 0) / week.length);
-      const avgNewMin = Math.round(week.reduce((s, p) => s + p.newMin, 0) / week.length);
-      const avgTotal = avgReviewMin + avgLearningMin + avgRelearningMin + avgNewMin;
-      const avgCap = Math.round(week.reduce((s, p) => s + p.capacityMin, 0) / week.length);
+      const sumReviewMin = week.reduce((s, p) => s + p.reviewMin, 0);
+      const sumLearningMin = week.reduce((s, p) => s + p.learningMin, 0);
+      const sumRelearningMin = week.reduce((s, p) => s + p.relearningMin, 0);
+      const sumNewMin = week.reduce((s, p) => s + p.newMin, 0);
+      const sumTotal = sumReviewMin + sumLearningMin + sumRelearningMin + sumNewMin;
+      const sumCap = week.reduce((s, p) => s + p.capacityMin, 0);
+      const firstDate = week[0].date;
+      const lastDate = week[week.length - 1].date;
+      const dateRange = week.length === 1 ? firstDate : `${firstDate} – ${lastDate}`;
       return {
-        date: week[0].date,
+        date: dateRange,
         day: `S${wi + 1}`,
-        reviewCards: Math.round(week.reduce((s, p) => s + p.reviewCards, 0) / week.length),
-        newCards: Math.round(week.reduce((s, p) => s + p.newCards, 0) / week.length),
-        learningCards: Math.round(week.reduce((s, p) => s + p.learningCards, 0) / week.length),
-        relearningCards: Math.round(week.reduce((s, p) => s + p.relearningCards, 0) / week.length),
-        reviewMin: avgReviewMin,
-        learningMin: avgLearningMin,
-        relearningMin: avgRelearningMin,
-        newMin: avgNewMin,
-        totalMin: avgTotal,
-        capacityMin: avgCap,
-        overloaded: avgTotal > avgCap,
-        createdCards: Math.round(week.reduce((s, p) => s + p.createdCards, 0) / week.length),
+        reviewCards: week.reduce((s, p) => s + p.reviewCards, 0),
+        newCards: week.reduce((s, p) => s + p.newCards, 0),
+        learningCards: week.reduce((s, p) => s + p.learningCards, 0),
+        relearningCards: week.reduce((s, p) => s + p.relearningCards, 0),
+        reviewMin: sumReviewMin,
+        learningMin: sumLearningMin,
+        relearningMin: sumRelearningMin,
+        newMin: sumNewMin,
+        totalMin: sumTotal,
+        capacityMin: sumCap,
+        overloaded: sumTotal > sumCap,
+        createdCards: week.reduce((s, p) => s + p.createdCards, 0),
       };
     });
   }
@@ -451,16 +471,31 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
   // Summary
   let peakMin = 0, peakDate = '';
   let totalMin = 0, overloadedDays = 0;
-  for (const p of points) {
+  let weekdayMin = 0, weekdayCount = 0;
+  let allDaysMin = 0, allDaysCount = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     totalMin += p.totalMin;
     if (p.totalMin > peakMin) { peakMin = p.totalMin; peakDate = p.date; }
     if (p.overloaded) overloadedDays++;
+    // Weekday vs all days
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const dow = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    allDaysMin += p.totalMin;
+    allDaysCount++;
+    if (dow >= 1 && dow <= 5) {
+      weekdayMin += p.totalMin;
+      weekdayCount++;
+    }
   }
 
   return {
     points: finalPoints,
     summary: {
       avgDailyMin: Math.round(totalMin / Math.max(1, points.length)),
+      avgWeekdayMin: Math.round(weekdayMin / Math.max(1, weekdayCount)),
+      avgAllDaysMin: Math.round(allDaysMin / Math.max(1, allDaysCount)),
       peakMin,
       peakDate,
       overloadedDays,

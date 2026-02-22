@@ -2,8 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle, Briefcase } from 'lucide-react';
+import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,11 +11,12 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
-import type { WeeklyMinutes, DayKey } from '@/hooks/useStudyPlan';
-import { DAY_LABELS } from '@/hooks/useStudyPlan';
+import type { WeeklyMinutes, WeeklyNewCards, DayKey } from '@/hooks/useStudyPlan';
+import { DAY_LABELS, getWeeklyAvgNewCardsGlobal } from '@/hooks/useStudyPlan';
 import { formatMinutes, HEALTH_CONFIG } from './constants';
 
 // ─── Health Ring SVG ────────────────────────────────────
@@ -210,25 +211,36 @@ function formatCompletionDate(dateStr: string): string {
 }
 
 // ─── Simplified Chart Tooltip ──────────────────────────
-function SimulatorTooltip({ active, payload }: any) {
+function SimulatorTooltip({ active, payload, summary }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as ForecastPoint;
   if (!d) return null;
 
-  const overAmount = d.totalMin - d.capacityMin;
+  const totalCards = d.reviewCards + d.newCards + d.learningCards + d.relearningCards;
 
   return (
-    <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px]">
+    <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px] z-50 relative">
       <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
-      <p className="font-medium text-sm">{formatMinutes(d.totalMin)} de estudo</p>
-      <p className="text-muted-foreground">
-        {d.reviewCards} revisões · {d.newCards} novos · {d.learningCards + d.relearningCards} aprendendo
-      </p>
+      <p className="font-medium text-sm">{totalCards} cards</p>
+      <div className="space-y-0.5 text-muted-foreground">
+        <p>{d.reviewCards} revisões</p>
+        <p>{d.newCards} novos</p>
+        <p>{d.learningCards + d.relearningCards} aprendendo</p>
+      </div>
       <div className="h-px bg-border" />
-      <p className={cn('font-medium', d.overloaded ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')}>
-        Capacidade: {formatMinutes(d.capacityMin)} {d.overloaded ? `⚠ +${formatMinutes(overAmount)}` : '✓'}
+      <p className="text-muted-foreground">
+        {formatMinutes(d.totalMin)} de estudo
       </p>
+      {summary && (
+        <>
+          <div className="h-px bg-border" />
+          <div className="space-y-0.5 text-muted-foreground">
+            <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
+            <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -242,6 +254,7 @@ function SimulationControls({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride, isSimulating,
   isUsingDefaults,
+  realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
   defaultNewCardsPerDay: number;
   newCardsOverride: number | undefined;
@@ -259,15 +272,18 @@ function SimulationControls({
   hasAnyOverride: boolean;
   isSimulating: boolean;
   isUsingDefaults: boolean;
+  realWeeklyNewCards: WeeklyNewCards | null;
+  weeklyNewCardsOverride: WeeklyNewCards | undefined;
+  onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
 }) {
-  const [editingNewCards, setEditingNewCards] = useState(false);
-  const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
   const [editingCapacity, setEditingCapacity] = useState(false);
+  const [editingNewCards, setEditingNewCards] = useState(false);
 
   const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+  // Capacity weekly
   const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? {
     mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes,
     fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes,
@@ -276,6 +292,16 @@ function SimulationControls({
   const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
 
   const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(currentWeekly);
+
+  // New cards weekly
+  const currentNewCardsWeekly = weeklyNewCardsOverride ?? realWeeklyNewCards ?? {
+    mon: defaultNewCardsPerDay, tue: defaultNewCardsPerDay, wed: defaultNewCardsPerDay, thu: defaultNewCardsPerDay,
+    fri: defaultNewCardsPerDay, sat: defaultNewCardsPerDay, sun: defaultNewCardsPerDay,
+  };
+  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
+  const isNewCardsOverridden = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined;
+
+  const [tempNewCardsWeekly, setTempNewCardsWeekly] = useState<WeeklyNewCards>(currentNewCardsWeekly);
 
   return (
     <Card>
@@ -292,24 +318,68 @@ function SimulationControls({
           </div>
         )}
 
-        {/* New cards per day */}
-        <ControlRow
-          icon={<Layers className="h-3 w-3" />}
-          label="cards novos para estudar/dia"
-          value={newCardsOverride ?? defaultNewCardsPerDay}
-          defaultValue={defaultNewCardsPerDay}
-          editing={editingNewCards}
-          tempValue={tempNewCards}
-          onEdit={() => { setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay)); setEditingNewCards(true); }}
-          onTempChange={setTempNewCards}
-          onConfirm={() => {
-            const val = parseInt(tempNewCards, 10);
-            if (!isNaN(val) && val >= 0) onNewCardsChange(val === defaultNewCardsPerDay ? undefined : val);
-            setEditingNewCards(false);
-          }}
-          onReset={() => { onNewCardsChange(undefined); setEditingNewCards(false); }}
-          isOverridden={newCardsOverride != null}
-        />
+        {/* New cards per day — opens modal */}
+        <div className="flex items-center gap-2 text-xs">
+          <Layers className="h-3 w-3 text-muted-foreground" />
+          <button
+            onClick={() => { setTempNewCardsWeekly(currentNewCardsWeekly); setEditingNewCards(true); }}
+            className="flex items-center gap-1 hover:text-primary transition-colors"
+          >
+            <span className="font-medium text-foreground">{currentNewCardsAvg} cards novos/dia</span>
+            <span className="text-muted-foreground">(média)</span>
+            <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            {isNewCardsOverridden && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+            )}
+          </button>
+          {isNewCardsOverridden && (
+            <button onClick={() => { onNewCardsChange(undefined); onWeeklyNewCardsChange(undefined); }} className="text-[10px] text-primary underline">reset</button>
+          )}
+        </div>
+
+        {/* New cards edit modal */}
+        <Dialog open={editingNewCards} onOpenChange={setEditingNewCards}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-4 w-4 text-primary" />
+                Cards Novos por Dia
+              </DialogTitle>
+              <DialogDescription>
+                Defina quantos cards novos estudar em cada dia. Coloque 0 para dias sem novos cards.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                {DAY_ORDER.map(dk => (
+                  <div key={dk} className="flex items-center gap-2">
+                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
+                    <Slider
+                      value={[tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay]}
+                      onValueChange={([v]) => setTempNewCardsWeekly(prev => ({ ...prev, [dk]: v }))}
+                      min={0} max={200} step={5}
+                      className="flex-1"
+                    />
+                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
+                      {tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
+              </p>
+              <Button className="w-full" onClick={() => {
+                onWeeklyNewCardsChange(tempNewCardsWeekly);
+                const avg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly);
+                onNewCardsChange(avg === defaultNewCardsPerDay ? undefined : avg);
+                setEditingNewCards(false);
+              }}>
+                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Created cards per day */}
         <ControlRow
@@ -330,72 +400,9 @@ function SimulationControls({
           isOverridden={createdCardsOverride != null}
         />
 
-        {/* Study time */}
-        <div className="flex items-center gap-2 text-xs">
-          <Timer className="h-3 w-3 text-muted-foreground" />
-          <button
-            onClick={() => { setTempWeekly(currentWeekly); setEditingCapacity(true); }}
-            className="flex items-center gap-1 hover:text-primary transition-colors"
-          >
-            <span className="font-medium text-foreground">Tempo de estudo diário</span>
-            <span className="text-muted-foreground">(média {currentAvgMin}min)</span>
-            <Pencil className="h-3 w-3 text-muted-foreground/50" />
-            {isCapacityOverridden && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
-            )}
-          </button>
-        </div>
 
-        {/* Capacity edit modal */}
-        <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <Timer className="h-4 w-4 text-primary" />
-                Tempo de Estudo Diário
-              </DialogTitle>
-              <DialogDescription>
-                Defina quanto tempo estudar em cada dia da semana. Coloque 0 para dias de folga.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                {DAY_ORDER.map(dk => (
-                  <div key={dk} className="flex items-center gap-2">
-                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
-                    <Slider
-                      value={[tempWeekly[dk]]}
-                      onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
-                      min={0} max={240} step={15}
-                      className="flex-1"
-                    />
-                    <span className={cn("text-xs font-semibold w-10 text-right", tempWeekly[dk] === 0 && "text-muted-foreground")}>
-                      {tempWeekly[dk] === 0 ? 'Folga' : formatMinutes(tempWeekly[dk])}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-center text-muted-foreground">
-                Média: <span className="font-semibold text-foreground">{Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7)}min/dia</span>
-              </p>
-              <Button className="w-full" onClick={() => {
-                onWeeklyMinutesChange(tempWeekly);
-                const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
-                onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
-                setEditingCapacity(false);
-              }}>
-                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
-        {/* Apply button */}
-        {hasAnyOverride && !isSimulating && (
-          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onApplyCapacity}>
-            <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar ao meu plano
-          </Button>
-        )}
+
       </CardContent>
     </Card>
   );
@@ -466,6 +473,7 @@ export function ForecastSimulator({
   dailyMinutesOverride, weeklyMinutesOverride,
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
+  realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -493,40 +501,49 @@ export function ForecastSimulator({
   onWeeklyMinutesChange: (v: WeeklyMinutes | undefined) => void;
   onApplyCapacity: () => void;
   hasAnyOverride: boolean;
+  realWeeklyNewCards: WeeklyNewCards | null;
+  weeklyNewCardsOverride: WeeklyNewCards | undefined;
+  onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const options = [...VIEW_OPTIONS, { value: 'target' as ForecastView, label: 'Escolher data' }];
   const plansWithDate = (plansList ?? []).filter(p => p.target_date);
 
-  const avgCapacity = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.capacityMin, 0) / data.length) : 0;
+  
 
-  // Prepare chart data with withinCapacity and overCapacity
+  // Prepare chart data with card counts by type
   const chartData = data.map(d => ({
     ...d,
-    withinCapacity: Math.min(d.totalMin, d.capacityMin),
-    overCapacity: Math.max(0, d.totalMin - d.capacityMin),
+    totalCards: d.reviewCards + d.newCards + d.learningCards + d.relearningCards,
+    learningTotal: d.learningCards + d.relearningCards,
   }));
 
   return (
     <div className="space-y-3">
-      {/* Block 1: Progress Summary */}
-      {!isSimulating && data.length > 0 && (
-        <ProgressSummaryCard
-          data={data}
-          summary={summary}
-          totalNewCards={totalNewCards}
-          plans={plansList}
-        />
-      )}
 
       {/* Block 2: Chart */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {/* Header */}
+          {/* Header with info tooltip */}
           <div className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Carga Diária Prevista</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" className="w-64 text-xs space-y-1.5 p-3">
+                <p className="font-semibold text-foreground">Tipos de cards</p>
+                <div className="space-y-1 text-muted-foreground">
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] mr-1.5" /><strong className="text-foreground">Revisão:</strong> Cards já estudados que voltam para reforço.</p>
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] mr-1.5" /><strong className="text-foreground">Novos:</strong> Cards que você nunca estudou.</p>
+                  <p><span className="inline-block h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] mr-1.5" /><strong className="text-foreground">Aprendendo:</strong> Cards em fase inicial de memorização.</p>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* View chips */}
@@ -565,64 +582,37 @@ export function ForecastSimulator({
 
           {/* Chart */}
           {chartData.length > 0 && !isSimulating && (
-            <ResponsiveContainer width="100%" height={180}>
-              <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
-                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis
-                  tick={{ fontSize: 9 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={32}
-                  tickFormatter={(v) => `${v}min`}
-                  domain={[0, (max: number) => Math.ceil(max * 1.15)]}
-                />
-                <Tooltip content={<SimulatorTooltip />} />
-                {avgCapacity > 0 && (
-                  <ReferenceLine
-                    y={avgCapacity}
-                    stroke="hsl(var(--muted-foreground) / 0.4)"
-                    strokeDasharray="6 3"
-                    strokeWidth={1.5}
-                    label={{
-                      value: `${avgCapacity}m`,
-                      position: 'right',
-                      fontSize: 9,
-                      fill: 'hsl(var(--muted-foreground))',
-                    }}
+            <div className="relative z-10">
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={32}
+                    domain={[0, (max: number) => Math.ceil(max * 1.15)]}
                   />
-                )}
-                {/* Two stacked bars: within capacity (blue) + over capacity (red) */}
-                <Bar
-                  dataKey="withinCapacity"
-                  stackId="load"
-                  name="Dentro da capacidade"
-                  fill="hsl(217 91% 60%)"
-                  opacity={0.8}
-                  radius={[0, 0, 0, 0]}
-                />
-                <Bar
-                  dataKey="overCapacity"
-                  stackId="load"
-                  name="Excedente"
-                  fill="hsl(0 84% 60%)"
-                  opacity={0.75}
-                  radius={[3, 3, 0, 0]}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+                  <Tooltip content={<SimulatorTooltip summary={summary} />} />
+                  <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           )}
 
           {/* Mini-legend */}
           {chartData.length > 0 && !isSimulating && (
             <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Dentro da capacidade
+                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-sm bg-[hsl(0_84%_60%)] opacity-75" /> Excedente
+                <span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)] opacity-80" /> Novos
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 border-t border-dashed border-muted-foreground/40" /> Média
+                <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
               </span>
             </div>
           )}
@@ -710,6 +700,9 @@ export function ForecastSimulator({
         hasAnyOverride={hasAnyOverride}
         isSimulating={isSimulating}
         isUsingDefaults={isUsingDefaults}
+        realWeeklyNewCards={realWeeklyNewCards}
+        weeklyNewCardsOverride={weeklyNewCardsOverride}
+        onWeeklyNewCardsChange={onWeeklyNewCardsChange}
       />
     </div>
   );

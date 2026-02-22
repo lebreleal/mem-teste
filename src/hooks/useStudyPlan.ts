@@ -7,6 +7,7 @@ import { computeNewCardAllocation } from '@/lib/studyUtils';
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
 export type WeeklyMinutes = Record<DayKey, number>;
+export type WeeklyNewCards = Record<DayKey, number>;
 
 export const DAY_LABELS: Record<DayKey, string> = {
   mon: 'Seg', tue: 'Ter', wed: 'Qua', thu: 'Qui', fri: 'Sex', sat: 'Sáb', sun: 'Dom',
@@ -40,6 +41,18 @@ export function getMinutesForDay(plan: StudyPlan, day?: DayKey): number {
 export function getWeeklyAvgMinutesGlobal(dailyMin: number, weeklyMin: WeeklyMinutes | null): number {
   if (!weeklyMin) return dailyMin;
   const vals = DAY_KEYS.map(d => weeklyMin[d] ?? dailyMin);
+  return Math.round(vals.reduce((a, b) => a + b, 0) / 7);
+}
+
+export function getNewCardsForDayGlobal(dailyLimit: number, weeklyNewCards: WeeklyNewCards | null, day?: DayKey): number {
+  const d = day ?? (DAY_KEYS[new Date().getDay()] as DayKey);
+  if (weeklyNewCards && weeklyNewCards[d] != null) return weeklyNewCards[d];
+  return dailyLimit;
+}
+
+export function getWeeklyAvgNewCardsGlobal(dailyLimit: number, weeklyNewCards: WeeklyNewCards | null): number {
+  if (!weeklyNewCards) return dailyLimit;
+  const vals = DAY_KEYS.map(d => weeklyNewCards[d] ?? dailyLimit);
   return Math.round(vals.reduce((a, b) => a + b, 0) / 7);
 }
 
@@ -120,7 +133,7 @@ export function useStudyPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit')
+        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit, weekly_new_cards')
         .eq('id', userId!)
         .single();
       if (error) throw error;
@@ -128,13 +141,14 @@ export function useStudyPlan() {
         dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
         weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
         dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
+        weeklyNewCards: (data as any)?.weekly_new_cards as WeeklyNewCards | null,
       };
     },
     enabled: !!userId,
   });
 
   const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30 };
+  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
 
   // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
   const allDeckIds = useMemo(() => {
@@ -321,7 +335,7 @@ export function useStudyPlan() {
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
     // ─── Smart new card allocation (shared pure function) ───
-    const globalNewBudget = globalCapacity.dailyNewCardsLimit;
+    const globalNewBudget = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
     const allocation = computeNewCardAllocation({
@@ -344,10 +358,11 @@ export function useStudyPlan() {
     const weeklyCardData: WeeklyCardDataPoint[] = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(dayKey => {
       const dayMinutes = getMinutesForDayGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes, dayKey);
       const dayCapacity = Math.floor((dayMinutes * 60) / avg);
+      const dayNewLimit = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards, dayKey);
       const dayReviews = totalReview > 0
         ? Math.min(totalReview, dayCapacity)
         : Math.min(totalLearning, Math.ceil(dayCapacity * reviewRatio));
-      const dayNew = Math.min(Math.max(0, dayCapacity - dayReviews), totalNew);
+      const dayNew = Math.min(Math.min(Math.max(0, dayCapacity - dayReviews), totalNew), dayNewLimit);
       return { day: DAY_LABELS[dayKey], review: dayReviews, newCards: dayNew, total: dayReviews + dayNew, minutes: dayMinutes };
     });
 
@@ -374,7 +389,7 @@ export function useStudyPlan() {
         reviewCards = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
       }
 
-      const fcNewCards = dailyNewCards;
+      const fcNewCards = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards, dayKey);
       const fcReviewMin = Math.round((reviewCards * avg) / 60);
       const fcNewMin = Math.round((fcNewCards * avg) / 60);
       const fcTotalMin = fcReviewMin + fcNewMin;
@@ -559,10 +574,14 @@ export function useStudyPlan() {
   });
 
   const updateNewCardsLimit = useMutation({
-    mutationFn: async (limit: number) => {
+    mutationFn: async (input: { limit: number; weeklyNewCards?: WeeklyNewCards | null }) => {
+      const updateData: any = { daily_new_cards_limit: input.limit };
+      if (input.weeklyNewCards !== undefined) {
+        updateData.weekly_new_cards = input.weeklyNewCards;
+      }
       const { error } = await supabase
         .from('profiles')
-        .update({ daily_new_cards_limit: limit } as any)
+        .update(updateData)
         .eq('id', userId!);
       if (error) throw error;
     },
