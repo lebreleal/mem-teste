@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target } from 'lucide-react';
+import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus } from 'lucide-react';
 import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,14 +94,15 @@ function ProgressSummaryCard({ data, summary, totalNewCards, plans }: {
   totalNewCards: number;
   plans?: { id: string; name: string; target_date: string | null }[];
 }) {
-  // Calculate progress: how many new cards have been "started" (will be studied within the simulation)
-  const lastNewDay = data.length > 0 ? [...data].reverse().find(d => d.newCards > 0) : null;
-  const completionDate = lastNewDay?.date ?? null;
-  
-  // Remaining new cards at the end of simulation
+  // Calculate progress: how many new cards will be studied within the simulation horizon
   const totalNewInSim = data.reduce((s, d) => s + d.newCards, 0);
-  const studied = Math.min(totalNewCards, totalNewInSim);
-  const pct = totalNewCards > 0 ? Math.min(100, Math.round((studied / totalNewCards) * 100)) : 100;
+  const willStudy = Math.min(totalNewCards, totalNewInSim);
+  const pct = totalNewCards > 0 ? Math.min(100, Math.round((willStudy / totalNewCards) * 100)) : 100;
+
+  // Completion date: last simulation point where newCards > 0
+  const lastNewDay = data.length > 0 ? [...data].reverse().find(d => d.newCards > 0) : null;
+  const completionDateRaw = lastNewDay?.date ?? null;
+  const completionDate = completionDateRaw ? formatCompletionDate(completionDateRaw) : null;
 
   // Target date comparison
   const earliestTarget = (plans ?? []).filter(p => p.target_date).reduce<Date | null>((min, p) => {
@@ -187,15 +188,25 @@ function ProgressSummaryCard({ data, summary, totalNewCards, plans }: {
   );
 }
 
-// Helper to parse "dd/MM/yy" or "dd/MM/yyyy" dates from simulation
+// Helper to parse "dd/MM/yy" or "dd/MM/yyyy" or weekly range "dd/MM – dd/MM" dates from simulation
 function parseSimDate(dateStr: string): Date | null {
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return null;
+  // Handle weekly aggregation format like "24/02 – 02/03"
+  const cleanStr = dateStr.includes('–') ? dateStr.split('–')[1].trim() : dateStr;
+  const parts = cleanStr.split('/');
+  if (parts.length < 2) return null;
   const day = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
-  let year = parseInt(parts[2], 10);
+  let year = parts.length === 3 ? parseInt(parts[2], 10) : new Date().getFullYear();
   if (year < 100) year += 2000;
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
   return new Date(year, month, day);
+}
+
+// Format completion date for display
+function formatCompletionDate(dateStr: string): string {
+  const parsed = parseSimDate(dateStr);
+  if (!parsed || isNaN(parsed.getTime())) return dateStr;
+  return format(parsed, "dd/MM/yyyy");
 }
 
 // ─── Simplified Chart Tooltip ──────────────────────────
@@ -283,7 +294,7 @@ function SimulationControls({
 
         {/* New cards per day */}
         <ControlRow
-          icon="~"
+          icon={<Layers className="h-3 w-3" />}
           label="cards novos para estudar/dia"
           value={newCardsOverride ?? defaultNewCardsPerDay}
           defaultValue={defaultNewCardsPerDay}
@@ -302,7 +313,7 @@ function SimulationControls({
 
         {/* Created cards per day */}
         <ControlRow
-          icon="+"
+          icon={<Plus className="h-3 w-3" />}
           label="cards criados/dia"
           value={createdCardsOverride ?? defaultCreatedCardsPerDay}
           defaultValue={defaultCreatedCardsPerDay}
@@ -392,7 +403,7 @@ function SimulationControls({
 
 // ─── Control Row (reusable inline editor) ──────────────
 function ControlRow({ icon, label, value, defaultValue, editing, tempValue, onEdit, onTempChange, onConfirm, onReset, isOverridden }: {
-  icon: string; label: string; value: number; defaultValue: number;
+  icon: React.ReactNode; label: string; value: number; defaultValue: number;
   editing: boolean; tempValue: string;
   onEdit: () => void; onTempChange: (v: string) => void; onConfirm: () => void; onReset: () => void;
   isOverridden: boolean;
@@ -419,11 +430,19 @@ function ControlRow({ icon, label, value, defaultValue, editing, tempValue, onEd
           )}
         </div>
       ) : (
-        <button onClick={onEdit} className="flex items-center gap-1 hover:text-primary transition-colors">
-          <span className="font-medium text-foreground">{value}</span>
-          <span className="text-muted-foreground">{label}</span>
-          <Pencil className="h-3 w-3 text-muted-foreground/50" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={onEdit} className="flex items-center gap-1 hover:text-primary transition-colors">
+            <span className="font-medium text-foreground">{value}</span>
+            <span className="text-muted-foreground">{label}</span>
+            <Pencil className="h-3 w-3 text-muted-foreground/50" />
+          </button>
+          {isOverridden && (
+            <>
+              <Badge variant="outline" className="text-[9px] h-4 px-1 border-primary/40 text-primary">simulando</Badge>
+              <button onClick={onReset} className="text-[10px] text-primary underline">reset</button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -591,6 +610,21 @@ export function ForecastSimulator({
                 />
               </ComposedChart>
             </ResponsiveContainer>
+          )}
+
+          {/* Mini-legend */}
+          {chartData.length > 0 && !isSimulating && (
+            <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Dentro da capacidade
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm bg-[hsl(0_84%_60%)] opacity-75" /> Excedente
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-3 w-3 border-t border-dashed border-muted-foreground/40" /> Média
+              </span>
+            </div>
           )}
 
           {/* Empty state */}
