@@ -582,44 +582,24 @@ export function ForecastSimulator({
 
           {/* Chart */}
           {chartData.length > 0 && !isSimulating && (
-            <ResponsiveContainer width="100%" height={180}>
-              <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
-                <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis
-                  tick={{ fontSize: 9 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={32}
-                  domain={[0, (max: number) => Math.ceil(max * 1.15)]}
-                />
-                <Tooltip content={<SimulatorTooltip summary={summary} />} />
-                {/* Stacked bars: review, new, learning */}
-                <Bar
-                  dataKey="reviewCards"
-                  stackId="cards"
-                  name="Revisões"
-                  fill="hsl(217 91% 60%)"
-                  opacity={0.8}
-                  radius={[0, 0, 0, 0]}
-                />
-                <Bar
-                  dataKey="newCards"
-                  stackId="cards"
-                  name="Novos"
-                  fill="hsl(142 71% 45%)"
-                  opacity={0.8}
-                  radius={[0, 0, 0, 0]}
-                />
-                <Bar
-                  dataKey="learningTotal"
-                  stackId="cards"
-                  name="Aprendendo"
-                  fill="hsl(38 92% 50%)"
-                  opacity={0.75}
-                  radius={[3, 3, 0, 0]}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <div className="relative z-10">
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={32}
+                    domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+                  />
+                  <Tooltip content={<SimulatorTooltip summary={summary} />} />
+                  <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           )}
 
           {/* Mini-legend */}
