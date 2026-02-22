@@ -403,7 +403,7 @@ export function useStudyPlan() {
       const rateToUse = Math.max(1, effectiveRate);
       const daysForNew = Math.ceil(totalNew / rateToUse);
       const projected = new Date();
-      projected.setDate(projected.getDate() + daysForNew);
+      projected.setDate(projected.getDate() + daysForNew - 1); // today counts as day 1
       projectedCompletionDate = projected.toISOString().slice(0, 10);
     }
 
