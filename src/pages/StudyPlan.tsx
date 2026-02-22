@@ -602,6 +602,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
   const { forecastView, setForecastView } = useForecastView();
   const { toast } = useToast();
   const [newCardsOverride, setNewCardsOverride] = useState<number | undefined>();
+  const [weeklyNewCardsOverride, setWeeklyNewCardsOverride] = useState<WeeklyNewCards | undefined>();
   const [createdCardsOverride, setCreatedCardsOverride] = useState<number | undefined>();
   const [dailyMinutesOverride, setDailyMinutesOverride] = useState<number | undefined>();
   const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
@@ -648,7 +649,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
     createdCardsPerDayOverride: createdCardsOverride,
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
-    weeklyNewCards,
+    weeklyNewCards: weeklyNewCardsOverride ?? weeklyNewCards,
     enabled: allDeckIds.length > 0,
     latestTargetDate,
   });
@@ -657,7 +658,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
     setForecastView(v);
   }, [setForecastView]);
 
-  const hasAnyOverride = newCardsOverride !== undefined || createdCardsOverride !== undefined || dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
+  const hasAnyOverride = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined || createdCardsOverride !== undefined || dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
 
   const handleApplyCapacity = useCallback(async () => {
     try {
@@ -695,6 +696,9 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, wee
       onWeeklyMinutesChange={setWeeklyMinutesOverride}
       onApplyCapacity={handleApplyCapacity}
       hasAnyOverride={hasAnyOverride}
+      realWeeklyNewCards={weeklyNewCards}
+      weeklyNewCardsOverride={weeklyNewCardsOverride}
+      onWeeklyNewCardsChange={setWeeklyNewCardsOverride}
     />
   );
 }

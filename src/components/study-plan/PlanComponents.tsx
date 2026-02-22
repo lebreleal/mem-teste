@@ -15,8 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { ForecastPoint, ForecastView, SimulatorSummary } from '@/types/forecast';
-import type { WeeklyMinutes, DayKey } from '@/hooks/useStudyPlan';
-import { DAY_LABELS } from '@/hooks/useStudyPlan';
+import type { WeeklyMinutes, WeeklyNewCards, DayKey } from '@/hooks/useStudyPlan';
+import { DAY_LABELS, getWeeklyAvgNewCardsGlobal } from '@/hooks/useStudyPlan';
 import { formatMinutes, HEALTH_CONFIG } from './constants';
 
 // ─── Health Ring SVG ────────────────────────────────────
@@ -245,6 +245,7 @@ function SimulationControls({
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride, isSimulating,
   isUsingDefaults,
+  realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
   defaultNewCardsPerDay: number;
   newCardsOverride: number | undefined;
@@ -262,15 +263,18 @@ function SimulationControls({
   hasAnyOverride: boolean;
   isSimulating: boolean;
   isUsingDefaults: boolean;
+  realWeeklyNewCards: WeeklyNewCards | null;
+  weeklyNewCardsOverride: WeeklyNewCards | undefined;
+  onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
 }) {
-  const [editingNewCards, setEditingNewCards] = useState(false);
-  const [tempNewCards, setTempNewCards] = useState(String(newCardsOverride ?? defaultNewCardsPerDay));
   const [editingCreatedCards, setEditingCreatedCards] = useState(false);
   const [tempCreatedCards, setTempCreatedCards] = useState(String(createdCardsOverride ?? defaultCreatedCardsPerDay));
   const [editingCapacity, setEditingCapacity] = useState(false);
+  const [editingNewCards, setEditingNewCards] = useState(false);
 
   const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+  // Capacity weekly
   const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? {
     mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes,
     fri: realDailyMinutes, sat: realDailyMinutes, sun: realDailyMinutes,
@@ -279,6 +283,16 @@ function SimulationControls({
   const isCapacityOverridden = dailyMinutesOverride !== undefined || weeklyMinutesOverride !== undefined;
 
   const [tempWeekly, setTempWeekly] = useState<WeeklyMinutes>(currentWeekly);
+
+  // New cards weekly
+  const currentNewCardsWeekly = weeklyNewCardsOverride ?? realWeeklyNewCards ?? {
+    mon: defaultNewCardsPerDay, tue: defaultNewCardsPerDay, wed: defaultNewCardsPerDay, thu: defaultNewCardsPerDay,
+    fri: defaultNewCardsPerDay, sat: defaultNewCardsPerDay, sun: defaultNewCardsPerDay,
+  };
+  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
+  const isNewCardsOverridden = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined;
+
+  const [tempNewCardsWeekly, setTempNewCardsWeekly] = useState<WeeklyNewCards>(currentNewCardsWeekly);
 
   return (
     <Card>
@@ -295,24 +309,68 @@ function SimulationControls({
           </div>
         )}
 
-        {/* New cards per day */}
-        <ControlRow
-          icon={<Layers className="h-3 w-3" />}
-          label="cards novos para estudar/dia"
-          value={newCardsOverride ?? defaultNewCardsPerDay}
-          defaultValue={defaultNewCardsPerDay}
-          editing={editingNewCards}
-          tempValue={tempNewCards}
-          onEdit={() => { setTempNewCards(String(newCardsOverride ?? defaultNewCardsPerDay)); setEditingNewCards(true); }}
-          onTempChange={setTempNewCards}
-          onConfirm={() => {
-            const val = parseInt(tempNewCards, 10);
-            if (!isNaN(val) && val >= 0) onNewCardsChange(val === defaultNewCardsPerDay ? undefined : val);
-            setEditingNewCards(false);
-          }}
-          onReset={() => { onNewCardsChange(undefined); setEditingNewCards(false); }}
-          isOverridden={newCardsOverride != null}
-        />
+        {/* New cards per day — opens modal */}
+        <div className="flex items-center gap-2 text-xs">
+          <Layers className="h-3 w-3 text-muted-foreground" />
+          <button
+            onClick={() => { setTempNewCardsWeekly(currentNewCardsWeekly); setEditingNewCards(true); }}
+            className="flex items-center gap-1 hover:text-primary transition-colors"
+          >
+            <span className="font-medium text-foreground">{currentNewCardsAvg} cards novos/dia</span>
+            <span className="text-muted-foreground">(média)</span>
+            <Pencil className="h-3 w-3 text-muted-foreground/50" />
+            {isNewCardsOverridden && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
+            )}
+          </button>
+          {isNewCardsOverridden && (
+            <button onClick={() => { onNewCardsChange(undefined); onWeeklyNewCardsChange(undefined); }} className="text-[10px] text-primary underline">reset</button>
+          )}
+        </div>
+
+        {/* New cards edit modal */}
+        <Dialog open={editingNewCards} onOpenChange={setEditingNewCards}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Layers className="h-4 w-4 text-primary" />
+                Cards Novos por Dia
+              </DialogTitle>
+              <DialogDescription>
+                Defina quantos cards novos estudar em cada dia. Coloque 0 para dias sem novos cards.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                {DAY_ORDER.map(dk => (
+                  <div key={dk} className="flex items-center gap-2">
+                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
+                    <Slider
+                      value={[tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay]}
+                      onValueChange={([v]) => setTempNewCardsWeekly(prev => ({ ...prev, [dk]: v }))}
+                      min={0} max={200} step={5}
+                      className="flex-1"
+                    />
+                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
+                      {tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
+              </p>
+              <Button className="w-full" onClick={() => {
+                onWeeklyNewCardsChange(tempNewCardsWeekly);
+                const avg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly);
+                onNewCardsChange(avg === defaultNewCardsPerDay ? undefined : avg);
+                setEditingNewCards(false);
+              }}>
+                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Created cards per day */}
         <ControlRow
@@ -469,6 +527,7 @@ export function ForecastSimulator({
   dailyMinutesOverride, weeklyMinutesOverride,
   onDailyMinutesChange, onWeeklyMinutesChange,
   onApplyCapacity, hasAnyOverride,
+  realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
   data: ForecastPoint[];
   summary: SimulatorSummary | null;
@@ -496,6 +555,9 @@ export function ForecastSimulator({
   onWeeklyMinutesChange: (v: WeeklyMinutes | undefined) => void;
   onApplyCapacity: () => void;
   hasAnyOverride: boolean;
+  realWeeklyNewCards: WeeklyNewCards | null;
+  weeklyNewCardsOverride: WeeklyNewCards | undefined;
+  onWeeklyNewCardsChange: (v: WeeklyNewCards | undefined) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -712,6 +774,9 @@ export function ForecastSimulator({
         hasAnyOverride={hasAnyOverride}
         isSimulating={isSimulating}
         isUsingDefaults={isUsingDefaults}
+        realWeeklyNewCards={realWeeklyNewCards}
+        weeklyNewCardsOverride={weeklyNewCardsOverride}
+        onWeeklyNewCardsChange={onWeeklyNewCardsChange}
       />
     </div>
   );
