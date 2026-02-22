@@ -621,90 +621,20 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
 }
 
 // ─── AI Plan Advisor Button ─────────────────────────────
-function PlanAdvisorButton({ metrics, plans, globalCapacity }: {
-  metrics: import('@/hooks/useStudyPlan').PlanMetrics;
-  plans: StudyPlanType[];
-  globalCapacity: { dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; dailyNewCardsLimit: number };
+function PlanAdvisorButton({ advice, loading, shown, onFetch, onToggle }: {
+  advice: string | null;
+  loading: boolean;
+  shown: boolean;
+  onFetch: () => void;
+  onToggle: () => void;
 }) {
-  const [advice, setAdvice] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [shown, setShown] = useState(false);
-  const paramsHashRef = useRef('');
-
-  const currentHash = useMemo(() => {
-    const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
-    const budget = globalCapacity.dailyNewCardsLimit;
-    const avgSec = metrics.avgSecondsPerCard;
-    const availMinForNew = Math.max(0, avgDailyMin - metrics.reviewMinutes);
-    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
-    const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
-    const earliestTarget = plans.filter(p => p.target_date).map(p => p.target_date!).sort()[0] || '';
-    return `${metrics.totalNew}-${budget}-${effectiveRate}-${earliestTarget}-${avgDailyMin}`;
-  }, [metrics, plans, globalCapacity]);
-
-  useEffect(() => {
-    if (paramsHashRef.current && paramsHashRef.current !== currentHash) {
-      setAdvice(null);
-      setShown(false);
-    }
-    paramsHashRef.current = currentHash;
-  }, [currentHash]);
-
-  const fetchAdvice = async () => {
-    if (advice) { setShown(true); return; }
-    setLoading(true);
-    try {
-      const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
-      const budget = globalCapacity.dailyNewCardsLimit;
-      const avgSec = metrics.avgSecondsPerCard;
-      const availMinForNew = Math.max(0, avgDailyMin - metrics.reviewMinutes);
-      const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
-      const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
-
-      const plansWithTarget = plans.filter(p => p.target_date);
-      const earliestTarget = plansWithTarget.length > 0
-        ? plansWithTarget.reduce((min, p) => { const d = p.target_date!; return d < min ? d : min; }, plansWithTarget[0].target_date!)
-        : null;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const daysLeft = earliestTarget ? Math.max(1, Math.ceil((new Date(earliestTarget).getTime() - today.getTime()) / 86400000)) : null;
-
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-advisor`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          totalNew: metrics.totalNew,
-          budget,
-          effectiveRate,
-          targetDate: earliestTarget,
-          projectedDate: metrics.projectedCompletionDate,
-          daysLeft,
-          reviewMinutes: metrics.reviewMinutes,
-          dailyMinutes: avgDailyMin,
-          planNames: plans.map(p => p.name).join(', '),
-        }),
-      });
-      const json = await res.json();
-      setAdvice(json.advice || 'Não foi possível gerar recomendação.');
-      setShown(true);
-    } catch {
-      setAdvice('Erro ao consultar a IA. Tente novamente.');
-      setShown(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="mt-2 space-y-2">
       <Button
         variant="outline"
         size="sm"
         className="w-full h-auto py-2 gap-2 text-xs justify-start"
-        onClick={fetchAdvice}
+        onClick={advice ? onToggle : onFetch}
         disabled={loading}
       >
         {loading ? (
@@ -723,7 +653,7 @@ function PlanAdvisorButton({ metrics, plans, globalCapacity }: {
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-start gap-2">
             <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            <p className="text-[11px] text-foreground leading-relaxed">{advice}</p>
+            <p className="text-[11px] text-foreground leading-relaxed whitespace-pre-wrap">{advice}</p>
           </div>
         </div>
       )}
@@ -770,6 +700,93 @@ const StudyPlan = () => {
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
   const [showNewCardsConfirm, setShowNewCardsConfirm] = useState(false);
+
+  // ─── Shared AI Advisor state ───
+  const [advisorAdvice, setAdvisorAdvice] = useState<string | null>(null);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorShown, setAdvisorShown] = useState(false);
+  const advisorHashRef = useRef('');
+
+  const advisorHash = useMemo(() => {
+    if (!metrics) return '';
+    const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
+    const budget = globalCapacity.dailyNewCardsLimit;
+    const avgSec = metrics.avgSecondsPerCard;
+    const availMinForNew = Math.max(0, avgDailyMin - metrics.reviewMinutes);
+    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
+    const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
+    const earliestTarget = plans.filter(p => p.target_date).map(p => p.target_date!).sort()[0] || '';
+    return `${metrics.totalNew}-${budget}-${effectiveRate}-${earliestTarget}-${avgDailyMin}`;
+  }, [metrics, plans, globalCapacity]);
+
+  useEffect(() => {
+    if (advisorHashRef.current && advisorHashRef.current !== advisorHash) {
+      setAdvisorAdvice(null);
+      setAdvisorShown(false);
+    }
+    advisorHashRef.current = advisorHash;
+  }, [advisorHash]);
+
+  // Is the goal unfeasible? (projected > target)
+  const isGoalUnfeasible = useMemo(() => {
+    if (!metrics?.projectedCompletionDate) return false;
+    const plansWithTarget = plans.filter(p => p.target_date);
+    if (plansWithTarget.length === 0) return false;
+    const earliest = plansWithTarget.reduce((min, p) => {
+      const d = p.target_date!;
+      return d < min ? d : min;
+    }, plansWithTarget[0].target_date!);
+    return metrics.projectedCompletionDate > earliest;
+  }, [metrics, plans]);
+
+  const fetchAdvisorAdvice = useCallback(async () => {
+    if (advisorAdvice) { setAdvisorShown(true); return; }
+    if (!metrics) return;
+    setAdvisorLoading(true);
+    try {
+      const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
+      const budget = globalCapacity.dailyNewCardsLimit;
+      const avgSec = metrics.avgSecondsPerCard;
+      const availMinForNew = Math.max(0, avgDailyMin - metrics.reviewMinutes);
+      const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / avgSec) : 0;
+      const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
+
+      const plansWithTarget = plans.filter(p => p.target_date);
+      const earliestTarget = plansWithTarget.length > 0
+        ? plansWithTarget.reduce((min, p) => { const d = p.target_date!; return d < min ? d : min; }, plansWithTarget[0].target_date!)
+        : null;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const daysLeft = earliestTarget ? Math.max(1, Math.ceil((new Date(earliestTarget).getTime() - today.getTime()) / 86400000)) : null;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/plan-advisor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          totalNew: metrics.totalNew,
+          budget,
+          effectiveRate,
+          targetDate: earliestTarget,
+          projectedDate: metrics.projectedCompletionDate,
+          daysLeft,
+          reviewMinutes: metrics.reviewMinutes,
+          dailyMinutes: avgDailyMin,
+          planNames: plans.map(p => p.name).join(', '),
+        }),
+      });
+      const json = await res.json();
+      setAdvisorAdvice(json.advice || 'Não foi possível gerar recomendação.');
+      setAdvisorShown(true);
+    } catch {
+      setAdvisorAdvice('Erro ao consultar a IA. Tente novamente.');
+      setAdvisorShown(true);
+    } finally {
+      setAdvisorLoading(false);
+    }
+  }, [advisorAdvice, metrics, plans, globalCapacity]);
 
   // Sync tempNewCards when globalCapacity loads/changes
   useEffect(() => {
@@ -957,7 +974,7 @@ const StudyPlan = () => {
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
     })() : null;
 
-    const feasibilityBlock = null; // Replaced by AI advisor button
+    
 
     // ─── EDIT MODE: Show all fields at once ───
     if (isEditing) {
@@ -1027,7 +1044,15 @@ const StudyPlan = () => {
                   <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
-              {feasibilityBlock}
+              {feasibilityCheck && (
+                <PlanAdvisorButton
+                  advice={advisorAdvice}
+                  loading={advisorLoading}
+                  shown={advisorShown}
+                  onFetch={fetchAdvisorAdvice}
+                  onToggle={() => setAdvisorShown(s => !s)}
+                />
+              )}
             </div>
 
             {/* Save */}
@@ -1182,7 +1207,15 @@ const StudyPlan = () => {
                 </PopoverContent>
               </Popover>
 
-              {feasibilityBlock}
+              {feasibilityCheck && (
+                <PlanAdvisorButton
+                  advice={advisorAdvice}
+                  loading={advisorLoading}
+                  shown={advisorShown}
+                  onFetch={fetchAdvisorAdvice}
+                  onToggle={() => setAdvisorShown(s => !s)}
+                />
+              )}
 
               <Button
                 className="w-full" size="lg"
@@ -1531,11 +1564,15 @@ const StudyPlan = () => {
                   {metrics?.totalNew === 0 && (
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Todos os cards novos foram dominados! 🎉</p>
                   )}
-                  <PlanAdvisorButton
-                    metrics={metrics!}
-                    plans={plans}
-                    globalCapacity={globalCapacity}
-                  />
+                  {isGoalUnfeasible && (
+                    <PlanAdvisorButton
+                      advice={advisorAdvice}
+                      loading={advisorLoading}
+                      shown={advisorShown}
+                      onFetch={fetchAdvisorAdvice}
+                      onToggle={() => setAdvisorShown(s => !s)}
+                    />
+                  )}
                 </div>
               )}
             </CardContent>
