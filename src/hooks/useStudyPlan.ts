@@ -335,8 +335,7 @@ export function useStudyPlan() {
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
     // ─── Smart new card allocation (shared pure function) ───
-    const todayNewBudget = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
-    const globalNewBudget = getWeeklyAvgNewCardsGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
+    const globalNewBudget = globalCapacity.dailyNewCardsLimit;
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
     const allocation = computeNewCardAllocation({
@@ -349,7 +348,7 @@ export function useStudyPlan() {
     const deckNewAllocation = allocation.perDeck;
     const newCardsAllocation = allocation.perPlan;
 
-    const dailyNewCards = Math.min(todayNewBudget, totalNew);
+    const dailyNewCards = Math.min(globalNewBudget, totalNew);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
     const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
