@@ -1429,9 +1429,7 @@ const StudyPlan = () => {
                     Novos cards por dia
                   </span>
                   <span className="text-base font-bold tabular-nums text-primary">
-                    {editingWeeklyNewCards && tempWeeklyNewCards
-                      ? getWeeklyAvgNewCardsGlobal(tempNewCards, tempWeeklyNewCards)
-                      : tempNewCards}
+                    {tempNewCards}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
