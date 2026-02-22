@@ -1356,7 +1356,7 @@ const StudyPlan = () => {
                       const today = new Date(); today.setHours(0, 0, 0, 0);
                       const dLeft = Math.max(1, Math.ceil((new Date(p.target_date!).getTime() - today.getTime()) / 86400000));
                       const needed = Math.ceil(pNewCards / dLeft);
-                      const budget = globalCapacity.dailyNewCardsLimit;
+                      const budget = getWeeklyAvgNewCardsGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
                       if (needed > budget) {
                         return (
                           <Badge variant="destructive" className="text-[9px] h-4 px-1.5 shrink-0">
@@ -1429,9 +1429,7 @@ const StudyPlan = () => {
                     Novos cards por dia
                   </span>
                   <span className="text-base font-bold tabular-nums text-primary">
-                    {editingWeeklyNewCards && tempWeeklyNewCards
-                      ? getWeeklyAvgNewCardsGlobal(tempNewCards, tempWeeklyNewCards)
-                      : tempNewCards}
+                    {getWeeklyAvgNewCardsGlobal(tempNewCards, editingWeeklyNewCards ? tempWeeklyNewCards : null)}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
