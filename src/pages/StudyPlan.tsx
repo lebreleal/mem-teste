@@ -89,7 +89,7 @@ function WhatCanIDoDialog({ open, onOpenChange, totalNew, neededPerDay, budget, 
               <p className="text-sm font-semibold">Dar mais tempo</p>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Mudar a data limite para <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong> — assim você mantém o ritmo atual sem se sobrecarregar.
+              Mudar a data para completar para <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong> — assim você mantém o ritmo atual sem se sobrecarregar.
             </p>
             <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { onApplyDate(suggestedDate); onOpenChange(false); }}>
               <CalendarIcon className="h-3 w-3 mr-1.5" />
@@ -937,18 +937,20 @@ const StudyPlan = () => {
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           {feasibilityCheck.isImpossible
             ? <>Seu ritmo atual de <strong>{feasibilityCheck.budget} cards/dia</strong> não é suficiente para cobrir os <strong>{feasibilityCheck.selectedNewCards} cards restantes</strong> até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>. Toque no botão abaixo para ver suas opções.</>
-            : <>O prazo até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong> está apertado para os <strong>{feasibilityCheck.selectedNewCards} cards restantes</strong> com <strong>{feasibilityCheck.budget} cards/dia</strong>. Veja abaixo o que ajustar.</>
+            : <>A margem está apertada: você terminará os <strong>{feasibilityCheck.selectedNewCards} cards restantes</strong> bem perto da data definida (<strong>{format(targetDate!, "dd/MM/yyyy")}</strong>).</>
           }
         </p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full text-xs gap-1.5"
-          onClick={() => setShowWhatCanIDo(true)}
-        >
-          <HelpCircle className="h-3.5 w-3.5" />
-          O que posso fazer?
-        </Button>
+        {feasibilityCheck.isImpossible && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-xs gap-1.5"
+            onClick={() => setShowWhatCanIDo(true)}
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            O que posso fazer?
+          </Button>
+        )}
         <WhatCanIDoDialog
           open={showWhatCanIDo}
           onOpenChange={setShowWhatCanIDo}
@@ -1033,7 +1035,7 @@ const StudyPlan = () => {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-primary" />
-                <h2 className="text-base font-bold">Data limite</h2>
+                <h2 className="text-base font-bold">Data para completar</h2>
               </div>
               <Popover>
                 <PopoverTrigger asChild>
@@ -1183,10 +1185,10 @@ const StudyPlan = () => {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Target className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold">Data limite</h2>
+                  <h2 className="text-xl font-bold">Data para completar</h2>
                 </div>
                  <p className="text-sm text-muted-foreground">
-                   A data limite indica até quando você quer ter <strong>dominado todos os cards novos</strong> dos baralhos selecionados.
+                   A data para completar indica até quando você quer ter <strong>dominado todos os cards novos</strong> dos baralhos selecionados.
                  </p>
               </div>
               <Popover>
