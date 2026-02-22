@@ -392,12 +392,8 @@ function SimulationControls({
         />
 
 
-        {/* Apply button */}
-        {hasAnyOverride && !isSimulating && (
-          <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={onApplyCapacity}>
-            <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar ao meu plano
-          </Button>
-        )}
+
+
       </CardContent>
     </Card>
   );
