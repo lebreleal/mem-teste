@@ -935,7 +935,10 @@ const StudyPlan = () => {
           {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
         </p>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{feasibilityCheck.budget}/dia</strong>.
+          {feasibilityCheck.isImpossible
+            ? <>Seu ritmo atual de <strong>{feasibilityCheck.budget} cards/dia</strong> não é suficiente para cobrir os <strong>{feasibilityCheck.selectedNewCards} cards restantes</strong> até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>. Toque no botão abaixo para ver suas opções.</>
+            : <>O prazo até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong> está apertado para os <strong>{feasibilityCheck.selectedNewCards} cards restantes</strong> com <strong>{feasibilityCheck.budget} cards/dia</strong>. Veja abaixo o que ajustar.</>
+          }
         </p>
         <Button
           size="sm"
