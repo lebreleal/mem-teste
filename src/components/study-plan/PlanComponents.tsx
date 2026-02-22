@@ -391,65 +391,6 @@ function SimulationControls({
           isOverridden={createdCardsOverride != null}
         />
 
-        {/* Study time */}
-        <div className="flex items-center gap-2 text-xs">
-          <Timer className="h-3 w-3 text-muted-foreground" />
-          <button
-            onClick={() => { setTempWeekly(currentWeekly); setEditingCapacity(true); }}
-            className="flex items-center gap-1 hover:text-primary transition-colors"
-          >
-            <span className="font-medium text-foreground">Tempo de estudo diário</span>
-            <span className="text-muted-foreground">(média {currentAvgMin}min)</span>
-            <Pencil className="h-3 w-3 text-muted-foreground/50" />
-            {isCapacityOverridden && (
-              <Badge variant="outline" className="text-[9px] h-4 px-1 ml-1 border-primary/40 text-primary">simulando</Badge>
-            )}
-          </button>
-        </div>
-
-        {/* Capacity edit modal */}
-        <Dialog open={editingCapacity} onOpenChange={setEditingCapacity}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <Timer className="h-4 w-4 text-primary" />
-                Tempo de Estudo Diário
-              </DialogTitle>
-              <DialogDescription>
-                Defina quanto tempo estudar em cada dia da semana. Coloque 0 para dias de folga.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                {DAY_ORDER.map(dk => (
-                  <div key={dk} className="flex items-center gap-2">
-                    <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
-                    <Slider
-                      value={[tempWeekly[dk]]}
-                      onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [dk]: v }))}
-                      min={0} max={240} step={15}
-                      className="flex-1"
-                    />
-                    <span className={cn("text-xs font-semibold w-10 text-right", tempWeekly[dk] === 0 && "text-muted-foreground")}>
-                      {tempWeekly[dk] === 0 ? 'Folga' : formatMinutes(tempWeekly[dk])}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-center text-muted-foreground">
-                Média: <span className="font-semibold text-foreground">{Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7)}min/dia</span>
-              </p>
-              <Button className="w-full" onClick={() => {
-                onWeeklyMinutesChange(tempWeekly);
-                const avg = Math.round(DAY_ORDER.reduce((s, d) => s + (tempWeekly[d] || 0), 0) / 7);
-                onDailyMinutesChange(avg === realDailyMinutes ? undefined : avg);
-                setEditingCapacity(false);
-              }}>
-                <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Apply button */}
         {hasAnyOverride && !isSimulating && (
