@@ -219,7 +219,7 @@ function SimulatorTooltip({ active, payload, summary }: any) {
   const totalCards = d.reviewCards + d.newCards + d.learningCards + d.relearningCards;
 
   return (
-    <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px]">
+    <div className="rounded-lg border bg-popover p-2.5 text-popover-foreground shadow-md text-[11px] space-y-1.5 min-w-[160px] z-50 relative">
       <p className="font-semibold">{d.day} — {d.date}</p>
       <div className="h-px bg-border" />
       <p className="font-medium text-sm">{totalCards} cards</p>
