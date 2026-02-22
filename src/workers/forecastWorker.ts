@@ -156,6 +156,15 @@ function getCapacityForDay(dayIndex: number, startDate: Date, dailyMin: number, 
   return dailyMin;
 }
 
+function getNewCardsLimitForDay(dayIndex: number, startDate: Date, dailyLimit: number, weeklyNewCards: Record<string, number> | null): number {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + dayIndex);
+  const dow = d.getDay();
+  const key = DAY_KEYS[dow];
+  if (weeklyNewCards && weeklyNewCards[key] != null) return weeklyNewCards[key];
+  return dailyLimit;
+}
+
 function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day: string } {
   const d = new Date(startDate);
   d.setDate(d.getDate() + dayIndex);
@@ -171,7 +180,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, createdCardsStopDay } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, weeklyNewCards, createdCardsStopDay } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -330,7 +339,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const usedMin = revMin + learnMin + relearnMin;
     const availableForNewMin = Math.max(0, capacityMin - usedMin);
     const maxNewByCapacity = Math.floor((availableForNewMin * 60) / (newSecsPerCard * scaleFactor));
-    const effectiveNewLimit = Math.min(newCardsPerDay, Math.max(0, maxNewByCapacity));
+    const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
+    const effectiveNewLimit = Math.min(dayNewCardsLimit, Math.max(0, maxNewByCapacity));
 
     // ── Step 3: Introduce new cards — EXISTING first, CREATED only after all existing are exhausted ──
     let newCardsToday = 0;

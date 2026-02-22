@@ -27,8 +27,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  useStudyPlan, getMinutesForDayGlobal, getWeeklyAvgMinutesGlobal,
-  DAY_LABELS, type StudyPlan as StudyPlanType, type DayKey, type WeeklyMinutes,
+  useStudyPlan, getMinutesForDayGlobal, getWeeklyAvgMinutesGlobal, getWeeklyAvgNewCardsGlobal,
+  DAY_LABELS, type StudyPlan as StudyPlanType, type DayKey, type WeeklyMinutes, type WeeklyNewCards,
 } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
 import type { DeckWithStats } from '@/types/deck';
@@ -594,8 +594,8 @@ function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePl
 }
 
 // ─── Forecast Simulator Section (extracted to use hooks) ──
-function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity, metricsTotalNew }: {
-  allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; plans: StudyPlanType[];
+function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, weeklyNewCards, plans, updateCapacity, metricsTotalNew }: {
+  allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; weeklyNewCards: WeeklyNewCards | null; plans: StudyPlanType[];
   updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
   metricsTotalNew?: number;
 }) {
@@ -648,6 +648,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     createdCardsPerDayOverride: createdCardsOverride,
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
+    weeklyNewCards,
     enabled: allDeckIds.length > 0,
     latestTargetDate,
   });
@@ -735,13 +736,17 @@ const StudyPlan = () => {
   const [showCatchUp, setShowCatchUp] = useState(false);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
+  const [tempWeeklyNewCards, setTempWeeklyNewCards] = useState<WeeklyNewCards | null>(globalCapacity.weeklyNewCards);
+  const [editingWeeklyNewCards, setEditingWeeklyNewCards] = useState(!!globalCapacity.weeklyNewCards);
   const [showNewCardsConfirm, setShowNewCardsConfirm] = useState(false);
   const [showWhatCanIDo, setShowWhatCanIDo] = useState(false);
 
   // Sync tempNewCards when globalCapacity loads/changes
   useEffect(() => {
     setTempNewCards(globalCapacity.dailyNewCardsLimit);
-  }, [globalCapacity.dailyNewCardsLimit]);
+    setTempWeeklyNewCards(globalCapacity.weeklyNewCards);
+    setEditingWeeklyNewCards(!!globalCapacity.weeklyNewCards);
+  }, [globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards]);
 
   const healthStatus = (metrics?.healthStatus ?? 'green') as keyof typeof HEALTH_CONFIG;
   const needsAttention = metrics && (healthStatus === 'yellow' || healthStatus === 'orange' || healthStatus === 'red');
@@ -913,7 +918,7 @@ const StudyPlan = () => {
         .reduce((sum, id) => sum + getNewCardsRecursive(id), 0);
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
-      const budget = globalCapacity.dailyNewCardsLimit;
+      const budget = getWeeklyAvgNewCardsGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
       const minDaysNeeded = Math.ceil(selectedNewCards / budget);
       const isImpossible = daysLeft < minDaysNeeded;
       const isTight = !isImpossible && daysLeft === minDaysNeeded;
@@ -1433,22 +1438,80 @@ const StudyPlan = () => {
                   min={0}
                   max={100}
                   step={5}
-                  onValueChange={(v) => setTempNewCards(v[0])}
+                  onValueChange={(v) => {
+                    setTempNewCards(v[0]);
+                    // If weekly overrides exist, update them proportionally
+                    if (tempWeeklyNewCards) {
+                      const oldGlobal = globalCapacity.dailyNewCardsLimit || 1;
+                      const ratio = v[0] / oldGlobal;
+                      const updated: WeeklyNewCards = {} as WeeklyNewCards;
+                      for (const day of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]) {
+                        updated[day] = Math.round((tempWeeklyNewCards[day] ?? globalCapacity.dailyNewCardsLimit) * ratio);
+                      }
+                      setTempWeeklyNewCards(updated);
+                    }
+                  }}
                 />
-                {tempNewCards !== globalCapacity.dailyNewCardsLimit && (
+
+                {/* Weekly override toggle */}
+                <button
+                  className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                  onClick={() => {
+                    if (editingWeeklyNewCards) {
+                      setEditingWeeklyNewCards(false);
+                      setTempWeeklyNewCards(null);
+                    } else {
+                      setEditingWeeklyNewCards(true);
+                      setTempWeeklyNewCards(tempWeeklyNewCards ?? {
+                        mon: tempNewCards, tue: tempNewCards, wed: tempNewCards,
+                        thu: tempNewCards, fri: tempNewCards, sat: tempNewCards, sun: tempNewCards,
+                      });
+                    }
+                  }}
+                >
+                  <CalendarIcon className="h-3 w-3" />
+                  {editingWeeklyNewCards ? 'Usar mesmo limite todos os dias' : 'Personalizar por dia da semana'}
+                </button>
+
+                {editingWeeklyNewCards && tempWeeklyNewCards && (
+                  <div className="space-y-1.5 pt-1">
+                    {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
+                      <div key={day} className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
+                        <Slider
+                          value={[tempWeeklyNewCards[day] ?? tempNewCards]}
+                          onValueChange={([v]) => setTempWeeklyNewCards(prev => prev ? { ...prev, [day]: v } : prev)}
+                          min={0} max={100} step={5} className="flex-1"
+                        />
+                        <span className={cn("text-[10px] font-semibold w-6 text-right tabular-nums", (tempWeeklyNewCards[day] ?? tempNewCards) === 0 && "text-muted-foreground")}>
+                          {tempWeeklyNewCards[day] ?? tempNewCards}
+                        </span>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-center text-muted-foreground">
+                      Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(tempNewCards, tempWeeklyNewCards)} cards/dia</span>
+                    </p>
+                  </div>
+                )}
+
+                {(tempNewCards !== globalCapacity.dailyNewCardsLimit || JSON.stringify(tempWeeklyNewCards) !== JSON.stringify(globalCapacity.weeklyNewCards)) && (
                   <div className="flex items-center gap-2 pt-1">
                     <Button
                       size="sm"
                       className="h-7 text-xs flex-1"
                       onClick={() => setShowNewCardsConfirm(true)}
                     >
-                      Confirmar ({tempNewCards} cards/dia)
+                      Confirmar ({editingWeeklyNewCards ? `média ${getWeeklyAvgNewCardsGlobal(tempNewCards, tempWeeklyNewCards)}` : tempNewCards} cards/dia)
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       className="h-7 text-xs"
-                      onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}
+                      onClick={() => {
+                        setTempNewCards(globalCapacity.dailyNewCardsLimit);
+                        setTempWeeklyNewCards(globalCapacity.weeklyNewCards);
+                        setEditingWeeklyNewCards(!!globalCapacity.weeklyNewCards);
+                      }}
                     >
                       Cancelar
                     </Button>
@@ -1470,61 +1533,6 @@ const StudyPlan = () => {
               </CardContent>
             </Card>
           )}
-
-          {/* Daily study time */}
-          <Card>
-            <CardContent className="p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-emerald-500" />
-                  Tempo de estudo diário
-                </span>
-                {!editingCapacity && (
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                    setEditingCapacity(true);
-                    setTempWeekly(globalCapacity.weeklyMinutes ?? {
-                      mon: globalCapacity.dailyMinutes, tue: globalCapacity.dailyMinutes,
-                      wed: globalCapacity.dailyMinutes, thu: globalCapacity.dailyMinutes,
-                      fri: globalCapacity.dailyMinutes, sat: globalCapacity.dailyMinutes,
-                      sun: globalCapacity.dailyMinutes,
-                    });
-                  }}>
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-
-              {editingCapacity ? (
-                <div className="space-y-2.5">
-                  <div className="space-y-1.5">
-                    {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as DayKey[]).map(day => (
-                      <div key={day} className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-medium w-6 text-muted-foreground">{DAY_LABELS[day]}</span>
-                        <Slider value={[tempWeekly[day]]} onValueChange={([v]) => setTempWeekly(prev => ({ ...prev, [day]: v }))} min={0} max={240} step={15} className="flex-1" />
-                        <span className={cn("text-[10px] font-semibold w-10 text-right", tempWeekly[day] === 0 && "text-muted-foreground")}>{tempWeekly[day] === 0 ? 'Folga' : formatMinutes(tempWeekly[day])}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-center text-muted-foreground">
-                    Média: <span className="font-semibold text-foreground">{Math.round(Object.values(tempWeekly).reduce((a, b) => a + b, 0) / 7)}min/dia</span>
-                  </p>
-                  <div className="flex gap-1">
-                    <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleSaveWeekly}>Salvar</Button>
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingCapacity(false); }}>Cancelar</Button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm font-semibold">
-                    {isUsingWeekly
-                      ? <>{formatMinutes(todayCapacity)} hoje <span className="text-muted-foreground font-normal text-xs">(média {formatMinutes(getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes))}/dia)</span></>
-                      : <>{formatMinutes(globalCapacity.dailyMinutes)}/dia <span className="text-muted-foreground font-normal text-xs">({metrics?.cardsPerDay ?? '?'} cards)</span></>
-                    }
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
@@ -1532,6 +1540,7 @@ const StudyPlan = () => {
           allDeckIds={expandedDeckIds}
           dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes}
+          weeklyNewCards={globalCapacity.weeklyNewCards}
           plans={plans}
           updateCapacity={updateCapacity}
           metricsTotalNew={metrics?.totalNew}
@@ -1552,9 +1561,9 @@ const StudyPlan = () => {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setTempNewCards(globalCapacity.dailyNewCardsLimit)}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel onClick={() => { setTempNewCards(globalCapacity.dailyNewCardsLimit); setTempWeeklyNewCards(globalCapacity.weeklyNewCards); }}>Cancelar</AlertDialogCancel>
               <AlertDialogAction onClick={() => {
-                updateNewCardsLimit.mutateAsync(tempNewCards);
+                updateNewCardsLimit.mutateAsync({ limit: tempNewCards, weeklyNewCards: tempWeeklyNewCards });
                 setShowNewCardsConfirm(false);
                 toast({ title: 'Limite atualizado!', description: `Agora você estudará ${tempNewCards} novos cards por dia.` });
               }}>
