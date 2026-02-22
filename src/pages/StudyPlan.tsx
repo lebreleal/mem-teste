@@ -840,7 +840,7 @@ const StudyPlan = () => {
       const isTight = !isImpossible && daysLeft === minDaysNeeded;
       if (!isImpossible && !isTight) return null;
       const suggestedDate = new Date(today);
-      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
+      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded - 1); // today counts as day 1
       const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
       return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
     })() : null;
@@ -1571,7 +1571,7 @@ const StudyPlan = () => {
                                        const minDays = Math.ceil(totalNew / effectiveRate);
                                        const suggested = new Date();
                                        suggested.setHours(0, 0, 0, 0);
-                                       suggested.setDate(suggested.getDate() + minDays);
+                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
                                       const yr = suggested.getFullYear();
                                       const mo = String(suggested.getMonth() + 1).padStart(2, '0');
                                       const dy = String(suggested.getDate()).padStart(2, '0');
@@ -1599,7 +1599,7 @@ const StudyPlan = () => {
                                        const minDays = Math.ceil(totalNew / effectiveRate);
                                        const suggested = new Date();
                                        suggested.setHours(0, 0, 0, 0);
-                                       suggested.setDate(suggested.getDate() + minDays);
+                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
                                       const yr = suggested.getFullYear();
                                       const mo = String(suggested.getMonth() + 1).padStart(2, '0');
                                       const dy = String(suggested.getDate()).padStart(2, '0');
