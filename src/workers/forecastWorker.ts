@@ -172,7 +172,7 @@ function formatLocalDate(d: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day: string } {
+function formatDayLabel(dayIndex: number, startDate: Date, horizonDays: number): { date: string; day: string } {
   const d = new Date(startDate);
   d.setDate(d.getDate() + dayIndex);
   const dateStr = formatLocalDate(d);
@@ -180,6 +180,12 @@ function formatDayLabel(dayIndex: number, startDate: Date): { date: string; day:
   const key = DAY_KEYS[dow];
   if (dayIndex === 0) return { date: dateStr, day: 'Hoje' };
   if (dayIndex === 1) return { date: dateStr, day: 'Amanhã' };
+  // For horizons > 7 days (daily view), append dd/MM to make labels unique
+  if (horizonDays > 7 && horizonDays <= 30) {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return { date: dateStr, day: `${dd}/${mm}` };
+  }
   return { date: dateStr, day: DAY_LABELS[key] || key };
 }
 
@@ -280,7 +286,7 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     const capacityMin = getCapacityForDay(day, startDate, dailyMinutes, weeklyMinutes);
-    const { date, day: dayLabel } = formatDayLabel(day, startDate);
+    const { date, day: dayLabel } = formatDayLabel(day, startDate, horizonDays);
 
     // Collect due cards
     const dueReview: number[] = [];
