@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle, Briefcase } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -519,6 +519,36 @@ export function ForecastSimulator({
     learningTotal: d.learningCards + d.relearningCards,
   }));
 
+  // Colors for objective deadline lines
+  const OBJECTIVE_COLORS = [
+    'hsl(280 70% 55%)',  // purple
+    'hsl(350 80% 55%)',  // rose
+    'hsl(190 80% 45%)',  // cyan
+    'hsl(30 90% 50%)',   // orange
+  ];
+
+  // Map plans with target dates to their matching chart day labels
+  const objectiveLines = React.useMemo(() => {
+    if (!plansWithDate.length || !chartData.length) return [];
+    return plansWithDate.map((p, i) => {
+      const targetDate = new Date(p.target_date!);
+      // Find the chart point whose date matches this target
+      const matchDay = chartData.find(d => {
+        const parsed = parseSimDate(d.date);
+        if (!parsed) return false;
+        return parsed.getFullYear() === targetDate.getFullYear()
+          && parsed.getMonth() === targetDate.getMonth()
+          && parsed.getDate() === targetDate.getDate();
+      });
+      return {
+        name: p.name,
+        color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length],
+        dayLabel: matchDay?.day ?? null,
+        dateStr: format(targetDate, "dd/MM", { locale: ptBR }),
+      };
+    }).filter(l => l.dayLabel !== null);
+  }, [plansWithDate, chartData]);
+
   return (
     <div className="space-y-3">
 
@@ -597,6 +627,16 @@ export function ForecastSimulator({
                   <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
+                  {objectiveLines.map(ol => (
+                    <ReferenceLine
+                      key={ol.name}
+                      x={ol.dayLabel!}
+                      stroke={ol.color}
+                      strokeWidth={2}
+                      strokeDasharray="5 3"
+                      label={false}
+                    />
+                  ))}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -604,7 +644,7 @@ export function ForecastSimulator({
 
           {/* Mini-legend */}
           {chartData.length > 0 && !isSimulating && (
-            <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 justify-center text-[10px] text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
               </span>
@@ -614,6 +654,12 @@ export function ForecastSimulator({
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
               </span>
+              {objectiveLines.map(ol => (
+                <span key={ol.name} className="flex items-center gap-1">
+                  <span className="h-3 w-0 border-l-2 border-dashed" style={{ borderColor: ol.color }} />
+                  <span className="truncate max-w-[80px]">{ol.name}</span>
+                </span>
+              ))}
             </div>
           )}
 
