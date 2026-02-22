@@ -532,14 +532,42 @@ export function ForecastSimulator({
     if (!plansWithDate.length || !chartData.length) return [];
     return plansWithDate.map((p, i) => {
       const targetDate = new Date(p.target_date!);
-      // Find the chart point whose date matches this target
-      const matchDay = chartData.find(d => {
+      const targetTime = targetDate.getTime();
+      // Try exact match first, then find closest chart point that contains or is nearest to the target date
+      let matchDay = chartData.find(d => {
         const parsed = parseSimDate(d.date);
         if (!parsed) return false;
         return parsed.getFullYear() === targetDate.getFullYear()
           && parsed.getMonth() === targetDate.getMonth()
           && parsed.getDate() === targetDate.getDate();
       });
+      // For weekly aggregation or when exact match fails, find the closest point
+      if (!matchDay) {
+        let bestDist = Infinity;
+        for (const d of chartData) {
+          // For weekly ranges "dd/MM – dd/MM", check if target falls within range
+          if (d.date.includes('–')) {
+            const [startStr, endStr] = d.date.split('–').map((s: string) => s.trim());
+            const startDate = parseSimDate(startStr);
+            const endDate = parseSimDate(endStr);
+            if (startDate && endDate && targetTime >= startDate.getTime() && targetTime <= endDate.getTime()) {
+              matchDay = d;
+              break;
+            }
+          }
+          const parsed = parseSimDate(d.date);
+          if (!parsed) continue;
+          const dist = Math.abs(parsed.getTime() - targetTime);
+          if (dist < bestDist) {
+            bestDist = dist;
+            matchDay = d;
+          }
+        }
+        // Only use closest match if within 7 days
+        if (matchDay && bestDist > 7 * 86400000 && !matchDay.date.includes('–')) {
+          matchDay = undefined;
+        }
+      }
       return {
         name: p.name,
         color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length],
@@ -632,8 +660,8 @@ export function ForecastSimulator({
                       key={ol.name}
                       x={ol.dayLabel!}
                       stroke={ol.color}
-                      strokeWidth={2}
-                      strokeDasharray="5 3"
+                      strokeWidth={1}
+                      strokeDasharray="4 3"
                       label={false}
                     />
                   ))}
