@@ -530,10 +530,22 @@ export function ForecastSimulator({
   // Map plans with target dates to their matching chart day labels
   const objectiveLines = React.useMemo(() => {
     if (!plansWithDate.length || !chartData.length) return [];
+
+    // Determine the chart's actual date range
+    const firstDate = parseSimDate(chartData[0].date);
+    const lastDate = parseSimDate(chartData[chartData.length - 1].date);
+    if (!firstDate || !lastDate) return [];
+
     return plansWithDate.map((p, i) => {
       const targetDate = new Date(p.target_date!);
       const targetTime = targetDate.getTime();
-      // Try exact match first, then find closest chart point that contains or is nearest to the target date
+
+      // Skip if target date is outside the chart's date range
+      if (targetTime < firstDate.getTime() || targetTime > lastDate.getTime()) {
+        return { name: p.name, color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length], dayLabel: null, dateStr: format(targetDate, "dd/MM", { locale: ptBR }) };
+      }
+
+      // Try exact match first
       let matchDay = chartData.find(d => {
         const parsed = parseSimDate(d.date);
         if (!parsed) return false;
@@ -541,11 +553,10 @@ export function ForecastSimulator({
           && parsed.getMonth() === targetDate.getMonth()
           && parsed.getDate() === targetDate.getDate();
       });
-      // For weekly aggregation or when exact match fails, find the closest point
+
+      // For weekly aggregation, find the week that contains the target date
       if (!matchDay) {
-        let bestDist = Infinity;
         for (const d of chartData) {
-          // For weekly ranges "dd/MM – dd/MM", check if target falls within range
           if (d.date.includes('–')) {
             const [startStr, endStr] = d.date.split('–').map((s: string) => s.trim());
             const startDate = parseSimDate(startStr);
@@ -555,6 +566,13 @@ export function ForecastSimulator({
               break;
             }
           }
+        }
+      }
+
+      // Last resort: closest point within 3 days (for daily views with slight mismatches)
+      if (!matchDay) {
+        let bestDist = Infinity;
+        for (const d of chartData) {
           const parsed = parseSimDate(d.date);
           if (!parsed) continue;
           const dist = Math.abs(parsed.getTime() - targetTime);
@@ -563,11 +581,9 @@ export function ForecastSimulator({
             matchDay = d;
           }
         }
-        // Only use closest match if within 7 days
-        if (matchDay && bestDist > 7 * 86400000 && !matchDay.date.includes('–')) {
-          matchDay = undefined;
-        }
+        if (bestDist > 3 * 86400000) matchDay = undefined;
       }
+
       return {
         name: p.name,
         color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length],
