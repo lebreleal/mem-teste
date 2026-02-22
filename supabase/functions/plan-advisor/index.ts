@@ -56,7 +56,7 @@ Dê uma recomendação curta e direta.`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.4,
-        max_tokens: 600,
+        max_tokens: 2048,
       }),
     });
 
