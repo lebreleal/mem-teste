@@ -232,15 +232,34 @@ function SimulatorTooltip({ active, payload, summary }: any) {
       <p className="text-muted-foreground">
         {formatMinutes(d.totalMin)} de estudo
       </p>
-      {summary && (
-        <>
-          <div className="h-px bg-border" />
-          <div className="space-y-0.5 text-muted-foreground">
-            <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
-            <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
-          </div>
-        </>
-      )}
+      {(() => {
+        const isWeekly = d.day?.startsWith("S") || d.date?.includes(" - ");
+        if (isWeekly) {
+          const avg7 = Math.round(d.totalMin / 7);
+          const avg5 = Math.round(d.totalMin / 5);
+          return (
+            <>
+              <div className="h-px bg-border" />
+              <div className="space-y-0.5 text-muted-foreground">
+                <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(avg5)}/dia</span></p>
+                <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(avg7)}/dia</span></p>
+              </div>
+            </>
+          );
+        }
+        if (summary) {
+          return (
+            <>
+              <div className="h-px bg-border" />
+              <div className="space-y-0.5 text-muted-foreground">
+                <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
+                <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
+              </div>
+            </>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
