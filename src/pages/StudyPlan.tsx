@@ -56,6 +56,84 @@ function getObjectiveHealth(p: StudyPlanType): 'green' | 'yellow' | 'orange' | '
   return 'green';
 }
 
+// ─── "What Can I Do?" Dialog ────────────────────────────
+function WhatCanIDoDialog({ open, onOpenChange, totalNew, neededPerDay, budget, suggestedDate, earliestTarget, avgDailyMin, reviewMinToday, avgSec, effectiveRate, onApplyDate, onGoToCards, onGoToCapacity }: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  totalNew: number; neededPerDay: number; budget: number;
+  suggestedDate: Date; earliestTarget: Date;
+  avgDailyMin: number; reviewMinToday: number; avgSec: number; effectiveRate: number;
+  onApplyDate: (date: Date) => void;
+  onGoToCards: () => void;
+  onGoToCapacity: () => void;
+}) {
+  const neededMinPerDay = Math.ceil((neededPerDay * avgSec) / 60) + reviewMinToday;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <HelpCircle className="h-5 w-5 text-primary" />
+            O que posso fazer?
+          </DialogTitle>
+          <DialogDescription className="text-xs leading-relaxed">
+            Você tem <strong>{totalNew} cards novos</strong> para dominar até <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, mas no ritmo atual ({effectiveRate}/dia) só terminaria em <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong>. Veja suas opções:
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {/* Option 1: Change date */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-sm font-semibold">Dar mais tempo</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Mudar a data limite para <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong> — assim você mantém o ritmo atual sem se sobrecarregar.
+            </p>
+            <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { onApplyDate(suggestedDate); onOpenChange(false); }}>
+              <CalendarIcon className="h-3 w-3 mr-1.5" />
+              Aplicar data sugerida
+            </Button>
+          </div>
+
+          {/* Option 2: Increase cards */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-sm font-semibold">Estudar mais cards por dia</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Aumentar de <strong>{budget}</strong> para <strong>{neededPerDay} novos cards/dia</strong> para cumprir o prazo.
+            </p>
+            <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { onGoToCards(); onOpenChange(false); }}>
+              <Layers className="h-3 w-3 mr-1.5" />
+              Ajustar limite de cards
+            </Button>
+          </div>
+
+          {/* Option 3: Increase time */}
+          {neededMinPerDay > avgDailyMin && (
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary shrink-0" />
+                <p className="text-sm font-semibold">Aumentar tempo de estudo</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Aumentar de <strong>{formatMinutes(avgDailyMin)}</strong> para <strong>{formatMinutes(neededMinPerDay)}/dia</strong> — mais tempo permite encaixar mais cards novos após as revisões.
+              </p>
+              <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { onGoToCapacity(); onOpenChange(false); }}>
+                <Clock className="h-3 w-3 mr-1.5" />
+                Ajustar tempo de estudo
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Catch-Up Dialog ────────────────────────────────────
 function CatchUpDialog({ open, onOpenChange, totalReview, avgSecondsPerCard, allDeckIds }: {
   open: boolean; onOpenChange: (v: boolean) => void; totalReview: number; avgSecondsPerCard: number; allDeckIds: string[];
@@ -658,6 +736,7 @@ const StudyPlan = () => {
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
   const [tempNewCards, setTempNewCards] = useState(globalCapacity.dailyNewCardsLimit);
   const [showNewCardsConfirm, setShowNewCardsConfirm] = useState(false);
+  const [showWhatCanIDo, setShowWhatCanIDo] = useState(false);
 
   // Sync tempNewCards when globalCapacity loads/changes
   useEffect(() => {
@@ -855,74 +934,44 @@ const StudyPlan = () => {
         <p className={cn('text-xs font-semibold', feasibilityCheck.isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
           {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
         </p>
-         <p className="text-[11px] text-muted-foreground leading-relaxed">
-           A data limite indica até quando você quer ter <strong>dominado</strong> todos os cards novos dos baralhos selecionados.
-         </p>
-         <p className="text-[11px] text-muted-foreground">
-           Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> antes de <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>, você precisaria estudar <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{feasibilityCheck.budget}/dia</strong>.
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> até <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{feasibilityCheck.budget}/dia</strong>.
         </p>
-
-        {feasibilityCheck.isImpossible ? (
-          <div className="space-y-1.5">
-            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-              ⚠ Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> até <strong>{format(targetDate, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>.
-            </p>
-            <p className="text-[10px] font-semibold text-muted-foreground">Recomendação:</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
-              onClick={() => {
-                if (targetDate) {
-                  setTargetDate(feasibilityCheck.suggestedDate);
-                }
-              }}
-            >
-              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-              <div className="text-left">
-                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
-                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
-              </div>
-            </Button>
-          </div>
-        ) : feasibilityCheck.neededPerDay > feasibilityCheck.budget ? (
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-semibold text-muted-foreground">Recomendações:</p>
-            {/* 1. Change date — primary actionable */}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
-              onClick={() => {
-                if (targetDate) {
-                  setTargetDate(feasibilityCheck.suggestedDate);
-                }
-              }}
-            >
-              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
-              <div className="text-left">
-                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
-                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
-              </div>
-            </Button>
-            {/* 2. Increase cards — informative */}
-            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
-              <Layers className="h-3 w-3 text-primary shrink-0 mt-0.5" />
-              <div className="text-left">
-                <span>Ou aumente para <strong className="text-foreground">{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
-                <span className="block text-muted-foreground/60 text-[9px]">Você terminaria em {feasibilityCheck.minDaysNeeded} dias</span>
-              </div>
-            </div>
-            {/* 3. Increase study time — informative */}
-            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
-              <Clock className="h-3 w-3 text-primary shrink-0 mt-0.5" />
-              <div className="text-left">
-                <span>Ou aumente o tempo de estudo diário</span>
-                <span className="block text-muted-foreground/60 text-[9px]">Mais tempo permite encaixar mais cards novos</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full text-xs gap-1.5"
+          onClick={() => setShowWhatCanIDo(true)}
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+          O que posso fazer?
+        </Button>
+        <WhatCanIDoDialog
+          open={showWhatCanIDo}
+          onOpenChange={setShowWhatCanIDo}
+          totalNew={feasibilityCheck.selectedNewCards}
+          neededPerDay={feasibilityCheck.neededPerDay}
+          budget={feasibilityCheck.budget}
+          suggestedDate={feasibilityCheck.suggestedDate}
+          earliestTarget={targetDate!}
+          avgDailyMin={getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes)}
+          reviewMinToday={metrics?.reviewMinutes ?? 0}
+          avgSec={avgSecondsPerCard}
+          effectiveRate={feasibilityCheck.budget}
+          onApplyDate={(d) => setTargetDate(d)}
+          onGoToCards={() => {
+            setView('home');
+            setIsEditing(false);
+            setEditingPlanId(null);
+            setTimeout(() => setTempNewCards(feasibilityCheck.neededPerDay), 100);
+          }}
+          onGoToCapacity={() => {
+            setView('home');
+            setIsEditing(false);
+            setEditingPlanId(null);
+            setTimeout(() => setEditingCapacity(true), 100);
+          }}
+        />
       </div>
     );
 
@@ -1521,6 +1570,11 @@ const StudyPlan = () => {
                     // Time needed if we increase new cards to neededPerDay
                     const neededMinPerDay = neededPerDay ? Math.ceil((neededPerDay * avgSec) / 60) + reviewMinToday : null;
                     
+                    // Compute suggested date for the modal
+                    const minDays = Math.ceil(totalNew / effectiveRate);
+                    const suggestedCompletionDate = new Date(today);
+                    suggestedCompletionDate.setDate(suggestedCompletionDate.getDate() + minDays - 1);
+                    
                     return (
                       <div className={cn(
                         "mt-2 rounded-lg border p-2.5 space-y-1.5",
@@ -1538,120 +1592,52 @@ const StudyPlan = () => {
                           </span>
                         </p>
                         
-                        {totalNew > 0 && (
-                          <div className="text-[10px] text-muted-foreground/70 space-y-0.5">
-                            {bottleneck === 'new_limit' ? (
-                              <p>Seu limite atual é <strong>{budget} novos cards/dia</strong>. Aumente o limite para acelerar o progresso.</p>
-                            ) : (
-                              <p>Seu tempo de estudo (<strong>{formatMinutes(avgDailyMin)}/dia</strong>) permite ~<strong>{cardsFitByTime} novos cards/dia</strong> após as revisões.</p>
-                            )}
-                          </div>
-                        )}
-                        
-                        {willMissTarget && neededPerDay && (
+                        {willMissTarget && neededPerDay && earliestTarget && (
                           <div className="space-y-2 pt-1.5 border-t border-amber-200 dark:border-amber-800">
-                             <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                                Para dominar todos os cards antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisaria aumentar o ritmo. No ritmo atual, só domina todos em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
-                              </p>
-
-                            {neededPerDay > budget ? (
-                              <div className="space-y-1.5">
-                              <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                                   ⚠ Para dominar todos os <strong>{totalNew} cards novos</strong> antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{budget}/dia</strong>.
-                                 </p>
-                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
-                                {/* Change target date — apply suggested date directly */}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
-                                  onClick={() => {
-                                    const editablePlan = plans.find(p => p.target_date);
-                                    if (editablePlan) {
-                                       const minDays = Math.ceil(totalNew / effectiveRate);
-                                       const suggested = new Date();
-                                       suggested.setHours(0, 0, 0, 0);
-                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
-                                      const yr = suggested.getFullYear();
-                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
-                                      const dy = String(suggested.getDate()).padStart(2, '0');
-                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
-                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
-                                    }
-                                  }}
-                                >
-                                  <CalendarIcon className="h-3 w-3 shrink-0" />
-                                  <span className="text-left">Mudar para uma data viável automaticamente</span>
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="space-y-1.5">
-                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendações:</p>
-
-                                {/* 1. Change target date — apply suggested date directly */}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
-                                  onClick={() => {
-                                    const editablePlan = plans.find(p => p.target_date);
-                                    if (editablePlan && neededPerDay && daysUntilTarget) {
-                                       const minDays = Math.ceil(totalNew / effectiveRate);
-                                       const suggested = new Date();
-                                       suggested.setHours(0, 0, 0, 0);
-                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
-                                      const yr = suggested.getFullYear();
-                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
-                                      const dy = String(suggested.getDate()).padStart(2, '0');
-                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
-                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
-                                    }
-                                  }}
-                                >
-                                  <CalendarIcon className="h-3 w-3 shrink-0" />
-                                  <span className="text-left">Mudar data limite</span>
-                                </Button>
-
-                                {/* 2. Increase cards/day — informative only */}
-                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
-                                  <Layers className="h-3 w-3 shrink-0" />
-                                  <span>Aumentar para <strong className="text-foreground">{neededPerDay} cards/dia</strong> <span>(manter tempo de {formatMinutes(avgDailyMin)})</span></span>
-                                </div>
-
-                                {/* 3. Increase study time — informative only */}
-                                {neededMinPerDay && neededMinPerDay > avgDailyMin && (
-                                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
-                                    <Clock className="h-3 w-3 shrink-0" />
-                                    <span>Aumentar para <strong className="text-foreground">{formatMinutes(neededMinPerDay)}/dia</strong> <span>(manter {budget} cards/dia)</span></span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                              ⚠️ Meta em risco — no ritmo atual, você só domina todos os cards em <strong>{format(projDate, "dd/MM/yyyy")}</strong>, após a data limite de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>.
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full text-xs gap-1.5"
+                              onClick={() => setShowWhatCanIDo(true)}
+                            >
+                              <HelpCircle className="h-3.5 w-3.5" />
+                              O que posso fazer?
+                            </Button>
+                            <WhatCanIDoDialog
+                              open={showWhatCanIDo}
+                              onOpenChange={setShowWhatCanIDo}
+                              totalNew={totalNew}
+                              neededPerDay={neededPerDay}
+                              budget={budget}
+                              suggestedDate={suggestedCompletionDate}
+                              earliestTarget={earliestTarget}
+                              avgDailyMin={avgDailyMin}
+                              reviewMinToday={reviewMinToday}
+                              avgSec={avgSec}
+                              effectiveRate={effectiveRate}
+                              onApplyDate={(d) => {
+                                const editablePlan = plans.find(p => p.target_date);
+                                if (editablePlan) {
+                                  const yr = d.getFullYear();
+                                  const mo = String(d.getMonth() + 1).padStart(2, '0');
+                                  const dy = String(d.getDate()).padStart(2, '0');
+                                  updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
+                                  toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(d, "dd/MM/yyyy")}` });
+                                }
+                              }}
+                              onGoToCards={() => { setTempNewCards(neededPerDay); setShowNewCardsConfirm(true); }}
+                              onGoToCapacity={() => setEditingCapacity(true)}
+                            />
                           </div>
                         )}
                         
                         {!willMissTarget && earliestTarget && (
                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                            ✓ No ritmo atual, você domina todos os cards novos antes da sua data limite (<strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>).
+                            ✓ No ritmo atual, você domina todos os cards antes da data limite (<strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>).
                           </p>
-                        )}
-                        
-                        {!earliestTarget && totalNew > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-0.5">
-                            <button
-                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
-                              onClick={() => { setTempNewCards(budget); setShowNewCardsConfirm(true); }}
-                            >
-                              Alterar limite de cards
-                            </button>
-                            <span className="text-[10px] text-muted-foreground/40">•</span>
-                            <button
-                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
-                              onClick={() => setEditingCapacity(true)}
-                            >
-                              Alterar tempo de estudo
-                            </button>
-                          </div>
                         )}
                       </div>
                     );
