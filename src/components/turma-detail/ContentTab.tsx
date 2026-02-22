@@ -34,6 +34,8 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
+import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
 const PdfCanvasViewer = lazy(() => import('@/components/lesson-detail/PdfCanvasViewer'));
 
 const formatFileSize = (bytes: number) => {
@@ -86,6 +88,8 @@ const ContentTab = () => {
   const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
+  const [gateDeck, setGateDeck] = useState<any>(null);
+  const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
 
   // ── Data derivation ──
   const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
@@ -364,14 +368,29 @@ const ContentTab = () => {
           {/* Subject folders */}
           {folderDrag.displayItems.map(subject => {
             const fHandlers = canEdit ? folderDrag.getHandlers(subject) : null;
-            const childFolders = subjects.filter((s: any) => s.parent_id === subject.id);
-            const childLessons = lessons.filter(l => l.subject_id === subject.id);
-            const totalItems = childFolders.length;
-            const relatedDecks = turmaDecks.filter(d => d.subject_id === subject.id || (d.lesson_id && childLessons.some(l => l.id === d.lesson_id)));
-            const totalCards = relatedDecks.reduce((sum: number, d: any) => sum + (d.card_count ?? 0), 0);
-            const childLessonIds = childLessons.map(l => l.id);
-            const totalAttachments = (ctx.lessonFiles as any[]).filter(f => childLessonIds.includes(f.lesson_id)).length;
-            const relatedExams = turmaExams.filter((e: any) => e.subject_id === subject.id || (e.lesson_id && childLessonIds.includes(e.lesson_id)));
+            // Recursive counting: collect all descendant subject IDs
+            const getDescendantIds = (parentId: string): string[] => {
+              const children = subjects.filter((s: any) => s.parent_id === parentId);
+              return children.reduce((acc: string[], c: any) => [...acc, c.id, ...getDescendantIds(c.id)], []);
+            };
+            const allDescendantIds = getDescendantIds(subject.id);
+            const allFolderIds = [subject.id, ...allDescendantIds];
+            const directChildFolders = subjects.filter((s: any) => s.parent_id === subject.id);
+            const totalSubfolders = directChildFolders.length;
+            // Lessons in this folder or any descendant
+            const allRelatedLessons = lessons.filter(l => l.subject_id && allFolderIds.includes(l.subject_id));
+            const allRelatedLessonIds = allRelatedLessons.map(l => l.id);
+            // Decks in this folder or any descendant (or via related lessons)
+            const allRelatedDecks = turmaDecks.filter(d =>
+              (d.subject_id && allFolderIds.includes(d.subject_id)) ||
+              (d.lesson_id && allRelatedLessonIds.includes(d.lesson_id))
+            );
+            const totalCards = allRelatedDecks.reduce((sum: number, d: any) => sum + (d.card_count ?? 0), 0);
+            const totalAttachments = (ctx.lessonFiles as any[]).filter(f => allRelatedLessonIds.includes(f.lesson_id)).length;
+            const totalExams = turmaExams.filter((e: any) =>
+              (e.subject_id && allFolderIds.includes(e.subject_id)) ||
+              (e.lesson_id && allRelatedLessonIds.includes(e.lesson_id))
+            ).length;
             return (
               <div key={subject.id}
                 {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
@@ -386,11 +405,11 @@ const ContentTab = () => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-card-foreground truncate">{subject.name}</h3>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                    {totalItems > 0 && <span className="flex items-center gap-1"><FolderOpen className="h-3 w-3" /> {totalItems}</span>}
+                    {totalSubfolders > 0 && <span className="flex items-center gap-1"><FolderOpen className="h-3 w-3" /> {totalSubfolders}</span>}
                     {totalAttachments > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" /> {totalAttachments}</span>}
                     {totalCards > 0 && <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {totalCards}</span>}
-                    {relatedExams.length > 0 && <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" /> {relatedExams.length}</span>}
-                    {totalItems === 0 && totalAttachments === 0 && totalCards === 0 && relatedExams.length === 0 && <span>Vazio</span>}
+                    {totalExams > 0 && <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" /> {totalExams}</span>}
+                    {totalSubfolders === 0 && totalAttachments === 0 && totalCards === 0 && totalExams === 0 && <span>Vazio</span>}
                   </div>
                 </div>
                 {!selectionMode && (
@@ -538,11 +557,21 @@ const ContentTab = () => {
                         onClick={() => { const id = personalDeckId || (alreadyOwns ? td.deck_id : null); if (id) navigate(`/decks/${id}`, { state: { from: 'community', turmaId } }); }}>
                         <LogIn className="h-3.5 w-3.5" />
                       </Button>
+                    ) : subscriberOnly && !canImport ? (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Visualizar / Experimentar"
+                          onClick={() => setGateDeck(td)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled title="Exclusivo para assinantes">
+                          <Lock className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     ) : (
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
-                        onClick={() => { if (subscriberOnly && !canImport) return; setConfirmImportItem({ type: 'deck', data: td }); }}
-                        disabled={importLogic.addToCollection.isPending || (subscriberOnly && !canImport)}>
-                        {subscriberOnly && !canImport ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Copy className="h-3.5 w-3.5" />}
+                        onClick={() => setConfirmImportItem({ type: 'deck', data: td })}
+                        disabled={importLogic.addToCollection.isPending}>
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {td.allow_download && !inCollection && canImport && (
@@ -871,6 +900,32 @@ const ContentTab = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Subscriber Gate Dialog */}
+      <SubscriberGateDialog
+        open={!!gateDeck}
+        onOpenChange={open => !open && setGateDeck(null)}
+        deckName={gateDeck?.deck_name || ''}
+        cardCount={gateDeck?.card_count ?? 0}
+        onTrial={() => {
+          const deck = gateDeck;
+          setGateDeck(null);
+          setTrialDeck({ deckId: deck.deck_id, deckName: deck.deck_name });
+        }}
+        onSubscribe={() => {
+          setGateDeck(null);
+          // Trigger subscribe flow from context
+          ctx.handleSubscribe?.();
+        }}
+      />
+
+      {/* Trial Study Modal */}
+      <TrialStudyModal
+        open={!!trialDeck}
+        onOpenChange={open => !open && setTrialDeck(null)}
+        deckId={trialDeck?.deckId || ''}
+        deckName={trialDeck?.deckName || ''}
+      />
     </div>
   );
 };

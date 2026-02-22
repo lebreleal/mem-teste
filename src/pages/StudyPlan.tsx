@@ -404,11 +404,15 @@ function DeckHierarchySelector({
             )}
           </div>
 
-          {/* Card count */}
-          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 tabular-nums shrink-0">
-            {hasChildren ? ownCards : totalCards}
-            <span className="ml-0.5 text-muted-foreground/60">cards</span>
-          </Badge>
+          {/* Card count - icon + number like community folder previews */}
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums shrink-0">
+            <Layers className="h-3 w-3" />
+            {hasChildren && isExpanded ? (
+              <>{ownCards} <span className="text-[10px]">cards próprios</span></>
+            ) : (
+              <>{hasChildren ? totalCards : ownCards}</>
+            )}
+          </span>
         </label>
 
         {/* Select all children shortcut for parent decks */}
@@ -512,9 +516,10 @@ function ObjectiveDecksExpanded({ plan, activeDecks, avgSecondsPerCard, updatePl
 }
 
 // ─── Forecast Simulator Section (extracted to use hooks) ──
-function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity }: {
+function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, plans, updateCapacity, metricsTotalNew }: {
   allDeckIds: string[]; dailyMinutes: number; weeklyMinutes: WeeklyMinutes | null; plans: StudyPlanType[];
   updateCapacity: { mutateAsync: (input: { daily_study_minutes: number; weekly_study_minutes?: WeeklyMinutes | null }) => Promise<void> };
+  metricsTotalNew?: number;
 }) {
   const { forecastView, setForecastView } = useForecastView();
   const { toast } = useToast();
@@ -522,7 +527,17 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
   const [createdCardsOverride, setCreatedCardsOverride] = useState<number | undefined>();
   const [dailyMinutesOverride, setDailyMinutesOverride] = useState<number | undefined>();
   const [weeklyMinutesOverride, setWeeklyMinutesOverride] = useState<WeeklyMinutes | undefined>();
+  const [customTargetDate, setCustomTargetDate] = useState<Date | null>(null);
   const hasTargetDate = plans.some(p => p.target_date);
+  // Find the latest (max) target date across all plans for created cards scoping
+  const latestTargetDate = useMemo(() => {
+    const plansWithDate = plans.filter(p => p.target_date);
+    if (plansWithDate.length === 0) return null;
+    return plansWithDate.reduce((max, p) => {
+      const d = p.target_date!;
+      return d > max ? d : max;
+    }, plansWithDate[0].target_date!);
+  }, [plans]);
 
   const effectiveDailyMin = dailyMinutesOverride ?? dailyMinutes;
   const effectiveWeeklyMin = weeklyMinutesOverride ?? weeklyMinutes;
@@ -532,18 +547,23 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     if (forecastView === '30d') return 30;
     if (forecastView === '90d') return 90;
     if (forecastView === '365d') return 365;
-    if (forecastView === 'target' && hasTargetDate) {
-      const earliest = plans.filter(p => p.target_date).reduce((min, p) => {
-        const d = new Date(p.target_date!);
-        return d < min ? d : min;
-      }, new Date(plans.filter(p => p.target_date)[0].target_date!));
-      const today = new Date(); today.setHours(0,0,0,0);
-      return Math.max(7, Math.ceil((earliest.getTime() - today.getTime()) / 86400000));
+    if (forecastView === 'target') {
+      const targetDateToUse = customTargetDate
+        ?? (hasTargetDate
+          ? plans.filter(p => p.target_date).reduce((min, p) => {
+              const d = new Date(p.target_date!);
+              return d < min ? d : min;
+            }, new Date(plans.filter(p => p.target_date)[0].target_date!))
+          : null);
+      if (targetDateToUse) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        return Math.max(7, Math.ceil((targetDateToUse.getTime() - today.getTime()) / 86400000));
+      }
     }
     return 7;
-  }, [forecastView, hasTargetDate, plans]);
+  }, [forecastView, hasTargetDate, plans, customTargetDate]);
 
-  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, isUsingDefaults } = useForecastSimulator({
+  const { data, summary, isSimulating, progress, defaultNewCardsPerDay, defaultCreatedCardsPerDay, totalNewCards, isUsingDefaults } = useForecastSimulator({
     deckIds: allDeckIds,
     horizonDays,
     newCardsPerDayOverride: newCardsOverride,
@@ -551,6 +571,7 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
     dailyMinutes: effectiveDailyMin,
     weeklyMinutes: effectiveWeeklyMin,
     enabled: allDeckIds.length > 0,
+    latestTargetDate,
   });
 
   const handleViewChange = useCallback((v: ForecastView) => {
@@ -565,7 +586,6 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
         daily_study_minutes: effectiveDailyMin,
         weekly_study_minutes: weeklyMinutesOverride ?? null,
       });
-      // Clear overrides after applying
       setDailyMinutesOverride(undefined);
       setWeeklyMinutesOverride(undefined);
       toast({ title: 'Capacidade atualizada!', description: 'Os valores simulados foram aplicados ao seu plano.' });
@@ -580,7 +600,11 @@ function ForecastSimulatorSection({ allDeckIds, dailyMinutes, weeklyMinutes, pla
       defaultNewCardsPerDay={defaultNewCardsPerDay} forecastView={forecastView}
       onViewChange={handleViewChange} newCardsOverride={newCardsOverride}
       onNewCardsChange={setNewCardsOverride} hasTargetDate={hasTargetDate}
+      plans={plans.map(p => ({ id: p.id, name: p.name, target_date: p.target_date }))}
+      customTargetDate={customTargetDate}
+      onCustomTargetDate={setCustomTargetDate}
       isUsingDefaults={isUsingDefaults}
+      totalNewCards={metricsTotalNew ?? totalNewCards}
       defaultCreatedCardsPerDay={defaultCreatedCardsPerDay}
       createdCardsOverride={createdCardsOverride}
       onCreatedCardsChange={setCreatedCardsOverride}
@@ -604,7 +628,7 @@ const StudyPlan = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
-    plans, allDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
+    plans, allDeckIds, expandedDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
   } = useStudyPlan();
   const { decks, isLoading: decksLoading } = useDecks();
@@ -791,20 +815,243 @@ const StudyPlan = () => {
   // ─── WIZARD VIEW ──────────────────────────────────────
   // ═══════════════════════════════════════════════════════
   if (view === 'wizard') {
+    // Feasibility check helper
+    const feasibilityCheck = targetDate && selectedDeckIds.length > 0 ? (() => {
+      // Recursive helper: sum new_count of a deck + all its descendants
+      const getNewCardsRecursive = (deckId: string): number => {
+        const deck = activeDecks.find(d => d.id === deckId);
+        const own = deck?.new_count ?? 0;
+        const children = activeDecks.filter(d => d.parent_deck_id === deckId);
+        return own + children.reduce((s, c) => s + getNewCardsRecursive(c.id), 0);
+      };
+      // Only count from roots of selection to avoid double-counting
+      const selectedNewCards = selectedDeckIds
+        .filter(id => {
+          const deck = activeDecks.find(d => d.id === id);
+          // Skip if parent is also selected (parent already counts this deck)
+          return !deck?.parent_deck_id || !selectedDeckIds.includes(deck.parent_deck_id);
+        })
+        .reduce((sum, id) => sum + getNewCardsRecursive(id), 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
+      const budget = globalCapacity.dailyNewCardsLimit;
+      const minDaysNeeded = Math.ceil(selectedNewCards / budget);
+      const isImpossible = daysLeft < minDaysNeeded;
+      const isTight = !isImpossible && daysLeft === minDaysNeeded;
+      if (!isImpossible && !isTight) return null;
+      const suggestedDate = new Date(today);
+      suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded - 1); // today counts as day 1
+      const neededPerDay = Math.ceil(selectedNewCards / daysLeft);
+      return { isImpossible, isTight, minDaysNeeded, suggestedDate, selectedNewCards, budget, daysLeft, neededPerDay };
+    })() : null;
+
+    const feasibilityBlock = feasibilityCheck && (
+      <div className={cn(
+        'rounded-lg border p-3 space-y-2',
+        feasibilityCheck.isImpossible
+          ? 'border-destructive/50 bg-destructive/5'
+          : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
+      )}>
+        <p className={cn('text-xs font-semibold', feasibilityCheck.isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
+          {feasibilityCheck.isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
+        </p>
+         <p className="text-[11px] text-muted-foreground leading-relaxed">
+           A data limite indica até quando você quer ter <strong>dominado</strong> todos os cards novos dos baralhos selecionados.
+         </p>
+         <p className="text-[11px] text-muted-foreground">
+           Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> antes de <strong>{format(targetDate!, "dd/MM/yyyy")}</strong>, você precisaria estudar <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{feasibilityCheck.budget}/dia</strong>.
+        </p>
+
+        {feasibilityCheck.isImpossible ? (
+          <div className="space-y-1.5">
+            <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+              ⚠ Para dominar todos os <strong>{feasibilityCheck.selectedNewCards} cards novos</strong> até <strong>{format(targetDate, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{feasibilityCheck.neededPerDay} novos cards/dia</strong>.
+            </p>
+            <p className="text-[10px] font-semibold text-muted-foreground">Recomendação:</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
+              onClick={() => {
+                if (targetDate) {
+                  setTargetDate(feasibilityCheck.suggestedDate);
+                }
+              }}
+            >
+              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+              <div className="text-left">
+                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+              </div>
+            </Button>
+          </div>
+        ) : feasibilityCheck.neededPerDay > feasibilityCheck.budget ? (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold text-muted-foreground">Recomendações:</p>
+            {/* 1. Change date — primary actionable */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-auto text-[10px] px-2.5 py-1.5 gap-1.5 w-full justify-start"
+              onClick={() => {
+                if (targetDate) {
+                  setTargetDate(feasibilityCheck.suggestedDate);
+                }
+              }}
+            >
+              <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+              <div className="text-left">
+                <span>Mudar data para <strong>{format(feasibilityCheck.suggestedDate, "dd/MM/yyyy")}</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Manter o ritmo atual e dar mais tempo para concluir</span>
+              </div>
+            </Button>
+            {/* 2. Increase cards — informative */}
+            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+              <Layers className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+              <div className="text-left">
+                <span>Ou aumente para <strong className="text-foreground">{feasibilityCheck.neededPerDay} novos cards/dia</strong></span>
+                <span className="block text-muted-foreground/60 text-[9px]">Você terminaria em {feasibilityCheck.minDaysNeeded} dias</span>
+              </div>
+            </div>
+            {/* 3. Increase study time — informative */}
+            <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+              <Clock className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+              <div className="text-left">
+                <span>Ou aumente o tempo de estudo diário</span>
+                <span className="block text-muted-foreground/60 text-[9px]">Mais tempo permite encaixar mais cards novos</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+
+    // ─── EDIT MODE: Show all fields at once ───
+    if (isEditing) {
+      return (
+        <div className="min-h-screen bg-background pb-24">
+          <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => { setView('home'); setIsEditing(false); setEditingPlanId(null); }}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="font-display text-lg font-bold flex-1">Editar Objetivo</h1>
+          </header>
+
+          <main className="container mx-auto px-4 py-6 max-w-2xl space-y-6">
+            {/* Nome */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Nome do objetivo</h2>
+              </div>
+              <Input
+                placeholder="Ex: ENARE 2026"
+                value={planName}
+                onChange={(e) => setPlanName(e.target.value)}
+                className="text-base"
+              />
+            </div>
+
+            {/* Baralhos */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Baralhos</h2>
+              </div>
+              {activeDecks.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="p-6 text-center space-y-3">
+                    <BookOpen className="h-10 w-10 text-muted-foreground mx-auto" />
+                    <p className="text-sm text-muted-foreground">Você ainda não tem baralhos.</p>
+                    <Button onClick={() => navigate('/dashboard')}>Criar baralho</Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <DeckHierarchySelector
+                  decks={activeDecks}
+                  selectedDeckIds={selectedDeckIds}
+                  setSelectedDeckIds={setSelectedDeckIds}
+                  plans={plans}
+                  editingPlanId={editingPlanId}
+                />
+              )}
+            </div>
+
+            {/* Data limite */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-bold">Data limite</h2>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !targetDate && 'text-muted-foreground')}>
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {targetDate ? format(targetDate, "dd 'de' MMMM, yyyy", { locale: ptBR }) : 'Selecionar data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              {feasibilityBlock}
+            </div>
+
+            {/* Save */}
+            <Button
+              className="w-full" size="lg"
+              onClick={handleConfirmPlan}
+              disabled={!planName.trim() || selectedDeckIds.length === 0 || !targetDate || updatePlan.isPending}
+            >
+              {updatePlan.isPending ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+
+            {/* Delete */}
+            {editingPlanId && (
+              <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                      handleDeletePlan(editingPlanId);
+                      setView('home');
+                      setIsEditing(false);
+                      setEditingPlanId(null);
+                    }}>
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </main>
+          <BottomNav />
+        </div>
+      );
+    }
+
+    // ─── CREATE MODE: Step-by-step wizard ───
     return (
       <div className="min-h-screen bg-background pb-24">
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => {
             if (step > 1) { setStep((step - 1) as WizardStep); return; }
             setView('home');
-            setIsEditing(false);
-            setEditingPlanId(null);
           }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="font-display text-lg font-bold flex-1">
-            {isEditing ? 'Editar Objetivo' : 'Novo Objetivo de Estudo'}
-          </h1>
+          <h1 className="font-display text-lg font-bold flex-1">Novo Objetivo de Estudo</h1>
           <div className="flex gap-1">
             {[1, 2, 3].map(s => (
               <div key={s} className={cn('h-1.5 w-6 rounded-full transition-colors', s <= step ? 'bg-primary' : 'bg-muted')} />
@@ -839,35 +1086,6 @@ const StudyPlan = () => {
               >
                 Continuar
               </Button>
-
-              {isEditing && editingPlanId && (
-                <AlertDialog open={deletingPlanId === editingPlanId} onOpenChange={(open) => setDeletingPlanId(open ? editingPlanId : null)}>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive text-xs">
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Excluir objetivo
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir objetivo?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        O objetivo "{planName}" será permanentemente excluído. Seus baralhos não serão afetados.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
-                        handleDeletePlan(editingPlanId);
-                        setView('home');
-                        setIsEditing(false);
-                        setEditingPlanId(null);
-                      }}>
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
             </div>
           )}
 
@@ -915,9 +1133,9 @@ const StudyPlan = () => {
                   <Target className="h-5 w-5 text-primary" />
                   <h2 className="text-xl font-bold">Data limite</h2>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Defina quando você precisa ter dominado este conteúdo. O sistema usará essa data para calcular se o seu ritmo de estudo é suficiente e distribuir os cards novos de forma inteligente.
-                </p>
+                 <p className="text-sm text-muted-foreground">
+                   A data limite indica até quando você quer ter <strong>dominado todos os cards novos</strong> dos baralhos selecionados.
+                 </p>
               </div>
               <Popover>
                 <PopoverTrigger asChild>
@@ -930,55 +1148,15 @@ const StudyPlan = () => {
                   <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} disabled={(date) => date < new Date()} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
-              {targetDate && (
-                <Button variant="outline" size="sm" className="text-xs" onClick={() => setTargetDate(undefined)}>
-                  <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
-                  Alterar data
-                </Button>
-              )}
 
-              {/* Feasibility warning */}
-              {targetDate && selectedDeckIds.length > 0 && (() => {
-                const selectedNewCards = selectedDeckIds.reduce((sum, id) => {
-                  const deck = activeDecks.find(d => d.id === id);
-                  return sum + (deck?.new_count ?? 0);
-                }, 0);
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const daysLeft = Math.max(1, Math.ceil((targetDate.getTime() - today.getTime()) / 86400000));
-                const budget = globalCapacity.dailyNewCardsLimit;
-                const minDaysNeeded = Math.ceil(selectedNewCards / budget);
-                const isImpossible = daysLeft < minDaysNeeded;
-                const isTight = !isImpossible && daysLeft < minDaysNeeded * 1.3;
-                if (!isImpossible && !isTight) return null;
-                const suggestedDate = new Date(today);
-                suggestedDate.setDate(suggestedDate.getDate() + minDaysNeeded);
-                return (
-                  <div className={cn(
-                    'rounded-lg border p-3 space-y-1',
-                    isImpossible
-                      ? 'border-destructive/50 bg-destructive/5'
-                      : 'border-amber-300 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30'
-                  )}>
-                    <p className={cn('text-xs font-semibold', isImpossible ? 'text-destructive' : 'text-amber-700 dark:text-amber-400')}>
-                      {isImpossible ? '⚠️ Meta inviável' : '⚡ Meta apertada'}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Com {budget} novos cards/dia e {selectedNewCards} cards restantes, você precisaria de pelo menos <strong>{minDaysNeeded} dias</strong>.
-                      {isImpossible && <> A data selecionada ({daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}) é insuficiente.</>}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      📅 Data mínima viável: <strong>{format(suggestedDate, "dd/MM/yyyy")}</strong>
-                    </p>
-                  </div>
-                );
-              })()}
+              {feasibilityBlock}
 
               <Button
                 className="w-full" size="lg"
                 onClick={handleConfirmPlan}
-                disabled={!targetDate || createPlan.isPending || updatePlan.isPending}
+                disabled={!targetDate || createPlan.isPending}
               >
-                {createPlan.isPending || updatePlan.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar objetivo'}
+                {createPlan.isPending ? 'Salvando...' : 'Criar objetivo'}
               </Button>
             </div>
           )}
@@ -1311,12 +1489,173 @@ const StudyPlan = () => {
                       : <>{formatMinutes(globalCapacity.dailyMinutes)}/dia <span className="text-muted-foreground font-normal text-xs">({metrics?.cardsPerDay ?? '?'} cards)</span></>
                     }
                   </p>
-                  {metrics?.projectedCompletionDate && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <CalendarIcon className="h-3 w-3" />
-                      Conclusão estimada: {format(new Date(metrics.projectedCompletionDate), "dd/MM/yyyy")}
-                    </p>
-                  )}
+                  {metrics?.projectedCompletionDate && (() => {
+                    const totalNew = metrics.totalNew;
+                    const budget = globalCapacity.dailyNewCardsLimit;
+                    const avgSec = metrics.avgSecondsPerCard;
+                    const projDate = new Date(metrics.projectedCompletionDate);
+                    const avgDailyMin = getWeeklyAvgMinutesGlobal(globalCapacity.dailyMinutes, globalCapacity.weeklyMinutes);
+                    
+                    // Time-based bottleneck: how many new cards fit in remaining capacity after reviews
+                    const reviewMinToday = metrics.reviewMinutes;
+                    const availMinForNew = Math.max(0, avgDailyMin - reviewMinToday);
+                    const newSecsPerCard = avgSec > 0 ? avgSec : 30;
+                    const cardsFitByTime = availMinForNew > 0 ? Math.floor((availMinForNew * 60) / newSecsPerCard) : 0;
+                    const effectiveRate = Math.min(budget, Math.max(1, cardsFitByTime));
+                    const bottleneck: 'new_limit' | 'time' = cardsFitByTime < budget ? 'time' : 'new_limit';
+                    
+                    const plansWithTarget = plans.filter(p => p.target_date);
+                    const earliestTarget = plansWithTarget.length > 0
+                      ? plansWithTarget.reduce((min, p) => {
+                          const d = new Date(p.target_date!);
+                          return d < min ? d : min;
+                        }, new Date(plansWithTarget[0].target_date!))
+                      : null;
+                    
+                    const willMissTarget = earliestTarget && projDate > earliestTarget;
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const daysUntilTarget = earliestTarget
+                      ? Math.max(1, Math.ceil((earliestTarget.getTime() - today.getTime()) / 86400000))
+                      : null;
+                    const neededPerDay = daysUntilTarget ? Math.ceil(totalNew / daysUntilTarget) : null;
+                    // Time needed if we increase new cards to neededPerDay
+                    const neededMinPerDay = neededPerDay ? Math.ceil((neededPerDay * avgSec) / 60) + reviewMinToday : null;
+                    
+                    return (
+                      <div className={cn(
+                        "mt-2 rounded-lg border p-2.5 space-y-1.5",
+                        willMissTarget
+                          ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20"
+                          : "border-border bg-muted/30"
+                      )}>
+                        <p className="text-[11px] font-medium flex items-center gap-1.5">
+                          <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>
+                            {totalNew > 0
+                               ? <>Faltam <strong className="text-foreground">{totalNew} cards novos</strong> para dominar. No ritmo atual ({effectiveRate}/dia), você domina todos até <strong className="text-foreground">{format(projDate, "dd/MM/yyyy")}</strong>.</>
+                               : <>Todos os cards novos foram dominados! 🎉</>
+                             }
+                          </span>
+                        </p>
+                        
+                        {totalNew > 0 && (
+                          <div className="text-[10px] text-muted-foreground/70 space-y-0.5">
+                            {bottleneck === 'new_limit' ? (
+                              <p>Seu limite atual é <strong>{budget} novos cards/dia</strong>. Aumente o limite para acelerar o progresso.</p>
+                            ) : (
+                              <p>Seu tempo de estudo (<strong>{formatMinutes(avgDailyMin)}/dia</strong>) permite ~<strong>{cardsFitByTime} novos cards/dia</strong> após as revisões.</p>
+                            )}
+                          </div>
+                        )}
+                        
+                        {willMissTarget && neededPerDay && (
+                          <div className="space-y-2 pt-1.5 border-t border-amber-200 dark:border-amber-800">
+                             <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                                Para dominar todos os cards antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, você precisaria aumentar o ritmo. No ritmo atual, só domina todos em <strong>{format(projDate, "dd/MM/yyyy")}</strong>.
+                              </p>
+
+                            {neededPerDay > budget ? (
+                              <div className="space-y-1.5">
+                              <p className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+                                   ⚠ Para dominar todos os <strong>{totalNew} cards novos</strong> antes de <strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>, seriam necessários <strong>{neededPerDay} novos cards/dia</strong>. Seu limite atual é <strong>{budget}/dia</strong>.
+                                 </p>
+                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendação:</p>
+                                {/* Change target date — apply suggested date directly */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
+                                  onClick={() => {
+                                    const editablePlan = plans.find(p => p.target_date);
+                                    if (editablePlan) {
+                                       const minDays = Math.ceil(totalNew / effectiveRate);
+                                       const suggested = new Date();
+                                       suggested.setHours(0, 0, 0, 0);
+                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
+                                      const yr = suggested.getFullYear();
+                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
+                                      const dy = String(suggested.getDate()).padStart(2, '0');
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
+                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
+                                    }
+                                  }}
+                                >
+                                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                                  <span className="text-left">Mudar para uma data viável automaticamente</span>
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] text-muted-foreground font-semibold">Recomendações:</p>
+
+                                {/* 1. Change target date — apply suggested date directly */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-auto text-[10px] px-2.5 py-1.5 gap-1 w-full justify-start"
+                                  onClick={() => {
+                                    const editablePlan = plans.find(p => p.target_date);
+                                    if (editablePlan && neededPerDay && daysUntilTarget) {
+                                       const minDays = Math.ceil(totalNew / effectiveRate);
+                                       const suggested = new Date();
+                                       suggested.setHours(0, 0, 0, 0);
+                                       suggested.setDate(suggested.getDate() + minDays - 1); // today counts as day 1
+                                      const yr = suggested.getFullYear();
+                                      const mo = String(suggested.getMonth() + 1).padStart(2, '0');
+                                      const dy = String(suggested.getDate()).padStart(2, '0');
+                                      updatePlan.mutate({ id: editablePlan.id, target_date: `${yr}-${mo}-${dy}` });
+                                      toast({ title: 'Data limite atualizada!', description: `Nova data: ${format(suggested, "dd/MM/yyyy")}` });
+                                    }
+                                  }}
+                                >
+                                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                                  <span className="text-left">Mudar data limite</span>
+                                </Button>
+
+                                {/* 2. Increase cards/day — informative only */}
+                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+                                  <Layers className="h-3 w-3 shrink-0" />
+                                  <span>Aumentar para <strong className="text-foreground">{neededPerDay} cards/dia</strong> <span>(manter tempo de {formatMinutes(avgDailyMin)})</span></span>
+                                </div>
+
+                                {/* 3. Increase study time — informative only */}
+                                {neededMinPerDay && neededMinPerDay > avgDailyMin && (
+                                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-2.5 py-1.5">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    <span>Aumentar para <strong className="text-foreground">{formatMinutes(neededMinPerDay)}/dia</strong> <span>(manter {budget} cards/dia)</span></span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {!willMissTarget && earliestTarget && (
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                            ✓ No ritmo atual, você domina todos os cards novos antes da sua data limite (<strong>{format(earliestTarget, "dd/MM/yyyy")}</strong>).
+                          </p>
+                        )}
+                        
+                        {!earliestTarget && totalNew > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            <button
+                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
+                              onClick={() => { setTempNewCards(budget); setShowNewCardsConfirm(true); }}
+                            >
+                              Alterar limite de cards
+                            </button>
+                            <span className="text-[10px] text-muted-foreground/40">•</span>
+                            <button
+                              className="text-[10px] text-primary underline hover:text-primary/80 transition-colors"
+                              onClick={() => setEditingCapacity(true)}
+                            >
+                              Alterar tempo de estudo
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </CardContent>
@@ -1325,11 +1664,12 @@ const StudyPlan = () => {
 
         {/* ═══ 4. PREVISÃO DE CARGA (SIMULADOR) ═══ */}
         <ForecastSimulatorSection
-          allDeckIds={allDeckIds}
+          allDeckIds={expandedDeckIds}
           dailyMinutes={globalCapacity.dailyMinutes}
           weeklyMinutes={globalCapacity.weeklyMinutes}
           plans={plans}
           updateCapacity={updateCapacity}
+          metricsTotalNew={metrics?.totalNew}
         />
 
         {/* ═══ MODAL: Confirmar alteração de novos cards ═══ */}

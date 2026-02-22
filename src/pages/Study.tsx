@@ -104,7 +104,7 @@ const Study = () => {
   useEffect(() => {
     const now = Date.now();
     const futureTimes = localQueue
-      .filter(c => c.state === 1)
+      .filter(c => c.state === 1 || c.state === 3)
       .map(c => new Date(c.scheduled_date).getTime())
       .filter(t => t > now);
     if (futureTimes.length === 0) return;
@@ -123,10 +123,16 @@ const Study = () => {
     const remaining = Math.max(0, Math.ceil((soonest - now) / 1000));
     setWaitingSeconds(remaining);
 
+    // If already ready (scheduled_date in the past), force immediate recomputation
+    if (remaining <= 0) {
+      setLearningTick(prev => prev + 1);
+      return;
+    }
+
     const interval = setInterval(() => {
       const r = Math.max(0, Math.ceil((soonest - Date.now()) / 1000));
       setWaitingSeconds(r);
-      if (r <= 0) { clearInterval(interval); setCardKey(prev => prev + 1); }
+      if (r <= 0) { clearInterval(interval); setLearningTick(prev => prev + 1); }
     }, 1000);
     return () => clearInterval(interval);
   }, [allWaiting, localQueue]);
