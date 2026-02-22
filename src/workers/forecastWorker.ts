@@ -171,7 +171,7 @@ let cancelled = false;
 
 function runSimulation(input: SimulatorInput): SimulatorResult {
   cancelled = false;
-  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes } = input;
+  const { params, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, createdCardsStopDay } = input;
   const { decks, cards: rawCards, timing, rating_distribution, total_reviews_90d } = params;
 
   const useAdaptive = total_reviews_90d >= 50;
@@ -241,8 +241,10 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
 
     // Generate newly created cards for today (spread across decks)
     // These cards are tagged as isCreated and go AFTER existing new cards in the queue
+    // Only add created cards before the target date deadline (createdCardsStopDay)
     let createdCardsToday = 0;
-    if (createdCardsPerDay > 0 && day > 0) {
+    const shouldAddCreated = createdCardsPerDay > 0 && day > 0 && (createdCardsStopDay === null || day <= createdCardsStopDay);
+    if (shouldAddCreated) {
       const deckIds = Array.from(deckMap.keys());
       const perDeck = Math.max(1, Math.round(createdCardsPerDay / deckIds.length));
       for (const deckId of deckIds) {

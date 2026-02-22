@@ -13,12 +13,14 @@ export interface UseForecastSimulatorOptions {
   dailyMinutes: number;
   weeklyMinutes: WeeklyMinutes | null;
   enabled?: boolean;
+  /** Latest target date across all objectives — used to stop adding created cards */
+  latestTargetDate?: string | null;
 }
 
 export function useForecastSimulator(options: UseForecastSimulatorOptions) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, enabled = true } = options;
+  const { deckIds, horizonDays, newCardsPerDayOverride, createdCardsPerDayOverride, dailyMinutes, weeklyMinutes, enabled = true, latestTargetDate } = options;
 
   const [result, setResult] = useState<SimulatorResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -99,6 +101,15 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     // Cancel previous
     workerRef.current.postMessage({ type: 'cancel' } as WorkerMessage);
 
+    // Calculate createdCardsStopDay from latest target date
+    let createdCardsStopDay: number | null = null;
+    if (latestTargetDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(latestTargetDate);
+      createdCardsStopDay = Math.max(0, Math.ceil((target.getTime() - today.getTime()) / 86400000));
+    }
+
     const input: SimulatorInput = {
       params,
       horizonDays,
@@ -106,12 +117,13 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
       createdCardsPerDay,
       dailyMinutes,
       weeklyMinutes: weeklyMinutes as Record<string, number> | null,
+      createdCardsStopDay,
     };
 
     setIsSimulating(true);
     setProgress(0);
     workerRef.current.postMessage({ type: 'run', input } as WorkerMessage);
-  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes]);
+  }, [paramsQuery.data, horizonDays, newCardsPerDay, createdCardsPerDay, dailyMinutes, weeklyMinutes, latestTargetDate]);
 
   // Debounced trigger
   useEffect(() => {

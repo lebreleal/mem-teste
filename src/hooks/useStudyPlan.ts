@@ -583,6 +583,7 @@ export function useStudyPlan() {
   return {
     plans,
     allDeckIds,
+    expandedDeckIds,
     globalCapacity,
     isLoading: plansQuery.isLoading || capacityQuery.isLoading,
     metrics: computed,
