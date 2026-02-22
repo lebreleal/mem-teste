@@ -346,10 +346,11 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     }
 
     // ── Step 2: Calculate time used by reviews, then limit new cards by remaining capacity ──
-    const revMin = Math.round((reviewCount * reviewSecsPerCard * scaleFactor) / 60);
-    const learnMin = Math.round((learningCount * learningSecsPerCard * scaleFactor) / 60);
-    const relearnMin = Math.round((relearningCount * relearningSecsPerCard * scaleFactor) / 60);
-    const usedMin = revMin + learnMin + relearnMin;
+    // Use fractional minutes during calculation to avoid rounding errors that compound over weeks
+    const revMinRaw = (reviewCount * reviewSecsPerCard * scaleFactor) / 60;
+    const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
+    const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
+    const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
     const availableForNewMin = Math.max(0, capacityMin - usedMin);
     const maxNewByCapacity = Math.floor((availableForNewMin * 60) / (newSecsPerCard * scaleFactor));
     const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
@@ -417,9 +418,9 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
         : simulateSM2(c, rating, day, maxInterval);
     }
 
-    // Calculate minutes
-    const newMin = Math.round((newCardsToday * newSecsPerCard * scaleFactor) / 60);
-    const totalMin = revMin + newMin + learnMin + relearnMin;
+    // Calculate minutes — keep raw fractional values, round only for final output
+    const newMinRaw = (newCardsToday * newSecsPerCard * scaleFactor) / 60;
+    const totalMinRaw = revMinRaw + newMinRaw + learnMinRaw + relearnMinRaw;
 
     points.push({
       date, day: dayLabel,
@@ -427,13 +428,13 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
       newCards: Math.round(newCardsToday * scaleFactor),
       learningCards: Math.round(learningCount * scaleFactor),
       relearningCards: Math.round(relearningCount * scaleFactor),
-      reviewMin: revMin,
-      learningMin: learnMin,
-      relearningMin: relearnMin,
-      newMin,
-      totalMin,
+      reviewMin: Math.round(revMinRaw),
+      learningMin: Math.round(learnMinRaw),
+      relearningMin: Math.round(relearnMinRaw),
+      newMin: Math.round(newMinRaw),
+      totalMin: Math.round(totalMinRaw),
       capacityMin,
-      overloaded: totalMin > capacityMin,
+      overloaded: totalMinRaw > capacityMin,
       createdCards: Math.round(newCreatedStudiedToday * scaleFactor),
     });
   }
