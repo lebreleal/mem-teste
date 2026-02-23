@@ -3,6 +3,8 @@
  */
 
 import { useState, useMemo } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Filter, Sparkles, BookOpen, Layers,
+  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 import type { PublicDeckItem } from '@/services/turmaService';
@@ -123,6 +125,10 @@ const PublicDeckCard = ({
         <Layers className="h-3.5 w-3.5 text-foreground" />
         <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
         cards
+      </span>
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <RefreshCw className="h-3 w-3" />
+        {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
       </span>
     </div>
 
