@@ -27,7 +27,7 @@ const Study = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, submitReview, algorithmMode } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, submitReview, algorithmMode, isLiveDeck } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
@@ -507,6 +507,7 @@ const Study = () => {
       <main className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className="w-full animate-fade-in">
           <FlashCard
+            cardId={currentCard.id}
             frontContent={currentCard.front_content}
             backContent={currentCard.back_content}
             stability={currentCard.stability}
@@ -542,6 +543,7 @@ const Study = () => {
             actions={
               <StudyCardActions
                 card={currentCard}
+                isLiveDeck={isLiveDeck}
                 onCardUpdated={(updatedFields) => {
                   setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
                   setCardKey(prev => prev + 1);

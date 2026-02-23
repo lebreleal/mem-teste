@@ -13,6 +13,7 @@ export interface StudyQueueResult {
   cards: any[];
   algorithmMode: string;
   deckConfig: any;
+  isLiveDeck: boolean;
 }
 
 /** Fetch the study queue for a deck or folder. */
@@ -23,7 +24,7 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck')
     .eq('user_id', userId);
 
   let deckIds: string[];
@@ -68,7 +69,8 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig };
+    const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+    return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
   // Fetch cards + scope card IDs in parallel (independent queries)
@@ -212,7 +214,8 @@ export async function fetchStudyQueue(
   const nonLearning = [...newCards, ...reviewCards];
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   const queue = [...learningCards, ...orderedNonLearning];
-  return { cards: queue, algorithmMode, deckConfig };
+  const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+  return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
 /** Submit a card review and update scheduling. */
