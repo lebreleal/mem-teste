@@ -22,7 +22,7 @@ import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
   Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
   RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail, Info,
+  Shuffle, BookOpen, Mail, Info, Globe,
 } from 'lucide-react';
 
 // ── Settings row component ──────────────────────────────────────
@@ -90,6 +90,7 @@ const DeckSettings = () => {
   const [algorithmMode, setAlgorithmMode] = useState<'sm2' | 'fsrs' | 'quick_review'>('sm2');
   const [requestedRetention, setRequestedRetention] = useState(0.9);
   const [shuffleCards, setShuffleCards] = useState(true);
+  const [isPublic, setIsPublic] = useState(true);
   const [learningSteps, setLearningSteps] = useState<string[]>(['1m', '15m']);
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
@@ -129,7 +130,7 @@ const DeckSettings = () => {
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
       setParentDeckId(data.parent_deck_id ?? null);
-      setLoading(false);
+      setIsPublic((data as any).is_public ?? true);
     });
   }, [deckId, user]);
 
@@ -378,6 +379,20 @@ const DeckSettings = () => {
 
         {/* ── Section: Social ─────────────────────────────── */}
         <SettingsGroup>
+          <SettingsRow
+            icon={<Globe className="h-5 w-5" />}
+            label="Publicar na comunidade"
+            subtitle="Visível para todos na aba Comunidade"
+            rightContent={
+              <Switch
+                checked={isPublic}
+                onCheckedChange={(checked) => {
+                  setIsPublic(checked);
+                  saveSettings({ is_public: checked });
+                }}
+              />
+            }
+          />
           <SettingsRow
             icon={<Share2 className="h-5 w-5" />}
             label="Compartilhar baralho"

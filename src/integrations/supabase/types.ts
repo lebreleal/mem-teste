@@ -415,6 +415,7 @@ export type Database = {
           is_archived: boolean
           is_free_in_community: boolean
           is_live_deck: boolean
+          is_public: boolean
           learning_steps: string[]
           max_interval: number
           name: string
@@ -441,6 +442,7 @@ export type Database = {
           is_archived?: boolean
           is_free_in_community?: boolean
           is_live_deck?: boolean
+          is_public?: boolean
           learning_steps?: string[]
           max_interval?: number
           name: string
@@ -467,6 +469,7 @@ export type Database = {
           is_archived?: boolean
           is_free_in_community?: boolean
           is_live_deck?: boolean
+          is_public?: boolean
           learning_steps?: string[]
           max_interval?: number
           name?: string

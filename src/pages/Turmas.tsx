@@ -1,11 +1,10 @@
 /**
- * Community Marketplace — grid of public communities with search and category filters.
- * Members can also access their own communities via "Minhas" tab.
+ * Community Marketplace — grid of public communities + public decks with search and category filters.
  */
 
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTurmas, useDiscoverTurmas, type Turma } from '@/hooks/useTurmas';
+import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +15,10 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Filter, Sparkles, BookOpen,
+  Globe, Lock, Filter, Sparkles, BookOpen, Layers,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
+import type { PublicDeckItem } from '@/services/turmaService';
 
 const DESC_MAX = 2000;
 
@@ -33,11 +33,6 @@ const CATEGORIES = [
   { value: 'vestibular', label: 'Vestibular' },
   { value: 'outros', label: 'Outros' },
 ];
-
-const formatPrice = (price: number) => {
-  if (!price || price <= 0) return 'Grátis';
-  return `R$${(price / 100).toFixed(2).replace('.', ',')}`;
-};
 
 const formatCount = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
@@ -55,6 +50,7 @@ const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   );
 };
 
+/* ── Community Card ── */
 const CommunityCard = ({
   turma,
   onClick,
@@ -63,44 +59,86 @@ const CommunityCard = ({
   turma: Turma & { member_count?: number; owner_name?: string };
   onClick: () => void;
   isMine?: boolean;
-}) => {
-  return (
-    <div
-      className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
-      onClick={onClick}
-    >
-      {/* Title + Creator */}
-      <div className="space-y-1">
-        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{turma.name}</h3>
-        <p className="text-xs text-muted-foreground">
-          por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
-        </p>
+}) => (
+  <div
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={onClick}
+  >
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">{turma.name}</h3>
+        {(turma.subscription_price ?? 0) > 0 && (
+          <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />
+        )}
       </div>
-
-      {/* Stats row */}
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Users className="h-3.5 w-3.5 text-foreground" />
-          <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
-          membros
-        </span>
-        <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-      </div>
-
-      {/* Action */}
-      {isMine ? (
-        <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
-          ✓ Inscrito
-        </span>
-      ) : (
-        <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-          Inscreva-se
-        </span>
-      )}
+      <p className="text-xs text-muted-foreground">
+        por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
+      </p>
     </div>
-  );
-};
 
+    <div className="flex items-center gap-4">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-foreground" />
+        <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
+        decks
+      </span>
+      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
+    </div>
+
+    {isMine ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Inscrito
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Inscreva-se
+      </span>
+    )}
+  </div>
+);
+
+/* ── Public Deck Card (same visual as community card) ── */
+const PublicDeckCard = ({
+  deck,
+  onClick,
+  isOwner,
+}: {
+  deck: PublicDeckItem;
+  onClick: () => void;
+  isOwner?: boolean;
+}) => (
+  <div
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={onClick}
+  >
+    <div className="space-y-1">
+      <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{deck.name}</h3>
+      <p className="text-xs text-muted-foreground">
+        por <span className="font-semibold text-foreground">{deck.owner_name}</span>
+      </p>
+    </div>
+
+    <div className="flex items-center gap-4">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-foreground" />
+        <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
+        cards
+      </span>
+    </div>
+
+    {isOwner ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Seu deck
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Ver deck
+      </span>
+    )}
+  </div>
+);
+
+/* ── Main Page ── */
 const Turmas = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -118,11 +156,11 @@ const Turmas = () => {
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
 
   const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
+  const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
 
   const myTurmaIds = new Set(turmas.map(t => t.id));
 
-  // Merge: all public communities, marking which ones user is member of
-  const allCommunities = useMemo(() => {
+  const communities = useMemo(() => {
     if (viewMode === 'mine') {
       return turmas
         .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -131,6 +169,11 @@ const Turmas = () => {
     return (discoverTurmas ?? [])
       .filter(t => !selectedCategory || (t as any).category === selectedCategory);
   }, [viewMode, turmas, discoverTurmas, searchQuery, selectedCategory]);
+
+  const filteredDecks = useMemo(() => {
+    if (viewMode === 'mine') return [];
+    return publicDecks ?? [];
+  }, [viewMode, publicDecks]);
 
   const handleCreate = () => {
     if (!name.trim()) return;
@@ -148,7 +191,7 @@ const Turmas = () => {
     });
   };
 
-  const loading = viewMode === 'discover' ? discoverLoading : isLoading;
+  const loading = viewMode === 'discover' ? (discoverLoading || publicDecksLoading) : isLoading;
 
   return (
     <div className="min-h-screen bg-background">
@@ -160,7 +203,7 @@ const Turmas = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="font-display text-xl font-bold text-foreground">Comunidades</h1>
+              <h1 className="font-display text-xl font-bold text-foreground">Comunidade</h1>
               <p className="text-[10px] text-muted-foreground">Descubra e aprenda com criadores</p>
             </div>
           </div>
@@ -201,7 +244,7 @@ const Turmas = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar comunidades..."
+              placeholder="Buscar comunidades e decks..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -224,41 +267,70 @@ const Turmas = () => {
           </div>
         </div>
 
-        {/* Grid */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
               <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
-        ) : allCommunities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 text-center">
-            <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h2 className="font-display text-lg font-bold text-foreground">
-              {viewMode === 'mine' ? 'Nenhuma comunidade' : 'Nenhuma comunidade encontrada'}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-              {viewMode === 'mine'
-                ? 'Crie uma comunidade ou descubra comunidades públicas.'
-                : searchQuery ? `Nenhum resultado para "${searchQuery}"` : 'Nenhuma comunidade pública disponível.'}
-            </p>
-            {viewMode === 'mine' && (
-              <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setViewMode('discover')}>
-                <Globe className="h-4 w-4" /> Descobrir comunidades
-              </Button>
-            )}
-          </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {allCommunities.map(turma => (
-              <CommunityCard
-                key={turma.id}
-                turma={turma}
-                onClick={() => navigate(`/turmas/${turma.id}`)}
-                isMine={myTurmaIds.has(turma.id)}
-              />
-            ))}
-          </div>
+          <>
+            {/* ── Communities Section ── */}
+            {communities.length > 0 && (
+              <section className="mb-8">
+                <h2 className="font-display text-base font-bold text-foreground mb-3">
+                  {viewMode === 'mine' ? 'Minhas Comunidades' : 'Comunidades'}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {communities.map(turma => (
+                    <CommunityCard
+                      key={turma.id}
+                      turma={turma}
+                      onClick={() => navigate(`/turmas/${turma.id}`)}
+                      isMine={myTurmaIds.has(turma.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── Public Decks Section ── */}
+            {viewMode === 'discover' && filteredDecks.length > 0 && (
+              <section className="mb-8">
+                <h2 className="font-display text-base font-bold text-foreground mb-3">Decks Públicos</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredDecks.map(deck => (
+                    <PublicDeckCard
+                      key={deck.id}
+                      deck={deck}
+                      onClick={() => navigate(`/decks/${deck.id}`)}
+                      isOwner={deck.owner_id === user?.id}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Empty state */}
+            {communities.length === 0 && filteredDecks.length === 0 && (
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 text-center">
+                <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  {viewMode === 'mine' ? 'Nenhuma comunidade' : 'Nenhum resultado encontrado'}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                  {viewMode === 'mine'
+                    ? 'Crie uma comunidade ou descubra comunidades públicas.'
+                    : searchQuery ? `Nenhum resultado para "${searchQuery}"` : 'Nenhum conteúdo público disponível.'}
+                </p>
+                {viewMode === 'mine' && (
+                  <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setViewMode('discover')}>
+                    <Globe className="h-4 w-4" /> Descobrir comunidades
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </main>
 
