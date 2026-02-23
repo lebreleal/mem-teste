@@ -315,7 +315,7 @@ const PublicDeckPreview = () => {
 
       const { data: newDeck, error: deckError } = await supabase
         .from('decks')
-        .insert({ user_id: user.id, name: deck.name, is_public: false })
+        .insert({ user_id: user.id, name: deck.name, is_public: false, source_listing_id: deckId })
         .select('id')
         .single();
       if (deckError) throw deckError;
