@@ -60,6 +60,7 @@ const CreatorPanel = lazyRetry(() => import("./pages/CreatorPanel"));
 const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
+const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -92,6 +93,7 @@ const App = () => (
                 <Route path="/study/:deckId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/manage" element={<ProtectedRoute><ManageDeck /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/settings" element={<ProtectedRoute><DeckSettings /></ProtectedRoute>} />
+                <Route path="/decks/:deckId/preview" element={<ProtectedRoute><PublicDeckPreview /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
