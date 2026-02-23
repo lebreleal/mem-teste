@@ -91,6 +91,7 @@ const DeckSettings = () => {
   const [requestedRetention, setRequestedRetention] = useState(0.9);
   const [shuffleCards, setShuffleCards] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
+  const [allowDuplication, setAllowDuplication] = useState(false);
   const [learningSteps, setLearningSteps] = useState<string[]>(['1m', '15m']);
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
@@ -98,6 +99,7 @@ const DeckSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
+  const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
 
   // Modals
   const [algorithmModal, setAlgorithmModal] = useState(false);
@@ -131,6 +133,8 @@ const DeckSettings = () => {
       setMaxInterval(data.max_interval ?? 1000);
       setParentDeckId(data.parent_deck_id ?? null);
       setIsPublic((data as any).is_public ?? true);
+      setAllowDuplication((data as any).allow_duplication ?? false);
+      setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
     });
   }, [deckId, user]);
 
@@ -378,36 +382,54 @@ const DeckSettings = () => {
         </SettingsGroup>
 
         {/* ── Section: Social ─────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Globe className="h-5 w-5" />}
-            label="Publicar na comunidade"
-            subtitle="Visível para todos na aba Comunidade"
-            rightContent={
-              <Switch
-                checked={isPublic}
-                onCheckedChange={(checked) => {
-                  setIsPublic(checked);
-                  saveSettings({ is_public: checked });
-                }}
-              />
-            }
-          />
-          <SettingsRow
-            icon={<Share2 className="h-5 w-5" />}
-            label="Compartilhar baralho"
-            onClick={() => setShareModal(true)}
-          />
-        </SettingsGroup>
+        {!sourceTurmaDeckId && (
+          <SettingsGroup>
+            <SettingsRow
+              icon={<Globe className="h-5 w-5" />}
+              label="Publicar na comunidade"
+              subtitle="Visível para todos na aba Comunidade"
+              rightContent={
+                <Switch
+                  checked={isPublic}
+                  onCheckedChange={(checked) => {
+                    setIsPublic(checked);
+                    saveSettings({ is_public: checked });
+                  }}
+                />
+              }
+            />
+            <SettingsRow
+              icon={<Copy className="h-5 w-5" />}
+              label="Permitir duplicação"
+              subtitle="Outros usuários podem duplicar este deck para uso pessoal"
+              rightContent={
+                <Switch
+                  checked={allowDuplication}
+                  onCheckedChange={(checked) => {
+                    setAllowDuplication(checked);
+                    saveSettings({ allow_duplication: checked });
+                  }}
+                />
+              }
+            />
+            <SettingsRow
+              icon={<Share2 className="h-5 w-5" />}
+              label="Compartilhar baralho"
+              onClick={() => setShareModal(true)}
+            />
+          </SettingsGroup>
+        )}
 
         {/* ── Section: IA ─────────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Download className="h-5 w-5" />}
-            label="Importar cartões"
-            onClick={() => navigate(`/decks/${deckId}/manage`)}
-          />
-        </SettingsGroup>
+        {!sourceTurmaDeckId && (
+          <SettingsGroup>
+            <SettingsRow
+              icon={<Download className="h-5 w-5" />}
+              label="Importar cartões"
+              onClick={() => navigate(`/decks/${deckId}/manage`)}
+            />
+          </SettingsGroup>
+        )}
 
         {/* ── Section: Gerenciar ──────────────────────────── */}
         <SettingsGroup>

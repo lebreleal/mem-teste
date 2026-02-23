@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -8,8 +8,9 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send } from 'lucide-react';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -44,6 +45,18 @@ const ManageDeck = () => {
   const [back, setBack] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editorType, setEditorType] = useState<EditorCardType | null>(null);
+  const [suggestCard, setSuggestCard] = useState<{ id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null>(null);
+
+  // Detect if this is a community deck (has source_turma_deck_id)
+  const { data: deckMeta } = useQuery({
+    queryKey: ['deck-meta', deckId],
+    queryFn: async () => {
+      const { data } = await supabase.from('decks').select('source_turma_deck_id').eq('id', deckId!).single();
+      return data as { source_turma_deck_id: string | null } | null;
+    },
+    enabled: !!deckId,
+  });
+  const isCommunityDeck = !!deckMeta?.source_turma_deck_id;
 
   // Multiple choice state
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
@@ -573,12 +586,16 @@ const ManageDeck = () => {
             <Button variant="ghost" size="icon" onClick={() => navigate(`/decks/${deckId}`)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="font-display text-xl font-bold text-foreground">Gerenciar Cards</h1>
+            <h1 className="font-display text-xl font-bold text-foreground">
+              {isCommunityDeck ? 'Cards do Deck' : 'Gerenciar Cards'}
+            </h1>
           </div>
-          <Button onClick={openNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Novo Card</span>
-          </Button>
+          {!isCommunityDeck && (
+            <Button onClick={openNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Novo Card</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -615,12 +632,20 @@ const ManageDeck = () => {
                   })()}
                 </div>
                 <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(card)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(card.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {isCommunityDeck ? (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => setSuggestCard(card)} title="Sugerir correção">
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(card)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(card.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -674,6 +699,15 @@ const ManageDeck = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Suggest Correction Modal for community decks */}
+      {suggestCard && (
+        <SuggestCorrectionModal
+          open={!!suggestCard}
+          onOpenChange={(open) => { if (!open) setSuggestCard(null); }}
+          card={suggestCard}
+        />
+      )}
     </div>
   );
 };
