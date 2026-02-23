@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot, Crown } from 'lucide-react';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -25,6 +25,7 @@ const Profile = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -32,6 +33,9 @@ const Profile = () => {
     supabase.from('profiles').select('name').eq('id', user.id).single().then(({ data }) => {
       setName(data?.name ?? user.user_metadata?.name ?? '');
       setLoading(false);
+    });
+    supabase.from('turmas').select('id').eq('owner_id', user.id).limit(1).then(({ data }) => {
+      setIsCreator((data ?? []).length > 0);
     });
   }, [user]);
 
@@ -122,6 +126,22 @@ const Profile = () => {
             <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
           </CardContent>
         </Card>
+
+        {/* Creator Panel shortcut */}
+        {isCreator && (
+          <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/creator')}>
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+                <Crown className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-display font-semibold text-foreground">Painel do Criador</p>
+                <p className="text-xs text-muted-foreground">Analytics, sugestões e gerenciamento</p>
+              </div>
+              <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Admin IA shortcut - only for admins */}
         {isAdmin && (
