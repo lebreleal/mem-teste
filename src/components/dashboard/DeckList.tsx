@@ -57,6 +57,9 @@ interface DeckListProps {
   // Reorder callbacks
   onReorderFolders?: (reordered: Folder[]) => void;
   onReorderDecks?: (reordered: DeckWithStats[]) => void;
+
+  // Pending updates for community decks
+  decksWithPendingUpdates?: Set<string>;
 }
 
 const DeckList = ({
@@ -64,6 +67,7 @@ const DeckList = ({
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
   folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
+  decksWithPendingUpdates,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
@@ -240,6 +244,7 @@ const DeckList = ({
             onDelete={onDeleteDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
+            hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
             {...deckRowProps}
           />
         );

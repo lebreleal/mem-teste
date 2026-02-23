@@ -4,12 +4,16 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
 
 export function useDashboardState(planAllocation?: Record<string, number>) {
+  const { user } = useAuth();
   const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
   const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
 
@@ -77,10 +81,65 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
   );
 
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
+    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !d.source_turma_deck_id)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [decks, currentFolderId]
   );
+
+  /** Community decks: imported from turma subscriptions (have source_turma_deck_id). Only shown at root level. */
+  const communityDecks = useMemo(
+    () => decks.filter(d => !d.parent_deck_id && !d.is_archived && !!d.source_turma_deck_id)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [decks]
+  );
+
+  /** Check which community decks have pending updates (source updated_at > local synced_at). */
+  const sourceTurmaDeckIds = useMemo(
+    () => communityDecks.map(d => d.source_turma_deck_id!).filter(Boolean),
+    [communityDecks]
+  );
+  const pendingUpdatesQuery = useQuery({
+    queryKey: ['community-deck-updates', sourceTurmaDeckIds],
+    queryFn: async () => {
+      if (sourceTurmaDeckIds.length === 0) return new Set<string>();
+      const { data } = await supabase
+        .from('turma_decks')
+        .select('id, deck_id')
+        .in('id', sourceTurmaDeckIds);
+      if (!data || data.length === 0) return new Set<string>();
+      // Get source deck updated_at
+      const sourceDeckIds = data.map((td: any) => td.deck_id);
+      const { data: sourceDecks } = await supabase
+        .from('decks')
+        .select('id, updated_at')
+        .in('id', sourceDeckIds);
+      const sourceUpdatedMap = new Map<string, string>();
+      for (const sd of (sourceDecks ?? []) as any[]) {
+        sourceUpdatedMap.set(sd.id, sd.updated_at);
+      }
+      // Build turma_deck_id -> source_updated_at map
+      const turmaDeckToSourceUpdated = new Map<string, string>();
+      for (const td of data as any[]) {
+        const updated = sourceUpdatedMap.get(td.deck_id);
+        if (updated) turmaDeckToSourceUpdated.set(td.id, updated);
+      }
+      // Compare with user's synced_at
+      const pending = new Set<string>();
+      for (const cd of communityDecks) {
+        const sourceUpdated = turmaDeckToSourceUpdated.get(cd.source_turma_deck_id!);
+        if (sourceUpdated && cd.source_turma_deck_id) {
+          const syncedAt = (cd as any).synced_at;
+          if (!syncedAt || new Date(sourceUpdated) > new Date(syncedAt)) {
+            pending.add(cd.id);
+          }
+        }
+      }
+      return pending;
+    },
+    enabled: !!user && sourceTurmaDeckIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+  const decksWithPendingUpdates = pendingUpdatesQuery.data ?? new Set<string>();
 
   const archivedDecks = useMemo(
     () => {
@@ -245,7 +304,7 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     // Data
     decks, folders, isLoading,
     currentFolderId, setCurrentFolderId,
-    currentFolders, currentDecks,
+    currentFolders, currentDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
     expandedDecks, toggleExpand,
