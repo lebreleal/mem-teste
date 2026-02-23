@@ -1,25 +1,20 @@
 /**
- * PublicDeckPreview — full page preview of a public deck from the marketplace
- * with card list, forecast simulation, and import action.
+ * PublicDeckPreview — full page preview of a public deck
+ * with card list, community suggestions, and import action.
  */
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Layers, RefreshCw, BarChart3, ArrowLeft } from 'lucide-react';
+import { Copy, Layers, RefreshCw, ArrowLeft, MessageSquare, ThumbsUp, ThumbsDown, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useForecastSimulator } from '@/hooks/useForecastSimulator';
-import type { ForecastView } from '@/types/forecast';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
+import type { Json } from '@/integrations/supabase/types';
 
 const stripHtml = (html: string) => {
   const div = document.createElement('div');
@@ -47,104 +42,187 @@ const CardRow = ({ front, back, type, index }: { front: string; back: string; ty
   );
 };
 
-/* ─── Simplified Forecast Chart ─── */
-const SimpleForecast = ({ deckId }: { deckId: string }) => {
-  const [view, setView] = useState<ForecastView>('30d');
-  const horizonMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
-  const horizonDays = horizonMap[view] ?? 30;
+/* ─── Suggestion Card (AnkiHub-style) ─── */
+interface Suggestion {
+  id: string;
+  status: string;
+  rationale: string;
+  created_at: string;
+  suggester_name: string;
+  card_id: string | null;
+  suggested_content: Json;
+  original_front: string | null;
+  original_back: string | null;
+}
 
-  const { data, summary, isSimulating, progress } = useForecastSimulator({
-    deckIds: [deckId],
-    horizonDays,
-    dailyMinutes: 60,
-    weeklyMinutes: null,
-    enabled: true,
-  });
+const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
+  const content = suggestion.suggested_content as { front_content?: string; back_content?: string } | null;
+  const suggestedFront = content?.front_content ?? '';
+  const suggestedBack = content?.back_content ?? '';
+  const originalFront = suggestion.original_front ?? '';
+  const originalBack = suggestion.original_back ?? '';
 
-  const chartData = data.map(d => ({
-    ...d,
-    totalCards: d.reviewCards + d.newCards + d.learningCards + d.relearningCards,
-  }));
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning border-warning/20' },
+    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  };
 
-  const viewOptions = [
-    { value: '7d', label: '7d' },
-    { value: '30d', label: '30d' },
-    { value: '90d', label: '90d' },
-    { value: '1y', label: '1 ano' },
-  ];
+  const status = statusConfig[suggestion.status] ?? statusConfig.pending;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-            Simulação de Carga
-          </h3>
+    <div className="border border-border rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+            {suggestion.suggester_name.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground truncate">{suggestion.suggester_name}</p>
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Clock className="h-2.5 w-2.5" />
+              {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-1">
-          {viewOptions.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setView(opt.value as ForecastView)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                view === opt.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${status.className}`}>
+          {status.label}
+        </span>
       </div>
 
-      {summary && !isSimulating && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-muted/50 p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{summary.avgDailyMin}</p>
-            <p className="text-[10px] text-muted-foreground">min/dia (média)</p>
-          </div>
-          <div className="rounded-lg bg-muted/50 p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{summary.peakMin}</p>
-            <p className="text-[10px] text-muted-foreground">min no pico</p>
-          </div>
+      {/* Rationale */}
+      {suggestion.rationale && (
+        <div className="px-4 py-2 bg-muted/20 border-b border-border/30">
+          <p className="text-xs text-muted-foreground italic">"{suggestion.rationale}"</p>
         </div>
       )}
 
-      <div className="h-48 w-full">
-        {isSimulating ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="text-[11px] text-muted-foreground">Simulando... {progress}%</p>
+      {/* Diff view */}
+      <div className="divide-y divide-border/30">
+        {/* Front diff */}
+        {suggestedFront && originalFront !== suggestedFront && (
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Frente</p>
+            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
+              <p className="text-xs text-destructive line-through">{stripHtml(originalFront)}</p>
+            </div>
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedFront)}</p>
+            </div>
           </div>
-        ) : chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-              <XAxis dataKey="day" tick={{ fontSize: 10 }} className="text-muted-foreground" interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" />
-              <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                labelStyle={{ fontWeight: 600 }}
-              />
-              <Area type="monotone" dataKey="reviewCards" name="Revisão" stackId="1" fill="hsl(217 91% 60%)" stroke="hsl(217 91% 60%)" fillOpacity={0.6} />
-              <Area type="monotone" dataKey="newCards" name="Novos" stackId="1" fill="hsl(142 71% 45%)" stroke="hsl(142 71% 45%)" fillOpacity={0.6} />
-              <Area type="monotone" dataKey="learningCards" name="Aprendendo" stackId="1" fill="hsl(38 92% 50%)" stroke="hsl(38 92% 50%)" fillOpacity={0.6} />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-muted-foreground">Sem dados para simular</p>
+        )}
+
+        {/* Back diff */}
+        {suggestedBack && originalBack !== suggestedBack && (
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Verso</p>
+            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
+              <p className="text-xs text-destructive line-through">{stripHtml(originalBack)}</p>
+            </div>
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedBack)}</p>
+            </div>
           </div>
         )}
       </div>
+    </div>
+  );
+};
 
-      <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)]" /> Revisão</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(142_71%_45%)]" /> Novos</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)]" /> Aprendendo</span>
+/* ─── Community Suggestions Section ─── */
+const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
+  const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+
+  const { data: suggestions = [], isLoading } = useQuery({
+    queryKey: ['deck-suggestions-public', deckId],
+    queryFn: async () => {
+      // Fetch suggestions with card info
+      const { data, error } = await supabase
+        .from('deck_suggestions')
+        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      if (!data || data.length === 0) return [];
+
+      // Get suggester names
+      const userIds = [...new Set(data.map(s => s.suggester_user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+      const nameMap = new Map((profiles ?? []).map(p => [p.id, p.name]));
+
+      // Get original card content
+      const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
+      const { data: cards } = cardIds.length > 0
+        ? await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds)
+        : { data: [] };
+      const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
+
+      return data.map(s => ({
+        ...s,
+        suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
+        original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
+        original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
+      })) as Suggestion[];
+    },
+    enabled: !!deckId,
+  });
+
+  const filtered = filter === 'all' ? suggestions : suggestions.filter(s => s.status === filter);
+  const counts = {
+    all: suggestions.length,
+    pending: suggestions.filter(s => s.status === 'pending').length,
+    accepted: suggestions.filter(s => s.status === 'accepted').length,
+    rejected: suggestions.filter(s => s.status === 'rejected').length,
+  };
+
+  const filters = [
+    { value: 'all' as const, label: 'Todas' },
+    { value: 'pending' as const, label: 'Pendentes' },
+    { value: 'accepted' as const, label: 'Aceitas' },
+    { value: 'rejected' as const, label: 'Rejeitadas' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {filters.map(f => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+              filter === f.value
+                ? 'bg-primary/15 text-primary border border-primary/30'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+            }`}
+          >
+            {f.label} ({counts[f.value]})
+          </button>
+        ))}
       </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhuma sugestão {filter !== 'all' ? `${filters.find(f => f.value === filter)?.label.toLowerCase()}` : 'da comunidade'}.</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Sugestões aparecem quando usuários propõem melhorias nos cards.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(suggestion => (
+            <SuggestionCard key={suggestion.id} suggestion={suggestion} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -170,7 +248,6 @@ const PublicDeckPreview = () => {
         .single();
       if (error) throw error;
 
-      // Get owner name
       const { data: profile } = await supabase
         .from('profiles')
         .select('name')
@@ -211,6 +288,19 @@ const PublicDeckPreview = () => {
         .limit(500);
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: !!deckId,
+  });
+
+  // Suggestion count for tab badge
+  const { data: suggestionCount = 0 } = useQuery({
+    queryKey: ['deck-suggestion-count', deckId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('deck_suggestions')
+        .select('id', { count: 'exact', head: true })
+        .eq('deck_id', deckId!);
+      return count ?? 0;
     },
     enabled: !!deckId,
   });
@@ -314,10 +404,10 @@ const PublicDeckPreview = () => {
               <Layers className="h-3.5 w-3.5" /> Cards ({allCards.length})
             </TabsTrigger>
             <TabsTrigger
-              value="simulation"
+              value="suggestions"
               className="text-xs gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
             >
-              <BarChart3 className="h-3.5 w-3.5" /> Simulação
+              <MessageSquare className="h-3.5 w-3.5" /> Sugestões {suggestionCount > 0 && `(${suggestionCount})`}
             </TabsTrigger>
           </TabsList>
 
@@ -374,8 +464,8 @@ const PublicDeckPreview = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="simulation" className="mt-3">
-            <SimpleForecast deckId={deck.id} />
+          <TabsContent value="suggestions" className="mt-3">
+            <CommunitySuggestions deckId={deck.id} />
           </TabsContent>
         </Tabs>
 
