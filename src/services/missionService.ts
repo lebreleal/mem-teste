@@ -44,9 +44,9 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
     }
   });
 
-  // Phase 2: fetch profile + deckCount + weeklyCards in parallel (independent)
+  // Phase 2: fetch profile + deckCount + weeklyCards + suggestion counts in parallel
   const weekStartDate = weekStart + 'T00:00:00.000Z';
-  const [{ data: profile }, { count: deckCount }, { count: weeklyCards }] = await Promise.all([
+  const [{ data: profile }, { count: deckCount }, { count: weeklyCards }, { count: totalSuggestions }, { count: acceptedSuggestions }] = await Promise.all([
     supabase
       .from('profiles')
       .select('daily_cards_studied, successful_cards_counter')
@@ -61,6 +61,15 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .gte('reviewed_at', weekStartDate),
+    supabase
+      .from('deck_suggestions')
+      .select('id', { count: 'exact', head: true })
+      .eq('suggester_user_id', userId),
+    supabase
+      .from('deck_suggestions')
+      .select('id', { count: 'exact', head: true })
+      .eq('suggester_user_id', userId)
+      .eq('status', 'accepted'),
   ]);
 
   const dailyCards = profile?.daily_cards_studied ?? 0;
@@ -78,6 +87,8 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
       case 'total_cards_studied': currentProgress = totalCards; break;
       case 'decks_created': currentProgress = deckCount ?? 0; break;
       case 'max_streak': currentProgress = stats.streak; break;
+      case 'suggestions_made': currentProgress = totalSuggestions ?? 0; break;
+      case 'suggestions_accepted': currentProgress = acceptedSuggestions ?? 0; break;
     }
 
     const isCompleted = um?.is_completed || currentProgress >= def.target_value;
@@ -91,6 +102,52 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
       isClaimed,
     };
   });
+}
+
+/** Fetch XP leaderboard. XP = (reviews * 1) + (accepted suggestions * 50). */
+export async function fetchXPLeaderboard(): Promise<{ user_id: string; user_name: string; xp: number; reviews: number; contributions: number }[]> {
+  // Get top users by review count (last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const { data: logs } = await supabase
+    .from('review_logs')
+    .select('user_id')
+    .gte('reviewed_at', thirtyDaysAgo.toISOString());
+
+  if (!logs || logs.length === 0) return [];
+
+  // Count reviews per user
+  const reviewMap = new Map<string, number>();
+  logs.forEach((l: any) => reviewMap.set(l.user_id, (reviewMap.get(l.user_id) ?? 0) + 1));
+
+  // Get accepted suggestions per user
+  const userIds = [...reviewMap.keys()];
+  const { data: suggestions } = await supabase
+    .from('deck_suggestions')
+    .select('suggester_user_id')
+    .eq('status', 'accepted')
+    .in('suggester_user_id', userIds);
+
+  const contribMap = new Map<string, number>();
+  (suggestions ?? []).forEach((s: any) => contribMap.set(s.suggester_user_id, (contribMap.get(s.suggester_user_id) ?? 0) + 1));
+
+  // Calculate XP and sort
+  const entries = userIds.map(uid => ({
+    user_id: uid,
+    reviews: reviewMap.get(uid) ?? 0,
+    contributions: contribMap.get(uid) ?? 0,
+    xp: (reviewMap.get(uid) ?? 0) + (contribMap.get(uid) ?? 0) * 50,
+  }));
+  entries.sort((a, b) => b.xp - a.xp);
+  const top = entries.slice(0, 50);
+
+  // Get names
+  const topIds = top.map(e => e.user_id);
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: topIds });
+  const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+
+  return top.map(e => ({ ...e, user_name: nameMap.get(e.user_id) ?? 'Anônimo' }));
 }
 
 /** Claim a mission reward. */

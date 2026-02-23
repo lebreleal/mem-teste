@@ -41,3 +41,13 @@ export const useMissions = () => {
 
   return { missions: query.data ?? [], isLoading: query.isLoading, claimReward };
 };
+
+export const useXPLeaderboard = () => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['xp-leaderboard'],
+    queryFn: () => missionService.fetchXPLeaderboard(),
+    enabled: !!user,
+    staleTime: 120_000,
+  });
+};
