@@ -20,6 +20,7 @@ import {
   Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
+import PublicDeckPreviewSheet from '@/components/community/PublicDeckPreviewSheet';
 import type { PublicDeckItem } from '@/services/turmaService';
 
 const DESC_MAX = 2000;
@@ -160,6 +161,7 @@ const Turmas = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
+  const [previewDeck, setPreviewDeck] = useState<PublicDeckItem | null>(null);
 
   const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
   const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
@@ -309,7 +311,7 @@ const Turmas = () => {
                     <PublicDeckCard
                       key={deck.id}
                       deck={deck}
-                      onClick={() => navigate(`/decks/${deck.id}`)}
+                      onClick={() => setPreviewDeck(deck)}
                       isOwner={deck.owner_id === user?.id}
                     />
                   ))}
@@ -383,6 +385,13 @@ const Turmas = () => {
         userId={user?.id}
         leaveTurma={leaveTurma}
         toast={toast}
+      />
+
+      {/* Public Deck Preview */}
+      <PublicDeckPreviewSheet
+        open={!!previewDeck}
+        onOpenChange={open => !open && setPreviewDeck(null)}
+        deck={previewDeck}
       />
     </div>
   );
