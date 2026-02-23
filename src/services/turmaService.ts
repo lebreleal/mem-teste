@@ -477,10 +477,11 @@ export interface PublicDeckItem {
   owner_name: string;
   owner_id: string;
   created_at: string;
+  updated_at: string;
 }
 
 export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
-  let query = supabase.from('decks').select('id, name, user_id, created_at').eq('is_public', true).is('parent_deck_id', null);
+  let query = supabase.from('decks').select('id, name, user_id, created_at, updated_at').eq('is_public', true).is('parent_deck_id', null);
   if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
   const { data: decks } = await query.order('created_at', { ascending: false }).limit(60);
   if (!decks || decks.length === 0) return [];
@@ -501,5 +502,6 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
     owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
     owner_id: d.user_id,
     created_at: d.created_at,
+    updated_at: d.updated_at,
   }));
 }
