@@ -39,6 +39,11 @@ const formatPrice = (price: number) => {
   return `R$${(price / 100).toFixed(2).replace('.', ',')}`;
 };
 
+const formatCount = (n: number) => {
+  if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
+  return String(n);
+};
+
 const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   if (count === 0) return <span className="text-[11px] text-muted-foreground">Novo</span>;
   return (
@@ -59,59 +64,39 @@ const CommunityCard = ({
   onClick: () => void;
   isMine?: boolean;
 }) => {
-  const coverUrl = turma.cover_image_url;
-  const price = turma.subscription_price ?? 0;
-
   return (
     <div
-      className="group cursor-pointer rounded-2xl border border-border/40 bg-card overflow-hidden hover:border-primary/30 hover:shadow-lg transition-all"
+      className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
       onClick={onClick}
     >
-      {/* Cover image */}
-      <div className="relative h-28 sm:h-32 bg-muted/30 overflow-hidden">
-        {coverUrl ? (
-          <img src={coverUrl} alt={turma.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-            <Users className="h-10 w-10 text-primary/30" />
-          </div>
-        )}
-        {/* Price badge */}
-        <div className="absolute top-2 right-2">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold backdrop-blur-sm ${
-            price > 0 ? 'bg-primary/90 text-primary-foreground' : 'bg-success/90 text-white'
-          }`}>
-            {formatPrice(price)}{price > 0 ? '/mês' : ''}
-          </span>
-        </div>
-        {isMine && (
-          <div className="absolute top-2 left-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-background/80 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-foreground">
-              <BookOpen className="h-3 w-3" /> Membro
-            </span>
-          </div>
-        )}
+      {/* Title + Creator */}
+      <div className="space-y-1">
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{turma.name}</h3>
+        <p className="text-xs text-muted-foreground">
+          por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
+        </p>
       </div>
 
-      {/* Info */}
-      <div className="p-3 space-y-1.5">
-        <h3 className="font-display font-bold text-sm text-foreground line-clamp-1">{turma.name}</h3>
-        {turma.description && (
-          <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{turma.description}</p>
-        )}
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Crown className="h-3 w-3 text-warning" />
-              <span className="truncate max-w-[80px]">{turma.owner_name ?? 'Criador'}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" /> {turma.member_count ?? 0}
-            </span>
-          </div>
-          <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-        </div>
+      {/* Stats row */}
+      <div className="flex items-center gap-4">
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Users className="h-3.5 w-3.5 text-foreground" />
+          <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
+          membros
+        </span>
+        <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
       </div>
+
+      {/* Action */}
+      {isMine ? (
+        <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+          ✓ Inscrito
+        </span>
+      ) : (
+        <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+          Inscreva-se
+        </span>
+      )}
     </div>
   );
 };
@@ -241,9 +226,9 @@ const Turmas = () => {
 
         {/* Grid */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-52 animate-pulse rounded-2xl bg-muted" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
         ) : allCommunities.length === 0 ? (
@@ -264,7 +249,7 @@ const Turmas = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {allCommunities.map(turma => (
               <CommunityCard
                 key={turma.id}
