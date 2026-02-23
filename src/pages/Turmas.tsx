@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+/**
+ * Community Marketplace — grid of public communities with search and category filters.
+ * Members can also access their own communities via "Minhas" tab.
+ */
+
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTurmas, useDiscoverTurmas, type Turma } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,19 +15,32 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs';
-import {
-  ArrowLeft, Plus, Users, Copy, LogIn, Crown, Search,
-  UserPlus, Globe, Lock, ChevronRight, Star,
+  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
+  Globe, Lock, Filter, Sparkles, BookOpen,
 } from 'lucide-react';
-import CommunityPreviewSheet from '@/components/community/CommunityPreviewSheet';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
 const DESC_MAX = 2000;
 
+const CATEGORIES = [
+  { value: '', label: 'Todas' },
+  { value: 'medicina', label: 'Medicina' },
+  { value: 'direito', label: 'Direito' },
+  { value: 'engenharia', label: 'Engenharia' },
+  { value: 'concursos', label: 'Concursos' },
+  { value: 'idiomas', label: 'Idiomas' },
+  { value: 'tecnologia', label: 'Tecnologia' },
+  { value: 'vestibular', label: 'Vestibular' },
+  { value: 'outros', label: 'Outros' },
+];
+
+const formatPrice = (price: number) => {
+  if (!price || price <= 0) return 'Grátis';
+  return `R$${(price / 100).toFixed(2).replace('.', ',')}`;
+};
+
 const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
-  if (count === 0) return <span className="text-[11px] text-muted-foreground">Sem nota</span>;
+  if (count === 0) return <span className="text-[11px] text-muted-foreground">Novo</span>;
   return (
     <span className="flex items-center gap-1 text-[11px]">
       <Star className="h-3 w-3 text-warning fill-warning" />
@@ -33,14 +50,77 @@ const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   );
 };
 
+const CommunityCard = ({
+  turma,
+  onClick,
+  isMine,
+}: {
+  turma: Turma & { member_count?: number; owner_name?: string };
+  onClick: () => void;
+  isMine?: boolean;
+}) => {
+  const coverUrl = turma.cover_image_url;
+  const price = turma.subscription_price ?? 0;
+
+  return (
+    <div
+      className="group cursor-pointer rounded-2xl border border-border/40 bg-card overflow-hidden hover:border-primary/30 hover:shadow-lg transition-all"
+      onClick={onClick}
+    >
+      {/* Cover image */}
+      <div className="relative h-28 sm:h-32 bg-muted/30 overflow-hidden">
+        {coverUrl ? (
+          <img src={coverUrl} alt={turma.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+            <Users className="h-10 w-10 text-primary/30" />
+          </div>
+        )}
+        {/* Price badge */}
+        <div className="absolute top-2 right-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold backdrop-blur-sm ${
+            price > 0 ? 'bg-primary/90 text-primary-foreground' : 'bg-success/90 text-white'
+          }`}>
+            {formatPrice(price)}{price > 0 ? '/mês' : ''}
+          </span>
+        </div>
+        {isMine && (
+          <div className="absolute top-2 left-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-background/80 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold text-foreground">
+              <BookOpen className="h-3 w-3" /> Membro
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 space-y-1.5">
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-1">{turma.name}</h3>
+        {turma.description && (
+          <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{turma.description}</p>
+        )}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Crown className="h-3 w-3 text-warning" />
+              <span className="truncate max-w-[80px]">{turma.owner_name ?? 'Criador'}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" /> {turma.member_count ?? 0}
+            </span>
+          </div>
+          <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Turmas = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isAdmin, loading: adminLoading } = useIsAdmin();
-  const { turmas, isLoading, createTurma, joinTurma, joinTurmaById, leaveTurma } = useTurmas();
-
-  // Communities now open for everyone - no admin gate
+  const { turmas, isLoading, createTurma, joinTurma, leaveTurma } = useTurmas();
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -48,20 +128,24 @@ const Turmas = () => {
   const [description, setDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [discoverSearch, setDiscoverSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('mine');
-  const [previewTurma, setPreviewTurma] = useState<(Turma & { member_count: number; owner_name: string }) | null>(null);
 
-  const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(discoverSearch);
+  const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
 
   const myTurmaIds = new Set(turmas.map(t => t.id));
-  const discoverFiltered = (discoverTurmas ?? []).filter(t => !myTurmaIds.has(t.id));
 
-  const filteredTurmas = turmas.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.description ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Merge: all public communities, marking which ones user is member of
+  const allCommunities = useMemo(() => {
+    if (viewMode === 'mine') {
+      return turmas
+        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+    }
+    return (discoverTurmas ?? [])
+      .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+  }, [viewMode, turmas, discoverTurmas, searchQuery, selectedCategory]);
 
   const handleCreate = () => {
     if (!name.trim()) return;
@@ -79,23 +163,11 @@ const Turmas = () => {
     });
   };
 
-  const handleJoinById = (turmaId: string) => {
-    joinTurmaById.mutate(turmaId, {
-      onSuccess: () => {
-        toast({ title: 'Entrou na comunidade!' });
-        setPreviewTurma(null);
-        setActiveTab('mine');
-      },
-      onError: (e) => toast({ title: e.message || 'Erro', variant: 'destructive' }),
-    });
-  };
-
-  const openPreview = (turma: Turma & { member_count: number; owner_name: string }) => {
-    setPreviewTurma(turma);
-  };
+  const loading = viewMode === 'discover' ? discoverLoading : isLoading;
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -104,7 +176,7 @@ const Turmas = () => {
             </Button>
             <div>
               <h1 className="font-display text-xl font-bold text-foreground">Comunidades</h1>
-              <p className="text-[10px] text-muted-foreground">Estude junto com outras pessoas</p>
+              <p className="text-[10px] text-muted-foreground">Descubra e aprenda com criadores</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -118,164 +190,92 @@ const Turmas = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-5 max-w-2xl">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-            <TabsTrigger value="mine" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Users className="h-3.5 w-3.5" /> Minhas
-            </TabsTrigger>
-            <TabsTrigger value="discover" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Globe className="h-3.5 w-3.5" /> Descobrir
-            </TabsTrigger>
-          </TabsList>
+      <main className="container mx-auto px-4 py-5 max-w-4xl">
+        {/* View toggle */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => setViewMode('discover')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              viewMode === 'discover' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5" /> Descobrir
+          </button>
+          <button
+            onClick={() => setViewMode('mine')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              viewMode === 'mine' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" /> Minhas ({turmas.length})
+          </button>
+        </div>
 
-          {/* ─── My Communities ─── */}
-          <TabsContent value="mine" className="space-y-3">
-            {turmas.length > 0 && (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar comunidades..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+        {/* Search + Category filters */}
+        <div className="space-y-3 mb-5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar comunidades..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.value}
+                onClick={() => setSelectedCategory(cat.value)}
+                className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  selectedCategory === cat.value
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Grid */}
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="h-52 animate-pulse rounded-2xl bg-muted" />
+            ))}
+          </div>
+        ) : allCommunities.length === 0 ? (
+          <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 text-center">
+            <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <h2 className="font-display text-lg font-bold text-foreground">
+              {viewMode === 'mine' ? 'Nenhuma comunidade' : 'Nenhuma comunidade encontrada'}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+              {viewMode === 'mine'
+                ? 'Crie uma comunidade ou descubra comunidades públicas.'
+                : searchQuery ? `Nenhum resultado para "${searchQuery}"` : 'Nenhuma comunidade pública disponível.'}
+            </p>
+            {viewMode === 'mine' && (
+              <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setViewMode('discover')}>
+                <Globe className="h-4 w-4" /> Descobrir comunidades
+              </Button>
             )}
-
-            {isLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />)}</div>
-            ) : filteredTurmas.length === 0 && turmas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 text-center">
-                <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                <h2 className="font-display text-xl font-bold text-foreground">Nenhuma comunidade</h2>
-                <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                  Crie uma comunidade, entre com um código ou descubra comunidades públicas.
-                </p>
-                <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setActiveTab('discover')}>
-                  <Globe className="h-4 w-4" /> Descobrir comunidades
-                </Button>
-              </div>
-            ) : filteredTurmas.length === 0 ? (
-              <div className="rounded-2xl border border-border/40 bg-card p-8 text-center">
-                <p className="text-sm text-muted-foreground">Nenhuma comunidade encontrada para "{searchQuery}"</p>
-              </div>
-            ) : (
-              filteredTurmas.map(turma => (
-                <div
-                  key={turma.id}
-                  className="group flex items-center gap-4 rounded-2xl border border-border/40 bg-card px-4 py-4 cursor-pointer hover:border-primary/20 hover:shadow-md transition-all"
-                  onClick={() => navigate(`/turmas/${turma.id}`)}
-                >
-                  {turma.cover_image_url ? (
-                    <div className="h-12 w-12 shrink-0 rounded-2xl overflow-hidden">
-                      <img src={turma.cover_image_url} alt={turma.name} className="h-full w-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-display font-semibold text-foreground truncate">{turma.name}</h3>
-                      {turma.owner_id === user?.id && <Crown className="h-3.5 w-3.5 text-warning shrink-0" />}
-                    </div>
-                    {turma.description && <p className="text-xs text-muted-foreground line-clamp-1">{turma.description}</p>}
-                    <div className="flex items-center gap-3 mt-1">
-                      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => {
-                        navigator.clipboard.writeText(turma.invite_code);
-                        toast({ title: 'Código copiado!', description: turma.invite_code });
-                      }}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => setConfirmLeave(turma.id)}
-                    >
-                      <LogIn className="h-3.5 w-3.5 rotate-180" />
-                    </Button>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))
-            )}
-          </TabsContent>
-
-          {/* ─── Discover Communities ─── */}
-          <TabsContent value="discover" className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar comunidades públicas..."
-                value={discoverSearch}
-                onChange={e => setDiscoverSearch(e.target.value)}
-                className="pl-9"
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {allCommunities.map(turma => (
+              <CommunityCard
+                key={turma.id}
+                turma={turma}
+                onClick={() => navigate(`/turmas/${turma.id}`)}
+                isMine={myTurmaIds.has(turma.id)}
               />
-            </div>
-
-            {discoverLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />)}</div>
-            ) : discoverFiltered.length === 0 ? (
-              <div className="rounded-2xl border border-border/40 bg-card p-10 text-center">
-                <Globe className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {discoverSearch ? `Nenhuma comunidade encontrada para "${discoverSearch}"` : 'Nenhuma comunidade pública disponível no momento.'}
-                </p>
-              </div>
-            ) : (
-              discoverFiltered.map(turma => (
-                <div
-                  key={turma.id}
-                  className="flex items-center gap-4 rounded-2xl border border-border/40 bg-card px-4 py-4 transition-all hover:border-primary/20 hover:shadow-md cursor-pointer"
-                  onClick={() => openPreview(turma)}
-                >
-                  {(turma as any).cover_image_url ? (
-                    <div className="h-12 w-12 shrink-0 rounded-2xl overflow-hidden">
-                      <img src={(turma as any).cover_image_url} alt={turma.name} className="h-full w-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/50">
-                      <Users className="h-5 w-5 text-accent-foreground" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display font-semibold text-foreground truncate">{turma.name}</h3>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {turma.member_count}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Crown className="h-3 w-3 text-warning" /> {turma.owner_name}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
+            ))}
+          </div>
+        )}
       </main>
-
-      {/* Community Preview Sheet */}
-      <CommunityPreviewSheet
-        turma={previewTurma}
-        open={!!previewTurma}
-        onOpenChange={open => !open && setPreviewTurma(null)}
-        onJoin={handleJoinById}
-        isJoining={joinTurmaById.isPending}
-        isMember={previewTurma ? myTurmaIds.has(previewTurma.id) : false}
-        onNavigate={(id) => navigate(`/turmas/${id}`)}
-      />
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

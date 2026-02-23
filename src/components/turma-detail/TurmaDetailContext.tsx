@@ -33,6 +33,7 @@ interface TurmaDetailContextValue {
   user: any;
 
   // Derived permissions
+  isMember: boolean;
   isAdmin: boolean;
   isMod: boolean;
   canEdit: boolean;
@@ -113,7 +114,21 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { turmas, updateTurma } = useTurmas();
-  const turma = turmas.find(t => t.id === turmaId);
+  const myTurma = turmas.find(t => t.id === turmaId);
+
+  // Fetch turma directly if user is not a member (public view)
+  const { data: fetchedTurma } = useQuery({
+    queryKey: ['turma-public', turmaId],
+    queryFn: async () => {
+      if (!turmaId) return null;
+      const { data } = await supabase.from('turmas').select('*').eq('id', turmaId).single();
+      return data;
+    },
+    enabled: !!turmaId && !myTurma,
+    staleTime: 60_000,
+  });
+
+  const turma = myTurma ?? fetchedTurma;
 
   // Queries
   const { data: myRole } = useTurmaRole(turmaId!);
@@ -136,6 +151,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   });
 
   // Permissions
+  const isMember = !!myRole;
   const isAdmin = myRole === 'admin';
   const isMod = myRole === 'moderator';
   const canEdit = isAdmin || isMod;
@@ -293,7 +309,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   const value: TurmaDetailContextValue = {
     turmaId: turmaId!,
     turma, myRole, members, subjects, lessons, turmaExams, turmaDecks, lessonFiles, user,
-    isAdmin, isMod, canEdit,
+    isMember, isAdmin, isMod, canEdit,
     hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
     contentFolderId, setContentFolderId, examFolderId, setExamFolderId,
     contentBreadcrumb, examBreadcrumb,
