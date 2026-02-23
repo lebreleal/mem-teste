@@ -40,6 +40,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   return {
     queue: studyQueue.data?.cards ?? [],
     algorithmMode: studyQueue.data?.algorithmMode || 'sm2',
+    isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     submitReview,
   };

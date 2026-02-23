@@ -7,6 +7,7 @@ import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen,
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
+import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
@@ -36,6 +37,7 @@ function looksLikeHtml(text: string): boolean {
 interface FlashCardProps {
   frontContent: string;
   backContent: string;
+  cardId?: string;
   stability: number;
   difficulty: number;
   state: number;
@@ -143,6 +145,7 @@ function parseMultipleChoice(backContent: string): MultipleChoiceData | null {
 const MultipleChoiceCard = ({
   frontContent,
   backContent,
+  cardId,
   onRate,
   isSubmitting,
   energy = 0,
@@ -162,6 +165,7 @@ const MultipleChoiceCard = ({
   onUndo,
   onOpenExplainChat,
 }: {
+  cardId?: string;
   frontContent: string;
   backContent: string;
   onRate: (rating: Rating) => void;
@@ -347,6 +351,11 @@ const MultipleChoiceCard = ({
               </div>
             </div>
           )}
+
+          {/* Personal notes */}
+          {cardId && answered && (
+            <PersonalNotes cardId={cardId} />
+          )}
         </div>
       </div>
 
@@ -454,7 +463,7 @@ const MultipleChoiceCard = ({
 };
 
 const FlashCard = ({
-  frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
@@ -498,6 +507,7 @@ const FlashCard = ({
       <MultipleChoiceCard
         frontContent={looksLikeHtml(frontContent) ? frontContent : formatMarkdown(frontContent)}
         backContent={backContent}
+        cardId={cardId}
         onRate={onRate}
         isSubmitting={isSubmitting}
         energy={energy}
@@ -703,6 +713,11 @@ const FlashCard = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Personal notes */}
+          {cardId && flipped && (
+            <PersonalNotes cardId={cardId} />
           )}
         </div>
       </div>

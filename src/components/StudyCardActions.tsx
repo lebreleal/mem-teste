@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,8 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import * as cardService from '@/services/cardService';
 
+const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
 interface StudyCardActionsProps {
   card: {
     id: string;
@@ -31,6 +33,7 @@ interface StudyCardActionsProps {
     card_type: string;
     deck_id: string;
   };
+  isLiveDeck?: boolean;
   onCardUpdated: (updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: () => void;
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
@@ -41,7 +44,7 @@ interface StudyCardActionsProps {
 
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice';
 
-const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -64,6 +67,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   const [isImproving, setIsImproving] = useState(false);
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const openEdit = async () => {
     setEditLoading(true);
@@ -413,6 +417,11 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
             <DropdownMenuItem onClick={openEdit} className="gap-2">
               <Pencil className="h-3.5 w-3.5" /> Editar card
             </DropdownMenuItem>
+            {isLiveDeck && (
+              <DropdownMenuItem onClick={() => setSuggestOpen(true)} className="gap-2">
+                <Send className="h-3.5 w-3.5" /> Sugerir correção
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => setFreezeConfirmOpen(true)} className="gap-2">
               <Snowflake className="h-3.5 w-3.5" /> Congelar card
             </DropdownMenuItem>
@@ -577,6 +586,17 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Suggest correction modal for live decks */}
+      {isLiveDeck && (
+        <Suspense fallback={null}>
+          <SuggestCorrectionModal
+            open={suggestOpen}
+            onOpenChange={setSuggestOpen}
+            card={card}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

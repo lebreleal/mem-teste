@@ -17,4 +17,5 @@ export interface StudyQueueResult {
   cards: any[];
   algorithmMode: string;
   deckConfig: any;
+  isLiveDeck: boolean;
 }
