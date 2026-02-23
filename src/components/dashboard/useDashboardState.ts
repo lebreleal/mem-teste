@@ -80,8 +80,8 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     [folders, currentFolderId]
   );
 
-  /** A deck is community-imported if it has source_turma_deck_id or source_listing_id */
-  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id);
+  /** A deck is community-imported if it has source_turma_deck_id, source_listing_id, or is_live_deck */
+  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
 
   const currentDecks = useMemo(
     () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !isCommunityDeck(d))

@@ -259,19 +259,29 @@ const PublicDeckPreview = () => {
     enabled: !!deckId,
   });
 
-  // Check ownership
+  // Check ownership — user already has this deck or imported it
   const { data: alreadyOwns } = useQuery({
     queryKey: ['owns-deck', deckId, user?.id],
     queryFn: async () => {
       if (!user || !deckId) return false;
       if (deck?.user_id === user.id) return true;
-      const { data } = await supabase
-        .from('decks')
+      // Check if user has a deck linked via marketplace listing
+      const { data: listing } = await supabase
+        .from('marketplace_listings')
         .select('id')
-        .eq('user_id', user.id)
-        .eq('source_listing_id', deckId)
-        .limit(1);
-      return (data?.length ?? 0) > 0;
+        .eq('deck_id', deckId)
+        .limit(1)
+        .maybeSingle();
+      if (listing) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('source_listing_id', listing.id)
+          .limit(1);
+        if ((data?.length ?? 0) > 0) return true;
+      }
+      return false;
     },
     enabled: !!user && !!deckId && !!deck,
   });
@@ -313,9 +323,23 @@ const PublicDeckPreview = () => {
     mutationFn: async () => {
       if (!user || !deck) throw new Error('Not authenticated');
 
+      // Find marketplace listing for this deck (if any) to set source_listing_id
+      const { data: listing } = await supabase
+        .from('marketplace_listings')
+        .select('id')
+        .eq('deck_id', deckId!)
+        .eq('is_published', true)
+        .limit(1)
+        .maybeSingle();
+
       const { data: newDeck, error: deckError } = await supabase
         .from('decks')
-        .insert({ user_id: user.id, name: deck.name, is_public: false, source_listing_id: deckId })
+        .insert({
+          user_id: user.id,
+          name: deck.name,
+          is_public: false,
+          ...(listing ? { source_listing_id: listing.id } : { is_live_deck: true }),
+        })
         .select('id')
         .single();
       if (deckError) throw deckError;
