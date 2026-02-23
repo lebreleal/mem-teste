@@ -252,6 +252,66 @@ export type Database = {
           },
         ]
       }
+      community_revenue_logs: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          owner_amount: number
+          owner_user_id: string
+          platform_amount: number
+          platform_fee_pct: number
+          status: string
+          stripe_payment_intent_id: string | null
+          subscriber_user_id: string
+          subscription_id: string | null
+          total_amount: number
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          owner_amount?: number
+          owner_user_id: string
+          platform_amount?: number
+          platform_fee_pct?: number
+          status?: string
+          stripe_payment_intent_id?: string | null
+          subscriber_user_id: string
+          subscription_id?: string | null
+          total_amount?: number
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          owner_amount?: number
+          owner_user_id?: string
+          platform_amount?: number
+          platform_fee_pct?: number
+          status?: string
+          stripe_payment_intent_id?: string | null
+          subscriber_user_id?: string
+          subscription_id?: string | null
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_revenue_logs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_revenue_logs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deck_reviews: {
         Row: {
           comment: string | null
@@ -287,9 +347,64 @@ export type Database = {
           },
         ]
       }
+      deck_suggestions: {
+        Row: {
+          card_id: string | null
+          created_at: string
+          deck_id: string
+          id: string
+          moderator_user_id: string | null
+          rationale: string
+          status: string
+          suggested_content: Json
+          suggester_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_id?: string | null
+          created_at?: string
+          deck_id: string
+          id?: string
+          moderator_user_id?: string | null
+          rationale?: string
+          status?: string
+          suggested_content?: Json
+          suggester_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string | null
+          created_at?: string
+          deck_id?: string
+          id?: string
+          moderator_user_id?: string | null
+          rationale?: string
+          status?: string
+          suggested_content?: Json
+          suggester_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_suggestions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deck_suggestions_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       decks: {
         Row: {
           algorithm_mode: string
+          community_id: string | null
           created_at: string
           daily_new_limit: number
           daily_review_limit: number
@@ -298,6 +413,8 @@ export type Database = {
           id: string
           interval_modifier: number
           is_archived: boolean
+          is_free_in_community: boolean
+          is_live_deck: boolean
           learning_steps: string[]
           max_interval: number
           name: string
@@ -313,6 +430,7 @@ export type Database = {
         }
         Insert: {
           algorithm_mode?: string
+          community_id?: string | null
           created_at?: string
           daily_new_limit?: number
           daily_review_limit?: number
@@ -321,6 +439,8 @@ export type Database = {
           id?: string
           interval_modifier?: number
           is_archived?: boolean
+          is_free_in_community?: boolean
+          is_live_deck?: boolean
           learning_steps?: string[]
           max_interval?: number
           name: string
@@ -336,6 +456,7 @@ export type Database = {
         }
         Update: {
           algorithm_mode?: string
+          community_id?: string | null
           created_at?: string
           daily_new_limit?: number
           daily_review_limit?: number
@@ -344,6 +465,8 @@ export type Database = {
           id?: string
           interval_modifier?: number
           is_archived?: boolean
+          is_free_in_community?: boolean
+          is_live_deck?: boolean
           learning_steps?: string[]
           max_interval?: number
           name?: string
@@ -358,6 +481,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "decks_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "decks_folder_id_fkey"
             columns: ["folder_id"]
@@ -1853,7 +1983,9 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          plan_type: string
           started_at: string
+          status: string
           turma_id: string
           user_id: string
         }
@@ -1862,7 +1994,9 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          plan_type?: string
           started_at?: string
+          status?: string
           turma_id: string
           user_id: string
         }
@@ -1871,7 +2005,9 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          plan_type?: string
           started_at?: string
+          status?: string
           turma_id?: string
           user_id?: string
         }
@@ -1888,6 +2024,7 @@ export type Database = {
       turmas: {
         Row: {
           avg_rating: number | null
+          category: string
           cover_image_url: string | null
           created_at: string
           description: string | null
@@ -1898,10 +2035,12 @@ export type Database = {
           owner_id: string
           rating_count: number
           subscription_price: number
+          subscription_price_yearly: number
           updated_at: string
         }
         Insert: {
           avg_rating?: number | null
+          category?: string
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -1912,10 +2051,12 @@ export type Database = {
           owner_id: string
           rating_count?: number
           subscription_price?: number
+          subscription_price_yearly?: number
           updated_at?: string
         }
         Update: {
           avg_rating?: number | null
+          category?: string
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -1926,6 +2067,7 @@ export type Database = {
           owner_id?: string
           rating_count?: number
           subscription_price?: number
+          subscription_price_yearly?: number
           updated_at?: string
         }
         Relationships: []
