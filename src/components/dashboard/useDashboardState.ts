@@ -80,15 +80,18 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     [folders, currentFolderId]
   );
 
+  /** A deck is community-imported if it has source_turma_deck_id or source_listing_id */
+  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id);
+
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !d.source_turma_deck_id)
+    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !isCommunityDeck(d))
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [decks, currentFolderId]
   );
 
-  /** Community decks: imported from turma subscriptions (have source_turma_deck_id). Only shown at root level. */
+  /** Community decks: imported from turma or marketplace. Only shown at root level. */
   const communityDecks = useMemo(
-    () => decks.filter(d => !d.parent_deck_id && !d.is_archived && !!d.source_turma_deck_id)
+    () => decks.filter(d => !d.parent_deck_id && !d.is_archived && isCommunityDeck(d))
       .sort((a, b) => a.name.localeCompare(b.name)),
     [decks]
   );

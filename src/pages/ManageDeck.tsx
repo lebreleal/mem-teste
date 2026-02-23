@@ -47,16 +47,16 @@ const ManageDeck = () => {
   const [editorType, setEditorType] = useState<EditorCardType | null>(null);
   const [suggestCard, setSuggestCard] = useState<{ id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null>(null);
 
-  // Detect if this is a community deck (has source_turma_deck_id)
+  // Detect if this is a community deck (has source_turma_deck_id or source_listing_id)
   const { data: deckMeta } = useQuery({
     queryKey: ['deck-meta', deckId],
     queryFn: async () => {
-      const { data } = await supabase.from('decks').select('source_turma_deck_id').eq('id', deckId!).single();
-      return data as { source_turma_deck_id: string | null } | null;
+      const { data } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id').eq('id', deckId!).single();
+      return data as { source_turma_deck_id: string | null; source_listing_id: string | null } | null;
     },
     enabled: !!deckId,
   });
-  const isCommunityDeck = !!deckMeta?.source_turma_deck_id;
+  const isCommunityDeck = !!(deckMeta?.source_turma_deck_id || deckMeta?.source_listing_id);
 
   // Multiple choice state
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
