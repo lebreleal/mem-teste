@@ -1,0 +1,1 @@
+ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS allow_duplication boolean NOT NULL DEFAULT false;
