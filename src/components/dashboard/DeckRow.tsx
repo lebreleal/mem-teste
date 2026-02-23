@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, Pencil,
+  ChevronRight, Link2, Pencil, RefreshCw,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -33,13 +33,14 @@ interface DeckRowProps {
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
+  hasPendingUpdate?: boolean;
 }
 
 const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers,
+  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers, hasPendingUpdate,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -79,7 +80,13 @@ const DeckRow = ({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
+            {deck.source_turma_deck_id && (
+              <span title="Deck sincronizado"><RefreshCw className="h-3.5 w-3.5 text-info shrink-0" /></span>
+            )}
             <h3 className="font-display font-semibold text-card-foreground truncate">{deck.name}</h3>
+            {hasPendingUpdate && (
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+            )}
             {(() => {
               const linkId = getCommunityLinkId(deck);
               return linkId ? (

@@ -3,7 +3,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
@@ -352,6 +352,11 @@ const Dashboard = () => {
           onSearchChange={setSearchQuery}
         />
 
+        {/* Section title: Meus Decks */}
+        {(state.currentDecks.length > 0 || state.currentFolders.length > 0 || state.isLoading) && (
+          <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">Meus Decks</h2>
+        )}
+
         <DeckList
           isLoading={state.isLoading}
           currentFolders={state.currentFolders}
@@ -386,6 +391,49 @@ const Dashboard = () => {
           onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
           onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
         />
+
+        {/* Section: Decks da Comunidade */}
+        {state.communityDecks.length > 0 && !state.currentFolderId && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-2">
+              <RefreshCw className="h-4 w-4 text-info" />
+              <h2 className="font-display text-sm font-bold text-muted-foreground uppercase tracking-wider">Decks da Comunidade</h2>
+            </div>
+            <DeckList
+              isLoading={false}
+              currentFolders={[]}
+              currentDecks={state.communityDecks}
+              currentFolderId={null}
+              searchQuery={searchQuery}
+              
+              deckSelectionMode={false}
+              selectedDeckIds={new Set()}
+              expandedDecks={state.expandedDecks}
+              toggleExpand={state.toggleExpand}
+              toggleDeckSelection={() => {}}
+              getSubDecks={state.getSubDecks}
+              getAggregateStats={state.getAggregateStats}
+              getCommunityLinkId={state.getCommunityLinkId}
+              folderHasCommunityLink={() => false}
+              getFolderDueCount={() => 0}
+              getFolderCommunityLinkId={() => null}
+              navigateToCommunity={handleNavigateCommunity}
+              
+              onFolderClick={() => {}}
+              onRenameFolder={() => {}}
+              onMoveFolder={() => {}}
+              onArchiveFolder={() => {}}
+              onDeleteFolder={() => {}}
+              
+              onCreateSubDeck={() => {}}
+              onRenameDeck={() => {}}
+              onMoveDeck={() => {}}
+              onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+              onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
+              decksWithPendingUpdates={state.decksWithPendingUpdates}
+            />
+          </div>
+        )}
 
         {/* Archived section */}
         {state.totalArchived > 0 && (
