@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
+import ankiLogo from '@/assets/anki-logo.svg';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { AnkiParseResult } from '@/lib/ankiParser';
@@ -636,8 +637,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 onClick={handleAnkiFormatClick}
                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
-                  <Package className="h-5 w-5 text-accent-foreground" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent p-1.5">
+                  <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-card-foreground">Anki</p>
