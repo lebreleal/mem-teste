@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
-import { useStudyPlan } from '@/hooks/useStudyPlan';
+import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
@@ -19,6 +19,7 @@ import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import type { CardRow } from '@/types/deck';
+import { findRootAncestorId } from '@/lib/studyUtils';
 
 // ─── Context value shape ────────────────────────────────
 interface DeckDetailContextValue {
@@ -132,6 +133,10 @@ interface DeckDetailContextValue {
   setOcclusionImageUrl: (v: string) => void;
   occlusionRects: any[];
   setOcclusionRects: (v: any[]) => void;
+  occlusionCanvasSize: { w: number; h: number } | null;
+  setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
+  occlusionModalOpen: boolean;
+  setOcclusionModalOpen: (v: boolean) => void;
 
   // Multiple choice
   mcOptions: string[];
@@ -235,6 +240,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [occlusionImageUrl, setOcclusionImageUrl] = useState<string>('');
   const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
 
@@ -284,7 +291,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const rootDeck = decks.find(d => d.id === rootId);
 
-  // Sum new_reviewed_today across the ENTIRE root hierarchy
+  // Sum new_reviewed_today across the ENTIRE root hierarchy (for deck-level cap)
   const rootTotals = useMemo(() => {
     const collectAll = (id: string): { newReviewed: number; reviewed: number; newGraduated: number } => {
       const d = decks.find(dk => dk.id === id);
@@ -303,28 +310,104 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     return collectAll(rootId);
   }, [decks, rootId]);
 
-  // ─── Plan-controlled limits ────────────
-  const { metrics: planMetrics } = useStudyPlan();
-  const planAllocationForRoot = planMetrics?.deckNewAllocation?.[rootId];
-  const isPlanControlled = planAllocationForRoot != null;
+  // Fetch active study plans to scope plan-governed limits
+  const studyPlansQuery = useQuery({
+    queryKey: ['study-plans-for-deck-detail', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('deck_ids')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  const planRootIds = useMemo(() => {
+    const roots = new Set<string>();
+    for (const plan of studyPlansQuery.data ?? []) {
+      for (const id of (plan.deck_ids ?? [])) {
+        roots.add(findRootAncestorId(decks, id));
+      }
+    }
+    return roots;
+  }, [studyPlansQuery.data, decks]);
+
+  const hasPlanActive = planRootIds.size > 0;
+
+  // Sum new_reviewed_today across deck scope:
+  // - plan mode: only objective roots
+  // - manual mode: all roots
+  const globalNewReviewedToday = useMemo(() => {
+    const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+    const scopedRoots = hasPlanActive ? roots.filter(d => planRootIds.has(d.id)) : roots;
+
+    return scopedRoots.reduce((sum, d) => {
+      const collectNew = (id: string): number => {
+        const dk = decks.find(x => x.id === id);
+        let nr = dk?.new_reviewed_today ?? 0;
+        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        for (const child of children) nr += collectNew(child.id);
+        return nr;
+      };
+      return sum + collectNew(d.id);
+    }, 0);
+  }, [decks, hasPlanActive, planRootIds]);
+
+  // Fetch global daily_new_cards_limit from profile
+  const globalNewLimitQuery = useQuery({
+    queryKey: ['daily-new-cards-limit', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('daily_new_cards_limit, weekly_new_cards')
+        .eq('id', user!.id)
+        .single();
+      return data as any;
+    },
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+
+  const isPlanControlled = hasPlanActive && planRootIds.has(rootId);
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
   const totalCards = allCards.length;
-  const dailyNewLimit = isPlanControlled
-    ? planAllocationForRoot
-    : (rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20);
+  const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
+
+  // Global new cards limit (from profile, with weekly override)
+  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
+  const rawGlobalLimit = typeof profileLimitData === 'number' ? profileLimitData : profileLimitData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCards = (profileLimitData && typeof profileLimitData === 'object')
+    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
+    : null;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const todayGlobalLimit = (weeklyNewCards && weeklyNewCards[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyNewCards[DAY_KEYS[new Date().getDay()]]
+    : rawGlobalLimit;
+
   const learningCount = (stats?.learning_count ?? 0);
   const newReviewedToday = rootTotals.newReviewed;
   const newGraduatedToday = rootTotals.newGraduated;
   const reviewedToday = rootTotals.reviewed;
   const reviewReviewedToday = Math.max(0, reviewedToday - newGraduatedToday);
 
+  // Effective new count:
+  // - objective deck in plan mode: governed only by global plan remaining
+  // - otherwise: deck hierarchy + global cap
+  const deckRemaining = Math.max(0, dailyNewLimit - newReviewedToday);
+  const globalRemaining = Math.max(0, todayGlobalLimit - globalNewReviewedToday);
+
   // Quick review: no daily limits, show all cards by state
   const newCountToday = isQuickReview
     ? (stats?.new_count ?? 0)
-    : Math.max(0, Math.min(stats?.new_count ?? 0, dailyNewLimit - newReviewedToday));
+    : isPlanControlled
+      ? Math.max(0, Math.min(stats?.new_count ?? 0, globalRemaining))
+      : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining, globalRemaining));
   const reviewDue = Math.max(0, Math.min(stats?.review_count ?? 0, dailyReviewLimit - reviewReviewedToday));
   const masteredToday = isQuickReview
     ? Math.max(0, totalCards - (stats?.new_count ?? 0) - learningCount)
@@ -375,7 +458,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }
     if (stateFilter !== 'all') {
       if (stateFilter === 'frozen') result = result.filter(c => isFrozenCard(c));
-      else if (stateFilter === 'new') result = result.filter(c => c.state === 0 && !isFrozenCard(c));
+      else if (stateFilter === 'new') result = result.filter(c => (c.state === 0 || c.state == null) && !isFrozenCard(c));
       else if (stateFilter === 'learning') result = result.filter(c => c.state === 1 && !isFrozenCard(c));
       else if (stateFilter === 'relearning') result = result.filter(c => c.state === 3 && !isFrozenCard(c));
       else if (stateFilter === 'mastered') result = result.filter(c => c.state === 2 && !isFrozenCard(c));
@@ -399,11 +482,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       return { label: '❄️ Congelado', color: 'text-info bg-info/10' };
     }
     if (isQuickReview) {
-      if (card.state === 0) return { label: 'Não estudado', color: 'text-muted-foreground bg-muted' };
+      if (card.state === 0 || card.state == null) return { label: 'Não estudado', color: 'text-muted-foreground bg-muted' };
       if (card.state === 1) return { label: 'Não entendi', color: 'text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40' };
       return { label: 'Entendi', color: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40' };
     }
-    if (card.state === 0) return { label: 'Novo', color: 'text-muted-foreground bg-muted' };
+    if (card.state === 0 || card.state == null) return { label: 'Novo', color: 'text-muted-foreground bg-muted' };
     if (card.state === 1 || card.state === 3) {
       const due = new Date(card.scheduled_date);
       const now = new Date();
@@ -435,7 +518,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const resetForm = useCallback(() => {
     setFront(''); setBack(''); setEditingId(null); setCardType(null);
-    setOcclusionImageUrl(''); setOcclusionRects([]);
+    setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, []);
 
@@ -449,9 +532,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         const data = JSON.parse(card.front_content);
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
-        setFront('');
+        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+        setFront(data.frontText || '');
         setBack(card.back_content);
-      } catch { setFront(card.front_content); setBack(card.back_content); }
+      } catch { setFront(''); setBack(card.back_content); }
     } else if (card.card_type === 'multiple_choice') {
       setFront(card.front_content);
       try {
@@ -489,7 +573,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (addAnother) {
         setFront(''); setBack(''); setEditingId(null);
         setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
-        setOcclusionImageUrl(''); setOcclusionRects([]);
+        setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionModalOpen(false);
       } else { setEditorOpen(false); resetForm(); }
     };
 
@@ -506,11 +590,14 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const cardEntries: { activeRectIds: string[] }[] = [];
       ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
       Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
+      const cw = occlusionCanvasSize?.w ?? undefined;
+      const ch = occlusionCanvasSize?.h ?? undefined;
+      const frontText = front.trim() ? front : undefined;
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [] });
+        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) });
         updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
       } else {
-        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds }), backContent: userBack, cardType: 'image_occlusion' }));
+        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) }), backContent: userBack, cardType: 'image_occlusion' }));
         createCard.mutate({ cards } as any, { onSuccess });
       }
       return;
@@ -674,6 +761,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     try {
       const url = await cardService.uploadCardImage(user.id, file);
       setOcclusionImageUrl(url);
+      setOcclusionModalOpen(true);
     } catch (e: any) { toast({ title: e.message || 'Erro no upload', variant: 'destructive' }); }
   }, [user, toast]);
 
@@ -861,7 +949,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     examGenerating, setExamGenerating,
     aiAddCardsOpen, setAiAddCardsOpen, importOpen, setImportOpen,
     isImproving, setIsImproving, improvePreview, setImprovePreview, improveModalOpen, setImproveModalOpen,
-    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects,
+    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionCanvasSize, setOcclusionCanvasSize, occlusionModalOpen, setOcclusionModalOpen,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
     energy, spendEnergy, model, setModel, getCost, createExam, addNotification, updateNotification,
     resetForm, openNew, openEdit, handleSave, handleDelete, handleMoveCard,

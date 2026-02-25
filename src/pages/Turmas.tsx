@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+/**
+ * Community Marketplace — grid of public communities + public decks with search and category filters.
+ */
+
+import { useState, useMemo } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { useTurmas, useDiscoverTurmas, type Turma } from '@/hooks/useTurmas';
+import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,19 +16,32 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs';
-import {
-  ArrowLeft, Plus, Users, Copy, LogIn, Crown, Search,
-  UserPlus, Globe, Lock, ChevronRight, Star,
+  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
+  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw,
 } from 'lucide-react';
-import CommunityPreviewSheet from '@/components/community/CommunityPreviewSheet';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
 const DESC_MAX = 2000;
 
+const CATEGORIES = [
+  { value: '', label: 'Todas' },
+  { value: 'medicina', label: 'Medicina' },
+  { value: 'direito', label: 'Direito' },
+  { value: 'engenharia', label: 'Engenharia' },
+  { value: 'concursos', label: 'Concursos' },
+  { value: 'idiomas', label: 'Idiomas' },
+  { value: 'tecnologia', label: 'Tecnologia' },
+  { value: 'vestibular', label: 'Vestibular' },
+  { value: 'outros', label: 'Outros' },
+];
+
+const formatCount = (n: number) => {
+  if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
+  return String(n);
+};
+
 const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
-  if (count === 0) return <span className="text-[11px] text-muted-foreground">Sem nota</span>;
+  if (count === 0) return <span className="text-[11px] text-muted-foreground">Novo</span>;
   return (
     <span className="flex items-center gap-1 text-[11px]">
       <Star className="h-3 w-3 text-warning fill-warning" />
@@ -33,14 +51,104 @@ const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   );
 };
 
+/* ── Community Card ── */
+const CommunityCard = ({
+  turma,
+  onClick,
+  isMine,
+}: {
+  turma: Turma & { member_count?: number; owner_name?: string };
+  onClick: () => void;
+  isMine?: boolean;
+}) => (
+  <div
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={onClick}
+  >
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">{turma.name}</h3>
+        {(turma.subscription_price ?? 0) > 0 && (
+          <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
+      </p>
+    </div>
+
+    <div className="flex items-center gap-4">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-foreground" />
+        <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
+        decks
+      </span>
+      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
+    </div>
+
+    {isMine ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Inscrito
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Inscreva-se
+      </span>
+    )}
+  </div>
+);
+
+/* ── Public Deck Card (same visual as community card) ── */
+const PublicDeckCard = ({
+  deck,
+  onClick,
+  isOwner,
+}: {
+  deck: { id: string; name: string; owner_name: string; card_count: number; updated_at: string; owner_id: string };
+  onClick: () => void;
+  isOwner?: boolean;
+}) => (
+  <div
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={onClick}
+  >
+    <div className="space-y-1">
+      <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{deck.name}</h3>
+      <p className="text-xs text-muted-foreground">
+        por <span className="font-semibold text-foreground">{deck.owner_name}</span>
+      </p>
+    </div>
+
+    <div className="flex items-center gap-4">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-foreground" />
+        <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
+        cards
+      </span>
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <RefreshCw className="h-3 w-3" />
+        {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+      </span>
+    </div>
+
+    {isOwner ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Seu deck
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Ver deck
+      </span>
+    )}
+  </div>
+);
+
+/* ── Main Page ── */
 const Turmas = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isAdmin, loading: adminLoading } = useIsAdmin();
-  const { turmas, isLoading, createTurma, joinTurma, joinTurmaById, leaveTurma } = useTurmas();
-
-  // Communities now open for everyone - no admin gate
+  const { turmas, isLoading, createTurma, joinTurma, leaveTurma } = useTurmas();
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -48,20 +156,30 @@ const Turmas = () => {
   const [description, setDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [discoverSearch, setDiscoverSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('mine');
-  const [previewTurma, setPreviewTurma] = useState<(Turma & { member_count: number; owner_name: string }) | null>(null);
+  
 
-  const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(discoverSearch);
+  const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
+  const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
 
   const myTurmaIds = new Set(turmas.map(t => t.id));
-  const discoverFiltered = (discoverTurmas ?? []).filter(t => !myTurmaIds.has(t.id));
 
-  const filteredTurmas = turmas.filter(t =>
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (t.description ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const communities = useMemo(() => {
+    if (viewMode === 'mine') {
+      return turmas
+        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+    }
+    return (discoverTurmas ?? [])
+      .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+  }, [viewMode, turmas, discoverTurmas, searchQuery, selectedCategory]);
+
+  const filteredDecks = useMemo(() => {
+    if (viewMode === 'mine') return [];
+    return publicDecks ?? [];
+  }, [viewMode, publicDecks]);
 
   const handleCreate = () => {
     if (!name.trim()) return;
@@ -79,23 +197,11 @@ const Turmas = () => {
     });
   };
 
-  const handleJoinById = (turmaId: string) => {
-    joinTurmaById.mutate(turmaId, {
-      onSuccess: () => {
-        toast({ title: 'Entrou na comunidade!' });
-        setPreviewTurma(null);
-        setActiveTab('mine');
-      },
-      onError: (e) => toast({ title: e.message || 'Erro', variant: 'destructive' }),
-    });
-  };
-
-  const openPreview = (turma: Turma & { member_count: number; owner_name: string }) => {
-    setPreviewTurma(turma);
-  };
+  const loading = viewMode === 'discover' ? (discoverLoading || publicDecksLoading) : isLoading;
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -103,8 +209,8 @@ const Turmas = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="font-display text-xl font-bold text-foreground">Comunidades</h1>
-              <p className="text-[10px] text-muted-foreground">Estude junto com outras pessoas</p>
+              <h1 className="font-display text-xl font-bold text-foreground">Comunidade</h1>
+              <p className="text-[10px] text-muted-foreground">Descubra e aprenda com criadores</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -118,164 +224,121 @@ const Turmas = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-5 max-w-2xl">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-            <TabsTrigger value="mine" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Users className="h-3.5 w-3.5" /> Minhas
-            </TabsTrigger>
-            <TabsTrigger value="discover" className="gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
-              <Globe className="h-3.5 w-3.5" /> Descobrir
-            </TabsTrigger>
-          </TabsList>
+      <main className="container mx-auto px-4 py-5 max-w-4xl">
+        {/* View toggle */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => setViewMode('discover')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              viewMode === 'discover' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5" /> Descobrir
+          </button>
+          <button
+            onClick={() => setViewMode('mine')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              viewMode === 'mine' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" /> Minhas ({turmas.length})
+          </button>
+        </div>
 
-          {/* ─── My Communities ─── */}
-          <TabsContent value="mine" className="space-y-3">
-            {turmas.length > 0 && (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar comunidades..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+        {/* Search + Category filters */}
+        <div className="space-y-3 mb-5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar comunidades e decks..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.value}
+                onClick={() => setSelectedCategory(cat.value)}
+                className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  selectedCategory === cat.value
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* ── Communities Section ── */}
+            {communities.length > 0 && (
+              <section className="mb-8">
+                <h2 className="font-display text-base font-bold text-foreground mb-3">
+                  {viewMode === 'mine' ? 'Minhas Comunidades' : 'Comunidades'}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {communities.map(turma => (
+                    <CommunityCard
+                      key={turma.id}
+                      turma={turma}
+                      onClick={() => navigate(`/turmas/${turma.id}`)}
+                      isMine={myTurmaIds.has(turma.id)}
+                    />
+                  ))}
+                </div>
+              </section>
             )}
 
-            {isLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />)}</div>
-            ) : filteredTurmas.length === 0 && turmas.length === 0 ? (
+            {/* ── Public Decks Section ── */}
+            {viewMode === 'discover' && filteredDecks.length > 0 && (
+              <section className="mb-8">
+                <h2 className="font-display text-base font-bold text-foreground mb-3">Decks Públicos</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredDecks.map(deck => (
+                    <PublicDeckCard
+                      key={deck.id}
+                      deck={deck}
+                      onClick={() => navigate(`/decks/${deck.id}/preview`)}
+                      isOwner={deck.owner_id === user?.id}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Empty state */}
+            {communities.length === 0 && filteredDecks.length === 0 && (
               <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 text-center">
-                <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                <h2 className="font-display text-xl font-bold text-foreground">Nenhuma comunidade</h2>
+                <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  {viewMode === 'mine' ? 'Nenhuma comunidade' : 'Nenhum resultado encontrado'}
+                </h2>
                 <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                  Crie uma comunidade, entre com um código ou descubra comunidades públicas.
+                  {viewMode === 'mine'
+                    ? 'Crie uma comunidade ou descubra comunidades públicas.'
+                    : searchQuery ? `Nenhum resultado para "${searchQuery}"` : 'Nenhum conteúdo público disponível.'}
                 </p>
-                <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setActiveTab('discover')}>
-                  <Globe className="h-4 w-4" /> Descobrir comunidades
-                </Button>
+                {viewMode === 'mine' && (
+                  <Button variant="outline" className="mt-4 gap-1.5" onClick={() => setViewMode('discover')}>
+                    <Globe className="h-4 w-4" /> Descobrir comunidades
+                  </Button>
+                )}
               </div>
-            ) : filteredTurmas.length === 0 ? (
-              <div className="rounded-2xl border border-border/40 bg-card p-8 text-center">
-                <p className="text-sm text-muted-foreground">Nenhuma comunidade encontrada para "{searchQuery}"</p>
-              </div>
-            ) : (
-              filteredTurmas.map(turma => (
-                <div
-                  key={turma.id}
-                  className="group flex items-center gap-4 rounded-2xl border border-border/40 bg-card px-4 py-4 cursor-pointer hover:border-primary/20 hover:shadow-md transition-all"
-                  onClick={() => navigate(`/turmas/${turma.id}`)}
-                >
-                  {turma.cover_image_url ? (
-                    <div className="h-12 w-12 shrink-0 rounded-2xl overflow-hidden">
-                      <img src={turma.cover_image_url} alt={turma.name} className="h-full w-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-display font-semibold text-foreground truncate">{turma.name}</h3>
-                      {turma.owner_id === user?.id && <Crown className="h-3.5 w-3.5 text-warning shrink-0" />}
-                    </div>
-                    {turma.description && <p className="text-xs text-muted-foreground line-clamp-1">{turma.description}</p>}
-                    <div className="flex items-center gap-3 mt-1">
-                      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => {
-                        navigator.clipboard.writeText(turma.invite_code);
-                        toast({ title: 'Código copiado!', description: turma.invite_code });
-                      }}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => setConfirmLeave(turma.id)}
-                    >
-                      <LogIn className="h-3.5 w-3.5 rotate-180" />
-                    </Button>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))
             )}
-          </TabsContent>
-
-          {/* ─── Discover Communities ─── */}
-          <TabsContent value="discover" className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar comunidades públicas..."
-                value={discoverSearch}
-                onChange={e => setDiscoverSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            {discoverLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted" />)}</div>
-            ) : discoverFiltered.length === 0 ? (
-              <div className="rounded-2xl border border-border/40 bg-card p-10 text-center">
-                <Globe className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {discoverSearch ? `Nenhuma comunidade encontrada para "${discoverSearch}"` : 'Nenhuma comunidade pública disponível no momento.'}
-                </p>
-              </div>
-            ) : (
-              discoverFiltered.map(turma => (
-                <div
-                  key={turma.id}
-                  className="flex items-center gap-4 rounded-2xl border border-border/40 bg-card px-4 py-4 transition-all hover:border-primary/20 hover:shadow-md cursor-pointer"
-                  onClick={() => openPreview(turma)}
-                >
-                  {(turma as any).cover_image_url ? (
-                    <div className="h-12 w-12 shrink-0 rounded-2xl overflow-hidden">
-                      <img src={(turma as any).cover_image_url} alt={turma.name} className="h-full w-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/50">
-                      <Users className="h-5 w-5 text-accent-foreground" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display font-semibold text-foreground truncate">{turma.name}</h3>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                      <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {turma.member_count}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Crown className="h-3 w-3 text-warning" /> {turma.owner_name}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
       </main>
-
-      {/* Community Preview Sheet */}
-      <CommunityPreviewSheet
-        turma={previewTurma}
-        open={!!previewTurma}
-        onOpenChange={open => !open && setPreviewTurma(null)}
-        onJoin={handleJoinById}
-        isJoining={joinTurmaById.isPending}
-        isMember={previewTurma ? myTurmaIds.has(previewTurma.id) : false}
-        onNavigate={(id) => navigate(`/turmas/${id}`)}
-      />
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
@@ -321,6 +384,7 @@ const Turmas = () => {
         leaveTurma={leaveTurma}
         toast={toast}
       />
+
     </div>
   );
 };

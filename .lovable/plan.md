@@ -1,45 +1,39 @@
 
-## Adicionar medias de estudo (Seg-Sex e 7 dias) ao resumo do simulador
+## Problema
 
-### O que muda
+O carrossel e a lista inferior estao usando logicas diferentes para calcular os cartoes novos:
 
-Atualmente o `SimulatorSummary` so tem `avgDailyMin` (media de todos os dias). Vamos adicionar duas novas metricas:
+- **Carrossel**: Passa `globalNewRemaining` inteiro para cada deck individualmente. Resultado: cada deck mostra `min(raw.new_count, globalNewRemaining)` -- todos recebem o orcamento cheio.
+- **Lista inferior**: Usa `distributedNewByDeck` (distribuicao sequencial) -- correto.
+- **Banner global**: Soma os stats de cada deck usando o budget cheio, gerando totais inflados.
 
-- **Media Seg-Sex**: media de minutos considerando apenas dias uteis (indices de dia 1-5, segunda a sexta)
-- **Media 7 dias**: media de minutos considerando todos os 7 dias da semana
+Isso causa numeros inconsistentes entre o carrossel e a lista, e o banner com somas erradas.
 
-Isso permite que quem nao estuda no fim de semana veja uma media mais realista (Seg-Sex), e quem estuda todos os dias veja a media completa (7 dias).
+## Solucao
 
-### Exibicao
+Unificar tudo usando o `distributedNewByDeck` que ja existe no `useDashboardState`, passando-o para o `DeckCarousel` como prop.
 
-Abaixo da mini-legenda do grafico, um bloco compacto com 2 metricas lado a lado:
+## Detalhes Tecnicos
 
-```text
-+----------------------------+----------------------------+
-|   Seg-Sex                  |   7 dias                   |
-|   ~45min/dia               |   ~38min/dia               |
-+----------------------------+----------------------------+
-```
+### 1. `src/pages/Dashboard.tsx`
 
-Estilo: fundo `bg-muted/50`, texto pequeno (`text-xs`), valores em negrito. Icones de calendario (BriefCase para Seg-Sex, Calendar para 7 dias).
+- Passar `distributedNewByDeck` (do `state`) como nova prop para `DeckCarousel`.
+- Expor `distributedNewByDeck` no retorno de `useDashboardState` (ja existe no hook, so precisa incluir no return).
 
----
+### 2. `src/components/dashboard/useDashboardState.ts`
 
-### Detalhes tecnicos
+- Adicionar `distributedNewByDeck` ao objeto retornado pelo hook (atualmente nao e exportado).
 
-**1. Atualizar `SimulatorSummary` em `src/types/forecast.ts`**
+### 3. `src/components/dashboard/DeckCarousel.tsx`
 
-Adicionar dois campos opcionais:
-- `avgWeekdayMin: number` (media seg-sex)
-- `avgAllDaysMin: number` (media 7 dias)
+- Aceitar nova prop `distributedNewByDeck?: Map<string, number>`.
+- **`DeckStudyCard`**: Receber `allocatedNew` (numero ja calculado) em vez de `globalNewRemaining`. Usar `allocatedNew` diretamente como `newAvailable` em vez de chamar `getDeckTodayStats` com o budget cheio.
+- **`globalPlanStats`**: Ao iterar os root decks, usar o valor de `distributedNewByDeck.get(rootId)` para `totalNew` em vez de chamar `getDeckTodayStats(root, decks, globalNewRemaining)` para cada um.
+- **`sortedDecks`**: Usar o mapa distribuido para filtrar decks com cards pendentes (considerando o budget alocado, nao o global).
+- **Filtro de visibilidade**: Um deck so aparece se `allocatedNew + reviewAvailable + learningAvailable > 0`.
 
-**2. Calcular no worker `src/workers/forecastWorker.ts`**
+### Resultado
 
-Na secao de Summary (linhas ~471-488), iterar pelos `points` (dados diarios, antes da agregacao semanal) e separar os dias por dia da semana (usando o indice do dia + `startDate` para determinar o `getDay()`):
-
-- Somar minutos dos dias com `getDay()` entre 1-5 -> dividir pelo count -> `avgWeekdayMin`
-- Somar minutos de todos os dias -> dividir pelo count -> `avgAllDaysMin`
-
-**3. Exibir em `src/components/study-plan/PlanComponents.tsx`**
-
-Abaixo da mini-legenda (apos linha ~629), adicionar um grid 2-colunas mostrando as duas medias quando `summary` existe e o chart tem dados. Usar `formatMinutes()` para formatar os valores.
+- Carrossel, banner e lista inferior usarao todos a mesma fonte de verdade (`distributedNewByDeck`).
+- Os totais no banner serao a soma exata dos cards individuais.
+- "Cartoes para hoje" na lista inferior e numeros no carrossel serao identicos para o mesmo deck.

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Loader2,
-  RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon,
+  RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon, Crown,
 } from 'lucide-react';
 
 const DeckDetailDialogs = () => {
@@ -32,8 +32,8 @@ const DeckDetailDialogs = () => {
   return (
     <>
       {/* Card Editor Dialog */}
-      <Dialog open={ctx.editorOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
-        <DialogContent className={`max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto ${ctx.cardType === 'image_occlusion' ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
+      <Dialog open={ctx.editorOpen && !ctx.occlusionModalOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
+        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">{ctx.editingId ? 'Editar Card' : 'Novo Card'}</DialogTitle>
           </DialogHeader>
@@ -68,30 +68,48 @@ const DeckDetailDialogs = () => {
 
               <div>
                 <Label className="mb-1.5 block">
-                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : 'Frente'}
+                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
                 <LazyRichEditor
                   content={ctx.front}
                   onChange={ctx.setFront}
-                  placeholder={ctx.cardType === 'multiple_choice' ? 'Qual organela é responsável pela produção de energia?' : ctx.cardType === 'cloze' ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.' : 'Pergunta, conceito ou texto com {{c1::lacunas}}...'}
+                  placeholder={ctx.cardType === 'multiple_choice' ? 'Qual organela é responsável pela produção de energia?' : ctx.cardType === 'cloze' ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.' : ctx.cardType === 'image_occlusion' ? 'Pergunta ou contexto (opcional)' : 'Pergunta, conceito ou texto com {{c1::lacunas}}...'}
                   onOcclusionPaste={ctx.cardType === 'image_occlusion' ? ctx.handleOcclusionPaste : undefined}
                   onOcclusionAttach={ctx.cardType === 'image_occlusion' ? ctx.handleOcclusionAttach : undefined}
                 />
               </div>
 
               {ctx.cardType === 'image_occlusion' && (
-                ctx.occlusionImageUrl ? (
-                  <div className="space-y-2">
-                    <Label className="mb-1.5 block">Oclusão de Imagem</Label>
-                    <ImageOcclusion imageUrl={ctx.occlusionImageUrl} initialRects={ctx.occlusionRects} onChange={ctx.setOcclusionRects} />
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); }}>Remover oclusão</Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center space-y-2">
-                    <span className="text-3xl">🖼️</span>
-                    <p className="text-xs text-muted-foreground">Cole uma imagem (Ctrl+V) ou use o botão de anexar no editor acima</p>
-                  </div>
-                )
+                <div className="space-y-2">
+                  <Label className="mb-1.5 block">Imagem de oclusão</Label>
+                  {ctx.occlusionImageUrl ? (
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => ctx.setOcclusionModalOpen(true)}
+                        className="relative inline-block rounded-lg overflow-hidden border border-border"
+                        title="Editar oclusões"
+                      >
+                        <img src={ctx.occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionModalOpen(false); }}
+                        title="Remover imagem"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
+                  )}
+                </div>
               )}
 
               {ctx.cardType === 'multiple_choice' && (
@@ -163,7 +181,7 @@ const DeckDetailDialogs = () => {
 
               {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
                 <div>
-                  <Label className="mb-1.5 block">Verso</Label>
+                  <Label className="mb-1.5 block">{ctx.cardType === 'image_occlusion' ? 'Verso (Resposta)' : 'Verso'}</Label>
                   <LazyRichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}
@@ -187,6 +205,31 @@ const DeckDetailDialogs = () => {
                   {ctx.isSaving ? 'Salvando...' : 'Salvar'}
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Occlusion editor modal */}
+      <Dialog open={ctx.occlusionModalOpen} onOpenChange={ctx.setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Oclusão de imagem</DialogTitle>
+          </DialogHeader>
+
+          {ctx.occlusionImageUrl ? (
+            <div className="space-y-3">
+              <ImageOcclusion imageUrl={ctx.occlusionImageUrl} initialRects={ctx.occlusionRects} onChange={(rects, meta) => { ctx.setOcclusionRects(rects); if (meta) ctx.setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight }); }} />
+              <div className="flex justify-between gap-2">
+                <Button variant="outline" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionCanvasSize(null); ctx.setOcclusionModalOpen(false); }}>
+                  Remover imagem
+                </Button>
+                <Button onClick={() => ctx.setOcclusionModalOpen(false)}>Concluir</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Adicione uma imagem pela barra de ferramentas da Frente para editar as oclusões.
             </div>
           )}
         </DialogContent>
@@ -304,7 +347,7 @@ const DeckDetailDialogs = () => {
               <div className="space-y-2 pt-2">
                 {[
                   { value: 'sm2', label: 'SM-2', desc: 'Algoritmo clássico de repetição espaçada', premium: false },
-                  { value: 'fsrs', label: 'FSRS-4.5', desc: 'Algoritmo avançado com retenção otimizada', premium: true },
+                  { value: 'fsrs', label: 'FSRS-6', desc: 'Algoritmo avançado com retenção otimizada', premium: true },
                   { value: 'quick_review', label: 'Revisão Rápida', desc: 'Modo manual, sem agendamento', premium: false },
                 ].map(algo => {
                   const isActive = (ctx.deck as any)?.algorithm_mode === algo.value;
@@ -313,7 +356,7 @@ const DeckDetailDialogs = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-foreground">{algo.label}</span>
-                          {algo.premium && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full">Premium</span>}
+                          {algo.premium && <><Crown className="h-3.5 w-3.5 text-amber-500" /><span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full">Premium</span></>}
                           {isActive && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Atual</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{algo.desc}</p>

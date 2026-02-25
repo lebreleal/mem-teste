@@ -212,7 +212,7 @@ describe('SM2 – scheduling uses midnight for day intervals, exact time for lea
   it('rating Again on review card → becomes learning with exact timestamp', () => {
     const card: SM2Card = { stability: 2.5, difficulty: 3, state: 2, scheduled_date: minutesAgo(60) };
     const result = sm2Schedule(card, 1, DEFAULT_SM2_PARAMS);
-    expect(result.state).toBe(1);
+    expect(result.state).toBe(3); // relearning (state 3 behaves like learning)
     expect(result.interval_days).toBe(0);
     const scheduled = new Date(result.scheduled_date);
     // Exact timestamp, not midnight
@@ -252,7 +252,7 @@ describe('FSRS – scheduling uses midnight for day intervals, exact time for le
   it('rating Again on review card → learning with exact timestamp', () => {
     const card: FSRSCard = { stability: 10, difficulty: 5, state: 2, scheduled_date: minutesAgo(24 * 60) };
     const result = fsrsSchedule(card, 1, DEFAULT_FSRS_PARAMS);
-    expect(result.state).toBe(1);
+    expect(result.state).toBe(3); // relearning
     const scheduled = new Date(result.scheduled_date);
     expect(scheduled.getTime()).toBeGreaterThan(Date.now() - 5000);
   });
@@ -292,24 +292,24 @@ describe('Full flow simulation – card state transitions', () => {
     // Step 1: Review card rated Again
     const card: SM2Card = { stability: 2.5, difficulty: 3, state: 2, scheduled_date: minutesAgo(24 * 60) };
     const result = sm2Schedule(card, 1, DEFAULT_SM2_PARAMS);
-    expect(result.state).toBe(1); // became learning
+    expect(result.state).toBe(3); // relearning
 
     // Step 2: In queue with future timer
     const queue = [
       { state: 0, scheduled_date: now() },
-      { state: 1, scheduled_date: result.scheduled_date }, // future timer
+      { state: 3, scheduled_date: result.scheduled_date }, // future timer (relearning)
     ];
     expect(getNextReadyIndex(queue)).toBe(0); // new card first
 
     // Step 3: Timer expires
     queue[1].scheduled_date = minutesAgo(0.5);
-    expect(getNextReadyIndex(queue)).toBe(1); // learning cuts!
+    expect(getNextReadyIndex(queue)).toBe(1); // relearning cuts!
   });
 
   it('FSRS: review card rated Again → learning → cuts line', () => {
     const card: FSRSCard = { stability: 15, difficulty: 5, state: 2, scheduled_date: minutesAgo(48 * 60) };
     const result = fsrsSchedule(card, 1, DEFAULT_FSRS_PARAMS);
-    expect(result.state).toBe(1);
+    expect(result.state).toBe(3); // relearning
 
     const queue = [
       { state: 0, scheduled_date: now() },

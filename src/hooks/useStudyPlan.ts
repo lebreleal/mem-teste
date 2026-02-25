@@ -46,7 +46,7 @@ export function getWeeklyAvgMinutesGlobal(dailyMin: number, weeklyMin: WeeklyMin
 
 export function getNewCardsForDayGlobal(dailyLimit: number, weeklyNewCards: WeeklyNewCards | null, day?: DayKey): number {
   const d = day ?? (DAY_KEYS[new Date().getDay()] as DayKey);
-  if (weeklyNewCards && weeklyNewCards[d] != null) return weeklyNewCards[d];
+  if (weeklyNewCards && typeof weeklyNewCards[d] === 'number') return weeklyNewCards[d];
   return dailyLimit;
 }
 
@@ -510,6 +510,7 @@ export function useStudyPlan() {
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
+    qc.invalidateQueries({ queryKey: ['study-plans-lock'] });
     qc.invalidateQueries({ queryKey: ['plan-metrics'] });
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
@@ -585,7 +586,34 @@ export function useStudyPlan() {
         .eq('id', userId!);
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: (_data, vars) => {
+      const nextWeekly = vars.weeklyNewCards !== undefined
+        ? vars.weeklyNewCards
+        : (globalCapacity.weeklyNewCards ?? null);
+
+      qc.setQueryData(['daily-new-cards-limit', userId], {
+        daily_new_cards_limit: vars.limit,
+        weekly_new_cards: nextWeekly,
+      });
+
+      qc.setQueryData(['global-capacity', userId], (prev: any) => {
+        if (!prev) {
+          return {
+            dailyMinutes: globalCapacity.dailyMinutes,
+            weeklyMinutes: globalCapacity.weeklyMinutes,
+            dailyNewCardsLimit: vars.limit,
+            weeklyNewCards: nextWeekly,
+          };
+        }
+        return {
+          ...prev,
+          dailyNewCardsLimit: vars.limit,
+          weeklyNewCards: nextWeekly,
+        };
+      });
+
+      invalidate();
+    },
   });
 
   // ─── Reorder objectives (persist priority) ───

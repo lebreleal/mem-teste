@@ -40,14 +40,14 @@ Deno.serve(async (req) => {
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
 
     let prompt: string;
-    let maxTokens = 8000;
+    let maxTokens = 800;
     if (action === "explain-mc") {
       const optionsList = (mcOptions || []).map((opt: string, i: number) => `${i === correctIndex ? "✅" : "❌"} ${String.fromCharCode(65 + i)}) ${opt}`).join("\n");
-      prompt = `O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## ✅ Resposta Correta\nExplique por que a alternativa correta está certa (2-3 frases detalhadas).\n\n---\n\n## ❌ Alternativas Incorretas\nPara CADA alternativa incorreta, crie um sub-tópico:\n\n### Alternativa X)\nExplique por que está errada (1-2 frases).\n\n---\n\n## 💡 Dica de Estudo\nUma dica prática para lembrar a resposta correta.\n\nResponda na mesma língua da pergunta. Use parágrafos bem separados.`;
-      maxTokens = 8000;
+      prompt = `O aluno respondeu uma questão de múltipla escolha.\n\nPERGUNTA: ${cleanFront}\n\nALTERNATIVAS:\n${optionsList}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + (correctIndex ?? 0))}.\n${selectedIndex !== undefined && selectedIndex !== correctIndex ? `O aluno marcou a alternativa ${String.fromCharCode(65 + selectedIndex)}.` : ""}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## ✅ Resposta Correta\nExplique por que a alternativa correta está certa (2-3 frases detalhadas).\n\n---\n\n## ❌ Alternativas Incorretas\nPara CADA alternativa incorreta, crie um sub-tópico:\n\n### Alternativa X)\nExplique por que está errada (1-2 frases).\n\n---\n\n## 💡 Dica de Estudo\nUma dica prática para lembrar a resposta correta.\n\nResponda na mesma língua da pergunta. Use parágrafos bem separados.\n\nSeja direto. Limite cada explicação de alternativa a 1-2 frases. Total máximo: 350 palavras.`;
+      maxTokens = 2500;
     } else if (action === "explain") {
-      prompt = `O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## 📚 Referência\nInforme a referência acadêmica consultada (1-2 livros ou fontes clássicas da área).\nFormato: "Baseado em: [Nome do livro/autor]"\n\n---\n\n## 📖 Explicação\nExplique o conceito de forma didática e completa, como uma aula particular.\n- Use analogias e exemplos práticos\n- Separe em parágrafos distintos\n- Destaque termos-chave em **negrito**\n- Se relevante, use listas para organizar sub-conceitos\n\n---\n\n## 🔗 Conexão com o Card\nRelacione a explicação diretamente com a pergunta/resposta do card, mostrando como o conceito se aplica.\n\nResponda na mesma língua do card. Seja completo, didático e claro. Use parágrafos bem separados com espaçamento entre seções.`;
-      maxTokens = 8000;
+      prompt = `O aluno está estudando com flashcards e precisa entender o conceito por trás deste card.\n\nFRENTE DO CARD: ${cleanFront}\nVERSO DO CARD: ${cleanBack}\n\nUse a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:\n\n## 📚 Referência\nInforme a referência acadêmica consultada (1-2 livros ou fontes clássicas da área).\nFormato: "Baseado em: [Nome do livro/autor]"\n\n---\n\n## 📖 Explicação\nExplique o conceito de forma didática e completa, como uma aula particular.\n- Use analogias e exemplos práticos\n- Separe em parágrafos distintos\n- Destaque termos-chave em **negrito**\n- Se relevante, use listas para organizar sub-conceitos\n\n---\n\n## 🔗 Conexão com o Card\nRelacione a explicação diretamente com a pergunta/resposta do card, mostrando como o conceito se aplica.\n\nResponda na mesma língua do card. Use parágrafos bem separados com espaçamento entre seções.\n\nSeja objetivo. Limite a explicação a no máximo 400 palavras no total.`;
+      maxTokens = 3000;
     } else {
       if (promptConfig?.user_prompt_template) {
         prompt = promptConfig.user_prompt_template.replace("{{front}}", cleanFront).replace("{{backHint}}", cleanBack ? `(The answer is: ${cleanBack} - but DO NOT reveal this. Give a hint instead.)` : "");
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
     const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
-    const estimatedCompletionTokens = Math.ceil(maxTokens * 0.7);
+    const estimatedCompletionTokens = Math.ceil(maxTokens * 0.5);
     const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
 
     const response = await fetchWithRetry(AI_URL, {

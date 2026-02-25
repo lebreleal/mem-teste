@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import * as deckService from '@/services/deckService';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { useStudyPlan } from '@/hooks/useStudyPlan';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,12 +18,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
   Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
   RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail, Info,
+  Shuffle, BookOpen, Mail, Globe, BarChart3, Settings,
 } from 'lucide-react';
+import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
+import ankiLogo from '@/assets/anki-logo.svg';
+import { exportAsApkg } from '@/lib/ankiExport';
 
 // ── Settings row component ──────────────────────────────────────
 interface SettingsRowProps {
@@ -69,19 +73,6 @@ const DeckSettings = () => {
   const { toast } = useToast();
   const { duplicateDeck, archiveDeck, decks } = useDecks();
   const queryClient = useQueryClient();
-  const { metrics: planMetrics } = useStudyPlan();
-
-  // Resolve root ancestor for plan detection
-  const rootId = (() => {
-    if (!decks.length || !deckId) return deckId;
-    let currentId = deckId;
-    while (true) {
-      const d = decks.find(dk => dk.id === currentId);
-      if (!d?.parent_deck_id) return currentId;
-      currentId = d.parent_deck_id;
-    }
-  })();
-  const isPlanControlled = planMetrics?.deckNewAllocation?.[rootId ?? ''] != null;
 
   // Deck data
   const [name, setName] = useState('');
@@ -90,6 +81,8 @@ const DeckSettings = () => {
   const [algorithmMode, setAlgorithmMode] = useState<'sm2' | 'fsrs' | 'quick_review'>('sm2');
   const [requestedRetention, setRequestedRetention] = useState(0.9);
   const [shuffleCards, setShuffleCards] = useState(true);
+  const [isPublic, setIsPublic] = useState(true);
+  const [allowDuplication, setAllowDuplication] = useState(false);
   const [learningSteps, setLearningSteps] = useState<string[]>(['1m', '15m']);
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
@@ -97,6 +90,7 @@ const DeckSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
+  const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
 
   // Modals
   const [algorithmModal, setAlgorithmModal] = useState(false);
@@ -107,8 +101,57 @@ const DeckSettings = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [exportModal, setExportModal] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingAnki, setExportingAnki] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'sm2' | 'fsrs' | 'quick_review' | null>(null);
+
+  const studyPlansQuery = useQuery({
+    queryKey: ['study-plans-lock', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('deck_ids')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+
+  const getRootAncestorId = useMemo(() => {
+    return (id: string): string => {
+      const visited = new Set<string>();
+      let currentId: string = id;
+      while (true) {
+        if (visited.has(currentId)) return currentId;
+        visited.add(currentId);
+        const deck = decks.find(d => d.id === currentId);
+        if (!deck?.parent_deck_id) return currentId;
+        currentId = deck.parent_deck_id;
+      }
+    };
+  }, [decks]);
+
+  const objectiveRootIds = useMemo(() => {
+    const roots = new Set<string>();
+    for (const plan of studyPlansQuery.data ?? []) {
+      for (const id of (plan.deck_ids ?? [])) {
+        roots.add(getRootAncestorId(id));
+      }
+    }
+    return roots;
+  }, [studyPlansQuery.data, getRootAncestorId]);
+
+  const currentDeckRootId = useMemo(() => {
+    if (!deckId) return null;
+    return getRootAncestorId(deckId);
+  }, [deckId, getRootAncestorId]);
+
+  const isDeckLockedByObjective = useMemo(() => {
+    if (!currentDeckRootId) return false;
+    return objectiveRootIds.has(currentDeckRootId);
+  }, [objectiveRootIds, currentDeckRootId]);
 
   useEffect(() => {
     if (!deckId || !user) return;
@@ -129,6 +172,9 @@ const DeckSettings = () => {
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
       setParentDeckId(data.parent_deck_id ?? null);
+      setIsPublic((data as any).is_public ?? true);
+      setAllowDuplication((data as any).allow_duplication ?? false);
+      setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
       setLoading(false);
     });
   }, [deckId, user]);
@@ -151,6 +197,17 @@ const DeckSettings = () => {
   };
 
   const handleSaveStudySettings = () => {
+    if (isDeckLockedByObjective) {
+      toast({
+        title: 'Bloqueado pelo Meu Plano',
+        description: 'Remova este baralho dos objetivos em Meu Plano para editar os limites diários.',
+        variant: 'destructive',
+      });
+      setStudySettingsModal(false);
+      setAdvancedModal(false);
+      return;
+    }
+
     saveSettings({
       daily_new_limit: dailyNewLimit,
       daily_review_limit: dailyReviewLimit,
@@ -278,22 +335,22 @@ const DeckSettings = () => {
 
   const handleExportCSV = async () => {
     if (!deckId) return;
-    setExporting(true);
+    setExportingCsv(true);
     try {
       const { data: cards, error } = await supabase
         .from('cards')
-        .select('front_content, back_content')
+        .select('front_content, back_content, card_type')
         .eq('deck_id', deckId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       if (!cards || cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
-        setExporting(false);
+        setExportingCsv(false);
         return;
       }
       const escapeCSV = (s: string) => {
-        // Strip HTML tags for clean CSV
-        const text = s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+        // Keep image tags as-is for CSV so they can be re-imported
+        const text = s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
         if (text.includes(',') || text.includes('"') || text.includes('\n')) {
           return `"${text.replace(/"/g, '""')}"`;
         }
@@ -312,7 +369,35 @@ const DeckSettings = () => {
     } catch {
       toast({ title: 'Erro ao exportar', variant: 'destructive' });
     }
-    setExporting(false);
+    setExportingCsv(false);
+  };
+
+  const handleExportAnki = async () => {
+    if (!deckId) return;
+    setExportingAnki(true);
+    try {
+      const { data: cards, error } = await supabase
+        .from('cards')
+        .select('front_content, back_content, card_type')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!cards || cards.length === 0) {
+        toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
+        setExportingAnki(false);
+        return;
+      }
+      await exportAsApkg(
+        name || 'baralho',
+        cards.map(c => ({ front: c.front_content, back: c.back_content, cardType: c.card_type })),
+      );
+      toast({ title: `${cards.length} cartões exportados como .apkg!` });
+      setExportModal(false);
+    } catch (err) {
+      console.error('Anki export error:', err);
+      toast({ title: 'Erro ao exportar', description: 'Tente novamente.', variant: 'destructive' });
+    }
+    setExportingAnki(false);
   };
 
   const addLearningStep = () => setLearningSteps(prev => [...prev, '10m']);
@@ -344,97 +429,162 @@ const DeckSettings = () => {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-2xl space-y-4 px-4 py-6">
-        {/* ── Section: Estudo ──────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Layers className="h-5 w-5" />}
-            label="Algoritmo de Aprendizagem"
-            subtitle={parentDeckId ? `${algoLabel} (herdado do pai)` : algoLabel}
-            onClick={parentDeckId ? () => toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai.' }) : () => setAlgorithmModal(true)}
-          />
-        </SettingsGroup>
+      <main className="container mx-auto max-w-2xl px-4 py-6">
+        <Tabs defaultValue="settings" className="space-y-4">
+          <TabsList className="w-full">
+            <TabsTrigger value="settings" className="flex-1 gap-1.5">
+              <Settings className="h-3.5 w-3.5" />
+              Configurações
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1 gap-1.5">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Estatísticas
+            </TabsTrigger>
+          </TabsList>
 
-        <SettingsGroup>
-          <SettingsRow
-            icon={<BookOpen className="h-5 w-5" />}
-            label="Configurações de estudo"
-            subtitle={parentDeckId ? 'Herdado do baralho pai' : isPlanControlled ? `Limite de novos definido pelo Plano (${planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia)` : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
-            onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
-          />
-          <SettingsRow
-            icon={<Volume2 className="h-5 w-5" />}
-            label="Texto para voz"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
-          />
-          <SettingsRow
-            icon={<Palette className="h-5 w-5" />}
-            label="Estilo do cartão"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
-          />
-        </SettingsGroup>
+          <TabsContent value="settings" className="space-y-4">
+            {/* ── Section: Estudo ──────────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Layers className="h-5 w-5" />}
+                label="Algoritmo de Aprendizagem"
+                subtitle={parentDeckId ? `${algoLabel} (herdado do pai)` : algoLabel}
+                onClick={parentDeckId ? () => toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai.' }) : () => setAlgorithmModal(true)}
+              />
+            </SettingsGroup>
 
-        {/* ── Section: Social ─────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Share2 className="h-5 w-5" />}
-            label="Compartilhar baralho"
-            onClick={() => setShareModal(true)}
-          />
-        </SettingsGroup>
+            <SettingsGroup>
+              <SettingsRow
+                icon={<BookOpen className="h-5 w-5" />}
+                label="Configurações de estudo"
+                subtitle={parentDeckId
+                  ? 'Herdado do baralho pai'
+                  : isDeckLockedByObjective
+                    ? 'Bloqueado por objetivo ativo (Meu Plano)'
+                    : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
+                onClick={
+                  parentDeckId
+                    ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' })
+                    : isDeckLockedByObjective
+                      ? () => toast({
+                          title: 'Bloqueado pelo Meu Plano',
+                          description: 'Remova este baralho dos objetivos para editar os limites diários nas configurações do deck.',
+                          variant: 'destructive',
+                        })
+                      : () => setStudySettingsModal(true)
+                }
+              />
+              <SettingsRow
+                icon={<Volume2 className="h-5 w-5" />}
+                label="Texto para voz"
+                rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
+                disabled
+              />
+              <SettingsRow
+                icon={<Palette className="h-5 w-5" />}
+                label="Estilo do cartão"
+                rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
+                disabled
+              />
+            </SettingsGroup>
 
-        {/* ── Section: IA ─────────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Download className="h-5 w-5" />}
-            label="Importar cartões"
-            onClick={() => navigate(`/decks/${deckId}/manage`)}
-          />
-        </SettingsGroup>
+            {/* ── Section: Social ─────────────────────────────── */}
+            {!sourceTurmaDeckId && (
+              <SettingsGroup>
+                <SettingsRow
+                  icon={<Globe className="h-5 w-5" />}
+                  label="Publicar na comunidade"
+                  subtitle="Visível para todos na aba Comunidade"
+                  rightContent={
+                    <Switch
+                      checked={isPublic}
+                      onCheckedChange={(checked) => {
+                        setIsPublic(checked);
+                        saveSettings({ is_public: checked });
+                      }}
+                    />
+                  }
+                />
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Permitir duplicação"
+                  subtitle="Outros usuários podem duplicar este deck para uso pessoal"
+                  rightContent={
+                    <Switch
+                      checked={allowDuplication}
+                      onCheckedChange={(checked) => {
+                        setAllowDuplication(checked);
+                        saveSettings({ allow_duplication: checked });
+                      }}
+                    />
+                  }
+                />
+                <SettingsRow
+                  icon={<Share2 className="h-5 w-5" />}
+                  label="Compartilhar baralho"
+                  onClick={() => setShareModal(true)}
+                />
+              </SettingsGroup>
+            )}
 
-        {/* ── Section: Gerenciar ──────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Edit3 className="h-5 w-5" />}
-            label="Renomear baralho"
-            onClick={() => setRenameModal(true)}
-          />
-          <SettingsRow
-            icon={<Copy className="h-5 w-5" />}
-            label="Duplicar baralho"
-            onClick={handleDuplicate}
-          />
-          <SettingsRow
-            icon={<RotateCcw className="h-5 w-5" />}
-            label="Redefinir progresso"
-            onClick={() => setResetConfirm(true)}
-          />
-          <SettingsRow
-            icon={<Archive className="h-5 w-5" />}
-            label="Arquivar baralho"
-            onClick={handleArchive}
-          />
-          <SettingsRow
-            icon={<Upload className="h-5 w-5" />}
-            label="Exportar cartões"
-            subtitle="CSV ou enviar por e-mail"
-            onClick={() => setExportModal(true)}
-          />
-        </SettingsGroup>
+            {/* ── Section: IA ─────────────────────────────────── */}
+            {!sourceTurmaDeckId && (
+              <SettingsGroup>
+                <SettingsRow
+                  icon={<Download className="h-5 w-5" />}
+                  label="Importar cartões"
+                  onClick={() => navigate(`/decks/${deckId}/manage`)}
+                />
+              </SettingsGroup>
+            )}
 
-        {/* ── Section: Danger ─────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Trash2 className="h-5 w-5" />}
-            label="Excluir baralho"
-            destructive
-            onClick={() => setDeleteConfirm(true)}
-          />
-        </SettingsGroup>
+            {/* ── Section: Gerenciar ──────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Edit3 className="h-5 w-5" />}
+                label="Renomear baralho"
+                onClick={() => setRenameModal(true)}
+              />
+              <SettingsRow
+                icon={<Copy className="h-5 w-5" />}
+                label="Duplicar baralho"
+                onClick={handleDuplicate}
+              />
+              <SettingsRow
+                icon={<RotateCcw className="h-5 w-5" />}
+                label="Redefinir progresso"
+                onClick={() => setResetConfirm(true)}
+              />
+              <SettingsRow
+                icon={<Archive className="h-5 w-5" />}
+                label="Arquivar baralho"
+                onClick={handleArchive}
+              />
+              <SettingsRow
+                icon={<Upload className="h-5 w-5" />}
+                label="Exportar cartões"
+                subtitle="CSV ou Anki (.apkg)"
+                onClick={() => setExportModal(true)}
+              />
+            </SettingsGroup>
 
-        <div className="h-8" />
+            {/* ── Section: Danger ─────────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Trash2 className="h-5 w-5" />}
+                label="Excluir baralho"
+                destructive
+                onClick={() => setDeleteConfirm(true)}
+              />
+            </SettingsGroup>
+
+            <div className="h-8" />
+          </TabsContent>
+
+          <TabsContent value="stats">
+            {deckId && <DeckStatsTab deckId={deckId} />}
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* ══════════════════════════════════════════════════════
@@ -564,22 +714,19 @@ const DeckSettings = () => {
             <DialogTitle className="font-display">Configurações de Estudo</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
-            {isPlanControlled && (
-              <div className="flex items-start gap-2.5 rounded-lg bg-accent/50 border border-border/60 p-3">
-                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  O limite de novos cartões deste baralho está sendo definido automaticamente pelo seu <strong>Plano de Estudos</strong> ({planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia). Para usar o limite manual, remova este baralho dos seus objetivos.
-                </p>
+            {isDeckLockedByObjective && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                Este deck está em objetivo ativo. Para editar os limites diários, remova-o primeiro em Meu Plano.
               </div>
             )}
             <div className="flex items-center justify-between">
-              <Label className={isPlanControlled ? 'text-muted-foreground' : ''}>Novos cartões por dia</Label>
+              <Label>Novos cartões por dia</Label>
               <Input
                 type="number" min={0} max={999}
-                value={isPlanControlled ? (planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0) : dailyNewLimit}
+                value={dailyNewLimit}
                 onChange={(e) => setDailyNewLimit(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 text-right font-semibold"
-                disabled={isPlanControlled}
+                disabled={isDeckLockedByObjective}
               />
             </div>
             <Separator />
@@ -590,6 +737,7 @@ const DeckSettings = () => {
                 value={dailyReviewLimit}
                 onChange={(e) => setDailyReviewLimit(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 text-right font-semibold"
+                disabled={isDeckLockedByObjective}
               />
             </div>
             <Separator />
@@ -598,20 +746,20 @@ const DeckSettings = () => {
                 <Shuffle className="h-4 w-4 text-muted-foreground" />
                 <Label>Embaralhar cartões</Label>
               </div>
-              <Switch checked={shuffleCards} onCheckedChange={setShuffleCards} />
+              <Switch checked={shuffleCards} onCheckedChange={setShuffleCards} disabled={isDeckLockedByObjective} />
             </div>
 
             {(algorithmMode === 'sm2' || algorithmMode === 'fsrs') && (
               <>
                 <Separator />
-                <Button variant="outline" className="w-full" onClick={() => { setStudySettingsModal(false); setAdvancedModal(true); }}>
+                <Button variant="outline" className="w-full" onClick={() => { setStudySettingsModal(false); setAdvancedModal(true); }} disabled={isDeckLockedByObjective}>
                   Configurações avançadas ({algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'})
                   <ChevronRight className="ml-auto h-4 w-4" />
                 </Button>
               </>
             )}
 
-            <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving}>
+            <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving || isDeckLockedByObjective}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Salvar
             </Button>
@@ -797,10 +945,10 @@ const DeckSettings = () => {
             <button
               className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
               onClick={handleExportCSV}
-              disabled={exporting}
+              disabled={exportingCsv || exportingAnki}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                {exporting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Download className="h-5 w-5 text-muted-foreground" />}
+                {exportingCsv ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Download className="h-5 w-5 text-muted-foreground" />}
               </div>
               <div>
                 <p className="font-medium text-sm text-foreground">Exportar como CSV</p>
@@ -808,15 +956,16 @@ const DeckSettings = () => {
               </div>
             </button>
             <button
-              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-              disabled
+              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
+              onClick={handleExportAnki}
+              disabled={exportingCsv || exportingAnki}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <Mail className="h-5 w-5 text-muted-foreground" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted p-1.5">
+                {exportingAnki ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />}
               </div>
               <div>
-                <p className="font-medium text-sm text-foreground">Enviar por e-mail</p>
-                <p className="text-xs text-muted-foreground">Em breve</p>
+                <p className="font-medium text-sm text-foreground">Exportar como Anki</p>
+                <p className="text-xs text-muted-foreground">Arquivo .apkg compatível com Anki</p>
               </div>
             </button>
           </div>

@@ -7,6 +7,7 @@ import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen,
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
+import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
@@ -36,6 +37,7 @@ function looksLikeHtml(text: string): boolean {
 interface FlashCardProps {
   frontContent: string;
   backContent: string;
+  cardId?: string;
   stability: number;
   difficulty: number;
   state: number;
@@ -88,7 +90,7 @@ function renderCloze(html: string, revealed: boolean, targetNum?: number): strin
   });
 }
 
-function renderOcclusion(frontContent: string, revealed: boolean): string {
+function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
   try {
     const data = JSON.parse(frontContent);
     const { imageUrl } = data;
@@ -96,10 +98,7 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
     const allRects: any[] = data.allRects || data.rects || [];
     const activeRectIds: string[] = data.activeRectIds || allRects.map((r: any) => r.id);
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
-    const allX = allRects.map((r: any) => r.x + r.w);
-    const allY = allRects.map((r: any) => r.y + r.h);
-    const maxX = Math.max(...allX, 100);
-    const maxY = Math.max(...allY, 100);
+
     const svgShapes = allRects.map((r: any) => {
       const isActive = activeRectIds.includes(r.id);
       if (!isActive) return '';
@@ -117,9 +116,19 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
       if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
+
+    const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
+      const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+      return Math.max(...xs, 100) * 1.02;
+    })();
+    const vbH = data.canvasHeight || fallbackCanvas?.h || (() => {
+      const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+      return Math.max(...ys, 100) * 1.02;
+    })();
+
     return `<div style="position:relative;display:inline-block;max-width:100%">
-      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" crossorigin="anonymous" />
-      <svg style="position:absolute;top:0;left:0;width:100%;height:100%" viewBox="0 0 ${maxX * 1.05} ${maxY * 1.05}" preserveAspectRatio="xMinYMin meet">
+      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem;display:block" crossorigin="anonymous" />
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMinYMin meet">
         ${svgShapes}
       </svg>
     </div>`;
@@ -143,6 +152,7 @@ function parseMultipleChoice(backContent: string): MultipleChoiceData | null {
 const MultipleChoiceCard = ({
   frontContent,
   backContent,
+  cardId,
   onRate,
   isSubmitting,
   energy = 0,
@@ -162,6 +172,7 @@ const MultipleChoiceCard = ({
   onUndo,
   onOpenExplainChat,
 }: {
+  cardId?: string;
   frontContent: string;
   backContent: string;
   onRate: (rating: Rating) => void;
@@ -347,6 +358,11 @@ const MultipleChoiceCard = ({
               </div>
             </div>
           )}
+
+          {/* Personal notes */}
+          {cardId && answered && (
+            <PersonalNotes cardId={cardId} />
+          )}
         </div>
       </div>
 
@@ -454,7 +470,7 @@ const MultipleChoiceCard = ({
 };
 
 const FlashCard = ({
-  frontContent, backContent, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
   onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
@@ -485,6 +501,41 @@ const FlashCard = ({
     return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate, last_reviewed_at: lastReviewedAt }, algorithmMode);
   }, [state, stability, difficulty, scheduledDate, lastReviewedAt, algorithmMode]);
 
+  const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOcclusion) {
+      setOcclusionFallbackCanvas(null);
+      return;
+    }
+
+    try {
+      const data = JSON.parse(frontContent);
+      if (data.canvasWidth && data.canvasHeight) {
+        setOcclusionFallbackCanvas(null);
+        return;
+      }
+      if (!data.imageUrl) {
+        setOcclusionFallbackCanvas(null);
+        return;
+      }
+
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const scale = Math.min(1, 450 / img.naturalHeight);
+        setOcclusionFallbackCanvas({
+          w: Math.round(img.naturalWidth * scale),
+          h: Math.round(img.naturalHeight * scale),
+        });
+      };
+      img.onerror = () => setOcclusionFallbackCanvas(null);
+      img.src = data.imageUrl;
+    } catch {
+      setOcclusionFallbackCanvas(null);
+    }
+  }, [isOcclusion, frontContent]);
+
   useEffect(() => {
     if (feedbackType) {
       const timer = setTimeout(() => setFeedbackType(null), 800);
@@ -498,6 +549,7 @@ const FlashCard = ({
       <MultipleChoiceCard
         frontContent={looksLikeHtml(frontContent) ? frontContent : formatMarkdown(frontContent)}
         backContent={backContent}
+        cardId={cardId}
         onRate={onRate}
         isSubmitting={isSubmitting}
         energy={energy}
@@ -536,12 +588,25 @@ const FlashCard = ({
 
   let displayFront: string;
   let displayBack: string;
+  let occlusionFrontText = '';
+  let occlusionBackText = '';
 
   if (isOcclusion) {
-    displayFront = renderOcclusion(frontContent, false);
-    const revealedImage = renderOcclusion(frontContent, true);
-    const userText = backContent ? `<div style="margin-top:1rem">${backContent}</div>` : '';
-    displayBack = revealedImage + userText;
+    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
+    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
+
+    try {
+      const occData = JSON.parse(frontContent);
+      const strippedFront = typeof occData.frontText === 'string' ? occData.frontText.replace(/<[^>]*>/g, '').trim() : '';
+      if (strippedFront) {
+        occlusionFrontText = sanitizeHtml(occData.frontText);
+      }
+    } catch {}
+
+    const backStripped = backContent ? backContent.replace(/<[^>]*>/g, '').trim() : '';
+    if (backStripped) {
+      occlusionBackText = sanitizeHtml(backContent);
+    }
   } else if (isCloze) {
     // Parse cloze target number from backContent (JSON with clozeTarget)
     let clozeTarget: number | undefined;
@@ -621,12 +686,21 @@ const FlashCard = ({
             {!flipped && (
               <div
                 className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
-                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: isOcclusion ? 'flex-start' : 'center', justifyContent: 'center' }}
               >
-                <div
-                  className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
-                />
+                {isOcclusion ? (
+                  <div className="w-full space-y-4">
+                    <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: displayFront }} />
+                    {occlusionFrontText && (
+                      <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
+                  />
+                )}
               </div>
             )}
 
@@ -643,7 +717,7 @@ const FlashCard = ({
 
                 <div
                   className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'} ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}
-                  style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                  style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: isOcclusion ? 'flex-start' : 'center', justifyContent: isOcclusion ? 'flex-start' : 'center', position: 'relative' }}
                 >
                   <button
                     onClick={(e) => {
@@ -659,10 +733,22 @@ const FlashCard = ({
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </button>
-                  <div
-                    className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
-                  />
+                  {isOcclusion ? (
+                    <div className="w-full space-y-4">
+                      <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
+                      {!peekingFront && occlusionBackText && (
+                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                      )}
+                      {peekingFront && occlusionFrontText && (
+                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                    />
+                  )}
                   {peekingFront && (
                     <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
                   )}
@@ -703,6 +789,11 @@ const FlashCard = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Personal notes */}
+          {cardId && flipped && (
+            <PersonalNotes cardId={cardId} />
           )}
         </div>
       </div>

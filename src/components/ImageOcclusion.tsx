@@ -21,7 +21,7 @@ interface OcclusionShape {
 interface ImageOcclusionProps {
   imageUrl: string;
   initialRects?: OcclusionShape[];
-  onChange: (rects: OcclusionShape[]) => void;
+  onChange: (rects: OcclusionShape[], meta?: { canvasWidth: number; canvasHeight: number }) => void;
 }
 
 const FILL_SOLID = 'rgba(59, 130, 246, 0.85)';
@@ -34,6 +34,13 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [shapes, setShapes] = useState<OcclusionShape[]>(initialRects);
+
+  // Wrap onChange to always include canvas meta
+  const emitChange = useCallback((rects: OcclusionShape[]) => {
+    const canvas = canvasRef.current;
+    const meta = canvas ? { canvasWidth: canvas.width, canvasHeight: canvas.height } : undefined;
+    onChange(rects, meta);
+  }, [onChange]);
   const [drawing, setDrawing] = useState(false);
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentShape, setCurrentShape] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -85,7 +92,6 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
-    ctx.scale(zoom, zoom);
     ctx.drawImage(img, 0, 0, img.naturalWidth * imageScale, img.naturalHeight * imageScale);
 
     const fill = translucent ? FILL_TRANSLUCENT : FILL_SOLID;
@@ -170,7 +176,7 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     }
 
     ctx.restore();
-  }, [shapes, currentShape, imageScale, zoom, panOffset, translucent, selectedIds, tool, polygonPoints]);
+  }, [shapes, currentShape, imageScale, panOffset, translucent, selectedIds, tool, polygonPoints]);
 
   const loadImage = useCallback(() => {
     const img = new window.Image();
@@ -199,15 +205,32 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     return () => window.removeEventListener('resize', h);
   }, [loadImage]);
 
+  // Native wheel listener on container to keep zoom working even when canvas is scaled/overflowing
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom(prev => {
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        return Math.round(Math.max(0.3, Math.min(5, prev + delta)) * 100) / 100;
+      });
+    };
+    container.addEventListener('wheel', handler, { passive: false });
+    return () => container.removeEventListener('wheel', handler);
+  }, []);
+
   const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    // CSS transform:scale handles zoom, so getBoundingClientRect already reflects zoom.
+    // We need to map from screen coords to canvas internal coords.
     const pixelRatioX = canvas.width / rect.width;
     const pixelRatioY = canvas.height / rect.height;
     return {
-      x: ((e.clientX - rect.left) * pixelRatioX - panOffset.x) / zoom,
-      y: ((e.clientY - rect.top) * pixelRatioY - panOffset.y) / zoom,
+      x: (e.clientX - rect.left) * pixelRatioX - panOffset.x,
+      y: (e.clientY - rect.top) * pixelRatioY - panOffset.y,
     };
   };
 
@@ -297,7 +320,7 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
 
     if (draggingId) {
       setDraggingId(null);
-      onChange(shapes); // Commit position
+      emitChange(shapes); // Commit position
       return;
     }
 
@@ -306,7 +329,7 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
       const newShape: OcclusionShape = { ...currentShape, id: crypto.randomUUID(), type: tool as ShapeType };
       const updated = [...shapes, newShape];
       setShapes(updated);
-      onChange(updated);
+      emitChange(updated);
     }
     setDrawing(false);
     setStartPos(null);
@@ -339,15 +362,12 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
       };
       const updated = [...shapes, newShape];
       setShapes(updated);
-      onChange(updated);
+      emitChange(updated);
       setPolygonPoints([]);
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    setZoom(prev => Math.max(0.3, Math.min(5, prev + (e.deltaY > 0 ? -0.1 : 0.1))));
-  };
+  // Wheel zoom handled via native event listener (passive: false) in useEffect above
 
   const addTextShape = () => {
     if (!textPos || !textInput.trim()) return;
@@ -357,7 +377,7 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     const newShape: OcclusionShape = { id: crypto.randomUUID(), type: 'text', x: textPos.x, y: textPos.y, w: tw, h: 30, text: textInput };
     const updated = [...shapes, newShape];
     setShapes(updated);
-    onChange(updated);
+    emitChange(updated);
     setTextInput('');
     setTextPos(null);
   };
@@ -367,25 +387,25 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     const gid = `g${nextGroupId.current++}`;
     const updated = shapes.map(s => selectedIds.has(s.id) ? { ...s, groupId: gid } : s);
     setShapes(updated);
-    onChange(updated);
+    emitChange(updated);
     setSelectedIds(new Set());
   };
 
   const ungroupSelected = () => {
     const updated = shapes.map(s => selectedIds.has(s.id) ? { ...s, groupId: undefined } : s);
     setShapes(updated);
-    onChange(updated);
+    emitChange(updated);
     setSelectedIds(new Set());
   };
 
   const deleteSelected = () => {
     const updated = shapes.filter(s => !selectedIds.has(s.id));
     setShapes(updated);
-    onChange(updated);
+    emitChange(updated);
     setSelectedIds(new Set());
   };
 
-  const clearAll = () => { setShapes([]); onChange([]); setSelectedIds(new Set()); setPolygonPoints([]); };
+  const clearAll = () => { setShapes([]); emitChange([]); setSelectedIds(new Set()); setPolygonPoints([]); };
   const zoomIn = () => setZoom(prev => Math.min(5, prev + 0.25));
   const zoomOut = () => setZoom(prev => Math.max(0.3, prev - 0.25));
 
@@ -494,11 +514,11 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
         )}
 
         {/* Canvas */}
-        <div ref={containerRef} className="relative rounded-lg border border-border overflow-hidden bg-muted/30 flex items-center justify-center">
-          <canvas ref={canvasRef} className="block max-w-full" style={{ maxHeight: '450px', cursor }}
+        <div ref={containerRef} className="relative rounded-lg border border-border overflow-auto bg-muted/30 flex items-start justify-start" style={{ maxHeight: '500px' }}>
+          <canvas ref={canvasRef} className="block" style={{ cursor, transformOrigin: 'top left', transform: `scale(${zoom})` }}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-            onMouseLeave={() => { if (isPanning) setIsPanning(false); if (draggingId) { setDraggingId(null); onChange(shapes); } }}
-            onClick={handleCanvasClick} onDoubleClick={handleCanvasDblClick} onWheel={handleWheel} />
+            onMouseLeave={() => { if (isPanning) setIsPanning(false); if (draggingId) { setDraggingId(null); emitChange(shapes); } }}
+            onClick={handleCanvasClick} onDoubleClick={handleCanvasDblClick} />
         </div>
 
         {/* Info */}

@@ -4,12 +4,16 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
 
-export function useDashboardState(planAllocation?: Record<string, number>) {
+export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: string[]) {
+  const { user } = useAuth();
   const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
   const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
 
@@ -46,6 +50,54 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; type: 'deck' | 'folder'; action: () => void } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  // Fetch global daily_new_cards_limit from profile
+  const globalNewLimitQuery = useQuery({
+    queryKey: ['daily-new-cards-limit', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('daily_new_cards_limit, weekly_new_cards')
+        .eq('id', user!.id)
+        .single();
+      return data as any;
+    },
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+    refetchOnMount: 'always',
+  });
+
+  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
+  const rawGlobalNewLimit = typeof profileLimitData === 'number'
+    ? profileLimitData
+    : profileLimitData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCardsProfile = (profileLimitData && typeof profileLimitData === 'object')
+    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
+    : null;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]
+    : rawGlobalNewLimit;
+
+  // Sum new_reviewed_today scoped to plan decks (when plan exists) or all decks
+  const globalNewReviewedToday = useMemo(() => {
+    const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+    const scopedRoots = planRootIds && planRootIds.size > 0
+      ? roots.filter(d => planRootIds.has(d.id))
+      : roots;
+    return scopedRoots.reduce((sum, d) => {
+      const collectNew = (id: string): number => {
+        const dk = decks.find(x => x.id === id);
+        let nr = dk?.new_reviewed_today ?? 0;
+        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        for (const child of children) nr += collectNew(child.id);
+        return nr;
+      };
+      return sum + collectNew(d.id);
+    }, 0);
+  }, [decks, planRootIds]);
+
+  const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
+
   const isLoading = decksLoading || foldersLoading;
 
   const toggleExpand = (deckId: string) => {
@@ -76,11 +128,69 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     [folders, currentFolderId]
   );
 
+  /** A deck is community-imported if it has source_turma_deck_id, source_listing_id, or is_live_deck */
+  const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
+
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
+    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !isCommunityDeck(d))
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [decks, currentFolderId]
   );
+
+  /** Community decks: imported from turma or marketplace. Only shown at root level. */
+  const communityDecks = useMemo(
+    () => decks.filter(d => !d.parent_deck_id && !d.is_archived && isCommunityDeck(d))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [decks]
+  );
+
+  /** Check which community decks have pending updates (source updated_at > local synced_at). */
+  const sourceTurmaDeckIds = useMemo(
+    () => communityDecks.map(d => d.source_turma_deck_id!).filter(Boolean),
+    [communityDecks]
+  );
+  const pendingUpdatesQuery = useQuery({
+    queryKey: ['community-deck-updates', sourceTurmaDeckIds],
+    queryFn: async () => {
+      if (sourceTurmaDeckIds.length === 0) return new Set<string>();
+      const { data } = await supabase
+        .from('turma_decks')
+        .select('id, deck_id')
+        .in('id', sourceTurmaDeckIds);
+      if (!data || data.length === 0) return new Set<string>();
+      // Get source deck updated_at
+      const sourceDeckIds = data.map((td: any) => td.deck_id);
+      const { data: sourceDecks } = await supabase
+        .from('decks')
+        .select('id, updated_at')
+        .in('id', sourceDeckIds);
+      const sourceUpdatedMap = new Map<string, string>();
+      for (const sd of (sourceDecks ?? []) as any[]) {
+        sourceUpdatedMap.set(sd.id, sd.updated_at);
+      }
+      // Build turma_deck_id -> source_updated_at map
+      const turmaDeckToSourceUpdated = new Map<string, string>();
+      for (const td of data as any[]) {
+        const updated = sourceUpdatedMap.get(td.deck_id);
+        if (updated) turmaDeckToSourceUpdated.set(td.id, updated);
+      }
+      // Compare with user's synced_at
+      const pending = new Set<string>();
+      for (const cd of communityDecks) {
+        const sourceUpdated = turmaDeckToSourceUpdated.get(cd.source_turma_deck_id!);
+        if (sourceUpdated && cd.source_turma_deck_id) {
+          const syncedAt = (cd as any).synced_at;
+          if (!syncedAt || new Date(sourceUpdated) > new Date(syncedAt)) {
+            pending.add(cd.id);
+          }
+        }
+      }
+      return pending;
+    },
+    enabled: !!user && sourceTurmaDeckIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+  const decksWithPendingUpdates = pendingUpdatesQuery.data ?? new Set<string>();
 
   const archivedDecks = useMemo(
     () => {
@@ -128,11 +238,12 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
   };
 
-  /** Aggregates descendant counts then caps using ROOT ancestor's limits.
-   *  When planAllocation is provided (from hook param), uses the plan-allocated new card limit instead of the deck's own limit. */
-  const getAggregateStats = (deck: DeckWithStats, overrideAllocation?: Record<string, number>): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
+  // No sequential distribution — all plan decks share the same globalNewRemaining pool
+  const distributedNewByDeck = null;
+
+
+  const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const raw = getRawAggregateStats(deck);
-    const allocation = overrideAllocation ?? planAllocation;
 
     // Find root ancestor — its config governs the entire hierarchy
     let rootDeck = deck;
@@ -142,14 +253,21 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
       rootDeck = parent;
     }
 
-    // Use plan allocation if available, otherwise fall back to deck's own limit
-    const dailyNewLimit = allocation?.[rootDeck.id] ?? rootDeck.daily_new_limit ?? 20;
+    const dailyNewLimit = rootDeck.daily_new_limit ?? 20;
     const dailyReviewLimit = rootDeck.daily_review_limit ?? 100;
 
     // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
     const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
 
-    const effectiveNew = Math.max(0, Math.min(raw.new_count, dailyNewLimit - rootRaw.newReviewed));
+    // When plan exists, all decks share the same global remaining; otherwise use deck limit
+    const hasPlanActive = planRootIds && planRootIds.size > 0;
+    const deckRemaining = Math.max(0, dailyNewLimit - rootRaw.newReviewed);
+    let effectiveNew: number;
+    if (hasPlanActive && planRootIds!.has(rootDeck.id)) {
+      effectiveNew = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
+    } else {
+      effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
+    }
     const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
     const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
     return { new_count: effectiveNew, learning_count: raw.learning_count, review_count: effectiveReview, reviewed_today: raw.reviewed };
@@ -206,7 +324,7 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
         const deck = decks.find(d => d.id === dId);
         if (!deck) return;
         if (deck.parent_deck_id) buildDeckPath(deck.parent_deck_id);
-        path.push({ id: `deck:${deck.id}`, name: `📦 ${deck.name}` });
+        path.push({ id: `deck:${deck.id}`, name: deck.name });
       };
       buildDeckPath(moveParentDeckId);
     }
@@ -245,7 +363,7 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     // Data
     decks, folders, isLoading,
     currentFolderId, setCurrentFolderId,
-    currentFolders, currentDecks,
+    currentFolders, currentDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
     expandedDecks, toggleExpand,
@@ -279,6 +397,8 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     getSubDecks, getAggregateStats, getCommunityLinkId, getFolderCommunityLinkId,
     getFolderDueCount, folderHasCommunityLink,
     movableDecks,
+    globalNewRemaining,
+    distributedNewByDeck,
   };
 
   function getFolderDueCount(folderId: string): number {

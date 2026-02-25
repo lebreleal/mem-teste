@@ -45,7 +45,7 @@ const DeckDetailContent = () => {
                 <span className="text-foreground">Algoritmo:</span>{' '}
                 <span className="font-medium text-info">
                   {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : (deck as any)?.algorithm_mode === 'fsrs' ? (
-                    <>FSRS-4.5 <Crown className="inline h-3 w-3 text-amber-500 ml-0.5 -mt-0.5" /></>
+                    <>FSRS-6 <Crown className="inline h-3 w-3 text-amber-500 ml-0.5 -mt-0.5" /></>
                   ) : 'SM-2'}
                 </span>
               </button>

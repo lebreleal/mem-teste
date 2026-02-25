@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
+import ankiLogo from '@/assets/anki-logo.svg';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { AnkiParseResult } from '@/lib/ankiParser';
@@ -26,6 +27,12 @@ export interface SubdeckOrganization {
   name: string;
   card_indices: number[];
   children?: SubdeckOrganization[];
+}
+
+interface DetectedDeckNode {
+  name: string;
+  count: number;
+  children: DetectedDeckNode[];
 }
 
 interface ImportCardsDialogProps {
@@ -68,6 +75,88 @@ function parseCSV(text: string, delimiter: string): string[][] {
     rows.push(row);
   }
   return rows;
+}
+
+const splitHierarchyName = (rawName: string): string[] => {
+  const raw = rawName.trim();
+  if (!raw) return [];
+
+  const parts = raw
+    .split(/::|\u001f|[\|｜¦]/g)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts : [raw];
+};
+
+function normalizeSubdeckHierarchy(nodes: SubdeckOrganization[]): SubdeckOrganization[] {
+  type MutableNode = {
+    name: string;
+    cardSet: Set<number>;
+    children: Map<string, MutableNode>;
+  };
+
+  const createNode = (name: string): MutableNode => ({
+    name,
+    cardSet: new Set<number>(),
+    children: new Map<string, MutableNode>(),
+  });
+
+  const root = new Map<string, MutableNode>();
+
+  const ensurePath = (target: Map<string, MutableNode>, path: string[]): MutableNode => {
+    let level = target;
+    let current: MutableNode | null = null;
+
+    for (const segment of path) {
+      const key = segment.toLocaleLowerCase('pt-BR');
+      let next = level.get(key);
+      if (!next) {
+        next = createNode(segment);
+        level.set(key, next);
+      }
+      current = next;
+      level = next.children;
+    }
+
+    return current!;
+  };
+
+  const absorb = (target: Map<string, MutableNode>, node: SubdeckOrganization) => {
+    const path = splitHierarchyName(node.name);
+    if (path.length === 0) return;
+
+    const current = ensurePath(target, path);
+
+    for (const idx of node.card_indices) {
+      if (Number.isInteger(idx) && idx >= 0) current.cardSet.add(idx);
+    }
+
+    if (node.children?.length) {
+      for (const child of node.children) {
+        absorb(current.children, child);
+      }
+    }
+  };
+
+  for (const node of nodes) {
+    absorb(root, node);
+  }
+
+  const toOutput = (map: Map<string, MutableNode>): SubdeckOrganization[] => {
+    return [...map.values()]
+      .map((node) => {
+        const children = toOutput(node.children);
+        return {
+          name: node.name,
+          card_indices: [...node.cardSet],
+          children: children.length > 0 ? children : undefined,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  };
+
+  return toOutput(root);
 }
 
 const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCardsDialogProps) => {
@@ -192,7 +281,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.subdecks && data.subdecks.length > 0) {
-        setSubdecks(data.subdecks);
+        setSubdecks(normalizeSubdeckHierarchy(data.subdecks as SubdeckOrganization[]));
         toast({ title: `${data.subdecks.length} subdecks identificados pela IA!` });
       } else {
         toast({ title: 'Não foi possível identificar temas distintos', variant: 'destructive' });
@@ -246,7 +335,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const { parseApkgFile } = await import('@/lib/ankiParser');
       const result = await parseApkgFile(file);
       setAnkiResult(result);
-      setSubdecks(null);
+      setSubdecks(result.subdecks ? normalizeSubdeckHierarchy(result.subdecks as SubdeckOrganization[]) : null);
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
@@ -299,33 +388,149 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const fileInputs = (
     <>
       <input ref={csvFileRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleFileUpload} />
-      <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc" className="hidden" onChange={handleAnkiUpload} />
+      <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc,.zip" className="hidden" onChange={handleAnkiUpload} />
     </>
   );
 
-  // Count total leaf cards in a subdeck tree
-  const countLeafCards = (sd: SubdeckOrganization): number => {
-    if (sd.children && sd.children.length > 0) {
-      return sd.children.reduce((sum, c) => sum + countLeafCards(c), 0);
-    }
-    return sd.card_indices.length;
+  // Count total cards in a subdeck tree (incluindo nós intermediários)
+  const countTreeCards = (sd: SubdeckOrganization): number => {
+    const own = sd.card_indices.length;
+    const fromChildren = sd.children?.reduce((sum, c) => sum + countTreeCards(c), 0) ?? 0;
+    return own + fromChildren;
   };
 
   const hasHierarchy = subdecks?.some(sd => sd.children && sd.children.length > 0);
 
+  const subdeckStats = useMemo(() => {
+    if (!subdecks || subdecks.length === 0) return null;
+
+    const walk = (nodes: SubdeckOrganization[], depth: number): { decks: number; cards: number; maxDepth: number } => {
+      return nodes.reduce((acc, node) => {
+        const child = node.children?.length ? walk(node.children, depth + 1) : { decks: 0, cards: 0, maxDepth: depth };
+        return {
+          decks: acc.decks + 1 + child.decks,
+          cards: acc.cards + node.card_indices.length + child.cards,
+          maxDepth: Math.max(acc.maxDepth, child.maxDepth, depth),
+        };
+      }, { decks: 0, cards: 0, maxDepth: depth });
+    };
+
+    return walk(subdecks, 1);
+  }, [subdecks]);
+
+  const splitDeckPathLabel = (rawDeckName: string): string[] => {
+    return splitHierarchyName(rawDeckName);
+  };
+
+  const normalizeDeckTitle = (value: string): string => {
+    return value
+      .replace(/^[\-•]+\s*/, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^([a-zA-Z])\.(\S)/, '$1. $2')
+      .trim();
+  };
+
+  const getDeckNodeTitle = (rawDeckName: string): string => {
+    const parts = splitDeckPathLabel(rawDeckName);
+    const last = parts[parts.length - 1] || rawDeckName;
+    return normalizeDeckTitle(last);
+  };
+
+  const detectedAnkiHierarchy = useMemo(() => {
+    if (source !== 'anki' || !ankiResult || ankiResult.cards.length === 0) {
+      return { nodes: [] as DetectedDeckNode[], deckCount: 0, maxDepth: 0 };
+    }
+
+    type MutableNode = { name: string; count: number; children: Map<string, MutableNode> };
+    const roots = new Map<string, MutableNode>();
+
+    const ensure = (map: Map<string, MutableNode>, name: string): MutableNode => {
+      const existing = map.get(name);
+      if (existing) return existing;
+      const created: MutableNode = { name, count: 0, children: new Map() };
+      map.set(name, created);
+      return created;
+    };
+
+    for (const card of ankiResult.cards) {
+      const raw = card.deckName?.trim() || deckName.trim() || 'Anki Import';
+      const parts = splitDeckPathLabel(raw);
+      if (parts.length === 0) continue;
+
+      let level = roots;
+      for (const part of parts) {
+        const node = ensure(level, part);
+        node.count += 1;
+        level = node.children;
+      }
+    }
+
+    const toArray = (map: Map<string, MutableNode>): DetectedDeckNode[] => {
+      return [...map.values()]
+        .map((node) => ({
+          name: node.name,
+          count: node.count,
+          children: toArray(node.children),
+        }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    };
+
+    const nodes = toArray(roots);
+
+    const stats = (items: DetectedDeckNode[], depth: number): { deckCount: number; maxDepth: number } => {
+      return items.reduce((acc, item) => {
+        const child = item.children.length > 0 ? stats(item.children, depth + 1) : { deckCount: 0, maxDepth: depth };
+        return {
+          deckCount: acc.deckCount + 1 + child.deckCount,
+          maxDepth: Math.max(acc.maxDepth, child.maxDepth, depth),
+        };
+      }, { deckCount: 0, maxDepth: depth });
+    };
+
+    return {
+      nodes,
+      ...stats(nodes, 1),
+    };
+  }, [ankiResult, deckName, source]);
+
+  const DetectedAnkiNode = ({ node, depth = 0 }: { node: DetectedDeckNode; depth?: number }) => {
+    const hasChildren = node.children.length > 0;
+
+    return (
+      <div style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
+        <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
+          <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
+            {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
+            {normalizeDeckTitle(node.name)}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{node.count} cartões</span>
+        </div>
+
+        {hasChildren && (
+          <div className="mt-0.5 space-y-0.5">
+            {node.children.map((child, index) => (
+              <DetectedAnkiNode key={`${child.name}-${index}`} node={child} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
   // Recursive node renderer for subdeck preview
   const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
     const hasChildren = node.children && node.children.length > 0;
-    const leafCount = countLeafCards(node);
+    const totalInBranch = countTreeCards(node);
     return (
       <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
-            {node.name}
+            {getDeckNodeTitle(node.name)}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {hasChildren ? `${leafCount} cartões` : `${node.card_indices.length} cartões`}
+            {hasChildren ? `${totalInBranch} cartões` : `${node.card_indices.length} cartões`}
           </span>
         </div>
         {hasChildren && (
@@ -341,14 +546,14 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
   // Subdeck organization preview component
   const SubdeckPreview = () => {
-    if (!subdecks || subdecks.length === 0) return null;
+    if (!subdecks || subdecks.length === 0 || !subdeckStats) return null;
 
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold flex items-center gap-1.5">
             <FolderTree className="h-4 w-4 text-primary" />
-            Organização ({subdecks.length} {hasHierarchy ? 'decks' : 'subdecks'})
+            Organização sugerida ({subdeckStats.decks} decks)
           </Label>
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
             <X className="h-3 w-3 mr-1" />
@@ -362,8 +567,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         </div>
         <p className="text-[11px] text-muted-foreground">
           {hasHierarchy
-            ? `Serão criados ${subdecks.length} deck(s) organizados hierarquicamente.`
-            : `Será criado o deck pai "${deckName}" com ${subdecks.length} subdecks.`}
+            ? `Serão criados ${subdeckStats.decks} deck(s), ${subdeckStats.cards} cartões e profundidade máxima ${subdeckStats.maxDepth}.`
+            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões, incluindo subníveis.`}
         </p>
       </div>
     );
@@ -432,8 +637,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 onClick={handleAnkiFormatClick}
                 className="flex w-full items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-muted/50"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
-                  <Package className="h-5 w-5 text-accent-foreground" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent p-1.5">
+                  <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-card-foreground">Anki</p>
@@ -480,6 +685,24 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 {/* Subdeck preview */}
                 <SubdeckPreview />
 
+                {/* Hierarquia detectada no arquivo Anki */}
+                {detectedAnkiHierarchy.nodes.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5">
+                      <FolderTree className="h-4 w-4 text-primary" />
+                      Estrutura original do arquivo ({detectedAnkiHierarchy.deckCount} decks)
+                    </Label>
+                    <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/20 p-2">
+                      {detectedAnkiHierarchy.nodes.map((node, index) => (
+                        <DetectedAnkiNode key={`${node.name}-${index}`} node={node} />
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Profundidade máxima detectada: {detectedAnkiHierarchy.maxDepth} nível(is).
+                    </p>
+                  </div>
+                )}
+
                 {/* Preview */}
                 <div>
                   <Label className="mb-2 block text-sm font-semibold">
@@ -488,12 +711,20 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   <div className="max-h-48 overflow-y-auto space-y-2">
                     {ankiResult.cards.slice(0, 20).map((card, i) => (
                       <div key={i} className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                             card.cardType === 'cloze' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                           }`}>
                             {card.cardType === 'cloze' ? 'Cloze' : 'Básico'}
                           </span>
+                          {card.deckName && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
+                              title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
+                            >
+                              {getDeckNodeTitle(card.deckName)}
+                            </span>
+                          )}
                           {card.tags.length > 0 && (
                             <span className="text-[10px] text-muted-foreground">{card.tags.slice(0, 3).join(', ')}</span>
                           )}
@@ -515,8 +746,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                   <Button onClick={handleImport} disabled={!deckName.trim() || loading}>
-                    {loading ? 'Importando...' : subdecks
-                      ? `Importar (${subdecks.length} subdecks)`
+                    {loading ? 'Importando...' : subdecks && subdeckStats
+                      ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
                       : `Importar (${ankiResult.cards.length})`
                     }
                   </Button>
@@ -683,8 +914,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                 <Button onClick={handleImport} disabled={parsedCards.length === 0 || !deckName.trim() || loading}>
-                  {loading ? 'Importando...' : subdecks
-                    ? `Importar (${subdecks.length} subdecks)`
+                  {loading ? 'Importando...' : subdecks && subdeckStats
+                    ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
                     : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`
                   }
                 </Button>

@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,11 +17,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import ImageOcclusion from '@/components/ImageOcclusion';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import * as cardService from '@/services/cardService';
+
+const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 
 interface StudyCardActionsProps {
   card: {
@@ -31,6 +34,7 @@ interface StudyCardActionsProps {
     card_type: string;
     deck_id: string;
   };
+  isLiveDeck?: boolean;
   onCardUpdated: (updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: () => void;
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
@@ -39,9 +43,9 @@ interface StudyCardActionsProps {
   chatHasMessages?: boolean;
 }
 
-type EditorCardType = 'basic' | 'cloze' | 'multiple_choice';
+type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
-const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -55,6 +59,11 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   const [editorType, setEditorType] = useState<EditorCardType>('basic');
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState(0);
+  const [occlusionImageUrl, setOcclusionImageUrl] = useState('');
+  const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionActiveRectIds, setOcclusionActiveRectIds] = useState<string[]>([]);
+  const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Store original front_content to find siblings
@@ -64,6 +73,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   const [isImproving, setIsImproving] = useState(false);
   const [improvePreview, setImprovePreview] = useState<{ front: string; back: string } | null>(null);
   const [improveModalOpen, setImproveModalOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const openEdit = async () => {
     setEditLoading(true);
@@ -72,6 +82,10 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       await import('@/components/RichEditor');
     } catch {}
     setFront(card.front_content);
+    setOcclusionImageUrl('');
+    setOcclusionRects([]);
+    setOcclusionActiveRectIds([]);
+    setOcclusionCanvasSize(null);
     originalFrontRef.current = card.front_content;
     if (card.card_type === 'multiple_choice') {
       setEditorType('multiple_choice');
@@ -94,6 +108,24 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       } catch {
         setBack(card.back_content);
       }
+    } else if (card.card_type === 'image_occlusion') {
+      setEditorType('image_occlusion');
+      try {
+        const data = JSON.parse(card.front_content);
+        setOcclusionImageUrl(data.imageUrl || '');
+        const rects = data.allRects || data.rects || [];
+        setOcclusionRects(rects);
+        setOcclusionActiveRectIds(data.activeRectIds || rects.map((r: any) => r.id));
+        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+        setFront(data.frontText || '');
+      } catch {
+        setOcclusionImageUrl('');
+        setOcclusionRects([]);
+        setOcclusionActiveRectIds([]);
+        setOcclusionCanvasSize(null);
+        setFront('');
+      }
+      setBack(card.back_content);
     } else {
       setEditorType('basic');
       setBack(card.back_content);
@@ -133,7 +165,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
   };
 
   const handleSave = async () => {
-    if (!front.trim()) {
+    if (editorType !== 'image_occlusion' && !front.trim()) {
       toast({ title: 'Preencha a pergunta', variant: 'destructive' });
       return;
     }
@@ -266,6 +298,43 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       return;
     }
 
+    // Image occlusion save
+    if (editorType === 'image_occlusion') {
+      if (!occlusionImageUrl || occlusionRects.length === 0) {
+        toast({ title: 'Adicione a imagem e pelo menos uma oclusão', variant: 'destructive' });
+        return;
+      }
+      setIsSaving(true);
+      try {
+        const cw = occlusionCanvasSize?.w;
+        const ch = occlusionCanvasSize?.h;
+        const frontText = front.trim() ? front : undefined;
+        const frontContent = JSON.stringify({
+          imageUrl: occlusionImageUrl,
+          allRects: occlusionRects,
+          activeRectIds: occlusionActiveRectIds.length > 0 ? occlusionActiveRectIds : occlusionRects.map((r: any) => r.id),
+          canvasWidth: cw,
+          canvasHeight: ch,
+          ...(frontText ? { frontText } : {}),
+        });
+        const { error } = await supabase
+          .from('cards')
+          .update({ front_content: frontContent, back_content: back })
+          .eq('id', card.id);
+        if (error) throw error;
+        toast({ title: 'Card atualizado!' });
+        setEditOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
+        queryClient.invalidateQueries({ queryKey: ['cards'] });
+        onCardUpdated({ front_content: frontContent, back_content: back });
+      } catch {
+        toast({ title: 'Erro ao salvar', variant: 'destructive' });
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
     // Basic save
     setIsSaving(true);
     try {
@@ -366,7 +435,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
     toast({ title: 'Melhoria aplicada e salva!' });
   };
 
-  const canImprove = editorType && editorType !== 'image_occlusion' as any;
+  const canImprove = editorType && editorType !== 'image_occlusion';
 
   return (
     <>
@@ -413,6 +482,11 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
             <DropdownMenuItem onClick={openEdit} className="gap-2">
               <Pencil className="h-3.5 w-3.5" /> Editar card
             </DropdownMenuItem>
+            {isLiveDeck && (
+              <DropdownMenuItem onClick={() => setSuggestOpen(true)} className="gap-2">
+                <Send className="h-3.5 w-3.5" /> Sugerir correção
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => setFreezeConfirmOpen(true)} className="gap-2">
               <Snowflake className="h-3.5 w-3.5" /> Congelar card
             </DropdownMenuItem>
@@ -437,7 +511,7 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
       </AlertDialog>
 
       {/* Edit dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={editOpen && !occlusionModalOpen} onOpenChange={(open) => { if (!open) { setEditOpen(false); setOcclusionModalOpen(false); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -448,12 +522,18 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
           <div className="space-y-4">
             <div>
               <Label className="mb-1.5 block">
-                {editorType === 'multiple_choice' ? 'Pergunta' : editorType === 'cloze' ? 'Texto com lacunas' : 'Frente (Pergunta)'}
+                {editorType === 'multiple_choice'
+                  ? 'Pergunta'
+                  : editorType === 'cloze'
+                    ? 'Texto com lacunas'
+                    : editorType === 'image_occlusion'
+                      ? 'Frente (Pergunta)'
+                      : 'Frente (Pergunta)'}
               </Label>
               <LazyRichEditor
                 content={front}
                 onChange={setFront}
-                placeholder="Pergunta..."
+                placeholder={editorType === 'image_occlusion' ? 'Pergunta ou contexto (opcional)' : 'Pergunta...'}
               />
             </div>
 
@@ -514,7 +594,40 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
                   Cria um cloze com <strong>número novo</strong>, gerando um <strong>card separado</strong>.
                 </p>
               </div>
-            ) : (
+            ) : editorType === 'image_occlusion' ? (
+              <div className="space-y-2">
+                <Label className="mb-1.5 block">Imagem de oclusão</Label>
+                {occlusionImageUrl ? (
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOcclusionModalOpen(true)}
+                      className="relative inline-block rounded-lg overflow-hidden border border-border"
+                      title="Editar oclusões"
+                    >
+                      <img src={occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                        <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    </button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => { setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionActiveRectIds([]); setOcclusionCanvasSize(null); setOcclusionModalOpen(false); }}
+                      title="Remover imagem"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Cole (Ctrl+V) ou anexe uma imagem no campo Frente para criar oclusões.</p>
+                )}
+              </div>
+            ) : null}
+
+            {(editorType === 'basic' || editorType === 'image_occlusion') && (
               <div>
                 <Label className="mb-1.5 block">Verso (Resposta)</Label>
                 <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta..." hideCloze />
@@ -549,6 +662,37 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
         </DialogContent>
       </Dialog>
 
+      {/* Occlusion editor modal */}
+      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editor de oclusão</DialogTitle>
+          </DialogHeader>
+          {occlusionImageUrl ? (
+            <div className="space-y-3">
+              <ImageOcclusion
+                imageUrl={occlusionImageUrl}
+                initialRects={occlusionRects}
+                onChange={(rects, meta) => {
+                  setOcclusionRects(rects);
+                  setOcclusionActiveRectIds(prev => {
+                    const currentIds = new Set(rects.map((r: any) => r.id));
+                    const kept = prev.filter(id => currentIds.has(id));
+                    return kept.length > 0 ? kept : rects.map((r: any) => r.id);
+                  });
+                  if (meta) setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight });
+                }}
+              />
+              <div className="flex justify-end">
+                <Button onClick={() => setOcclusionModalOpen(false)}>Concluir</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma imagem de oclusão carregada.</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* AI Improve preview dialog */}
       <Dialog open={improveModalOpen} onOpenChange={setImproveModalOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -577,6 +721,17 @@ const StudyCardActions = ({ card, onCardUpdated, onCardFrozen, onSiblingsUpdated
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Suggest correction modal for live decks */}
+      {isLiveDeck && (
+        <Suspense fallback={null}>
+          <SuggestCorrectionModal
+            open={suggestOpen}
+            onOpenChange={setSuggestOpen}
+            card={card}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

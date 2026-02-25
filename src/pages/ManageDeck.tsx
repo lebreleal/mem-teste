@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -8,8 +8,9 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send, Upload, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -19,6 +20,277 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+
+/* ─── Occlusion Editor Component ─── */
+
+interface OcclusionRect {
+  x: number; y: number; w: number; h: number; id: string;
+}
+
+interface OcclusionEditorProps {
+  initialFront: string;
+  onSave: (front: string, back: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}
+
+const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: OcclusionEditorProps) => {
+  const [imageUrl, setImageUrl] = useState('');
+  const [rects, setRects] = useState<OcclusionRect[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [drawing, setDrawing] = useState(false);
+  const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const pendingNaturalRects = useRef<OcclusionRect[] | null>(null);
+
+  useEffect(() => {
+    if (initialFront) {
+      try {
+        const data = JSON.parse(initialFront);
+        if (data.imageUrl) setImageUrl(data.imageUrl);
+        if (data.allRects) pendingNaturalRects.current = data.allRects;
+      } catch {}
+    }
+  }, [initialFront]);
+
+  const drawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(zoom, zoom);
+    ctx.drawImage(img, 0, 0, img.naturalWidth * imageScale, img.naturalHeight * imageScale);
+
+    rects.forEach((r, i) => {
+      ctx.fillStyle = selectedId === r.id ? 'rgba(59,130,246,0.5)' : 'rgba(59,130,246,0.75)';
+      ctx.strokeStyle = selectedId === r.id ? '#facc15' : 'rgba(59,130,246,1)';
+      ctx.lineWidth = selectedId === r.id ? 3 : 2;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${i + 1}`, r.x + r.w / 2, r.y + r.h / 2);
+    });
+
+    if (currentRect) {
+      ctx.fillStyle = 'rgba(59,130,246,0.25)';
+      ctx.strokeStyle = 'rgba(59,130,246,0.8)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+      ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }, [rects, currentRect, imageScale, zoom, selectedId]);
+
+  const loadImage = useCallback((url: string) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imgRef.current = img;
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
+      const maxW = container.clientWidth;
+      const maxH = 400;
+      const s = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+      setImageScale(s);
+      canvas.width = Math.round(img.naturalWidth * s * zoom);
+      canvas.height = Math.round(img.naturalHeight * s * zoom);
+      // Rescale pending natural rects to canvas coordinates
+      if (pendingNaturalRects.current) {
+        const scaled = pendingNaturalRects.current.map(r => ({
+          ...r,
+          x: r.x * s,
+          y: r.y * s,
+          w: r.w * s,
+          h: r.h * s,
+        }));
+        setRects(scaled);
+        pendingNaturalRects.current = null;
+      }
+    };
+    img.src = url;
+  }, [zoom]);
+
+  useEffect(() => { if (imageUrl) loadImage(imageUrl); }, [imageUrl, loadImage]);
+  useEffect(() => { drawCanvas(); }, [drawCanvas]);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    canvas.width = Math.round(img.naturalWidth * imageScale * zoom);
+    canvas.height = Math.round(img.naturalHeight * imageScale * zoom);
+    drawCanvas();
+  }, [zoom, imageScale, drawCanvas]);
+
+  const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) * (canvas.width / rect.width)) / zoom,
+      y: ((e.clientY - rect.top) * (canvas.height / rect.height)) / zoom,
+    };
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const pos = toCanvasCoords(e);
+    const hit = [...rects].reverse().find(r => pos.x >= r.x && pos.x <= r.x + r.w && pos.y >= r.y && pos.y <= r.y + r.h);
+    if (hit) { setSelectedId(hit.id); return; }
+    setSelectedId(null);
+    setDrawing(true);
+    setStartPos(pos);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!drawing || !startPos) return;
+    const pos = toCanvasCoords(e);
+    setCurrentRect({
+      x: Math.min(startPos.x, pos.x), y: Math.min(startPos.y, pos.y),
+      w: Math.abs(pos.x - startPos.x), h: Math.abs(pos.y - startPos.y),
+    });
+  };
+
+  const handleMouseUp = () => {
+    if (!drawing || !currentRect) { setDrawing(false); return; }
+    if (currentRect.w > 10 && currentRect.h > 10) {
+      setRects(prev => [...prev, { ...currentRect, id: crypto.randomUUID() }]);
+    }
+    setDrawing(false);
+    setStartPos(null);
+    setCurrentRect(null);
+  };
+
+  const deleteSelected = () => {
+    if (!selectedId) return;
+    setRects(prev => prev.filter(r => r.id !== selectedId));
+    setSelectedId(null);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('card-images').upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
+      setImageUrl(urlData.publicUrl);
+      setRects([]);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!imageUrl || rects.length === 0) return;
+    // Normalize rects from scaled coordinates to natural image coordinates
+    const scale = imageScale || 1;
+    const normalizedRects = rects.map(r => ({
+      ...r,
+      x: r.x / scale,
+      y: r.y / scale,
+      w: r.w / scale,
+      h: r.h / scale,
+    }));
+    const frontContent = JSON.stringify({
+      imageUrl,
+      allRects: normalizedRects,
+      activeRectIds: normalizedRects.map(r => r.id),
+    });
+    onSave(frontContent, '');
+  };
+
+  if (!imageUrl) {
+    return (
+      <div className="space-y-4">
+        {!initialFront && (
+          <button onClick={onCancel} className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-3 w-3" />
+            <Image className="h-4 w-4" /> Oclusão de imagem
+          </button>
+        )}
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-3">
+          <Upload className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">Envie uma imagem</p>
+          <p className="text-xs text-muted-foreground max-w-xs">
+            Selecione a imagem e depois marque as áreas que serão ocultadas durante o estudo.
+          </p>
+          <label className="cursor-pointer">
+            <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+            <span className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? 'Enviando...' : 'Escolher imagem'}
+            </span>
+          </label>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {!initialFront && (
+        <button onClick={() => { setImageUrl(''); setRects([]); }} className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-3 w-3" />
+          <Image className="h-4 w-4" /> Trocar imagem
+        </button>
+      )}
+
+      <div className="flex items-center gap-1 flex-wrap rounded-lg border border-border bg-muted/30 p-1.5">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.3, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
+        <span className="text-xs text-muted-foreground w-10 text-center select-none">{Math.round(zoom * 100)}%</span>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
+        <div className="h-5 w-px bg-border mx-1" />
+        {selectedId && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={deleteSelected}><Trash2 className="h-4 w-4" /></Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => { setRects([]); setSelectedId(null); }} className="gap-1 text-xs h-8 ml-auto">
+          <RotateCcw className="h-3 w-3" /> Limpar
+        </Button>
+      </div>
+
+      <div ref={containerRef} className="relative rounded-lg border border-border overflow-auto bg-muted/30 max-h-[400px]">
+        <canvas ref={canvasRef} className="block" style={{ cursor: 'crosshair' }}
+          onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+          onMouseLeave={() => { if (drawing) { setDrawing(false); setStartPos(null); setCurrentRect(null); } }}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {rects.length} área(s) marcada(s). Desenhe retângulos sobre as partes que deseja ocultar.
+      </p>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+        <Button onClick={handleSave} disabled={isSaving || rects.length === 0}>
+          {isSaving ? 'Salvando...' : `Salvar (${rects.length} área${rects.length !== 1 ? 's' : ''})`}
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
@@ -44,6 +316,19 @@ const ManageDeck = () => {
   const [back, setBack] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editorType, setEditorType] = useState<EditorCardType | null>(null);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
+  const [suggestCard, setSuggestCard] = useState<{ id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null>(null);
+
+  // Detect if this is a community deck (has source_turma_deck_id or source_listing_id)
+  const { data: deckMeta } = useQuery({
+    queryKey: ['deck-meta', deckId],
+    queryFn: async () => {
+      const { data } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id').eq('id', deckId!).single();
+      return data as { source_turma_deck_id: string | null; source_listing_id: string | null } | null;
+    },
+    enabled: !!deckId,
+  });
+  const isCommunityDeck = !!(deckMeta?.source_turma_deck_id || deckMeta?.source_listing_id);
 
   // Multiple choice state
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
@@ -90,6 +375,11 @@ const ManageDeck = () => {
       }
     } else if (card.card_type === 'image_occlusion') {
       setEditorType('image_occlusion');
+      // Extract frontText from occlusion JSON if present
+      try {
+        const occData = JSON.parse(card.front_content);
+        // Don't overwrite front — keep the full JSON; the editor will extract frontText
+      } catch {}
       setBack(card.back_content);
     } else {
       setEditorType('basic');
@@ -288,7 +578,10 @@ const ManageDeck = () => {
         {CARD_TYPES.map(type => (
           <button
             key={type.value}
-            onClick={() => setEditorType(type.value)}
+            onClick={() => {
+              setEditorType(type.value);
+              if (type.value === 'image_occlusion') setOcclusionModalOpen(true);
+            }}
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
@@ -319,16 +612,83 @@ const ManageDeck = () => {
       )}
 
       {editorType === 'image_occlusion' ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center space-y-3">
-          <span className="text-4xl">🖼️</span>
-          <p className="text-sm font-medium text-foreground">Oclusão de Imagem</p>
-          <p className="text-xs text-muted-foreground max-w-xs">
-            Para criar cards de oclusão, use o editor de oclusão na página do baralho (botão "Oclusão de Imagem").
-          </p>
-          <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); navigate(`/decks/${deckId}`); }}>
-            Ir para o Baralho
-          </Button>
-        </div>
+        <>
+          <div>
+            <Label className="mb-1.5 block">Frente (Pergunta)</Label>
+            <LazyRichEditor
+              content={(() => { try { const d = JSON.parse(front); return d.frontText || ''; } catch { return front; } })()}
+              onChange={(v) => {
+                // Store frontText inside the occlusion JSON
+                try {
+                  const d = JSON.parse(front);
+                  d.frontText = v;
+                  setFront(JSON.stringify(d));
+                } catch {
+                  // No occlusion data yet, just store as text
+                  setFront(v);
+                }
+              }}
+              placeholder="Pergunta ou contexto (opcional)"
+              hideCloze
+            />
+            {/* Occlusion image thumbnail */}
+            {(() => {
+              let occData: { imageUrl?: string; allRects?: any[] } | null = null;
+              try { occData = JSON.parse(front); } catch {}
+
+              if (occData?.imageUrl) {
+                return (
+                  <div className="mt-2 inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => setOcclusionModalOpen(true)}
+                      className="relative group inline-block rounded-lg overflow-hidden border border-border"
+                    >
+                      <img src={occData.imageUrl} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                        <Image className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFront(''); }}
+                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors"
+                      >
+                        ×
+                      </button>
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  type="button"
+                  onClick={() => setOcclusionModalOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
+                </button>
+              );
+            })()}
+          </div>
+
+          <div>
+            <Label className="mb-1.5 block">Verso</Label>
+            <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta / nota extra" hideCloze />
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
+            {!editingId && (
+              <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving || !front}>
+                {isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}
+              </Button>
+            )}
+            <Button onClick={() => handleSave(false)} disabled={isSaving || !front}>
+              {isSaving ? 'Salvando...' : 'Salvar e Fechar'}
+            </Button>
+          </div>
+        </>
       ) : (
         <>
           <div>
@@ -573,12 +933,16 @@ const ManageDeck = () => {
             <Button variant="ghost" size="icon" onClick={() => navigate(`/decks/${deckId}`)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="font-display text-xl font-bold text-foreground">Gerenciar Cards</h1>
+            <h1 className="font-display text-xl font-bold text-foreground">
+              {isCommunityDeck ? 'Cards do Deck' : 'Gerenciar Cards'}
+            </h1>
           </div>
-          <Button onClick={openNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Novo Card</span>
-          </Button>
+          {!isCommunityDeck && (
+            <Button onClick={openNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Novo Card</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -603,9 +967,28 @@ const ManageDeck = () => {
                   <div className="flex items-center gap-2 mb-1">
                     {getCardTypeBadge(card.card_type)}
                   </div>
-                  <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
-                  {card.card_type !== 'multiple_choice' && (
-                    <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
+                  {card.card_type === 'image_occlusion' ? (() => {
+                    try {
+                      const data = JSON.parse(card.front_content);
+                      const rectCount = data.allRects?.length || 0;
+                      return (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
+                            {data.imageUrl && <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      );
+                    } catch {
+                      return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
+                    }
+                  })() : (
+                    <>
+                      <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
+                      {card.card_type !== 'multiple_choice' && (
+                        <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
+                      )}
+                    </>
                   )}
                   {card.card_type === 'multiple_choice' && (() => {
                     try {
@@ -615,12 +998,20 @@ const ManageDeck = () => {
                   })()}
                 </div>
                 <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(card)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(card.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {isCommunityDeck ? (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => setSuggestCard(card)} title="Sugerir correção">
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(card)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(card.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -629,8 +1020,8 @@ const ManageDeck = () => {
       </main>
 
       {/* Card Editor Dialog */}
-      <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-        <DialogContent className={`max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto ${editorType === 'image_occlusion' ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
+      <Dialog open={editorOpen && !occlusionModalOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
+        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
               {editingId ? 'Editar Card' : editorType ? CARD_TYPES.find(t => t.value === editorType)?.label : 'Novo Card'}
@@ -661,6 +1052,39 @@ const ManageDeck = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Occlusion Editor Modal */}
+      <Dialog open={occlusionModalOpen} onOpenChange={(open) => { setOcclusionModalOpen(open); }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Image className="h-5 w-5 text-primary" />
+              Oclusão de Imagem
+            </DialogTitle>
+          </DialogHeader>
+          <OcclusionEditor
+            initialFront={front}
+            onSave={(frontContent) => {
+              // Preserve frontText from existing front state
+              try {
+                const existing = JSON.parse(front);
+                if (existing.frontText) {
+                  const newData = JSON.parse(frontContent);
+                  newData.frontText = existing.frontText;
+                  setFront(JSON.stringify(newData));
+                } else {
+                  setFront(frontContent);
+                }
+              } catch {
+                setFront(frontContent);
+              }
+              setOcclusionModalOpen(false);
+            }}
+            onCancel={() => setOcclusionModalOpen(false)}
+            isSaving={false}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent>
@@ -674,6 +1098,15 @@ const ManageDeck = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Suggest Correction Modal for community decks */}
+      {suggestCard && (
+        <SuggestCorrectionModal
+          open={!!suggestCard}
+          onOpenChange={(open) => { if (!open) setSuggestCard(null); }}
+          card={suggestCard}
+        />
+      )}
     </div>
   );
 };

@@ -291,10 +291,16 @@ ${getOutputExamples(formats)}`;
     let jsonStr = rawContent
       .replace(/^\uFEFF/, '')
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/```\s*$/, '')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // strip control chars except \n \r \t
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .trim();
+
+    // Fix unescaped newlines inside JSON string values (common AI output issue)
+    // This runs BEFORE any JSON.parse attempt
+    jsonStr = jsonStr.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
+      return match.replace(/(?<!\\)\n/g, '\\n').replace(/(?<!\\)\r/g, '\\r');
+    });
 
     const m = jsonStr.match(/\[[\s\S]*\]/);
     if (m) {
@@ -332,14 +338,29 @@ ${getOutputExamples(formats)}`;
           }
         }
       } catch {
-        // Third attempt: try to fix unescaped newlines inside strings
+        // Third attempt: aggressive newline/tab fix + trailing comma cleanup
         try {
-          const fixed = jsonStr.replace(/"([^"]*)\n([^"]*)"/g, (_, a, b) => `"${a}\\n${b}"`);
+          let fixed = jsonStr;
+          // Replace all literal newlines/tabs inside strings
+          fixed = fixed.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
+            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+          });
+          fixed = fixed.replace(/,\s*([}\]])/g, '$1');
           cards = JSON.parse(fixed);
         } catch {
-          console.error("Parse failed, raw:", rawContent.substring(0, 500));
-          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+          // Fourth attempt: extract individual JSON objects with regex
+          try {
+            const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
+            if (objMatches.length > 0) {
+              cards = JSON.parse('[' + objMatches.map(m => m[0]).join(',') + ']');
+            } else {
+              throw new Error("no objects found");
+            }
+          } catch {
+            console.error("Parse failed, raw:", rawContent.substring(0, 500));
+            if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+            return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+          }
         }
       }
     }

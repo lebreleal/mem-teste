@@ -228,6 +228,9 @@ export async function importDeck(userId: string, name: string, folderId: string 
     front_content: c.frontContent,
     back_content: c.backContent,
     card_type: c.cardType,
+    state: 0,
+    stability: 0,
+    difficulty: 0,
   }));
   // Batch insert to avoid payload limits
   const BATCH_SIZE = 200;
@@ -267,6 +270,9 @@ export async function importDeckWithSubdecks(
         front_content: cards[idx].frontContent,
         back_content: cards[idx].backContent,
         card_type: cards[idx].cardType,
+        state: 0,
+        stability: 0,
+        difficulty: 0,
       }));
     const BATCH_SIZE = 200;
     for (let i = 0; i < validCards.length; i += BATCH_SIZE) {
@@ -297,10 +303,11 @@ export async function importDeckWithSubdecks(
 
     const deckId = (deck as any).id;
 
-    if (!node.children || node.children.length === 0) {
+    if (node.card_indices.length > 0) {
       await insertCards(deckId, node.card_indices);
-    } else {
-      // Recursively create children
+    }
+
+    if (node.children && node.children.length > 0) {
       for (const child of node.children) {
         await createDeckTree(child, deckId, nodeFolderId);
       }

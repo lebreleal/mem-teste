@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, Pencil,
+  ChevronRight, Link2, Pencil, RefreshCw,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -33,13 +33,14 @@ interface DeckRowProps {
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
+  hasPendingUpdate?: boolean;
 }
 
 const DeckRow = ({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers,
+  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers, hasPendingUpdate,
 }: DeckRowProps) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -48,6 +49,7 @@ const DeckRow = ({
   const stats = getAggregateStats(deck);
   const totalDue = stats.new_count + stats.learning_count + stats.review_count;
   const isDeckSelected = selectedDeckIds.has(deck.id);
+  const isCommunityDeck = !!(deck.source_turma_deck_id || deck.source_listing_id);
 
   const basePadding = depth === 0 ? 8 : 20 + depth * 24;
 
@@ -79,7 +81,13 @@ const DeckRow = ({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
+            {(deck.source_turma_deck_id || deck.source_listing_id) && (
+              <span title="Deck sincronizado"><RefreshCw className="h-3.5 w-3.5 text-info shrink-0" /></span>
+            )}
             <h3 className="font-display font-semibold text-card-foreground truncate">{deck.name}</h3>
+            {hasPendingUpdate && (
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
+            )}
             {(() => {
               const linkId = getCommunityLinkId(deck);
               return linkId ? (
@@ -91,6 +99,7 @@ const DeckRow = ({
           </div>
           <p className="text-xs text-muted-foreground">
             {deck.source_author && <span className="text-primary font-medium">por {deck.source_author} · </span>}
+            {isCommunityDeck && !deck.source_author && <span className="text-primary font-medium">Deck da comunidade · </span>}
             {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
           </p>
         </div>
@@ -101,22 +110,22 @@ const DeckRow = ({
               <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!deck.source_turma_deck_id && (
+              {!isCommunityDeck && (
                 <DropdownMenuItem onClick={() => onRename(deck)}>
                   <Pencil className="mr-2 h-4 w-4" /> Renomear
                 </DropdownMenuItem>
               )}
-              {!deck.source_turma_deck_id && (
+              {!isCommunityDeck && (
                 <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
                   <Settings className="mr-2 h-4 w-4" /> Configurações
                 </DropdownMenuItem>
               )}
-              {!deck.source_turma_deck_id && (
+              {!isCommunityDeck && (
                 <DropdownMenuItem onClick={() => onCreateSubDeck(deck.id)}>
                   <CirclePlus className="mr-2 h-4 w-4" /> Adicionar sub-deck
                 </DropdownMenuItem>
               )}
-              {!deck.source_turma_deck_id ? (
+              {!isCommunityDeck ? (
                 <DropdownMenuItem onClick={() => onMove(deck)}>
                   <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                 </DropdownMenuItem>

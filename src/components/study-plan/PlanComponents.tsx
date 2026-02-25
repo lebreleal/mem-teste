@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, GripVertical, Play, Pencil, Check, Info, Clock, TrendingUp, Timer, CheckCircle2, BarChart3, CalendarIcon, Layers, CalendarDays, Target, Plus, HelpCircle, Briefcase } from 'lucide-react';
-import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -232,15 +232,34 @@ function SimulatorTooltip({ active, payload, summary }: any) {
       <p className="text-muted-foreground">
         {formatMinutes(d.totalMin)} de estudo
       </p>
-      {summary && (
-        <>
-          <div className="h-px bg-border" />
-          <div className="space-y-0.5 text-muted-foreground">
-            <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
-            <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
-          </div>
-        </>
-      )}
+      {(() => {
+        const isWeekly = d.day?.startsWith("S") || d.date?.includes(" - ");
+        if (isWeekly) {
+          const avg7 = Math.round(d.totalMin / 7);
+          const avg5 = Math.round(d.totalMin / 5);
+          return (
+            <>
+              <div className="h-px bg-border" />
+              <div className="space-y-0.5 text-muted-foreground">
+                <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(avg5)}/dia</span></p>
+                <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(avg7)}/dia</span></p>
+              </div>
+            </>
+          );
+        }
+        if (summary) {
+          return (
+            <>
+              <div className="h-px bg-border" />
+              <div className="space-y-0.5 text-muted-foreground">
+                <p>Média Seg-Sex: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgWeekdayMin)}/dia</span></p>
+                <p>Média 7 dias: <span className="font-semibold text-popover-foreground">~{formatMinutes(summary.avgAllDaysMin)}/dia</span></p>
+              </div>
+            </>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
@@ -256,7 +275,7 @@ function SimulationControls({
   isUsingDefaults,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
-  defaultNewCardsPerDay: number;
+  defaultNewCardsPerDay: number | { daily_new_cards_limit?: number; weekly_new_cards?: WeeklyNewCards | null };
   newCardsOverride: number | undefined;
   onNewCardsChange: (v: number | undefined) => void;
   defaultCreatedCardsPerDay: number;
@@ -283,6 +302,10 @@ function SimulationControls({
 
   const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+  const normalizedDefaultNewCardsPerDay = typeof defaultNewCardsPerDay === 'number'
+    ? defaultNewCardsPerDay
+    : (typeof defaultNewCardsPerDay?.daily_new_cards_limit === 'number' ? defaultNewCardsPerDay.daily_new_cards_limit : 30);
+
   // Capacity weekly
   const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? {
     mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes,
@@ -295,10 +318,10 @@ function SimulationControls({
 
   // New cards weekly
   const currentNewCardsWeekly = weeklyNewCardsOverride ?? realWeeklyNewCards ?? {
-    mon: defaultNewCardsPerDay, tue: defaultNewCardsPerDay, wed: defaultNewCardsPerDay, thu: defaultNewCardsPerDay,
-    fri: defaultNewCardsPerDay, sat: defaultNewCardsPerDay, sun: defaultNewCardsPerDay,
+    mon: normalizedDefaultNewCardsPerDay, tue: normalizedDefaultNewCardsPerDay, wed: normalizedDefaultNewCardsPerDay, thu: normalizedDefaultNewCardsPerDay,
+    fri: normalizedDefaultNewCardsPerDay, sat: normalizedDefaultNewCardsPerDay, sun: normalizedDefaultNewCardsPerDay,
   };
-  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
+  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
   const isNewCardsOverridden = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined;
 
   const [tempNewCardsWeekly, setTempNewCardsWeekly] = useState<WeeklyNewCards>(currentNewCardsWeekly);
@@ -355,24 +378,24 @@ function SimulationControls({
                   <div key={dk} className="flex items-center gap-2">
                     <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
                     <Slider
-                      value={[tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay]}
+                      value={[tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay]}
                       onValueChange={([v]) => setTempNewCardsWeekly(prev => ({ ...prev, [dk]: v }))}
                       min={0} max={200} step={5}
                       className="flex-1"
                     />
-                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
-                      {tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay}
+                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
+                      {tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay}
                     </span>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-center text-muted-foreground">
-                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
+                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
               </p>
               <Button className="w-full" onClick={() => {
                 onWeeklyNewCardsChange(tempNewCardsWeekly);
-                const avg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly);
-                onNewCardsChange(avg === defaultNewCardsPerDay ? undefined : avg);
+                const avg = getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, tempNewCardsWeekly);
+                onNewCardsChange(avg === normalizedDefaultNewCardsPerDay ? undefined : avg);
                 setEditingNewCards(false);
               }}>
                 <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação
@@ -519,6 +542,81 @@ export function ForecastSimulator({
     learningTotal: d.learningCards + d.relearningCards,
   }));
 
+  // Colors for objective deadline lines
+  const OBJECTIVE_COLORS = [
+    'hsl(280 70% 55%)',  // purple
+    'hsl(350 80% 55%)',  // rose
+    'hsl(190 80% 45%)',  // cyan
+    'hsl(30 90% 50%)',   // orange
+  ];
+
+  // Map plans with target dates to their matching chart day labels
+  const objectiveLines = React.useMemo(() => {
+    if (!plansWithDate.length || !chartData.length) return [];
+
+    // Determine the chart's actual date range
+    const firstDate = parseSimDate(chartData[0].date);
+    const lastDate = parseSimDate(chartData[chartData.length - 1].date);
+    if (!firstDate || !lastDate) return [];
+
+    return plansWithDate.map((p, i) => {
+      const targetDate = new Date(p.target_date! + 'T00:00:00');
+      const targetTime = targetDate.getTime();
+
+      // Skip if target date is outside the chart's date range
+      if (targetTime < firstDate.getTime() || targetTime > lastDate.getTime()) {
+        return { name: p.name, color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length], dayLabel: null, dateStr: format(targetDate, "dd/MM", { locale: ptBR }) };
+      }
+
+      // Try exact match first
+      let matchDay = chartData.find(d => {
+        const parsed = parseSimDate(d.date);
+        if (!parsed) return false;
+        return parsed.getFullYear() === targetDate.getFullYear()
+          && parsed.getMonth() === targetDate.getMonth()
+          && parsed.getDate() === targetDate.getDate();
+      });
+
+      // For weekly aggregation, find the week that contains the target date
+      if (!matchDay) {
+        for (const d of chartData) {
+          if (d.date.includes('–')) {
+            const [startStr, endStr] = d.date.split('–').map((s: string) => s.trim());
+            const startDate = parseSimDate(startStr);
+            const endDate = parseSimDate(endStr);
+            if (startDate && endDate && targetTime >= startDate.getTime() && targetTime <= endDate.getTime()) {
+              matchDay = d;
+              break;
+            }
+          }
+        }
+      }
+
+      // Last resort: closest point within 3 days (for daily views with slight mismatches)
+      if (!matchDay) {
+        let bestDist = Infinity;
+        for (const d of chartData) {
+          const parsed = parseSimDate(d.date);
+          if (!parsed) continue;
+          const dist = Math.abs(parsed.getTime() - targetTime);
+          if (dist < bestDist) {
+            bestDist = dist;
+            matchDay = d;
+          }
+        }
+        if (bestDist > 3 * 86400000) matchDay = undefined;
+      }
+
+      return {
+        name: p.name,
+        color: OBJECTIVE_COLORS[i % OBJECTIVE_COLORS.length],
+        dayLabel: matchDay?.day ?? null,
+        dateStr: format(targetDate, "dd/MM", { locale: ptBR }),
+      };
+    }).filter(l => l.dayLabel !== null);
+  }, [plansWithDate, chartData]);
+
+
   return (
     <div className="space-y-3">
 
@@ -572,6 +670,7 @@ export function ForecastSimulator({
             ))}
           </div>
 
+
           {/* Simulation progress */}
           {isSimulating && (
             <div className="space-y-1">
@@ -585,7 +684,7 @@ export function ForecastSimulator({
             <div className="relative z-10">
               <ResponsiveContainer width="100%" height={180}>
                 <ComposedChart data={chartData} barGap={0} barCategoryGap="15%">
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                   <YAxis
                     tick={{ fontSize: 9 }}
                     tickLine={false}
@@ -597,6 +696,16 @@ export function ForecastSimulator({
                   <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
+                  {objectiveLines.map(ol => (
+                    <ReferenceLine
+                      key={ol.name}
+                      x={ol.dayLabel!}
+                      stroke={ol.color}
+                      strokeWidth={1}
+                      strokeDasharray="4 3"
+                      label={false}
+                    />
+                  ))}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -604,7 +713,7 @@ export function ForecastSimulator({
 
           {/* Mini-legend */}
           {chartData.length > 0 && !isSimulating && (
-            <div className="flex items-center gap-4 justify-center text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 justify-center text-[10px] text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-sm bg-[hsl(217_91%_60%)] opacity-80" /> Revisões
               </span>
@@ -614,6 +723,12 @@ export function ForecastSimulator({
               <span className="flex items-center gap-1">
                 <span className="h-2 w-2 rounded-sm bg-[hsl(38_92%_50%)] opacity-75" /> Aprendendo
               </span>
+              {objectiveLines.map(ol => (
+                <span key={ol.name} className="flex items-center gap-1">
+                  <span className="h-3 w-0 border-l-2 border-dashed" style={{ borderColor: ol.color }} />
+                  <span className="truncate max-w-[80px]">{ol.name}</span>
+                </span>
+              ))}
             </div>
           )}
 

@@ -2,33 +2,75 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
-const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em criação de flashcards eficazes para estudo com repetição espaçada.
+const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
-Sua tarefa: melhorar o flashcard fornecido pelo usuário, tornando-o mais claro, preciso e eficaz para memorização.
+Sua tarefa: MELHORAR o flashcard fornecido, aplicando os mesmos princípios usados para criar flashcards de alta qualidade. O card melhorado deve ser significativamente superior ao original em clareza, precisão e eficácia para memorização.
 
-Regras gerais:
-- Mantenha o MESMO tema e conteúdo original
-- Melhore a clareza, precisão e objetividade
-- Use linguagem concisa mas completa
-- Mantenha HTML simples se necessário (negrito, itálico)
-- NÃO mude o tipo do card
-- Se o card já está excelente, retorne o mesmo conteúdo sem alterações e marque "unchanged" como true
+REGRA CRÍTICA DE LINGUAGEM:
+Os cartões NUNCA devem referenciar a origem do conhecimento. PROIBIDO usar "de acordo com o material", "segundo o texto", "conforme mencionado", "o conteúdo aborda" ou QUALQUER variação. Cada cartão deve soar como conhecimento factual independente.
 
-Regras para Cloze:
+PRINCÍPIOS DE MELHORIA (aplique todos):
+
+1. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Se a resposta tem mais de 1 frase para basic, SIMPLIFIQUE.
+2. INTERROGAÇÃO ELABORATIVA: Transforme perguntas "O que é X?" em "Por quê?" e "Como?" — o estudante deve RACIOCINAR, não recitar.
+3. CONEXÕES E CONTRASTE: Se possível, reformule para conectar conceitos ("Como X se relaciona com Y?") ou forçar diferenciação.
+4. APLICAÇÃO PRÁTICA: Sempre que possível, substitua definições abstratas por cenários práticos/clínicos.
+5. SEM DECOREBA: NÃO permita perguntas que podem ser respondidas citando uma definição de memória. Formule para que o estudante raciocine sobre mecanismo, causa ou consequência.
+6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
+7. CONCISÃO: Remova palavras desnecessárias. Respostas devem ser curtas e diretas.
+8. HTML LIMPO: Use HTML simples se necessário (<b>, <i>) mas remova formatação excessiva ou desnecessária.
+
+ANTI-PADRÕES (corrija se encontrar):
+❌ Perguntas "O que é X?" com respostas de dicionário → Reformule para testar compreensão
+❌ Respostas que são listas ("A, B, C e D") → Simplifique para testar UM conceito
+❌ Cards que agrupam múltiplos conceitos → Foque no mais importante
+❌ Cloze com lacunas em palavras triviais (artigos, preposições) → Mova a lacuna para o conceito-chave
+❌ Cards que copiam frases inteiras sem reformulação → Reescreva com suas palavras
+❌ Frases vagas ou ambíguas → Torne específico e respondível
+
+REGRAS GERAIS:
+- Mantenha o MESMO tema e conteúdo factual original
+- NÃO mude o tipo do card (basic→basic, cloze→cloze, etc.)
+- Se o card já aplica todos os princípios acima e está excelente, retorne o mesmo conteúdo e marque "unchanged" como true
+- NÃO invente informações que não estão no card original`;
+
+const CLOZE_ADDON = `
+
+REGRAS ESPECÍFICAS PARA CLOZE:
 - O campo "front" contém o texto com lacunas usando sintaxe {{c1::resposta}}
-- Melhore APENAS o texto ao redor, mantendo EXATAMENTE a sintaxe {{c1::resposta}} intacta
-- Você pode melhorar o conteúdo dentro do {{c1::...}} mas NUNCA remova ou quebre a sintaxe de chaves duplas
+- PRESERVE a sintaxe {{c1::resposta}} — NUNCA remova ou quebre as chaves duplas
+- Cloze DEVE ser uma AFIRMAÇÃO DECLARATIVA COMPLETA, nunca uma pergunta
+- A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número), nunca uma palavra trivial
+- Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes na mesma frase quando relevante
+- A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando oculta
 - O campo "back" para cloze geralmente é vazio ou contém notas extras
-- Retorne o front melhorado COM a sintaxe cloze preservada
 
-Regras para Múltipla Escolha:
+EXEMPLOS DE MELHORIA CLOZE:
+  Ruim: "O {{c1::diafragma}} é um músculo." → Vago, sem contexto
+  Bom: "O principal músculo responsável pela inspiração em repouso é o {{c1::diafragma}}."
+  
+  Ruim: "{{c1::A hematose}} acontece nos pulmões." → Lacuna muito ampla
+  Bom: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
+
+const MC_ADDON = `
+
+REGRAS ESPECÍFICAS PARA MÚLTIPLA ESCOLHA:
 - O campo "front" contém a pergunta
 - O campo "back" contém um JSON: {"options": ["A","B","C","D"], "correctIndex": 0}
-- Melhore a pergunta no front tornando-a mais clara
-- Melhore as alternativas no back tornando-as mais distintas e precisas
+- Melhore a pergunta tornando-a mais clara e que exija RACIOCÍNIO (não simples recall)
+- Melhore as alternativas tornando-as PLAUSÍVEIS e distintas — distratores devem parecer verossímeis
 - A resposta correta DEVE permanecer no MESMO índice (correctIndex)
 - Retorne o back como JSON válido com a mesma estrutura {"options": [...], "correctIndex": N}
 - NÃO adicione texto fora do JSON no campo back`;
+
+const BASIC_ADDON = `
+
+REGRAS ESPECÍFICAS PARA BÁSICO (FRENTE E VERSO):
+- A FRENTE deve conter uma pergunta clara que exija RACIOCÍNIO, não simples recall
+- Transforme "O que é X?" em perguntas como "Por que X é importante para Y?", "Como X difere de Y?", "Qual o mecanismo de X?"
+- A RESPOSTA (verso) deve ser CURTA e DIRETA — idealmente 1 frase ou menos
+- Se a resposta original é longa, extraia apenas o conceito essencial
+- Inclua contexto suficiente na pergunta para que haja UMA ÚNICA resposta possível`;
 
 
 Deno.serve(async (req) => {
@@ -61,13 +103,19 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
-    if (cardType === "multiple_choice") systemPrompt += `\n\nATENÇÃO: Este é um card de Múltipla Escolha. O campo "back" é JSON puro. Retorne o "back" melhorado TAMBÉM como JSON válido {"options": [...], "correctIndex": N}. Mantenha o correctIndex apontando para a mesma resposta correta.`;
-    else if (cardType === "cloze") systemPrompt += `\n\nATENÇÃO: Este é um card Cloze. Preserve EXATAMENTE a sintaxe {{c1::resposta}} no campo "front". Nunca remova as chaves duplas.`;
+    // Add type-specific instructions
+    if (cardType === "multiple_choice") systemPrompt += MC_ADDON;
+    else if (cardType === "cloze") systemPrompt += CLOZE_ADDON;
+    else systemPrompt += BASIC_ADDON;
 
     let userContent = "";
-    if (cardType === "multiple_choice") userContent = `Tipo: Múltipla Escolha\nPergunta (front): ${front}\nDados do verso (back - JSON): ${back}\n\nIMPORTANTE: Retorne o campo "back" como JSON válido com a mesma estrutura.`;
-    else if (cardType === "cloze") userContent = `Tipo: Cloze\nTexto com lacunas (front): ${front}\nNotas extras (back): ${back || '(vazio)'}\n\nIMPORTANTE: Preserve a sintaxe {{c1::resposta}} no front.`;
-    else userContent = `Tipo: Básico\nFrente (Pergunta): ${front}\nVerso (Resposta): ${back}`;
+    if (cardType === "multiple_choice") {
+      userContent = `Tipo: Múltipla Escolha\nPergunta (front): ${front}\nDados do verso (back - JSON): ${back}\n\nMelhore este card aplicando os princípios pedagógicos. Retorne o campo "back" como JSON válido com a mesma estrutura {"options": [...], "correctIndex": N}.`;
+    } else if (cardType === "cloze") {
+      userContent = `Tipo: Cloze\nTexto com lacunas (front): ${front}\nNotas extras (back): ${back || '(vazio)'}\n\nMelhore este card: a lacuna deve testar um conceito-chave, a frase deve ser uma afirmação declarativa completa e autocontida. Preserve a sintaxe {{c1::resposta}}.`;
+    } else {
+      userContent = `Tipo: Básico (Frente e Verso)\nFrente (Pergunta): ${front}\nVerso (Resposta): ${back}\n\nMelhore este card: a pergunta deve exigir raciocínio (não simples "O que é?"), a resposta deve ser curta e direta. Aplique interrogação elaborativa, conexões e aplicação prática.`;
+    }
 
     const tools = [{ type: "function", function: { name: "return_improved_card", description: "Return the improved flashcard", parameters: { type: "object", properties: { front: { type: "string", description: "Improved front content" }, back: { type: "string", description: "Improved back content" }, unchanged: { type: "boolean", description: "True if no changes were made" } }, required: ["front", "back", "unchanged"], additionalProperties: false } } }];
 
@@ -79,7 +127,7 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       if (response.status === 429) return jsonResponse({ error: "Rate limit excedido." }, 429);
-      const t = await response.text(); console.error("OpenAI error:", response.status, t); throw new Error("OpenAI error");
+      const t = await response.text(); console.error("AI error:", response.status, t); throw new Error("AI error");
     }
 
     const data = await response.json();

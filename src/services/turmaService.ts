@@ -467,3 +467,41 @@ export async function fetchCommunityContentStats(turmaId: string) {
     rootLessons: (d.rootLessons ?? []).map((l: any) => ({ id: l.id, name: l.name })),
   };
 }
+
+// ── Public Decks Discovery ──
+
+export interface PublicDeckItem {
+  id: string;
+  name: string;
+  card_count: number;
+  owner_name: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
+  let query = supabase.from('decks').select('id, name, user_id, created_at, updated_at').eq('is_public', true).is('parent_deck_id', null);
+  if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
+  const { data: decks } = await query.order('created_at', { ascending: false }).limit(60);
+  if (!decks || decks.length === 0) return [];
+
+  const ownerIds = [...new Set(decks.map((d: any) => d.user_id))];
+  const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+
+  const deckIds = decks.map((d: any) => d.id);
+  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
+  const countMap = new Map<string, number>();
+  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+
+  return decks.map((d: any) => ({
+    id: d.id,
+    name: d.name,
+    card_count: countMap.get(d.id) ?? 0,
+    owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
+    owner_id: d.user_id,
+    created_at: d.created_at,
+    updated_at: d.updated_at,
+  }));
+}
