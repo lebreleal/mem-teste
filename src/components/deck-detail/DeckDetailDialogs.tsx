@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Loader2,
-  RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon,
+  RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon, Crown,
 } from 'lucide-react';
 
 const DeckDetailDialogs = () => {
@@ -356,7 +356,7 @@ const DeckDetailDialogs = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-foreground">{algo.label}</span>
-                          {algo.premium && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full">Premium</span>}
+                          {algo.premium && <><Crown className="h-3.5 w-3.5 text-amber-500" /><span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full">Premium</span></>}
                           {isActive && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Atual</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{algo.desc}</p>
