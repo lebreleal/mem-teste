@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
-import { useStudyPlan } from '@/hooks/useStudyPlan';
+
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
@@ -309,17 +309,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     return collectAll(rootId);
   }, [decks, rootId]);
 
-  // ─── Plan-controlled limits ────────────
-  const { metrics: planMetrics } = useStudyPlan();
-  const planAllocationForRoot = planMetrics?.deckNewAllocation?.[rootId];
-  const isPlanControlled = planAllocationForRoot != null;
+  const isPlanControlled = false;
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
   const totalCards = allCards.length;
-  const dailyNewLimit = isPlanControlled
-    ? planAllocationForRoot
-    : (rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20);
+  const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
   const learningCount = (stats?.learning_count ?? 0);
   const newReviewedToday = rootTotals.newReviewed;
