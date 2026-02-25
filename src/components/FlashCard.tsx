@@ -686,7 +686,7 @@ const FlashCard = ({
             {!flipped && (
               <div
                 className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
-                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: isOcclusion ? 'flex-start' : 'center', justifyContent: 'center' }}
               >
                 <div
                   className="prose prose-sm max-w-none text-center text-card-foreground w-full"
@@ -708,7 +708,7 @@ const FlashCard = ({
 
                 <div
                   className={`card-premium w-full border border-border/40 bg-card p-6 sm:p-8 ${peekingFront ? 'animate-flip-peek' : 'animate-fade-in'} ${feedbackType === 'correct' ? 'animate-correct-flash' : feedbackType === 'wrong' ? 'animate-wrong-flash' : feedbackType === 'hard' ? 'animate-hard-flash' : ''}`}
-                  style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                  style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: isOcclusion ? 'flex-start' : 'center', justifyContent: isOcclusion ? 'flex-start' : 'center', position: 'relative' }}
                 >
                   <button
                     onClick={(e) => {
