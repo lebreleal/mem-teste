@@ -107,9 +107,10 @@ interface DeckCarouselProps {
   planDeckIds?: string[];
   planDeckOrder?: string[];
   plansByDeckId?: Record<string, string>;
+  globalNewBudget?: number;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewBudget }: DeckCarouselProps) {
   const navigate = useNavigate();
 
   const activeDecks = useMemo(() => {
@@ -146,6 +147,33 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     });
   }, [activeDecks, decks, planDeckOrder]);
 
+  // New cards remaining for today (global plan quota)
+  const newCardsStudiedToday = useMemo(() => {
+    if (!hasPlan || !planDeckIds || planDeckIds.length === 0) return 0;
+    const getRootId = (deckId: string): string | null => {
+      const d = decks.find(x => x.id === deckId);
+      if (!d) return null;
+      if (!d.parent_deck_id) return d.id;
+      return getRootId(d.parent_deck_id);
+    };
+    const rootIds = new Set<string>();
+    for (const pid of planDeckIds) {
+      const rootId = getRootId(pid);
+      if (rootId) rootIds.add(rootId);
+    }
+    let total = 0;
+    for (const rootId of rootIds) {
+      const root = decks.find(d => d.id === rootId);
+      if (root) {
+        const raw = getAggregateRaw(root, decks);
+        total += raw.newReviewed;
+      }
+    }
+    return total;
+  }, [decks, hasPlan, planDeckIds]);
+
+  const newCardsRemaining = globalNewBudget != null ? Math.max(0, globalNewBudget - newCardsStudiedToday) : null;
+
   if (activeDecks.length === 0) return null;
 
   const totalPending = sortedDecks.reduce((sum, d) => {
@@ -169,6 +197,41 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
             <p className="text-xs text-muted-foreground truncate">Organize sua rotina e acompanhe seu progresso</p>
           </div>
         </button>
+      )}
+
+      {/* New cards remaining banner */}
+      {hasPlan && newCardsRemaining != null && (
+        <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-4 py-2.5 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <SquarePlus className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground tabular-nums">
+                {newCardsRemaining > 0
+                  ? <>{newCardsRemaining} <span className="font-normal text-muted-foreground">novos cards restantes</span></>
+                  : <span className="text-muted-foreground">Meta de novos cards concluída! 🎉</span>
+                }
+              </p>
+              {globalNewBudget != null && newCardsRemaining > 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  {newCardsStudiedToday}/{globalNewBudget} do plano de hoje
+                </p>
+              )}
+            </div>
+          </div>
+          {globalNewBudget != null && (
+            <div className="flex items-center gap-2">
+              <Progress
+                value={globalNewBudget > 0 ? Math.round((newCardsStudiedToday / globalNewBudget) * 100) : 0}
+                className="h-1.5 w-16"
+              />
+              <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
+                {globalNewBudget > 0 ? Math.round((newCardsStudiedToday / globalNewBudget) * 100) : 0}%
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Carousel - unified list */}
