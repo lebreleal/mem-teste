@@ -238,45 +238,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
   };
 
-  // Pre-distribute global new budget sequentially across plan decks (same order as carousel)
-  const distributedNewByDeck = useMemo(() => {
-    const hasPlan = planRootIds && planRootIds.size > 0;
-    if (!hasPlan) return null;
-    const map = new Map<string, number>();
-    let remaining = globalNewRemaining;
-    const orderedRootIds: string[] = [];
-    const seenRoots = new Set<string>();
-    if (planDeckOrder && planDeckOrder.length > 0) {
-      for (const deckId of planDeckOrder) {
-        let root = decks.find(d => d.id === deckId);
-        if (!root) continue;
-        while (root.parent_deck_id) {
-          const parent = decks.find(d => d.id === root!.parent_deck_id);
-          if (!parent) break;
-          root = parent;
-        }
-        if (!seenRoots.has(root.id) && !root.is_archived) {
-          seenRoots.add(root.id);
-          orderedRootIds.push(root.id);
-        }
-      }
-    }
-    for (const id of planRootIds) {
-      if (!seenRoots.has(id)) {
-        seenRoots.add(id);
-        orderedRootIds.push(id);
-      }
-    }
-    for (const rootId of orderedRootIds) {
-      const deck = decks.find(d => d.id === rootId);
-      if (!deck) continue;
-      const raw = getRawAggregateStats(deck);
-      const allocated = Math.max(0, Math.min(raw.new_count, remaining));
-      map.set(rootId, allocated);
-      remaining -= allocated;
-    }
-    return map;
-  }, [planRootIds, planDeckOrder, globalNewRemaining, decks]);
+  // No sequential distribution — all plan decks share the same globalNewRemaining pool
+  const distributedNewByDeck = null;
 
 
   const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
@@ -296,15 +259,11 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
     const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
 
-    // When plan exists, use pre-distributed budget; otherwise use min of deck limit and global
+    // When plan exists, all decks share the same global remaining; otherwise use deck limit
     const hasPlanActive = planRootIds && planRootIds.size > 0;
     const deckRemaining = Math.max(0, dailyNewLimit - rootRaw.newReviewed);
     let effectiveNew: number;
-    if (hasPlanActive && distributedNewByDeck && distributedNewByDeck.has(rootDeck.id)) {
-      const allocated = distributedNewByDeck.get(rootDeck.id)!;
-      // For sub-deck queries, cap by the sub-tree's raw count but within root's allocated budget
-      effectiveNew = Math.max(0, Math.min(raw.new_count, allocated));
-    } else if (hasPlanActive) {
+    if (hasPlanActive && planRootIds!.has(rootDeck.id)) {
       effectiveNew = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
     } else {
       effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
