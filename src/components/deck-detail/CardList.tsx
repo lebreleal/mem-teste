@@ -413,8 +413,27 @@ const CardList = () => {
                               return parts;
                             })()}
                           </p>
+                        ) : isOcclusion ? (
+                          (() => {
+                            try {
+                              const data = JSON.parse(card.front_content);
+                              const rectCount = data.allRects?.length || 0;
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
+                                    {data.imageUrl && (
+                                      <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
+                                </div>
+                              );
+                            } catch {
+                              return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
+                            }
+                          })()
                         ) : (
-                          <p className="text-sm font-semibold text-foreground leading-snug">
+                          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
                             {stripHtml(card.front_content)}
                           </p>
                         )}
@@ -434,6 +453,7 @@ const CardList = () => {
                             {stripHtml(card.back_content)}
                           </p>
                         ) : null}
+
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
