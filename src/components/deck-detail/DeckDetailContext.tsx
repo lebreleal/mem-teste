@@ -132,6 +132,8 @@ interface DeckDetailContextValue {
   setOcclusionImageUrl: (v: string) => void;
   occlusionRects: any[];
   setOcclusionRects: (v: any[]) => void;
+  occlusionModalOpen: boolean;
+  setOcclusionModalOpen: (v: boolean) => void;
 
   // Multiple choice
   mcOptions: string[];
@@ -235,6 +237,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [occlusionImageUrl, setOcclusionImageUrl] = useState<string>('');
   const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
 
@@ -489,7 +492,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (addAnother) {
         setFront(''); setBack(''); setEditingId(null);
         setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
-        setOcclusionImageUrl(''); setOcclusionRects([]);
+        setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionModalOpen(false);
       } else { setEditorOpen(false); resetForm(); }
     };
 
@@ -674,6 +677,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     try {
       const url = await cardService.uploadCardImage(user.id, file);
       setOcclusionImageUrl(url);
+      setOcclusionModalOpen(true);
     } catch (e: any) { toast({ title: e.message || 'Erro no upload', variant: 'destructive' }); }
   }, [user, toast]);
 
@@ -861,7 +865,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     examGenerating, setExamGenerating,
     aiAddCardsOpen, setAiAddCardsOpen, importOpen, setImportOpen,
     isImproving, setIsImproving, improvePreview, setImprovePreview, improveModalOpen, setImproveModalOpen,
-    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects,
+    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionModalOpen, setOcclusionModalOpen,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
     energy, spendEnergy, model, setModel, getCost, createExam, addNotification, updateNotification,
     resetForm, openNew, openEdit, handleSave, handleDelete, handleMoveCard,

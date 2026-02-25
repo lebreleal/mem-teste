@@ -32,8 +32,8 @@ const DeckDetailDialogs = () => {
   return (
     <>
       {/* Card Editor Dialog */}
-      <Dialog open={ctx.editorOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
-        <DialogContent className={`max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto ${ctx.cardType === 'image_occlusion' ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
+      <Dialog open={ctx.editorOpen && !ctx.occlusionModalOpen} onOpenChange={open => { if (!open) { ctx.setEditorOpen(false); ctx.resetForm(); } }}>
+        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">{ctx.editingId ? 'Editar Card' : 'Novo Card'}</DialogTitle>
           </DialogHeader>
@@ -80,18 +80,36 @@ const DeckDetailDialogs = () => {
               </div>
 
               {ctx.cardType === 'image_occlusion' && (
-                ctx.occlusionImageUrl ? (
-                  <div className="space-y-2">
-                    <Label className="mb-1.5 block">Oclusão de Imagem</Label>
-                    <ImageOcclusion imageUrl={ctx.occlusionImageUrl} initialRects={ctx.occlusionRects} onChange={ctx.setOcclusionRects} />
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); }}>Remover oclusão</Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center space-y-2">
-                    <span className="text-3xl">🖼️</span>
-                    <p className="text-xs text-muted-foreground">Cole uma imagem (Ctrl+V) ou use o botão de anexar no editor acima</p>
-                  </div>
-                )
+                <div className="space-y-2">
+                  <Label className="mb-1.5 block">Imagem de oclusão</Label>
+                  {ctx.occlusionImageUrl ? (
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => ctx.setOcclusionModalOpen(true)}
+                        className="relative inline-block rounded-lg overflow-hidden border border-border"
+                        title="Editar oclusões"
+                      >
+                        <img src={ctx.occlusionImageUrl} alt="Imagem de oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                          <ImageIcon className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionModalOpen(false); }}
+                        title="Remover imagem"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Use o ícone de oclusão na barra da Frente para anexar uma imagem.</p>
+                  )}
+                </div>
               )}
 
               {ctx.cardType === 'multiple_choice' && (
@@ -187,6 +205,31 @@ const DeckDetailDialogs = () => {
                   {ctx.isSaving ? 'Salvando...' : 'Salvar'}
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Occlusion editor modal */}
+      <Dialog open={ctx.occlusionModalOpen} onOpenChange={ctx.setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Oclusão de imagem</DialogTitle>
+          </DialogHeader>
+
+          {ctx.occlusionImageUrl ? (
+            <div className="space-y-3">
+              <ImageOcclusion imageUrl={ctx.occlusionImageUrl} initialRects={ctx.occlusionRects} onChange={ctx.setOcclusionRects} />
+              <div className="flex justify-between gap-2">
+                <Button variant="outline" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionModalOpen(false); }}>
+                  Remover imagem
+                </Button>
+                <Button onClick={() => ctx.setOcclusionModalOpen(false)}>Concluir</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Adicione uma imagem pela barra de ferramentas da Frente para editar as oclusões.
             </div>
           )}
         </DialogContent>
