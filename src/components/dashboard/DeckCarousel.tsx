@@ -178,6 +178,24 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
   }, [decks, hasPlan, planDeckIds]);
 
+  // Stats for ALL root decks (used when no plan exists)
+  const allDecksStats = useMemo(() => {
+    if (hasPlan) return null;
+    const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
+    let totalNew = 0, totalLearning = 0, totalReview = 0, totalStudied = 0, totalPending = 0;
+    for (const root of roots) {
+      const stats = getDeckTodayStats(root, decks);
+      totalNew += stats.newAvailable;
+      totalLearning += stats.learningAvailable;
+      totalReview += stats.reviewAvailable;
+      totalStudied += stats.studiedToday;
+      totalPending += stats.pendingToday;
+    }
+    const totalCards = totalStudied + totalPending;
+    const progress = totalCards > 0 ? Math.round((totalStudied / totalCards) * 100) : 0;
+    return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
+  }, [decks, hasPlan]);
+
 
   // We just need newCardsStudiedToday for the new cards specific count
   const newCardsStudiedToday = useMemo(() => {
@@ -211,8 +229,9 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return sum + pendingToday;
   }, 0);
 
-  const estimatedTotalMinutes = globalPlanStats
-    ? Math.round((globalPlanStats.totalPending * avgSecondsPerCard) / 60)
+  const activeStats = globalPlanStats || allDecksStats;
+  const estimatedTotalMinutes = activeStats
+    ? Math.round((activeStats.totalPending * avgSecondsPerCard) / 60)
     : 0;
 
   return (
@@ -233,8 +252,8 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         </button>
       )}
 
-      {/* Daily study progress banner */}
-      {hasPlan && globalPlanStats && (
+      {/* Daily study progress banner — shown for both plan and no-plan modes */}
+      {activeStats && activeStats.totalCards > 0 && (
         <div className="rounded-xl border border-border/50 bg-card px-4 py-2.5 shadow-sm space-y-2">
           {/* Top row: icon counts + time estimate */}
           <div className="flex items-center justify-between">
@@ -242,19 +261,21 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
               <div className="flex items-center gap-1" title="Novos">
                 <SquarePlus className="h-3.5 w-3.5 text-primary" />
                 <span className="font-bold text-foreground">
-                  {globalPlanStats.totalNew}
+                  {hasPlan && globalNewBudget != null && typeof globalNewBudget === 'number'
+                    ? Math.max(0, globalNewBudget - newCardsStudiedToday)
+                    : activeStats.totalNew}
                 </span>
               </div>
               <div className="flex items-center gap-1" title="Aprendendo">
                 <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                <span className="font-bold text-foreground">{globalPlanStats.totalLearning}</span>
+                <span className="font-bold text-foreground">{activeStats.totalLearning}</span>
               </div>
               <div className="flex items-center gap-1" title="Revisão">
                 <Layers className="h-3.5 w-3.5 text-primary" />
-                <span className="font-bold text-foreground">{globalPlanStats.totalReview}</span>
+                <span className="font-bold text-foreground">{activeStats.totalReview}</span>
               </div>
             </div>
-            {globalPlanStats.totalPending > 0 && (
+            {activeStats.totalPending > 0 && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 ~{formatMinutes(estimatedTotalMinutes)}
@@ -263,11 +284,11 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
           </div>
 
           {/* Progress bar */}
-          <Progress value={globalPlanStats.progress} className="h-1.5" />
+          <Progress value={activeStats.progress} className="h-1.5" />
 
           {/* Bottom row: card count */}
           <p className="text-[11px] text-muted-foreground tabular-nums">
-            {globalPlanStats.totalStudied}/{globalPlanStats.totalCards} cards · {globalPlanStats.progress}% concluído
+            {activeStats.totalStudied}/{activeStats.totalCards} cards · {activeStats.progress}% concluído
           </p>
         </div>
       )}
