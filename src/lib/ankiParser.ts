@@ -7,6 +7,7 @@
  */
 
 import JSZip from 'jszip';
+import * as fzstd from 'fzstd';
 import initSqlJs, { type Database } from 'sql.js/dist/sql-asm.js';
 
 export interface AnkiCard {
@@ -80,6 +81,10 @@ function isLikelySQLite(bytes: Uint8Array): boolean {
   return header === 'SQLite format 3\0';
 }
 
+function isLikelyZstd(bytes: Uint8Array): boolean {
+  return bytes.length >= 4 && bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd;
+}
+
 async function resolveAnkiArchive(file: File): Promise<JSZip> {
   let zip = await JSZip.loadAsync(file);
 
@@ -120,8 +125,17 @@ async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isMo
   let fallback: { dbBytes: Uint8Array; isModernFormat: boolean } | null = null;
 
   for (const { entry } of candidates) {
-    const dbBytes = await entry.async('uint8array');
+    const rawBytes = await entry.async('uint8array');
     const isModernFormat = /collection\.anki21b$/i.test(entry.name);
+
+    let dbBytes = rawBytes;
+    if (!isLikelySQLite(dbBytes) && isLikelyZstd(dbBytes)) {
+      try {
+        dbBytes = fzstd.decompress(dbBytes);
+      } catch (error) {
+        console.warn('Falha ao descompactar banco Anki em zstd:', error);
+      }
+    }
 
     if (!fallback) {
       fallback = { dbBytes, isModernFormat };
