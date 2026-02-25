@@ -89,7 +89,7 @@ function convertClozeFormat(text: string): string {
 export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
   // Load sql.js with WASM from CDN
   const SQL = await initSqlJs({
-    locateFile: (f: string) => `https://sql.js.org/dist/${f}`,
+    locateFile: () => '/sql-wasm.wasm',
   });
 
   // Unzip the file
