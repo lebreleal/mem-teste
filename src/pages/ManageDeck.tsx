@@ -1008,7 +1008,7 @@ const ManageDeck = () => {
       </main>
 
       {/* Card Editor Dialog */}
-      <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
+      <Dialog open={editorOpen && !occlusionModalOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
         <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
@@ -1041,7 +1041,7 @@ const ManageDeck = () => {
       </Dialog>
 
       {/* Occlusion Editor Modal */}
-      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
+      <Dialog open={occlusionModalOpen} onOpenChange={(open) => { setOcclusionModalOpen(open); }}>
         <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
