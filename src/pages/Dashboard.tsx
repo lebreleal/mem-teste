@@ -3,6 +3,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
@@ -46,7 +47,7 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
+  const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
   // deckNewAllocation is already keyed by root IDs from useStudyPlan
   const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
@@ -337,6 +338,7 @@ const Dashboard = () => {
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
+            globalNewBudget={hasPlan ? getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards) : undefined}
           />
         )}
 
