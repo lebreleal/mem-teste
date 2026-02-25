@@ -117,16 +117,19 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
 
-    // Compute viewBox from rect extents — rects are in canvas-scaled coords
-    const allX = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
-    const allY = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
-    const maxX = Math.max(...allX, 100);
-    const maxY = Math.max(...allY, 100);
-    // Use the image onload to set viewBox to match the canvas coordinate space used during editing
+    // Use saved canvas dimensions if available, otherwise compute from rect extents
+    const vbW = data.canvasWidth || (() => {
+      const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+      return Math.max(...xs, 100) * 1.02;
+    })();
+    const vbH = data.canvasHeight || (() => {
+      const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+      return Math.max(...ys, 100) * 1.02;
+    })();
+
     return `<div style="position:relative;display:inline-block;max-width:100%">
-      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem;display:block" crossorigin="anonymous"
-        onload="(function(img){var svg=img.nextElementSibling;if(!svg)return;var dw=img.offsetWidth;var dh=img.offsetHeight;svg.style.width=dw+'px';svg.style.height=dh+'px'})(this)" />
-      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 ${maxX * 1.02} ${maxY * 1.02}" preserveAspectRatio="xMinYMin meet">
+      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem;display:block" crossorigin="anonymous" />
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMinYMin meet">
         ${svgShapes}
       </svg>
     </div>`;
