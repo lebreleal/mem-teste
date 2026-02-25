@@ -18,12 +18,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft, ChevronRight, Layers, Zap, Volume2, Palette,
   Share2, Store, Sparkles, Download, Edit3, FolderInput, Copy,
   RotateCcw, Archive, Upload, Trash2, Loader2, Plus, X,
-  Shuffle, BookOpen, Mail, Info, Globe,
+  Shuffle, BookOpen, Mail, Info, Globe, BarChart3, Settings,
 } from 'lucide-react';
+import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
 
 // ── Settings row component ──────────────────────────────────────
 interface SettingsRowProps {
@@ -135,6 +137,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setLoading(false);
     });
   }, [deckId, user]);
 
@@ -349,129 +352,148 @@ const DeckSettings = () => {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-2xl space-y-4 px-4 py-6">
-        {/* ── Section: Estudo ──────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Layers className="h-5 w-5" />}
-            label="Algoritmo de Aprendizagem"
-            subtitle={parentDeckId ? `${algoLabel} (herdado do pai)` : algoLabel}
-            onClick={parentDeckId ? () => toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai.' }) : () => setAlgorithmModal(true)}
-          />
-        </SettingsGroup>
+      <main className="container mx-auto max-w-2xl px-4 py-6">
+        <Tabs defaultValue="settings" className="space-y-4">
+          <TabsList className="w-full">
+            <TabsTrigger value="settings" className="flex-1 gap-1.5">
+              <Settings className="h-3.5 w-3.5" />
+              Configurações
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1 gap-1.5">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Estatísticas
+            </TabsTrigger>
+          </TabsList>
 
-        <SettingsGroup>
-          <SettingsRow
-            icon={<BookOpen className="h-5 w-5" />}
-            label="Configurações de estudo"
-            subtitle={parentDeckId ? 'Herdado do baralho pai' : isPlanControlled ? `Limite de novos definido pelo Plano (${planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia)` : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
-            onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
-          />
-          <SettingsRow
-            icon={<Volume2 className="h-5 w-5" />}
-            label="Texto para voz"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
-          />
-          <SettingsRow
-            icon={<Palette className="h-5 w-5" />}
-            label="Estilo do cartão"
-            rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
-            disabled
-          />
-        </SettingsGroup>
+          <TabsContent value="settings" className="space-y-4">
+            {/* ── Section: Estudo ──────────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Layers className="h-5 w-5" />}
+                label="Algoritmo de Aprendizagem"
+                subtitle={parentDeckId ? `${algoLabel} (herdado do pai)` : algoLabel}
+                onClick={parentDeckId ? () => toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai.' }) : () => setAlgorithmModal(true)}
+              />
+            </SettingsGroup>
 
-        {/* ── Section: Social ─────────────────────────────── */}
-        {!sourceTurmaDeckId && (
-          <SettingsGroup>
-            <SettingsRow
-              icon={<Globe className="h-5 w-5" />}
-              label="Publicar na comunidade"
-              subtitle="Visível para todos na aba Comunidade"
-              rightContent={
-                <Switch
-                  checked={isPublic}
-                  onCheckedChange={(checked) => {
-                    setIsPublic(checked);
-                    saveSettings({ is_public: checked });
-                  }}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<BookOpen className="h-5 w-5" />}
+                label="Configurações de estudo"
+                subtitle={parentDeckId ? 'Herdado do baralho pai' : isPlanControlled ? `Limite de novos definido pelo Plano (${planMetrics?.deckNewAllocation?.[rootId ?? ''] ?? 0}/dia)` : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
+                onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
+              />
+              <SettingsRow
+                icon={<Volume2 className="h-5 w-5" />}
+                label="Texto para voz"
+                rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
+                disabled
+              />
+              <SettingsRow
+                icon={<Palette className="h-5 w-5" />}
+                label="Estilo do cartão"
+                rightContent={<Badge variant="secondary" className="text-xs">Em breve</Badge>}
+                disabled
+              />
+            </SettingsGroup>
+
+            {/* ── Section: Social ─────────────────────────────── */}
+            {!sourceTurmaDeckId && (
+              <SettingsGroup>
+                <SettingsRow
+                  icon={<Globe className="h-5 w-5" />}
+                  label="Publicar na comunidade"
+                  subtitle="Visível para todos na aba Comunidade"
+                  rightContent={
+                    <Switch
+                      checked={isPublic}
+                      onCheckedChange={(checked) => {
+                        setIsPublic(checked);
+                        saveSettings({ is_public: checked });
+                      }}
+                    />
+                  }
                 />
-              }
-            />
-            <SettingsRow
-              icon={<Copy className="h-5 w-5" />}
-              label="Permitir duplicação"
-              subtitle="Outros usuários podem duplicar este deck para uso pessoal"
-              rightContent={
-                <Switch
-                  checked={allowDuplication}
-                  onCheckedChange={(checked) => {
-                    setAllowDuplication(checked);
-                    saveSettings({ allow_duplication: checked });
-                  }}
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Permitir duplicação"
+                  subtitle="Outros usuários podem duplicar este deck para uso pessoal"
+                  rightContent={
+                    <Switch
+                      checked={allowDuplication}
+                      onCheckedChange={(checked) => {
+                        setAllowDuplication(checked);
+                        saveSettings({ allow_duplication: checked });
+                      }}
+                    />
+                  }
                 />
-              }
-            />
-            <SettingsRow
-              icon={<Share2 className="h-5 w-5" />}
-              label="Compartilhar baralho"
-              onClick={() => setShareModal(true)}
-            />
-          </SettingsGroup>
-        )}
+                <SettingsRow
+                  icon={<Share2 className="h-5 w-5" />}
+                  label="Compartilhar baralho"
+                  onClick={() => setShareModal(true)}
+                />
+              </SettingsGroup>
+            )}
 
-        {/* ── Section: IA ─────────────────────────────────── */}
-        {!sourceTurmaDeckId && (
-          <SettingsGroup>
-            <SettingsRow
-              icon={<Download className="h-5 w-5" />}
-              label="Importar cartões"
-              onClick={() => navigate(`/decks/${deckId}/manage`)}
-            />
-          </SettingsGroup>
-        )}
+            {/* ── Section: IA ─────────────────────────────────── */}
+            {!sourceTurmaDeckId && (
+              <SettingsGroup>
+                <SettingsRow
+                  icon={<Download className="h-5 w-5" />}
+                  label="Importar cartões"
+                  onClick={() => navigate(`/decks/${deckId}/manage`)}
+                />
+              </SettingsGroup>
+            )}
 
-        {/* ── Section: Gerenciar ──────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Edit3 className="h-5 w-5" />}
-            label="Renomear baralho"
-            onClick={() => setRenameModal(true)}
-          />
-          <SettingsRow
-            icon={<Copy className="h-5 w-5" />}
-            label="Duplicar baralho"
-            onClick={handleDuplicate}
-          />
-          <SettingsRow
-            icon={<RotateCcw className="h-5 w-5" />}
-            label="Redefinir progresso"
-            onClick={() => setResetConfirm(true)}
-          />
-          <SettingsRow
-            icon={<Archive className="h-5 w-5" />}
-            label="Arquivar baralho"
-            onClick={handleArchive}
-          />
-          <SettingsRow
-            icon={<Upload className="h-5 w-5" />}
-            label="Exportar cartões"
-            subtitle="CSV ou enviar por e-mail"
-            onClick={() => setExportModal(true)}
-          />
-        </SettingsGroup>
+            {/* ── Section: Gerenciar ──────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Edit3 className="h-5 w-5" />}
+                label="Renomear baralho"
+                onClick={() => setRenameModal(true)}
+              />
+              <SettingsRow
+                icon={<Copy className="h-5 w-5" />}
+                label="Duplicar baralho"
+                onClick={handleDuplicate}
+              />
+              <SettingsRow
+                icon={<RotateCcw className="h-5 w-5" />}
+                label="Redefinir progresso"
+                onClick={() => setResetConfirm(true)}
+              />
+              <SettingsRow
+                icon={<Archive className="h-5 w-5" />}
+                label="Arquivar baralho"
+                onClick={handleArchive}
+              />
+              <SettingsRow
+                icon={<Upload className="h-5 w-5" />}
+                label="Exportar cartões"
+                subtitle="CSV ou enviar por e-mail"
+                onClick={() => setExportModal(true)}
+              />
+            </SettingsGroup>
 
-        {/* ── Section: Danger ─────────────────────────────── */}
-        <SettingsGroup>
-          <SettingsRow
-            icon={<Trash2 className="h-5 w-5" />}
-            label="Excluir baralho"
-            destructive
-            onClick={() => setDeleteConfirm(true)}
-          />
-        </SettingsGroup>
+            {/* ── Section: Danger ─────────────────────────────── */}
+            <SettingsGroup>
+              <SettingsRow
+                icon={<Trash2 className="h-5 w-5" />}
+                label="Excluir baralho"
+                destructive
+                onClick={() => setDeleteConfirm(true)}
+              />
+            </SettingsGroup>
 
-        <div className="h-8" />
+            <div className="h-8" />
+          </TabsContent>
+
+          <TabsContent value="stats">
+            {deckId && <DeckStatsTab deckId={deckId} />}
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* ══════════════════════════════════════════════════════
