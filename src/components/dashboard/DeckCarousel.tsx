@@ -200,16 +200,15 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   }, [decks, hasPlan]);
 
 
-  // Count ALL new cards studied today across ALL user decks (global scope)
+  // Count new cards studied today only within active roots (plan scope when plan exists)
   const newCardsStudiedToday = useMemo(() => {
-    const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     let total = 0;
-    for (const root of roots) {
+    for (const root of activeDecks) {
       const raw = getAggregateRaw(root, decks);
       total += raw.newReviewed;
     }
     return total;
-  }, [decks]);
+  }, [activeDecks, decks]);
 
   // Compute the global new cards remaining for today (only when plan exists with budget)
   const globalNewRemaining = (hasPlan && globalNewBudget != null && typeof globalNewBudget === 'number')
