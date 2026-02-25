@@ -63,6 +63,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     },
     enabled: !!user,
     staleTime: 5 * 60_000,
+    refetchOnMount: 'always',
   });
 
   const rawGlobalNewLimit = globalNewLimitQuery.data?.daily_new_cards_limit ?? 9999;
