@@ -90,7 +90,7 @@ function renderCloze(html: string, revealed: boolean, targetNum?: number): strin
   });
 }
 
-function renderOcclusion(frontContent: string, revealed: boolean): string {
+function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas?: { w: number; h: number }): string {
   try {
     const data = JSON.parse(frontContent);
     const { imageUrl } = data;
@@ -117,12 +117,11 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
 
-    // Use saved canvas dimensions if available, otherwise compute from rect extents
-    const vbW = data.canvasWidth || (() => {
+    const vbW = data.canvasWidth || fallbackCanvas?.w || (() => {
       const xs = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
       return Math.max(...xs, 100) * 1.02;
     })();
-    const vbH = data.canvasHeight || (() => {
+    const vbH = data.canvasHeight || fallbackCanvas?.h || (() => {
       const ys = allRects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
       return Math.max(...ys, 100) * 1.02;
     })();
@@ -502,6 +501,41 @@ const FlashCard = ({
     return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate, last_reviewed_at: lastReviewedAt }, algorithmMode);
   }, [state, stability, difficulty, scheduledDate, lastReviewedAt, algorithmMode]);
 
+  const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOcclusion) {
+      setOcclusionFallbackCanvas(null);
+      return;
+    }
+
+    try {
+      const data = JSON.parse(frontContent);
+      if (data.canvasWidth && data.canvasHeight) {
+        setOcclusionFallbackCanvas(null);
+        return;
+      }
+      if (!data.imageUrl) {
+        setOcclusionFallbackCanvas(null);
+        return;
+      }
+
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const scale = Math.min(1, 450 / img.naturalHeight);
+        setOcclusionFallbackCanvas({
+          w: Math.round(img.naturalWidth * scale),
+          h: Math.round(img.naturalHeight * scale),
+        });
+      };
+      img.onerror = () => setOcclusionFallbackCanvas(null);
+      img.src = data.imageUrl;
+    } catch {
+      setOcclusionFallbackCanvas(null);
+    }
+  }, [isOcclusion, frontContent]);
+
   useEffect(() => {
     if (feedbackType) {
       const timer = setTimeout(() => setFeedbackType(null), 800);
@@ -556,8 +590,8 @@ const FlashCard = ({
   let displayBack: string;
 
   if (isOcclusion) {
-    displayFront = renderOcclusion(frontContent, false);
-    const revealedImage = renderOcclusion(frontContent, true);
+    displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
+    const revealedImage = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
     const safeBackContent = backContent ? sanitizeHtml(backContent) : '';
     const userText = safeBackContent ? `<div style="margin-top:1rem">${safeBackContent}</div>` : '';
     displayBack = revealedImage + userText;

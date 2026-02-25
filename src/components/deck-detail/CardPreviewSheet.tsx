@@ -66,18 +66,37 @@ function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
-  
 
-  if (!card) return <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-6 text-center text-muted-foreground">Cartão não encontrado</div>;
-
-  const isCloze = card.card_type === 'cloze';
-  const isMultiple = card.card_type === 'multiple_choice';
-  const isOcclusion = card.card_type === 'image_occlusion';
+  const isCloze = card?.card_type === 'cloze';
+  const isMultiple = card?.card_type === 'multiple_choice';
+  const isOcclusion = card?.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
 
   let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number } | null = null;
   if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
+  const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOcclusion || !occlusionData?.imageUrl || (occlusionData.canvasWidth && occlusionData.canvasHeight)) {
+      setOcclusionFallbackCanvas(null);
+      return;
+    }
+
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const scale = Math.min(1, 450 / img.naturalHeight);
+      setOcclusionFallbackCanvas({
+        w: Math.round(img.naturalWidth * scale),
+        h: Math.round(img.naturalHeight * scale),
+      });
+    };
+    img.onerror = () => setOcclusionFallbackCanvas(null);
+    img.src = occlusionData.imageUrl;
+  }, [isOcclusion, occlusionData?.imageUrl, occlusionData?.canvasWidth, occlusionData?.canvasHeight]);
+
+  if (!card) return <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-6 text-center text-muted-foreground">Cartão não encontrado</div>;
 
   let mcOptions: string[] = [];
   let mcCorrectIdx = -1;
@@ -90,11 +109,11 @@ function CardContent({
       if (isOcclusion && occlusionData?.imageUrl) {
         const rects = occlusionData.allRects || [];
         const activeRectIds = occlusionData.activeRectIds || rects.map((r: any) => r.id);
-        const vbW = occlusionData.canvasWidth || (() => {
+        const vbW = occlusionData.canvasWidth || occlusionFallbackCanvas?.w || (() => {
           const xs = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
           return Math.max(...xs, 100) * 1.02;
         })();
-        const vbH = occlusionData.canvasHeight || (() => {
+        const vbH = occlusionData.canvasHeight || occlusionFallbackCanvas?.h || (() => {
           const ys = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
           return Math.max(...ys, 100) * 1.02;
         })();
