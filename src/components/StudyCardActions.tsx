@@ -117,13 +117,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
         setOcclusionRects(rects);
         setOcclusionActiveRectIds(data.activeRectIds || rects.map((r: any) => r.id));
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
+        setFront(data.frontText || '');
       } catch {
         setOcclusionImageUrl('');
         setOcclusionRects([]);
         setOcclusionActiveRectIds([]);
         setOcclusionCanvasSize(null);
+        setFront('');
       }
-      setFront('');
       setBack(card.back_content);
     } else {
       setEditorType('basic');
@@ -307,12 +308,14 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
       try {
         const cw = occlusionCanvasSize?.w;
         const ch = occlusionCanvasSize?.h;
+        const frontText = front.trim() ? front : undefined;
         const frontContent = JSON.stringify({
           imageUrl: occlusionImageUrl,
           allRects: occlusionRects,
           activeRectIds: occlusionActiveRectIds.length > 0 ? occlusionActiveRectIds : occlusionRects.map((r: any) => r.id),
           canvasWidth: cw,
           canvasHeight: ch,
+          ...(frontText ? { frontText } : {}),
         });
         const { error } = await supabase
           .from('cards')
@@ -517,18 +520,22 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
           </DialogHeader>
 
           <div className="space-y-4">
-            {editorType !== 'image_occlusion' && (
-              <div>
-                <Label className="mb-1.5 block">
-                  {editorType === 'multiple_choice' ? 'Pergunta' : editorType === 'cloze' ? 'Texto com lacunas' : 'Frente (Pergunta)'}
-                </Label>
-                <LazyRichEditor
-                  content={front}
-                  onChange={setFront}
-                  placeholder="Pergunta..."
-                />
-              </div>
-            )}
+            <div>
+              <Label className="mb-1.5 block">
+                {editorType === 'multiple_choice'
+                  ? 'Pergunta'
+                  : editorType === 'cloze'
+                    ? 'Texto com lacunas'
+                    : editorType === 'image_occlusion'
+                      ? 'Frente (Pergunta)'
+                      : 'Frente (Pergunta)'}
+              </Label>
+              <LazyRichEditor
+                content={front}
+                onChange={setFront}
+                placeholder={editorType === 'image_occlusion' ? 'Pergunta ou contexto (opcional)' : 'Pergunta...'}
+              />
+            </div>
 
             {editorType === 'multiple_choice' ? (
               <div className="space-y-2">
