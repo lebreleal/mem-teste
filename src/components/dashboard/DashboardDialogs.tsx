@@ -135,13 +135,13 @@ const MoveBrowser = ({
   return (
     <div className="space-y-3">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-sm flex-wrap min-w-0">
+      <div className="flex items-center gap-1 text-xs sm:text-sm flex-wrap min-w-0 overflow-hidden">
         {moveBreadcrumb.map((item, i) => (
           <span key={item.id ?? 'root'} className="flex items-center gap-1 min-w-0">
             {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
             <button
               onClick={() => handleBreadcrumbClick(item.id)}
-              className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted truncate max-w-[120px] ${i === moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+              className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted truncate max-w-[100px] sm:max-w-[140px] ${i === moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
             >
               {item.name}
             </button>
@@ -187,15 +187,17 @@ const MoveBrowser = ({
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:justify-between gap-2 pt-1">
-        {!isInsideDeck && onCreateFolderInMove ? (
-          <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 w-full sm:w-auto">
-            <CirclePlus className="h-4 w-4" /> Nova pasta aqui
-          </Button>
-        ) : <div />}
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-          <Button size="sm" onClick={onMoveSubmit}>{submitLabel}</Button>
+      <div className="flex flex-col gap-2 pt-1">
+        <div className="flex items-center justify-between gap-2">
+          {!isInsideDeck && onCreateFolderInMove ? (
+            <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0">
+              <CirclePlus className="h-3.5 w-3.5" /> Nova pasta
+            </Button>
+          ) : <div />}
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+            <Button size="sm" onClick={onMoveSubmit} className="whitespace-nowrap">{submitLabel}</Button>
+          </div>
         </div>
       </div>
     </div>
