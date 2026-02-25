@@ -250,8 +250,12 @@ export function useDashboardState(planRootIds?: Set<string>) {
     // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
     const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
 
+    // When plan exists, global limit overrides deck limit; otherwise use min of both
+    const hasPlanActive = planRootIds && planRootIds.size > 0;
     const deckRemaining = Math.max(0, dailyNewLimit - rootRaw.newReviewed);
-    const effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
+    const effectiveNew = hasPlanActive
+      ? Math.max(0, Math.min(raw.new_count, globalNewRemaining))
+      : Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
     const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
     const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
     return { new_count: effectiveNew, learning_count: raw.learning_count, review_count: effectiveReview, reviewed_today: raw.reviewed };
