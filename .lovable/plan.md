@@ -1,32 +1,39 @@
 
 ## Problema
 
-O carrossel distribui o orçamento global sequencialmente entre os decks (ex: Anatomia consome 7, sobram 33 para Histologia). Porém, a lista de decks na parte inferior usa `getAggregateStats()` que dá a cada deck o `globalNewRemaining` inteiro (40), sem descontar o que outros decks já consumiram. Resultado: Histologia mostra 45 (min de 45 novos vs 40 global) em vez de 33.
+O carrossel e a lista inferior estao usando logicas diferentes para calcular os cartoes novos:
 
-## Solução
+- **Carrossel**: Passa `globalNewRemaining` inteiro para cada deck individualmente. Resultado: cada deck mostra `min(raw.new_count, globalNewRemaining)` -- todos recebem o orcamento cheio.
+- **Lista inferior**: Usa `distributedNewByDeck` (distribuicao sequencial) -- correto.
+- **Banner global**: Soma os stats de cada deck usando o budget cheio, gerando totais inflados.
 
-Pré-calcular a distribuição do orçamento global entre os decks do plano dentro do `useDashboardState`, na mesma ordem do carrossel, e usar esses valores distribuídos no `getAggregateStats` em vez do `globalNewRemaining` bruto.
+Isso causa numeros inconsistentes entre o carrossel e a lista, e o banner com somas erradas.
 
-## Detalhes Técnicos
+## Solucao
 
-### `src/components/dashboard/useDashboardState.ts`
+Unificar tudo usando o `distributedNewByDeck` que ja existe no `useDashboardState`, passando-o para o `DeckCarousel` como prop.
 
-1. **Novo `useMemo` - `distributedNewByDeck`**: Depois de calcular `globalNewRemaining`, iterar pelos root decks do plano (na ordem de prioridade, se disponível) e distribuir o budget sequencialmente:
-   - Para cada root deck, calcular `raw.new_count` via `getRawAggregateStats`
-   - Alocar `min(raw.new_count, remainingBudget)` para esse deck
-   - Decrementar `remainingBudget`
-   - Armazenar o valor alocado num `Map<string, number>`
+## Detalhes Tecnicos
 
-2. **Aceitar `planDeckOrder` como parâmetro** do hook (já vem do Dashboard) para garantir a mesma ordem de distribuição do carrossel.
+### 1. `src/pages/Dashboard.tsx`
 
-3. **Modificar `getAggregateStats`**: Quando há plano ativo, em vez de usar `globalNewRemaining` diretamente, consultar o `distributedNewByDeck` map para obter o valor já distribuído para aquele deck específico. Para decks fora do plano, manter o comportamento atual.
+- Passar `distributedNewByDeck` (do `state`) como nova prop para `DeckCarousel`.
+- Expor `distributedNewByDeck` no retorno de `useDashboardState` (ja existe no hook, so precisa incluir no return).
 
-### `src/pages/Dashboard.tsx`
+### 2. `src/components/dashboard/useDashboardState.ts`
 
-- Passar `planDeckOrder` para `useDashboardState` para que a distribuição siga a mesma ordem de prioridade do carrossel.
+- Adicionar `distributedNewByDeck` ao objeto retornado pelo hook (atualmente nao e exportado).
+
+### 3. `src/components/dashboard/DeckCarousel.tsx`
+
+- Aceitar nova prop `distributedNewByDeck?: Map<string, number>`.
+- **`DeckStudyCard`**: Receber `allocatedNew` (numero ja calculado) em vez de `globalNewRemaining`. Usar `allocatedNew` diretamente como `newAvailable` em vez de chamar `getDeckTodayStats` com o budget cheio.
+- **`globalPlanStats`**: Ao iterar os root decks, usar o valor de `distributedNewByDeck.get(rootId)` para `totalNew` em vez de chamar `getDeckTodayStats(root, decks, globalNewRemaining)` para cada um.
+- **`sortedDecks`**: Usar o mapa distribuido para filtrar decks com cards pendentes (considerando o budget alocado, nao o global).
+- **Filtro de visibilidade**: Um deck so aparece se `allocatedNew + reviewAvailable + learningAvailable > 0`.
 
 ### Resultado
 
-- Carrossel mostra: Anatomia 7 novos, Histologia 33 novos
-- Lista inferior mostra: Anatomia "Cartoes para hoje: 7+learning+review", Histologia "Cartoes para hoje: 33+learning+review"
-- Ambos sincronizados com a mesma lógica de distribuição sequencial
+- Carrossel, banner e lista inferior usarao todos a mesma fonte de verdade (`distributedNewByDeck`).
+- Os totais no banner serao a soma exata dos cards individuais.
+- "Cartoes para hoje" na lista inferior e numeros no carrossel serao identicos para o mesmo deck.
