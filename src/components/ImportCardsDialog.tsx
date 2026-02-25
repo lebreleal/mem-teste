@@ -246,7 +246,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const { parseApkgFile } = await import('@/lib/ankiParser');
       const result = await parseApkgFile(file);
       setAnkiResult(result);
-      setSubdecks(null);
+      setSubdecks(result.subdecks ?? null);
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
