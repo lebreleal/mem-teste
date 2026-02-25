@@ -52,6 +52,8 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, planA
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
+  const isPlanGoverned = planAllocation && planAllocation[deck.id] != null;
+  const planNewLimit = isPlanGoverned ? planAllocation[deck.id] : null;
 
   return (
     <div className="min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm">
@@ -63,6 +65,15 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, planA
           </Badge>
         )}
       </div>
+
+      {/* Plan governance indicator */}
+      {isPlanGoverned && (
+        <div className="flex items-center gap-1.5 text-[10px] text-primary/80 bg-primary/5 rounded-md px-2 py-1">
+          <CalendarCheck className="h-3 w-3 shrink-0" />
+          <span className="font-medium">Plano: {planNewLimit} novos/dia</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 text-xs">
         <div className="flex items-center gap-1 text-muted-foreground" title="Novos">
           <SquarePlus className="h-3.5 w-3.5" />
