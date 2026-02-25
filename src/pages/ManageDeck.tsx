@@ -610,61 +610,59 @@ const ManageDeck = () => {
         <>
           <div>
             <Label className="mb-1.5 block">Frente</Label>
-            <div className="rounded-xl border border-border bg-card min-h-[120px] p-3 cursor-text" onClick={() => {
-              let occData: { imageUrl?: string } | null = null;
-              try { occData = front ? JSON.parse(front) : null; } catch {}
-              if (!occData?.imageUrl) setOcclusionModalOpen(true);
-            }}>
-              <p className="text-sm text-muted-foreground select-none">Digite o texto aqui</p>
-              {(() => {
-                let occData: { imageUrl?: string; allRects?: any[] } | null = null;
-                try { occData = front ? JSON.parse(front) : null; } catch {}
+            <LazyRichEditor
+              content={(() => { try { JSON.parse(front); return ''; } catch { return front; } })()}
+              onChange={(v) => {
+                // Keep occlusion data in a separate ref, store text in front only if no occlusion
+                try { const d = JSON.parse(front); /* occlusion data exists, ignore text changes */ } catch { setFront(v); }
+              }}
+              placeholder="Digite o texto aqui"
+              hideCloze
+            />
+            {/* Occlusion image thumbnail */}
+            {(() => {
+              let occData: { imageUrl?: string; allRects?: any[] } | null = null;
+              try { occData = JSON.parse(front); } catch {}
 
-                if (occData?.imageUrl) {
-                  return (
-                    <div className="mt-3">
+              if (occData?.imageUrl) {
+                return (
+                  <div className="mt-2 inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => setOcclusionModalOpen(true)}
+                      className="relative group inline-block rounded-lg overflow-hidden border border-border"
+                    >
+                      <img src={occData.imageUrl} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center bg-primary/80 py-0.5">
+                        <Image className="h-3 w-3 text-primary-foreground" />
+                      </div>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setOcclusionModalOpen(true); }}
-                        className="relative group inline-block rounded-lg overflow-hidden border border-border"
+                        onClick={(e) => { e.stopPropagation(); setFront(''); }}
+                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-[10px] font-bold hover:bg-destructive transition-colors"
                       >
-                        <img src={occData.imageUrl} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setFront(''); }}
-                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-xs font-bold hover:bg-destructive transition-colors"
-                        >
-                          ×
-                        </button>
+                        ×
                       </button>
-                    </div>
-                  );
-                }
-
-                return null;
-              })()}
-            </div>
-            {(() => {
-              let occData: { imageUrl?: string } | null = null;
-              try { occData = front ? JSON.parse(front) : null; } catch {}
-              if (!occData?.imageUrl) {
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setOcclusionModalOpen(true)}
-                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-                  >
-                    <Upload className="h-3.5 w-3.5" /> Enviar imagem
-                  </button>
+                    </button>
+                  </div>
                 );
               }
-              return null;
+
+              return (
+                <button
+                  type="button"
+                  onClick={() => setOcclusionModalOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Enviar imagem para oclusão
+                </button>
+              );
             })()}
           </div>
 
           <div>
-            <Label className="mb-1.5 block">Verso (Nota extra - opcional)</Label>
-            <LazyRichEditor content={back} onChange={setBack} placeholder="Nota adicional (opcional)" hideCloze />
+            <Label className="mb-1.5 block">Verso</Label>
+            <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta / nota extra" hideCloze />
           </div>
 
           <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
