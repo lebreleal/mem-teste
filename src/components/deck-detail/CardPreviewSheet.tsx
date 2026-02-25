@@ -66,7 +66,7 @@ function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
-  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
+  
 
   if (!card) return <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-6 text-center text-muted-foreground">Cartão não encontrado</div>;
 
@@ -75,7 +75,7 @@ function CardContent({
   const isOcclusion = card.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
 
-  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[] } | null = null;
+  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number } | null = null;
   if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
 
@@ -89,43 +89,38 @@ function CardContent({
     try {
       if (isOcclusion && occlusionData?.imageUrl) {
         const rects = occlusionData.allRects || [];
-        // Compute viewBox from image natural dimensions (rects are in pixel coords scaled to imageScale)
-        // We use the bounding box of the rects + image to set a proper viewBox
+        const activeRectIds = occlusionData.activeRectIds || rects.map((r: any) => r.id);
+        const vbW = occlusionData.canvasWidth || (() => {
+          const xs = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.x) : [r.x, r.x + r.w]);
+          return Math.max(...xs, 100) * 1.02;
+        })();
+        const vbH = occlusionData.canvasHeight || (() => {
+          const ys = rects.flatMap((r: any) => r.points ? r.points.map((p: any) => p.y) : [r.y, r.y + r.h]);
+          return Math.max(...ys, 100) * 1.02;
+        })();
+
         return (
-          <div className="relative inline-block mx-auto">
-            <img
-              src={occlusionData.imageUrl}
-              alt="Oclusão"
-              className="max-w-full max-h-[50vh] rounded-lg object-contain"
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
-              }}
-            />
-            {imgNatural && rects.length > 0 && (
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
-                viewBox={`0 0 ${imgNatural.w} ${imgNatural.h}`}
-                preserveAspectRatio="xMidYMid meet"
-              >
-                {rects.map((r: any, i: number) => {
-                  // When not revealed, show all rects. When revealed, hide the active ones (reveal answer).
-                  const isActive = occlusionData!.activeRectIds?.includes(r.id) ?? true;
-                  if (revealed && isActive) return null;
-                  return (
-                    <rect
-                      key={i}
-                      x={r.x}
-                      y={r.y}
-                      width={r.w}
-                      height={r.h}
-                      fill="rgba(59,130,246,0.85)"
-                      rx="4"
-                    />
-                  );
-                })}
-              </svg>
-            )}
+          <div className="relative inline-block mx-auto max-w-full">
+            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet">
+              {rects.map((r: any, i: number) => {
+                const isActive = activeRectIds.includes(r.id);
+                if (!isActive) return null;
+
+                const fill = revealed ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.85)';
+                const stroke = revealed ? 'rgba(59,130,246,0.5)' : 'rgb(49,120,236)';
+                const shapeType = r.type || 'rect';
+
+                if (shapeType === 'ellipse') {
+                  return <ellipse key={i} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
+                }
+                if (shapeType === 'polygon' && r.points) {
+                  const pts = (r.points as { x: number; y: number }[]).map((p) => `${p.x},${p.y}`).join(' ');
+                  return <polygon key={i} points={pts} fill={fill} stroke={stroke} strokeWidth={2} />;
+                }
+                return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} stroke={stroke} strokeWidth={2} rx={4} />;
+              })}
+            </svg>
           </div>
         );
       }
