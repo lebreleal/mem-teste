@@ -375,6 +375,11 @@ const ManageDeck = () => {
       }
     } else if (card.card_type === 'image_occlusion') {
       setEditorType('image_occlusion');
+      // Extract frontText from occlusion JSON if present
+      try {
+        const occData = JSON.parse(card.front_content);
+        // Don't overwrite front — keep the full JSON; the editor will extract frontText
+      } catch {}
       setBack(card.back_content);
     } else {
       setEditorType('basic');
@@ -609,14 +614,21 @@ const ManageDeck = () => {
       {editorType === 'image_occlusion' ? (
         <>
           <div>
-            <Label className="mb-1.5 block">Frente</Label>
+            <Label className="mb-1.5 block">Frente (Pergunta)</Label>
             <LazyRichEditor
-              content={(() => { try { JSON.parse(front); return ''; } catch { return front; } })()}
+              content={(() => { try { const d = JSON.parse(front); return d.frontText || ''; } catch { return front; } })()}
               onChange={(v) => {
-                // Keep occlusion data in a separate ref, store text in front only if no occlusion
-                try { const d = JSON.parse(front); /* occlusion data exists, ignore text changes */ } catch { setFront(v); }
+                // Store frontText inside the occlusion JSON
+                try {
+                  const d = JSON.parse(front);
+                  d.frontText = v;
+                  setFront(JSON.stringify(d));
+                } catch {
+                  // No occlusion data yet, just store as text
+                  setFront(v);
+                }
               }}
-              placeholder="Digite o texto aqui"
+              placeholder="Pergunta ou contexto (opcional)"
               hideCloze
             />
             {/* Occlusion image thumbnail */}
@@ -1052,7 +1064,19 @@ const ManageDeck = () => {
           <OcclusionEditor
             initialFront={front}
             onSave={(frontContent) => {
-              setFront(frontContent);
+              // Preserve frontText from existing front state
+              try {
+                const existing = JSON.parse(front);
+                if (existing.frontText) {
+                  const newData = JSON.parse(frontContent);
+                  newData.frontText = existing.frontText;
+                  setFront(JSON.stringify(newData));
+                } else {
+                  setFront(frontContent);
+                }
+              } catch {
+                setFront(frontContent);
+              }
               setOcclusionModalOpen(false);
             }}
             onCancel={() => setOcclusionModalOpen(false)}

@@ -72,7 +72,7 @@ function CardContent({
   const isOcclusion = card?.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
 
-  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number } | null = null;
+  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[]; canvasWidth?: number; canvasHeight?: number; frontText?: string } | null = null;
   if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
@@ -119,27 +119,36 @@ function CardContent({
         })();
 
         return (
-          <div className="relative inline-block mx-auto max-w-full">
-            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet">
-              {rects.map((r: any, i: number) => {
-                const isActive = activeRectIds.includes(r.id);
-                if (!isActive) return null;
+          <div>
+            <div className="relative inline-block mx-auto max-w-full">
+              <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet">
+                {rects.map((r: any, i: number) => {
+                  const isActive = activeRectIds.includes(r.id);
+                  if (!isActive) return null;
 
-                const fill = revealed ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.85)';
-                const stroke = revealed ? 'rgba(59,130,246,0.5)' : 'rgb(49,120,236)';
-                const shapeType = r.type || 'rect';
+                  const fill = revealed ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.85)';
+                  const stroke = revealed ? 'rgba(59,130,246,0.5)' : 'rgb(49,120,236)';
+                  const shapeType = r.type || 'rect';
 
-                if (shapeType === 'ellipse') {
-                  return <ellipse key={i} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
-                }
-                if (shapeType === 'polygon' && r.points) {
-                  const pts = (r.points as { x: number; y: number }[]).map((p) => `${p.x},${p.y}`).join(' ');
-                  return <polygon key={i} points={pts} fill={fill} stroke={stroke} strokeWidth={2} />;
-                }
-                return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} stroke={stroke} strokeWidth={2} rx={4} />;
-              })}
-            </svg>
+                  if (shapeType === 'ellipse') {
+                    return <ellipse key={i} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
+                  }
+                  if (shapeType === 'polygon' && r.points) {
+                    const pts = (r.points as { x: number; y: number }[]).map((p) => `${p.x},${p.y}`).join(' ');
+                    return <polygon key={i} points={pts} fill={fill} stroke={stroke} strokeWidth={2} />;
+                  }
+                  return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} stroke={stroke} strokeWidth={2} rx={4} />;
+                })}
+              </svg>
+            </div>
+            {/* Show frontText on front, backContent on back (revealed) */}
+            {!revealed && occlusionData.frontText && (occlusionData.frontText as string).replace(/<[^>]*>/g, '').trim() && (
+              <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(occlusionData.frontText as string) }} />
+            )}
+            {revealed && card.back_content && card.back_content.trim() && (
+              <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
+            )}
           </div>
         );
       }
@@ -159,6 +168,7 @@ function CardContent({
   const backContent = (() => {
     try {
       if (isCloze) return null;
+      if (isOcclusion) return null; // handled inline in frontContent
       if (isMultiple) {
         return (
           <div className="space-y-2.5 mt-6">
