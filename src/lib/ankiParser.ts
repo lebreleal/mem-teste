@@ -13,8 +13,7 @@
  */
 
 import JSZip from 'jszip';
-import initSqlJs, { type Database } from 'sql.js';
-import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import initSqlJs, { type Database } from 'sql.js/dist/sql-asm.js';
 
 export interface AnkiCard {
   front: string;
@@ -89,9 +88,7 @@ function convertClozeFormat(text: string): string {
 
 export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
   // Load sql.js with WASM from CDN
-  const SQL = await initSqlJs({
-    locateFile: () => wasmUrl,
-  });
+  const SQL = await initSqlJs();
 
   // Unzip the file
   let zip = await JSZip.loadAsync(file);
