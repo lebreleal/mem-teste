@@ -66,6 +66,8 @@ function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
+  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
+
   if (!card) return <div className="bg-card rounded-2xl border border-border/30 shadow-lg p-6 text-center text-muted-foreground">Cartão não encontrado</div>;
 
   const isCloze = card.card_type === 'cloze';
@@ -76,6 +78,7 @@ function CardContent({
   let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[] } | null = null;
   if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
+
   let mcOptions: string[] = [];
   let mcCorrectIdx = -1;
   if (isMultiple) {
@@ -84,28 +87,48 @@ function CardContent({
 
   const frontContent = (() => {
     try {
-      if (isOcclusion && occlusionData?.imageUrl)
+      if (isOcclusion && occlusionData?.imageUrl) {
+        const rects = occlusionData.allRects || [];
+        // Compute viewBox from image natural dimensions (rects are in pixel coords scaled to imageScale)
+        // We use the bounding box of the rects + image to set a proper viewBox
         return (
           <div className="relative inline-block mx-auto">
-            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
-            {revealed && occlusionData.allRects && (
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 100 100`} preserveAspectRatio="none">
-                {occlusionData.allRects
-                  .filter(r => !occlusionData!.activeRectIds?.includes(r.id))
-                  .map((r, i) => (
-                    <rect key={i} x={`${r.x}%`} y={`${r.y}%`} width={`${r.w}%`} height={`${r.h}%`} fill="rgba(59,130,246,0.85)" rx="2" />
-                  ))}
-              </svg>
-            )}
-            {!revealed && occlusionData.allRects && (
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 100 100`} preserveAspectRatio="none">
-                {occlusionData.allRects.map((r, i) => (
-                  <rect key={i} x={`${r.x}%`} y={`${r.y}%`} width={`${r.w}%`} height={`${r.h}%`} fill="rgba(59,130,246,0.85)" rx="2" />
-                ))}
+            <img
+              src={occlusionData.imageUrl}
+              alt="Oclusão"
+              className="max-w-full max-h-[50vh] rounded-lg object-contain"
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+              }}
+            />
+            {imgNatural && rects.length > 0 && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox={`0 0 ${imgNatural.w} ${imgNatural.h}`}
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {rects.map((r: any, i: number) => {
+                  // When not revealed, show all rects. When revealed, hide the active ones (reveal answer).
+                  const isActive = occlusionData!.activeRectIds?.includes(r.id) ?? true;
+                  if (revealed && isActive) return null;
+                  return (
+                    <rect
+                      key={i}
+                      x={r.x}
+                      y={r.y}
+                      width={r.w}
+                      height={r.h}
+                      fill="rgba(59,130,246,0.85)"
+                      rx="4"
+                    />
+                  );
+                })}
               </svg>
             )}
           </div>
         );
+      }
       if (isCloze) {
         const html = renderClozePreview(card.front_content, revealed, clozeTarget);
         return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;

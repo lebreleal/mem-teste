@@ -47,13 +47,14 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const pendingNaturalRects = useRef<OcclusionRect[] | null>(null);
 
   useEffect(() => {
     if (initialFront) {
       try {
         const data = JSON.parse(initialFront);
         if (data.imageUrl) setImageUrl(data.imageUrl);
-        if (data.allRects) setRects(data.allRects);
+        if (data.allRects) pendingNaturalRects.current = data.allRects;
       } catch {}
     }
   }, [initialFront]);
@@ -108,6 +109,18 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
       setImageScale(s);
       canvas.width = Math.round(img.naturalWidth * s * zoom);
       canvas.height = Math.round(img.naturalHeight * s * zoom);
+      // Rescale pending natural rects to canvas coordinates
+      if (pendingNaturalRects.current) {
+        const scaled = pendingNaturalRects.current.map(r => ({
+          ...r,
+          x: r.x * s,
+          y: r.y * s,
+          w: r.w * s,
+          h: r.h * s,
+        }));
+        setRects(scaled);
+        pendingNaturalRects.current = null;
+      }
     };
     img.src = url;
   }, [zoom]);
@@ -174,10 +187,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     setUploading(true);
     try {
       const ext = file.name.split('.').pop();
-      const path = `card-images/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('public').upload(path, file);
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('card-images').upload(path, file);
       if (error) throw error;
-      const { data: urlData } = supabase.storage.from('public').getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
       setImageUrl(urlData.publicUrl);
       setRects([]);
     } catch (err: any) {
@@ -189,10 +202,19 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 
   const handleSave = () => {
     if (!imageUrl || rects.length === 0) return;
+    // Normalize rects from scaled coordinates to natural image coordinates
+    const scale = imageScale || 1;
+    const normalizedRects = rects.map(r => ({
+      ...r,
+      x: r.x / scale,
+      y: r.y / scale,
+      w: r.w / scale,
+      h: r.h / scale,
+    }));
     const frontContent = JSON.stringify({
       imageUrl,
-      allRects: rects,
-      activeRectIds: rects.map(r => r.id),
+      allRects: normalizedRects,
+      activeRectIds: normalizedRects.map(r => r.id),
     });
     onSave(frontContent, '');
   };
@@ -876,9 +898,28 @@ const ManageDeck = () => {
                   <div className="flex items-center gap-2 mb-1">
                     {getCardTypeBadge(card.card_type)}
                   </div>
-                  <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
-                  {card.card_type !== 'multiple_choice' && (
-                    <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
+                  {card.card_type === 'image_occlusion' ? (() => {
+                    try {
+                      const data = JSON.parse(card.front_content);
+                      const rectCount = data.allRects?.length || 0;
+                      return (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
+                            {data.imageUrl && <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      );
+                    } catch {
+                      return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
+                    }
+                  })() : (
+                    <>
+                      <div className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
+                      {card.card_type !== 'multiple_choice' && (
+                        <div className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
+                      )}
+                    </>
                   )}
                   {card.card_type === 'multiple_choice' && (() => {
                     try {
