@@ -297,10 +297,11 @@ export async function importDeckWithSubdecks(
 
     const deckId = (deck as any).id;
 
-    if (!node.children || node.children.length === 0) {
+    if (node.card_indices.length > 0) {
       await insertCards(deckId, node.card_indices);
-    } else {
-      // Recursively create children
+    }
+
+    if (node.children && node.children.length > 0) {
       for (const child of node.children) {
         await createDeckTree(child, deckId, nodeFolderId);
       }

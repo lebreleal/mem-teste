@@ -320,12 +320,25 @@ function buildCards(
 
   const noteDeckIdMap = new Map<string, string>();
   try {
-    const cardDeckResult = db.exec('SELECT nid, did FROM cards');
-    if (cardDeckResult.length > 0) {
-      for (const row of cardDeckResult[0].values) {
-        const noteId = String(row[0]);
-        if (!noteDeckIdMap.has(noteId)) {
-          noteDeckIdMap.set(noteId, String(row[1]));
+    const cardColsResult = db.exec('PRAGMA table_info(cards)');
+    const cardCols = new Set<string>();
+    if (cardColsResult.length > 0) {
+      for (const row of cardColsResult[0].values) {
+        cardCols.add(String(row[1]));
+      }
+    }
+
+    const noteColumn = cardCols.has('nid') ? 'nid' : cardCols.has('note_id') ? 'note_id' : null;
+    const deckColumn = cardCols.has('did') ? 'did' : cardCols.has('deck_id') ? 'deck_id' : null;
+
+    if (noteColumn && deckColumn) {
+      const cardDeckResult = db.exec(`SELECT ${noteColumn}, ${deckColumn} FROM cards`);
+      if (cardDeckResult.length > 0) {
+        for (const row of cardDeckResult[0].values) {
+          const noteId = String(row[0]);
+          if (!noteDeckIdMap.has(noteId)) {
+            noteDeckIdMap.set(noteId, String(row[1]));
+          }
         }
       }
     }
