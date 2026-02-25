@@ -73,7 +73,7 @@ function CardContent({
   const isOcclusion = card.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
 
-  let occlusionData: { imageUrl?: string } | null = null;
+  let occlusionData: { imageUrl?: string; allRects?: any[]; activeRectIds?: string[] } | null = null;
   if (isOcclusion) { try { occlusionData = JSON.parse(card.front_content); } catch {} }
 
   let mcOptions: string[] = [];
@@ -85,7 +85,27 @@ function CardContent({
   const frontContent = (() => {
     try {
       if (isOcclusion && occlusionData?.imageUrl)
-        return <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain mx-auto" />;
+        return (
+          <div className="relative inline-block mx-auto">
+            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
+            {revealed && occlusionData.allRects && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 100 100`} preserveAspectRatio="none">
+                {occlusionData.allRects
+                  .filter(r => !occlusionData!.activeRectIds?.includes(r.id))
+                  .map((r, i) => (
+                    <rect key={i} x={`${r.x}%`} y={`${r.y}%`} width={`${r.w}%`} height={`${r.h}%`} fill="rgba(59,130,246,0.85)" rx="2" />
+                  ))}
+              </svg>
+            )}
+            {!revealed && occlusionData.allRects && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 100 100`} preserveAspectRatio="none">
+                {occlusionData.allRects.map((r, i) => (
+                  <rect key={i} x={`${r.x}%`} y={`${r.y}%`} width={`${r.w}%`} height={`${r.h}%`} fill="rgba(59,130,246,0.85)" rx="2" />
+                ))}
+              </svg>
+            )}
+          </div>
+        );
       if (isCloze) {
         const html = renderClozePreview(card.front_content, revealed, clozeTarget);
         return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
