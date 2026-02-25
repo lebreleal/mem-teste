@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
 
-export function useDashboardState() {
+export function useDashboardState(planRootIds?: Set<string>) {
   const { user } = useAuth();
   const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
   const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
@@ -72,21 +72,23 @@ export function useDashboardState() {
     ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]
     : rawGlobalNewLimit;
 
-  // Sum new_reviewed_today across ALL user decks (for global cap)
+  // Sum new_reviewed_today scoped to plan decks (when plan exists) or all decks
   const globalNewReviewedToday = useMemo(() => {
-    return decks
-      .filter(d => !d.parent_deck_id && !d.is_archived)
-      .reduce((sum, d) => {
-        const collectNew = (id: string): number => {
-          const dk = decks.find(x => x.id === id);
-          let nr = dk?.new_reviewed_today ?? 0;
-          const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
-          for (const child of children) nr += collectNew(child.id);
-          return nr;
-        };
-        return sum + collectNew(d.id);
-      }, 0);
-  }, [decks]);
+    const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+    const scopedRoots = planRootIds && planRootIds.size > 0
+      ? roots.filter(d => planRootIds.has(d.id))
+      : roots;
+    return scopedRoots.reduce((sum, d) => {
+      const collectNew = (id: string): number => {
+        const dk = decks.find(x => x.id === id);
+        let nr = dk?.new_reviewed_today ?? 0;
+        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        for (const child of children) nr += collectNew(child.id);
+        return nr;
+      };
+      return sum + collectNew(d.id);
+    }, 0);
+  }, [decks, planRootIds]);
 
   const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
 
