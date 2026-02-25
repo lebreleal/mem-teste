@@ -105,8 +105,9 @@ export async function fetchStudyQueue(
   // For global new-card cap, only count decks within the user's active study plans
   const { data: studyPlans } = await supabase
     .from('study_plans' as any)
-    .select('deck_ids')
-    .eq('user_id', userId);
+    .select('deck_ids, priority')
+    .eq('user_id', userId)
+    .order('priority', { ascending: true });
 
   let globalLimitsPromise: PromiseLike<any> = Promise.resolve({ data: null });
   const planDeckIdSet = new Set<string>();
@@ -165,12 +166,53 @@ export async function fetchStudyQueue(
   const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
   const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawGlobalLimit;
 
-  // When a plan exists, the global limit overrides the deck-level limit.
-  // The deck's own daily_new_limit is only used when there are no active plans.
   const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
-  const effectiveNewLimit = hasPlanActive ? globalRemaining : Math.min(deckRemaining, globalRemaining);
+
+  // Sequential sharing by plan priority/order: each root deck receives a slice of the global remaining budget.
+  let effectiveNewLimit = Math.min(deckRemaining, globalRemaining);
+  if (hasPlanActive) {
+    const plansOrdered = [...(studyPlans as any[])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+
+    const orderedPlanRootIds: string[] = [];
+    const seenRoots = new Set<string>();
+    for (const plan of plansOrdered) {
+      for (const id of (plan.deck_ids ?? [])) {
+        const rootId = findRootAncestorId(allDecks ?? [], id);
+        if (!seenRoots.has(rootId)) {
+          seenRoots.add(rootId);
+          orderedPlanRootIds.push(rootId);
+        }
+      }
+    }
+
+    const { data: allStats } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+    const newByRoot = new Map<string, number>();
+    for (const row of ((allStats as any[]) ?? [])) {
+      const rootId = findRootAncestorId(allDecks ?? [], row.deck_id);
+      newByRoot.set(rootId, (newByRoot.get(rootId) ?? 0) + (Number(row.new_count) || 0));
+    }
+
+    const allocatedByRoot = new Map<string, number>();
+    let remainingBudget = globalRemaining;
+    for (const rootId of orderedPlanRootIds) {
+      const rootNew = newByRoot.get(rootId) ?? 0;
+      const allocated = Math.max(0, Math.min(rootNew, remainingBudget));
+      allocatedByRoot.set(rootId, allocated);
+      remainingBudget -= allocated;
+      if (remainingBudget <= 0) break;
+    }
+
+    const sessionRootIds = new Set(deckIds.map(id => findRootAncestorId(allDecks ?? [], id)));
+    let sessionAllocated = 0;
+    for (const rootId of sessionRootIds) sessionAllocated += allocatedByRoot.get(rootId) ?? 0;
+
+    // Decks outside active objectives keep their own hierarchy limit and do not consume plan global quota.
+    const sessionHasPlanRoot = Array.from(sessionRootIds).some(rootId => seenRoots.has(rootId));
+    effectiveNewLimit = sessionHasPlanRoot ? sessionAllocated : deckRemaining;
+  }
+
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
