@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import * as deckService from '@/services/deckService';
 import { useAuth } from '@/hooks/useAuth';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -105,6 +105,54 @@ const DeckSettings = () => {
   const [exportingAnki, setExportingAnki] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'sm2' | 'fsrs' | 'quick_review' | null>(null);
 
+  const studyPlansQuery = useQuery({
+    queryKey: ['study-plans-lock', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('deck_ids')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  const getRootAncestorId = useMemo(() => {
+    return (id: string): string => {
+      const visited = new Set<string>();
+      let currentId: string = id;
+      while (true) {
+        if (visited.has(currentId)) return currentId;
+        visited.add(currentId);
+        const deck = decks.find(d => d.id === currentId);
+        if (!deck?.parent_deck_id) return currentId;
+        currentId = deck.parent_deck_id;
+      }
+    };
+  }, [decks]);
+
+  const objectiveRootIds = useMemo(() => {
+    const roots = new Set<string>();
+    for (const plan of studyPlansQuery.data ?? []) {
+      for (const id of (plan.deck_ids ?? [])) {
+        roots.add(getRootAncestorId(id));
+      }
+    }
+    return roots;
+  }, [studyPlansQuery.data, getRootAncestorId]);
+
+  const currentDeckRootId = useMemo(() => {
+    if (!deckId) return null;
+    return getRootAncestorId(deckId);
+  }, [deckId, getRootAncestorId]);
+
+  const isDeckLockedByObjective = useMemo(() => {
+    if (!currentDeckRootId) return false;
+    return objectiveRootIds.has(currentDeckRootId);
+  }, [objectiveRootIds, currentDeckRootId]);
+
   useEffect(() => {
     if (!deckId || !user) return;
     supabase.from('decks').select('*').eq('id', deckId).single().then(({ data, error }) => {
@@ -149,6 +197,17 @@ const DeckSettings = () => {
   };
 
   const handleSaveStudySettings = () => {
+    if (isDeckLockedByObjective) {
+      toast({
+        title: 'Bloqueado pelo Meu Plano',
+        description: 'Remova este baralho dos objetivos em Meu Plano para editar os limites diários.',
+        variant: 'destructive',
+      });
+      setStudySettingsModal(false);
+      setAdvancedModal(false);
+      return;
+    }
+
     saveSettings({
       daily_new_limit: dailyNewLimit,
       daily_review_limit: dailyReviewLimit,
@@ -398,8 +457,22 @@ const DeckSettings = () => {
               <SettingsRow
                 icon={<BookOpen className="h-5 w-5" />}
                 label="Configurações de estudo"
-                subtitle={parentDeckId ? 'Herdado do baralho pai' : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
-                onClick={parentDeckId ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' }) : () => setStudySettingsModal(true)}
+                subtitle={parentDeckId
+                  ? 'Herdado do baralho pai'
+                  : isDeckLockedByObjective
+                    ? 'Bloqueado por objetivo ativo (Meu Plano)'
+                    : `${dailyNewLimit} novos · ${dailyReviewLimit} revisões/dia`}
+                onClick={
+                  parentDeckId
+                    ? () => toast({ title: 'Configuração herdada', description: 'As configurações de estudo são definidas pelo baralho pai.' })
+                    : isDeckLockedByObjective
+                      ? () => toast({
+                          title: 'Bloqueado pelo Meu Plano',
+                          description: 'Remova este baralho dos objetivos para editar os limites diários nas configurações do deck.',
+                          variant: 'destructive',
+                        })
+                      : () => setStudySettingsModal(true)
+                }
               />
               <SettingsRow
                 icon={<Volume2 className="h-5 w-5" />}
@@ -641,6 +714,11 @@ const DeckSettings = () => {
             <DialogTitle className="font-display">Configurações de Estudo</DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
+            {isDeckLockedByObjective && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                Este deck está em objetivo ativo. Para editar os limites diários, remova-o primeiro em Meu Plano.
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <Label>Novos cartões por dia</Label>
               <Input
@@ -648,6 +726,7 @@ const DeckSettings = () => {
                 value={dailyNewLimit}
                 onChange={(e) => setDailyNewLimit(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 text-right font-semibold"
+                disabled={isDeckLockedByObjective}
               />
             </div>
             <Separator />
@@ -658,6 +737,7 @@ const DeckSettings = () => {
                 value={dailyReviewLimit}
                 onChange={(e) => setDailyReviewLimit(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 text-right font-semibold"
+                disabled={isDeckLockedByObjective}
               />
             </div>
             <Separator />
@@ -666,20 +746,20 @@ const DeckSettings = () => {
                 <Shuffle className="h-4 w-4 text-muted-foreground" />
                 <Label>Embaralhar cartões</Label>
               </div>
-              <Switch checked={shuffleCards} onCheckedChange={setShuffleCards} />
+              <Switch checked={shuffleCards} onCheckedChange={setShuffleCards} disabled={isDeckLockedByObjective} />
             </div>
 
             {(algorithmMode === 'sm2' || algorithmMode === 'fsrs') && (
               <>
                 <Separator />
-                <Button variant="outline" className="w-full" onClick={() => { setStudySettingsModal(false); setAdvancedModal(true); }}>
+                <Button variant="outline" className="w-full" onClick={() => { setStudySettingsModal(false); setAdvancedModal(true); }} disabled={isDeckLockedByObjective}>
                   Configurações avançadas ({algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'})
                   <ChevronRight className="ml-auto h-4 w-4" />
                 </Button>
               </>
             )}
 
-            <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving}>
+            <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving || isDeckLockedByObjective}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Salvar
             </Button>
