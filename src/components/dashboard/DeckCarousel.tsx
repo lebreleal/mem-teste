@@ -46,12 +46,10 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string }) {
   const navigate = useNavigate();
   const stats = getDeckTodayStats(deck, allDecks);
-  // Cap new cards by global plan budget when available
-  const newAvailable = globalNewRemaining != null ? Math.min(stats.newAvailable, globalNewRemaining) : stats.newAvailable;
-  const { reviewAvailable, learningAvailable, studiedToday } = stats;
+  const { newAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
@@ -91,7 +89,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globa
         )}
       </div>
       <Progress value={progressPercent} className="h-1.5" />
-      <p className="text-[10px] text-muted-foreground">{studiedToday} feitos · {pendingToday} restantes · {progressPercent}%</p>
+      <p className="text-[10px] text-muted-foreground">{studiedToday}/{totalToday} cards · {progressPercent}% concluído</p>
       <div className="flex items-center gap-2 mt-auto">
         <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
           <Play className="h-3 w-3 mr-1" /> Estudar
@@ -284,7 +282,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
 
           {/* Bottom row: card count */}
           <p className="text-[11px] text-muted-foreground tabular-nums">
-            {activeStats.totalStudied} feitos · {activeStats.totalPending} restantes · {activeStats.progress}%
+            {activeStats.totalStudied}/{activeStats.totalCards} cards · {activeStats.progress}% concluído
           </p>
         </div>
       )}
@@ -306,7 +304,6 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
                 allDecks={decks}
                 avgSecondsPerCard={avgSecondsPerCard}
                 objectiveName={plansByDeckId?.[deck.id]}
-                globalNewRemaining={globalNewRemaining}
               />
             ))}
         </div>
