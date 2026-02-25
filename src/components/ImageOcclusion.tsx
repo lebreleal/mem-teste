@@ -205,20 +205,19 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     return () => window.removeEventListener('resize', h);
   }, [loadImage]);
 
-  // Native wheel listener to prevent container scroll and handle zoom
+  // Native wheel listener on container to keep zoom working even when canvas is scaled/overflowing
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!container) return;
     const handler = (e: WheelEvent) => {
       e.preventDefault();
-      e.stopPropagation();
       setZoom(prev => {
         const delta = e.deltaY > 0 ? -0.1 : 0.1;
         return Math.round(Math.max(0.3, Math.min(5, prev + delta)) * 100) / 100;
       });
     };
-    canvas.addEventListener('wheel', handler, { passive: false });
-    return () => canvas.removeEventListener('wheel', handler);
+    container.addEventListener('wheel', handler, { passive: false });
+    return () => container.removeEventListener('wheel', handler);
   }, []);
 
   const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
