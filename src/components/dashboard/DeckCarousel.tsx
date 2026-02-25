@@ -46,10 +46,12 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number }) {
   const navigate = useNavigate();
   const stats = getDeckTodayStats(deck, allDecks);
-  const { newAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
+  // Cap new cards by global plan budget — the global limit is shared across all decks
+  const newAvailable = globalNewRemaining != null ? Math.min(stats.newAvailable, globalNewRemaining) : stats.newAvailable;
+  const { reviewAvailable, learningAvailable, studiedToday } = stats;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
@@ -304,6 +306,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
                 allDecks={decks}
                 avgSecondsPerCard={avgSecondsPerCard}
                 objectiveName={plansByDeckId?.[deck.id]}
+                globalNewRemaining={globalNewRemaining}
               />
             ))}
         </div>
