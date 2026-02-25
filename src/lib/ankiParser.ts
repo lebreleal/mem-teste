@@ -63,17 +63,29 @@ function stripAnkiTemplateSyntax(html: string): string {
  * Build card content from a template and field values
  */
 function renderTemplate(template: string, fields: Record<string, string>): string {
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let result = template;
-  // Replace {{FieldName}} with field values
+
+  // Handle conditional sections: {{#Field}}...{{/Field}}
+  result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/gi, (_m, fieldName: string, content: string) => {
+    const value = fields[fieldName]?.trim();
+    return value ? content : '';
+  });
+
+  // Handle inverse conditional sections: {{^Field}}...{{/Field}}
+  result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/gi, (_m, fieldName: string, content: string) => {
+    const value = fields[fieldName]?.trim();
+    return value ? '' : content;
+  });
+
+  // Replace {{FieldName}}, {{text:FieldName}} and {{cloze:FieldName}}
   for (const [name, value] of Object.entries(fields)) {
-    const regex = new RegExp(`\\{\\{${name}\\}\\}`, 'gi');
-    result = result.replace(regex, value);
+    const escapedName = escapeRegExp(name);
+    result = result.replace(new RegExp(`\\{\\{${escapedName}\\}\\}`, 'gi'), value);
+    result = result.replace(new RegExp(`\\{\\{text:${escapedName}\\}\\}`, 'gi'), value.replace(/<[^>]*>/g, ''));
+    result = result.replace(new RegExp(`\\{\\{cloze:${escapedName}\\}\\}`, 'gi'), value);
   }
-  // Also handle {{text:FieldName}}
-  for (const [name, value] of Object.entries(fields)) {
-    const regex = new RegExp(`\\{\\{text:${name}\\}\\}`, 'gi');
-    result = result.replace(regex, value.replace(/<[^>]*>/g, ''));
-  }
+
   return stripAnkiTemplateSyntax(result);
 }
 
