@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
 
-export function useDashboardState(planAllocation?: Record<string, number>) {
+export function useDashboardState() {
   const { user } = useAuth();
   const { decks, isLoading: decksLoading, createDeck, deleteDeck, archiveDeck, duplicateDeck, resetProgress, moveDeck, reorderDecks } = useDecks();
   const { folders, isLoading: foldersLoading, createFolder, updateFolder, deleteFolder, archiveFolder, moveFolder, reorderFolders } = useFolders();
@@ -190,11 +190,9 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
     return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
   };
 
-  /** Aggregates descendant counts then caps using ROOT ancestor's limits.
-   *  When planAllocation is provided (from hook param), uses the plan-allocated new card limit instead of the deck's own limit. */
-  const getAggregateStats = (deck: DeckWithStats, overrideAllocation?: Record<string, number>): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
+  /** Aggregates descendant counts then caps using ROOT ancestor's limits. */
+  const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const raw = getRawAggregateStats(deck);
-    const allocation = overrideAllocation ?? planAllocation;
 
     // Find root ancestor — its config governs the entire hierarchy
     let rootDeck = deck;
@@ -204,8 +202,7 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
       rootDeck = parent;
     }
 
-    // Use plan allocation if available, otherwise fall back to deck's own limit
-    const dailyNewLimit = allocation?.[rootDeck.id] ?? rootDeck.daily_new_limit ?? 20;
+    const dailyNewLimit = rootDeck.daily_new_limit ?? 20;
     const dailyReviewLimit = rootDeck.daily_review_limit ?? 100;
 
     // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
