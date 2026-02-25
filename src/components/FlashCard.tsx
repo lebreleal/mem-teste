@@ -588,25 +588,25 @@ const FlashCard = ({
 
   let displayFront: string;
   let displayBack: string;
+  let occlusionFrontText = '';
+  let occlusionBackText = '';
 
   if (isOcclusion) {
     displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
-    // Show frontText (question) below the occlusion on front
+    displayBack = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
+
     try {
       const occData = JSON.parse(frontContent);
-      if (occData.frontText) {
-        const stripped = occData.frontText.replace(/<[^>]*>/g, '').trim();
-        if (stripped) {
-          displayFront += `<div style="margin-top:1rem;text-align:left">${sanitizeHtml(occData.frontText)}</div>`;
-        }
+      const strippedFront = typeof occData.frontText === 'string' ? occData.frontText.replace(/<[^>]*>/g, '').trim() : '';
+      if (strippedFront) {
+        occlusionFrontText = sanitizeHtml(occData.frontText);
       }
     } catch {}
-    const revealedImage = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
-    // Show backContent (answer text) below the revealed image
+
     const backStripped = backContent ? backContent.replace(/<[^>]*>/g, '').trim() : '';
-    const safeBackContent = backStripped ? sanitizeHtml(backContent) : '';
-    const userText = safeBackContent ? `<div style="margin-top:1rem;text-align:left">${safeBackContent}</div>` : '';
-    displayBack = revealedImage + userText;
+    if (backStripped) {
+      occlusionBackText = sanitizeHtml(backContent);
+    }
   } else if (isCloze) {
     // Parse cloze target number from backContent (JSON with clozeTarget)
     let clozeTarget: number | undefined;
@@ -688,10 +688,19 @@ const FlashCard = ({
                 className="card-premium w-full border border-border/40 bg-card p-6 sm:p-8 animate-fade-in"
                 style={{ borderRadius: 'var(--radius)', minHeight: '200px', display: 'flex', alignItems: isOcclusion ? 'flex-start' : 'center', justifyContent: 'center' }}
               >
-                <div
-                  className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                  dangerouslySetInnerHTML={{ __html: isOcclusion ? displayFront : sanitizeHtml(displayFront) }}
-                />
+                {isOcclusion ? (
+                  <div className="w-full space-y-4">
+                    <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: displayFront }} />
+                    {occlusionFrontText && (
+                      <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
+                  />
+                )}
               </div>
             )}
 
@@ -724,10 +733,22 @@ const FlashCard = ({
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </button>
-                  <div
-                    className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                    dangerouslySetInnerHTML={{ __html: isOcclusion ? (peekingFront ? displayFront : displayBack) : sanitizeHtml(peekingFront ? displayFront : displayBack) }}
-                  />
+                  {isOcclusion ? (
+                    <div className="w-full space-y-4">
+                      <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
+                      {!peekingFront && occlusionBackText && (
+                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
+                      )}
+                      {peekingFront && occlusionFrontText && (
+                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="prose prose-sm max-w-none text-center text-card-foreground w-full"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                    />
+                  )}
                   {peekingFront && (
                     <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
                   )}
