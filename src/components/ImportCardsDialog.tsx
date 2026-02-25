@@ -350,6 +350,20 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     return [raw];
   };
 
+  const normalizeDeckTitle = (value: string): string => {
+    return value
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^([a-zA-Z])\.(\S)/, '$1. $2')
+      .trim();
+  };
+
+  const getDeckNodeTitle = (rawDeckName: string): string => {
+    const parts = splitDeckPathLabel(rawDeckName);
+    const last = parts[parts.length - 1] || rawDeckName;
+    return normalizeDeckTitle(last);
+  };
+
   const detectedAnkiHierarchy = useMemo(() => {
     if (source !== 'anki' || !ankiResult || ankiResult.cards.length === 0) {
       return { nodes: [] as DetectedDeckNode[], deckCount: 0, maxDepth: 0 };
@@ -415,7 +429,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
-            {node.name}
+            {normalizeDeckTitle(node.name)}
           </span>
           <span className="text-[10px] text-muted-foreground">{node.count} cartões</span>
         </div>
@@ -441,7 +455,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
-            {node.name}
+            {getDeckNodeTitle(node.name)}
           </span>
           <span className="text-[10px] text-muted-foreground">
             {hasChildren ? `${totalInBranch} cartões` : `${node.card_indices.length} cartões`}
@@ -467,7 +481,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold flex items-center gap-1.5">
             <FolderTree className="h-4 w-4 text-primary" />
-            Organização ({subdeckStats.decks} decks)
+            Organização sugerida ({subdeckStats.decks} decks)
           </Label>
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
             <X className="h-3 w-3 mr-1" />
@@ -604,7 +618,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5">
                       <FolderTree className="h-4 w-4 text-primary" />
-                      Estrutura detectada ({detectedAnkiHierarchy.deckCount} decks)
+                      Estrutura original do arquivo ({detectedAnkiHierarchy.deckCount} decks)
                     </Label>
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/20 p-2">
                       {detectedAnkiHierarchy.nodes.map((node, index) => (
@@ -632,8 +646,11 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                             {card.cardType === 'cloze' ? 'Cloze' : 'Básico'}
                           </span>
                           {card.deckName && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground">
-                              {splitDeckPathLabel(card.deckName).join(' › ')}
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
+                              title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
+                            >
+                              {getDeckNodeTitle(card.deckName)}
                             </span>
                           )}
                           {card.tags.length > 0 && (
