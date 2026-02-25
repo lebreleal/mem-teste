@@ -221,7 +221,7 @@ const DeckDetailDialogs = () => {
             <div className="space-y-3">
               <ImageOcclusion imageUrl={ctx.occlusionImageUrl} initialRects={ctx.occlusionRects} onChange={(rects, meta) => { ctx.setOcclusionRects(rects); if (meta) ctx.setOcclusionCanvasSize({ w: meta.canvasWidth, h: meta.canvasHeight }); }} />
               <div className="flex justify-between gap-2">
-                <Button variant="outline" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionModalOpen(false); }}>
+                <Button variant="outline" onClick={() => { ctx.setOcclusionImageUrl(''); ctx.setOcclusionRects([]); ctx.setOcclusionCanvasSize(null); ctx.setOcclusionModalOpen(false); }}>
                   Remover imagem
                 </Button>
                 <Button onClick={() => ctx.setOcclusionModalOpen(false)}>Concluir</Button>
