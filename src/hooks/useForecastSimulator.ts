@@ -5,6 +5,20 @@ import { useAuth } from '@/hooks/useAuth';
 import type { ForecastView, ForecastParams, SimulatorInput, SimulatorResult, WorkerMessage, WorkerResponse } from '@/types/forecast';
 import type { WeeklyMinutes } from '@/hooks/useStudyPlan';
 
+type ProfileDailyNewLimitData =
+  | number
+  | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null }
+  | null
+  | undefined;
+
+function getDailyNewLimitValue(data: ProfileDailyNewLimitData, fallback = 30): number {
+  if (typeof data === 'number') return data;
+  if (data && typeof data === 'object' && typeof data.daily_new_cards_limit === 'number') {
+    return data.daily_new_cards_limit;
+  }
+  return fallback;
+}
+
 export interface UseForecastSimulatorOptions {
   deckIds: string[];
   horizonDays: number;
@@ -61,7 +75,7 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     staleTime: 5 * 60_000,
   });
 
-  const defaultNewCardsPerDay = profileLimitQuery.data?.daily_new_cards_limit ?? 30;
+  const defaultNewCardsPerDay = getDailyNewLimitValue(profileLimitQuery.data, 30);
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
   const defaultCreatedCardsPerDay = 0;

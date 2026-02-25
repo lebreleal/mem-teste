@@ -66,8 +66,13 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     refetchOnMount: 'always',
   });
 
-  const rawGlobalNewLimit = globalNewLimitQuery.data?.daily_new_cards_limit ?? 9999;
-  const weeklyNewCardsProfile = globalNewLimitQuery.data?.weekly_new_cards as Record<string, number> | null;
+  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
+  const rawGlobalNewLimit = typeof profileLimitData === 'number'
+    ? profileLimitData
+    : profileLimitData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCardsProfile = (profileLimitData && typeof profileLimitData === 'object')
+    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
+    : null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)
     ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]

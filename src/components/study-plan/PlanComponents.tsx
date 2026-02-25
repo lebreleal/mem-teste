@@ -275,7 +275,7 @@ function SimulationControls({
   isUsingDefaults,
   realWeeklyNewCards, weeklyNewCardsOverride, onWeeklyNewCardsChange,
 }: {
-  defaultNewCardsPerDay: number;
+  defaultNewCardsPerDay: number | { daily_new_cards_limit?: number; weekly_new_cards?: WeeklyNewCards | null };
   newCardsOverride: number | undefined;
   onNewCardsChange: (v: number | undefined) => void;
   defaultCreatedCardsPerDay: number;
@@ -302,6 +302,10 @@ function SimulationControls({
 
   const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+  const normalizedDefaultNewCardsPerDay = typeof defaultNewCardsPerDay === 'number'
+    ? defaultNewCardsPerDay
+    : (typeof defaultNewCardsPerDay?.daily_new_cards_limit === 'number' ? defaultNewCardsPerDay.daily_new_cards_limit : 30);
+
   // Capacity weekly
   const currentWeekly = weeklyMinutesOverride ?? realWeeklyMinutes ?? {
     mon: realDailyMinutes, tue: realDailyMinutes, wed: realDailyMinutes, thu: realDailyMinutes,
@@ -314,10 +318,10 @@ function SimulationControls({
 
   // New cards weekly
   const currentNewCardsWeekly = weeklyNewCardsOverride ?? realWeeklyNewCards ?? {
-    mon: defaultNewCardsPerDay, tue: defaultNewCardsPerDay, wed: defaultNewCardsPerDay, thu: defaultNewCardsPerDay,
-    fri: defaultNewCardsPerDay, sat: defaultNewCardsPerDay, sun: defaultNewCardsPerDay,
+    mon: normalizedDefaultNewCardsPerDay, tue: normalizedDefaultNewCardsPerDay, wed: normalizedDefaultNewCardsPerDay, thu: normalizedDefaultNewCardsPerDay,
+    fri: normalizedDefaultNewCardsPerDay, sat: normalizedDefaultNewCardsPerDay, sun: normalizedDefaultNewCardsPerDay,
   };
-  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
+  const currentNewCardsAvg = getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, weeklyNewCardsOverride ?? realWeeklyNewCards);
   const isNewCardsOverridden = newCardsOverride !== undefined || weeklyNewCardsOverride !== undefined;
 
   const [tempNewCardsWeekly, setTempNewCardsWeekly] = useState<WeeklyNewCards>(currentNewCardsWeekly);
@@ -374,24 +378,24 @@ function SimulationControls({
                   <div key={dk} className="flex items-center gap-2">
                     <span className="text-xs font-medium w-8 text-muted-foreground">{DAY_LABELS[dk]}</span>
                     <Slider
-                      value={[tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay]}
+                      value={[tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay]}
                       onValueChange={([v]) => setTempNewCardsWeekly(prev => ({ ...prev, [dk]: v }))}
                       min={0} max={200} step={5}
                       className="flex-1"
                     />
-                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
-                      {tempNewCardsWeekly[dk] ?? defaultNewCardsPerDay}
+                    <span className={cn("text-xs font-semibold w-8 text-right tabular-nums", (tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay) === 0 && "text-muted-foreground")}>
+                      {tempNewCardsWeekly[dk] ?? normalizedDefaultNewCardsPerDay}
                     </span>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-center text-muted-foreground">
-                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
+                Média: <span className="font-semibold text-foreground">{getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, tempNewCardsWeekly)} cards/dia</span>
               </p>
               <Button className="w-full" onClick={() => {
                 onWeeklyNewCardsChange(tempNewCardsWeekly);
-                const avg = getWeeklyAvgNewCardsGlobal(defaultNewCardsPerDay, tempNewCardsWeekly);
-                onNewCardsChange(avg === defaultNewCardsPerDay ? undefined : avg);
+                const avg = getWeeklyAvgNewCardsGlobal(normalizedDefaultNewCardsPerDay, tempNewCardsWeekly);
+                onNewCardsChange(avg === normalizedDefaultNewCardsPerDay ? undefined : avg);
                 setEditingNewCards(false);
               }}>
                 <Check className="h-4 w-4 mr-1.5" /> Aplicar na simulação

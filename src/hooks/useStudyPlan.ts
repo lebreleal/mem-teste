@@ -585,7 +585,34 @@ export function useStudyPlan() {
         .eq('id', userId!);
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: (_data, vars) => {
+      const nextWeekly = vars.weeklyNewCards !== undefined
+        ? vars.weeklyNewCards
+        : (globalCapacity.weeklyNewCards ?? null);
+
+      qc.setQueryData(['daily-new-cards-limit', userId], {
+        daily_new_cards_limit: vars.limit,
+        weekly_new_cards: nextWeekly,
+      });
+
+      qc.setQueryData(['global-capacity', userId], (prev: any) => {
+        if (!prev) {
+          return {
+            dailyMinutes: globalCapacity.dailyMinutes,
+            weeklyMinutes: globalCapacity.weeklyMinutes,
+            dailyNewCardsLimit: vars.limit,
+            weeklyNewCards: nextWeekly,
+          };
+        }
+        return {
+          ...prev,
+          dailyNewCardsLimit: vars.limit,
+          weeklyNewCards: nextWeekly,
+        };
+      });
+
+      invalidate();
+    },
   });
 
   // ─── Reorder objectives (persist priority) ───
