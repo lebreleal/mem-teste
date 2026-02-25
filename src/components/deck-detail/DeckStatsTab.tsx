@@ -21,13 +21,25 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   // Collect this deck + all descendant IDs
   const allDeckIds = [deckId, ...collectDescendantIds(decks, deckId)];
 
+  // Find root ancestor to get governing limits
+  const rootId = (() => {
+    let currentId = deckId;
+    while (true) {
+      const d = decks.find(dk => dk.id === currentId);
+      if (!d?.parent_deck_id) return currentId;
+      currentId = d.parent_deck_id;
+    }
+  })();
+  const rootDeck = decks.find(d => d.id === rootId);
+  const deckNewLimit = rootDeck?.daily_new_limit ?? 20;
+
   // Fetch profile daily_minutes + weekly_minutes for capacity
   const profileQuery = useQuery({
     queryKey: ['profile-capacity', user?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit, weekly_new_cards')
+        .select('daily_study_minutes, weekly_study_minutes, weekly_new_cards')
         .eq('id', user!.id)
         .single();
       return data as any;
@@ -61,7 +73,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
   const sim = useForecastSimulator({
     deckIds: allDeckIds,
     horizonDays,
-    newCardsPerDayOverride: newCardsOverride,
+    newCardsPerDayOverride: newCardsOverride ?? deckNewLimit,
     createdCardsPerDayOverride: createdCardsOverride,
     dailyMinutes: effectiveDailyMinutes,
     weeklyMinutes: weeklyMinutesOverride ?? realWeeklyMinutes,
@@ -87,7 +99,7 @@ export function DeckStatsTab({ deckId }: DeckStatsTabProps) {
       summary={sim.summary}
       isSimulating={sim.isSimulating}
       progress={sim.progress}
-      defaultNewCardsPerDay={sim.defaultNewCardsPerDay}
+      defaultNewCardsPerDay={deckNewLimit}
       forecastView={forecastView}
       onViewChange={setForecastView}
       newCardsOverride={newCardsOverride}
