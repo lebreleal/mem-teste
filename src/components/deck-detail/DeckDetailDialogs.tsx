@@ -68,12 +68,12 @@ const DeckDetailDialogs = () => {
 
               <div>
                 <Label className="mb-1.5 block">
-                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : 'Frente'}
+                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
                 <LazyRichEditor
                   content={ctx.front}
                   onChange={ctx.setFront}
-                  placeholder={ctx.cardType === 'multiple_choice' ? 'Qual organela é responsável pela produção de energia?' : ctx.cardType === 'cloze' ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.' : 'Pergunta, conceito ou texto com {{c1::lacunas}}...'}
+                  placeholder={ctx.cardType === 'multiple_choice' ? 'Qual organela é responsável pela produção de energia?' : ctx.cardType === 'cloze' ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.' : ctx.cardType === 'image_occlusion' ? 'Pergunta ou contexto (opcional)' : 'Pergunta, conceito ou texto com {{c1::lacunas}}...'}
                   onOcclusionPaste={ctx.cardType === 'image_occlusion' ? ctx.handleOcclusionPaste : undefined}
                   onOcclusionAttach={ctx.cardType === 'image_occlusion' ? ctx.handleOcclusionAttach : undefined}
                 />
@@ -181,7 +181,7 @@ const DeckDetailDialogs = () => {
 
               {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
                 <div>
-                  <Label className="mb-1.5 block">Verso</Label>
+                  <Label className="mb-1.5 block">{ctx.cardType === 'image_occlusion' ? 'Verso (Resposta)' : 'Verso'}</Label>
                   <LazyRichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}

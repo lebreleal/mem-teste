@@ -456,9 +456,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
         setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
-        setFront('');
+        setFront(data.frontText || '');
         setBack(card.back_content);
-      } catch { setFront(card.front_content); setBack(card.back_content); }
+      } catch { setFront(''); setBack(card.back_content); }
     } else if (card.card_type === 'multiple_choice') {
       setFront(card.front_content);
       try {
@@ -515,11 +515,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
       const cw = occlusionCanvasSize?.w ?? undefined;
       const ch = occlusionCanvasSize?.h ?? undefined;
+      const frontText = front.trim() ? front : undefined;
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch });
+        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) });
         updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
       } else {
-        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch }), backContent: userBack, cardType: 'image_occlusion' }));
+        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch, ...(frontText ? { frontText } : {}) }), backContent: userBack, cardType: 'image_occlusion' }));
         createCard.mutate({ cards } as any, { onSuccess });
       }
       return;
