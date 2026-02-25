@@ -609,46 +609,56 @@ const ManageDeck = () => {
       {editorType === 'image_occlusion' ? (
         <>
           <div>
-            <Label className="mb-1.5 block">Frente (Imagem com oclusões)</Label>
-            {(() => {
-              let occData: { imageUrl?: string; allRects?: any[] } | null = null;
+            <Label className="mb-1.5 block">Frente</Label>
+            <div className="rounded-xl border border-border bg-card min-h-[120px] p-3 cursor-text" onClick={() => {
+              let occData: { imageUrl?: string } | null = null;
               try { occData = front ? JSON.parse(front) : null; } catch {}
+              if (!occData?.imageUrl) setOcclusionModalOpen(true);
+            }}>
+              <p className="text-sm text-muted-foreground select-none">Digite o texto aqui</p>
+              {(() => {
+                let occData: { imageUrl?: string; allRects?: any[] } | null = null;
+                try { occData = front ? JSON.parse(front) : null; } catch {}
 
-              if (occData?.imageUrl) {
+                if (occData?.imageUrl) {
+                  return (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOcclusionModalOpen(true); }}
+                        className="relative group inline-block rounded-lg overflow-hidden border border-border"
+                      >
+                        <img src={occData.imageUrl} alt="Oclusão" className="h-14 w-14 object-cover rounded-lg" />
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setFront(''); }}
+                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-muted-foreground/80 text-background flex items-center justify-center text-xs font-bold hover:bg-destructive transition-colors"
+                        >
+                          ×
+                        </button>
+                      </button>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
+            </div>
+            {(() => {
+              let occData: { imageUrl?: string } | null = null;
+              try { occData = front ? JSON.parse(front) : null; } catch {}
+              if (!occData?.imageUrl) {
                 return (
                   <button
                     type="button"
                     onClick={() => setOcclusionModalOpen(true)}
-                    className="w-full rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/20 p-3 transition-colors group text-left"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                   >
-                    <div className="relative rounded-lg overflow-hidden">
-                      <img src={occData.imageUrl} alt="Oclusão" className="w-full max-h-48 object-contain rounded-lg" />
-                      {occData.allRects && occData.allRects.length > 0 && (
-                        <div className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-primary/90 px-2.5 py-1 text-[11px] font-bold text-primary-foreground shadow">
-                          {occData.allRects.length} área{occData.allRects.length !== 1 ? 's' : ''}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg">
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 rounded-lg bg-card/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow">
-                          <Pencil className="h-3 w-3" /> Editar oclusões
-                        </span>
-                      </div>
-                    </div>
+                    <Upload className="h-3.5 w-3.5" /> Enviar imagem
                   </button>
                 );
               }
-
-              return (
-                <button
-                  type="button"
-                  onClick={() => setOcclusionModalOpen(true)}
-                  className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-10 text-center hover:border-primary/50 transition-colors"
-                >
-                  <Image className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium text-foreground">Clique para enviar imagem</p>
-                  <p className="text-xs text-muted-foreground mt-1">e marcar as áreas de oclusão</p>
-                </button>
-              );
+              return null;
             })()}
           </div>
 
