@@ -433,6 +433,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     getFolderDueCount, folderHasCommunityLink,
     movableDecks,
     globalNewRemaining,
+    distributedNewByDeck,
   };
 
   function getFolderDueCount(folderId: string): number {
