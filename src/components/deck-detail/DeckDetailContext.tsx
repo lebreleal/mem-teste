@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
-
+import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
@@ -290,7 +290,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const rootDeck = decks.find(d => d.id === rootId);
 
-  // Sum new_reviewed_today across the ENTIRE root hierarchy
+  // Sum new_reviewed_today across the ENTIRE root hierarchy (for deck-level cap)
   const rootTotals = useMemo(() => {
     const collectAll = (id: string): { newReviewed: number; reviewed: number; newGraduated: number } => {
       const d = decks.find(dk => dk.id === id);
@@ -309,6 +309,38 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     return collectAll(rootId);
   }, [decks, rootId]);
 
+  // Sum new_reviewed_today across ALL user decks (for global cap)
+  const globalNewReviewedToday = useMemo(() => {
+    // Only count root-level totals to avoid double-counting
+    return decks
+      .filter(d => !d.parent_deck_id && !d.is_archived)
+      .reduce((sum, d) => {
+        const collectNew = (id: string): number => {
+          const dk = decks.find(x => x.id === id);
+          let nr = dk?.new_reviewed_today ?? 0;
+          const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+          for (const child of children) nr += collectNew(child.id);
+          return nr;
+        };
+        return sum + collectNew(d.id);
+      }, 0);
+  }, [decks]);
+
+  // Fetch global daily_new_cards_limit from profile
+  const globalNewLimitQuery = useQuery({
+    queryKey: ['daily-new-cards-limit', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('daily_new_cards_limit, weekly_new_cards')
+        .eq('id', user!.id)
+        .single();
+      return data as any;
+    },
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+
   const isPlanControlled = false;
 
   // ─── Computed ──────────────────────────
@@ -316,16 +348,29 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const totalCards = allCards.length;
   const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
+
+  // Global new cards limit (from profile, with weekly override)
+  const rawGlobalLimit = globalNewLimitQuery.data?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCards = globalNewLimitQuery.data?.weekly_new_cards as Record<string, number> | null;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const todayGlobalLimit = (weeklyNewCards && weeklyNewCards[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyNewCards[DAY_KEYS[new Date().getDay()]]
+    : rawGlobalLimit;
+
   const learningCount = (stats?.learning_count ?? 0);
   const newReviewedToday = rootTotals.newReviewed;
   const newGraduatedToday = rootTotals.newGraduated;
   const reviewedToday = rootTotals.reviewed;
   const reviewReviewedToday = Math.max(0, reviewedToday - newGraduatedToday);
 
+  // Effective new = min(deck hierarchy remaining, global remaining)
+  const deckRemaining = Math.max(0, dailyNewLimit - newReviewedToday);
+  const globalRemaining = Math.max(0, todayGlobalLimit - globalNewReviewedToday);
+
   // Quick review: no daily limits, show all cards by state
   const newCountToday = isQuickReview
     ? (stats?.new_count ?? 0)
-    : Math.max(0, Math.min(stats?.new_count ?? 0, dailyNewLimit - newReviewedToday));
+    : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining, globalRemaining));
   const reviewDue = Math.max(0, Math.min(stats?.review_count ?? 0, dailyReviewLimit - reviewReviewedToday));
   const masteredToday = isQuickReview
     ? Math.max(0, totalCards - (stats?.new_count ?? 0) - learningCount)

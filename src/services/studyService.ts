@@ -6,7 +6,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
-import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId, computeNewCardAllocation } from '@/lib/studyUtils';
+import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
 import { calculateStreak, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
@@ -56,7 +56,7 @@ export async function fetchStudyQueue(
     limitScopeIds = [rootId, ...rootDescendants];
   }
 
-  const newLimit = deckConfig?.daily_new_limit ?? 20;
+  const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
   const algorithmMode = deckConfig?.algorithm_mode || 'sm2';
   const shuffle = deckConfig?.shuffle_cards ?? false;
@@ -73,8 +73,8 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
-  // Fetch cards + scope card IDs in parallel (independent queries)
-  const [cardsResult, scopeResult] = await Promise.all([
+  // Fetch cards + scope card IDs + global card IDs in parallel
+  const [cardsResult, scopeResult, globalResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
@@ -85,125 +85,62 @@ export async function fetchStudyQueue(
       .from('cards')
       .select('id')
       .in('deck_id', limitScopeIds),
+    // All user's cards for global new-reviewed counting
+    supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', (allDecks ?? []).map(d => d.id)),
   ]);
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
 
-  // Count today's reviews across the ENTIRE root hierarchy using single RPC
-  let newReviewedToday = 0;
-  let reviewReviewedToday = 0;
+  // Count today's reviews: hierarchy scope + global scope
+  const tzOffsetMinutes = -new Date().getTimezoneOffset();
 
   const limitCardIds = (scopeResult.data ?? []).map((c: any) => c.id);
+  const globalCardIds = (globalResult.data ?? []).map((c: any) => c.id);
 
-  if (limitCardIds.length > 0) {
-    const tzOffsetMinutes = -new Date().getTimezoneOffset();
-    const { data: limits } = await supabase.rpc('get_study_queue_limits', {
-      p_user_id: userId,
-      p_card_ids: limitCardIds,
-      p_tz_offset_minutes: tzOffsetMinutes,
-    } as any);
-    if (limits && (limits as any[]).length > 0) {
-      const row = (limits as any[])[0];
-      newReviewedToday = row.new_reviewed_today ?? 0;
-      reviewReviewedToday = row.review_reviewed_today ?? 0;
-    }
+  let newReviewedInHierarchy = 0;
+  let reviewReviewedToday = 0;
+  let globalNewReviewedToday = 0;
+
+  // Batch both RPC calls in parallel
+  const [hierarchyLimits, globalLimits] = await Promise.all([
+    limitCardIds.length > 0
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      : Promise.resolve({ data: null }),
+    globalCardIds.length > 0
+      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  if (hierarchyLimits.data && (hierarchyLimits.data as any[]).length > 0) {
+    const row = (hierarchyLimits.data as any[])[0];
+    newReviewedInHierarchy = row.new_reviewed_today ?? 0;
+    reviewReviewedToday = row.review_reviewed_today ?? 0;
+  }
+  if (globalLimits.data && (globalLimits.data as any[]).length > 0) {
+    const row = (globalLimits.data as any[])[0];
+    globalNewReviewedToday = row.new_reviewed_today ?? 0;
   }
 
-  // Fetch plan allocation for smart new card distribution
-  let planNewLimit: number | undefined;
+  // Fetch global daily_new_cards_limit from profile
   const { data: profileData } = await supabase
     .from('profiles')
     .select('daily_new_cards_limit, weekly_new_cards')
     .eq('id', userId)
     .single();
 
-  {
-    const rawLimit = (profileData as any)?.daily_new_cards_limit ?? 30;
-    const weeklyNewCards = (profileData as any)?.weekly_new_cards as Record<string, number> | null;
-    // Use per-day limit based on current day of week
-    const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-    const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
-    const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawLimit;
-    // Fetch all study plans to compute allocation
-    const { data: plansData } = await supabase
-      .from('study_plans')
-      .select('deck_ids, target_date, priority')
-      .eq('user_id', userId)
-      .order('priority', { ascending: true });
-    
-    if (plansData && plansData.length > 0) {
-      // Check if this deck belongs to any plan
-      const allPlanDeckIds = new Set<string>();
-      for (const p of plansData as any[]) {
-        for (const id of (p.deck_ids ?? [])) allPlanDeckIds.add(id);
-      }
-      
-      // Expand allPlanDeckIds to include roots and descendants before membership check
-      const expandedPlanCheck = new Set<string>();
-      for (const id of Array.from(allPlanDeckIds)) {
-        expandedPlanCheck.add(id);
-        expandedPlanCheck.add(findRootAncestorId(allDecks ?? [], id));
-        const descs = collectDescendantIds(allDecks ?? [], id);
-        for (const d of descs) expandedPlanCheck.add(d);
-      }
+  const rawGlobalLimit = (profileData as any)?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCards = (profileData as any)?.weekly_new_cards as Record<string, number> | null;
+  const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
+  const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawGlobalLimit;
 
-      if (deckIds.some(id => expandedPlanCheck.has(id))) {
-        // Expand plan deck IDs to include roots AND descendants for counting
-        const expandedPlanDeckIds = new Set<string>();
-        for (const id of Array.from(allPlanDeckIds)) {
-          expandedPlanDeckIds.add(id);
-          // Include root ancestor to count cards on root
-          const rootId = findRootAncestorId(allDecks ?? [], id);
-          expandedPlanDeckIds.add(rootId);
-          // Include descendants
-          const descs = collectDescendantIds(allDecks ?? [], id);
-          for (const d of descs) expandedPlanDeckIds.add(d);
-        }
-
-        // Count new cards across expanded decks, aggregate by root
-        const { data: newCounts } = await supabase
-          .from('cards')
-          .select('deck_id')
-          .in('deck_id', Array.from(expandedPlanDeckIds))
-          .eq('state', 0);
-        
-        const newPerRoot: Record<string, number> = {};
-        for (const c of (newCounts ?? []) as any[]) {
-          const rootId = findRootAncestorId(allDecks ?? [], c.deck_id);
-          newPerRoot[rootId] = (newPerRoot[rootId] ?? 0) + 1;
-        }
-
-        // Use shared allocation function
-        const allocation = computeNewCardAllocation({
-          globalBudget: globalLimit,
-          plans: (plansData as any[]).map((p: any) => ({
-            id: p.deck_ids?.join(',') ?? '',
-            deck_ids: p.deck_ids ?? [],
-            target_date: p.target_date,
-            priority: p.priority ?? 0,
-          })),
-          newPerRoot,
-          findRoot: (id: string) => findRootAncestorId(allDecks ?? [], id),
-        });
-
-        // Sum allocation for this session's deck roots (deduplicated)
-        const seenSessionRoots = new Set<string>();
-        const totalForSession = deckIds.reduce((s, id) => {
-          const rootId = findRootAncestorId(allDecks ?? [], id);
-          if (seenSessionRoots.has(rootId)) return s;
-          seenSessionRoots.add(rootId);
-          return s + (allocation.perDeck[rootId] ?? 0);
-        }, 0);
-        planNewLimit = totalForSession;
-      }
-    }
-  }
-
-  // When a plan is active, plan allocation governs completely (ignores deck's manual limit)
-  const baseNewLimit = planNewLimit != null
-    ? planNewLimit
-    : newLimit;
-  const effectiveNewLimit = Math.max(0, baseNewLimit - newReviewedToday);
+  // Effective new limit = min(deck hierarchy remaining, global remaining)
+  const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
+  const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
+  const effectiveNewLimit = Math.min(deckRemaining, globalRemaining);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
