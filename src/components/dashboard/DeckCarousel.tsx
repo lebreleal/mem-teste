@@ -221,7 +221,9 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   // activeStats = globalPlanStats or allDecksStats
   const activeStats = globalPlanStats || allDecksStats;
 
-  if (activeDecks.length === 0) return null;
+  const hasNoDecksAtAll = decks.filter(d => !d.is_archived).length === 0;
+
+  if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
     ? Math.round((activeStats.totalPending * avgSecondsPerCard) / 60)

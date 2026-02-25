@@ -348,7 +348,7 @@ const Dashboard = () => {
         </div>
 
         {/* Study deck carousel */}
-        {allDecks && allDecks.length > 0 && (
+        {allDecks && (
           <DeckCarousel
             decks={allDecks}
             avgSecondsPerCard={avgSecondsPerCard}
