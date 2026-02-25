@@ -74,6 +74,67 @@ function convertClozeFormat(text: string): string {
   return text.replace(/\{\{c(\d+)::([^:}]+)(?:::[^}]*)?\}\}/g, '{{c$1::$2}}');
 }
 
+function isLikelySQLite(bytes: Uint8Array): boolean {
+  if (bytes.length < 16) return false;
+  const header = Array.from(bytes.slice(0, 16)).map(b => String.fromCharCode(b)).join('');
+  return header === 'SQLite format 3\0';
+}
+
+async function resolveAnkiArchive(file: File): Promise<JSZip> {
+  let zip = await JSZip.loadAsync(file);
+
+  for (let depth = 0; depth < 3; depth++) {
+    const hasCollection = Object.values(zip.files).some(
+      entry => !entry.dir && /(^|\/)collection\.anki(21b|21|2)$/i.test(entry.name)
+    );
+    if (hasCollection) return zip;
+
+    const innerArchive = Object.values(zip.files).find(
+      entry => !entry.dir && /\.(apkg|colpkg|zip)$/i.test(entry.name)
+    );
+    if (!innerArchive) return zip;
+
+    const innerBlob = await innerArchive.async('blob');
+    zip = await JSZip.loadAsync(innerBlob);
+  }
+
+  return zip;
+}
+
+async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isModernFormat: boolean }> {
+  const files = Object.values(zip.files).filter(entry => !entry.dir);
+
+  const candidates = files
+    .filter(entry => /(^|\/)collection\.anki(21b|21|2)$/i.test(entry.name))
+    .map(entry => {
+      const lower = entry.name.toLowerCase();
+      const priority = lower.endsWith('collection.anki21b') ? 0 : lower.endsWith('collection.anki21') ? 1 : 2;
+      return { entry, priority };
+    })
+    .sort((a, b) => a.priority - b.priority);
+
+  if (candidates.length === 0) {
+    throw new Error('Arquivo .apkg inválido: banco de dados não encontrado');
+  }
+
+  let fallback: { dbBytes: Uint8Array; isModernFormat: boolean } | null = null;
+
+  for (const { entry } of candidates) {
+    const dbBytes = await entry.async('uint8array');
+    const isModernFormat = /collection\.anki21b$/i.test(entry.name);
+
+    if (!fallback) {
+      fallback = { dbBytes, isModernFormat };
+    }
+
+    if (isLikelySQLite(dbBytes)) {
+      return { dbBytes, isModernFormat };
+    }
+  }
+
+  return fallback!;
+}
+
 /* ── extract media ── */
 
 async function extractMedia(zip: JSZip): Promise<Map<string, string>> {
@@ -312,36 +373,15 @@ function buildCards(
 export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
   const SQL = await initSqlJs();
 
-  // Unzip
-  let zip = await JSZip.loadAsync(file);
-
-  // If wrapper zip containing .apkg/.colpkg inside, extract it first
-  const innerApkg = Object.keys(zip.files).find(
-    name => /\.(apkg|colpkg)$/i.test(name) && !zip.files[name].dir
-  );
-  if (innerApkg && !zip.files['collection.anki21'] && !zip.files['collection.anki21b'] && !zip.files['collection.anki2']) {
-    const innerBlob = await zip.files[innerApkg].async('blob');
-    zip = await JSZip.loadAsync(innerBlob);
-  }
-
-  // Find the SQLite database file — prefer anki21b (modern), then anki21, then anki2
-  let dbFile: JSZip.JSZipObject | null = null;
-  let isModernFormat = false;
-  for (const name of ['collection.anki21b', 'collection.anki21', 'collection.anki2']) {
-    if (zip.files[name]) {
-      dbFile = zip.files[name];
-      isModernFormat = name === 'collection.anki21b';
-      break;
-    }
-  }
-  if (!dbFile) throw new Error('Arquivo .apkg inválido: banco de dados não encontrado');
+  // Open package (supports wrapper .zip/.apkg recursively)
+  const zip = await resolveAnkiArchive(file);
 
   // Extract media
   const mediaMap = await extractMedia(zip);
 
-  // Open DB
-  const dbBuffer = await dbFile.async('arraybuffer');
-  const db: Database = new SQL.Database(new Uint8Array(dbBuffer));
+  // Find and open SQLite DB
+  const { dbBytes, isModernFormat } = await findDatabaseFile(zip);
+  const db: Database = new SQL.Database(dbBytes);
 
   // Parse models — try modern tables first, fallback to legacy col table
   let models: Record<string, AnkiModel> = {};
