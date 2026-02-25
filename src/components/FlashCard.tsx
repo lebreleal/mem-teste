@@ -558,7 +558,8 @@ const FlashCard = ({
   if (isOcclusion) {
     displayFront = renderOcclusion(frontContent, false);
     const revealedImage = renderOcclusion(frontContent, true);
-    const userText = backContent ? `<div style="margin-top:1rem">${backContent}</div>` : '';
+    const safeBackContent = backContent ? sanitizeHtml(backContent) : '';
+    const userText = safeBackContent ? `<div style="margin-top:1rem">${safeBackContent}</div>` : '';
     displayBack = revealedImage + userText;
   } else if (isCloze) {
     // Parse cloze target number from backContent (JSON with clozeTarget)
@@ -643,7 +644,7 @@ const FlashCard = ({
               >
                 <div
                   className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayFront) }}
+                  dangerouslySetInnerHTML={{ __html: isOcclusion ? displayFront : sanitizeHtml(displayFront) }}
                 />
               </div>
             )}
@@ -679,7 +680,7 @@ const FlashCard = ({
                   </button>
                   <div
                     className="prose prose-sm max-w-none text-center text-card-foreground w-full"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(peekingFront ? displayFront : displayBack) }}
+                    dangerouslySetInnerHTML={{ __html: isOcclusion ? (peekingFront ? displayFront : displayBack) : sanitizeHtml(peekingFront ? displayFront : displayBack) }}
                   />
                   {peekingFront && (
                     <span className="mt-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Frente do card</span>
