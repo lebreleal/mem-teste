@@ -241,14 +241,16 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1" title="Novos">
                 <SquarePlus className="h-3.5 w-3.5 text-primary" />
-                <span className="font-bold text-foreground">{globalPlanStats.totalNew}</span>
+                <span className="font-bold text-foreground">
+                  {globalNewBudget != null ? Math.max(0, globalNewBudget - newCardsStudiedToday) : globalPlanStats.totalNew}
+                </span>
               </div>
               <div className="flex items-center gap-1" title="Aprendendo">
                 <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
                 <span className="font-bold text-foreground">{globalPlanStats.totalLearning}</span>
               </div>
               <div className="flex items-center gap-1" title="Revisão">
-                <Layers className="h-3.5 w-3.5 text-emerald-500" />
+                <Layers className="h-3.5 w-3.5 text-primary" />
                 <span className="font-bold text-foreground">{globalPlanStats.totalReview}</span>
               </div>
             </div>
