@@ -101,8 +101,8 @@ function CardContent({
 
         return (
           <div className="relative inline-block mx-auto max-w-full">
-            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg object-contain" />
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet">
+            <img src={occlusionData.imageUrl} alt="Oclusão" className="max-w-full max-h-[50vh] rounded-lg block" />
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${vbW} ${vbH}`} preserveAspectRatio="xMinYMin meet">
               {rects.map((r: any, i: number) => {
                 const isActive = activeRectIds.includes(r.id);
                 if (!isActive) return null;
