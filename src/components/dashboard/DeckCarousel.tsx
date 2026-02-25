@@ -147,7 +147,39 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     });
   }, [activeDecks, decks, planDeckOrder]);
 
-  // New cards remaining for today (global plan quota)
+  // Global plan stats (all card types)
+  const globalPlanStats = useMemo(() => {
+    if (!hasPlan || !planDeckIds || planDeckIds.length === 0) return null;
+    const getRootId = (deckId: string): string | null => {
+      const d = decks.find(x => x.id === deckId);
+      if (!d) return null;
+      if (!d.parent_deck_id) return d.id;
+      return getRootId(d.parent_deck_id);
+    };
+    const rootIds = new Set<string>();
+    for (const pid of planDeckIds) {
+      const rootId = getRootId(pid);
+      if (rootId) rootIds.add(rootId);
+    }
+    let totalNew = 0, totalLearning = 0, totalReview = 0, totalStudied = 0, totalPending = 0;
+    for (const rootId of rootIds) {
+      const root = decks.find(d => d.id === rootId);
+      if (root) {
+        const stats = getDeckTodayStats(root, decks);
+        totalNew += stats.newAvailable;
+        totalLearning += stats.learningAvailable;
+        totalReview += stats.reviewAvailable;
+        totalStudied += stats.studiedToday;
+        totalPending += stats.pendingToday;
+      }
+    }
+    const totalCards = totalStudied + totalPending;
+    const progress = totalCards > 0 ? Math.round((totalStudied / totalCards) * 100) : 0;
+    return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
+  }, [decks, hasPlan, planDeckIds]);
+
+
+  // We just need newCardsStudiedToday for the new cards specific count
   const newCardsStudiedToday = useMemo(() => {
     if (!hasPlan || !planDeckIds || planDeckIds.length === 0) return 0;
     const getRootId = (deckId: string): string | null => {
@@ -172,14 +204,16 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return total;
   }, [decks, hasPlan, planDeckIds]);
 
-  const newCardsRemaining = globalNewBudget != null ? Math.max(0, globalNewBudget - newCardsStudiedToday) : null;
-
   if (activeDecks.length === 0) return null;
 
   const totalPending = sortedDecks.reduce((sum, d) => {
     const { pendingToday } = getDeckTodayStats(d, decks);
     return sum + pendingToday;
   }, 0);
+
+  const estimatedTotalMinutes = globalPlanStats
+    ? Math.round((globalPlanStats.totalPending * avgSecondsPerCard) / 60)
+    : 0;
 
   return (
     <div className="space-y-3 mb-6">
@@ -199,38 +233,40 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         </button>
       )}
 
-      {/* New cards remaining banner */}
-      {hasPlan && newCardsRemaining != null && (
-        <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card px-4 py-2.5 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <SquarePlus className="h-4 w-4 text-primary" />
+      {/* Daily study progress banner */}
+      {hasPlan && globalPlanStats && (
+        <div className="rounded-xl border border-border/50 bg-card px-4 py-2.5 shadow-sm space-y-2">
+          {/* Top row: icon counts + time estimate */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1" title="Novos">
+                <SquarePlus className="h-3.5 w-3.5 text-primary" />
+                <span className="font-bold text-foreground">{globalPlanStats.totalNew}</span>
+              </div>
+              <div className="flex items-center gap-1" title="Aprendendo">
+                <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                <span className="font-bold text-foreground">{globalPlanStats.totalLearning}</span>
+              </div>
+              <div className="flex items-center gap-1" title="Revisão">
+                <Layers className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="font-bold text-foreground">{globalPlanStats.totalReview}</span>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground tabular-nums">
-                {newCardsRemaining > 0
-                  ? <>{newCardsRemaining} <span className="font-normal text-muted-foreground">novos cards restantes</span></>
-                  : <span className="text-muted-foreground">Meta de novos cards concluída! 🎉</span>
-                }
-              </p>
-              {globalNewBudget != null && newCardsRemaining > 0 && (
-                <p className="text-[10px] text-muted-foreground">
-                  {newCardsStudiedToday}/{globalNewBudget} do plano de hoje
-                </p>
-              )}
-            </div>
-          </div>
-          {globalNewBudget != null && (
-            <div className="flex items-center gap-2">
-              <Progress
-                value={globalNewBudget > 0 ? Math.round((newCardsStudiedToday / globalNewBudget) * 100) : 0}
-                className="h-1.5 w-16"
-              />
-              <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
-                {globalNewBudget > 0 ? Math.round((newCardsStudiedToday / globalNewBudget) * 100) : 0}%
+            {globalPlanStats.totalPending > 0 && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                ~{formatMinutes(estimatedTotalMinutes)}
               </span>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <Progress value={globalPlanStats.progress} className="h-1.5" />
+
+          {/* Bottom row: card count */}
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {globalPlanStats.totalStudied}/{globalPlanStats.totalCards} cards · {globalPlanStats.progress}% concluído
+          </p>
         </div>
       )}
 
