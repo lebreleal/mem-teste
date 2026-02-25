@@ -594,13 +594,18 @@ const FlashCard = ({
     // Show frontText (question) below the occlusion on front
     try {
       const occData = JSON.parse(frontContent);
-      if (occData.frontText && occData.frontText.replace(/<[^>]*>/g, '').trim()) {
-        displayFront += `<div style="margin-top:1rem">${sanitizeHtml(occData.frontText)}</div>`;
+      if (occData.frontText) {
+        const stripped = occData.frontText.replace(/<[^>]*>/g, '').trim();
+        if (stripped) {
+          displayFront += `<div style="margin-top:1rem;text-align:left">${sanitizeHtml(occData.frontText)}</div>`;
+        }
       }
     } catch {}
     const revealedImage = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
-    const safeBackContent = backContent ? sanitizeHtml(backContent) : '';
-    const userText = safeBackContent ? `<div style="margin-top:1rem">${safeBackContent}</div>` : '';
+    // Show backContent (answer text) below the revealed image
+    const backStripped = backContent ? backContent.replace(/<[^>]*>/g, '').trim() : '';
+    const safeBackContent = backStripped ? sanitizeHtml(backContent) : '';
+    const userText = safeBackContent ? `<div style="margin-top:1rem;text-align:left">${safeBackContent}</div>` : '';
     displayBack = revealedImage + userText;
   } else if (isCloze) {
     // Parse cloze target number from backContent (JSON with clozeTarget)
