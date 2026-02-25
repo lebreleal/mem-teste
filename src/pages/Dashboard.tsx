@@ -36,6 +36,7 @@ const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDele
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
+import { usePendingDecks } from '@/stores/usePendingDecks';
 import { supabase } from '@/integrations/supabase/client';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -570,6 +571,22 @@ const Dashboard = () => {
           <ImportCardsDialog
             open={state.importOpen} onOpenChange={state.setImportOpen}
             onImport={async (deckName, cards, subdecks) => {
+              const pendingStore = usePendingDecks.getState();
+              const pendingId = `import-${Date.now()}`;
+              const totalCards = subdecks && subdecks.length > 0
+                ? subdecks.reduce(function cntAll(s: number, n: any): number { return s + (n.card_indices?.length || 0) + (n.children?.length ? n.children.reduce(cntAll, 0) : 0); }, 0)
+                : cards.length;
+
+              pendingStore.addPending({
+                id: pendingId,
+                name: deckName,
+                folderId: state.currentFolderId ?? null,
+                status: 'saving',
+                progress: { current: 0, total: totalCards },
+              });
+
+              state.setImportOpen(false);
+
               try {
                 const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
                 if (subdecks && subdecks.length > 0) {
@@ -581,10 +598,7 @@ const Dashboard = () => {
                     subdecks,
                     defaultAlgorithm
                   );
-                  const countAll = (nodes: typeof subdecks): number =>
-                    nodes.reduce((s, n) => s + (n.children?.length ? countAll(n.children) : n.card_indices.length), 0);
-                  const totalCards = countAll(subdecks);
-                  toast({ title: `${totalCards} cartões importados em ${subdecks.length} subdecks dentro de "${deckName}"!` });
+                  toast({ title: `${totalCards} cartões importados em "${deckName}"!` });
                 } else {
                   await importDeck(
                     user!.id,
@@ -595,11 +609,16 @@ const Dashboard = () => {
                   );
                   toast({ title: `${cards.length} cartões importados!` });
                 }
-                state.setImportOpen(false);
+                pendingStore.updatePending(pendingId, { status: 'done', progress: { current: totalCards, total: totalCards } });
                 await queryClient.invalidateQueries({ queryKey: ['decks'] });
                 await queryClient.invalidateQueries({ queryKey: ['folders'] });
                 await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
-              } catch (err) { toast({ title: 'Erro ao importar', variant: 'destructive' }); }
+                setTimeout(() => pendingStore.removePending(pendingId), 2000);
+              } catch (err) {
+                pendingStore.updatePending(pendingId, { status: 'error' });
+                toast({ title: 'Erro ao importar', variant: 'destructive' });
+                setTimeout(() => pendingStore.removePending(pendingId), 4000);
+              }
             }}
           />
         )}

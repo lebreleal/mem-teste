@@ -143,14 +143,16 @@ function normalizeSubdeckHierarchy(nodes: SubdeckOrganization[]): SubdeckOrganiz
   }
 
   const toOutput = (map: Map<string, MutableNode>): SubdeckOrganization[] => {
-    return [...map.values()].map((node) => {
-      const children = toOutput(node.children);
-      return {
-        name: node.name,
-        card_indices: [...node.cardSet],
-        children: children.length > 0 ? children : undefined,
-      };
-    });
+    return [...map.values()]
+      .map((node) => {
+        const children = toOutput(node.children);
+        return {
+          name: node.name,
+          card_indices: [...node.cardSet],
+          children: children.length > 0 ? children : undefined,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   };
 
   return toOutput(root);
