@@ -112,6 +112,21 @@ function normalizeAnkiId(value: string | number | null | undefined): string {
   return raw;
 }
 
+function splitDeckPath(rawDeckName: string): string[] {
+  const raw = rawDeckName.trim();
+  if (!raw) return [];
+
+  if (raw.includes('::')) {
+    return raw.split('::').map(part => part.trim()).filter(Boolean);
+  }
+
+  if (raw.includes('|')) {
+    return raw.split('|').map(part => part.trim()).filter(Boolean);
+  }
+
+  return [raw];
+}
+
 async function resolveAnkiArchive(file: File): Promise<JSZip> {
   let zip = await JSZip.loadAsync(file);
 
@@ -565,7 +580,7 @@ function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
 
   cards.forEach((card, cardIndex) => {
     if (!card.deckName) return;
-    const parts = card.deckName.split('::').map(p => p.trim()).filter(Boolean);
+    const parts = splitDeckPath(card.deckName);
     if (parts.length === 0) return;
 
     const relative = parts[0] === rootDeckName ? parts.slice(1) : parts;
@@ -645,7 +660,7 @@ export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
 
   const rootDeckCounts = new Map<string, number>();
   for (const card of cards) {
-    const root = card.deckName?.split('::')[0]?.trim();
+    const root = splitDeckPath(card.deckName)[0];
     if (!root) continue;
     rootDeckCounts.set(root, (rootDeckCounts.get(root) || 0) + 1);
   }
