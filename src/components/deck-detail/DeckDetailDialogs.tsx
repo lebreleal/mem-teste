@@ -347,7 +347,7 @@ const DeckDetailDialogs = () => {
               <div className="space-y-2 pt-2">
                 {[
                   { value: 'sm2', label: 'SM-2', desc: 'Algoritmo clássico de repetição espaçada', premium: false },
-                  { value: 'fsrs', label: 'FSRS-4.5', desc: 'Algoritmo avançado com retenção otimizada', premium: true },
+                  { value: 'fsrs', label: 'FSRS-6', desc: 'Algoritmo avançado com retenção otimizada', premium: true },
                   { value: 'quick_review', label: 'Revisão Rápida', desc: 'Modo manual, sem agendamento', premium: false },
                 ].map(algo => {
                   const isActive = (ctx.deck as any)?.algorithm_mode === algo.value;
