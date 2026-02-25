@@ -1,33 +1,32 @@
 
+## Problema
 
-## Correcao: Media no tooltip baseada na semana visivel
+O carrossel distribui o orçamento global sequencialmente entre os decks (ex: Anatomia consome 7, sobram 33 para Histologia). Porém, a lista de decks na parte inferior usa `getAggregateStats()` que dá a cada deck o `globalNewRemaining` inteiro (40), sem descontar o que outros decks já consumiram. Resultado: Histologia mostra 45 (min de 45 novos vs 40 global) em vez de 33.
 
-### Problema
-O tooltip mostra as medias "Seg-Sex" e "7 dias" vindas do `summary` global (media do ano inteiro = ~11min/dia). Quando o usuario olha a semana S5 que tem 7h1min total, espera ver ~60min/dia, nao 11min.
+## Solução
 
-### Solucao
-No componente `SimulatorTooltip`, quando o ponto exibido e uma semana agregada (horizonte > 30d), calcular a media **localmente a partir dos dados daquele ponto** em vez de usar o `summary` global.
+Pré-calcular a distribuição do orçamento global entre os decks do plano dentro do `useDashboardState`, na mesma ordem do carrossel, e usar esses valores distribuídos no `getAggregateStats` em vez do `globalNewRemaining` bruto.
 
-### Mudanca
+## Detalhes Técnicos
 
-**Arquivo: `src/components/study-plan/PlanComponents.tsx`**
+### `src/components/dashboard/useDashboardState.ts`
 
-Na funcao `SimulatorTooltip` (linha ~214):
+1. **Novo `useMemo` - `distributedNewByDeck`**: Depois de calcular `globalNewRemaining`, iterar pelos root decks do plano (na ordem de prioridade, se disponível) e distribuir o budget sequencialmente:
+   - Para cada root deck, calcular `raw.new_count` via `getRawAggregateStats`
+   - Alocar `min(raw.new_count, remainingBudget)` para esse deck
+   - Decrementar `remainingBudget`
+   - Armazenar o valor alocado num `Map<string, number>`
 
-- Detectar se o ponto e uma semana agregada (ex: `d.day` comeca com "S" ou o `date` contem " - ")
-- Se for semana agregada:
-  - Media 7 dias = `Math.round(d.totalMin / 7)`
-  - Media Seg-Sex = `Math.round(d.totalMin / 5)` (aproximacao, pois a semana tem ~5 dias uteis)
-- Se for ponto diario: manter o `summary` global normalmente (ou simplesmente nao mostrar medias, ja que e um unico dia)
+2. **Aceitar `planDeckOrder` como parâmetro** do hook (já vem do Dashboard) para garantir a mesma ordem de distribuição do carrossel.
 
-Logica:
+3. **Modificar `getAggregateStats`**: Quando há plano ativo, em vez de usar `globalNewRemaining` diretamente, consultar o `distributedNewByDeck` map para obter o valor já distribuído para aquele deck específico. Para decks fora do plano, manter o comportamento atual.
 
-```text
-Se ponto e semanal (agregado):
-  avg7dias = totalMin / 7
-  avgSegSex = totalMin / 5
-Senao:
-  usar summary global (ou ocultar medias)
-```
+### `src/pages/Dashboard.tsx`
 
-Isso resolve o problema sem precisar alterar o Worker, o hook ou a estrutura de dados.
+- Passar `planDeckOrder` para `useDashboardState` para que a distribuição siga a mesma ordem de prioridade do carrossel.
+
+### Resultado
+
+- Carrossel mostra: Anatomia 7 novos, Histologia 33 novos
+- Lista inferior mostra: Anatomia "Cartoes para hoje: 7+learning+review", Histologia "Cartoes para hoje: 33+learning+review"
+- Ambos sincronizados com a mesma lógica de distribuição sequencial
