@@ -152,7 +152,7 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
   if (deckIds.length === 0) return totals;
 
-  const allCards: Array<{ id: string; state: number; scheduled_date: string }> = [];
+  const allCards: Array<{ id: string; state: number | null; scheduled_date: string }> = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
       .from('cards')
@@ -160,7 +160,7 @@ export async function fetchAggregatedStats(deckIds: string[]) {
       .in('deck_id', deckIds)
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
-    const batch = (data ?? []) as Array<{ id: string; state: number; scheduled_date: string }>;
+    const batch = (data ?? []) as Array<{ id: string; state: number | null; scheduled_date: string }>;
     allCards.push(...batch);
     if (batch.length < PAGE_SIZE) break;
   }
@@ -172,7 +172,7 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   todayStart.setHours(0, 0, 0, 0);
 
   for (const c of allCards) {
-    if (c.state === 0) totals.new_count++;
+    if (c.state === 0 || c.state == null) totals.new_count++;
     else if (c.state === 1 || c.state === 3) totals.learning_count++;
     else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
   }

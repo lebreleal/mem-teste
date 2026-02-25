@@ -93,7 +93,7 @@ const CardList = () => {
   const getStateCount = (value: string) => {
     if (value === 'all') return allCards.length;
     if (value === 'frozen') return frozenCount;
-    if (value === 'new') return allCards.filter(c => c.state === 0 && !isFrozenCard(c)).length;
+    if (value === 'new') return allCards.filter(c => (c.state === 0 || c.state == null) && !isFrozenCard(c)).length;
     if (value === 'learning') return allCards.filter(c => c.state === 1 && !isFrozenCard(c)).length;
     if (value === 'relearning') return allCards.filter(c => c.state === 3 && !isFrozenCard(c)).length;
     return allCards.filter(c => c.state === 2 && !isFrozenCard(c)).length;
