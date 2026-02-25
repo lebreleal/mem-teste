@@ -591,6 +591,13 @@ const FlashCard = ({
 
   if (isOcclusion) {
     displayFront = renderOcclusion(frontContent, false, occlusionFallbackCanvas ?? undefined);
+    // Show frontText (question) below the occlusion on front
+    try {
+      const occData = JSON.parse(frontContent);
+      if (occData.frontText && occData.frontText.replace(/<[^>]*>/g, '').trim()) {
+        displayFront += `<div style="margin-top:1rem">${sanitizeHtml(occData.frontText)}</div>`;
+      }
+    } catch {}
     const revealedImage = renderOcclusion(frontContent, true, occlusionFallbackCanvas ?? undefined);
     const safeBackContent = backContent ? sanitizeHtml(backContent) : '';
     const userText = safeBackContent ? `<div style="margin-top:1rem">${safeBackContent}</div>` : '';
