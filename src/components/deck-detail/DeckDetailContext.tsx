@@ -19,6 +19,7 @@ import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import type { CardRow } from '@/types/deck';
+import { findRootAncestorId } from '@/lib/studyUtils';
 
 // ─── Context value shape ────────────────────────────────
 interface DeckDetailContextValue {
@@ -309,22 +310,51 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     return collectAll(rootId);
   }, [decks, rootId]);
 
-  // Sum new_reviewed_today across ALL user decks (for global cap)
+  // Fetch active study plans to scope plan-governed limits
+  const studyPlansQuery = useQuery({
+    queryKey: ['study-plans-for-deck-detail', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('study_plans')
+        .select('deck_ids')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      return (data ?? []) as Array<{ deck_ids: string[] | null }>;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  const planRootIds = useMemo(() => {
+    const roots = new Set<string>();
+    for (const plan of studyPlansQuery.data ?? []) {
+      for (const id of (plan.deck_ids ?? [])) {
+        roots.add(findRootAncestorId(decks, id));
+      }
+    }
+    return roots;
+  }, [studyPlansQuery.data, decks]);
+
+  const hasPlanActive = planRootIds.size > 0;
+
+  // Sum new_reviewed_today across deck scope:
+  // - plan mode: only objective roots
+  // - manual mode: all roots
   const globalNewReviewedToday = useMemo(() => {
-    // Only count root-level totals to avoid double-counting
-    return decks
-      .filter(d => !d.parent_deck_id && !d.is_archived)
-      .reduce((sum, d) => {
-        const collectNew = (id: string): number => {
-          const dk = decks.find(x => x.id === id);
-          let nr = dk?.new_reviewed_today ?? 0;
-          const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
-          for (const child of children) nr += collectNew(child.id);
-          return nr;
-        };
-        return sum + collectNew(d.id);
-      }, 0);
-  }, [decks]);
+    const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+    const scopedRoots = hasPlanActive ? roots.filter(d => planRootIds.has(d.id)) : roots;
+
+    return scopedRoots.reduce((sum, d) => {
+      const collectNew = (id: string): number => {
+        const dk = decks.find(x => x.id === id);
+        let nr = dk?.new_reviewed_today ?? 0;
+        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+        for (const child of children) nr += collectNew(child.id);
+        return nr;
+      };
+      return sum + collectNew(d.id);
+    }, 0);
+  }, [decks, hasPlanActive, planRootIds]);
 
   // Fetch global daily_new_cards_limit from profile
   const globalNewLimitQuery = useQuery({
@@ -341,7 +371,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     staleTime: 5 * 60_000,
   });
 
-  const isPlanControlled = false;
+  const isPlanControlled = hasPlanActive && planRootIds.has(rootId);
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
@@ -363,14 +393,18 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const reviewedToday = rootTotals.reviewed;
   const reviewReviewedToday = Math.max(0, reviewedToday - newGraduatedToday);
 
-  // Effective new = min(deck hierarchy remaining, global remaining)
+  // Effective new count:
+  // - objective deck in plan mode: governed only by global plan remaining
+  // - otherwise: deck hierarchy + global cap
   const deckRemaining = Math.max(0, dailyNewLimit - newReviewedToday);
   const globalRemaining = Math.max(0, todayGlobalLimit - globalNewReviewedToday);
 
   // Quick review: no daily limits, show all cards by state
   const newCountToday = isQuickReview
     ? (stats?.new_count ?? 0)
-    : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining, globalRemaining));
+    : isPlanControlled
+      ? Math.max(0, Math.min(stats?.new_count ?? 0, globalRemaining))
+      : Math.max(0, Math.min(stats?.new_count ?? 0, deckRemaining, globalRemaining));
   const reviewDue = Math.max(0, Math.min(stats?.review_count ?? 0, dailyReviewLimit - reviewReviewedToday));
   const masteredToday = isQuickReview
     ? Math.max(0, totalCards - (stats?.new_count ?? 0) - learningCount)
