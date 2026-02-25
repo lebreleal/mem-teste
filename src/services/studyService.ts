@@ -165,10 +165,12 @@ export async function fetchStudyQueue(
   const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
   const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawGlobalLimit;
 
-  // Effective new limit = min(deck hierarchy remaining, global remaining)
+  // When a plan exists, the global limit overrides the deck-level limit.
+  // The deck's own daily_new_limit is only used when there are no active plans.
+  const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
-  const effectiveNewLimit = Math.min(deckRemaining, globalRemaining);
+  const effectiveNewLimit = hasPlanActive ? globalRemaining : Math.min(deckRemaining, globalRemaining);
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
