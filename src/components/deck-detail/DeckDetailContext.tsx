@@ -510,7 +510,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
       Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [] });
+        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], imageScale: null });
         updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
       } else {
         const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds }), backContent: userBack, cardType: 'image_occlusion' }));
