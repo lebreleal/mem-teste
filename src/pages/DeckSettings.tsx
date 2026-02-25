@@ -26,6 +26,8 @@ import {
   Shuffle, BookOpen, Mail, Globe, BarChart3, Settings,
 } from 'lucide-react';
 import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
+import ankiLogo from '@/assets/anki-logo.svg';
+import { exportAsApkg } from '@/lib/ankiExport';
 
 // ── Settings row component ──────────────────────────────────────
 interface SettingsRowProps {
@@ -310,6 +312,33 @@ const DeckSettings = () => {
     setExporting(false);
   };
 
+  const handleExportAnki = async () => {
+    if (!deckId) return;
+    setExporting(true);
+    try {
+      const { data: cards, error } = await supabase
+        .from('cards')
+        .select('front_content, back_content')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!cards || cards.length === 0) {
+        toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
+        setExporting(false);
+        return;
+      }
+      await exportAsApkg(
+        name || 'baralho',
+        cards.map(c => ({ front: c.front_content, back: c.back_content })),
+      );
+      toast({ title: `${cards.length} cartões exportados como .apkg!` });
+      setExportModal(false);
+    } catch {
+      toast({ title: 'Erro ao exportar', variant: 'destructive' });
+    }
+    setExporting(false);
+  };
+
   const addLearningStep = () => setLearningSteps(prev => [...prev, '10m']);
   const removeLearningStep = (i: number) => { if (learningSteps.length > 1) setLearningSteps(prev => prev.filter((_, idx) => idx !== i)); };
   const updateLearningStep = (i: number, v: string) => setLearningSteps(prev => prev.map((s, idx) => idx === i ? v : s));
@@ -459,7 +488,7 @@ const DeckSettings = () => {
               <SettingsRow
                 icon={<Upload className="h-5 w-5" />}
                 label="Exportar cartões"
-                subtitle="CSV ou enviar por e-mail"
+                subtitle="CSV ou Anki (.apkg)"
                 onClick={() => setExportModal(true)}
               />
             </SettingsGroup>
@@ -845,15 +874,16 @@ const DeckSettings = () => {
               </div>
             </button>
             <button
-              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-              disabled
+              className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
+              onClick={handleExportAnki}
+              disabled={exporting}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <Mail className="h-5 w-5 text-muted-foreground" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted p-1.5">
+                {exporting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />}
               </div>
               <div>
-                <p className="font-medium text-sm text-foreground">Enviar por e-mail</p>
-                <p className="text-xs text-muted-foreground">Em breve</p>
+                <p className="font-medium text-sm text-foreground">Exportar como Anki</p>
+                <p className="text-xs text-muted-foreground">Arquivo .apkg compatível com Anki</p>
               </div>
             </button>
           </div>
