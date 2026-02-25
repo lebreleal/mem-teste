@@ -339,20 +339,17 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     const raw = rawDeckName.trim();
     if (!raw) return [];
 
-    if (raw.includes('::')) {
-      return raw.split('::').map(part => part.trim()).filter(Boolean);
-    }
+    const parts = raw
+      .split(/::|\u001f|[\|｜¦]/g)
+      .map(part => part.trim())
+      .filter(Boolean);
 
-    if (raw.includes('|')) {
-      return raw.split('|').map(part => part.trim()).filter(Boolean);
-    }
-
-    return [raw];
+    return parts.length > 0 ? parts : [raw];
   };
 
   const normalizeDeckTitle = (value: string): string => {
     return value
-      .replace(/_/g, ' ')
+      .replace(/^[\-•]+\s*/, '')
       .replace(/\s+/g, ' ')
       .replace(/^([a-zA-Z])\.(\S)/, '$1. $2')
       .trim();
