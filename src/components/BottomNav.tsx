@@ -1,8 +1,9 @@
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Brain, Home, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const BottomNav = () => {
+const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -15,7 +16,7 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/40 bg-card/95 backdrop-blur-md" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <nav ref={ref} className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/40 bg-card/95 backdrop-blur-md" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex items-center justify-around px-2 pb-2 pt-1">
         {items.map((item) => {
           const Icon = item.icon;
@@ -36,6 +37,8 @@ const BottomNav = () => {
       </div>
     </nav>
   );
-};
+});
+
+BottomNav.displayName = 'BottomNav';
 
 export default BottomNav;
