@@ -268,7 +268,7 @@ export function useDashboardState(planAllocation?: Record<string, number>) {
         const deck = decks.find(d => d.id === dId);
         if (!deck) return;
         if (deck.parent_deck_id) buildDeckPath(deck.parent_deck_id);
-        path.push({ id: `deck:${deck.id}`, name: `📦 ${deck.name}` });
+        path.push({ id: `deck:${deck.id}`, name: deck.name });
       };
       buildDeckPath(moveParentDeckId);
     }
