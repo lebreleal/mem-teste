@@ -594,7 +594,17 @@ function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
     if (current) current.card_indices.push(cardIndex);
   });
 
-  return tree;
+  const sortTree = (nodes: AnkiSubdeck[]): AnkiSubdeck[] => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    for (const node of nodes) {
+      if (node.children && node.children.length > 0) {
+        sortTree(node.children);
+      }
+    }
+    return nodes;
+  };
+
+  return sortTree(tree);
 }
 
 /* ── main entry point ── */
