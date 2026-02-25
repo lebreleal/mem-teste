@@ -291,8 +291,15 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
+          {/* Comunidade - em breve */}
+          <div className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm opacity-50 cursor-not-allowed">
+            <Users className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
+            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-muted-foreground">Comunidade</span>
+            <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">
+              em breve
+            </span>
+          </div>
           {[
-            { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
             { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
