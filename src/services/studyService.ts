@@ -73,8 +73,8 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
-  // Fetch cards + scope card IDs + global card IDs in parallel
-  const [cardsResult, scopeResult, globalResult] = await Promise.all([
+  // Fetch cards + scope card IDs in parallel (global scope will be computed after plan check)
+  const [cardsResult, scopeResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
@@ -85,34 +85,62 @@ export async function fetchStudyQueue(
       .from('cards')
       .select('id')
       .in('deck_id', limitScopeIds),
-    // All user's cards for global new-reviewed counting
-    supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', (allDecks ?? []).map(d => d.id)),
   ]);
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
 
-  // Count today's reviews: hierarchy scope + global scope
   const tzOffsetMinutes = -new Date().getTimezoneOffset();
 
   const limitCardIds = (scopeResult.data ?? []).map((c: any) => c.id);
-  const globalCardIds = (globalResult.data ?? []).map((c: any) => c.id);
 
   let newReviewedInHierarchy = 0;
   let reviewReviewedToday = 0;
   let globalNewReviewedToday = 0;
 
-  // Batch both RPC calls in parallel
-  const [hierarchyLimits, globalLimits] = await Promise.all([
-    limitCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
-      : Promise.resolve({ data: null }),
-    globalCardIds.length > 0
-      ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
-      : Promise.resolve({ data: null }),
-  ]);
+  // Hierarchy limits (deck-level cap)
+  const hierarchyLimitsPromise = limitCardIds.length > 0
+    ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
+    : Promise.resolve({ data: null });
+
+  // For global new-card cap, only count decks within the user's active study plans
+  const { data: studyPlans } = await supabase
+    .from('study_plans' as any)
+    .select('deck_ids')
+    .eq('user_id', userId);
+
+  let globalLimitsPromise: PromiseLike<any> = Promise.resolve({ data: null });
+  const planDeckIdSet = new Set<string>();
+  if (studyPlans && (studyPlans as any[]).length > 0) {
+    for (const plan of studyPlans as any[]) {
+      for (const id of (plan.deck_ids ?? [])) planDeckIdSet.add(id);
+    }
+    // Expand to include all descendants
+    const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
+    for (const pid of planDeckIdSet) {
+      const descendants = collectDescendantIds(allDecks ?? [], pid);
+      for (const d of descendants) expandedPlanDeckIds.add(d);
+    }
+    const { data: planCards } = await supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', Array.from(expandedPlanDeckIds));
+    const planCardIds = (planCards ?? []).map((c: any) => c.id);
+    if (planCardIds.length > 0) {
+      globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: planCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
+    }
+  } else {
+    // No plan exists: count all user cards globally (fallback)
+    const { data: allCards } = await supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', (allDecks ?? []).map(d => d.id));
+    const allCardIds = (allCards ?? []).map((c: any) => c.id);
+    if (allCardIds.length > 0) {
+      globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: allCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
+    }
+  }
+
+  const [hierarchyLimits, globalLimits] = await Promise.all([hierarchyLimitsPromise, globalLimitsPromise]);
 
   if (hierarchyLimits.data && (hierarchyLimits.data as any[]).length > 0) {
     const row = (hierarchyLimits.data as any[])[0];

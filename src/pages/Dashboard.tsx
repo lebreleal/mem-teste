@@ -48,11 +48,28 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
-  // deckNewAllocation is already keyed by root IDs from useStudyPlan
-  const state = useDashboardState();
+  const { decks: allDecks } = useDecks();
+  
+  // Compute plan root IDs for scoping global new-card counting
+  const planRootIds = useMemo(() => {
+    if (plans.length === 0 || !allDecks) return undefined;
+    const getRootIdLocal = (deckId: string): string | null => {
+      const d = allDecks.find(x => x.id === deckId);
+      if (!d) return null;
+      if (!d.parent_deck_id) return d.id;
+      return getRootIdLocal(d.parent_deck_id);
+    };
+    const rootIds = new Set<string>();
+    for (const id of allDeckIds) {
+      const rootId = getRootIdLocal(id);
+      if (rootId) rootIds.add(rootId);
+    }
+    return rootIds;
+  }, [plans, allDeckIds, allDecks]);
+
+  const state = useDashboardState(planRootIds);
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
-  const { decks: allDecks } = useDecks();
   const { isAdmin } = useIsAdmin();
 
   // Carousel helpers
