@@ -116,7 +116,7 @@ const DeckSettings = () => {
       return (data ?? []) as Array<{ deck_ids: string[] | null }>;
     },
     enabled: !!user,
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
 
   const getRootAncestorId = useMemo(() => {

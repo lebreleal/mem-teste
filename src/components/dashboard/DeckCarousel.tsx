@@ -146,7 +146,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return roots;
   }, [decks, hasPlan, planDeckIds]);
 
-  // Only show decks with pending cards; sort by planDeckOrder
+  // Sort by planDeckOrder; in plan mode show ALL plan decks (even with 0 pending)
   const sortedDecks = useMemo(() => {
     const sorted = [...activeDecks].sort((a, b) => {
       if (!planDeckOrder || planDeckOrder.length === 0) return 0;
@@ -155,18 +155,17 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       return (aPos === -1 ? Infinity : aPos) - (bPos === -1 ? Infinity : bPos);
     });
 
+    if (hasPlan) {
+      // In plan mode, show all plan decks (so the user sees them all)
+      return sorted;
+    }
+
     return sorted.filter(deck => {
       const allocated = distributedNewByDeck?.get(deck.id);
       const { pendingToday } = getDeckTodayStats(deck, decks, allocated != null ? allocated : globalNewRemaining);
-      // If distributed, override pending with allocated new
-      if (allocated != null) {
-        const stats = getDeckTodayStats(deck, decks, allocated);
-        const newAvail = Math.min(stats.newAvailable, allocated);
-        return newAvail + stats.reviewAvailable + stats.learningAvailable > 0;
-      }
       return pendingToday > 0;
     });
-  }, [activeDecks, decks, planDeckOrder, globalNewRemaining, distributedNewByDeck]);
+  }, [activeDecks, decks, planDeckOrder, globalNewRemaining, distributedNewByDeck, hasPlan]);
 
   // Global plan stats (all card types)
   const globalPlanStats = useMemo(() => {

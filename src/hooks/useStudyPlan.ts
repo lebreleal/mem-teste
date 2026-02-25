@@ -510,6 +510,7 @@ export function useStudyPlan() {
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
+    qc.invalidateQueries({ queryKey: ['study-plans-lock'] });
     qc.invalidateQueries({ queryKey: ['plan-metrics'] });
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
