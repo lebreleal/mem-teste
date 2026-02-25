@@ -355,7 +355,7 @@ const Dashboard = () => {
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
-            globalNewBudget={hasPlan ? getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards) : undefined}
+            globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
           />
         )}
 
