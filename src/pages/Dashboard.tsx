@@ -47,7 +47,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics } = useStudyPlan();
   // deckNewAllocation is already keyed by root IDs from useStudyPlan
-  const state = useDashboardState(metrics?.deckNewAllocation);
+  const state = useDashboardState();
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { decks: allDecks } = useDecks();
@@ -336,7 +336,6 @@ const Dashboard = () => {
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
-            planAllocation={metrics?.deckNewAllocation}
           />
         )}
 
