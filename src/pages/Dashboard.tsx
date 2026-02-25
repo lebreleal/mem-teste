@@ -67,7 +67,8 @@ const Dashboard = () => {
     return rootIds;
   }, [plans, allDeckIds, allDecks]);
 
-  const state = useDashboardState(planRootIds);
+  const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
+  const state = useDashboardState(planRootIds, planDeckOrderEarly);
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
