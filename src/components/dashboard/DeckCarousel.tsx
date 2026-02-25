@@ -91,7 +91,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globa
         )}
       </div>
       <Progress value={progressPercent} className="h-1.5" />
-      <p className="text-[10px] text-muted-foreground">{studiedToday}/{totalToday} cards · {progressPercent}% concluído</p>
+      <p className="text-[10px] text-muted-foreground">{studiedToday} feitos · {pendingToday} restantes · {progressPercent}%</p>
       <div className="flex items-center gap-2 mt-auto">
         <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => navigate(`/study/${deck.id}`)}>
           <Play className="h-3 w-3 mr-1" /> Estudar
@@ -200,30 +200,16 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   }, [decks, hasPlan]);
 
 
-  // We just need newCardsStudiedToday for the new cards specific count
+  // Count ALL new cards studied today across ALL user decks (global scope)
   const newCardsStudiedToday = useMemo(() => {
-    if (!hasPlan || !planDeckIds || planDeckIds.length === 0) return 0;
-    const getRootId = (deckId: string): string | null => {
-      const d = decks.find(x => x.id === deckId);
-      if (!d) return null;
-      if (!d.parent_deck_id) return d.id;
-      return getRootId(d.parent_deck_id);
-    };
-    const rootIds = new Set<string>();
-    for (const pid of planDeckIds) {
-      const rootId = getRootId(pid);
-      if (rootId) rootIds.add(rootId);
-    }
+    const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     let total = 0;
-    for (const rootId of rootIds) {
-      const root = decks.find(d => d.id === rootId);
-      if (root) {
-        const raw = getAggregateRaw(root, decks);
-        total += raw.newReviewed;
-      }
+    for (const root of roots) {
+      const raw = getAggregateRaw(root, decks);
+      total += raw.newReviewed;
     }
     return total;
-  }, [decks, hasPlan, planDeckIds]);
+  }, [decks]);
 
   // Compute the global new cards remaining for today (only when plan exists with budget)
   const globalNewRemaining = (hasPlan && globalNewBudget != null && typeof globalNewBudget === 'number')
@@ -298,7 +284,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
 
           {/* Bottom row: card count */}
           <p className="text-[11px] text-muted-foreground tabular-nums">
-            {activeStats.totalStudied}/{activeStats.totalCards} cards · {activeStats.progress}% concluído
+            {activeStats.totalStudied} feitos · {activeStats.totalPending} restantes · {activeStats.progress}%
           </p>
         </div>
       )}
