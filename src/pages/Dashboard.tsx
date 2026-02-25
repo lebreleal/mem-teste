@@ -353,8 +353,8 @@ const Dashboard = () => {
           onSearchChange={setSearchQuery}
         />
 
-        {/* Tab switcher: Meus Decks / Decks da Comunidade */}
-        {state.communityDecks.length > 0 && !state.currentFolderId && (
+        {/* Tab switcher: Meus Decks / Comunidade (Em breve) */}
+        {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
               onClick={() => setDashboardTab('personal')}
@@ -365,24 +365,20 @@ const Dashboard = () => {
               Meus Decks
             </button>
             <button
-              onClick={() => setDashboardTab('community')}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
+              disabled
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60 cursor-not-allowed"
             >
               <RefreshCw className="h-3 w-3" />
               Comunidade
-              {state.decksWithPendingUpdates.size > 0 && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-                  {state.decksWithPendingUpdates.size}
-                </span>
-              )}
+              <span className="ml-1 text-[9px] font-semibold bg-muted-foreground/15 text-muted-foreground rounded-full px-1.5 py-0.5 normal-case tracking-normal">
+                em breve
+              </span>
             </button>
           </div>
         )}
 
-        {/* Personal decks tab */}
-        {(dashboardTab === 'personal' || state.communityDecks.length === 0 || !!state.currentFolderId) && (
+        {/* Personal decks tab (always shown since community is "em breve") */}
+        {(dashboardTab === 'personal' || !!state.currentFolderId) && (
           <DeckList
             isLoading={state.isLoading}
             currentFolders={state.currentFolders}
