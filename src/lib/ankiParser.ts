@@ -93,7 +93,16 @@ export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
   });
 
   // Unzip the file
-  const zip = await JSZip.loadAsync(file);
+  let zip = await JSZip.loadAsync(file);
+
+  // If this is a wrapper zip containing an .apkg/.colpkg inside, extract it first
+  const innerApkg = Object.keys(zip.files).find(
+    name => /\.(apkg|colpkg)$/i.test(name) && !zip.files[name].dir
+  );
+  if (innerApkg && !zip.files['collection.anki21'] && !zip.files['collection.anki2']) {
+    const innerBlob = await zip.files[innerApkg].async('blob');
+    zip = await JSZip.loadAsync(innerBlob);
+  }
 
   // Find the SQLite database file
   let dbFile: JSZip.JSZipObject | null = null;

@@ -299,7 +299,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const fileInputs = (
     <>
       <input ref={csvFileRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleFileUpload} />
-      <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc" className="hidden" onChange={handleAnkiUpload} />
+      <input ref={ankiFileRef} type="file" accept=".apkg,.colpkg,.ofc,.zip" className="hidden" onChange={handleAnkiUpload} />
     </>
   );
 
