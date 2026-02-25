@@ -32,14 +32,22 @@ function getAggregateRaw(deck: DeckWithStats, allDecks: DeckWithStats[]): { new_
 }
 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits.
- *  When globalNewBudget is provided (plan mode), it overrides the deck's own daily_new_limit. */
-function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globalNewBudget?: number) {
+ *  When globalNewRemaining is provided (plan mode), it represents the remaining global new-card
+ *  budget across ALL objective decks (already reduced by cards studied in any objective deck today). */
+function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globalNewRemaining?: number) {
   const raw = getAggregateRaw(deck, allDecks);
-  // When a plan governs, use the global budget instead of the deck's own limit
-  const dailyNewLimit = globalNewBudget ?? (deck.daily_new_limit ?? 20);
   const dailyReviewLimit = deck.daily_review_limit ?? 100;
 
-  const newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
+  let newAvailable: number;
+  if (globalNewRemaining != null) {
+    // Plan mode: cap by the shared global remaining (already accounts for all decks' reviews)
+    newAvailable = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
+  } else {
+    // Manual mode: use deck's own limit
+    const dailyNewLimit = deck.daily_new_limit ?? 20;
+    newAvailable = Math.max(0, Math.min(raw.new_count, dailyNewLimit - raw.newReviewed));
+  }
+
   const reviewReviewedToday = Math.max(0, raw.reviewed - raw.newGraduated);
   const reviewAvailable = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
   const learningAvailable = raw.learning_count;
@@ -48,9 +56,9 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globa
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewBudget }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewBudget?: number }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number }) {
   const navigate = useNavigate();
-  const stats = getDeckTodayStats(deck, allDecks, globalNewBudget);
+  const stats = getDeckTodayStats(deck, allDecks, globalNewRemaining);
   const { newAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
@@ -110,10 +118,10 @@ interface DeckCarouselProps {
   planDeckIds?: string[];
   planDeckOrder?: string[];
   plansByDeckId?: Record<string, string>;
-  globalNewBudget?: number;
+  globalNewRemaining?: number;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewBudget }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining }: DeckCarouselProps) {
   const navigate = useNavigate();
 
   const activeDecks = useMemo(() => {
@@ -145,10 +153,10 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     });
 
     return sorted.filter(deck => {
-      const { pendingToday } = getDeckTodayStats(deck, decks, globalNewBudget);
+      const { pendingToday } = getDeckTodayStats(deck, decks, globalNewRemaining);
       return pendingToday > 0;
     });
-  }, [activeDecks, decks, planDeckOrder, globalNewBudget]);
+  }, [activeDecks, decks, planDeckOrder, globalNewRemaining]);
 
   // Global plan stats (all card types)
   const globalPlanStats = useMemo(() => {
@@ -168,7 +176,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     for (const rootId of rootIds) {
       const root = decks.find(d => d.id === rootId);
       if (root) {
-        const stats = getDeckTodayStats(root, decks, globalNewBudget);
+        const stats = getDeckTodayStats(root, decks, globalNewRemaining);
         totalNew += stats.newAvailable;
         totalLearning += stats.learningAvailable;
         totalReview += stats.reviewAvailable;
@@ -179,7 +187,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     const totalCards = totalStudied + totalPending;
     const progress = totalCards > 0 ? Math.round((totalStudied / totalCards) * 100) : 0;
     return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
-  }, [decks, hasPlan, planDeckIds, globalNewBudget]);
+  }, [decks, hasPlan, planDeckIds, globalNewRemaining]);
 
   // Stats for ALL root decks (used when no plan exists)
   const allDecksStats = useMemo(() => {
@@ -199,7 +207,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
   }, [decks, hasPlan]);
 
-  // activeStats = globalPlanStats or allDecksStats (already computed with globalNewBudget override)
+  // activeStats = globalPlanStats or allDecksStats
   const activeStats = globalPlanStats || allDecksStats;
 
   if (activeDecks.length === 0) return null;
@@ -280,7 +288,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
                 allDecks={decks}
                 avgSecondsPerCard={avgSecondsPerCard}
                 objectiveName={plansByDeckId?.[deck.id]}
-                globalNewBudget={globalNewBudget}
+                globalNewRemaining={globalNewRemaining}
               />
             ))}
         </div>

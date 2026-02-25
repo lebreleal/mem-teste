@@ -385,6 +385,7 @@ export function useDashboardState(planRootIds?: Set<string>) {
     getSubDecks, getAggregateStats, getCommunityLinkId, getFolderCommunityLinkId,
     getFolderDueCount, folderHasCommunityLink,
     movableDecks,
+    globalNewRemaining,
   };
 
   function getFolderDueCount(folderId: string): number {
