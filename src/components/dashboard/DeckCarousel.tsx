@@ -46,9 +46,13 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[]) {
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string }) {
+function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number }) {
   const navigate = useNavigate();
-  const { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday } = getDeckTodayStats(deck, allDecks);
+  const stats = getDeckTodayStats(deck, allDecks);
+  // Cap new cards by global plan budget when available
+  const newAvailable = globalNewRemaining != null ? Math.min(stats.newAvailable, globalNewRemaining) : stats.newAvailable;
+  const { reviewAvailable, learningAvailable, studiedToday } = stats;
+  const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
@@ -70,7 +74,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { d
           <span className="font-semibold text-foreground">{newAvailable}</span>
         </div>
         <div className="flex items-center gap-1 text-muted-foreground" title="Aprendendo">
-          <RotateCcw className="h-3.5 w-3.5 text-green-500" />
+          <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
           <span className="font-semibold text-foreground">{learningAvailable}</span>
         </div>
         <div className="flex items-center gap-1 text-muted-foreground" title="Dominados">
@@ -99,7 +103,6 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName }: { d
     </div>
   );
 }
-
 interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
@@ -222,14 +225,25 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return total;
   }, [decks, hasPlan, planDeckIds]);
 
+  // Compute the global new cards remaining for today (only when plan exists with budget)
+  const globalNewRemaining = (hasPlan && globalNewBudget != null && typeof globalNewBudget === 'number')
+    ? Math.max(0, globalNewBudget - newCardsStudiedToday)
+    : undefined;
+
+  // Recompute banner stats with capped new cards when plan governs
+  const activeStats = useMemo(() => {
+    const base = globalPlanStats || allDecksStats;
+    if (!base) return null;
+    if (globalNewRemaining == null) return base;
+    const cappedNew = Math.min(base.totalNew, globalNewRemaining);
+    const cappedPending = cappedNew + base.totalLearning + base.totalReview;
+    const cappedTotal = base.totalStudied + cappedPending;
+    const cappedProgress = cappedTotal > 0 ? Math.round((base.totalStudied / cappedTotal) * 100) : 0;
+    return { ...base, totalNew: cappedNew, totalPending: cappedPending, totalCards: cappedTotal, progress: cappedProgress };
+  }, [globalPlanStats, allDecksStats, globalNewRemaining]);
+
   if (activeDecks.length === 0) return null;
 
-  const totalPending = sortedDecks.reduce((sum, d) => {
-    const { pendingToday } = getDeckTodayStats(d, decks);
-    return sum + pendingToday;
-  }, 0);
-
-  const activeStats = globalPlanStats || allDecksStats;
   const estimatedTotalMinutes = activeStats
     ? Math.round((activeStats.totalPending * avgSecondsPerCard) / 60)
     : 0;
@@ -260,11 +274,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1" title="Novos">
                 <SquarePlus className="h-3.5 w-3.5 text-primary" />
-                <span className="font-bold text-foreground">
-                  {hasPlan && globalNewBudget != null && typeof globalNewBudget === 'number'
-                    ? Math.max(0, globalNewBudget - newCardsStudiedToday)
-                    : activeStats.totalNew}
-                </span>
+                <span className="font-bold text-foreground">{activeStats.totalNew}</span>
               </div>
               <div className="flex items-center gap-1" title="Aprendendo">
                 <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
@@ -293,6 +303,28 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
         </div>
       )}
 
+      {/* Carousel - unified list */}
+      {sortedDecks.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-4 text-center">
+          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            Nenhuma revisão pendente!
+          </p>
+        </div>
+      ) : (
+        <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
+          {sortedDecks.map(deck => (
+              <DeckStudyCard
+                key={deck.id}
+                deck={deck}
+                allDecks={decks}
+                avgSecondsPerCard={avgSecondsPerCard}
+                objectiveName={plansByDeckId?.[deck.id]}
+                globalNewRemaining={globalNewRemaining}
+              />
+            ))}
+        </div>
+      )}
       {/* Carousel - unified list */}
       {sortedDecks.length === 0 ? (
         <div className="rounded-xl border border-dashed p-4 text-center">
