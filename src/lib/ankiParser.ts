@@ -93,6 +93,25 @@ function isLikelyZstd(bytes: Uint8Array): boolean {
   return bytes.length >= 4 && bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd;
 }
 
+function normalizeAnkiId(value: string | number | null | undefined): string {
+  if (value == null) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  if (/^-?\d+(\.0+)?$/.test(raw)) {
+    return raw.replace(/\.0+$/, '');
+  }
+
+  if (/^-?\d+(\.\d+)?e[+-]?\d+$/i.test(raw)) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      return Math.trunc(parsed).toString();
+    }
+  }
+
+  return raw;
+}
+
 async function resolveAnkiArchive(file: File): Promise<JSZip> {
   let zip = await JSZip.loadAsync(file);
 
@@ -207,7 +226,8 @@ function parseModelsFromCol(db: Database): { models: Record<string, AnkiModel>; 
         const modelsJson = JSON.parse(modelsRaw);
         for (const [mid, model] of Object.entries(modelsJson)) {
           const m = model as any;
-          models[mid] = {
+          const normalizedMid = normalizeAnkiId(mid);
+          models[normalizedMid] = {
             name: m.name || '',
             flds: (m.flds || []).map((f: any) => ({ name: f.name, ord: f.ord })).sort((a: any, b: any) => a.ord - b.ord),
             type: m.type || 0,
@@ -220,7 +240,7 @@ function parseModelsFromCol(db: Database): { models: Record<string, AnkiModel>; 
       if (decksRaw && decksRaw.startsWith('{')) {
         const decksJson = JSON.parse(decksRaw) as Record<string, any>;
         for (const [id, deck] of Object.entries(decksJson)) {
-          if (deck?.name) deckNamesById[String(id)] = String(deck.name);
+          if (deck?.name) deckNamesById[normalizeAnkiId(id)] = String(deck.name);
         }
 
         const deckEntries = Object.values(decksJson) as any[];
@@ -252,7 +272,7 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
     const ntResult = db.exec('SELECT id, name, config FROM notetypes');
     if (ntResult.length > 0) {
       for (const row of ntResult[0].values) {
-        const ntId = String(row[0]);
+        const ntId = normalizeAnkiId(row[0] as string | number);
         const ntName = row[1] as string;
         models[ntId] = { name: ntName, flds: [], type: 0, tmpls: [] };
       }
@@ -261,7 +281,7 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
     const fieldsResult = db.exec('SELECT ntid, ord, name FROM fields ORDER BY ord');
     if (fieldsResult.length > 0) {
       for (const row of fieldsResult[0].values) {
-        const ntId = String(row[0]);
+        const ntId = normalizeAnkiId(row[0] as string | number);
         if (models[ntId]) {
           models[ntId].flds.push({ name: row[2] as string, ord: row[1] as number });
         }
@@ -271,7 +291,7 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
     const tmplResult = db.exec('SELECT ntid, ord, name, qfmt, afmt FROM templates ORDER BY ord');
     if (tmplResult.length > 0) {
       for (const row of tmplResult[0].values) {
-        const ntId = String(row[0]);
+        const ntId = normalizeAnkiId(row[0] as string | number);
         if (models[ntId]) {
           const qfmt = row[3] as string;
           models[ntId].tmpls.push({
@@ -292,7 +312,7 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
       const decksResult = db.exec('SELECT CAST(id AS TEXT), name FROM decks');
       if (decksResult.length > 0) {
         for (const row of decksResult[0].values) {
-          const dId = row[0] as string;
+          const dId = normalizeAnkiId(row[0] as string | number);
           const dName = row[1] as string;
           if (dName) deckNamesById[dId] = dName;
           if (dName && dName !== 'Default' && dName !== 'Padrão' && deckName === 'Anki Import') {
@@ -306,6 +326,42 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
   }
 
   return { models, deckName, deckNamesById };
+}
+
+
+function parseDeckNamesFromDecksTable(db: Database): Record<string, string> {
+  const deckNamesById: Record<string, string> = {};
+
+  try {
+    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='decks'");
+    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) return deckNamesById;
+
+    const columns = db.exec('PRAGMA table_info(decks)');
+    const colSet = new Set<string>();
+    if (columns.length > 0) {
+      for (const row of columns[0].values) {
+        colSet.add(String(row[1]));
+      }
+    }
+
+    const idCol = colSet.has('id') ? 'id' : colSet.has('deck_id') ? 'deck_id' : colSet.has('did') ? 'did' : null;
+    const nameCol = colSet.has('name') ? 'name' : colSet.has('title') ? 'title' : null;
+
+    if (!idCol || !nameCol) return deckNamesById;
+
+    const result = db.exec(`SELECT CAST(${idCol} AS TEXT), ${nameCol} FROM decks`);
+    if (result.length === 0) return deckNamesById;
+
+    for (const row of result[0].values) {
+      const id = normalizeAnkiId(row[0] as string | number);
+      const name = row[1] as string;
+      if (id && name) deckNamesById[id] = name;
+    }
+  } catch (e) {
+    console.warn('Failed to parse decks table directly:', e);
+  }
+
+  return deckNamesById;
 }
 
 /* ── build cards from notes ── */
@@ -368,10 +424,10 @@ function buildCards(
 
     if (rowsResult.length > 0) {
       cardRows = rowsResult[0].values.map((row) => ({
-        noteId: row[0] as string,
-        deckId: row[1] as string,
+        noteId: normalizeAnkiId(row[0] as string | number),
+        deckId: normalizeAnkiId(row[1] as string | number),
         templateOrd: row[2] == null ? null : Number(row[2]),
-        mid: row[3] as string,
+        mid: normalizeAnkiId(row[3] as string | number),
         flds: (row[4] as string) || '',
         tags: (row[5] as string) || '',
       }));
@@ -387,10 +443,10 @@ function buildCards(
 
     for (const row of notesResult[0].values) {
       cardRows.push({
-        noteId: row[0] as string,
+        noteId: normalizeAnkiId(row[0] as string | number),
         deckId: '',
         templateOrd: null,
-        mid: row[1] as string,
+        mid: normalizeAnkiId(row[1] as string | number),
         flds: (row[2] as string) || '',
         tags: (row[3] as string) || '',
       });
@@ -398,10 +454,12 @@ function buildCards(
   }
 
   for (const row of cardRows) {
-    const model = models[row.mid];
+    const normalizedMid = normalizeAnkiId(row.mid);
+    const normalizedDeckId = normalizeAnkiId(row.deckId);
+    const model = models[normalizedMid];
     const fieldValues = row.flds.split('\x1f');
     const tags = row.tags.trim().split(/\s+/).filter(Boolean);
-    const deckName = row.deckId ? deckNamesById[row.deckId] : undefined;
+    const deckName = normalizedDeckId ? deckNamesById[normalizedDeckId] : undefined;
 
     if (!model) {
       const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
@@ -568,7 +626,16 @@ export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
     if (result.deckName !== 'Anki Import') deckName = result.deckName;
   }
 
+  if (Object.keys(deckNamesById).length === 0) {
+    const tableDeckNames = parseDeckNamesFromDecksTable(db);
+    if (Object.keys(tableDeckNames).length > 0) {
+      deckNamesById = tableDeckNames;
+      const candidate = Object.values(tableDeckNames).find(name => name !== 'Default' && name !== 'Padrão');
+      if (candidate) deckName = candidate;
+    }
+  }
   let cards: AnkiCard[] = [];
+
   try {
     cards = buildCards(db, models, mediaMap, deckNamesById);
   } catch (e) {
