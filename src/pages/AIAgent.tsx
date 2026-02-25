@@ -86,11 +86,14 @@ const AIAgent = () => {
     if (data) setMessages(data.map(m => ({ id: m.id, role: m.role as 'user' | 'assistant', content: m.content })));
   };
 
-  // Auto-scroll
+  // Auto-scroll only when user sends a new message (not on every streaming update)
+  const lastUserMsgCount = useRef(0);
   useEffect(() => {
-    if (scrollRef.current) {
+    const userMsgCount = messages.filter(m => m.role === 'user').length;
+    if (scrollRef.current && userMsgCount > lastUserMsgCount.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    lastUserMsgCount.current = userMsgCount;
   }, [messages]);
 
   const createConversation = async (firstMessage: string): Promise<string> => {

@@ -227,30 +227,31 @@ export async function submitCardReview(
     result = sm2Schedule(sm2Card, rating, sm2Params);
   }
 
-    const { error: updateError } = await supabase
-      .from('cards')
-      .update({
-        stability: result.stability,
-        difficulty: result.difficulty,
-        state: result.state,
-        scheduled_date: result.scheduled_date,
-        last_reviewed_at: new Date().toISOString(),
-      } as any)
-      .eq('id', card.id);
-  if (updateError) throw updateError;
-
-  const { error: logError } = await supabase
-    .from('review_logs')
-    .insert({
-      user_id: userId,
-      card_id: card.id,
-      rating,
-      stability: result.stability,
-      difficulty: result.difficulty,
-      scheduled_date: result.scheduled_date,
-      state: card.state,
-    } as any);
-  if (logError) throw logError;
+    const [updateResult, logResult] = await Promise.all([
+      supabase
+        .from('cards')
+        .update({
+          stability: result.stability,
+          difficulty: result.difficulty,
+          state: result.state,
+          scheduled_date: result.scheduled_date,
+          last_reviewed_at: new Date().toISOString(),
+        } as any)
+        .eq('id', card.id),
+      supabase
+        .from('review_logs')
+        .insert({
+          user_id: userId,
+          card_id: card.id,
+          rating,
+          stability: result.stability,
+          difficulty: result.difficulty,
+          scheduled_date: result.scheduled_date,
+          state: card.state,
+        } as any),
+    ]);
+    if (updateResult.error) throw updateResult.error;
+    if (logResult.error) throw logResult.error;
 
   return result;
 }

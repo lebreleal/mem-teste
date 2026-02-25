@@ -242,7 +242,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
               <div className="flex items-center gap-1" title="Novos">
                 <SquarePlus className="h-3.5 w-3.5 text-primary" />
                 <span className="font-bold text-foreground">
-                  {globalNewBudget != null ? Math.max(0, globalNewBudget - newCardsStudiedToday) : globalPlanStats.totalNew}
+                  {globalNewBudget != null && typeof globalNewBudget === 'number' ? Math.max(0, globalNewBudget - newCardsStudiedToday) : globalPlanStats.totalNew}
                 </span>
               </div>
               <div className="flex items-center gap-1" title="Aprendendo">

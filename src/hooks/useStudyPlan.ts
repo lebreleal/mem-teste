@@ -46,7 +46,7 @@ export function getWeeklyAvgMinutesGlobal(dailyMin: number, weeklyMin: WeeklyMin
 
 export function getNewCardsForDayGlobal(dailyLimit: number, weeklyNewCards: WeeklyNewCards | null, day?: DayKey): number {
   const d = day ?? (DAY_KEYS[new Date().getDay()] as DayKey);
-  if (weeklyNewCards && weeklyNewCards[d] != null) return weeklyNewCards[d];
+  if (weeklyNewCards && typeof weeklyNewCards[d] === 'number') return weeklyNewCards[d];
   return dailyLimit;
 }
 
