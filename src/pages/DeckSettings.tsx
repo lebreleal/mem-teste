@@ -101,7 +101,8 @@ const DeckSettings = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [exportModal, setExportModal] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingAnki, setExportingAnki] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'sm2' | 'fsrs' | 'quick_review' | null>(null);
 
   useEffect(() => {
@@ -275,22 +276,22 @@ const DeckSettings = () => {
 
   const handleExportCSV = async () => {
     if (!deckId) return;
-    setExporting(true);
+    setExportingCsv(true);
     try {
       const { data: cards, error } = await supabase
         .from('cards')
-        .select('front_content, back_content')
+        .select('front_content, back_content, card_type')
         .eq('deck_id', deckId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       if (!cards || cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
-        setExporting(false);
+        setExportingCsv(false);
         return;
       }
       const escapeCSV = (s: string) => {
-        // Strip HTML tags for clean CSV
-        const text = s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+        // Keep image tags as-is for CSV so they can be re-imported
+        const text = s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
         if (text.includes(',') || text.includes('"') || text.includes('\n')) {
           return `"${text.replace(/"/g, '""')}"`;
         }
@@ -309,34 +310,35 @@ const DeckSettings = () => {
     } catch {
       toast({ title: 'Erro ao exportar', variant: 'destructive' });
     }
-    setExporting(false);
+    setExportingCsv(false);
   };
 
   const handleExportAnki = async () => {
     if (!deckId) return;
-    setExporting(true);
+    setExportingAnki(true);
     try {
       const { data: cards, error } = await supabase
         .from('cards')
-        .select('front_content, back_content')
+        .select('front_content, back_content, card_type')
         .eq('deck_id', deckId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       if (!cards || cards.length === 0) {
         toast({ title: 'Nenhum cartão para exportar', variant: 'destructive' });
-        setExporting(false);
+        setExportingAnki(false);
         return;
       }
       await exportAsApkg(
         name || 'baralho',
-        cards.map(c => ({ front: c.front_content, back: c.back_content })),
+        cards.map(c => ({ front: c.front_content, back: c.back_content, cardType: c.card_type })),
       );
       toast({ title: `${cards.length} cartões exportados como .apkg!` });
       setExportModal(false);
-    } catch {
-      toast({ title: 'Erro ao exportar', variant: 'destructive' });
+    } catch (err) {
+      console.error('Anki export error:', err);
+      toast({ title: 'Erro ao exportar', description: 'Tente novamente.', variant: 'destructive' });
     }
-    setExporting(false);
+    setExportingAnki(false);
   };
 
   const addLearningStep = () => setLearningSteps(prev => [...prev, '10m']);
@@ -863,10 +865,10 @@ const DeckSettings = () => {
             <button
               className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
               onClick={handleExportCSV}
-              disabled={exporting}
+              disabled={exportingCsv || exportingAnki}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                {exporting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Download className="h-5 w-5 text-muted-foreground" />}
+                {exportingCsv ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Download className="h-5 w-5 text-muted-foreground" />}
               </div>
               <div>
                 <p className="font-medium text-sm text-foreground">Exportar como CSV</p>
@@ -876,10 +878,10 @@ const DeckSettings = () => {
             <button
               className="flex w-full items-center gap-4 rounded-xl border-2 border-border p-4 transition-all text-left hover:border-primary/50 hover:bg-primary/5"
               onClick={handleExportAnki}
-              disabled={exporting}
+              disabled={exportingCsv || exportingAnki}
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted p-1.5">
-                {exporting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />}
+                {exportingAnki ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <img src={ankiLogo} alt="Anki" className="h-full w-full object-contain" />}
               </div>
               <div>
                 <p className="font-medium text-sm text-foreground">Exportar como Anki</p>
