@@ -120,7 +120,7 @@ export const useContentImport = () => {
       } as any).select().single();
       if (newDeck) {
         const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any);
+        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
       }
       return newDeck;
     },
@@ -154,7 +154,7 @@ export const useContentImport = () => {
       } as any).select().single();
       if (newDeck) {
         const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type })) as any);
+        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
       }
       return newDeck;
     },

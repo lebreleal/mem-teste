@@ -350,6 +350,9 @@ const PublicDeckPreview = () => {
           front_content: c.front_content,
           back_content: c.back_content,
           card_type: c.card_type,
+          state: 0,
+          stability: 0,
+          difficulty: 0,
         }));
         for (let i = 0; i < cardsToInsert.length; i += 100) {
           const batch = cardsToInsert.slice(i, i + 100);

@@ -48,6 +48,9 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     front_content: c.frontContent,
     back_content: c.backContent,
     card_type: c.cardType,
+    state: 0,
+    stability: 0,
+    difficulty: 0,
     created_at: new Date(baseTime + idx).toISOString(),
   }));
   const BATCH_SIZE = 200;
