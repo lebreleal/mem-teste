@@ -132,6 +132,8 @@ interface DeckDetailContextValue {
   setOcclusionImageUrl: (v: string) => void;
   occlusionRects: any[];
   setOcclusionRects: (v: any[]) => void;
+  occlusionCanvasSize: { w: number; h: number } | null;
+  setOcclusionCanvasSize: (v: { w: number; h: number } | null) => void;
   occlusionModalOpen: boolean;
   setOcclusionModalOpen: (v: boolean) => void;
 
@@ -237,6 +239,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [occlusionImageUrl, setOcclusionImageUrl] = useState<string>('');
   const [occlusionRects, setOcclusionRects] = useState<any[]>([]);
+  const [occlusionCanvasSize, setOcclusionCanvasSize] = useState<{ w: number; h: number } | null>(null);
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [mcOptions, setMcOptions] = useState<string[]>(['', '', '', '']);
   const [mcCorrectIndex, setMcCorrectIndex] = useState<number>(0);
@@ -438,7 +441,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const resetForm = useCallback(() => {
     setFront(''); setBack(''); setEditingId(null); setCardType(null);
-    setOcclusionImageUrl(''); setOcclusionRects([]);
+    setOcclusionImageUrl(''); setOcclusionRects([]); setOcclusionCanvasSize(null);
     setMcOptions(['', '', '', '']); setMcCorrectIndex(0);
   }, []);
 
@@ -452,6 +455,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         const data = JSON.parse(card.front_content);
         setOcclusionImageUrl(data.imageUrl || '');
         setOcclusionRects(data.allRects || data.rects || []);
+        setOcclusionCanvasSize(data.canvasWidth ? { w: data.canvasWidth, h: data.canvasHeight } : null);
         setFront('');
         setBack(card.back_content);
       } catch { setFront(card.front_content); setBack(card.back_content); }
@@ -509,11 +513,13 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const cardEntries: { activeRectIds: string[] }[] = [];
       ungrouped.forEach(r => cardEntries.push({ activeRectIds: [r.id] }));
       Object.values(groups).forEach(groupRects => { cardEntries.push({ activeRectIds: groupRects.map((r: any) => r.id) }); });
+      const cw = occlusionCanvasSize?.w ?? undefined;
+      const ch = occlusionCanvasSize?.h ?? undefined;
       if (editingId) {
-        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], imageScale: null });
+        const frontData = JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: cardEntries[0]?.activeRectIds ?? [], canvasWidth: cw, canvasHeight: ch });
         updateCard.mutate({ id: editingId, frontContent: frontData, backContent: userBack }, { onSuccess });
       } else {
-        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds }), backContent: userBack, cardType: 'image_occlusion' }));
+        const cards = cardEntries.map(entry => ({ frontContent: JSON.stringify({ imageUrl: occlusionImageUrl, allRects, activeRectIds: entry.activeRectIds, canvasWidth: cw, canvasHeight: ch }), backContent: userBack, cardType: 'image_occlusion' }));
         createCard.mutate({ cards } as any, { onSuccess });
       }
       return;
@@ -865,7 +871,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     examGenerating, setExamGenerating,
     aiAddCardsOpen, setAiAddCardsOpen, importOpen, setImportOpen,
     isImproving, setIsImproving, improvePreview, setImprovePreview, improveModalOpen, setImproveModalOpen,
-    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionModalOpen, setOcclusionModalOpen,
+    occlusionImageUrl, setOcclusionImageUrl, occlusionRects, setOcclusionRects, occlusionCanvasSize, setOcclusionCanvasSize, occlusionModalOpen, setOcclusionModalOpen,
     mcOptions, setMcOptions, mcCorrectIndex, setMcCorrectIndex,
     energy, spendEnergy, model, setModel, getCost, createExam, addNotification, updateNotification,
     resetForm, openNew, openEdit, handleSave, handleDelete, handleMoveCard,
