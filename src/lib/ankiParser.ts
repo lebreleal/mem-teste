@@ -116,15 +116,12 @@ function splitDeckPath(rawDeckName: string): string[] {
   const raw = rawDeckName.trim();
   if (!raw) return [];
 
-  if (raw.includes('::')) {
-    return raw.split('::').map(part => part.trim()).filter(Boolean);
-  }
+  const parts = raw
+    .split(/::|\u001f|[\|｜¦]/g)
+    .map(part => part.trim())
+    .filter(Boolean);
 
-  if (raw.includes('|')) {
-    return raw.split('|').map(part => part.trim()).filter(Boolean);
-  }
-
-  return [raw];
+  return parts.length > 0 ? parts : [raw];
 }
 
 async function resolveAnkiArchive(file: File): Promise<JSZip> {
