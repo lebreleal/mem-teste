@@ -92,49 +92,6 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
 
   const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
 
-  // Pre-distribute global new budget sequentially across plan decks (same order as carousel)
-  const distributedNewByDeck = useMemo(() => {
-    const hasPlan = planRootIds && planRootIds.size > 0;
-    if (!hasPlan) return null;
-    const map = new Map<string, number>();
-    let remaining = globalNewRemaining;
-    // Use planDeckOrder to get root deck ids in priority order
-    const orderedRootIds: string[] = [];
-    const seenRoots = new Set<string>();
-    if (planDeckOrder && planDeckOrder.length > 0) {
-      for (const deckId of planDeckOrder) {
-        // Find root ancestor
-        let root = decks.find(d => d.id === deckId);
-        if (!root) continue;
-        while (root.parent_deck_id) {
-          const parent = decks.find(d => d.id === root!.parent_deck_id);
-          if (!parent) break;
-          root = parent;
-        }
-        if (!seenRoots.has(root.id) && !root.is_archived) {
-          seenRoots.add(root.id);
-          orderedRootIds.push(root.id);
-        }
-      }
-    }
-    // Fallback: add any plan root ids not yet included
-    for (const id of planRootIds) {
-      if (!seenRoots.has(id)) {
-        seenRoots.add(id);
-        orderedRootIds.push(id);
-      }
-    }
-    for (const rootId of orderedRootIds) {
-      const deck = decks.find(d => d.id === rootId);
-      if (!deck) continue;
-      const raw = getRawAggregateStats(deck);
-      const allocated = Math.max(0, Math.min(raw.new_count, remaining));
-      map.set(rootId, allocated);
-      remaining -= allocated;
-    }
-    return map;
-  }, [planRootIds, planDeckOrder, globalNewRemaining, decks]);
-
   const isLoading = decksLoading || foldersLoading;
 
   const toggleExpand = (deckId: string) => {
@@ -275,7 +232,47 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
   };
 
-  /** Aggregates descendant counts then caps using ROOT ancestor's limits. */
+  // Pre-distribute global new budget sequentially across plan decks (same order as carousel)
+  const distributedNewByDeck = useMemo(() => {
+    const hasPlan = planRootIds && planRootIds.size > 0;
+    if (!hasPlan) return null;
+    const map = new Map<string, number>();
+    let remaining = globalNewRemaining;
+    const orderedRootIds: string[] = [];
+    const seenRoots = new Set<string>();
+    if (planDeckOrder && planDeckOrder.length > 0) {
+      for (const deckId of planDeckOrder) {
+        let root = decks.find(d => d.id === deckId);
+        if (!root) continue;
+        while (root.parent_deck_id) {
+          const parent = decks.find(d => d.id === root!.parent_deck_id);
+          if (!parent) break;
+          root = parent;
+        }
+        if (!seenRoots.has(root.id) && !root.is_archived) {
+          seenRoots.add(root.id);
+          orderedRootIds.push(root.id);
+        }
+      }
+    }
+    for (const id of planRootIds) {
+      if (!seenRoots.has(id)) {
+        seenRoots.add(id);
+        orderedRootIds.push(id);
+      }
+    }
+    for (const rootId of orderedRootIds) {
+      const deck = decks.find(d => d.id === rootId);
+      if (!deck) continue;
+      const raw = getRawAggregateStats(deck);
+      const allocated = Math.max(0, Math.min(raw.new_count, remaining));
+      map.set(rootId, allocated);
+      remaining -= allocated;
+    }
+    return map;
+  }, [planRootIds, planDeckOrder, globalNewRemaining, decks]);
+
+
   const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const raw = getRawAggregateStats(deck);
 
