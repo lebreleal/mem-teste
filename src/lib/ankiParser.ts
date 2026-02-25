@@ -289,10 +289,10 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
 
     const decksCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='decks'");
     if (decksCheck.length > 0 && decksCheck[0].values.length > 0) {
-      const decksResult = db.exec('SELECT id, name FROM decks');
+      const decksResult = db.exec('SELECT CAST(id AS TEXT), name FROM decks');
       if (decksResult.length > 0) {
         for (const row of decksResult[0].values) {
-          const dId = String(row[0]);
+          const dId = row[0] as string;
           const dName = row[1] as string;
           if (dName) deckNamesById[dId] = dName;
           if (dName && dName !== 'Default' && dName !== 'Padrão' && deckName === 'Anki Import') {
@@ -318,8 +318,24 @@ function buildCards(
 ): AnkiCard[] {
   const cards: AnkiCard[] = [];
 
-  const noteDeckIdMap = new Map<string, string>();
+  let cardRows: Array<{
+    noteId: string;
+    deckId: string;
+    templateOrd: number | null;
+    mid: string;
+    flds: string;
+    tags: string;
+  }> = [];
+
   try {
+    const noteColsResult = db.exec('PRAGMA table_info(notes)');
+    const noteCols = new Set<string>();
+    if (noteColsResult.length > 0) {
+      for (const row of noteColsResult[0].values) {
+        noteCols.add(String(row[1]));
+      }
+    }
+
     const cardColsResult = db.exec('PRAGMA table_info(cards)');
     const cardCols = new Set<string>();
     if (cardColsResult.length > 0) {
@@ -328,37 +344,65 @@ function buildCards(
       }
     }
 
-    const noteColumn = cardCols.has('nid') ? 'nid' : cardCols.has('note_id') ? 'note_id' : null;
-    const deckColumn = cardCols.has('did') ? 'did' : cardCols.has('deck_id') ? 'deck_id' : null;
+    const notesIdColumn = noteCols.has('id') ? 'id' : noteCols.has('note_id') ? 'note_id' : null;
+    const notesModelColumn = noteCols.has('mid') ? 'mid' : noteCols.has('notetype_id') ? 'notetype_id' : null;
+    const notesFieldsColumn = noteCols.has('flds') ? 'flds' : noteCols.has('fields') ? 'fields' : null;
+    const notesTagsColumn = noteCols.has('tags') ? 'tags' : null;
 
-    if (noteColumn && deckColumn) {
-      const cardDeckResult = db.exec(`SELECT ${noteColumn}, ${deckColumn} FROM cards`);
-      if (cardDeckResult.length > 0) {
-        for (const row of cardDeckResult[0].values) {
-          const noteId = String(row[0]);
-          if (!noteDeckIdMap.has(noteId)) {
-            noteDeckIdMap.set(noteId, String(row[1]));
-          }
-        }
-      }
+    const cardNoteColumn = cardCols.has('nid') ? 'nid' : cardCols.has('note_id') ? 'note_id' : null;
+    const cardDeckColumn = cardCols.has('did') ? 'did' : cardCols.has('deck_id') ? 'deck_id' : null;
+    const cardOrdColumn = cardCols.has('ord') ? 'ord' : cardCols.has('template_idx') ? 'template_idx' : null;
+
+    if (!notesIdColumn || !notesModelColumn || !notesFieldsColumn || !cardNoteColumn || !cardDeckColumn) {
+      throw new Error('Estrutura do banco Anki não suportada (notes/cards).');
+    }
+
+    const tagsSelect = notesTagsColumn ? `, n.${notesTagsColumn}` : ", ''";
+    const ordSelect = cardOrdColumn ? `, c.${cardOrdColumn}` : ', NULL';
+
+    const rowsResult = db.exec(
+      `SELECT CAST(c.${cardNoteColumn} AS TEXT), CAST(c.${cardDeckColumn} AS TEXT)${ordSelect}, CAST(n.${notesModelColumn} AS TEXT), n.${notesFieldsColumn}${tagsSelect}
+       FROM cards c
+       JOIN notes n ON CAST(n.${notesIdColumn} AS TEXT) = CAST(c.${cardNoteColumn} AS TEXT)`
+    );
+
+    if (rowsResult.length > 0) {
+      cardRows = rowsResult[0].values.map((row) => ({
+        noteId: row[0] as string,
+        deckId: row[1] as string,
+        templateOrd: row[2] == null ? null : Number(row[2]),
+        mid: row[3] as string,
+        flds: (row[4] as string) || '',
+        tags: (row[5] as string) || '',
+      }));
     }
   } catch (error) {
-    console.warn('Failed to map notes to decks:', error);
+    console.warn('Failed to read cards/notes join, falling back to notes table:', error);
   }
 
-  const notesResult = db.exec('SELECT id, mid, flds, tags FROM notes');
-  if (notesResult.length === 0) return cards;
+  if (cardRows.length === 0) {
+    // Fallback compatível com parsers antigos
+    const notesResult = db.exec('SELECT CAST(id AS TEXT), CAST(mid AS TEXT), flds, tags FROM notes');
+    if (notesResult.length === 0) return cards;
 
-  for (const row of notesResult[0].values) {
-    const noteId = String(row[0]);
-    const mid = String(row[1]);
-    const fldsStr = row[2] as string;
-    const tags = (row[3] as string || '').trim().split(/\s+/).filter(Boolean);
-    const fieldValues = fldsStr.split('\x1f');
-    const deckId = noteDeckIdMap.get(noteId);
-    const deckName = deckId ? deckNamesById[deckId] : undefined;
+    for (const row of notesResult[0].values) {
+      cardRows.push({
+        noteId: row[0] as string,
+        deckId: '',
+        templateOrd: null,
+        mid: row[1] as string,
+        flds: (row[2] as string) || '',
+        tags: (row[3] as string) || '',
+      });
+    }
+  }
 
-    const model = models[mid];
+  for (const row of cardRows) {
+    const model = models[row.mid];
+    const fieldValues = row.flds.split('\x1f');
+    const tags = row.tags.trim().split(/\s+/).filter(Boolean);
+    const deckName = row.deckId ? deckNamesById[row.deckId] : undefined;
+
     if (!model) {
       const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
       const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
@@ -375,46 +419,74 @@ function buildCards(
 
     if (model.type === 1) {
       const frontContent = convertClozeFormat(replaceMediaRefs(fieldValues[0] || '', mediaMap));
-      const clozeNums = new Set<number>();
-      frontContent.replace(/\{\{c(\d+)::/g, (_, n) => { clozeNums.add(parseInt(n)); return ''; });
+      const targetFromOrd = row.templateOrd != null && row.templateOrd >= 0 ? row.templateOrd + 1 : null;
 
-      if (clozeNums.size > 0) {
-        for (const cNum of clozeNums) {
-          cards.push({
-            front: frontContent,
-            back: JSON.stringify({ clozeTarget: cNum }),
-            cardType: 'cloze',
-            tags,
-            media: mediaMap,
-            deckName,
-          });
-        }
+      if (targetFromOrd) {
+        cards.push({
+          front: frontContent,
+          back: JSON.stringify({ clozeTarget: targetFromOrd }),
+          cardType: 'cloze',
+          tags,
+          media: mediaMap,
+          deckName,
+        });
       } else {
-        const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
-        const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
-        if (front.trim()) cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
-      }
-    } else {
-      if (model.tmpls.length > 0) {
-        for (const tmpl of model.tmpls) {
-          const front = renderTemplate(tmpl.qfmt, fieldMap);
-          const back = renderTemplate(tmpl.afmt, fieldMap);
-          if (front.trim()) {
+        const clozeNums = new Set<number>();
+        frontContent.replace(/\{\{c(\d+)::/g, (_, n) => { clozeNums.add(parseInt(n)); return ''; });
+        if (clozeNums.size > 0) {
+          for (const cNum of clozeNums) {
             cards.push({
-              front: replaceMediaRefs(front, mediaMap),
-              back: replaceMediaRefs(back, mediaMap),
-              cardType: 'basic',
+              front: frontContent,
+              back: JSON.stringify({ clozeTarget: cNum }),
+              cardType: 'cloze',
               tags,
               media: mediaMap,
               deckName,
             });
           }
         }
-      } else {
-        const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
-        const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
-        if (front.trim()) cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
       }
+      continue;
+    }
+
+    if (model.tmpls.length > 0 && row.templateOrd != null && row.templateOrd >= 0) {
+      const tmpl = model.tmpls.find(t => t.ord === row.templateOrd);
+      if (tmpl) {
+        const front = renderTemplate(tmpl.qfmt, fieldMap);
+        const back = renderTemplate(tmpl.afmt, fieldMap);
+        if (front.trim()) {
+          cards.push({
+            front: replaceMediaRefs(front, mediaMap),
+            back: replaceMediaRefs(back, mediaMap),
+            cardType: 'basic',
+            tags,
+            media: mediaMap,
+            deckName,
+          });
+        }
+        continue;
+      }
+    }
+
+    if (model.tmpls.length > 0) {
+      for (const tmpl of model.tmpls) {
+        const front = renderTemplate(tmpl.qfmt, fieldMap);
+        const back = renderTemplate(tmpl.afmt, fieldMap);
+        if (front.trim()) {
+          cards.push({
+            front: replaceMediaRefs(front, mediaMap),
+            back: replaceMediaRefs(back, mediaMap),
+            cardType: 'basic',
+            tags,
+            media: mediaMap,
+            deckName,
+          });
+        }
+      }
+    } else {
+      const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
+      const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
+      if (front.trim()) cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
     }
   }
 
