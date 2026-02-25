@@ -76,6 +76,86 @@ function parseCSV(text: string, delimiter: string): string[][] {
   return rows;
 }
 
+const splitHierarchyName = (rawName: string): string[] => {
+  const raw = rawName.trim();
+  if (!raw) return [];
+
+  const parts = raw
+    .split(/::|\u001f|[\|｜¦]/g)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts : [raw];
+};
+
+function normalizeSubdeckHierarchy(nodes: SubdeckOrganization[]): SubdeckOrganization[] {
+  type MutableNode = {
+    name: string;
+    cardSet: Set<number>;
+    children: Map<string, MutableNode>;
+  };
+
+  const createNode = (name: string): MutableNode => ({
+    name,
+    cardSet: new Set<number>(),
+    children: new Map<string, MutableNode>(),
+  });
+
+  const root = new Map<string, MutableNode>();
+
+  const ensurePath = (target: Map<string, MutableNode>, path: string[]): MutableNode => {
+    let level = target;
+    let current: MutableNode | null = null;
+
+    for (const segment of path) {
+      const key = segment.toLocaleLowerCase('pt-BR');
+      let next = level.get(key);
+      if (!next) {
+        next = createNode(segment);
+        level.set(key, next);
+      }
+      current = next;
+      level = next.children;
+    }
+
+    return current!;
+  };
+
+  const absorb = (target: Map<string, MutableNode>, node: SubdeckOrganization) => {
+    const path = splitHierarchyName(node.name);
+    if (path.length === 0) return;
+
+    const current = ensurePath(target, path);
+
+    for (const idx of node.card_indices) {
+      if (Number.isInteger(idx) && idx >= 0) current.cardSet.add(idx);
+    }
+
+    if (node.children?.length) {
+      for (const child of node.children) {
+        absorb(current.children, child);
+      }
+    }
+  };
+
+  for (const node of nodes) {
+    absorb(root, node);
+  }
+
+  const toOutput = (map: Map<string, MutableNode>): SubdeckOrganization[] => {
+    return [...map.values()].map((node) => {
+      const children = toOutput(node.children);
+      return {
+        name: node.name,
+        card_indices: [...node.cardSet],
+        children: children.length > 0 ? children : undefined,
+      };
+    });
+  };
+
+  return toOutput(root);
+}
+
 const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCardsDialogProps) => {
   const [source, setSource] = useState<ImportSource>(null);
   const [deckName, setDeckName] = useState('');
@@ -198,7 +278,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.subdecks && data.subdecks.length > 0) {
-        setSubdecks(data.subdecks);
+        setSubdecks(normalizeSubdeckHierarchy(data.subdecks as SubdeckOrganization[]));
         toast({ title: `${data.subdecks.length} subdecks identificados pela IA!` });
       } else {
         toast({ title: 'Não foi possível identificar temas distintos', variant: 'destructive' });
@@ -252,7 +332,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       const { parseApkgFile } = await import('@/lib/ankiParser');
       const result = await parseApkgFile(file);
       setAnkiResult(result);
-      setSubdecks(result.subdecks ?? null);
+      setSubdecks(result.subdecks ? normalizeSubdeckHierarchy(result.subdecks as SubdeckOrganization[]) : null);
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
@@ -336,15 +416,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   }, [subdecks]);
 
   const splitDeckPathLabel = (rawDeckName: string): string[] => {
-    const raw = rawDeckName.trim();
-    if (!raw) return [];
-
-    const parts = raw
-      .split(/::|\u001f|[\|｜¦]/g)
-      .map(part => part.trim())
-      .filter(Boolean);
-
-    return parts.length > 0 ? parts : [raw];
+    return splitHierarchyName(rawDeckName);
   };
 
   const normalizeDeckTitle = (value: string): string => {
@@ -493,7 +565,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         <p className="text-[11px] text-muted-foreground">
           {hasHierarchy
             ? `Serão criados ${subdeckStats.decks} deck(s), ${subdeckStats.cards} cartões e profundidade máxima ${subdeckStats.maxDepth}.`
-            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões.`}
+            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões, incluindo subníveis.`}
         </p>
       </div>
     );
