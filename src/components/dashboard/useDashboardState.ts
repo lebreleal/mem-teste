@@ -50,6 +50,46 @@ export function useDashboardState() {
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; type: 'deck' | 'folder'; action: () => void } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  // Fetch global daily_new_cards_limit from profile
+  const globalNewLimitQuery = useQuery({
+    queryKey: ['daily-new-cards-limit', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('daily_new_cards_limit, weekly_new_cards')
+        .eq('id', user!.id)
+        .single();
+      return data as any;
+    },
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+
+  const rawGlobalNewLimit = globalNewLimitQuery.data?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCardsProfile = globalNewLimitQuery.data?.weekly_new_cards as Record<string, number> | null;
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)
+    ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]
+    : rawGlobalNewLimit;
+
+  // Sum new_reviewed_today across ALL user decks (for global cap)
+  const globalNewReviewedToday = useMemo(() => {
+    return decks
+      .filter(d => !d.parent_deck_id && !d.is_archived)
+      .reduce((sum, d) => {
+        const collectNew = (id: string): number => {
+          const dk = decks.find(x => x.id === id);
+          let nr = dk?.new_reviewed_today ?? 0;
+          const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
+          for (const child of children) nr += collectNew(child.id);
+          return nr;
+        };
+        return sum + collectNew(d.id);
+      }, 0);
+  }, [decks]);
+
+  const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
+
   const isLoading = decksLoading || foldersLoading;
 
   const toggleExpand = (deckId: string) => {
@@ -208,7 +248,8 @@ export function useDashboardState() {
     // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
     const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
 
-    const effectiveNew = Math.max(0, Math.min(raw.new_count, dailyNewLimit - rootRaw.newReviewed));
+    const deckRemaining = Math.max(0, dailyNewLimit - rootRaw.newReviewed);
+    const effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
     const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
     const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
     return { new_count: effectiveNew, learning_count: raw.learning_count, review_count: effectiveReview, reviewed_today: raw.reviewed };
