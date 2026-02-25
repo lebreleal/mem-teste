@@ -85,7 +85,6 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
-    ctx.scale(zoom, zoom);
     ctx.drawImage(img, 0, 0, img.naturalWidth * imageScale, img.naturalHeight * imageScale);
 
     const fill = translucent ? FILL_TRANSLUCENT : FILL_SOLID;
@@ -170,7 +169,7 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     }
 
     ctx.restore();
-  }, [shapes, currentShape, imageScale, zoom, panOffset, translucent, selectedIds, tool, polygonPoints]);
+  }, [shapes, currentShape, imageScale, panOffset, translucent, selectedIds, tool, polygonPoints]);
 
   const loadImage = useCallback(() => {
     const img = new window.Image();
@@ -184,12 +183,12 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
       const maxH = 450;
       const s = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
       setImageScale(s);
-      canvas.width = Math.round(img.naturalWidth * s * zoom);
-      canvas.height = Math.round(img.naturalHeight * s * zoom);
+      canvas.width = Math.round(img.naturalWidth * s);
+      canvas.height = Math.round(img.naturalHeight * s);
       drawCanvas();
     };
     img.src = imageUrl;
-  }, [imageUrl, drawCanvas, zoom]);
+  }, [imageUrl, drawCanvas]);
 
   useEffect(() => { loadImage(); }, [loadImage]);
   useEffect(() => { drawCanvas(); }, [drawCanvas]);
@@ -203,11 +202,13 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    // CSS transform:scale handles zoom, so getBoundingClientRect already reflects zoom.
+    // We need to map from screen coords to canvas internal coords.
     const pixelRatioX = canvas.width / rect.width;
     const pixelRatioY = canvas.height / rect.height;
     return {
-      x: ((e.clientX - rect.left) * pixelRatioX - panOffset.x) / zoom,
-      y: ((e.clientY - rect.top) * pixelRatioY - panOffset.y) / zoom,
+      x: (e.clientX - rect.left) * pixelRatioX - panOffset.x,
+      y: (e.clientY - rect.top) * pixelRatioY - panOffset.y,
     };
   };
 
@@ -494,8 +495,8 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
         )}
 
         {/* Canvas */}
-        <div ref={containerRef} className="relative rounded-lg border border-border overflow-hidden bg-muted/30 flex items-center justify-center">
-          <canvas ref={canvasRef} className="block max-w-full" style={{ maxHeight: '450px', cursor }}
+        <div ref={containerRef} className="relative rounded-lg border border-border overflow-auto bg-muted/30 flex items-start justify-start" style={{ maxHeight: '500px' }}>
+          <canvas ref={canvasRef} className="block" style={{ maxHeight: '450px', cursor, transformOrigin: 'top left', transform: `scale(${zoom})` }}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             onMouseLeave={() => { if (isPanning) setIsPanning(false); if (draggingId) { setDraggingId(null); onChange(shapes); } }}
             onClick={handleCanvasClick} onDoubleClick={handleCanvasDblClick} onWheel={handleWheel} />
