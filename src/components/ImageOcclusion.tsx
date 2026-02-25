@@ -184,12 +184,12 @@ const ImageOcclusion = ({ imageUrl, initialRects = [], onChange }: ImageOcclusio
       const maxH = 450;
       const s = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
       setImageScale(s);
-      canvas.width = Math.round(img.naturalWidth * s);
-      canvas.height = Math.round(img.naturalHeight * s);
+      canvas.width = Math.round(img.naturalWidth * s * zoom);
+      canvas.height = Math.round(img.naturalHeight * s * zoom);
       drawCanvas();
     };
     img.src = imageUrl;
-  }, [imageUrl, drawCanvas]);
+  }, [imageUrl, drawCanvas, zoom]);
 
   useEffect(() => { loadImage(); }, [loadImage]);
   useEffect(() => { drawCanvas(); }, [drawCanvas]);

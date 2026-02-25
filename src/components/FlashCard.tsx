@@ -98,10 +98,7 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
     const allRects: any[] = data.allRects || data.rects || [];
     const activeRectIds: string[] = data.activeRectIds || allRects.map((r: any) => r.id);
     if (allRects.length === 0) return `<img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" />`;
-    const allX = allRects.map((r: any) => r.x + r.w);
-    const allY = allRects.map((r: any) => r.y + r.h);
-    const maxX = Math.max(...allX, 100);
-    const maxY = Math.max(...allY, 100);
+
     const svgShapes = allRects.map((r: any) => {
       const isActive = activeRectIds.includes(r.id);
       if (!isActive) return '';
@@ -119,9 +116,17 @@ function renderOcclusion(frontContent: string, revealed: boolean): string {
       if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
     }).join('');
-    return `<div style="position:relative;display:inline-block;max-width:100%">
-      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem" crossorigin="anonymous" />
-      <svg style="position:absolute;top:0;left:0;width:100%;height:100%" viewBox="0 0 ${maxX * 1.05} ${maxY * 1.05}" preserveAspectRatio="xMinYMin meet">
+
+    // The SVG viewBox is set dynamically via onload to match the image's natural dimensions.
+    // Rects are stored in canvas-scaled coords (naturalWidth * scale), so we must also scale
+    // the viewBox to match. We use a data attribute to pass the imageScale if available,
+    // otherwise we compute it from the rect extents.
+    // Simplest reliable approach: set viewBox from image onload to canvas-scale space.
+    const containerId = `occ-${Math.random().toString(36).slice(2, 8)}`;
+    return `<div id="${containerId}" style="position:relative;display:inline-block;max-width:100%">
+      <img src="${imageUrl}" style="max-width:100%;border-radius:0.5rem;display:block" crossorigin="anonymous"
+        onload="(function(img){var svg=img.nextElementSibling;if(!svg)return;var container=img.parentElement;var displayW=img.offsetWidth;var displayH=img.offsetHeight;var natW=img.naturalWidth;var natH=img.naturalHeight;var scale=Math.min(displayW/natW,displayH/natH,1);svg.setAttribute('viewBox','0 0 '+(natW*scale)+' '+(natH*scale));svg.style.width=displayW+'px';svg.style.height=displayH+'px';})(this)" />
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 100 100" preserveAspectRatio="xMinYMin meet">
         ${svgShapes}
       </svg>
     </div>`;
