@@ -316,6 +316,7 @@ const ManageDeck = () => {
   const [back, setBack] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editorType, setEditorType] = useState<EditorCardType | null>(null);
+  const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [suggestCard, setSuggestCard] = useState<{ id: string; front_content: string; back_content: string; deck_id: string; card_type: string } | null>(null);
 
   // Detect if this is a community deck (has source_turma_deck_id or source_listing_id)
@@ -572,7 +573,10 @@ const ManageDeck = () => {
         {CARD_TYPES.map(type => (
           <button
             key={type.value}
-            onClick={() => setEditorType(type.value)}
+            onClick={() => {
+              setEditorType(type.value);
+              if (type.value === 'image_occlusion') setOcclusionModalOpen(true);
+            }}
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
@@ -603,23 +607,68 @@ const ManageDeck = () => {
       )}
 
       {editorType === 'image_occlusion' ? (
-        <OcclusionEditor
-          initialFront={editingId ? front : ''}
-          onSave={(frontContent, backContent) => {
-            const onSuccess = () => {
-              toast({ title: editingId ? 'Card atualizado!' : 'Card criado!' });
-              setEditorOpen(false);
-              resetForm();
-            };
-            if (editingId) {
-              updateCard.mutate({ id: editingId, frontContent, backContent }, { onSuccess });
-            } else {
-              createCard.mutate({ frontContent, backContent, cardType: 'image_occlusion' }, { onSuccess });
-            }
-          }}
-          onCancel={() => { if (!editingId) setEditorType(null); else { setEditorOpen(false); resetForm(); } }}
-          isSaving={isSaving}
-        />
+        <>
+          <div>
+            <Label className="mb-1.5 block">Frente (Imagem com oclusões)</Label>
+            {(() => {
+              let occData: { imageUrl?: string; allRects?: any[] } | null = null;
+              try { occData = front ? JSON.parse(front) : null; } catch {}
+
+              if (occData?.imageUrl) {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setOcclusionModalOpen(true)}
+                    className="w-full rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/20 p-3 transition-colors group text-left"
+                  >
+                    <div className="relative rounded-lg overflow-hidden">
+                      <img src={occData.imageUrl} alt="Oclusão" className="w-full max-h-48 object-contain rounded-lg" />
+                      {occData.allRects && occData.allRects.length > 0 && (
+                        <div className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-primary/90 px-2.5 py-1 text-[11px] font-bold text-primary-foreground shadow">
+                          {occData.allRects.length} área{occData.allRects.length !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 rounded-lg bg-card/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow">
+                          <Pencil className="h-3 w-3" /> Editar oclusões
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  type="button"
+                  onClick={() => setOcclusionModalOpen(true)}
+                  className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-10 text-center hover:border-primary/50 transition-colors"
+                >
+                  <Image className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium text-foreground">Clique para enviar imagem</p>
+                  <p className="text-xs text-muted-foreground mt-1">e marcar as áreas de oclusão</p>
+                </button>
+              );
+            })()}
+          </div>
+
+          <div>
+            <Label className="mb-1.5 block">Verso (Nota extra - opcional)</Label>
+            <LazyRichEditor content={back} onChange={setBack} placeholder="Nota adicional (opcional)" hideCloze />
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
+            {!editingId && (
+              <Button variant="secondary" onClick={() => handleSave(true)} disabled={isSaving || !front}>
+                {isSaving ? 'Salvando...' : 'Salvar e Adicionar Outro'}
+              </Button>
+            )}
+            <Button onClick={() => handleSave(false)} disabled={isSaving || !front}>
+              {isSaving ? 'Salvando...' : 'Salvar e Fechar'}
+            </Button>
+          </div>
+        </>
       ) : (
         <>
           <div>
@@ -952,7 +1001,7 @@ const ManageDeck = () => {
 
       {/* Card Editor Dialog */}
       <Dialog open={editorOpen} onOpenChange={open => { if (!open) { setEditorOpen(false); resetForm(); } }}>
-        <DialogContent className={`max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto ${editorType === 'image_occlusion' ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
+        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display">
               {editingId ? 'Editar Card' : editorType ? CARD_TYPES.find(t => t.value === editorType)?.label : 'Novo Card'}
@@ -980,6 +1029,27 @@ const ManageDeck = () => {
               Aplicar melhoria <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Occlusion Editor Modal */}
+      <Dialog open={occlusionModalOpen} onOpenChange={setOcclusionModalOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Image className="h-5 w-5 text-primary" />
+              Oclusão de Imagem
+            </DialogTitle>
+          </DialogHeader>
+          <OcclusionEditor
+            initialFront={front}
+            onSave={(frontContent) => {
+              setFront(frontContent);
+              setOcclusionModalOpen(false);
+            }}
+            onCancel={() => setOcclusionModalOpen(false)}
+            isSaving={false}
+          />
         </DialogContent>
       </Dialog>
 
