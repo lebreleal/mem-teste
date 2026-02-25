@@ -335,6 +335,21 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     return walk(subdecks, 1);
   }, [subdecks]);
 
+  const splitDeckPathLabel = (rawDeckName: string): string[] => {
+    const raw = rawDeckName.trim();
+    if (!raw) return [];
+
+    if (raw.includes('::')) {
+      return raw.split('::').map(part => part.trim()).filter(Boolean);
+    }
+
+    if (raw.includes('|')) {
+      return raw.split('|').map(part => part.trim()).filter(Boolean);
+    }
+
+    return [raw];
+  };
+
   const detectedAnkiHierarchy = useMemo(() => {
     if (source !== 'anki' || !ankiResult || ankiResult.cards.length === 0) {
       return { nodes: [] as DetectedDeckNode[], deckCount: 0, maxDepth: 0 };
@@ -353,7 +368,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
     for (const card of ankiResult.cards) {
       const raw = card.deckName?.trim() || deckName.trim() || 'Anki Import';
-      const parts = raw.split('::').map(part => part.trim()).filter(Boolean);
+      const parts = splitDeckPathLabel(raw);
       if (parts.length === 0) continue;
 
       let level = roots;
@@ -415,6 +430,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       </div>
     );
   };
+
 
   // Recursive node renderer for subdeck preview
   const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
@@ -617,7 +633,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                           </span>
                           {card.deckName && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground">
-                              {card.deckName}
+                              {splitDeckPathLabel(card.deckName).join(' › ')}
                             </span>
                           )}
                           {card.tags.length > 0 && (
