@@ -303,20 +303,36 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     </>
   );
 
-  // Count total leaf cards in a subdeck tree
-  const countLeafCards = (sd: SubdeckOrganization): number => {
-    if (sd.children && sd.children.length > 0) {
-      return sd.children.reduce((sum, c) => sum + countLeafCards(c), 0);
-    }
-    return sd.card_indices.length;
+  // Count total cards in a subdeck tree (incluindo nós intermediários)
+  const countTreeCards = (sd: SubdeckOrganization): number => {
+    const own = sd.card_indices.length;
+    const fromChildren = sd.children?.reduce((sum, c) => sum + countTreeCards(c), 0) ?? 0;
+    return own + fromChildren;
   };
 
   const hasHierarchy = subdecks?.some(sd => sd.children && sd.children.length > 0);
 
+  const subdeckStats = useMemo(() => {
+    if (!subdecks || subdecks.length === 0) return null;
+
+    const walk = (nodes: SubdeckOrganization[], depth: number): { decks: number; cards: number; maxDepth: number } => {
+      return nodes.reduce((acc, node) => {
+        const child = node.children?.length ? walk(node.children, depth + 1) : { decks: 0, cards: 0, maxDepth: depth };
+        return {
+          decks: acc.decks + 1 + child.decks,
+          cards: acc.cards + node.card_indices.length + child.cards,
+          maxDepth: Math.max(acc.maxDepth, child.maxDepth, depth),
+        };
+      }, { decks: 0, cards: 0, maxDepth: depth });
+    };
+
+    return walk(subdecks, 1);
+  }, [subdecks]);
+
   // Recursive node renderer for subdeck preview
   const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
     const hasChildren = node.children && node.children.length > 0;
-    const leafCount = countLeafCards(node);
+    const totalInBranch = countTreeCards(node);
     return (
       <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
@@ -325,7 +341,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             {node.name}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {hasChildren ? `${leafCount} cartões` : `${node.card_indices.length} cartões`}
+            {hasChildren ? `${totalInBranch} cartões` : `${node.card_indices.length} cartões`}
           </span>
         </div>
         {hasChildren && (
@@ -341,14 +357,14 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
   // Subdeck organization preview component
   const SubdeckPreview = () => {
-    if (!subdecks || subdecks.length === 0) return null;
+    if (!subdecks || subdecks.length === 0 || !subdeckStats) return null;
 
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold flex items-center gap-1.5">
             <FolderTree className="h-4 w-4 text-primary" />
-            Organização ({subdecks.length} {hasHierarchy ? 'decks' : 'subdecks'})
+            Organização ({subdeckStats.decks} decks)
           </Label>
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
             <X className="h-3 w-3 mr-1" />
@@ -362,8 +378,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         </div>
         <p className="text-[11px] text-muted-foreground">
           {hasHierarchy
-            ? `Serão criados ${subdecks.length} deck(s) organizados hierarquicamente.`
-            : `Será criado o deck pai "${deckName}" com ${subdecks.length} subdecks.`}
+            ? `Serão criados ${subdeckStats.decks} deck(s), ${subdeckStats.cards} cartões e profundidade máxima ${subdeckStats.maxDepth}.`
+            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões.`}
         </p>
       </div>
     );
@@ -515,8 +531,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                   <Button onClick={handleImport} disabled={!deckName.trim() || loading}>
-                    {loading ? 'Importando...' : subdecks
-                      ? `Importar (${subdecks.length} subdecks)`
+                    {loading ? 'Importando...' : subdecks && subdeckStats
+                      ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
                       : `Importar (${ankiResult.cards.length})`
                     }
                   </Button>
@@ -683,8 +699,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                 <Button onClick={handleImport} disabled={parsedCards.length === 0 || !deckName.trim() || loading}>
-                  {loading ? 'Importando...' : subdecks
-                    ? `Importar (${subdecks.length} subdecks)`
+                  {loading ? 'Importando...' : subdecks && subdeckStats
+                    ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
                     : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`
                   }
                 </Button>
