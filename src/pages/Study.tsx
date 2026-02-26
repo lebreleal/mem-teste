@@ -27,7 +27,7 @@ const Study = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, submitReview, algorithmMode, isLiveDeck } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
@@ -520,6 +520,7 @@ const Study = () => {
             isSubmitting={submitReview.isPending || isTransitioning}
             quickReview={algorithmMode === 'quick_review'}
             algorithmMode={algorithmMode}
+            deckConfig={deckConfig}
             energy={energy}
             tutorCost={TUTOR_COST}
             onTutorRequest={handleTutorRequest}
