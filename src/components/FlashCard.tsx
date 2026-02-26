@@ -14,12 +14,12 @@ import ReactMarkdown from 'react-markdown';
 /** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
 function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
   if (!deckConfig) return {};
-  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '15m'];
+  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '10m'];
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
   const maxIntervalDays = deckConfig.max_interval ?? 36500;
 
   if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig.requested_retention ?? 0.9;
+    const requestedRetention = deckConfig.requested_retention ?? 0.85;
     return {
       fsrs: {
         ...DEFAULT_FSRS_PARAMS,
@@ -202,6 +202,7 @@ const MultipleChoiceCard = ({
   difficulty,
   state,
   scheduledDate,
+  learningStep = 0,
   canUndo,
   onUndo,
   onOpenExplainChat,
@@ -225,6 +226,7 @@ const MultipleChoiceCard = ({
   difficulty: number;
   state: number;
   scheduledDate: string;
+  learningStep?: number;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -240,7 +242,7 @@ const MultipleChoiceCard = ({
   const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: 0 };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0 };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -604,6 +606,7 @@ const FlashCard = ({
         canUndo={canUndo}
         onUndo={onUndo}
         onOpenExplainChat={onOpenExplainChat}
+        learningStep={learningStep}
       />
     );
   }
