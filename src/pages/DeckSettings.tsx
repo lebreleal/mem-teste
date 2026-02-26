@@ -78,8 +78,8 @@ const DeckSettings = () => {
   const [name, setName] = useState('');
   const [dailyNewLimit, setDailyNewLimit] = useState(20);
   const [dailyReviewLimit, setDailyReviewLimit] = useState(100);
-  const [algorithmMode, setAlgorithmMode] = useState<'sm2' | 'fsrs' | 'quick_review'>('sm2');
-  const [requestedRetention, setRequestedRetention] = useState(0.9);
+  const [algorithmMode, setAlgorithmMode] = useState<'fsrs' | 'quick_review'>('fsrs');
+  const [requestedRetention, setRequestedRetention] = useState(0.85);
   const [shuffleCards, setShuffleCards] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [allowDuplication, setAllowDuplication] = useState(false);
@@ -103,7 +103,7 @@ const DeckSettings = () => {
   const [exportModal, setExportModal] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingAnki, setExportingAnki] = useState(false);
-  const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'sm2' | 'fsrs' | 'quick_review' | null>(null);
+  const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'fsrs' | 'quick_review' | null>(null);
 
   const studyPlansQuery = useQuery({
     queryKey: ['study-plans-lock', user?.id],
@@ -164,8 +164,8 @@ const DeckSettings = () => {
       setName(data.name);
       setDailyNewLimit(data.daily_new_limit);
       setDailyReviewLimit(data.daily_review_limit);
-      setAlgorithmMode(data.algorithm_mode as any || 'sm2');
-      setRequestedRetention((data as any).requested_retention ?? 0.9);
+      setAlgorithmMode(data.algorithm_mode === 'quick_review' ? 'quick_review' : 'fsrs');
+      setRequestedRetention((data as any).requested_retention ?? 0.85);
       setShuffleCards(data.shuffle_cards ?? true);
       setLearningSteps(data.learning_steps || ['1m', '15m']);
       setEasyBonus(data.easy_bonus ?? 130);
@@ -276,7 +276,7 @@ const DeckSettings = () => {
     });
   };
 
-  const handleAlgorithmSwitch = (target: 'sm2' | 'fsrs' | 'quick_review') => {
+  const handleAlgorithmSwitch = (target: 'fsrs' | 'quick_review') => {
     if (target === algorithmMode) return;
     setAlgorithmChangeTarget(target);
     setAlgorithmModal(false);
@@ -316,7 +316,7 @@ const DeckSettings = () => {
     if (!algorithmChangeTarget || !deckId || !user) return;
     const { data: currentDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
     if (!currentDeck) return;
-    const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : algorithmChangeTarget === 'sm2' ? 'SM-2' : 'Revisão rápida'})`;
+    const newName = `${currentDeck.name} (${algorithmChangeTarget === 'fsrs' ? 'FSRS' : 'Revisão rápida'})`;
     const { data: newDeck, error } = await supabase
       .from('decks')
       .insert({ name: newName, user_id: user.id, folder_id: currentDeck.folder_id, algorithm_mode: algorithmChangeTarget } as any)
@@ -412,7 +412,7 @@ const DeckSettings = () => {
     );
   }
 
-  const algoLabel = algorithmMode === 'quick_review' ? 'Revisão rápida' : algorithmMode === 'fsrs' ? 'FSRS (Premium)' : 'SM-2 (Padrão)';
+  const algoLabel = algorithmMode === 'quick_review' ? 'Revisão rápida' : 'FSRS-6';
 
   return (
     <div className="min-h-screen bg-background">
@@ -598,33 +598,7 @@ const DeckSettings = () => {
             <DialogTitle className="font-display">Modo de Estudo</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {/* SM-2 option */}
-            <button
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 transition-all text-left ${
-                algorithmMode === 'sm2' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
-              }`}
-              onClick={() => handleAlgorithmSwitch('sm2')}
-            >
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                algorithmMode === 'sm2' ? 'bg-primary/10' : 'bg-muted'
-              }`}>
-                <Layers className={`h-5 w-5 ${algorithmMode === 'sm2' ? 'text-primary' : 'text-muted-foreground'}`} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-foreground">SM-2</p>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Padrão</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Algoritmo clássico de repetição espaçada.</p>
-              </div>
-              <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                algorithmMode === 'sm2' ? 'border-primary' : 'border-muted-foreground/30'
-              }`}>
-                {algorithmMode === 'sm2' && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
-              </div>
-            </button>
-
-            {/* FSRS option */}
+            {/* FSRS-6 option */}
             <button
               className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 transition-all text-left ${
                 algorithmMode === 'fsrs' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
@@ -638,8 +612,8 @@ const DeckSettings = () => {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-foreground">FSRS</p>
-                  <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] px-1.5 py-0">Premium</Badge>
+                  <p className="font-semibold text-foreground">FSRS-6</p>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Padrão</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">Algoritmo moderno com otimização automática.</p>
               </div>
@@ -681,7 +655,7 @@ const DeckSettings = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display">
-              Trocar para {algorithmChangeTarget === 'fsrs' ? 'FSRS' : algorithmChangeTarget === 'sm2' ? 'SM-2' : 'Revisão rápida'}?
+              Trocar para {algorithmChangeTarget === 'fsrs' ? 'FSRS-6' : 'Revisão rápida'}?
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
@@ -749,11 +723,11 @@ const DeckSettings = () => {
               <Switch checked={shuffleCards} onCheckedChange={setShuffleCards} disabled={isDeckLockedByObjective} />
             </div>
 
-            {(algorithmMode === 'sm2' || algorithmMode === 'fsrs') && (
+            {algorithmMode === 'fsrs' && (
               <>
                 <Separator />
                 <Button variant="outline" className="w-full" onClick={() => { setStudySettingsModal(false); setAdvancedModal(true); }} disabled={isDeckLockedByObjective}>
-                  Configurações avançadas ({algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'})
+                  Configurações avançadas (FSRS)
                   <ChevronRight className="ml-auto h-4 w-4" />
                 </Button>
               </>
@@ -772,12 +746,10 @@ const DeckSettings = () => {
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">
-              Configurações avançadas ({algorithmMode === 'fsrs' ? 'FSRS' : 'SM-2'})
+              Configurações avançadas (FSRS)
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
-            {algorithmMode === 'fsrs' ? (
-              <>
                 {/* FSRS: Requested Retention */}
                 <div className="space-y-3">
                   <div>
@@ -809,10 +781,10 @@ const DeckSettings = () => {
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">dias</span>
                   </div>
                 </div>
-              </>
-            ) : (
-              <>
-                {/* SM-2: Learning steps */}
+
+                <Separator />
+
+                {/* Learning steps */}
                 <div className="space-y-3">
                   <div>
                     <h4 className="font-semibold text-foreground">Etapas de aprendizado</h4>
@@ -835,39 +807,6 @@ const DeckSettings = () => {
                     <Plus className="h-3.5 w-3.5" /> Adicionar etapa
                   </Button>
                 </div>
-
-                <Separator />
-
-                {/* SM-2: Easy bonus */}
-                <div className="space-y-2">
-                  <Label>Bônus fácil</Label>
-                  <div className="relative">
-                    <Input type="number" min={100} max={500} value={easyBonus} onChange={(e) => setEasyBonus(Math.max(100, parseInt(e.target.value) || 130))} className="pr-8" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Multiplicador adicional quando avalia como "Fácil".</p>
-                </div>
-
-                {/* SM-2: Interval modifier */}
-                <div className="space-y-2">
-                  <Label>Modificador de intervalo</Label>
-                  <div className="relative">
-                    <Input type="number" min={50} max={500} value={intervalModifier} onChange={(e) => setIntervalModifier(Math.max(50, parseInt(e.target.value) || 100))} className="pr-8" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Multiplica todos os intervalos na fase dominada.</p>
-                </div>
-
-                {/* SM-2: Max interval */}
-                <div className="space-y-2">
-                  <Label>Intervalo máximo</Label>
-                  <div className="relative">
-                    <Input type="number" min={1} max={36500} value={maxInterval} onChange={(e) => setMaxInterval(Math.max(1, parseInt(e.target.value) || 1000))} className="pr-12" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">dias</span>
-                  </div>
-                </div>
-              </>
-            )}
 
             <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
