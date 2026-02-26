@@ -1,105 +1,51 @@
 
+# Corrigir Parametros FSRS-6 e Bug de Learning Step no Preview
 
-# Corrigir Etapas de Aprendizado FSRS + Ocultar Irmãos Cloze
+## Problemas encontrados
 
-## Diagnostico
-
-Comparando os prints do Anki com o nosso sistema, encontrei **dois problemas reais**:
-
-### Problema 1: Etapas de aprendizado para cards novos
-No Anki com FSRS e steps `[1m, 10m]`, um card novo mostra:
-- De novo: **1min** (step 0)
-- Dificil: **~6min** (media entre step 0 e step 1)
-- Bom: **10min** (step 1 - ainda em aprendizado!)
-- Facil: **14d** (gradua direto para revisao)
-
-No nosso sistema, um card novo mostra:
-- De novo: 1min (correto)
-- Dificil: 10min ou 15min (usa step[1] direto, deveria ser a media)
-- Bom: **vai direto para revisao com intervalo de dias** (ERRADO - deveria ficar em aprendizado)
-- Facil: gradua para revisao (correto)
-
-**Causa raiz**: O nosso `fsrsSchedule` gradua cards novos para `state=2` (revisao) quando o rating e Good ou Easy. No Anki, Good em card novo avanca para o proximo learning step, permanecendo em `state=1`. So Easy pula os steps.
-
-### Problema 2: Irmãos cloze nao sao ocultos
-No Anki (print 5), cards irmãos (cloze 1, cloze 2 do mesmo texto) sao automaticamente ocultos ate o dia seguinte apos revisar um deles. Nosso sistema mostra todos os irmãos na mesma sessão, o que prejudica a eficácia do estudo.
-
-## Plano de implementação
-
-### 1. Adicionar coluna `learning_step` na tabela cards
-- Nova migração SQL: `ALTER TABLE cards ADD COLUMN learning_step integer NOT NULL DEFAULT 0`
-- Rastreia em qual etapa de aprendizado o card está (0, 1, 2...)
-- Necessário para saber se Good deve avancar para o próximo step ou graduar
-
-### 2. Reescrever lógica de new/learning no `fsrsSchedule` (src/lib/fsrs.ts)
-Comportamento correto (igual ao Anki):
-
-**Card novo (state 0):**
-```text
-Again  → state 1, step 0, intervalo = steps[0]
-Hard   → state 1, step 0, intervalo = avg(steps[0], steps[1])
-Good   → state 1, step 1, intervalo = steps[1]  (se houver mais steps)
-         OU gradua para state 2 (se so tem 1 step)
-Easy   → state 2, gradua direto, intervalo = FSRS initial stability
+### 1. Bug: MultipleChoiceCard hardcoda `learning_step: 0`
+Em `FlashCard.tsx` linha 243, o preview de intervalos do card de multipla escolha ignora o `learningStep` real do card:
+```typescript
+// ERRADO (linha 243):
+const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: 0 };
+// CORRETO (como ja esta na linha 619 do card basico):
+const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep };
 ```
+Isso faz com que cards de multipla escolha em `learning_step: 1` mostrem intervalos errados (como se ainda estivessem no step 0).
 
-**Card em aprendizado (state 1) no step N:**
-```text
-Again  → state 1, step 0, intervalo = steps[0]
-Hard   → state 1, step N (repete), intervalo = avg(steps[N], steps[N+1])
-         ou steps[N] * 1.5 se nao houver próximo
-Good   → state 1, step N+1, intervalo = steps[N+1]
-         OU gradua para state 2 se N é o último step
-Easy   → state 2, gradua direto
-```
+### 2. Learning steps padrao no banco: `['1m', '15m']` vs Anki `['1m', '10m']`
+O banco de dados tem default `['1m', '15m']` mas o Anki usa `[1m, 10m]` como padrao. Isso causa intervalos diferentes dos screenshots do Anki (Hard mostra ~8min em vez de ~5.5min, Good mostra 15min em vez de 10min).
 
-**Card em reaprendizado (state 3):**
-- Mesma lógica, mas usa `relearningSteps` em vez de `learningSteps`
+### 3. `DEFAULT_FSRS_PARAMS.requestedRetention` ainda e `0.9`
+No codigo `src/lib/fsrs.ts` linha 57, o default hardcoded ainda e `0.9`. Embora o deck config sobreponha com `0.85`, qualquer chamada sem config explicito usa 90% em vez de 85%.
 
-### 3. Atualizar interface FSRSParams e FSRSCard
-- `FSRSCard` ganha campo `learning_step: number`
-- `FSRSOutput` ganha campo `learning_step: number`
-- Necessário para propagar step entre agendamentos
+### 4. `Again` em learning halving stability (`s * 0.5`)
+Na linha 198, quando um card em aprendizado recebe "Again", a estabilidade e cortada pela metade. No Anki com FSRS, a estabilidade NAO muda durante os learning steps - ela so e recalculada quando o card gradua ou entra em revisao. O mesmo problema ocorre na linha 230 (same-day review Again).
 
-### 4. Atualizar submissão de review (src/services/studyService.ts)
-- Salvar `learning_step` no card apos cada revisao
-- Passar `learning_step` atual para o `fsrsSchedule`
+### 5. Same-day review Again usa `s * 0.5` em vez de `nextForgetStability`
+Na linha 230, um card de revisao revisado no mesmo dia com "Again" deveria usar `nextForgetStability()` (a formula oficial do FSRS) em vez de simplesmente cortar pela metade.
 
-### 5. Atualizar preview de intervalos (FlashCard.tsx)
-- Passar `learning_step` do card atual para o `fsrsPreviewIntervals`
-- Garantir que os botoes mostrem os intervalos corretos
+## Plano de correcao
 
-### 6. Implementar ocultacao de irmãos cloze (Sibling Burying)
-- No `fetchStudyQueue` (src/services/studyService.ts):
-  - Identificar cards cloze com mesmo `front_content` como irmãos
-  - Ao montar a fila, incluir apenas 1 irmão por grupo
-  - Os demais ficam "buried" (nao aparecem na sessão)
-- No `Study.tsx` apos revisar um card cloze:
-  - Remover irmãos da fila local imediatamente
-- Adicionar toggle nas configuracoes do deck: "Ocultar irmãos cloze ate o dia seguinte" (ativo por padrao)
+### Arquivo 1: `src/lib/fsrs.ts`
+- Linha 57: Mudar `requestedRetention: 0.9` para `0.85`
+- Linha 198: Remover `Math.max(s * 0.5, 0.1)` e manter a estabilidade original `s` no Again durante learning
+- Linha 230: Substituir `Math.max(s * 0.5, 0.1)` por `nextForgetStability(w, card.difficulty, card.stability, 1)` no same-day Again
 
-### 7. Adicionar config `bury_siblings` no deck
-- Nova coluna na tabela decks: `bury_siblings boolean DEFAULT true`
-- Toggle nas configuracoes avancadas do deck (src/pages/DeckSettings.tsx)
+### Arquivo 2: `src/components/FlashCard.tsx`
+- Linha 243: Trocar `learning_step: 0` por `learning_step: learningStep ?? 0` (precisa receber a prop, ja existe como `learningStep` na interface do componente - verificar se o MultipleChoiceCard recebe)
 
-### 8. Atualizar testes
-- Expandir `src/test/fsrs.test.ts` com cenarios de learning steps multi-etapa
-- Testar progressao: novo → step0 → step1 → gradua
-- Testar Hard usa media dos steps
-- Testar Again volta para step 0
-- Testar Easy pula todos os steps
+### Arquivo 3: Migracao SQL
+- Atualizar default de `learning_steps` de `['1m', '15m']` para `['1m', '10m']` na tabela decks
+- Atualizar decks existentes que ainda usam `['1m', '15m']` para `['1m', '10m']`
 
-## Arquivos a editar
-1. Nova migracao SQL (adicionar `learning_step` em cards + `bury_siblings` em decks)
-2. `src/lib/fsrs.ts` - Reescrever logica de state 0 e state 1
-3. `src/services/studyService.ts` - Salvar learning_step + sibling burying na fila
-4. `src/components/FlashCard.tsx` - Passar learning_step ao preview
-5. `src/pages/Study.tsx` - Remover siblings da fila apos review
-6. `src/pages/DeckSettings.tsx` - Toggle de bury siblings
-7. `src/test/fsrs.test.ts` - Novos testes
+### Arquivo 4: `src/test/fsrs.test.ts`
+- Teste 16 (linha 156): Ajustar expectativa - Again em learning nao deve mais reduzir stability
+- Teste 22 (linha 198): Ajustar - stability nao deve mais reduzir com Again repetido em learning
 
 ## Resultado esperado
-- Intervalos identicos ao Anki: `<1min | <6min | <10min | 14d` para cards novos com steps [1m, 10m]
-- Cards cloze irmãos ocultos automaticamente apos revisar um deles
-- Progressao correta pelos learning steps antes de graduar para revisao
-
+- Intervalos para cards novos com steps [1m, 10m]: `1min | ~5.5min | 10min | Xd` (identico ao Anki)
+- MultipleChoiceCard mostra intervalos corretos quando em learning step > 0
+- Again em learning mantem a estabilidade (nao halve), como no Anki
+- Same-day Again usa a formula oficial de forget stability
+- Retencao padrao alinhada a 85% em todo o sistema
