@@ -124,7 +124,7 @@ export function shouldKeepInSession(result: { interval_days: number }): boolean 
 export function applyReviewToQueue<T extends { id: string }>(
   queue: T[],
   cardId: string,
-  result: { interval_days: number; state: number; stability: number; difficulty: number; scheduled_date: string },
+  result: { interval_days: number; state: number; stability: number; difficulty: number; scheduled_date: string; learning_step?: number },
 ): T[] {
   const keep = shouldKeepInSession(result);
   if (!keep) {
@@ -138,6 +138,7 @@ export function applyReviewToQueue<T extends { id: string }>(
     stability: result.stability,
     difficulty: result.difficulty,
     scheduled_date: result.scheduled_date,
+    learning_step: result.learning_step ?? 0,
   };
   const without = [...queue.slice(0, idx), ...queue.slice(idx + 1)];
   return [...without, updatedCard];
