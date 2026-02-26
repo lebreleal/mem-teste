@@ -75,6 +75,7 @@ interface FlashCardProps {
   scheduledDate: string;
   lastReviewedAt?: string;
   cardType?: string;
+  learningStep?: number;
   onRate: (rating: Rating) => void;
   isSubmitting: boolean;
   quickReview?: boolean;
@@ -239,7 +240,7 @@ const MultipleChoiceCard = ({
   const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: 0 };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -504,7 +505,7 @@ const MultipleChoiceCard = ({
 };
 
 const FlashCard = ({
-  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0,
   onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
@@ -615,7 +616,7 @@ const FlashCard = ({
   const previewParams = buildPreviewParams(deckConfig, algorithmMode);
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };

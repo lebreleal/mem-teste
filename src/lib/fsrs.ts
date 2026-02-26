@@ -7,6 +7,7 @@ export interface FSRSCard {
   difficulty: number;
   state: number; // 0=new, 1=learning, 2=review, 3=relearning
   scheduled_date: string;
+  learning_step?: number; // current step index in learningSteps/relearningSteps
 }
 
 export interface FSRSOutput {
@@ -15,6 +16,7 @@ export interface FSRSOutput {
   state: number;
   scheduled_date: string;
   interval_days: number;
+  learning_step: number;
 }
 
 // Rating: 1=Again, 2=Hard, 3=Good, 4=Easy
@@ -85,12 +87,6 @@ function initDifficulty(w: number[], rating: Rating): number {
   return clamp(d, 1, 10);
 }
 
-/**
- * FSRS-5/6 difficulty update with linear damping.
- * ΔD = -w6 * (G - 3)
- * D' = D + ΔD * (10 - D) / 9
- * D'' = w7 * D0(4) + (1 - w7) * D'   (mean reversion to D0(4))
- */
 function nextDifficulty(w: number[], d: number, rating: Rating): number {
   const deltaD = -w[6] * (rating - 3);
   const dPrime = d + deltaD * (10 - d) / 9;
@@ -98,10 +94,6 @@ function nextDifficulty(w: number[], d: number, rating: Rating): number {
   return clamp(meanReverted, 1, 10);
 }
 
-/**
- * Retrievability with trainable decay (FSRS-6).
- * R(t, S) = (1 + factor * t / S) ^ (-decay)
- */
 function retrievability(w: number[], stability: number, elapsedDays: number): number {
   if (stability <= 0) return 0;
   const decay = getDecay(w);
@@ -109,18 +101,12 @@ function retrievability(w: number[], stability: number, elapsedDays: number): nu
   return Math.pow(1 + factor * elapsedDays / stability, -decay);
 }
 
-/**
- * FSRS-6 same-day review stability.
- * S'(S, G) = S * exp(w17 * (G - 3 + w18) * S^(-w19))
- * Ensures S_inc >= 1 when G >= 3.
- */
 function sameDayStability(w: number[], s: number, rating: Rating): number {
-  if (w.length < 19) return s; // fallback for old params
+  if (w.length < 19) return s;
   const w17 = w[17] ?? 0;
   const w18 = w[18] ?? 0;
   const w19 = w.length >= 21 ? (w[19] ?? 0) : 0;
   const sInc = Math.exp(w17 * (rating - 3 + w18) * Math.pow(s, -w19));
-  // Ensure stability doesn't decrease on Good/Easy
   const safeSInc = rating >= 3 ? Math.max(sInc, 1) : sInc;
   return Math.max(s * safeSInc, 0.1);
 }
@@ -150,63 +136,88 @@ function getLocalMidnight(daysFromNow: number): Date {
   return d;
 }
 
+// ── Helper: schedule a learning/relearning step ──
+
+function scheduleStep(now: Date, stepMinutes: number, s: number, d: number, state: number, step: number): FSRSOutput {
+  const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
+  return { stability: s, difficulty: d, state, scheduled_date: scheduledDate.toISOString(), interval_days: 0, learning_step: step };
+}
+
+function graduateToReview(w: number[], s: number, d: number, requestedRetention: number, maximumInterval: number, minDays: number = 1): FSRSOutput {
+  const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
+  const finalInterval = Math.max(interval, minDays);
+  const scheduledDate = getLocalMidnight(finalInterval);
+  return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval, learning_step: 0 };
+}
+
 // ── Main scheduling function ──
 
 export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams = DEFAULT_FSRS_PARAMS): FSRSOutput {
   const now = new Date();
   const { w, requestedRetention, maximumInterval, learningSteps, relearningSteps } = params;
+  const currentStep = card.learning_step ?? 0;
 
+  // ═══ STATE 0: New card ═══
   if (card.state === 0) {
-    // New card
     const s = initStability(w, rating);
     const d = initDifficulty(w, rating);
 
     if (rating === 1) {
-      const stepMinutes = learningSteps[0] ?? 1;
-      const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: s, difficulty: d, state: 1, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      // Again → learning step 0
+      return scheduleStep(now, learningSteps[0] ?? 1, s, d, 1, 0);
     }
-
     if (rating === 2) {
-      const stepMinutes = learningSteps.length > 1 ? learningSteps[1] : learningSteps[0] ?? 10;
-      const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: s, difficulty: d, state: 1, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      // Hard → learning step 0, interval = avg(step[0], step[1]) or step[0]*1.5
+      const step0 = learningSteps[0] ?? 1;
+      const step1 = learningSteps.length > 1 ? learningSteps[1] : step0;
+      const avgMinutes = (step0 + step1) / 2;
+      return scheduleStep(now, avgMinutes, s, d, 1, 0);
     }
-
-    // Good or Easy → review
-    const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
-    const finalInterval = rating === 4 ? Math.max(interval, 4) : interval;
-    const scheduledDate = getLocalMidnight(finalInterval);
-    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
+    if (rating === 3) {
+      // Good → advance to next learning step (stay in learning)
+      if (learningSteps.length > 1) {
+        // Go to step 1, interval = step[1]
+        return scheduleStep(now, learningSteps[1], s, d, 1, 1);
+      }
+      // Only 1 step → graduate
+      return graduateToReview(w, s, d, requestedRetention, maximumInterval);
+    }
+    // Easy → graduate directly with minimum 4 days
+    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
   }
 
+  // ═══ STATE 1 or 3: Learning / Relearning ═══
   if (card.state === 1 || card.state === 3) {
-    // Learning or Relearning
+    const steps = card.state === 3 ? relearningSteps : learningSteps;
     const s = card.stability > 0 ? card.stability : initStability(w, rating);
     const d = card.difficulty > 0 ? nextDifficulty(w, card.difficulty, rating) : initDifficulty(w, rating);
-    const keepState = card.state;
 
     if (rating === 1) {
-      const stepMinutes = relearningSteps[0] ?? learningSteps[0] ?? 1;
-      const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: Math.max(s * 0.5, 0.1), difficulty: d, state: keepState, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      // Again → back to step 0, halve stability
+      const stepMinutes = steps[0] ?? 1;
+      return scheduleStep(now, stepMinutes, Math.max(s * 0.5, 0.1), d, card.state, 0);
     }
-
     if (rating === 2) {
-      const steps = card.state === 3 ? relearningSteps : learningSteps;
-      const stepMinutes = steps.length > 1 ? steps[1] : (steps[0] ?? 10);
-      const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: s, difficulty: d, state: keepState, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      // Hard → repeat current step, interval = avg(steps[N], steps[N+1]) or steps[N]*1.5
+      const currentStepMin = steps[currentStep] ?? steps[steps.length - 1] ?? 10;
+      const nextStepMin = currentStep + 1 < steps.length ? steps[currentStep + 1] : null;
+      const avgMinutes = nextStepMin !== null ? (currentStepMin + nextStepMin) / 2 : currentStepMin * 1.5;
+      return scheduleStep(now, avgMinutes, s, d, card.state, currentStep);
     }
-
-    // Good or Easy → graduate to review
-    const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
-    const finalInterval = rating === 4 ? Math.max(interval, 4) : Math.max(interval, 1);
-    const scheduledDate = getLocalMidnight(finalInterval);
-    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
+    if (rating === 3) {
+      // Good → advance to next step, or graduate if last step
+      const nextStep = currentStep + 1;
+      if (nextStep < steps.length) {
+        return scheduleStep(now, steps[nextStep], s, d, card.state, nextStep);
+      }
+      // Last step → graduate to review
+      return graduateToReview(w, s, d, requestedRetention, maximumInterval);
+    }
+    // Easy → graduate directly with minimum 4 days
+    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
   }
 
-  // Review card (state === 2)
+  // ═══ STATE 2: Review ═══
   const scheduledTime = new Date(card.scheduled_date).getTime();
   const elapsedDays = Math.max(0, (now.getTime() - scheduledTime) / (1000 * 60 * 60 * 24));
   const d = nextDifficulty(w, card.difficulty, rating);
@@ -216,30 +227,26 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     const s = sameDayStability(w, card.stability, rating);
     if (rating === 1) {
       const stepMinutes = relearningSteps[0] ?? 10;
-      const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-      return { stability: Math.max(s * 0.5, 0.1), difficulty: d, state: 3, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+      return scheduleStep(now, stepMinutes, Math.max(s * 0.5, 0.1), d, 3, 0);
     }
-    // For same-day Hard/Good/Easy, keep in review but reschedule
     const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
     const scheduledDate = getLocalMidnight(Math.max(interval, 1));
-    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: Math.max(interval, 1) };
+    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: Math.max(interval, 1), learning_step: 0 };
   }
 
   const r = retrievability(w, card.stability, elapsedDays);
 
   if (rating === 1) {
-    // Again → relearning
+    // Again → relearning step 0
     const s = nextForgetStability(w, card.difficulty, card.stability, r);
     const stepMinutes = relearningSteps[0] ?? 10;
-    const scheduledDate = new Date(now.getTime() + stepMinutes * 60 * 1000);
-    return { stability: s, difficulty: d, state: 3, scheduled_date: scheduledDate.toISOString(), interval_days: 0 };
+    return scheduleStep(now, stepMinutes, s, d, 3, 0);
   }
 
   // Hard, Good, Easy → recall
   const s = nextRecallStability(w, card.difficulty, card.stability, r, rating);
   const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
 
-  // Enforce minimum intervals: hard >= current, good >= hard, easy >= good
   const currentInterval = Math.max(1, Math.round(elapsedDays));
   let finalInterval = interval;
   if (rating === 2) {
@@ -252,7 +259,7 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
   finalInterval = Math.min(finalInterval, maximumInterval);
 
   const scheduledDate = getLocalMidnight(finalInterval);
-  return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval };
+  return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval, learning_step: 0 };
 }
 
 // ── Preview intervals ──

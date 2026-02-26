@@ -22,6 +22,14 @@ const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
 
+/** Get IDs of cloze siblings (same front_content, different card) from queue */
+function getSiblingIds(card: any, queue: any[]): string[] {
+  if (card.card_type !== 'cloze') return [];
+  return queue
+    .filter(c => c.id !== card.id && c.card_type === 'cloze' && c.front_content === card.front_content)
+    .map(c => c.id);
+}
+
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
   const navigate = useNavigate();
@@ -347,13 +355,25 @@ const Study = () => {
                   stability: result.stability,
                   difficulty: result.difficulty,
                   scheduled_date: result.scheduled_date,
+                  learning_step: result.learning_step ?? 0,
                 };
                 const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
                 return [...without, updatedCard];
               });
             } else {
               // Future review (interval_days > 0): remove from session
-              setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id));
+              // Also bury cloze siblings if enabled
+              setLocalQueue(prev => {
+                let filtered = prev.filter(c => c.id !== currentCard.id);
+                // Sibling burying: remove cloze siblings from session
+                if (currentCard.card_type === 'cloze' && deckConfig?.bury_siblings !== false) {
+                  const siblingIds = getSiblingIds(currentCard, filtered);
+                  if (siblingIds.length > 0) {
+                    filtered = filtered.filter(c => !siblingIds.includes(c.id));
+                  }
+                }
+                return filtered;
+              });
             }
 
             setCardKey(prev => prev + 1);
@@ -531,6 +551,7 @@ const Study = () => {
             scheduledDate={currentCard.scheduled_date}
             lastReviewedAt={currentCard.last_reviewed_at}
             cardType={currentCard.card_type}
+            learningStep={currentCard.learning_step ?? 0}
             onRate={handleRate}
             isSubmitting={submitReview.isPending || isTransitioning}
             quickReview={algorithmMode === 'quick_review'}

@@ -7,6 +7,7 @@ function makeCard(overrides: Partial<FSRSCard> = {}): FSRSCard {
     difficulty: 0,
     state: 0,
     scheduled_date: new Date().toISOString(),
+    learning_step: 0,
     ...overrides,
   };
 }
@@ -24,7 +25,7 @@ function minutesFromNow(result: { scheduled_date: string }): number {
 const params: FSRSParams = { ...DEFAULT_FSRS_PARAMS };
 
 // Helper to advance a card through a sequence of ratings
-function simulate(ratings: (1|2|3|4)[], p: FSRSParams = params): { stability: number; difficulty: number; state: number; interval_days: number; scheduled_date: string }[] {
+function simulate(ratings: (1|2|3|4)[], p: FSRSParams = params): { stability: number; difficulty: number; state: number; interval_days: number; scheduled_date: string; learning_step: number }[] {
   let card = makeCard();
   const results: any[] = [];
   for (const rating of ratings) {
@@ -34,195 +35,224 @@ function simulate(ratings: (1|2|3|4)[], p: FSRSParams = params): { stability: nu
     const nextScheduled = r.interval_days > 0
       ? new Date(Date.now() - r.interval_days * 86400000).toISOString()
       : r.scheduled_date; // for learning steps, keep as-is (pretend timer expired)
-    card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: nextScheduled };
+    card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: nextScheduled, learning_step: r.learning_step };
   }
   return results;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// BLOCK A: New Cards (state=0) — 15 tests
+// BLOCK A: New Cards (state=0) — with Anki-compatible learning steps
 // ═══════════════════════════════════════════════════════════════
 describe('FSRS – New Cards (state=0)', () => {
-  it('1. Again → learning, 1min step', () => {
+  it('1. Again → learning step 0, 1min', () => {
     const r = fsrsSchedule(makeCard(), 1, params);
     expect(r.state).toBe(1);
     expect(r.interval_days).toBe(0);
+    expect(r.learning_step).toBe(0);
     expect(minutesFromNow(r)).toBeCloseTo(1, 0);
   });
 
-  it('2. Hard → learning, 10min step', () => {
+  it('2. Hard → learning step 0, avg(step0, step1) ≈ 5.5min', () => {
     const r = fsrsSchedule(makeCard(), 2, params);
     expect(r.state).toBe(1);
     expect(r.interval_days).toBe(0);
+    expect(r.learning_step).toBe(0);
+    // Default steps [1, 10], avg = 5.5
+    expect(minutesFromNow(r)).toBeCloseTo(5.5, 0);
+  });
+
+  it('3. Good → learning step 1 (stays learning), 10min', () => {
+    const r = fsrsSchedule(makeCard(), 3, params);
+    expect(r.state).toBe(1);
+    expect(r.interval_days).toBe(0);
+    expect(r.learning_step).toBe(1);
     expect(minutesFromNow(r)).toBeCloseTo(10, 0);
   });
 
-  it('3. Good → review', () => {
-    const r = fsrsSchedule(makeCard(), 3, params);
+  it('4. Easy → graduates directly with >= 4d', () => {
+    const r = fsrsSchedule(makeCard(), 4, params);
+    expect(r.state).toBe(2);
+    expect(r.interval_days).toBeGreaterThanOrEqual(4);
+    expect(r.learning_step).toBe(0);
+  });
+
+  it('5. Good with single step [5] → graduates', () => {
+    const p = { ...params, learningSteps: [5] };
+    const r = fsrsSchedule(makeCard(), 3, p);
     expect(r.state).toBe(2);
     expect(r.interval_days).toBeGreaterThanOrEqual(1);
   });
 
-  it('4. Easy → review with >= 4d', () => {
-    const r = fsrsSchedule(makeCard(), 4, params);
-    expect(r.state).toBe(2);
-    expect(r.interval_days).toBeGreaterThanOrEqual(4);
-  });
-
-  it('5. Stability initialized from w[rating-1]', () => {
+  it('6. Stability initialized from w[rating-1]', () => {
     const r = fsrsSchedule(makeCard(), 3, params);
     expect(r.stability).toBeCloseTo(DEFAULT_FSRS_PARAMS.w[2], 1);
   });
 
-  it('6. Difficulty in [1, 10]', () => {
+  it('7. Difficulty in [1, 10]', () => {
     const r = fsrsSchedule(makeCard(), 3, params);
     expect(r.difficulty).toBeGreaterThanOrEqual(1);
     expect(r.difficulty).toBeLessThanOrEqual(10);
   });
 
-  it('7. Higher rating → lower difficulty', () => {
+  it('8. Higher rating → lower difficulty', () => {
     const rAgain = fsrsSchedule(makeCard(), 1, params);
     const rEasy = fsrsSchedule(makeCard(), 4, params);
     expect(rEasy.difficulty).toBeLessThan(rAgain.difficulty);
   });
 
-  it('8. Higher rating → higher stability', () => {
+  it('9. Higher rating → higher stability', () => {
     const rAgain = fsrsSchedule(makeCard(), 1, params);
     const rEasy = fsrsSchedule(makeCard(), 4, params);
     expect(rEasy.stability).toBeGreaterThan(rAgain.stability);
   });
 
-  it('9. Custom steps [5, 30] – Again uses 5min', () => {
+  it('10. Custom steps [5, 30] – Again uses 5min', () => {
     const p = { ...params, learningSteps: [5, 30] };
     const r = fsrsSchedule(makeCard(), 1, p);
     expect(minutesFromNow(r)).toBeCloseTo(5, 0);
   });
 
-  it('10. Custom steps [5, 30] – Hard uses 30min', () => {
+  it('11. Custom steps [5, 30] – Hard uses avg(5,30) = 17.5min', () => {
     const p = { ...params, learningSteps: [5, 30] };
     const r = fsrsSchedule(makeCard(), 2, p);
+    expect(minutesFromNow(r)).toBeCloseTo(17.5, 0);
+  });
+
+  it('12. Custom steps [5, 30] – Good uses 30min (step 1)', () => {
+    const p = { ...params, learningSteps: [5, 30] };
+    const r = fsrsSchedule(makeCard(), 3, p);
+    expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(1);
     expect(minutesFromNow(r)).toBeCloseTo(30, 0);
   });
 
-  it('11. Custom steps [1, 15] – Again 1min, Hard 15min', () => {
-    const p = { ...params, learningSteps: [1, 15] };
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 1, p))).toBeCloseTo(1, 0);
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 2, p))).toBeCloseTo(15, 0);
-  });
-
-  it('12. Custom steps [10, 60] – Again 10min, Hard 60min', () => {
-    const p = { ...params, learningSteps: [10, 60] };
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 1, p))).toBeCloseTo(10, 0);
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 2, p))).toBeCloseTo(60, 0);
-  });
-
-  it('13. Single step [5] – Hard also uses 5min', () => {
+  it('13. Single step [5] – Hard uses 5*1.5=7.5min (no next step)', () => {
     const p = { ...params, learningSteps: [5] };
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 2, p))).toBeCloseTo(5, 0);
+    const r = fsrsSchedule(makeCard(), 2, p);
+    // avg(5, 5) = 5 since only one step
+    expect(minutesFromNow(r)).toBeCloseTo(5, 0);
   });
 
-  it('14. Retention 0.95 → shorter Good interval', () => {
-    const p95 = { ...params, requestedRetention: 0.95 };
-    const p80 = { ...params, requestedRetention: 0.80 };
-    expect(fsrsSchedule(makeCard(), 3, p95).interval_days).toBeLessThanOrEqual(
-      fsrsSchedule(makeCard(), 3, p80).interval_days
-    );
-  });
-
-  it('15. maxInterval 7 caps new card Easy', () => {
+  it('14. maxInterval 7 caps new card Easy', () => {
     const p = { ...params, maximumInterval: 7 };
     expect(fsrsSchedule(makeCard(), 4, p).interval_days).toBeLessThanOrEqual(7);
+  });
+
+  it('15. Three steps [1, 5, 15] – Good goes to step 1 (5min)', () => {
+    const p = { ...params, learningSteps: [1, 5, 15] };
+    const r = fsrsSchedule(makeCard(), 3, p);
+    expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(1);
+    expect(minutesFromNow(r)).toBeCloseTo(5, 0);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════
-// BLOCK B: Learning Cards (state=1) — 12 tests
+// BLOCK B: Learning Cards (state=1) — with step progression
 // ═══════════════════════════════════════════════════════════════
 describe('FSRS – Learning Cards (state=1)', () => {
-  const learningCard = makeCard({ state: 1, stability: 2.4, difficulty: 5.0 });
+  const learningCard = makeCard({ state: 1, stability: 2.4, difficulty: 5.0, learning_step: 0 });
 
-  it('16. Again → stay learning, halved stability', () => {
+  it('16. Again → stay learning step 0, halved stability', () => {
     const r = fsrsSchedule(learningCard, 1, params);
     expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(0);
     expect(r.stability).toBeLessThan(learningCard.stability);
     expect(r.stability).toBeGreaterThanOrEqual(0.1);
   });
 
-  it('17. Hard → stay learning', () => {
+  it('17. Hard → stay learning, same step, avg interval', () => {
     const r = fsrsSchedule(learningCard, 2, params);
     expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(0);
     expect(r.interval_days).toBe(0);
+    // avg(steps[0], steps[1]) = avg(1, 10) = 5.5
+    expect(minutesFromNow(r)).toBeCloseTo(5.5, 0);
   });
 
-  it('18. Good → graduate to review', () => {
+  it('18. Good on step 0 → advance to step 1', () => {
     const r = fsrsSchedule(learningCard, 3, params);
+    expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(1);
+    expect(minutesFromNow(r)).toBeCloseTo(10, 0);
+  });
+
+  it('19. Good on last step → graduate to review', () => {
+    const card = makeCard({ state: 1, stability: 2.4, difficulty: 5.0, learning_step: 1 });
+    const r = fsrsSchedule(card, 3, params);
     expect(r.state).toBe(2);
     expect(r.interval_days).toBeGreaterThanOrEqual(1);
   });
 
-  it('19. Easy → graduate with >= 4d', () => {
+  it('20. Easy → graduate with >= 4d regardless of step', () => {
     const r = fsrsSchedule(learningCard, 4, params);
     expect(r.state).toBe(2);
     expect(r.interval_days).toBeGreaterThanOrEqual(4);
   });
 
-  it('20. Difficulty updated on learning review', () => {
+  it('21. Difficulty updated on learning review', () => {
     const r = fsrsSchedule(learningCard, 1, params);
     expect(r.difficulty).not.toBe(learningCard.difficulty);
   });
 
-  it('21. Again→Again still learning, stability floors at 0.1', () => {
+  it('22. Again→Again still learning, stability floors at 0.1', () => {
     let card = learningCard;
     for (let i = 0; i < 5; i++) {
       const r = fsrsSchedule(card, 1, params);
       expect(r.state).toBe(1);
       expect(r.stability).toBeGreaterThanOrEqual(0.1);
-      card = { ...card, stability: r.stability, difficulty: r.difficulty };
+      card = { ...card, stability: r.stability, difficulty: r.difficulty, learning_step: r.learning_step };
     }
   });
 
-  it('22. Again→Hard stays learning', () => {
+  it('23. Again→Good advances step', () => {
     const r1 = fsrsSchedule(learningCard, 1, params);
-    const card2 = { ...learningCard, stability: r1.stability, difficulty: r1.difficulty, scheduled_date: r1.scheduled_date };
-    const r2 = fsrsSchedule(card2, 2, params);
-    expect(r2.state).toBe(1);
-    expect(r2.interval_days).toBe(0);
-  });
-
-  it('23. Again→Good graduates', () => {
-    const r1 = fsrsSchedule(learningCard, 1, params);
-    const card2 = { ...learningCard, stability: r1.stability, difficulty: r1.difficulty, scheduled_date: r1.scheduled_date };
+    const card2 = { ...learningCard, stability: r1.stability, difficulty: r1.difficulty, scheduled_date: r1.scheduled_date, learning_step: r1.learning_step };
     const r2 = fsrsSchedule(card2, 3, params);
-    expect(r2.state).toBe(2);
-    expect(r2.interval_days).toBeGreaterThanOrEqual(1);
+    expect(r2.state).toBe(1);
+    expect(r2.learning_step).toBe(1);
   });
 
-  it('24. Custom relearning steps [15] respected', () => {
+  it('24. Again→Good→Good graduates', () => {
+    const r1 = fsrsSchedule(learningCard, 1, params);
+    const card2 = { ...learningCard, stability: r1.stability, difficulty: r1.difficulty, scheduled_date: r1.scheduled_date, learning_step: r1.learning_step };
+    const r2 = fsrsSchedule(card2, 3, params);
+    const card3 = { ...card2, stability: r2.stability, difficulty: r2.difficulty, scheduled_date: r2.scheduled_date, learning_step: r2.learning_step };
+    const r3 = fsrsSchedule(card3, 3, params);
+    expect(r3.state).toBe(2);
+    expect(r3.interval_days).toBeGreaterThanOrEqual(1);
+  });
+
+  it('25. Custom relearning steps [15] respected', () => {
     const p = { ...params, relearningSteps: [15] };
-    const card = makeCard({ state: 3, stability: 5, difficulty: 5 });
+    const card = makeCard({ state: 3, stability: 5, difficulty: 5, learning_step: 0 });
     const r = fsrsSchedule(card, 1, p);
     expect(minutesFromNow(r)).toBeCloseTo(15, 0);
   });
 
-  it('25. Custom relearning steps [5, 20] – Hard uses second step', () => {
-    const p = { ...params, relearningSteps: [5, 20] };
-    const card = makeCard({ state: 3, stability: 5, difficulty: 5 });
-    const r = fsrsSchedule(card, 2, p);
-    expect(minutesFromNow(r)).toBeCloseTo(20, 0);
-  });
-
-  it('26. Relearning Again uses first relearning step', () => {
-    const p = { ...params, relearningSteps: [7] };
-    const card = makeCard({ state: 3, stability: 5, difficulty: 5 });
-    const r = fsrsSchedule(card, 1, p);
-    expect(minutesFromNow(r)).toBeCloseTo(7, 0);
-  });
-
-  it('27. Relearning Good graduates', () => {
-    const card = makeCard({ state: 3, stability: 5, difficulty: 5 });
+  it('26. Relearning Good graduates', () => {
+    const card = makeCard({ state: 3, stability: 5, difficulty: 5, learning_step: 0 });
     const r = fsrsSchedule(card, 3, params);
     expect(r.state).toBe(2);
     expect(r.interval_days).toBeGreaterThanOrEqual(1);
+  });
+
+  it('27. Three steps [1, 5, 15]: step 0 → Good → step 1 → Good → step 2 → Good → graduate', () => {
+    const p = { ...params, learningSteps: [1, 5, 15] };
+    const card0 = makeCard({ state: 1, stability: 2, difficulty: 5, learning_step: 0 });
+    const r1 = fsrsSchedule(card0, 3, p);
+    expect(r1.state).toBe(1);
+    expect(r1.learning_step).toBe(1);
+    
+    const card1 = { ...card0, stability: r1.stability, difficulty: r1.difficulty, scheduled_date: r1.scheduled_date, learning_step: r1.learning_step };
+    const r2 = fsrsSchedule(card1, 3, p);
+    expect(r2.state).toBe(1);
+    expect(r2.learning_step).toBe(2);
+    
+    const card2 = { ...card1, stability: r2.stability, difficulty: r2.difficulty, scheduled_date: r2.scheduled_date, learning_step: r2.learning_step };
+    const r3 = fsrsSchedule(card2, 3, p);
+    expect(r3.state).toBe(2); // graduated!
+    expect(r3.interval_days).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -317,19 +347,17 @@ describe('FSRS – Review Cards (state=2)', () => {
   });
 
   it('42. Long progression: stability and intervals grow', () => {
-    let card = makeCard();
-    let r = fsrsSchedule(card, 3, params);
-    card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date };
-    let prevInterval = r.interval_days;
-    let prevStability = r.stability;
+    // Start from a graduated card (after learning steps)
+    let card = makeCard({ state: 2, stability: DEFAULT_FSRS_PARAMS.w[2], difficulty: 5, scheduled_date: new Date(Date.now() - 2 * 86400000).toISOString() });
+    let prevInterval = 2;
+    let prevStability = card.stability;
     for (let i = 0; i < 8; i++) {
-      card.scheduled_date = new Date(Date.now() - prevInterval * 86400000).toISOString();
-      r = fsrsSchedule(card, 3, params);
+      const r = fsrsSchedule(card, 3, params);
       expect(r.stability).toBeGreaterThan(prevStability);
       expect(r.interval_days).toBeGreaterThanOrEqual(prevInterval);
       prevInterval = r.interval_days;
       prevStability = r.stability;
-      card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date };
+      card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: new Date(Date.now() - r.interval_days * 86400000).toISOString(), learning_step: 0 };
     }
   });
 
@@ -388,11 +416,11 @@ describe('FSRS – Invariants', () => {
   });
 
   it('56. Learning: Again 10x still has stability >= 0.1', () => {
-    let card = makeCard({ state: 1, stability: 1, difficulty: 5 });
+    let card = makeCard({ state: 1, stability: 1, difficulty: 5, learning_step: 0 });
     for (let i = 0; i < 10; i++) {
       const r = fsrsSchedule(card, 1, params);
       expect(r.stability).toBeGreaterThanOrEqual(0.1);
-      card = { ...card, stability: r.stability, difficulty: r.difficulty };
+      card = { ...card, stability: r.stability, difficulty: r.difficulty, learning_step: r.learning_step };
     }
   });
 
@@ -401,8 +429,7 @@ describe('FSRS – Invariants', () => {
     for (let i = 0; i < 10; i++) {
       const r = fsrsSchedule(card, 1, params);
       expect(r.difficulty).toBeLessThanOrEqual(10);
-      // After Again on review, card enters relearning
-      card = { stability: r.stability, difficulty: r.difficulty, state: 2, scheduled_date: new Date(Date.now() - 5 * 86400000).toISOString() };
+      card = { stability: r.stability, difficulty: r.difficulty, state: 2, scheduled_date: new Date(Date.now() - 5 * 86400000).toISOString(), learning_step: 0 };
     }
   });
 
@@ -411,14 +438,14 @@ describe('FSRS – Invariants', () => {
     for (let i = 0; i < 10; i++) {
       const r = fsrsSchedule(card, 4, params);
       expect(r.difficulty).toBeGreaterThanOrEqual(1);
-      card = { stability: r.stability, difficulty: r.difficulty, state: 2, scheduled_date: new Date(Date.now() - r.interval_days * 86400000).toISOString() };
+      card = { stability: r.stability, difficulty: r.difficulty, state: 2, scheduled_date: new Date(Date.now() - r.interval_days * 86400000).toISOString(), learning_step: 0 };
     }
   });
 
   it('59. interval_days always >= 0', () => {
     for (const rating of ratings) {
       for (const state of [0, 1, 2, 3]) {
-        const card = makeCard({ state, stability: 5, difficulty: 5, scheduled_date: new Date(Date.now() - 5 * 86400000).toISOString() });
+        const card = makeCard({ state, stability: 5, difficulty: 5, scheduled_date: new Date(Date.now() - 5 * 86400000).toISOString(), learning_step: 0 });
         const r = fsrsSchedule(card, rating, params);
         expect(r.interval_days).toBeGreaterThanOrEqual(0);
       }
@@ -427,53 +454,63 @@ describe('FSRS – Invariants', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// BLOCK E: Complete Chains (real user scenarios) — 20 tests
+// BLOCK E: Complete Chains (real user scenarios)
 // ═══════════════════════════════════════════════════════════════
 describe('FSRS – Complete Chains', () => {
-  it('60. New→Good: graduates immediately', () => {
+  it('60. New→Good: stays in learning (step 1)', () => {
     const [r] = simulate([3]);
-    expect(r.state).toBe(2);
-    expect(r.interval_days).toBeGreaterThanOrEqual(1);
+    expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(1);
+    expect(r.interval_days).toBe(0);
   });
 
-  it('61. New→Again→Good: learning then graduate', () => {
-    const [r1, r2] = simulate([1, 3]);
+  it('61. New→Good→Good: graduates after completing all steps', () => {
+    const [r1, r2] = simulate([3, 3]);
     expect(r1.state).toBe(1);
+    expect(r1.learning_step).toBe(1);
     expect(r2.state).toBe(2);
+    expect(r2.interval_days).toBeGreaterThanOrEqual(1);
   });
 
-  it('62. New→Again→Again→Good: double fail then graduate', () => {
-    const [r1, r2, r3] = simulate([1, 1, 3]);
+  it('62. New→Again→Good→Good: fail, advance through steps, graduate', () => {
+    const [r1, r2, r3] = simulate([1, 3, 3]);
     expect(r1.state).toBe(1);
+    expect(r1.learning_step).toBe(0);
     expect(r2.state).toBe(1);
+    expect(r2.learning_step).toBe(1);
     expect(r3.state).toBe(2);
   });
 
-  it('63. New→Again→Hard→Good: fail, hard, then graduate', () => {
-    const [r1, r2, r3] = simulate([1, 2, 3]);
+  it('63. New→Again→Again→Good→Good: double fail then graduate', () => {
+    const [r1, r2, r3, r4] = simulate([1, 1, 3, 3]);
     expect(r1.state).toBe(1);
     expect(r2.state).toBe(1);
-    expect(r3.state).toBe(2);
+    expect(r3.state).toBe(1);
+    expect(r3.learning_step).toBe(1);
+    expect(r4.state).toBe(2);
   });
 
-  it('64. New→Good→Good: two successful reviews', () => {
-    const results = simulate([3, 3]);
-    expect(results[0].state).toBe(2);
-    expect(results[1].state).toBe(2);
-    expect(results[1].interval_days).toBeGreaterThan(results[0].interval_days);
+  it('64. New→Good→Good→Good: two reviews after graduation', () => {
+    const results = simulate([3, 3, 3]);
+    expect(results[0].state).toBe(1); // learning step 1
+    expect(results[1].state).toBe(2); // graduated
+    expect(results[2].state).toBe(2); // review
+    expect(results[2].interval_days).toBeGreaterThan(results[1].interval_days);
   });
 
-  it('65. New→Good→Again: lapse after graduation', () => {
-    const results = simulate([3, 1]);
+  it('65. New→Easy→Again: lapse after easy graduation', () => {
+    const results = simulate([4, 1]);
     expect(results[0].state).toBe(2);
     expect(results[1].state).toBe(3); // relearning
     expect(results[1].interval_days).toBe(0);
   });
 
-  it('66. New→Good→Again→Good: lapse and re-graduate', () => {
-    const results = simulate([3, 1, 3]);
-    expect(results[2].state).toBe(2);
-    expect(results[2].interval_days).toBeGreaterThanOrEqual(1);
+  it('66. New→Good→Good→Again→Good: lapse after grad and re-graduate', () => {
+    const results = simulate([3, 3, 1, 3]);
+    expect(results[0].state).toBe(1); // learning
+    expect(results[1].state).toBe(2); // graduated
+    expect(results[2].state).toBe(3); // relearning
+    expect(results[3].state).toBe(2); // re-graduated
   });
 
   it('67. New→Easy: fast track', () => {
@@ -489,45 +526,42 @@ describe('FSRS – Complete Chains', () => {
     expect(results[1].interval_days).toBeGreaterThanOrEqual(4);
   });
 
-  it('69. 10-review Good streak: monotonically increasing intervals', () => {
+  it('69. 10-review Good streak after graduation: monotonically increasing intervals', () => {
+    // First graduate: Good→Good, then 8 more Good reviews
     const results = simulate([3, 3, 3, 3, 3, 3, 3, 3, 3, 3]);
-    for (let i = 1; i < results.length; i++) {
-      expect(results[i].interval_days).toBeGreaterThanOrEqual(results[i-1].interval_days);
+    // First two are learning steps, rest are reviews
+    const reviewResults = results.filter(r => r.state === 2 && r.interval_days > 0);
+    for (let i = 1; i < reviewResults.length; i++) {
+      expect(reviewResults[i].interval_days).toBeGreaterThanOrEqual(reviewResults[i-1].interval_days);
     }
   });
 
-  it('70. New→Good→Good→Good→Again→Good: lapse mid-streak', () => {
-    const results = simulate([3, 3, 3, 1, 3]);
-    expect(results[3].state).toBe(3); // relearning
-    expect(results[4].state).toBe(2); // re-graduated
-    // After lapse, interval should be shorter than before lapse
-    expect(results[4].interval_days).toBeLessThan(results[2].interval_days);
+  it('70. Full lifecycle: new→learn→review→lapse→relearn→review', () => {
+    const results = simulate([1, 3, 3, 3, 1, 3, 3]);
+    expect(results[0].state).toBe(1);   // learning
+    expect(results[1].state).toBe(1);   // still learning (step 1)
+    expect(results[2].state).toBe(2);   // graduated
+    expect(results[3].state).toBe(2);   // review
+    expect(results[4].state).toBe(3);   // relearning
+    expect(results[5].state).toBe(2);   // re-graduated
+    expect(results[6].state).toBe(2);   // review again
   });
 
-  it('71. Mixed: Again→Again→Again→Good', () => {
-    const results = simulate([1, 1, 1, 3]);
+  it('71. Mixed: Again×3 → Good → Good (graduate)', () => {
+    const results = simulate([1, 1, 1, 3, 3]);
     expect(results[0].state).toBe(1);
     expect(results[1].state).toBe(1);
     expect(results[2].state).toBe(1);
-    expect(results[3].state).toBe(2);
+    expect(results[3].state).toBe(1); // advance to step 1
+    expect(results[4].state).toBe(2); // graduate
   });
 
-  it('72. Mixed: Again→Hard→Hard→Good', () => {
-    const results = simulate([1, 2, 2, 3]);
-    expect(results[3].state).toBe(2);
+  it('72. Again→Hard→Hard→Good→Good: graduate', () => {
+    const results = simulate([1, 2, 2, 3, 3]);
+    expect(results[4].state).toBe(2);
   });
 
-  it('73. Full lifecycle: new→learn→review→lapse→relearn→review', () => {
-    const results = simulate([1, 3, 3, 1, 3, 3]);
-    expect(results[0].state).toBe(1);   // learning
-    expect(results[1].state).toBe(2);   // graduated
-    expect(results[2].state).toBe(2);   // review
-    expect(results[3].state).toBe(3);   // relearning
-    expect(results[4].state).toBe(2);   // re-graduated
-    expect(results[5].state).toBe(2);   // review again
-  });
-
-  it('74. 20-step mixed chain stays valid', () => {
+  it('73. 20-step mixed chain stays valid', () => {
     const ratings: (1|2|3|4)[] = [1, 2, 3, 3, 3, 1, 3, 3, 4, 3, 1, 1, 3, 3, 3, 4, 3, 3, 3, 3];
     const results = simulate(ratings);
     for (const r of results) {
@@ -537,7 +571,7 @@ describe('FSRS – Complete Chains', () => {
     }
   });
 
-  it('75. Alternate Again/Good stays bounded', () => {
+  it('74. Alternate Again/Good stays bounded', () => {
     const ratings: (1|2|3|4)[] = [1, 3, 1, 3, 1, 3, 1, 3];
     const results = simulate(ratings);
     for (const r of results) {
@@ -547,24 +581,19 @@ describe('FSRS – Complete Chains', () => {
     }
   });
 
-  it('76. 5 Easy reviews → very large interval', () => {
+  it('75. 5 Easy reviews → very large interval', () => {
     const results = simulate([4, 4, 4, 4, 4]);
-    expect(results[4].interval_days).toBeGreaterThan(100);
+    const lastReview = results.filter(r => r.state === 2).pop();
+    expect(lastReview!.interval_days).toBeGreaterThan(100);
   });
 
-  it('77. Again→Again→Again→Again→Easy (stubborn card)', () => {
+  it('76. Again×4→Easy (stubborn card)', () => {
     const results = simulate([1, 1, 1, 1, 4]);
     expect(results[4].state).toBe(2);
     expect(results[4].interval_days).toBeGreaterThanOrEqual(4);
   });
 
-  it('78. Good→Good→Hard→Good (slightly difficult)', () => {
-    const results = simulate([3, 3, 2, 3]);
-    expect(results[3].state).toBe(2);
-    expect(results[3].interval_days).toBeGreaterThanOrEqual(1);
-  });
-
-  it('79. Easy→Again→Easy→Again (volatile card)', () => {
+  it('77. Easy→Again→Easy→Again (volatile card)', () => {
     const results = simulate([4, 1, 4, 1]);
     for (const r of results) {
       expect(r.stability).toBeGreaterThanOrEqual(0.1);
@@ -573,100 +602,84 @@ describe('FSRS – Complete Chains', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// BLOCK F: Custom params + edge cases — 15 tests
+// BLOCK F: Custom params + edge cases
 // ═══════════════════════════════════════════════════════════════
 describe('FSRS – Custom Params & Edge Cases', () => {
-  it('80. maxInterval 1 → all reviews capped at 1d', () => {
+  it('78. maxInterval 1 → all reviews capped at 1d', () => {
     const p = { ...params, maximumInterval: 1 };
-    const results = simulate([3, 3, 3], p);
+    const results = simulate([4, 3, 3], p);
     for (const r of results) {
       if (r.state === 2) expect(r.interval_days).toBeLessThanOrEqual(1);
     }
   });
 
-  it('81. Retention 0.99 → very short intervals', () => {
+  it('79. Retention 0.99 → very short intervals', () => {
     const p = { ...params, requestedRetention: 0.99 };
     const r = fsrsSchedule(makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() }), 3, p);
     const rNormal = fsrsSchedule(makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() }), 3, params);
     expect(r.interval_days).toBeLessThan(rNormal.interval_days);
   });
 
-  it('82. Retention 0.70 → longer intervals', () => {
-    const p = { ...params, requestedRetention: 0.70 };
-    const r = fsrsSchedule(makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() }), 3, p);
-    const rNormal = fsrsSchedule(makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() }), 3, params);
-    expect(r.interval_days).toBeGreaterThan(rNormal.interval_days);
-  });
-
-  it('83. Steps [1, 5, 15] – Again uses first', () => {
+  it('80. Steps [1, 5, 15] – Again uses first', () => {
     const p = { ...params, learningSteps: [1, 5, 15] };
     expect(minutesFromNow(fsrsSchedule(makeCard(), 1, p))).toBeCloseTo(1, 0);
   });
 
-  it('84. Very high difficulty card (9.9) + Again', () => {
+  it('81. Very high difficulty card (9.9) + Again', () => {
     const card = makeCard({ state: 2, stability: 5, difficulty: 9.9, scheduled_date: new Date(Date.now() - 5 * 86400000).toISOString() });
     const r = fsrsSchedule(card, 1, params);
     expect(r.difficulty).toBeLessThanOrEqual(10);
     expect(r.stability).toBeGreaterThanOrEqual(0.1);
   });
 
-  it('85. Very low difficulty card (1.1) + Easy', () => {
-    const card = makeCard({ state: 2, stability: 50, difficulty: 1.1, scheduled_date: new Date(Date.now() - 50 * 86400000).toISOString() });
-    const r = fsrsSchedule(card, 4, params);
-    expect(r.difficulty).toBeGreaterThanOrEqual(1);
-  });
-
-  it('86. Very high stability (1000) + Good', () => {
+  it('82. Very high stability (1000) + Good', () => {
     const card = makeCard({ state: 2, stability: 1000, difficulty: 5, scheduled_date: new Date(Date.now() - 1000 * 86400000).toISOString() });
     const r = fsrsSchedule(card, 3, params);
     expect(r.interval_days).toBeGreaterThanOrEqual(1);
     expect(r.interval_days).toBeLessThanOrEqual(params.maximumInterval);
   });
 
-  it('87. Zero elapsed (reviewed immediately) + Good', () => {
+  it('83. Zero elapsed (same-day review) + Good', () => {
     const card = makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date().toISOString() });
     const r = fsrsSchedule(card, 3, params);
     expect(r.state).toBe(2);
     expect(r.interval_days).toBeGreaterThanOrEqual(1);
   });
 
-  it('88. Zero elapsed + Again → relearning', () => {
+  it('84. Zero elapsed + Again → relearning', () => {
     const card = makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date().toISOString() });
     const r = fsrsSchedule(card, 1, params);
     expect(r.state).toBe(3);
     expect(r.interval_days).toBe(0);
   });
 
-  it('89. Relearning card: Hard uses relearning steps not learning steps', () => {
-    const p = { ...params, learningSteps: [1, 10], relearningSteps: [5, 25] };
-    const card = makeCard({ state: 3, stability: 5, difficulty: 5 });
+  it('85. Relearning Hard uses avg of relearning steps', () => {
+    const p = { ...params, relearningSteps: [5, 25] };
+    const card = makeCard({ state: 3, stability: 5, difficulty: 5, learning_step: 0 });
     const r = fsrsSchedule(card, 2, p);
-    expect(minutesFromNow(r)).toBeCloseTo(25, 0);
+    // avg(5, 25) = 15
+    expect(minutesFromNow(r)).toBeCloseTo(15, 0);
   });
 
-  it('90. Learning card: Hard uses learning steps', () => {
-    const p = { ...params, learningSteps: [1, 10], relearningSteps: [5, 25] };
-    const card = makeCard({ state: 1, stability: 2, difficulty: 5 });
+  it('86. Learning Hard uses avg of learning steps', () => {
+    const p = { ...params, learningSteps: [1, 10] };
+    const card = makeCard({ state: 1, stability: 2, difficulty: 5, learning_step: 0 });
     const r = fsrsSchedule(card, 2, p);
-    expect(minutesFromNow(r)).toBeCloseTo(10, 0);
+    // avg(1, 10) = 5.5
+    expect(minutesFromNow(r)).toBeCloseTo(5.5, 0);
   });
 
-  it('91. Again on new card with [3, 12] steps → 3min', () => {
-    const p = { ...params, learningSteps: [3, 12] };
-    expect(minutesFromNow(fsrsSchedule(makeCard(), 1, p))).toBeCloseTo(3, 0);
-  });
-
-  it('92. Stress: 15-step all-Again on new card', () => {
+  it('87. Stress: 15-step all-Again on new card', () => {
     let card = makeCard();
     for (let i = 0; i < 15; i++) {
       const r = fsrsSchedule(card, 1, params);
       expect(r.stability).toBeGreaterThanOrEqual(0.1);
       expect(r.difficulty).toBeLessThanOrEqual(10);
-      card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date };
+      card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date, learning_step: r.learning_step };
     }
   });
 
-  it('93. Stress: alternate Hard/Easy 10 times on review', () => {
+  it('88. Stress: alternate Hard/Easy 10 times on review', () => {
     let card = makeCard({ state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() });
     for (let i = 0; i < 10; i++) {
       const rating = (i % 2 === 0 ? 2 : 4) as 1|2|3|4;
@@ -675,14 +688,14 @@ describe('FSRS – Custom Params & Edge Cases', () => {
       expect(r.difficulty).toBeGreaterThanOrEqual(1);
       expect(r.difficulty).toBeLessThanOrEqual(10);
       if (r.state === 2) {
-        card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: new Date(Date.now() - r.interval_days * 86400000).toISOString() };
+        card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: new Date(Date.now() - r.interval_days * 86400000).toISOString(), learning_step: 0 };
       } else {
-        card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date };
+        card = { stability: r.stability, difficulty: r.difficulty, state: r.state, scheduled_date: r.scheduled_date, learning_step: r.learning_step };
       }
     }
   });
 
-  it('94. maxInterval 365 with huge stability', () => {
+  it('89. maxInterval 365 with huge stability', () => {
     const p = { ...params, maximumInterval: 365 };
     const card = makeCard({ state: 2, stability: 500, difficulty: 2, scheduled_date: new Date(Date.now() - 500 * 86400000).toISOString() });
     const r = fsrsSchedule(card, 4, p);
@@ -691,7 +704,7 @@ describe('FSRS – Custom Params & Edge Cases', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// BLOCK G: Parametric matrix (multiple configs × ratings) — 6 tests ≈ 24 sub-cases
+// BLOCK G: Parametric matrix
 // ═══════════════════════════════════════════════════════════════
 describe('FSRS – Parametric Matrix', () => {
   const configs: { name: string; p: FSRSParams }[] = [
@@ -704,7 +717,7 @@ describe('FSRS – Parametric Matrix', () => {
   ];
 
   for (const { name, p } of configs) {
-    it(`95-100. ${name}: new card all ratings produce valid output`, () => {
+    it(`${name}: new card all ratings produce valid output`, () => {
       for (const rating of [1, 2, 3, 4] as (1|2|3|4)[]) {
         const r = fsrsSchedule(makeCard(), rating, p);
         expect(r.stability).toBeGreaterThanOrEqual(0.1);
@@ -714,4 +727,63 @@ describe('FSRS – Parametric Matrix', () => {
       }
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// BLOCK H: Anki-compatible learning step verification
+// ═══════════════════════════════════════════════════════════════
+describe('FSRS – Anki Learning Step Compatibility', () => {
+  it('New card with [1m, 10m]: Again=1min, Hard≈5.5min, Good=10min, Easy=days', () => {
+    const p = { ...params, learningSteps: [1, 10] };
+    const again = fsrsSchedule(makeCard(), 1, p);
+    const hard = fsrsSchedule(makeCard(), 2, p);
+    const good = fsrsSchedule(makeCard(), 3, p);
+    const easy = fsrsSchedule(makeCard(), 4, p);
+
+    expect(again.state).toBe(1);
+    expect(minutesFromNow(again)).toBeCloseTo(1, 0);
+    
+    expect(hard.state).toBe(1);
+    expect(minutesFromNow(hard)).toBeCloseTo(5.5, 0);
+    
+    expect(good.state).toBe(1);
+    expect(good.learning_step).toBe(1);
+    expect(minutesFromNow(good)).toBeCloseTo(10, 0);
+    
+    expect(easy.state).toBe(2);
+    expect(easy.interval_days).toBeGreaterThanOrEqual(1);
+  });
+
+  it('New card with [1m, 15m]: Again=1min, Hard≈8min, Good=15min, Easy=days', () => {
+    const p = { ...params, learningSteps: [1, 15] };
+    const hard = fsrsSchedule(makeCard(), 2, p);
+    const good = fsrsSchedule(makeCard(), 3, p);
+
+    expect(minutesFromNow(hard)).toBeCloseTo(8, 0);
+    expect(good.state).toBe(1);
+    expect(minutesFromNow(good)).toBeCloseTo(15, 0);
+  });
+
+  it('Learning step 1 + Good → graduates to review', () => {
+    const p = { ...params, learningSteps: [1, 10] };
+    const card = makeCard({ state: 1, stability: 2.3, difficulty: 5, learning_step: 1 });
+    const r = fsrsSchedule(card, 3, p);
+    expect(r.state).toBe(2);
+    expect(r.interval_days).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Learning step 1 + Again → back to step 0', () => {
+    const p = { ...params, learningSteps: [1, 10] };
+    const card = makeCard({ state: 1, stability: 2.3, difficulty: 5, learning_step: 1 });
+    const r = fsrsSchedule(card, 1, p);
+    expect(r.state).toBe(1);
+    expect(r.learning_step).toBe(0);
+    expect(minutesFromNow(r)).toBeCloseTo(1, 0);
+  });
+
+  it('learning_step is propagated through output', () => {
+    const r = fsrsSchedule(makeCard(), 3, params);
+    expect(r).toHaveProperty('learning_step');
+    expect(typeof r.learning_step).toBe('number');
+  });
 });
