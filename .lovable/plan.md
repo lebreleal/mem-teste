@@ -1,85 +1,105 @@
 
 
-# Tornar FSRS-6 o unico algoritmo padrao
+# Corrigir Etapas de Aprendizado FSRS + Ocultar Irmãos Cloze
 
-## Resumo
-Remover o SM-2 como opcao de algoritmo, tornar FSRS-6 o unico padrao para todos os decks (novos e existentes), ajustar a retencao padrao para 85%, definir limite de revisao diaria como 9999, e atualizar o modal Premium e seletores de algoritmo para refletir que so existem FSRS-6 e Revisao Rapida.
+## Diagnostico
 
-## Alteracoes
+Comparando os prints do Anki com o nosso sistema, encontrei **dois problemas reais**:
 
-### 1. Migracao de banco de dados
-Uma unica migracao SQL para:
-- Alterar default de `algorithm_mode` de `'sm2'` para `'fsrs'`
-- Alterar default de `requested_retention` de `0.9` para `0.85`
-- Alterar default de `daily_review_limit` de `100` para `9999`
-- Converter todos os decks existentes com `algorithm_mode = 'sm2'` para `'fsrs'`
-- Atualizar `requested_retention` para `0.85` em todos os decks que ainda estao em `0.9`
-- Atualizar `daily_review_limit` para `9999` em todos os decks existentes
+### Problema 1: Etapas de aprendizado para cards novos
+No Anki com FSRS e steps `[1m, 10m]`, um card novo mostra:
+- De novo: **1min** (step 0)
+- Dificil: **~6min** (media entre step 0 e step 1)
+- Bom: **10min** (step 1 - ainda em aprendizado!)
+- Facil: **14d** (gradua direto para revisao)
 
-### 2. Modal Premium (`src/components/dashboard/PremiumModal.tsx`)
-- Remover a linha do beneficio "Algoritmo FSRS 6" da lista BENEFITS (ja que nao e mais exclusivo Premium)
-- Substituir por outro beneficio ou simplesmente remover a entrada
+No nosso sistema, um card novo mostra:
+- De novo: 1min (correto)
+- Dificil: 10min ou 15min (usa step[1] direto, deveria ser a media)
+- Bom: **vai direto para revisao com intervalo de dias** (ERRADO - deveria ficar em aprendizado)
+- Facil: gradua para revisao (correto)
 
-### 3. Seletor de algoritmo em DeckSettings (`src/pages/DeckSettings.tsx`)
-- Remover a opcao SM-2 do modal de selecao de algoritmo
-- Manter apenas FSRS-6 e Revisao Rapida
-- Remover o badge "Premium" do FSRS-6 (agora e o padrao para todos)
-- Atualizar `algoLabel` para nao referenciar SM-2
-- Atualizar tipo de `algorithmMode` de `'sm2' | 'fsrs' | 'quick_review'` para `'fsrs' | 'quick_review'`
-- Alterar `algorithmChangeTarget` para `'fsrs' | 'quick_review' | null`
-- No modal de configuracoes avancadas, remover o branch SM-2 (easy bonus, interval modifier) e mostrar apenas as configs FSRS (retencao, intervalo maximo, learning steps)
-- Adicionar learning steps tambem ao painel FSRS avancado (atualmente so aparece no SM-2)
-- Atualizar retencao padrao para 0.85
+**Causa raiz**: O nosso `fsrsSchedule` gradua cards novos para `state=2` (revisao) quando o rating e Good ou Easy. No Anki, Good em card novo avanca para o proximo learning step, permanecendo em `state=1`. So Easy pula os steps.
 
-### 4. Seletor de algoritmo em DeckDetailDialogs (`src/components/deck-detail/DeckDetailDialogs.tsx`)
-- Remover a opcao SM-2 da lista de algoritmos
-- Remover badge Premium do FSRS-6
-- Manter apenas FSRS-6 e Revisao Rapida
+### Problema 2: Irmãos cloze nao sao ocultos
+No Anki (print 5), cards irmãos (cloze 1, cloze 2 do mesmo texto) sao automaticamente ocultos ate o dia seguinte apos revisar um deles. Nosso sistema mostra todos os irmãos na mesma sessão, o que prejudica a eficácia do estudo.
 
-### 5. DeckDetailContext (`src/components/deck-detail/DeckDetailContext.tsx`)
-- Alterar fallback de `algorithm_mode` de `'sm2'` para `'fsrs'`
+## Plano de implementação
 
-### 6. DeckDetail page (`src/pages/DeckDetail.tsx`)
-- Remover referencia a SM-2 no label do algoritmo
+### 1. Adicionar coluna `learning_step` na tabela cards
+- Nova migração SQL: `ALTER TABLE cards ADD COLUMN learning_step integer NOT NULL DEFAULT 0`
+- Rastreia em qual etapa de aprendizado o card está (0, 1, 2...)
+- Necessário para saber se Good deve avancar para o próximo step ou graduar
 
-### 7. Servicos e hooks com fallback SM-2
-- `src/services/studyService.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
-- `src/hooks/useStudySession.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
-- `src/hooks/usePerformance.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
-- `src/components/FlashCard.tsx`: atualizar fallbacks se houver
-- `src/components/turma-detail/TrialStudyModal.tsx`: mudar `algorithmMode="sm2"` para `"fsrs"`
+### 2. Reescrever lógica de new/learning no `fsrsSchedule` (src/lib/fsrs.ts)
+Comportamento correto (igual ao Anki):
 
-### 8. Criacao de decks
-- `src/components/ai-deck/useAIDeckFlow.ts`: remover condicional `isPremium ? 'fsrs' : 'sm2'`, sempre usar `'fsrs'`
-- `src/services/deckService.ts`: sem mudanca necessaria (ja aceita parametro)
-
-### 9. Limpeza de codigo SM-2
-- `src/lib/sm2.ts`: manter o arquivo por enquanto para compatibilidade retroativa (cards antigos podem ter sido agendados com SM-2), mas nao sera mais referenciado para novos agendamentos
-- `src/services/studyService.ts`: a logica de `submitCardReview` que chama sm2 para `algorithmMode === 'sm2'` pode ser mantida como fallback de seguranca para cards ja agendados
-
-## Detalhes tecnicos
-
-### SQL da migracao
-```sql
-ALTER TABLE public.decks ALTER COLUMN algorithm_mode SET DEFAULT 'fsrs';
-ALTER TABLE public.decks ALTER COLUMN requested_retention SET DEFAULT 0.85;
-ALTER TABLE public.decks ALTER COLUMN daily_review_limit SET DEFAULT 9999;
-
-UPDATE public.decks SET algorithm_mode = 'fsrs' WHERE algorithm_mode = 'sm2';
-UPDATE public.decks SET requested_retention = 0.85 WHERE requested_retention = 0.9;
-UPDATE public.decks SET daily_review_limit = 9999;
+**Card novo (state 0):**
+```text
+Again  → state 1, step 0, intervalo = steps[0]
+Hard   → state 1, step 0, intervalo = avg(steps[0], steps[1])
+Good   → state 1, step 1, intervalo = steps[1]  (se houver mais steps)
+         OU gradua para state 2 (se so tem 1 step)
+Easy   → state 2, gradua direto, intervalo = FSRS initial stability
 ```
 
-### Arquivos a editar (10 arquivos + 1 migracao)
-1. Migracao SQL (nova)
-2. `src/components/dashboard/PremiumModal.tsx`
-3. `src/pages/DeckSettings.tsx`
-4. `src/components/deck-detail/DeckDetailDialogs.tsx`
-5. `src/components/deck-detail/DeckDetailContext.tsx`
-6. `src/pages/DeckDetail.tsx`
-7. `src/services/studyService.ts`
-8. `src/hooks/useStudySession.ts`
-9. `src/hooks/usePerformance.ts`
-10. `src/components/ai-deck/useAIDeckFlow.ts`
-11. `src/components/turma-detail/TrialStudyModal.tsx`
+**Card em aprendizado (state 1) no step N:**
+```text
+Again  → state 1, step 0, intervalo = steps[0]
+Hard   → state 1, step N (repete), intervalo = avg(steps[N], steps[N+1])
+         ou steps[N] * 1.5 se nao houver próximo
+Good   → state 1, step N+1, intervalo = steps[N+1]
+         OU gradua para state 2 se N é o último step
+Easy   → state 2, gradua direto
+```
+
+**Card em reaprendizado (state 3):**
+- Mesma lógica, mas usa `relearningSteps` em vez de `learningSteps`
+
+### 3. Atualizar interface FSRSParams e FSRSCard
+- `FSRSCard` ganha campo `learning_step: number`
+- `FSRSOutput` ganha campo `learning_step: number`
+- Necessário para propagar step entre agendamentos
+
+### 4. Atualizar submissão de review (src/services/studyService.ts)
+- Salvar `learning_step` no card apos cada revisao
+- Passar `learning_step` atual para o `fsrsSchedule`
+
+### 5. Atualizar preview de intervalos (FlashCard.tsx)
+- Passar `learning_step` do card atual para o `fsrsPreviewIntervals`
+- Garantir que os botoes mostrem os intervalos corretos
+
+### 6. Implementar ocultacao de irmãos cloze (Sibling Burying)
+- No `fetchStudyQueue` (src/services/studyService.ts):
+  - Identificar cards cloze com mesmo `front_content` como irmãos
+  - Ao montar a fila, incluir apenas 1 irmão por grupo
+  - Os demais ficam "buried" (nao aparecem na sessão)
+- No `Study.tsx` apos revisar um card cloze:
+  - Remover irmãos da fila local imediatamente
+- Adicionar toggle nas configuracoes do deck: "Ocultar irmãos cloze ate o dia seguinte" (ativo por padrao)
+
+### 7. Adicionar config `bury_siblings` no deck
+- Nova coluna na tabela decks: `bury_siblings boolean DEFAULT true`
+- Toggle nas configuracoes avancadas do deck (src/pages/DeckSettings.tsx)
+
+### 8. Atualizar testes
+- Expandir `src/test/fsrs.test.ts` com cenarios de learning steps multi-etapa
+- Testar progressao: novo → step0 → step1 → gradua
+- Testar Hard usa media dos steps
+- Testar Again volta para step 0
+- Testar Easy pula todos os steps
+
+## Arquivos a editar
+1. Nova migracao SQL (adicionar `learning_step` em cards + `bury_siblings` em decks)
+2. `src/lib/fsrs.ts` - Reescrever logica de state 0 e state 1
+3. `src/services/studyService.ts` - Salvar learning_step + sibling burying na fila
+4. `src/components/FlashCard.tsx` - Passar learning_step ao preview
+5. `src/pages/Study.tsx` - Remover siblings da fila apos review
+6. `src/pages/DeckSettings.tsx` - Toggle de bury siblings
+7. `src/test/fsrs.test.ts` - Novos testes
+
+## Resultado esperado
+- Intervalos identicos ao Anki: `<1min | <6min | <10min | 14d` para cards novos com steps [1m, 10m]
+- Cards cloze irmãos ocultos automaticamente apos revisar um deles
+- Progressao correta pelos learning steps antes de graduar para revisao
 
