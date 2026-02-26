@@ -137,9 +137,11 @@ function CardContent({
                     return (
                       <g key={i}>
                         <rect x={r.x} y={r.y} width={textW} height={textH} fill={fill} stroke={stroke} strokeWidth={2} rx={6} />
-                        <text x={r.x + textW / 2} y={r.y + textH / 2} fill="white" fontSize={16} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
-                          {(r.text ?? '').toString() || '?'}
-                        </text>
+                        {revealed && (
+                          <text x={r.x + textW / 2} y={r.y + textH / 2} fill="white" fontSize={16} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
+                            {(r.text ?? '').toString() || '?'}
+                          </text>
+                        )}
                       </g>
                     );
                   }
