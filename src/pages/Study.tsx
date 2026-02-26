@@ -275,8 +275,15 @@ const Study = () => {
 
   // isTransitioning moved earlier (before currentCard computation)
 
+  // Guard against double-submission of the same card
+  const submittingRef = useRef<string | null>(null);
+
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
+    // Prevent double-click on the same card
+    if (submittingRef.current === currentCard.id) return;
+    submittingRef.current = currentCard.id;
+
     // Save undo snapshot before modifying (including card DB state for revert)
     setUndoSnapshot({
       queue: [...localQueue],
@@ -324,11 +331,13 @@ const Study = () => {
         onSuccess: (result) => {
           setTimeout(() => {
             setReviewCount(prev => prev + 1);
-            if (rating > 2) {
-              // Success: remove card from queue
-              setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id));
-            } else {
-              // Fail: update card with new scheduled_date/state and move to end
+
+            // Decision: keep in session ONLY if interval_days === 0
+            // (learning/relearning short-term step). Otherwise remove.
+            const shouldKeep = result.interval_days === 0;
+
+            if (shouldKeep) {
+              // Short-term step: update card and move to end of queue
               setLocalQueue(prev => {
                 const idx = prev.findIndex(c => c.id === currentCard.id);
                 if (idx < 0) return prev;
@@ -342,13 +351,19 @@ const Study = () => {
                 const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
                 return [...without, updatedCard];
               });
+            } else {
+              // Future review (interval_days > 0): remove from session
+              setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id));
             }
+
             setCardKey(prev => prev + 1);
             setIsTransitioning(false);
+            submittingRef.current = null;
           }, 150);
         },
         onError: () => {
           setIsTransitioning(false);
+          submittingRef.current = null;
         },
       }
     );
