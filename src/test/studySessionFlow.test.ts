@@ -117,19 +117,21 @@ describe('Session Flow: New card scenarios', () => {
     expect(q[0].state).toBe(1);
   });
 
-  it('12. New → Again → Good: graduates, removed from queue', () => {
+  it('12. New → Again → Good: advances to step 1, stays in queue', () => {
     let q = [makeQueueCard('c1')];
     ({ queue: q } = reviewCard(q, 'c1', 1));
     const { queue: final, result } = reviewCard(q, 'c1', 3);
-    expect(result.state).toBe(2);
-    expect(result.interval_days).toBeGreaterThanOrEqual(1);
-    expect(final.length).toBe(0);
+    // With 2 learning steps [1, 10], Again→Good goes to step 1 (still learning)
+    expect(result.state).toBe(1);
+    expect(result.learning_step).toBe(1);
+    expect(result.interval_days).toBe(0);
+    expect(final.length).toBe(1);
   });
 
-  it('13. New → Again → Again → Good: graduates after double fail', () => {
+  it('13. New → Again → Good → Good: graduates after completing all steps', () => {
     let q = [makeQueueCard('c1')];
     ({ queue: q } = reviewCard(q, 'c1', 1));
-    ({ queue: q } = reviewCard(q, 'c1', 1));
+    ({ queue: q } = reviewCard(q, 'c1', 3));
     const { queue: final, result } = reviewCard(q, 'c1', 3);
     expect(result.state).toBe(2);
     expect(final.length).toBe(0);
@@ -144,10 +146,13 @@ describe('Session Flow: New card scenarios', () => {
     expect(final.length).toBe(0);
   });
 
-  it('15. New → Good: immediate graduation, removed', () => {
+  it('15. New → Good: stays in learning step 1 (not immediate graduation)', () => {
     const q = [makeQueueCard('c1')];
-    const { queue: final } = reviewCard(q, 'c1', 3);
-    expect(final.length).toBe(0);
+    const { queue: final, result } = reviewCard(q, 'c1', 3);
+    // With 2 steps, Good advances to step 1 — stays in queue
+    expect(result.state).toBe(1);
+    expect(result.learning_step).toBe(1);
+    expect(final.length).toBe(1);
   });
 
   it('16. New → Easy: immediate graduation, removed', () => {
@@ -284,23 +289,24 @@ describe('getNextReadyIndex integration', () => {
 // Multi-card session scenarios
 // ═══════════════════════════════════════════════════════════════
 describe('Multi-card session', () => {
-  it('34. Two new cards: first fails, second succeeds → queue has 1', () => {
+  it('34. Two new cards: first fails, second Good stays learning → queue has 2', () => {
     let q = [makeQueueCard('a'), makeQueueCard('b')];
     ({ queue: q } = reviewCard(q, 'a', 1));
     ({ queue: q } = reviewCard(q, 'b', 3));
-    expect(q.length).toBe(1);
-    expect(q[0].id).toBe('a');
+    // Both stay: a is learning step 0, b is learning step 1
+    expect(q.length).toBe(2);
   });
 
-  it('35. Three cards: all Good → empty queue', () => {
+  it('35. Three cards: all Good → all stay in learning (step 1)', () => {
     let q = [makeQueueCard('a'), makeQueueCard('b'), makeQueueCard('c')];
     ({ queue: q } = reviewCard(q, 'a', 3));
     ({ queue: q } = reviewCard(q, 'b', 3));
     ({ queue: q } = reviewCard(q, 'c', 3));
-    expect(q.length).toBe(0);
+    // All stay in queue (learning step 1)
+    expect(q.length).toBe(3);
   });
 
-  it('36. Mix: new fails, review succeeds, new succeeds', () => {
+  it('36. Mix: new fails, review succeeds, new Good stays', () => {
     let q: QueueCard[] = [
       makeQueueCard('new1'),
       makeQueueCard('rev1', { state: 2, stability: 10, difficulty: 5, scheduled_date: new Date(Date.now() - 10 * 86400000).toISOString() }),
@@ -309,8 +315,10 @@ describe('Multi-card session', () => {
     ({ queue: q } = reviewCard(q, 'new1', 1));
     ({ queue: q } = reviewCard(q, 'rev1', 3));
     ({ queue: q } = reviewCard(q, 'new2', 3));
-    expect(q.length).toBe(1);
-    expect(q[0].id).toBe('new1');
+    // new1 stays (learning), rev1 removed (review), new2 stays (learning step 1)
+    expect(q.length).toBe(2);
+    expect(q.find(c => c.id === 'new1')).toBeDefined();
+    expect(q.find(c => c.id === 'new2')).toBeDefined();
   });
 
   it('37. Review Hard removes, new Again keeps', () => {
