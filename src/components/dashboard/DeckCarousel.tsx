@@ -181,20 +181,20 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       const rootId = getRootId(pid);
       if (rootId) rootIds.add(rootId);
     }
-    let totalNew = 0, totalLearning = 0, totalReview = 0, totalStudied = 0, totalPending = 0;
+    let totalLearning = 0, totalReview = 0, totalStudied = 0;
     for (const rootId of rootIds) {
       const root = decks.find(d => d.id === rootId);
       if (root) {
         const allocated = distributedNewByDeck?.get(rootId);
         const stats = getDeckTodayStats(root, decks, allocated != null ? allocated : globalNewRemaining);
-        const newAvail = allocated != null ? Math.min(stats.newAvailable, allocated) : stats.newAvailable;
-        totalNew += newAvail;
         totalLearning += stats.learningAvailable;
         totalReview += stats.reviewAvailable;
         totalStudied += stats.studiedToday;
-        totalPending += newAvail + stats.learningAvailable + stats.reviewAvailable;
       }
     }
+    // Banner shows the global limit directly, not the sum of per-deck new cards
+    const totalNew = globalNewRemaining != null ? globalNewRemaining : 0;
+    const totalPending = totalNew + totalLearning + totalReview;
     const totalCards = totalStudied + totalPending;
     const progress = totalCards > 0 ? Math.round((totalStudied / totalCards) * 100) : 0;
     return { totalNew, totalLearning, totalReview, totalStudied, totalPending, totalCards, progress };
