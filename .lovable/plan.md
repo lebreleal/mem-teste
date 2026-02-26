@@ -1,92 +1,85 @@
 
-Objetivo
-- Garantir que o agendamento FSRS respeite exatamente o tempo exibido na UI e que nenhum card volte antes da hora.
-- Entregar uma suíte robusta com 100+ cenários de teste (incluindo os fluxos que você descreveu: erra, erra de novo, bom/fácil, volta e erra etc.) para validar algoritmo + integração de fila.
 
-Diagnóstico (o que encontrei)
-1) Ponto crítico de integração na sessão de estudo (principal suspeita de “voltar antes do tempo”)
-- Em `src/pages/Study.tsx`, após avaliar um card:
-  - hoje o código remove da fila local apenas quando `rating > 2`;
-  - quando `rating <= 2`, mantém o card na fila e atualiza `scheduled_date`.
-- Problema: para card em revisão (`state=2`) com nota **Difícil (2)**, o FSRS pode devolver próximo agendamento para amanhã (ex.: `1d`), mas o card fica na fila local da sessão.  
-- Como `getNextReadyIndex` (`src/lib/studyUtils.ts`) considera `state=2` sempre elegível na etapa de “new/review”, esse card pode reaparecer antes do horário agendado.
+# Tornar FSRS-6 o unico algoritmo padrao
 
-2) Evidência real em dados
-- Consulta em `review_logs` mostrou casos de card com `state=2`, rating `2`, `scheduled_date` no dia seguinte, mas revisado novamente minutos depois (antes do `scheduled_date`).
-- Isso confirma falha de integração fila/sessão, não apenas matemática do FSRS.
+## Resumo
+Remover o SM-2 como opcao de algoritmo, tornar FSRS-6 o unico padrao para todos os decks (novos e existentes), ajustar a retencao padrao para 85%, definir limite de revisao diaria como 9999, e atualizar o modal Premium e seletores de algoritmo para refletir que so existem FSRS-6 e Revisao Rapida.
 
-3) Algoritmo FSRS em si
-- `src/lib/fsrs.ts` está bem coberto por testes básicos/intermediários e a matemática geral está consistente.
-- O maior risco atual está na regra de reentrada na fila local (integração), não no núcleo da fórmula.
+## Alteracoes
 
-4) Observação
-- Session replay retornou vazio nesta captura, então usei leitura de código + logs de banco para isolar a causa.
+### 1. Migracao de banco de dados
+Uma unica migracao SQL para:
+- Alterar default de `algorithm_mode` de `'sm2'` para `'fsrs'`
+- Alterar default de `requested_retention` de `0.9` para `0.85`
+- Alterar default de `daily_review_limit` de `100` para `9999`
+- Converter todos os decks existentes com `algorithm_mode = 'sm2'` para `'fsrs'`
+- Atualizar `requested_retention` para `0.85` em todos os decks que ainda estao em `0.9`
+- Atualizar `daily_review_limit` para `9999` em todos os decks existentes
 
-Plano de implementação (quando você aprovar)
-1) Corrigir regra de permanência do card na fila local
-- Arquivo: `src/pages/Study.tsx`
-- Trocar regra baseada em `rating` por regra baseada no `result` real do agendamento:
-  - Reenfileirar somente quando próximo agendamento é de curto prazo (ex.: `interval_days === 0`, típico de learning/relearning).
-  - Remover da fila quando o card foi para revisão futura (ex.: `interval_days > 0`), mesmo que a nota tenha sido 2.
-- Resultado esperado: card não reaparece antes da hora se UI disse 10min/15min/1d.
+### 2. Modal Premium (`src/components/dashboard/PremiumModal.tsx`)
+- Remover a linha do beneficio "Algoritmo FSRS 6" da lista BENEFITS (ja que nao e mais exclusivo Premium)
+- Substituir por outro beneficio ou simplesmente remover a entrada
 
-2) Blindagem adicional contra inconsistência de clique/concorrência na sessão
-- Ainda em `Study.tsx`, adicionar trava síncrona (ref) para impedir dupla submissão do mesmo card no mesmo instante.
-- Evita logs e agendamentos duplicados por cliques rápidos.
+### 3. Seletor de algoritmo em DeckSettings (`src/pages/DeckSettings.tsx`)
+- Remover a opcao SM-2 do modal de selecao de algoritmo
+- Manter apenas FSRS-6 e Revisao Rapida
+- Remover o badge "Premium" do FSRS-6 (agora e o padrao para todos)
+- Atualizar `algoLabel` para nao referenciar SM-2
+- Atualizar tipo de `algorithmMode` de `'sm2' | 'fsrs' | 'quick_review'` para `'fsrs' | 'quick_review'`
+- Alterar `algorithmChangeTarget` para `'fsrs' | 'quick_review' | null`
+- No modal de configuracoes avancadas, remover o branch SM-2 (easy bonus, interval modifier) e mostrar apenas as configs FSRS (retencao, intervalo maximo, learning steps)
+- Adicionar learning steps tambem ao painel FSRS avancado (atualmente so aparece no SM-2)
+- Atualizar retencao padrao para 0.85
 
-3) (Opcional, mas recomendado) Extrair lógica de atualização da fila para função pura testável
-- Criar helper em `src/lib/studyUtils.ts` (ou novo util de sessão) para:
-  - aplicar resultado da revisão na fila local;
-  - decidir keep/remove de forma determinística.
-- Benefício: permite testar integração sem depender de componente React.
+### 4. Seletor de algoritmo em DeckDetailDialogs (`src/components/deck-detail/DeckDetailDialogs.tsx`)
+- Remover a opcao SM-2 da lista de algoritmos
+- Remover badge Premium do FSRS-6
+- Manter apenas FSRS-6 e Revisao Rapida
 
-Plano de testes (100+ cenários, como você pediu)
-A) FSRS unitário (expandir `src/test/fsrs.test.ts` para 100+)
-- Meta: adicionar matriz grande de casos parametrizados.
-- Blocos:
-  1. Novos cards: combinações de steps customizados (1m/10m, 1m/15m, 5m/30m), retenção, maxInterval.
-  2. Learning/Relearning: sequências longas (Again→Again→Good, Again→Hard→Good, etc.).
-  3. Review: overdue leve/médio/extremo + hard/good/easy ordering.
-  4. Invariantes: limites de dificuldade [1,10], estabilidade >= 0.1, monotonicidade esperada.
-  5. Cadeias completas de 10–20 passos por card simulando uso real.
-- Total planejado aqui: ~70–90 casos.
+### 5. DeckDetailContext (`src/components/deck-detail/DeckDetailContext.tsx`)
+- Alterar fallback de `algorithm_mode` de `'sm2'` para `'fsrs'`
 
-B) Integração fila/agendamento (novo arquivo de teste, ex. `src/test/studySessionFlow.test.ts`)
-- Simular a mesma lógica da sessão:
-  - card novo erra -> volta em step curto;
-  - erra de novo -> respeita step;
-  - depois bom/fácil -> sai da sessão;
-  - review com hard -> NÃO pode reaparecer antes da data.
-- Adicionar regressão explícita para o bug atual.
-- Total planejado aqui: ~20–40 casos.
+### 6. DeckDetail page (`src/pages/DeckDetail.tsx`)
+- Remover referencia a SM-2 no label do algoritmo
 
-C) Verificação de consistência UI x agendamento
-- Garantir que rótulo de intervalo exibido (preview) corresponde ao resultado usado para atualizar card.
-- Cobrir FSRS com configurações reais de deck (`learning_steps`, `requested_retention`, `max_interval`).
+### 7. Servicos e hooks com fallback SM-2
+- `src/services/studyService.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
+- `src/hooks/useStudySession.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
+- `src/hooks/usePerformance.ts`: mudar fallback `|| 'sm2'` para `|| 'fsrs'`
+- `src/components/FlashCard.tsx`: atualizar fallbacks se houver
+- `src/components/turma-detail/TrialStudyModal.tsx`: mudar `algorithmMode="sm2"` para `"fsrs"`
 
-Validação final
-1) Rodar testes automatizados
-- `vitest` no arquivo novo + suíte completa.
-- Critério: 100+ cenários passando, incluindo regressão do bug reportado.
+### 8. Criacao de decks
+- `src/components/ai-deck/useAIDeckFlow.ts`: remover condicional `isPremium ? 'fsrs' : 'sm2'`, sempre usar `'fsrs'`
+- `src/services/deckService.ts`: sem mudanca necessaria (ja aceita parametro)
 
-2) Teste manual end-to-end (fundamental)
-- Fluxo guiado no Study:
-  - cenário que você descreveu (erra/erra/bom/fácil/erra de novo);
-  - confirmar com relógio que card só reaparece após o tempo prometido;
-  - confirmar que “Difícil 1d” não reaparece na mesma sessão.
+### 9. Limpeza de codigo SM-2
+- `src/lib/sm2.ts`: manter o arquivo por enquanto para compatibilidade retroativa (cards antigos podem ter sido agendados com SM-2), mas nao sera mais referenciado para novos agendamentos
+- `src/services/studyService.ts`: a logica de `submitCardReview` que chama sm2 para `algorithmMode === 'sm2'` pode ser mantida como fallback de seguranca para cards ja agendados
 
-Arquivos previstos para alteração
-- `src/pages/Study.tsx` (correção principal da integração)
-- `src/lib/studyUtils.ts` (helper puro opcional para teste)
-- `src/test/fsrs.test.ts` (expansão para 100+)
-- `src/test/studySessionFlow.test.ts` (novo, integração/regras de fila)
+## Detalhes tecnicos
 
-Riscos e mitigação
-- Risco: corrigir fila e afetar dinâmica “furar fila” de learning/relearning.
-- Mitigação: manter prioridade existente de `state 1/3` vencidos e cobrir com testes específicos.
-- Risco: falso positivo por múltiplas abas.
-- Mitigação: trava de submissão local + teste de não duplicidade no fluxo.
+### SQL da migracao
+```sql
+ALTER TABLE public.decks ALTER COLUMN algorithm_mode SET DEFAULT 'fsrs';
+ALTER TABLE public.decks ALTER COLUMN requested_retention SET DEFAULT 0.85;
+ALTER TABLE public.decks ALTER COLUMN daily_review_limit SET DEFAULT 9999;
 
-Entregável esperado após implementação
-- Correção objetiva do reaparecimento precoce.
-- Cobertura massiva de testes (100+), com cenários reais de uso e regressão do problema reportado.
+UPDATE public.decks SET algorithm_mode = 'fsrs' WHERE algorithm_mode = 'sm2';
+UPDATE public.decks SET requested_retention = 0.85 WHERE requested_retention = 0.9;
+UPDATE public.decks SET daily_review_limit = 9999;
+```
+
+### Arquivos a editar (10 arquivos + 1 migracao)
+1. Migracao SQL (nova)
+2. `src/components/dashboard/PremiumModal.tsx`
+3. `src/pages/DeckSettings.tsx`
+4. `src/components/deck-detail/DeckDetailDialogs.tsx`
+5. `src/components/deck-detail/DeckDetailContext.tsx`
+6. `src/pages/DeckDetail.tsx`
+7. `src/services/studyService.ts`
+8. `src/hooks/useStudySession.ts`
+9. `src/hooks/usePerformance.ts`
+10. `src/components/ai-deck/useAIDeckFlow.ts`
+11. `src/components/turma-detail/TrialStudyModal.tsx`
+
