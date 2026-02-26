@@ -17,6 +17,7 @@ function makeQueueCard(id: string, overrides: Partial<FSRSCard> = {}): QueueCard
     difficulty: 0,
     state: 0,
     scheduled_date: new Date().toISOString(),
+    learning_step: 0,
     ...overrides,
   };
 }

@@ -87,6 +87,7 @@ const DeckSettings = () => {
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
   const [maxInterval, setMaxInterval] = useState(1000);
+  const [burySiblings, setBurySiblings] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
@@ -175,6 +176,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setBurySiblings((data as any).bury_siblings !== false);
       setLoading(false);
     });
   }, [deckId, user]);
@@ -217,6 +219,7 @@ const DeckSettings = () => {
       interval_modifier: intervalModifier,
       max_interval: maxInterval,
       requested_retention: requestedRetention,
+      bury_siblings: burySiblings,
     } as any);
     setStudySettingsModal(false);
     setAdvancedModal(false);
@@ -806,6 +809,21 @@ const DeckSettings = () => {
                   <Button variant="outline" size="sm" className="w-full gap-1" onClick={addLearningStep}>
                     <Plus className="h-3.5 w-3.5" /> Adicionar etapa
                   </Button>
+                </div>
+
+                <Separator />
+
+                {/* Bury siblings toggle */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-foreground">Ocultar irmãos cloze</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Quando ativo, ao revisar um card cloze, seus irmãos (cloze 1, cloze 2, etc.) são ocultados até o dia seguinte.
+                      </p>
+                    </div>
+                    <Switch checked={burySiblings} onCheckedChange={setBurySiblings} />
+                  </div>
                 </div>
 
             <Button className="w-full" onClick={handleSaveStudySettings} disabled={saving}>
