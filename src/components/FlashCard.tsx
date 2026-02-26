@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { fsrsPreviewIntervals, type FSRSCard, type Rating } from '@/lib/fsrs';
-import { sm2PreviewIntervals, type SM2Card } from '@/lib/sm2';
+import { fsrsPreviewIntervals, type FSRSCard, type Rating, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
+import { sm2PreviewIntervals, type SM2Card, type SM2Params, DEFAULT_SM2_PARAMS } from '@/lib/sm2';
+import { parseStepToMinutes } from '@/lib/studyUtils';
 import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -9,6 +10,36 @@ import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
 import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
+
+/** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
+function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
+  if (!deckConfig) return {};
+  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '15m'];
+  const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
+  const maxIntervalDays = deckConfig.max_interval ?? 36500;
+
+  if (algorithmMode === 'fsrs') {
+    const requestedRetention = deckConfig.requested_retention ?? 0.9;
+    return {
+      fsrs: {
+        ...DEFAULT_FSRS_PARAMS,
+        requestedRetention,
+        maximumInterval: maxIntervalDays,
+        learningSteps: learningStepsMinutes,
+        relearningSteps: [learningStepsMinutes[0] ?? 10],
+      },
+    };
+  }
+
+  return {
+    sm2: {
+      learningSteps: learningStepsMinutes,
+      easyBonus: (deckConfig.easy_bonus ?? 130) / 100,
+      intervalModifier: (deckConfig.interval_modifier ?? 100) / 100,
+      maxInterval: maxIntervalDays,
+    },
+  };
+}
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
 function formatMarkdown(text: string): string {
@@ -48,6 +79,7 @@ interface FlashCardProps {
   isSubmitting: boolean;
   quickReview?: boolean;
   algorithmMode?: string;
+  deckConfig?: any;
   energy?: number;
   tutorCost?: number;
   onTutorRequest?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -163,6 +195,7 @@ const MultipleChoiceCard = ({
   mcExplainResponse,
   recallData,
   algorithmMode,
+  deckConfig,
   actions,
   stability,
   difficulty,
@@ -185,6 +218,7 @@ const MultipleChoiceCard = ({
   mcExplainResponse?: string | null;
   recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
   algorithmMode?: string;
+  deckConfig?: any;
   actions?: React.ReactNode;
   stability: number;
   difficulty: number;
@@ -202,13 +236,14 @@ const MultipleChoiceCard = ({
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
+  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'sm2');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
       const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
-      return fsrsPreviewIntervals(fsrsCard);
+      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card);
+    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
   })();
 
   useEffect(() => {
@@ -341,7 +376,6 @@ const MultipleChoiceCard = ({
           </div>
 
 
-
           {/* Tutor hint (before answering) */}
           {hintResponse && !answered && (
             <div className="card-premium w-full border border-primary/20 bg-primary/5 p-4 text-sm text-foreground animate-fade-in" style={{ borderRadius: 'var(--radius)' }}>
@@ -471,7 +505,7 @@ const MultipleChoiceCard = ({
 
 const FlashCard = ({
   frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
-  onRate, isSubmitting, quickReview, algorithmMode = 'sm2',
+  onRate, isSubmitting, quickReview, algorithmMode = 'sm2', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {
@@ -560,6 +594,7 @@ const FlashCard = ({
         mcExplainResponse={mcExplainResponse}
         recallData={recallData}
         algorithmMode={algorithmMode}
+        deckConfig={deckConfig}
         actions={actions}
         stability={stability}
         difficulty={difficulty}
@@ -577,13 +612,14 @@ const FlashCard = ({
     onRate(rating);
   };
 
+  const previewParams = buildPreviewParams(deckConfig, algorithmMode);
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
       const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
-      return fsrsPreviewIntervals(fsrsCard);
+      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card);
+    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
   })();
 
   let displayFront: string;
