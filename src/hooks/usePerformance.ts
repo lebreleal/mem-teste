@@ -95,7 +95,7 @@ export const usePerformance = () => {
         totalNewCards += cappedNewCards;
         totalPendingReviews += cappedReviewCards;
 
-        const algorithmMode = rootDeck.algorithm_mode || 'sm2';
+        const algorithmMode = rootDeck.algorithm_mode || 'fsrs';
         let totalRetention = 0;
         let cardsWithData = 0;
         let lastReviewAt: string | null = null;

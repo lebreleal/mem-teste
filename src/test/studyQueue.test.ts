@@ -240,13 +240,17 @@ describe('FSRS – scheduling uses midnight for day intervals, exact time for le
     expect(scheduled.getTime()).toBeLessThan(Date.now() + 2 * 60 * 1000);
   });
 
-  it('rating Good on new card → review with midnight', () => {
+  it('rating Good on new card → learning step 1 with exact timestamp (Anki behavior)', () => {
     const card: FSRSCard = { stability: 0, difficulty: 0, state: 0, scheduled_date: now() };
     const result = fsrsSchedule(card, 3, DEFAULT_FSRS_PARAMS);
-    expect(result.state).toBe(2);
+    // Good on new card with 2 steps stays in learning (step 1)
+    expect(result.state).toBe(1);
+    expect(result.learning_step).toBe(1);
+    expect(result.interval_days).toBe(0);
     const scheduled = new Date(result.scheduled_date);
-    expect(scheduled.getHours()).toBe(0);
-    expect(scheduled.getMinutes()).toBe(0);
+    // Exact timestamp (10min from now), NOT midnight
+    expect(scheduled.getTime()).toBeGreaterThan(Date.now());
+    expect(scheduled.getTime()).toBeLessThan(Date.now() + 11 * 60 * 1000);
   });
 
   it('rating Again on review card → learning with exact timestamp', () => {

@@ -1,0 +1,1 @@
+ALTER TABLE decks ALTER COLUMN learning_steps SET DEFAULT ARRAY['1m', '10m'];

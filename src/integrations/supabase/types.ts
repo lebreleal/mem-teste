@@ -209,6 +209,7 @@ export type Database = {
           front_content: string
           id: string
           last_reviewed_at: string | null
+          learning_step: number
           scheduled_date: string
           stability: number
           state: number
@@ -223,6 +224,7 @@ export type Database = {
           front_content: string
           id?: string
           last_reviewed_at?: string | null
+          learning_step?: number
           scheduled_date?: string
           stability?: number
           state?: number
@@ -237,6 +239,7 @@ export type Database = {
           front_content?: string
           id?: string
           last_reviewed_at?: string | null
+          learning_step?: number
           scheduled_date?: string
           stability?: number
           state?: number
@@ -405,6 +408,7 @@ export type Database = {
         Row: {
           algorithm_mode: string
           allow_duplication: boolean
+          bury_siblings: boolean
           community_id: string | null
           created_at: string
           daily_new_limit: number
@@ -433,6 +437,7 @@ export type Database = {
         Insert: {
           algorithm_mode?: string
           allow_duplication?: boolean
+          bury_siblings?: boolean
           community_id?: string | null
           created_at?: string
           daily_new_limit?: number
@@ -461,6 +466,7 @@ export type Database = {
         Update: {
           algorithm_mode?: string
           allow_duplication?: boolean
+          bury_siblings?: boolean
           community_id?: string | null
           created_at?: string
           daily_new_limit?: number

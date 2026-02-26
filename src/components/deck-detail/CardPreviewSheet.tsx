@@ -131,6 +131,20 @@ function CardContent({
                   const stroke = revealed ? 'rgba(59,130,246,0.5)' : 'rgb(49,120,236)';
                   const shapeType = r.type || 'rect';
 
+                  if (shapeType === 'text') {
+                    const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
+                    const textH = r.h || 30;
+                    return (
+                      <g key={i}>
+                        <rect x={r.x} y={r.y} width={textW} height={textH} fill={fill} stroke={stroke} strokeWidth={2} rx={6} />
+                        {revealed && (
+                          <text x={r.x + textW / 2} y={r.y + textH / 2} fill="white" fontSize={16} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
+                            {(r.text ?? '').toString() || '?'}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  }
                   if (shapeType === 'ellipse') {
                     return <ellipse key={i} cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={Math.abs(r.w / 2)} ry={Math.abs(r.h / 2)} fill={fill} stroke={stroke} strokeWidth={2} />;
                   }
@@ -142,8 +156,8 @@ function CardContent({
                 })}
               </svg>
             </div>
-            {/* Show frontText on front, backContent on back (revealed) */}
-            {!revealed && occlusionData.frontText && (occlusionData.frontText as string).replace(/<[^>]*>/g, '').trim() && (
+            {/* Keep frontText visible on both faces; show back content only when revealed */}
+            {occlusionData.frontText && (occlusionData.frontText as string).replace(/<[^>]*>/g, '').trim() && (
               <div className="mt-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(occlusionData.frontText as string) }} />
             )}
             {revealed && card.back_content && card.back_content.trim() && (

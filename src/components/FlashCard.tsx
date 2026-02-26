@@ -14,12 +14,12 @@ import ReactMarkdown from 'react-markdown';
 /** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
 function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
   if (!deckConfig) return {};
-  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '15m'];
+  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '10m'];
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
   const maxIntervalDays = deckConfig.max_interval ?? 36500;
 
   if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig.requested_retention ?? 0.9;
+    const requestedRetention = deckConfig.requested_retention ?? 0.85;
     return {
       fsrs: {
         ...DEFAULT_FSRS_PARAMS,
@@ -75,6 +75,7 @@ interface FlashCardProps {
   scheduledDate: string;
   lastReviewedAt?: string;
   cardType?: string;
+  learningStep?: number;
   onRate: (rating: Rating) => void;
   isSubmitting: boolean;
   quickReview?: boolean;
@@ -135,15 +136,21 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
       const isActive = activeRectIds.includes(r.id);
       if (!isActive) return '';
       const shapeType = r.type || 'rect';
+      const textW = r.w || Math.max(48, ((r.text ?? '').toString().length * 9) + 16);
+      const textH = r.h || 30;
+      const safeText = (r.text ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
       if (revealed) {
         const fill = 'rgba(59,130,246,0.25)';
         const stroke = 'rgba(59,130,246,0.5)';
+        if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/><text x="${r.x + textW / 2}" y="${r.y + textH / 2}" fill="white" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="middle">${safeText || '?'}</text></g>`;
         if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
         if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
         return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
       }
       const fill = 'rgb(59,130,246)';
       const stroke = 'rgb(49,120,236)';
+      if (shapeType === 'text') return `<g><rect x="${r.x}" y="${r.y}" width="${textW}" height="${textH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="2"/></g>`;
       if (shapeType === 'ellipse') return `<ellipse cx="${r.x + r.w/2}" cy="${r.y + r.h/2}" rx="${Math.abs(r.w/2)}" ry="${Math.abs(r.h/2)}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
       if (shapeType === 'polygon' && r.points) { const pts = (r.points as {x:number,y:number}[]).map((p: any) => `${p.x},${p.y}`).join(' '); return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`; }
       return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="${stroke}" stroke-width="2" rx="4"/>`;
@@ -201,6 +208,7 @@ const MultipleChoiceCard = ({
   difficulty,
   state,
   scheduledDate,
+  learningStep = 0,
   canUndo,
   onUndo,
   onOpenExplainChat,
@@ -224,6 +232,7 @@ const MultipleChoiceCard = ({
   difficulty: number;
   state: number;
   scheduledDate: string;
+  learningStep?: number;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -236,10 +245,10 @@ const MultipleChoiceCard = ({
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'sm2');
+  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0 };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -504,8 +513,8 @@ const MultipleChoiceCard = ({
 };
 
 const FlashCard = ({
-  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
-  onRate, isSubmitting, quickReview, algorithmMode = 'sm2', deckConfig,
+  frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0,
+  onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {
@@ -603,6 +612,7 @@ const FlashCard = ({
         canUndo={canUndo}
         onUndo={onUndo}
         onOpenExplainChat={onOpenExplainChat}
+        learningStep={learningStep}
       />
     );
   }
@@ -615,7 +625,7 @@ const FlashCard = ({
   const previewParams = buildPreviewParams(deckConfig, algorithmMode);
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -772,11 +782,11 @@ const FlashCard = ({
                   {isOcclusion ? (
                     <div className="w-full space-y-4">
                       <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: peekingFront ? displayFront : displayBack }} />
-                      {!peekingFront && occlusionBackText && (
-                        <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
-                      )}
-                      {peekingFront && occlusionFrontText && (
+                      {occlusionFrontText && (
                         <div className="prose prose-sm max-w-none text-left text-card-foreground" dangerouslySetInnerHTML={{ __html: occlusionFrontText }} />
+                      )}
+                      {!peekingFront && occlusionBackText && (
+                        <div className="prose prose-sm max-w-none text-left text-muted-foreground pt-3 border-t border-border/30" dangerouslySetInnerHTML={{ __html: occlusionBackText }} />
                       )}
                     </div>
                   ) : (

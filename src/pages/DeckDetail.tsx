@@ -4,7 +4,7 @@ import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Settings, Crown } from 'lucide-react';
+import { ArrowLeft, Settings } from 'lucide-react';
 
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen } = useDeckDetail();
@@ -44,9 +44,7 @@ const DeckDetailContent = () => {
               >
                 <span className="text-foreground">Algoritmo:</span>{' '}
                 <span className="font-medium text-info">
-                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : (deck as any)?.algorithm_mode === 'fsrs' ? (
-                    <>FSRS-6 <Crown className="inline h-3 w-3 text-amber-500 ml-0.5 -mt-0.5" /></>
-                  ) : 'SM-2'}
+                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
                 </span>
               </button>
             </div>

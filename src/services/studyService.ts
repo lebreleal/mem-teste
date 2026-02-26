@@ -24,7 +24,7 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings')
     .eq('user_id', userId);
 
   let deckIds: string[];
@@ -58,7 +58,7 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
-  const algorithmMode = deckConfig?.algorithm_mode || 'sm2';
+  const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
   if (algorithmMode === 'quick_review') {
@@ -185,7 +185,21 @@ export async function fetchStudyQueue(
   // Shuffle only applies to new + review cards; learning cards always go first (they cut the line when ready)
   const nonLearning = [...newCards, ...reviewCards];
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
-  const queue = [...learningCards, ...orderedNonLearning];
+  let queue = [...learningCards, ...orderedNonLearning];
+
+  // Sibling burying: keep only 1 cloze sibling per group
+  const burySiblings = deckConfig?.bury_siblings !== false;
+  if (burySiblings) {
+    const seenFronts = new Set<string>();
+    queue = queue.filter(card => {
+      if (card.card_type !== 'cloze') return true;
+      const key = card.front_content;
+      if (seenFronts.has(key)) return false;
+      seenFronts.add(key);
+      return true;
+    });
+  }
+
   const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
@@ -217,14 +231,14 @@ export async function submitCardReview(
     return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 0 };
   }
 
-  const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '15m'];
+  const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
   const maxIntervalDays = deckConfig?.max_interval ?? 36500;
 
   let result: any;
 
   if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig?.requested_retention ?? 0.9;
+    const requestedRetention = deckConfig?.requested_retention ?? 0.85;
     const params: FSRSParams = {
       ...DEFAULT_FSRS_PARAMS,
       requestedRetention,
@@ -238,6 +252,7 @@ export async function submitCardReview(
       difficulty: card.difficulty,
       state: card.state,
       scheduled_date: card.scheduled_date,
+      learning_step: card.learning_step ?? 0,
     };
 
     result = fsrsSchedule(fsrsCard, rating, params);
@@ -271,6 +286,7 @@ export async function submitCardReview(
           state: result.state,
           scheduled_date: result.scheduled_date,
           last_reviewed_at: new Date().toISOString(),
+          learning_step: result.learning_step ?? 0,
         } as any)
         .eq('id', card.id),
       supabase

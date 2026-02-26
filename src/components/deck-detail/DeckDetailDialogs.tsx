@@ -346,9 +346,8 @@ const DeckDetailDialogs = () => {
               <p className="text-sm text-muted-foreground">Selecione o algoritmo de estudo para este baralho.</p>
               <div className="space-y-2 pt-2">
                 {[
-                  { value: 'sm2', label: 'SM-2', desc: 'Algoritmo clássico de repetição espaçada', premium: false },
-                  { value: 'fsrs', label: 'FSRS-6', desc: 'Algoritmo avançado com retenção otimizada', premium: true },
-                  { value: 'quick_review', label: 'Revisão Rápida', desc: 'Modo manual, sem agendamento', premium: false },
+                  { value: 'fsrs', label: 'FSRS-6', desc: 'Algoritmo avançado com retenção otimizada' },
+                  { value: 'quick_review', label: 'Revisão Rápida', desc: 'Modo manual, sem agendamento' },
                 ].map(algo => {
                   const isActive = (ctx.deck as any)?.algorithm_mode === algo.value;
                   return (
@@ -356,7 +355,6 @@ const DeckDetailDialogs = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-foreground">{algo.label}</span>
-                          {algo.premium && <><Crown className="h-3.5 w-3.5 text-amber-500" /><span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-full">Premium</span></>}
                           {isActive && <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Atual</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{algo.desc}</p>

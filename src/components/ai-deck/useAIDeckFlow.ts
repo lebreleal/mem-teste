@@ -180,7 +180,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     } else {
       // Resolve unique name to avoid duplicates
       const uniqueName = await deckService.resolveUniqueDeckName(user.id, name.trim());
-      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, null, isPremium ? 'fsrs' : 'sm2');
+      const deck = await deckService.createDeck(user.id, uniqueName, folderId ?? null, null, 'fsrs');
       targetDeckId = (deck as any).id;
     }
 

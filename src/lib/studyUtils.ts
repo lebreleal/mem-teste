@@ -105,6 +105,45 @@ export function getLocalMidnight(daysFromNow: number): Date {
   return d;
 }
 
+/**
+ * Decide whether a card should stay in the local session queue after a review.
+ * Returns true only when `interval_days === 0` (learning/relearning short-term step).
+ * Cards scheduled for a future day (interval_days > 0) are always removed,
+ * regardless of the rating (even "Hard").
+ */
+export function shouldKeepInSession(result: { interval_days: number }): boolean {
+  return result.interval_days === 0;
+}
+
+/**
+ * Apply a review result to the local queue:
+ * - If shouldKeep: update the card in-place and move it to the end.
+ * - Otherwise: remove it from the queue.
+ * Pure function — returns the new queue.
+ */
+export function applyReviewToQueue<T extends { id: string }>(
+  queue: T[],
+  cardId: string,
+  result: { interval_days: number; state: number; stability: number; difficulty: number; scheduled_date: string; learning_step?: number },
+): T[] {
+  const keep = shouldKeepInSession(result);
+  if (!keep) {
+    return queue.filter(c => c.id !== cardId);
+  }
+  const idx = queue.findIndex(c => c.id === cardId);
+  if (idx < 0) return queue;
+  const updatedCard = {
+    ...queue[idx],
+    state: result.state,
+    stability: result.stability,
+    difficulty: result.difficulty,
+    scheduled_date: result.scheduled_date,
+    learning_step: result.learning_step ?? 0,
+  };
+  const without = [...queue.slice(0, idx), ...queue.slice(idx + 1)];
+  return [...without, updatedCard];
+}
+
 // ─── Shared new-card allocation logic ───
 
 export interface AllocationPlan {

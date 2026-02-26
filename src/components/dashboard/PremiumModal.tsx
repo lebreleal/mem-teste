@@ -21,7 +21,6 @@ interface PremiumModalProps {
 }
 
 const BENEFITS = [
-  { icon: Brain, title: 'Algoritmo FSRS 6', desc: 'O melhor algoritmo de repetição espaçada do mundo', color: 'hsl(var(--primary))' },
   { icon: Sparkles, title: 'Raciocínio Pro liberado', desc: 'Acesse o modelo de IA avançado para gerar conteúdo', color: 'hsl(var(--primary))' },
   { icon: Zap, title: '50% menos créditos no Flash', desc: 'Modelo Flash consome metade dos créditos de IA', color: 'hsl(var(--warning))' },
   { icon: Infinity, title: '1.500 créditos por mês', desc: 'Receba créditos de IA mensalmente no seu plano', color: 'hsl(var(--destructive))' },
