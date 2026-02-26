@@ -83,7 +83,7 @@ const DeckSettings = () => {
   const [shuffleCards, setShuffleCards] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [allowDuplication, setAllowDuplication] = useState(false);
-  const [learningSteps, setLearningSteps] = useState<string[]>(['1m', '15m']);
+  const [learningSteps, setLearningSteps] = useState<string[]>(['1m', '10m']);
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
   const [maxInterval, setMaxInterval] = useState(1000);
@@ -168,7 +168,7 @@ const DeckSettings = () => {
       setAlgorithmMode(data.algorithm_mode === 'quick_review' ? 'quick_review' : 'fsrs');
       setRequestedRetention((data as any).requested_retention ?? 0.85);
       setShuffleCards(data.shuffle_cards ?? true);
-      setLearningSteps(data.learning_steps || ['1m', '15m']);
+      setLearningSteps(data.learning_steps || ['1m', '10m']);
       setEasyBonus(data.easy_bonus ?? 130);
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);

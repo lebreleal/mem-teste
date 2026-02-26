@@ -231,7 +231,7 @@ export async function submitCardReview(
     return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 0 };
   }
 
-  const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '15m'];
+  const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];
   const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
   const maxIntervalDays = deckConfig?.max_interval ?? 36500;
 

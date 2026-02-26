@@ -54,7 +54,7 @@ export interface FSRSParams {
 
 export const DEFAULT_FSRS_PARAMS: FSRSParams = {
   w: DEFAULT_W,
-  requestedRetention: 0.9,
+  requestedRetention: 0.85,
   maximumInterval: 36500,
   learningSteps: [1, 10],
   relearningSteps: [10],
@@ -193,9 +193,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
     const d = card.difficulty > 0 ? nextDifficulty(w, card.difficulty, rating) : initDifficulty(w, rating);
 
     if (rating === 1) {
-      // Again → back to step 0, halve stability
+      // Again → back to step 0, keep stability (Anki: stability unchanged during learning)
       const stepMinutes = steps[0] ?? 1;
-      return scheduleStep(now, stepMinutes, Math.max(s * 0.5, 0.1), d, card.state, 0);
+      return scheduleStep(now, stepMinutes, s, d, card.state, 0);
     }
     if (rating === 2) {
       // Hard → repeat current step, interval = avg(steps[N], steps[N+1]) or steps[N]*1.5
@@ -226,8 +226,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
   if (elapsedDays < 1) {
     const s = sameDayStability(w, card.stability, rating);
     if (rating === 1) {
+      const sForget = nextForgetStability(w, card.difficulty, card.stability, retrievability(w, card.stability, elapsedDays));
       const stepMinutes = relearningSteps[0] ?? 10;
-      return scheduleStep(now, stepMinutes, Math.max(s * 0.5, 0.1), d, 3, 0);
+      return scheduleStep(now, stepMinutes, sForget, d, 3, 0);
     }
     const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
     const scheduledDate = getLocalMidnight(Math.max(interval, 1));
