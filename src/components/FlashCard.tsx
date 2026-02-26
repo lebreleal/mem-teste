@@ -236,7 +236,7 @@ const MultipleChoiceCard = ({
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'sm2');
+  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
       const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -505,7 +505,7 @@ const MultipleChoiceCard = ({
 
 const FlashCard = ({
   frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType,
-  onRate, isSubmitting, quickReview, algorithmMode = 'sm2', deckConfig,
+  onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
   energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
   canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {

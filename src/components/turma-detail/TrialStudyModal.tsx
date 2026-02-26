@@ -142,7 +142,7 @@ const TrialStudyModal = ({ open, onOpenChange, deckId, deckName }: TrialStudyMod
                 cardType={current.card_type}
                 onRate={handleRate}
                 isSubmitting={false}
-                algorithmMode="sm2"
+                algorithmMode="fsrs"
               />
             </div>
           ) : null}

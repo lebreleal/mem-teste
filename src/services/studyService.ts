@@ -58,7 +58,7 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
-  const algorithmMode = deckConfig?.algorithm_mode || 'sm2';
+  const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
   if (algorithmMode === 'quick_review') {
@@ -224,7 +224,7 @@ export async function submitCardReview(
   let result: any;
 
   if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig?.requested_retention ?? 0.9;
+    const requestedRetention = deckConfig?.requested_retention ?? 0.85;
     const params: FSRSParams = {
       ...DEFAULT_FSRS_PARAMS,
       requestedRetention,
