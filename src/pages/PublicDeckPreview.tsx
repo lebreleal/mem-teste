@@ -101,44 +101,55 @@ const FlashcardViewer = ({ cards }: { cards: { id: string; front_content: string
   );
 };
 
-/* ─── Card Item (full-width card style) ─── */
+/* ─── Parse MC JSON ─── */
+function parseMcOptions(back: string): { options: string[]; correctIndex: number } | null {
+  try {
+    const data = JSON.parse(back);
+    if (Array.isArray(data.options) && typeof data.correctIndex === 'number') return data;
+  } catch {}
+  return null;
+}
+
+/* ─── Card Item (matches Study card layout) ─── */
 const CardItem = ({ front, back, type }: { front: string; back: string; type: string }) => {
   const isCloze = type === 'cloze' || front.includes('{{c');
   const frontText = stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '[$1]');
+  const typeInfo = getCardTypeLabel(type, front);
+  const mcData = parseMcOptions(back);
+
+  // For non-MC, non-cloze: plain back text
   const backText = isCloze
     ? stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '$1')
-    : stripHtml(back);
-  const typeInfo = getCardTypeLabel(type, front);
-
-  // Try to parse multiple choice options from back_content
-  const optionLines = !isCloze ? backText.split('\n').filter(l => l.trim()) : [];
-  const hasOptions = type === 'multiple_choice' || optionLines.length >= 3;
+    : mcData ? '' : stripHtml(back);
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+    <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
       <div className="px-4 py-3 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-foreground leading-snug flex-1">{frontText}</p>
-          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${typeInfo.className}`}>
+        {/* Top row: state badge + type badge */}
+        <div className="flex items-center justify-between">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/15 text-primary border border-primary/30">
+            Novo
+          </span>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${typeInfo.className}`}>
             {typeInfo.label}
           </span>
         </div>
 
-        {hasOptions ? (
+        {/* Question */}
+        <p className="text-sm font-semibold text-foreground leading-snug">{frontText}</p>
+
+        {/* Answer / Options */}
+        {mcData ? (
           <div className="space-y-1 pt-1">
-            {optionLines.slice(0, 5).map((line, i) => {
-              const isCorrect = line.startsWith('✓') || line.startsWith('✔');
-              const cleanLine = line.replace(/^[✓✔]\s*/, '');
-              return (
-                <p key={i} className={`text-xs leading-relaxed ${isCorrect ? 'text-emerald-500 font-medium' : 'text-muted-foreground'}`}>
-                  {isCorrect && '✓ '}{cleanLine}
-                </p>
-              );
-            })}
+            {mcData.options.map((option, i) => (
+              <p key={i} className={`text-xs leading-relaxed ${i === mcData.correctIndex ? 'text-emerald-500 font-medium' : 'text-muted-foreground'}`}>
+                {i === mcData.correctIndex && '✓ '}{option}
+              </p>
+            ))}
           </div>
-        ) : (
+        ) : backText ? (
           <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{backText}</p>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -602,23 +613,7 @@ const PublicDeckPreview = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Action bar */}
-        <div className="sticky bottom-4 pt-3">
-          {alreadyOwns ? (
-            <Button className="w-full gap-2" disabled>
-              ✓ Já na sua coleção
-            </Button>
-          ) : (
-            <Button
-              className="w-full gap-2"
-              onClick={() => importDeck.mutate()}
-              disabled={importDeck.isPending}
-            >
-              <Copy className="h-4 w-4" />
-              {importDeck.isPending ? 'Importando...' : 'Importar para minha coleção'}
-            </Button>
-          )}
-        </div>
+        {/* Action bar removed — deck actions handled in community context */}
       </main>
     </div>
   );
