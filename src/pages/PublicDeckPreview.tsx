@@ -452,6 +452,109 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
   );
 };
 
+/* ─── Inline Card Previewer (embedded above card list) ─── */
+const InlineCardPreviewer = ({ cards, onCardClick }: { cards: any[]; onCardClick: (idx: number) => void }) => {
+  const isMobile = useIsMobile();
+  const virtualCards = useMemo(() => buildVirtualCards(cards), [cards]);
+  const [index, setIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+
+  const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
+  const vc = virtualCards.length > 0 ? virtualCards[safeIndex] : null;
+
+  const goPrev = useCallback(() => {
+    if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); }
+  }, [safeIndex]);
+
+  const goNext = useCallback(() => {
+    if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
+  }, [safeIndex, virtualCards.length]);
+
+  // Swipe support
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const container = document.getElementById('inline-previewer');
+    if (!container) return;
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      swipedRef.current = false;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStartRef.current || swipedRef.current) return;
+      const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+      const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        swipedRef.current = true;
+        if (dx > 0) goPrev(); else goNext();
+      }
+      touchStartRef.current = null;
+    };
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobile, goPrev, goNext]);
+
+  if (!vc || virtualCards.length === 0) return null;
+
+  const isCloze = vc.card?.card_type === 'cloze';
+  const clozeTarget = vc.clozeTarget;
+
+  return (
+    <div id="inline-previewer" className="relative">
+      {/* Counter + cloze badge */}
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
+          <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
+        </span>
+        {isCloze && clozeTarget && (
+          <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+            c{clozeTarget}
+          </span>
+        )}
+      </div>
+
+      {/* Card + arrows */}
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost" size="icon"
+          className="rounded-full bg-card/80 shadow-sm shrink-0 h-8 w-8 disabled:opacity-30"
+          disabled={safeIndex === 0} onClick={goPrev}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        <div className="flex-1 min-w-0">
+          <CardContent
+            vc={vc}
+            revealed={revealed}
+            onClick={() => setRevealed(r => !r)}
+            className=""
+          />
+          {!revealed && (
+            <p className="text-center text-xs text-muted-foreground mt-2 animate-pulse">
+              Toque para revelar
+            </p>
+          )}
+        </div>
+
+        <Button
+          variant="ghost" size="icon"
+          className="rounded-full bg-card/80 shadow-sm shrink-0 h-8 w-8 disabled:opacity-30"
+          disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 /* ─── Main Page ─── */
 const PublicDeckPreview = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -611,7 +714,11 @@ const PublicDeckPreview = () => {
             ) : allCards.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">Nenhum card neste baralho.</p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-4">
+                {/* Inline card previewer */}
+                <InlineCardPreviewer cards={allCards} onCardClick={(idx) => setPreviewIndex(idx)} />
+                
+                <div className="space-y-2.5">
                 {groupedCards.map((group) => {
                   const card = group.cards[0];
                   return (
@@ -656,6 +763,7 @@ const PublicDeckPreview = () => {
                     )}
                   </div>
                 )}
+                </div>
               </div>
             )}
           </TabsContent>
