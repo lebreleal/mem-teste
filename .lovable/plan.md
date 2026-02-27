@@ -1,32 +1,64 @@
 
 
-## Fix: Carousel deck cards ignoring deck-level limits when no plan is active
+## Fix: Easy graduation should produce a larger interval than Good
 
 ### Problem
 
-After the previous fix that always passes `globalNewRemaining` to the carousel, the individual deck cards (Histologia, Anatomia) in the top carousel section now use the global limit instead of deck-level limits. This causes them to show "0 new" when the global limit is exhausted, even though deck-level limits allow more cards.
+When a learning card reaches its last step, pressing "Bom" (Good) and "Facil" (Easy) show the **same interval** (e.g., both 6d). This happens because `graduateToReview()` uses the same stability for both -- the only difference is `minDays` (1 vs 4), which has no effect when the computed interval already exceeds 4.
 
-The banner totals (138 new, 10 learning, 10 review) are correct because `allDecksStats` already uses deck-level limits when no plan exists. But each `DeckStudyCard` receives `globalNewRemaining` and uses it to cap new cards.
+In Anki's FSRS implementation, Easy graduation applies a **bonus multiplier** to produce a meaningfully larger interval than Good.
 
-### Root Cause
+### Is the 2-review graduation correct?
 
-In `src/pages/Dashboard.tsx` line 359, `globalNewRemaining` is always passed to the carousel. Inside `DeckCarousel.tsx`, each `DeckStudyCard` receives this value (line 283) and `getDeckTodayStats` uses it as a cap (line 42-44). When no plan is active, `globalNewRemaining` should not be passed to individual deck cards.
+Yes. With default learning steps `[1, 10]`, the flow is:
+1. New card → "Bom" → 10min (advance to step 1)
+2. Step 1 → "Bom" → graduate to review (6d)
+
+This matches Anki behavior. The user's concern about "graduating too fast" is unfounded -- this is standard.
 
 ### Fix
 
-**File: `src/pages/Dashboard.tsx`** (line 359)
+**File: `src/lib/fsrs.ts`**
 
-Revert to only passing `globalNewRemaining` when a plan is active:
+Apply the easy bonus multiplier (`w[16]`) to the stability when graduating via Easy from learning/relearning states. This ensures Easy always produces a larger interval than Good.
 
+Changes in the **State 1/3 (Learning/Relearning)** section:
+
+**Before (line 216-217):**
 ```
-globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+// Easy -> graduate directly with minimum 4 days
+return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
 ```
 
-This was the original code before the earlier fix. The earlier fix was addressing a different issue (dashboard deck list showing wrong counts), which is now correctly handled by the `useDashboardState.ts` change to `getAggregateStats`. The carousel has its own independent stats calculation (`getDeckTodayStats`) that already handles the no-plan case correctly by using deck-level limits when `globalNewRemaining` is undefined.
+**After:**
+```
+// Easy -> graduate with easy bonus applied to stability
+const easyS = s * w[16]; // w[16] = easy bonus (1.8729)
+return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+```
 
-### Why this is safe
+Same change in **State 0 (New card)** section (line 185-186):
 
-- The deck list section (bottom) uses `getAggregateStats` from `useDashboardState.ts` -- already fixed to use only deck limits when no plan
-- The carousel banner uses `allDecksStats` -- already correct, uses deck limits when no plan
-- The carousel deck cards use `getDeckTodayStats` -- correctly uses deck limits when `globalNewRemaining` is `undefined`
-- When a plan IS active, `globalNewRemaining` continues to be passed and everything works as before
+**Before:**
+```
+return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
+```
+
+**After:**
+```
+const easyS = s * w[16];
+return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+```
+
+### Expected Result
+
+With default params and stability ~2.3 (w[2] for Good on new card):
+- **Bom**: interval from S=2.3 → ~4-6d
+- **Facil**: interval from S=2.3 * 1.87 = ~4.3 → ~8-11d
+
+This matches Anki's behavior where Easy always gives a substantially longer interval during graduation.
+
+### Files Changed
+
+1. `src/lib/fsrs.ts` -- Apply w[16] easy bonus to stability during Easy graduation (2 locations: state 0 and state 1/3)
+
