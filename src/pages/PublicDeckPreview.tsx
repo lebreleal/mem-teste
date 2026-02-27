@@ -714,7 +714,8 @@ const PublicDeckPreview = () => {
           toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
           continue;
         }
-        const filePath = `${user.id}/${turmaDeck.turma_id}/${lessonId}/${Date.now()}_${file.name}`;
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `${user.id}/${turmaDeck.turma_id}/${lessonId}/${Date.now()}_${safeName}`;
         const { error: uploadError } = await supabase.storage.from('lesson-files').upload(filePath, file);
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
