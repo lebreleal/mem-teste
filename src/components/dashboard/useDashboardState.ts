@@ -158,29 +158,51 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
         .select('id, deck_id')
         .in('id', sourceTurmaDeckIds);
       if (!data || data.length === 0) return new Set<string>();
-      // Get source deck updated_at
+
+      // Get source deck IDs and fetch the latest card update for each
       const sourceDeckIds = data.map((td: any) => td.deck_id);
-      const { data: sourceDecks } = await supabase
-        .from('decks')
-        .select('id, updated_at')
-        .in('id', sourceDeckIds);
-      const sourceUpdatedMap = new Map<string, string>();
-      for (const sd of (sourceDecks ?? []) as any[]) {
-        sourceUpdatedMap.set(sd.id, sd.updated_at);
+
+      // Fetch both deck updated_at AND the latest card updated_at per source deck
+      const [decksResult, cardsResult] = await Promise.all([
+        supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds),
+        supabase.from('cards').select('deck_id, updated_at').in('deck_id', sourceDeckIds).order('updated_at', { ascending: false }),
+      ]);
+
+      // Build map: source_deck_id -> latest modification timestamp
+      // Use the most recent between deck.updated_at and max(cards.updated_at)
+      const latestModMap = new Map<string, string>();
+      for (const sd of (decksResult.data ?? []) as any[]) {
+        latestModMap.set(sd.id, sd.updated_at);
       }
-      // Build turma_deck_id -> source_updated_at map
-      const turmaDeckToSourceUpdated = new Map<string, string>();
+      // Group cards by deck_id and take the max updated_at
+      const cardMaxMap = new Map<string, string>();
+      for (const c of (cardsResult.data ?? []) as any[]) {
+        if (!cardMaxMap.has(c.deck_id)) {
+          cardMaxMap.set(c.deck_id, c.updated_at); // already sorted desc, first is max
+        }
+      }
+      // Merge: use whichever is more recent
+      for (const [deckId, cardUpdated] of cardMaxMap) {
+        const deckUpdated = latestModMap.get(deckId);
+        if (!deckUpdated || new Date(cardUpdated) > new Date(deckUpdated)) {
+          latestModMap.set(deckId, cardUpdated);
+        }
+      }
+
+      // Build turma_deck_id -> latest modification timestamp
+      const turmaDeckToLatest = new Map<string, string>();
       for (const td of data as any[]) {
-        const updated = sourceUpdatedMap.get(td.deck_id);
-        if (updated) turmaDeckToSourceUpdated.set(td.id, updated);
+        const latest = latestModMap.get(td.deck_id);
+        if (latest) turmaDeckToLatest.set(td.id, latest);
       }
+
       // Compare with user's synced_at
       const pending = new Set<string>();
       for (const cd of communityDecks) {
-        const sourceUpdated = turmaDeckToSourceUpdated.get(cd.source_turma_deck_id!);
-        if (sourceUpdated && cd.source_turma_deck_id) {
+        const latestMod = turmaDeckToLatest.get(cd.source_turma_deck_id!);
+        if (latestMod && cd.source_turma_deck_id) {
           const syncedAt = (cd as any).synced_at;
-          if (!syncedAt || new Date(sourceUpdated) > new Date(syncedAt)) {
+          if (!syncedAt || new Date(latestMod) > new Date(syncedAt)) {
             pending.add(cd.id);
           }
         }
