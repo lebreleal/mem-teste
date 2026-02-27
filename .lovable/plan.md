@@ -1,64 +1,73 @@
 
 
-## Fix: Easy graduation should produce a larger interval than Good
+## Separar ocultação de irmãos em 3 configurações (como Anki)
 
-### Problem
+### Situacao atual
+Existe apenas um campo booleano `bury_siblings` no baralho. Quando ativo, remove **todos** os irmãos cloze da fila independente do estado (novo, aprendendo, revisao). Isso e mais agressivo que o Anki e causa a situacao onde 9 novos aparecem no contador mas nao aparecem na sessao.
 
-When a learning card reaches its last step, pressing "Bom" (Good) and "Facil" (Easy) show the **same interval** (e.g., both 6d). This happens because `graduateToReview()` uses the same stability for both -- the only difference is `minDays` (1 vs 4), which has no effect when the computed interval already exceeds 4.
+### O que muda
 
-In Anki's FSRS implementation, Easy graduation applies a **bonus multiplier** to produce a meaningfully larger interval than Good.
+Dividir em 3 campos independentes, alinhados com o Anki:
+- `bury_new_siblings` -- Ocultar novos irmaos ate o dia seguinte
+- `bury_review_siblings` -- Ocultar irmaos de revisao ate o dia seguinte  
+- `bury_learning_siblings` -- Ocultar irmaos em aprendizado ate o dia seguinte
 
-### Is the 2-review graduation correct?
+Todos ativados por padrao (mantendo compatibilidade com o comportamento atual).
 
-Yes. With default learning steps `[1, 10]`, the flow is:
-1. New card → "Bom" → 10min (advance to step 1)
-2. Step 1 → "Bom" → graduate to review (6d)
+### Plano tecnico
 
-This matches Anki behavior. The user's concern about "graduating too fast" is unfounded -- this is standard.
+**1. Banco de dados -- adicionar 3 novas colunas na tabela `decks`**
 
-### Fix
+Criar migracao SQL:
+```sql
+ALTER TABLE decks 
+  ADD COLUMN bury_new_siblings boolean NOT NULL DEFAULT true,
+  ADD COLUMN bury_review_siblings boolean NOT NULL DEFAULT true,
+  ADD COLUMN bury_learning_siblings boolean NOT NULL DEFAULT true;
 
-**File: `src/lib/fsrs.ts`**
-
-Apply the easy bonus multiplier (`w[16]`) to the stability when graduating via Easy from learning/relearning states. This ensures Easy always produces a larger interval than Good.
-
-Changes in the **State 1/3 (Learning/Relearning)** section:
-
-**Before (line 216-217):**
-```
-// Easy -> graduate directly with minimum 4 days
-return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
-```
-
-**After:**
-```
-// Easy -> graduate with easy bonus applied to stability
-const easyS = s * w[16]; // w[16] = easy bonus (1.8729)
-return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+-- Copiar valor atual do bury_siblings para os 3 novos campos
+UPDATE decks SET 
+  bury_new_siblings = bury_siblings,
+  bury_review_siblings = bury_siblings,
+  bury_learning_siblings = bury_siblings;
 ```
 
-Same change in **State 0 (New card)** section (line 185-186):
+**2. Logica da fila de estudo -- `src/services/studyService.ts`**
 
-**Before:**
-```
-return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
-```
+Atualizar o select para incluir os 3 novos campos. Substituir a logica de burying unica por uma logica que verifica o estado de cada cartao:
 
-**After:**
-```
-const easyS = s * w[16];
-return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+```text
+Para cada cartao cloze na fila:
+  - Se state=0 (novo) e bury_new_siblings=true --> ocultar se irmao ja visto
+  - Se state=2 (revisao) e bury_review_siblings=true --> ocultar se irmao ja visto
+  - Se state=1 ou 3 (aprendendo/reaprendendo) e bury_learning_siblings=true --> ocultar se irmao ja visto
 ```
 
-### Expected Result
+O campo antigo `bury_siblings` sera mantido temporariamente mas nao mais utilizado na logica.
 
-With default params and stability ~2.3 (w[2] for Good on new card):
-- **Bom**: interval from S=2.3 → ~4-6d
-- **Facil**: interval from S=2.3 * 1.87 = ~4.3 → ~8-11d
+**3. Logica na sessao de estudo -- `src/pages/Study.tsx`**
 
-This matches Anki's behavior where Easy always gives a substantially longer interval during graduation.
+A mesma logica de burying por estado tambem se aplica quando um cartao e respondido durante a sessao (remocao de irmaos em tempo real). Atualizar para respeitar as 3 flags.
 
-### Files Changed
+**4. Tela de configuracoes -- `src/pages/DeckSettings.tsx`**
 
-1. `src/lib/fsrs.ts` -- Apply w[16] easy bonus to stability during Easy graduation (2 locations: state 0 and state 1/3)
+Substituir o toggle unico "Ocultar irmaos" por 3 toggles separados:
+- Ocultar novos irmaos ate o dia seguinte
+- Ocultar irmaos de revisao ate o dia seguinte
+- Ocultar irmaos em aprendizado ate o dia seguinte
 
+**5. Contadores do deck-detail -- `src/components/deck-detail/DeckDetailContext.tsx`**
+
+Garantir que os contadores exibidos no card superior reflitam a fila efetiva (com burying aplicado por estado), para que o numero de "novos" mostrado bata com o que realmente aparece na sessao.
+
+### Arquivos alterados
+- Nova migracao SQL em `supabase/migrations/`
+- `src/integrations/supabase/types.ts` (tipos gerados -- atualizados apos migracao)
+- `src/services/studyService.ts` (logica de burying por estado)
+- `src/pages/Study.tsx` (burying em tempo real por estado)
+- `src/pages/DeckSettings.tsx` (UI dos 3 toggles)
+- `src/components/deck-detail/DeckDetailContext.tsx` (contadores alinhados)
+
+### Compatibilidade
+- Baralhos existentes manterao o mesmo comportamento (todos os 3 campos herdam o valor atual de `bury_siblings`)
+- O campo antigo `bury_siblings` fica como fallback ate ser removido numa limpeza futura
