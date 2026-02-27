@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2 } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -719,6 +719,22 @@ const PublicDeckPreview = () => {
     }
   };
 
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const handleDeleteFile = async (fileId: string) => {
+    try {
+      setDeletingFileId(fileId);
+      const { error } = await supabase.from('turma_lesson_files' as any).delete().eq('id', fileId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-content-files'] });
+      toast({ title: 'Arquivo removido' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao remover', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
   const totalPages = Math.ceil(allCards.length / PAGE_SIZE);
   const paginatedCards = allCards.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -830,27 +846,36 @@ const PublicDeckPreview = () => {
                   const isPdf = file.file_type?.includes('pdf');
                   const isImage = file.file_type?.startsWith('image/');
                   return (
-                    <a
+                    <div
                       key={file.id}
-                      href={file.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:shadow-sm group"
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${
-                        isPdf ? 'bg-destructive/10 text-destructive' : isImage ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {isPdf ? 'PDF' : isImage ? 'IMG' : ext.slice(0, 3)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-2">
-                          {sizeLabel && <span>{sizeLabel}</span>}
-                          <span>{formatDistanceToNow(new Date(file.created_at), { addSuffix: true, locale: ptBR })}</span>
-                        </p>
-                      </div>
-                      <Download className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
-                    </a>
+                      <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${
+                          isPdf ? 'bg-destructive/10 text-destructive' : isImage ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {isPdf ? 'PDF' : isImage ? 'IMG' : ext.slice(0, 3)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-2">
+                            {sizeLabel && <span>{sizeLabel}</span>}
+                            <span>{formatDistanceToNow(new Date(file.created_at), { addSuffix: true, locale: ptBR })}</span>
+                          </p>
+                        </div>
+                        <Download className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
+                      </a>
+                      {isOwner && (
+                        <button
+                          onClick={() => handleDeleteFile(file.id)}
+                          disabled={deletingFileId === file.id}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          aria-label="Remover arquivo"
+                        >
+                          {deletingFileId === file.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
