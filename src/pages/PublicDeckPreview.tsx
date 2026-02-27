@@ -6,17 +6,21 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { Json } from '@/integrations/supabase/types';
 
 const stripHtml = (html: string) => {
@@ -561,9 +565,13 @@ const PublicDeckPreview = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [showEditWarning, setShowEditWarning] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch deck info
   const { data: deck, isLoading: deckLoading } = useQuery({
@@ -664,6 +672,53 @@ const PublicDeckPreview = () => {
     enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
 
+  const isOwner = !!(user && deck && deck.user_id === user.id);
+
+  // ── File upload for owner ──
+  const getOrCreateLesson = async (): Promise<string> => {
+    if (turmaDeck?.lesson_id) return turmaDeck.lesson_id;
+    const { data, error } = await supabase.from('turma_lessons' as any).insert({
+      turma_id: turmaDeck!.turma_id, subject_id: turmaDeck?.subject_id ?? null,
+      name: deck?.name || 'Conteúdo', created_by: user!.id, is_published: true,
+    } as any).select().single();
+    if (error) throw error;
+    // Update turma_deck to reference the new lesson
+    await supabase.from('turma_decks').update({ lesson_id: (data as any).id }).eq('id', turmaDeck!.id);
+    queryClient.invalidateQueries({ queryKey: ['turma-deck-link', deckId] });
+    queryClient.invalidateQueries({ queryKey: ['turma-lessons'] });
+    return (data as any).id;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList?.length || !user || !turmaDeck) return;
+    setUploading(true);
+    try {
+      const lessonId = await getOrCreateLesson();
+      for (const file of Array.from(fileList)) {
+        if (file.size > 20 * 1024 * 1024) {
+          toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
+          continue;
+        }
+        const filePath = `${user.id}/${turmaDeck.turma_id}/${lessonId}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('lesson-files').upload(filePath, file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('lesson-files').getPublicUrl(filePath);
+        await supabase.from('turma_lesson_files' as any).insert({
+          lesson_id: lessonId, turma_id: turmaDeck.turma_id, file_name: file.name,
+          file_url: urlData.publicUrl, file_size: file.size, file_type: file.type, uploaded_by: user.id,
+        } as any);
+      }
+      queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
+      toast({ title: 'Arquivo(s) enviado(s)!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const totalPages = Math.ceil(allCards.length / PAGE_SIZE);
   const paginatedCards = allCards.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -737,79 +792,124 @@ const PublicDeckPreview = () => {
           </span>
         </div>
 
-        {/* Anexos section (only if files exist) */}
-        {deckFiles.length > 0 && (
+        {/* Hidden file input for owner uploads */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+
+        {/* Anexos section */}
+        {(deckFiles.length > 0 || (isOwner && turmaDeck)) && (
           <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Paperclip className="h-3.5 w-3.5" /> Anexos
-            </h3>
-            <div className="space-y-1.5">
-              {deckFiles.map(file => {
-                const ext = file.file_name.split('.').pop()?.toUpperCase() || 'FILE';
-                const sizeKb = file.file_size ? Math.round(file.file_size / 1024) : null;
-                const sizeLabel = sizeKb && sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : sizeKb ? `${sizeKb} KB` : '';
-                const isPdf = file.file_type?.includes('pdf');
-                const isImage = file.file_type?.startsWith('image/');
-                return (
-                  <a
-                    key={file.id}
-                    href={file.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:shadow-sm group"
-                  >
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${
-                      isPdf ? 'bg-destructive/10 text-destructive' : isImage ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {isPdf ? 'PDF' : isImage ? 'IMG' : ext.slice(0, 3)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-2">
-                        {sizeLabel && <span>{sizeLabel}</span>}
-                        <span>{formatDistanceToNow(new Date(file.created_at), { addSuffix: true, locale: ptBR })}</span>
-                      </p>
-                    </div>
-                    <Download className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
-                  </a>
-                );
-              })}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5" /> Anexos
+              </h3>
+              {isOwner && turmaDeck && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  {uploading ? 'Enviando...' : 'Adicionar'}
+                </Button>
+              )}
             </div>
+            {deckFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {deckFiles.map(file => {
+                  const ext = file.file_name.split('.').pop()?.toUpperCase() || 'FILE';
+                  const sizeKb = file.file_size ? Math.round(file.file_size / 1024) : null;
+                  const sizeLabel = sizeKb && sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : sizeKb ? `${sizeKb} KB` : '';
+                  const isPdf = file.file_type?.includes('pdf');
+                  const isImage = file.file_type?.startsWith('image/');
+                  return (
+                    <a
+                      key={file.id}
+                      href={file.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:shadow-sm group"
+                    >
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${
+                        isPdf ? 'bg-destructive/10 text-destructive' : isImage ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {isPdf ? 'PDF' : isImage ? 'IMG' : ext.slice(0, 3)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-2">
+                          {sizeLabel && <span>{sizeLabel}</span>}
+                          <span>{formatDistanceToNow(new Date(file.created_at), { addSuffix: true, locale: ptBR })}</span>
+                        </p>
+                      </div>
+                      <Download className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+            {deckFiles.length === 0 && isOwner && (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhum anexo ainda. Clique em "Adicionar" para enviar arquivos.</p>
+            )}
           </div>
         )}
 
-        {/* Provas section (only if exams exist) */}
-        {deckExams.length > 0 && (
+        {/* Provas section */}
+        {(deckExams.length > 0 || (isOwner && turmaDeck)) && (
           <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <GraduationCap className="h-3.5 w-3.5" /> Provas
-            </h3>
-            <div className="space-y-1.5">
-              {deckExams.map(exam => (
-                <div
-                  key={exam.id}
-                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:shadow-sm cursor-pointer"
-                  onClick={() => navigate(`/turma-exam/${exam.id}`)}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <GraduationCap className="h-3.5 w-3.5" /> Provas
+              </h3>
+              {isOwner && turmaDeck && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => navigate(`/exam/create?turma=${turmaDeck.turma_id}&subject=${turmaDeck.subject_id || ''}&deck=${deckId}`)}
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <GraduationCap className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{exam.title}</p>
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-2">
-                      <span>{exam.total_questions} questões</span>
-                      {exam.time_limit_seconds && (
-                        <span className="flex items-center gap-0.5">
-                          <Clock className="h-3 w-3" />
-                          {Math.round(exam.time_limit_seconds / 60)} min
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))}
+                  <Plus className="h-3 w-3" /> Criar prova
+                </Button>
+              )}
             </div>
+            {deckExams.length > 0 && (
+              <div className="space-y-1.5">
+                {deckExams.map(exam => (
+                  <div
+                    key={exam.id}
+                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:shadow-sm cursor-pointer"
+                    onClick={() => navigate(`/turma-exam/${exam.id}`)}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <GraduationCap className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{exam.title}</p>
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-2">
+                        <span>{exam.total_questions} questões</span>
+                        {exam.time_limit_seconds && (
+                          <span className="flex items-center gap-0.5">
+                            <Clock className="h-3 w-3" />
+                            {Math.round(exam.time_limit_seconds / 60)} min
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {deckExams.length === 0 && isOwner && (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma prova ainda. Clique em "Criar prova" para adicionar.</p>
+            )}
           </div>
         )}
 
@@ -831,12 +931,36 @@ const PublicDeckPreview = () => {
           </TabsList>
 
           <TabsContent value="cards" className="mt-4">
+            {/* Owner warning + edit button */}
+            {isOwner && (
+              <div className="flex items-center gap-2 mb-4 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2">
+                <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                <p className="text-xs text-muted-foreground flex-1">
+                  Edições feitas aqui alteram o baralho original e a comunidade.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 shrink-0"
+                  onClick={() => setShowEditWarning(true)}
+                >
+                  <Pencil className="h-3 w-3" /> Editar cards
+                </Button>
+              </div>
+            )}
             {cardsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
             ) : allCards.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">Nenhum card neste baralho.</p>
+              <div className="text-center py-12 space-y-3">
+                <p className="text-sm text-muted-foreground">Nenhum card neste baralho.</p>
+                {isOwner && (
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowEditWarning(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Adicionar cards
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 <InlineCardPreviewer cards={allCards} onCardClick={(idx) => setPreviewIndex(idx)} />
@@ -904,6 +1028,26 @@ const PublicDeckPreview = () => {
         open={previewIndex !== null}
         onClose={() => setPreviewIndex(null)}
       />
+      {/* Edit warning dialog */}
+      <AlertDialog open={showEditWarning} onOpenChange={setShowEditWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              Editar baralho
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              As alterações feitas nos cards serão refletidas tanto no seu baralho pessoal quanto na comunidade. Todos os membros que importaram este deck receberão as atualizações.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate(`/decks/${deckId}/manage`)}>
+              Entendi, editar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
