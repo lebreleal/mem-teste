@@ -191,36 +191,43 @@ const SectionHeader = ({
   isAdmin,
   onEdit,
   onDelete,
+  onAddDeck,
 }: {
   name: string;
   canEdit: boolean;
   isAdmin: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onAddDeck: () => void;
 }) => (
   <div className="flex items-center justify-between mb-3">
     <h2 className="font-display text-base font-bold text-foreground">{name}</h2>
     {canEdit && (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-4 w-4" /> Renomear Seção
-          </DropdownMenuItem>
-          {isAdmin && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir Seção
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" onClick={onAddDeck}>
+          <Plus className="h-3.5 w-3.5" /> Deck
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="mr-2 h-4 w-4" /> Renomear Seção
+            </DropdownMenuItem>
+            {isAdmin && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Excluir Seção
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     )}
   </div>
 );
@@ -369,6 +376,7 @@ const ContentTab = () => {
             name={sectionName}
             canEdit={canEdit}
             isAdmin={isAdmin}
+            onAddDeck={() => { setAddDeckSectionId(sectionId); setShowAddDeck(true); setAllowDownload(false); }}
             onEdit={() => {
               if (sectionSubject) {
                 setEditingSubject({ id: sectionSubject.id, name: sectionSubject.name });
@@ -488,9 +496,6 @@ const ContentTab = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { setAddDeckSectionId(null); setShowAddDeck(true); setAllowDownload(false); }}>
-                    <Copy className="mr-2 h-4 w-4" /> Baralho
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => importLogic.setShowImportExam(true)}>
                     <ClipboardList className="mr-2 h-4 w-4" /> Prova
                   </DropdownMenuItem>
@@ -512,9 +517,6 @@ const ContentTab = () => {
         </div>
       ) : (
         <>
-          {/* Root decks/exams (without section) */}
-          {(rootDecks.length > 0 || rootExams.length > 0) && renderSection(null, 'Geral')}
-
           {/* Sections */}
           {sections.map(section => renderSection(section.id, section.name, section))}
         </>
@@ -554,17 +556,15 @@ const ContentTab = () => {
       {/* Add Deck Dialog – Multi-select with search & folder grouping */}
       <Dialog open={showAddDeck} onOpenChange={v => { if (!v) { setShowAddDeck(false); setSelectedDeckIds(new Set()); setDeckSearchQuery(''); } else setShowAddDeck(true); }}>
         <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
-          <DialogHeader><DialogTitle>Adicionar Baralhos</DialogTitle></DialogHeader>
-          <div className="space-y-3 flex-1 flex flex-col min-h-0">
-            {sections.length > 0 && (
-              <Select value={addDeckSectionId ?? '__root__'} onValueChange={v => setAddDeckSectionId(v === '__root__' ? null : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Seção" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__root__">Sem seção</SelectItem>
-                  {sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <DialogHeader>
+            <DialogTitle>Adicionar Baralhos</DialogTitle>
+            {addDeckSectionId && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Seção: <span className="font-medium text-foreground">{sections.find(s => s.id === addDeckSectionId)?.name}</span>
+              </p>
             )}
+          </DialogHeader>
+          <div className="space-y-3 flex-1 flex flex-col min-h-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar baralhos..." value={deckSearchQuery} onChange={e => setDeckSearchQuery(e.target.value)} className="pl-9 h-9" />
