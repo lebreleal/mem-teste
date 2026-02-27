@@ -182,8 +182,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Only 1 step → graduate
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate directly with minimum 4 days
-    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
+    // Easy → graduate with easy bonus applied to stability
+    const easyS = s * w[16];
+    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
   }
 
   // ═══ STATE 1 or 3: Learning / Relearning ═══
@@ -213,8 +214,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Last step → graduate to review
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate directly with minimum 4 days
-    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
+    // Easy → graduate with easy bonus applied to stability
+    const easyS = s * w[16];
+    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
   }
 
   // ═══ STATE 2: Review ═══
