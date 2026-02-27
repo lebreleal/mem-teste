@@ -59,6 +59,9 @@ const Study = () => {
   const [cardKey, setCardKey] = useState(0);
   const [waitingSeconds, setWaitingSeconds] = useState(0);
   const [learningTick, setLearningTick] = useState(0);
+  // Track unique card IDs reviewed to compute accurate progress
+  const [initialQueueSize, setInitialQueueSize] = useState(0);
+  const reviewedCardIdsRef = useRef(new Set<string>());
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,6 +88,7 @@ const Study = () => {
   useEffect(() => {
     if (queue.length > 0 && !queueInitialized) {
       setLocalQueue([...queue]);
+      setInitialQueueSize(queue.length);
       setQueueInitialized(true);
     }
   }, [queue, queueInitialized]);
@@ -145,8 +149,11 @@ const Study = () => {
     return () => clearInterval(interval);
   }, [allWaiting, localQueue]);
 
-  const totalCards = localQueue.length + reviewCount;
-  const progressPercent = totalCards > 0 ? (reviewCount / totalCards) * 100 : 0;
+  // totalCards uses the initial queue size (stable denominator).
+  // uniqueReviewedCount = distinct cards reviewed (not counting re-reviews of learning cards).
+  const totalCards = initialQueueSize;
+  const uniqueReviewedCount = reviewedCardIdsRef.current.size;
+  const progressPercent = totalCards > 0 ? Math.min(100, (uniqueReviewedCount / totalCards) * 100) : 0;
 
   const tutorAbortRef = useRef<AbortController | null>(null);
 
@@ -338,6 +345,7 @@ const Study = () => {
       {
         onSuccess: (result) => {
           setTimeout(() => {
+            reviewedCardIdsRef.current.add(currentCard.id);
             setReviewCount(prev => prev + 1);
 
             // Decision: keep in session ONLY if interval_days === 0
@@ -395,6 +403,8 @@ const Study = () => {
     setLocalQueue(undoSnapshot.queue);
     setReviewCount(undoSnapshot.reviewCount);
     setCardKey(undoSnapshot.cardKey);
+    // Remove the undone card from reviewed set if it wasn't in the snapshot queue as already-reviewed
+    reviewedCardIdsRef.current.delete(undoSnapshot.cardId);
     setUndoSnapshot(null);
 
     // Revert card in DB to previous state
@@ -447,7 +457,7 @@ const Study = () => {
           </div>
           <h1 className="font-display text-3xl font-bold text-foreground">Sessão Completa!</h1>
           <p className="mt-2 text-lg text-muted-foreground">
-            Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
+            Você revisou <span className="font-bold text-primary">{uniqueReviewedCount}</span> {uniqueReviewedCount === 1 ? 'card' : 'cards'} hoje.
           </p>
            <Button onClick={goBack} className="mt-8 gap-2">
              <ArrowLeft className="h-4 w-4" /> Voltar
@@ -523,7 +533,7 @@ const Study = () => {
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
-          <span className="text-xs font-bold text-muted-foreground tabular-nums">{reviewCount + 1}/{totalCards}</span>
+          <span className="text-xs font-bold text-muted-foreground tabular-nums">{Math.min(uniqueReviewedCount + 1, totalCards)}/{totalCards}</span>
         </div>
       </header>
 
