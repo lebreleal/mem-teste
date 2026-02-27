@@ -370,14 +370,26 @@ const Study = () => {
               });
             } else {
               // Future review (interval_days > 0): remove from session
-              // Also bury cloze siblings if enabled
+              // Also bury cloze siblings if enabled (state-aware)
               setLocalQueue(prev => {
                 let filtered = prev.filter(c => c.id !== currentCard.id);
-                // Sibling burying: remove cloze siblings from session
-                if (currentCard.card_type === 'cloze' && deckConfig?.bury_siblings !== false) {
-                  const siblingIds = getSiblingIds(currentCard, filtered);
-                  if (siblingIds.length > 0) {
-                    filtered = filtered.filter(c => !siblingIds.includes(c.id));
+                // Sibling burying: remove cloze siblings based on their state
+                if (currentCard.card_type === 'cloze') {
+                  const buryNew = deckConfig?.bury_new_siblings !== false;
+                  const buryReview = deckConfig?.bury_review_siblings !== false;
+                  const buryLearning = deckConfig?.bury_learning_siblings !== false;
+                  if (buryNew || buryReview || buryLearning) {
+                    const siblingIds = getSiblingIds(currentCard, filtered);
+                    if (siblingIds.length > 0) {
+                      filtered = filtered.filter(c => {
+                        if (!siblingIds.includes(c.id)) return true;
+                        // Only bury if the sibling's state matches a bury flag
+                        if (c.state === 0 && buryNew) return false;
+                        if (c.state === 2 && buryReview) return false;
+                        if ((c.state === 1 || c.state === 3) && buryLearning) return false;
+                        return true;
+                      });
+                    }
                   }
                 }
                 return filtered;
