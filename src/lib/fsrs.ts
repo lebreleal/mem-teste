@@ -182,8 +182,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Only 1 step → graduate
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate directly with minimum 4 days
-    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
+    // Easy → graduate with easy bonus applied to stability
+    const easyS = s * w[16];
+    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
   }
 
   // ═══ STATE 1 or 3: Learning / Relearning ═══
@@ -213,8 +214,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Last step → graduate to review
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate directly with minimum 4 days
-    return graduateToReview(w, s, d, requestedRetention, maximumInterval, 4);
+    // Easy → graduate with easy bonus applied to stability
+    const easyS = s * w[16];
+    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
   }
 
   // ═══ STATE 2: Review ═══
@@ -282,7 +284,5 @@ function formatInterval(output: FSRSOutput): string {
     return `${Math.round(mins / 60)}h`;
   }
   if (output.interval_days === 1) return '1d';
-  if (output.interval_days < 30) return `${output.interval_days}d`;
-  if (output.interval_days < 365) return `${Math.round(output.interval_days / 30)}m`;
-  return `${(output.interval_days / 365).toFixed(1)}a`;
+  return `${output.interval_days}d`;
 }

@@ -24,7 +24,7 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings')
     .eq('user_id', userId);
 
   let deckIds: string[];
@@ -179,27 +179,39 @@ export async function fetchStudyQueue(
 
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
-  const newCards = cards.filter(c => c.state === 0).slice(0, effectiveNewLimit);
-  const learningCards = cards.filter(c => c.state === 1 || c.state === 3);
-  const reviewCards = cards.filter(c => c.state === 2).slice(0, effectiveReviewLimit);
+  // --- Sibling burying BEFORE limits (buried cards must not consume slots) ---
+  const buryNew = deckConfig?.bury_new_siblings !== false;
+  const buryReview = deckConfig?.bury_review_siblings !== false;
+  const buryLearning = deckConfig?.bury_learning_siblings !== false;
 
-  // Shuffle only applies to new + review cards; learning cards always go first (they cut the line when ready)
-  const nonLearning = [...newCards, ...reviewCards];
-  const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
-  let queue = [...learningCards, ...orderedNonLearning];
+  let allLearning = cards.filter(c => c.state === 1 || c.state === 3);
+  let allNew = cards.filter(c => c.state === 0);
+  let allReview = cards.filter(c => c.state === 2);
 
-  // Sibling burying: keep only 1 cloze sibling per group
-  const burySiblings = deckConfig?.bury_siblings !== false;
-  if (burySiblings) {
+  if (buryNew || buryReview || buryLearning) {
     const seenFronts = new Set<string>();
-    queue = queue.filter(card => {
-      if (card.card_type !== 'cloze') return true;
+    const buryFilter = (card: any, shouldBury: boolean) => {
+      if (card.card_type !== 'cloze' || !shouldBury) return true;
       const key = card.front_content;
       if (seenFronts.has(key)) return false;
       seenFronts.add(key);
       return true;
-    });
+    };
+    // Process in priority order: learning first (they keep their slot),
+    // then new, then review — so a learning sibling buries the new one, not vice-versa.
+    allLearning = allLearning.filter(c => buryFilter(c, buryLearning));
+    allNew = allNew.filter(c => buryFilter(c, buryNew));
+    allReview = allReview.filter(c => buryFilter(c, buryReview));
   }
+
+  // Apply daily limits AFTER burying
+  const newCards = allNew.slice(0, effectiveNewLimit);
+  const reviewCards = allReview.slice(0, effectiveReviewLimit);
+
+  // Shuffle only applies to new + review cards; learning cards always go first
+  const nonLearning = [...newCards, ...reviewCards];
+  const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
+  let queue = [...allLearning, ...orderedNonLearning];
 
   const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };

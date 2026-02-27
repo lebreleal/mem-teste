@@ -1,32 +1,73 @@
 
 
-## Fix: Carousel deck cards ignoring deck-level limits when no plan is active
+## Separar ocultação de irmãos em 3 configurações (como Anki)
 
-### Problem
+### Situacao atual
+Existe apenas um campo booleano `bury_siblings` no baralho. Quando ativo, remove **todos** os irmãos cloze da fila independente do estado (novo, aprendendo, revisao). Isso e mais agressivo que o Anki e causa a situacao onde 9 novos aparecem no contador mas nao aparecem na sessao.
 
-After the previous fix that always passes `globalNewRemaining` to the carousel, the individual deck cards (Histologia, Anatomia) in the top carousel section now use the global limit instead of deck-level limits. This causes them to show "0 new" when the global limit is exhausted, even though deck-level limits allow more cards.
+### O que muda
 
-The banner totals (138 new, 10 learning, 10 review) are correct because `allDecksStats` already uses deck-level limits when no plan exists. But each `DeckStudyCard` receives `globalNewRemaining` and uses it to cap new cards.
+Dividir em 3 campos independentes, alinhados com o Anki:
+- `bury_new_siblings` -- Ocultar novos irmaos ate o dia seguinte
+- `bury_review_siblings` -- Ocultar irmaos de revisao ate o dia seguinte  
+- `bury_learning_siblings` -- Ocultar irmaos em aprendizado ate o dia seguinte
 
-### Root Cause
+Todos ativados por padrao (mantendo compatibilidade com o comportamento atual).
 
-In `src/pages/Dashboard.tsx` line 359, `globalNewRemaining` is always passed to the carousel. Inside `DeckCarousel.tsx`, each `DeckStudyCard` receives this value (line 283) and `getDeckTodayStats` uses it as a cap (line 42-44). When no plan is active, `globalNewRemaining` should not be passed to individual deck cards.
+### Plano tecnico
 
-### Fix
+**1. Banco de dados -- adicionar 3 novas colunas na tabela `decks`**
 
-**File: `src/pages/Dashboard.tsx`** (line 359)
+Criar migracao SQL:
+```sql
+ALTER TABLE decks 
+  ADD COLUMN bury_new_siblings boolean NOT NULL DEFAULT true,
+  ADD COLUMN bury_review_siblings boolean NOT NULL DEFAULT true,
+  ADD COLUMN bury_learning_siblings boolean NOT NULL DEFAULT true;
 
-Revert to only passing `globalNewRemaining` when a plan is active:
-
+-- Copiar valor atual do bury_siblings para os 3 novos campos
+UPDATE decks SET 
+  bury_new_siblings = bury_siblings,
+  bury_review_siblings = bury_siblings,
+  bury_learning_siblings = bury_siblings;
 ```
-globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+
+**2. Logica da fila de estudo -- `src/services/studyService.ts`**
+
+Atualizar o select para incluir os 3 novos campos. Substituir a logica de burying unica por uma logica que verifica o estado de cada cartao:
+
+```text
+Para cada cartao cloze na fila:
+  - Se state=0 (novo) e bury_new_siblings=true --> ocultar se irmao ja visto
+  - Se state=2 (revisao) e bury_review_siblings=true --> ocultar se irmao ja visto
+  - Se state=1 ou 3 (aprendendo/reaprendendo) e bury_learning_siblings=true --> ocultar se irmao ja visto
 ```
 
-This was the original code before the earlier fix. The earlier fix was addressing a different issue (dashboard deck list showing wrong counts), which is now correctly handled by the `useDashboardState.ts` change to `getAggregateStats`. The carousel has its own independent stats calculation (`getDeckTodayStats`) that already handles the no-plan case correctly by using deck-level limits when `globalNewRemaining` is undefined.
+O campo antigo `bury_siblings` sera mantido temporariamente mas nao mais utilizado na logica.
 
-### Why this is safe
+**3. Logica na sessao de estudo -- `src/pages/Study.tsx`**
 
-- The deck list section (bottom) uses `getAggregateStats` from `useDashboardState.ts` -- already fixed to use only deck limits when no plan
-- The carousel banner uses `allDecksStats` -- already correct, uses deck limits when no plan
-- The carousel deck cards use `getDeckTodayStats` -- correctly uses deck limits when `globalNewRemaining` is `undefined`
-- When a plan IS active, `globalNewRemaining` continues to be passed and everything works as before
+A mesma logica de burying por estado tambem se aplica quando um cartao e respondido durante a sessao (remocao de irmaos em tempo real). Atualizar para respeitar as 3 flags.
+
+**4. Tela de configuracoes -- `src/pages/DeckSettings.tsx`**
+
+Substituir o toggle unico "Ocultar irmaos" por 3 toggles separados:
+- Ocultar novos irmaos ate o dia seguinte
+- Ocultar irmaos de revisao ate o dia seguinte
+- Ocultar irmaos em aprendizado ate o dia seguinte
+
+**5. Contadores do deck-detail -- `src/components/deck-detail/DeckDetailContext.tsx`**
+
+Garantir que os contadores exibidos no card superior reflitam a fila efetiva (com burying aplicado por estado), para que o numero de "novos" mostrado bata com o que realmente aparece na sessao.
+
+### Arquivos alterados
+- Nova migracao SQL em `supabase/migrations/`
+- `src/integrations/supabase/types.ts` (tipos gerados -- atualizados apos migracao)
+- `src/services/studyService.ts` (logica de burying por estado)
+- `src/pages/Study.tsx` (burying em tempo real por estado)
+- `src/pages/DeckSettings.tsx` (UI dos 3 toggles)
+- `src/components/deck-detail/DeckDetailContext.tsx` (contadores alinhados)
+
+### Compatibilidade
+- Baralhos existentes manterao o mesmo comportamento (todos os 3 campos herdam o valor atual de `bury_siblings`)
+- O campo antigo `bury_siblings` fica como fallback ate ser removido numa limpeza futura
