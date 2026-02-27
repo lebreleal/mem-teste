@@ -341,25 +341,16 @@ const ContentTab = () => {
   };
 
   const handleDeckClick = (td: any) => {
-    const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
-    const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
-    const inCollection = alreadyOwns || alreadyLinked;
     const subscriberOnly = !importLogic.isDeckFree(td);
     const canImportDeck = importLogic.canAccessDeck(td);
-
-    if (inCollection) {
-      const personalId = importLogic.getPersonalDeckId(td.id) || (alreadyOwns ? td.deck_id : null);
-      if (personalId) navigate(`/decks/${personalId}`, { state: { from: 'community', turmaId } });
-      return;
-    }
 
     if (subscriberOnly && !canImportDeck) {
       setGateDeck(td);
       return;
     }
 
-    // Navigate to public deck preview
-    navigate(`/decks/${td.deck_id}/preview`);
+    // Always open in preview mode within community
+    navigate(`/decks/${td.deck_id}/preview`, { state: { from: 'community', turmaId } });
   };
 
   // ── Render section with its decks and exams ──
