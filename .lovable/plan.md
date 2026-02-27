@@ -1,51 +1,39 @@
 
-# Corrigir Parametros FSRS-6 e Bug de Learning Step no Preview
+## Bug: Dashboard shows 20 new cards but study queue returns 0
 
-## Problemas encontrados
+### Root Cause
 
-### 1. Bug: MultipleChoiceCard hardcoda `learning_step: 0`
-Em `FlashCard.tsx` linha 243, o preview de intervalos do card de multipla escolha ignora o `learningStep` real do card:
-```typescript
-// ERRADO (linha 243):
-const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: 0 };
-// CORRETO (como ja esta na linha 619 do card basico):
-const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep };
+There is an inconsistency in how the **global daily new card limit** (`daily_new_cards_limit` / `weekly_new_cards` from the user profile) is applied:
+
+| Component | Applies global limit? | Result |
+|---|---|---|
+| Dashboard Carousel (no plan) | NO - passes `undefined` | Shows 20 new |
+| Deck Detail page | YES - always | Shows 0 new |
+| Study Queue (`fetchStudyQueue`) | YES - always | Returns 0 cards |
+
+### Why it happens
+
+In `src/pages/Dashboard.tsx` (line 359):
+```text
+globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
 ```
-Isso faz com que cards de multipla escolha em `learning_step: 1` mostrem intervalos errados (como se ainda estivessem no step 0).
 
-### 2. Learning steps padrao no banco: `['1m', '15m']` vs Anki `['1m', '10m']`
-O banco de dados tem default `['1m', '15m']` mas o Anki usa `[1m, 10m]` como padrao. Isso causa intervalos diferentes dos screenshots do Anki (Hard mostra ~8min em vez de ~5.5min, Good mostra 15min em vez de 10min).
+When there is no active study plan, `globalNewRemaining` is passed as `undefined` to the carousel. Inside `getDeckTodayStats`, this causes the carousel to use only the **deck-level limit** (default 20), ignoring the global cap entirely.
 
-### 3. `DEFAULT_FSRS_PARAMS.requestedRetention` ainda e `0.9`
-No codigo `src/lib/fsrs.ts` linha 57, o default hardcoded ainda e `0.9`. Embora o deck config sobreponha com `0.85`, qualquer chamada sem config explicito usa 90% em vez de 85%.
+Meanwhile, the study queue in `studyService.ts` ALWAYS fetches the profile's `daily_new_cards_limit` and `weekly_new_cards`, applying it as a hard cap. If the user has already studied enough new cards from other decks today to exhaust this global limit, the study queue returns 0 cards -- but the carousel still shows 20.
 
-### 4. `Again` em learning halving stability (`s * 0.5`)
-Na linha 198, quando um card em aprendizado recebe "Again", a estabilidade e cortada pela metade. No Anki com FSRS, a estabilidade NAO muda durante os learning steps - ela so e recalculada quando o card gradua ou entra em revisao. O mesmo problema ocorre na linha 230 (same-day review Again).
+### Fix
 
-### 5. Same-day review Again usa `s * 0.5` em vez de `nextForgetStability`
-Na linha 230, um card de revisao revisado no mesmo dia com "Again" deveria usar `nextForgetStability()` (a formula oficial do FSRS) em vez de simplesmente cortar pela metade.
+**File: `src/pages/Dashboard.tsx`** (line 359)
+- Always pass `globalNewRemaining` to the carousel, regardless of whether a plan is active:
+```text
+globalNewRemaining={state.globalNewRemaining}
+```
 
-## Plano de correcao
+This ensures the carousel display matches what the study queue will actually deliver.
 
-### Arquivo 1: `src/lib/fsrs.ts`
-- Linha 57: Mudar `requestedRetention: 0.9` para `0.85`
-- Linha 198: Remover `Math.max(s * 0.5, 0.1)` e manter a estabilidade original `s` no Again durante learning
-- Linha 230: Substituir `Math.max(s * 0.5, 0.1)` por `nextForgetStability(w, card.difficulty, card.stability, 1)` no same-day Again
+### Technical Details
 
-### Arquivo 2: `src/components/FlashCard.tsx`
-- Linha 243: Trocar `learning_step: 0` por `learning_step: learningStep ?? 0` (precisa receber a prop, ja existe como `learningStep` na interface do componente - verificar se o MultipleChoiceCard recebe)
-
-### Arquivo 3: Migracao SQL
-- Atualizar default de `learning_steps` de `['1m', '15m']` para `['1m', '10m']` na tabela decks
-- Atualizar decks existentes que ainda usam `['1m', '15m']` para `['1m', '10m']`
-
-### Arquivo 4: `src/test/fsrs.test.ts`
-- Teste 16 (linha 156): Ajustar expectativa - Again em learning nao deve mais reduzir stability
-- Teste 22 (linha 198): Ajustar - stability nao deve mais reduzir com Again repetido em learning
-
-## Resultado esperado
-- Intervalos para cards novos com steps [1m, 10m]: `1min | ~5.5min | 10min | Xd` (identico ao Anki)
-- MultipleChoiceCard mostra intervalos corretos quando em learning step > 0
-- Again em learning mantem a estabilidade (nao halve), como no Anki
-- Same-day Again usa a formula oficial de forget stability
-- Retencao padrao alinhada a 85% em todo o sistema
+- `globalNewRemaining` is computed in `useDashboardState.ts` as `Math.max(0, todayGlobalLimit - globalNewReviewedToday)` and already handles both plan and non-plan scenarios correctly (scoping to plan roots when a plan exists, or all roots otherwise).
+- No changes needed to `studyService.ts` or `DeckDetailContext.tsx` -- they already apply the global limit correctly.
+- The `Study.tsx` progress counter fix from the previous edit is unrelated and did not introduce this bug.
