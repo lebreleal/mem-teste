@@ -12,7 +12,8 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Layers, RefreshCw, ArrowLeft, MessageSquare, ThumbsUp, ThumbsDown, Clock } from 'lucide-react';
+import { Copy, Layers, RefreshCw, ArrowLeft, MessageSquare, ThumbsUp, ThumbsDown, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -29,7 +30,7 @@ const getCardTypeLabel = (type: string, front: string) => {
   return { label: 'BÁSICO', className: 'bg-muted text-muted-foreground border-border/50' };
 };
 
-/* ─── Flashcard Viewer ─── */
+/* ─── Flashcard Viewer (matches Anki-style preview) ─── */
 const FlashcardViewer = ({ cards }: { cards: { id: string; front_content: string; back_content: string; card_type: string }[] }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -38,65 +39,106 @@ const FlashcardViewer = ({ cards }: { cards: { id: string; front_content: string
 
   const card = cards[currentIndex];
   const isCloze = card.card_type === 'cloze' || card.front_content.includes('{{c');
-  const frontText = stripHtml(card.front_content).replace(/\{\{c\d+::(.+?)\}\}/g, '[...]');
-  const backText = isCloze
-    ? stripHtml(card.front_content).replace(/\{\{c\d+::(.+?)\}\}/g, '$1')
-    : stripHtml(card.back_content);
+  const isMC = card.card_type === 'multiple_choice';
+  const mcData = parseMcOptions(card.back_content);
 
-  const hasImage = card.front_content.includes('<img');
-  const imgMatch = card.front_content.match(/<img[^>]+src="([^"]+)"/);
-  const imgSrc = imgMatch?.[1];
+  // Render front HTML with cloze blanks styled as blue pills
+  const renderFrontHtml = () => {
+    let html = card.front_content;
+    if (isCloze) {
+      html = html.replace(
+        /\{\{c\d+::(.+?)\}\}/g,
+        revealed
+          ? '<span style="background:hsl(var(--primary)/0.15);color:hsl(var(--primary));padding:2px 8px;border-radius:4px;font-weight:600">$1</span>'
+          : '<span style="background:hsl(var(--primary)/0.1);color:hsl(var(--primary));padding:2px 8px;border-radius:4px;border:1.5px solid hsl(var(--primary)/0.3);font-weight:600">[...]</span>'
+      );
+    }
+    return html;
+  };
+
+  const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(currentIndex - 1); setRevealed(false); } };
+  const goNext = () => { if (currentIndex < cards.length - 1) { setCurrentIndex(currentIndex + 1); setRevealed(false); } };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-center">
+    <div className="space-y-2">
+      {/* Counter + cloze badge */}
+      <div className="flex items-center justify-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">
           <span className="text-primary">{currentIndex + 1}</span>/{cards.length}
         </span>
-      </div>
-
-      <div
-        className="rounded-2xl border border-border/50 bg-card p-5 min-h-[200px] flex flex-col items-center justify-center cursor-pointer transition-all hover:border-primary/30 active:scale-[0.99]"
-        onClick={() => setRevealed(!revealed)}
-      >
-        {!revealed ? (
-          <div className="text-center space-y-3 w-full">
-            {hasImage && imgSrc && (
-              <img src={imgSrc} alt="" className="max-h-40 mx-auto rounded-lg object-contain" />
-            )}
-            <p className="text-sm text-foreground leading-relaxed">{frontText}</p>
-          </div>
-        ) : (
-          <div className="text-center space-y-3 w-full">
-            <p className="text-sm text-primary leading-relaxed font-medium">{backText}</p>
-          </div>
+        {isCloze && (
+          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+            c{card.front_content.match(/\{\{c(\d+)::/)?.[1] ?? '1'}
+          </span>
         )}
       </div>
 
-      {!revealed && (
-        <p className="text-center text-[11px] text-muted-foreground/60">Toque para revelar</p>
-      )}
-
-      <div className="flex items-center justify-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-3 text-xs"
+      {/* Card + side arrows */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={goPrev}
           disabled={currentIndex === 0}
-          onClick={() => { setCurrentIndex(currentIndex - 1); setRevealed(false); }}
+          className="shrink-0 p-1 text-muted-foreground/40 hover:text-muted-foreground disabled:opacity-0 transition-opacity"
         >
-          ← Anterior
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-3 text-xs"
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        <div
+          className="flex-1 rounded-2xl border border-border/40 bg-card shadow-sm min-h-[250px] sm:min-h-[300px] flex flex-col justify-center cursor-pointer transition-all active:scale-[0.995]"
+          onClick={() => setRevealed(!revealed)}
+        >
+          <div className="px-6 py-8 space-y-4">
+            {/* Front content */}
+            <div
+              className="prose prose-sm max-w-none text-foreground leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderFrontHtml()) }}
+            />
+
+            {/* MC options (always visible, highlight correct on reveal) */}
+            {isMC && mcData && (
+              <div className="space-y-2 mt-4">
+                {mcData.options.map((option, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm transition-colors ${
+                      revealed && idx === mcData.correctIndex
+                        ? 'border-emerald-500/50 bg-emerald-500/10 text-foreground font-medium'
+                        : 'border-border/50 bg-background/50 text-foreground'
+                    }`}
+                  >
+                    <span className="text-muted-foreground font-semibold text-xs shrink-0">
+                      {String.fromCharCode(65 + idx)})
+                    </span>
+                    <span>{option}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Basic card: show back on reveal */}
+            {!isCloze && !isMC && revealed && (
+              <div className="border-t border-border/30 pt-4 mt-4">
+                <div
+                  className="prose prose-sm max-w-none text-muted-foreground leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={goNext}
           disabled={currentIndex === cards.length - 1}
-          onClick={() => { setCurrentIndex(currentIndex + 1); setRevealed(false); }}
+          className="shrink-0 p-1 text-muted-foreground/40 hover:text-muted-foreground disabled:opacity-0 transition-opacity"
         >
-          Próximo →
-        </Button>
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
+
+      {!revealed && (
+        <p className="text-center text-[11px] text-muted-foreground/50">Toque para revelar</p>
+      )}
     </div>
   );
 };
@@ -110,17 +152,38 @@ function parseMcOptions(back: string): { options: string[]; correctIndex: number
   return null;
 }
 
-/* ─── Card Item (matches Study card layout) ─── */
+/* ─── Card Item (matches Study card layout from reference) ─── */
 const CardItem = ({ front, back, type }: { front: string; back: string; type: string }) => {
   const isCloze = type === 'cloze' || front.includes('{{c');
-  const frontText = stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '[$1]');
   const typeInfo = getCardTypeLabel(type, front);
   const mcData = parseMcOptions(back);
 
-  // For non-MC, non-cloze: plain back text
-  const backText = isCloze
-    ? stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '$1')
-    : mcData ? '' : stripHtml(back);
+  // Cloze: render with answers revealed as colored inline highlights
+  const renderClozeText = () => {
+    return stripHtml(front).replace(
+      /\{\{c\d+::(.+?)\}\}/g,
+      '⟨$1⟩'
+    );
+  };
+
+  // Split cloze text into parts with highlights
+  const renderClozeInline = () => {
+    const text = front.replace(/<[^>]+>/g, ''); // strip HTML
+    const parts: { text: string; isAnswer: boolean }[] = [];
+    let lastIndex = 0;
+    const regex = /\{\{c\d+::(.+?)\}\}/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push({ text: text.slice(lastIndex, match.index), isAnswer: false });
+      parts.push({ text: match[1], isAnswer: true });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isAnswer: false });
+    return parts;
+  };
+
+  const frontText = isCloze ? '' : stripHtml(front);
+  const backText = !isCloze && !mcData ? stripHtml(back) : '';
 
   return (
     <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
@@ -135,21 +198,38 @@ const CardItem = ({ front, back, type }: { front: string; back: string; type: st
           </span>
         </div>
 
-        {/* Question */}
-        <p className="text-sm font-semibold text-foreground leading-snug">{frontText}</p>
+        {/* Content */}
+        {isCloze ? (
+          <p className="text-sm font-medium text-foreground leading-relaxed">
+            {renderClozeInline().map((part, i) =>
+              part.isAnswer ? (
+                <span key={i} className="bg-primary/15 text-primary px-1.5 py-0.5 rounded font-semibold">
+                  {part.text}
+                </span>
+              ) : (
+                <span key={i}>{part.text}</span>
+              )
+            )}
+          </p>
+        ) : (
+          <p className="text-sm font-semibold text-foreground leading-snug">{frontText}</p>
+        )}
 
-        {/* Answer / Options */}
-        {mcData ? (
-          <div className="space-y-1 pt-1">
+        {/* MC options */}
+        {mcData && (
+          <div className="space-y-0.5 pt-1">
             {mcData.options.map((option, i) => (
               <p key={i} className={`text-xs leading-relaxed ${i === mcData.correctIndex ? 'text-emerald-500 font-medium' : 'text-muted-foreground'}`}>
                 {i === mcData.correctIndex && '✓ '}{option}
               </p>
             ))}
           </div>
-        ) : backText ? (
+        )}
+
+        {/* Basic back */}
+        {backText && (
           <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{backText}</p>
-        ) : null}
+        )}
       </div>
     </div>
   );
