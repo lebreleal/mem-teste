@@ -22,22 +22,124 @@ const stripHtml = (html: string) => {
   return div.textContent || div.innerText || '';
 };
 
-/* ─── Card Row ─── */
-const CardRow = ({ front, back, type, index }: { front: string; back: string; type: string; index: number }) => {
+const getCardTypeLabel = (type: string, front: string) => {
   const isCloze = type === 'cloze' || front.includes('{{c');
-  const frontText = stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '[$1]');
-  const backText = isCloze ? '' : stripHtml(back);
+  if (isCloze) return { label: 'CLOZE', className: 'bg-purple-500/15 text-purple-400 border-purple-500/30' };
+  if (type === 'multiple_choice') return { label: 'MÚLTIPLA', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
+  return { label: 'BÁSICO', className: 'bg-muted text-muted-foreground border-border/50' };
+};
+
+/* ─── Flashcard Viewer ─── */
+const FlashcardViewer = ({ cards }: { cards: { id: string; front_content: string; back_content: string; card_type: string }[] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+
+  if (cards.length === 0) return null;
+
+  const card = cards[currentIndex];
+  const isCloze = card.card_type === 'cloze' || card.front_content.includes('{{c');
+  const frontText = stripHtml(card.front_content).replace(/\{\{c\d+::(.+?)\}\}/g, '[...]');
+  const backText = isCloze
+    ? stripHtml(card.front_content).replace(/\{\{c\d+::(.+?)\}\}/g, '$1')
+    : stripHtml(card.back_content);
+
+  const hasImage = card.front_content.includes('<img');
+  const imgMatch = card.front_content.match(/<img[^>]+src="([^"]+)"/);
+  const imgSrc = imgMatch?.[1];
 
   return (
-    <div className={`flex gap-3 px-4 py-3 text-sm ${index % 2 === 0 ? 'bg-muted/30' : ''}`}>
-      <div className="flex-1 min-w-0">
-        <p className="text-foreground line-clamp-2">{frontText}</p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-center">
+        <span className="text-xs font-semibold text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">
+          <span className="text-primary">{currentIndex + 1}</span>/{cards.length}
+        </span>
       </div>
-      {backText && (
-        <div className="flex-1 min-w-0">
-          <p className="text-muted-foreground line-clamp-2">{backText}</p>
-        </div>
+
+      <div
+        className="rounded-2xl border border-border/50 bg-card p-5 min-h-[200px] flex flex-col items-center justify-center cursor-pointer transition-all hover:border-primary/30 active:scale-[0.99]"
+        onClick={() => setRevealed(!revealed)}
+      >
+        {!revealed ? (
+          <div className="text-center space-y-3 w-full">
+            {hasImage && imgSrc && (
+              <img src={imgSrc} alt="" className="max-h-40 mx-auto rounded-lg object-contain" />
+            )}
+            <p className="text-sm text-foreground leading-relaxed">{frontText}</p>
+          </div>
+        ) : (
+          <div className="text-center space-y-3 w-full">
+            <p className="text-sm text-primary leading-relaxed font-medium">{backText}</p>
+          </div>
+        )}
+      </div>
+
+      {!revealed && (
+        <p className="text-center text-[11px] text-muted-foreground/60">Toque para revelar</p>
       )}
+
+      <div className="flex items-center justify-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-3 text-xs"
+          disabled={currentIndex === 0}
+          onClick={() => { setCurrentIndex(currentIndex - 1); setRevealed(false); }}
+        >
+          ← Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-3 text-xs"
+          disabled={currentIndex === cards.length - 1}
+          onClick={() => { setCurrentIndex(currentIndex + 1); setRevealed(false); }}
+        >
+          Próximo →
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Card Item (full-width card style) ─── */
+const CardItem = ({ front, back, type }: { front: string; back: string; type: string }) => {
+  const isCloze = type === 'cloze' || front.includes('{{c');
+  const frontText = stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '[$1]');
+  const backText = isCloze
+    ? stripHtml(front).replace(/\{\{c\d+::(.+?)\}\}/g, '$1')
+    : stripHtml(back);
+  const typeInfo = getCardTypeLabel(type, front);
+
+  // Try to parse multiple choice options from back_content
+  const optionLines = !isCloze ? backText.split('\n').filter(l => l.trim()) : [];
+  const hasOptions = type === 'multiple_choice' || optionLines.length >= 3;
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <div className="px-4 py-3 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium text-foreground leading-snug flex-1">{frontText}</p>
+          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${typeInfo.className}`}>
+            {typeInfo.label}
+          </span>
+        </div>
+
+        {hasOptions ? (
+          <div className="space-y-1 pt-1">
+            {optionLines.slice(0, 5).map((line, i) => {
+              const isCorrect = line.startsWith('✓') || line.startsWith('✔');
+              const cleanLine = line.replace(/^[✓✔]\s*/, '');
+              return (
+                <p key={i} className={`text-xs leading-relaxed ${isCorrect ? 'text-emerald-500 font-medium' : 'text-muted-foreground'}`}>
+                  {isCorrect && '✓ '}{cleanLine}
+                </p>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{backText}</p>
+        )}
+      </div>
     </div>
   );
 };
@@ -438,7 +540,7 @@ const PublicDeckPreview = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="cards" className="mt-0">
+          <TabsContent value="cards" className="mt-4 space-y-6">
             {cardsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -447,46 +549,50 @@ const PublicDeckPreview = () => {
               <p className="text-sm text-muted-foreground text-center py-12">Nenhum card neste baralho.</p>
             ) : (
               <>
-                <div className="flex gap-3 px-4 py-2 border-b border-border/50 bg-muted/50">
-                  <span className="flex-1 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Frente</span>
-                  <span className="flex-1 text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Verso</span>
+                {/* Flashcard Viewer */}
+                <FlashcardViewer cards={allCards} />
+
+                {/* Card list */}
+                <div className="space-y-2.5">
+                  <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider px-1">
+                    Todos os cards ({allCards.length})
+                  </h3>
+                  {paginatedCards.map((card) => (
+                    <CardItem
+                      key={card.id}
+                      front={card.front_content}
+                      back={card.back_content}
+                      type={card.card_type}
+                    />
+                  ))}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 py-3">
+                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                        const pageNum = totalPages <= 5 ? i : (
+                          page < 3 ? i :
+                          page > totalPages - 3 ? totalPages - 5 + i :
+                          page - 2 + i
+                        );
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setPage(pageNum)}
+                            className={`h-7 w-7 rounded-md text-xs font-semibold transition-colors ${
+                              page === pageNum
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}
+                          >
+                            {pageNum + 1}
+                          </button>
+                        );
+                      })}
+                      {totalPages > 5 && (
+                        <span className="text-xs text-muted-foreground">... {totalPages}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {paginatedCards.map((card, i) => (
-                  <CardRow
-                    key={card.id}
-                    front={card.front_content}
-                    back={card.back_content}
-                    type={card.card_type}
-                    index={i}
-                  />
-                ))}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 py-3 border-t border-border/30">
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                      const pageNum = totalPages <= 5 ? i : (
-                        page < 3 ? i :
-                        page > totalPages - 3 ? totalPages - 5 + i :
-                        page - 2 + i
-                      );
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setPage(pageNum)}
-                          className={`h-7 w-7 rounded-md text-xs font-semibold transition-colors ${
-                            page === pageNum
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                          }`}
-                        >
-                          {pageNum + 1}
-                        </button>
-                      );
-                    })}
-                    {totalPages > 5 && (
-                      <span className="text-xs text-muted-foreground">... {totalPages}</span>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </TabsContent>
