@@ -1,20 +1,22 @@
 /**
  * PublicDeckPreview — full page preview of a public deck
  * with card list, community suggestions, and import action.
+ * Reuses exact same CardContent/viewer from CardPreviewSheet and card list layout from CardList.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Layers, RefreshCw, ArrowLeft, MessageSquare, ThumbsUp, ThumbsDown, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
-import { sanitizeHtml } from '@/lib/sanitize';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
 import type { Json } from '@/integrations/supabase/types';
 
 const stripHtml = (html: string) => {
@@ -23,213 +25,255 @@ const stripHtml = (html: string) => {
   return div.textContent || div.innerText || '';
 };
 
-const getCardTypeLabel = (type: string, front: string) => {
-  const isCloze = type === 'cloze' || front.includes('{{c');
-  if (isCloze) return { label: 'CLOZE', className: 'bg-purple-500/15 text-purple-400 border-purple-500/30' };
-  if (type === 'multiple_choice') return { label: 'MÚLTIPLA', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
-  return { label: 'BÁSICO', className: 'bg-muted text-muted-foreground border-border/50' };
-};
+/* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
+const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose }: {
+  cards: any[];
+  initialIndex: number;
+  open: boolean;
+  onClose: () => void;
+}) => {
+  const isMobile = useIsMobile();
 
-/* ─── Flashcard Viewer (matches Anki-style preview) ─── */
-const FlashcardViewer = ({ cards }: { cards: { id: string; front_content: string; back_content: string; card_type: string }[] }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const virtualCards = useMemo(() => {
+    if (!cards || cards.length === 0) return [];
+    return buildVirtualCards(cards);
+  }, [cards]);
+
+  const initialVirtualIndex = useMemo(() => {
+    if (virtualCards.length === 0) return 0;
+    if (initialIndex < 0 || initialIndex >= cards.length) return 0;
+    const targetCard = cards[initialIndex];
+    if (!targetCard) return 0;
+    const found = virtualCards.findIndex(vc => vc.card.id === targetCard.id);
+    return found >= 0 ? found : 0;
+  }, [initialIndex, cards, virtualCards]);
+
+  const [index, setIndex] = useState(initialVirtualIndex);
   const [revealed, setRevealed] = useState(false);
 
-  if (cards.length === 0) return null;
+  useEffect(() => { setIndex(initialVirtualIndex); setRevealed(false); }, [initialVirtualIndex]);
 
-  const card = cards[currentIndex];
-  const isCloze = card.card_type === 'cloze' || card.front_content.includes('{{c');
-  const isMC = card.card_type === 'multiple_choice';
-  const mcData = parseMcOptions(card.back_content);
+  const safeIndex = virtualCards.length > 0 ? Math.min(index, virtualCards.length - 1) : 0;
+  const vc = virtualCards.length > 0 ? virtualCards[safeIndex] : null;
 
-  // Render front HTML with cloze blanks styled as blue pills
-  const renderFrontHtml = () => {
-    let html = card.front_content;
-    if (isCloze) {
-      html = html.replace(
-        /\{\{c\d+::(.+?)\}\}/g,
-        revealed
-          ? '<span style="background:hsl(var(--primary)/0.15);color:hsl(var(--primary));padding:2px 8px;border-radius:4px;font-weight:600">$1</span>'
-          : '<span style="background:hsl(var(--primary)/0.1);color:hsl(var(--primary));padding:2px 8px;border-radius:4px;border:1.5px solid hsl(var(--primary)/0.3);font-weight:600">[...]</span>'
-      );
-    }
-    return html;
-  };
+  const goPrev = useCallback(() => {
+    if (safeIndex > 0) { setIndex(i => i - 1); setRevealed(false); }
+  }, [safeIndex]);
 
-  const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(currentIndex - 1); setRevealed(false); } };
-  const goNext = () => { if (currentIndex < cards.length - 1) { setCurrentIndex(currentIndex + 1); setRevealed(false); } };
+  const goNext = useCallback(() => {
+    if (safeIndex < virtualCards.length - 1) { setIndex(i => i + 1); setRevealed(false); }
+  }, [safeIndex, virtualCards.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setRevealed(r => !r); }
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, goPrev, goNext, onClose]);
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
+
+  useEffect(() => {
+    if (!open || !isMobile) return;
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      swipedRef.current = false;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStartRef.current || swipedRef.current) return;
+      const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+      const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        swipedRef.current = true;
+        if (dx > 0) goPrev(); else goNext();
+      }
+      touchStartRef.current = null;
+    };
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [open, isMobile, goPrev, goNext]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  if (!open || !vc) return null;
+
+  const isCloze = vc.card?.card_type === 'cloze';
+  const clozeTarget = vc.clozeTarget;
 
   return (
-    <div className="space-y-2">
-      {/* Counter + cloze badge */}
-      <div className="flex items-center justify-center gap-2">
-        <span className="text-xs font-semibold text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">
-          <span className="text-primary">{currentIndex + 1}</span>/{cards.length}
-        </span>
-        {isCloze && (
-          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            c{card.front_content.match(/\{\{c(\d+)::/)?.[1] ?? '1'}
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      <header className="flex items-center justify-between px-3 sm:px-5 py-3 shrink-0">
+        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-border/50 bg-card/80 px-3 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums">
+            <span className="text-primary">{safeIndex + 1}</span>/{virtualCards.length}
           </span>
-        )}
-      </div>
+          {isCloze && clozeTarget && (
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+              c{clozeTarget}
+            </span>
+          )}
+        </div>
+        <div className="w-9" />
+      </header>
 
-      {/* Card + side arrows */}
-      <div className="flex items-center gap-1">
-        <button
-          onClick={goPrev}
-          disabled={currentIndex === 0}
-          className="shrink-0 p-1 text-muted-foreground/40 hover:text-muted-foreground disabled:opacity-0 transition-opacity"
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-4 sm:px-6">
+        <Button
+          variant="ghost" size="icon"
+          className={`rounded-full bg-card/80 shadow-sm shrink-0 absolute left-2 sm:left-3 z-10 disabled:opacity-30 ${isMobile ? 'h-8 w-8' : 'h-10 w-10'}`}
+          disabled={safeIndex === 0} onClick={goPrev}
         >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+          <ChevronLeft className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
+        </Button>
 
-        <div
-          className="flex-1 rounded-2xl border border-border/40 bg-card shadow-sm min-h-[250px] sm:min-h-[300px] flex flex-col justify-center cursor-pointer transition-all active:scale-[0.995]"
-          onClick={() => setRevealed(!revealed)}
-        >
-          <div className="px-6 py-8 space-y-4">
-            {/* Front content */}
-            <div
-              className="prose prose-sm max-w-none text-foreground leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderFrontHtml()) }}
-            />
-
-            {/* MC options (always visible, highlight correct on reveal) */}
-            {isMC && mcData && (
-              <div className="space-y-2 mt-4">
-                {mcData.options.map((option, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm transition-colors ${
-                      revealed && idx === mcData.correctIndex
-                        ? 'border-emerald-500/50 bg-emerald-500/10 text-foreground font-medium'
-                        : 'border-border/50 bg-background/50 text-foreground'
-                    }`}
-                  >
-                    <span className="text-muted-foreground font-semibold text-xs shrink-0">
-                      {String.fromCharCode(65 + idx)})
-                    </span>
-                    <span>{option}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Basic card: show back on reveal */}
-            {!isCloze && !isMC && revealed && (
-              <div className="border-t border-border/30 pt-4 mt-4">
-                <div
-                  className="prose prose-sm max-w-none text-muted-foreground leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }}
-                />
-              </div>
-            )}
-          </div>
+        <div className="w-full max-w-2xl mx-auto px-10 sm:px-14">
+          <CardContent vc={vc} revealed={revealed} onClick={() => setRevealed(r => !r)} />
+          {!revealed && (
+            <p className="text-center text-xs text-muted-foreground mt-3 sm:mt-4 animate-pulse">
+              Toque para revelar
+            </p>
+          )}
         </div>
 
-        <button
-          onClick={goNext}
-          disabled={currentIndex === cards.length - 1}
-          className="shrink-0 p-1 text-muted-foreground/40 hover:text-muted-foreground disabled:opacity-0 transition-opacity"
+        <Button
+          variant="ghost" size="icon"
+          className={`rounded-full bg-card/80 shadow-sm shrink-0 absolute right-2 sm:right-3 z-10 disabled:opacity-30 ${isMobile ? 'h-8 w-8' : 'h-10 w-10'}`}
+          disabled={safeIndex === virtualCards.length - 1} onClick={goNext}
         >
-          <ChevronRight className="h-5 w-5" />
-        </button>
+          <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
+        </Button>
       </div>
-
-      {!revealed && (
-        <p className="text-center text-[11px] text-muted-foreground/50">Toque para revelar</p>
-      )}
     </div>
   );
 };
 
-/* ─── Parse MC JSON ─── */
-function parseMcOptions(back: string): { options: string[]; correctIndex: number } | null {
-  try {
-    const data = JSON.parse(back);
-    if (Array.isArray(data.options) && typeof data.correctIndex === 'number') return data;
-  } catch {}
-  return null;
-}
+/* ─── Card list item (exact same rendering as CardList in DeckDetail) ─── */
+const CardListItem = ({ card, onClick }: { card: any; onClick: () => void }) => {
+  const isCloze = card.card_type === 'cloze';
+  const isMultiple = card.card_type === 'multiple_choice';
+  const isOcclusion = card.card_type === 'image_occlusion';
 
-/* ─── Card Item (matches Study card layout from reference) ─── */
-const CardItem = ({ front, back, type }: { front: string; back: string; type: string }) => {
-  const isCloze = type === 'cloze' || front.includes('{{c');
-  const typeInfo = getCardTypeLabel(type, front);
-  const mcData = parseMcOptions(back);
+  const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
+  const typeBadgeClass = isCloze
+    ? 'bg-primary/15 text-primary border-primary/30'
+    : isMultiple
+    ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
+    : isOcclusion
+    ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
+    : 'bg-muted text-muted-foreground border-border';
 
-  // Cloze: render with answers revealed as colored inline highlights
-  const renderClozeText = () => {
-    return stripHtml(front).replace(
-      /\{\{c\d+::(.+?)\}\}/g,
-      '⟨$1⟩'
-    );
-  };
-
-  // Split cloze text into parts with highlights
-  const renderClozeInline = () => {
-    const text = front.replace(/<[^>]+>/g, ''); // strip HTML
-    const parts: { text: string; isAnswer: boolean }[] = [];
-    let lastIndex = 0;
-    const regex = /\{\{c\d+::(.+?)\}\}/g;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push({ text: text.slice(lastIndex, match.index), isAnswer: false });
-      parts.push({ text: match[1], isAnswer: true });
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isAnswer: false });
-    return parts;
-  };
-
-  const frontText = isCloze ? '' : stripHtml(front);
-  const backText = !isCloze && !mcData ? stripHtml(back) : '';
+  let mcOptions: string[] = [];
+  let mcCorrectIdx = -1;
+  if (isMultiple && card.back_content) {
+    try {
+      const parsed = JSON.parse(card.back_content);
+      if (parsed.options) mcOptions = parsed.options;
+      if (typeof parsed.correctIndex === 'number') mcCorrectIdx = parsed.correctIndex;
+    } catch {}
+  }
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
-      <div className="px-4 py-3 space-y-2">
-        {/* Top row: state badge + type badge */}
-        <div className="flex items-center justify-between">
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/15 text-primary border border-primary/30">
-            Novo
-          </span>
-          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${typeInfo.className}`}>
-            {typeInfo.label}
-          </span>
+    <div
+      className="group rounded-xl border border-border/60 bg-card p-4 transition-colors cursor-pointer hover:border-border hover:shadow-sm"
+      onClick={onClick}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-muted/80 text-muted-foreground">
+              Novo
+            </span>
+          </div>
+          {isCloze ? (
+            <p className="text-sm font-semibold text-foreground leading-snug">
+              {(() => {
+                const plain = stripHtml(card.front_content);
+                const parts: React.ReactNode[] = [];
+                const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                let lastIdx = 0;
+                let m;
+                let k = 0;
+                const BADGE_STYLE = 'bg-primary/15 text-primary border-b-2 border-primary/50 rounded';
+                while ((m = regex.exec(plain)) !== null) {
+                  if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                  const n = parseInt(m[1]);
+                  parts.push(
+                    <span key={k++} className={`inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold ${BADGE_STYLE}`}>
+                      <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
+                      {m[2]}
+                    </span>
+                  );
+                  lastIdx = m.index + m[0].length;
+                }
+                if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                return parts;
+              })()}
+            </p>
+          ) : isOcclusion ? (
+            (() => {
+              try {
+                const data = JSON.parse(card.front_content);
+                const rectCount = data.allRects?.length || 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-14 rounded border border-border/50 bg-muted/50 overflow-hidden shrink-0">
+                      {data.imageUrl && <img src={data.imageUrl} alt="" className="h-full w-full object-cover" />}
+                    </div>
+                    <span className="text-xs text-muted-foreground">{rectCount} área{rectCount !== 1 ? 's' : ''} oculta{rectCount !== 1 ? 's' : ''}</span>
+                  </div>
+                );
+              } catch {
+                return <p className="text-sm text-muted-foreground">Oclusão de imagem</p>;
+              }
+            })()
+          ) : (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+              {stripHtml(card.front_content)}
+            </p>
+          )}
+
+          {isMultiple && mcOptions.length > 0 ? (
+            <div className="mt-2 space-y-0.5">
+              {mcOptions.map((opt, oi) => (
+                <p key={oi} className={`text-xs leading-snug ${oi === mcCorrectIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                  {oi === mcCorrectIdx ? '✓ ' : '  '}{opt}
+                </p>
+              ))}
+            </div>
+          ) : !isOcclusion && !isCloze && card.back_content ? (
+            <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">
+              {stripHtml(card.back_content)}
+            </p>
+          ) : null}
         </div>
 
-        {/* Content */}
-        {isCloze ? (
-          <p className="text-sm font-medium text-foreground leading-relaxed">
-            {renderClozeInline().map((part, i) =>
-              part.isAnswer ? (
-                <span key={i} className="bg-primary/15 text-primary px-1.5 py-0.5 rounded font-semibold">
-                  {part.text}
-                </span>
-              ) : (
-                <span key={i}>{part.text}</span>
-              )
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
+            {isCloze && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
+              </svg>
             )}
-          </p>
-        ) : (
-          <p className="text-sm font-semibold text-foreground leading-snug">{frontText}</p>
-        )}
-
-        {/* MC options */}
-        {mcData && (
-          <div className="space-y-0.5 pt-1">
-            {mcData.options.map((option, i) => (
-              <p key={i} className={`text-xs leading-relaxed ${i === mcData.correctIndex ? 'text-emerald-500 font-medium' : 'text-muted-foreground'}`}>
-                {i === mcData.correctIndex && '✓ '}{option}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {/* Basic back */}
-        {backText && (
-          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{backText}</p>
-        )}
+            {typeLabel}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -265,7 +309,6 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
         <div className="flex items-center gap-2 min-w-0">
           <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
@@ -284,16 +327,13 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
         </span>
       </div>
 
-      {/* Rationale */}
       {suggestion.rationale && (
         <div className="px-4 py-2 bg-muted/20 border-b border-border/30">
           <p className="text-xs text-muted-foreground italic">"{suggestion.rationale}"</p>
         </div>
       )}
 
-      {/* Diff view */}
       <div className="divide-y divide-border/30">
-        {/* Front diff */}
         {suggestedFront && originalFront !== suggestedFront && (
           <div className="px-4 py-3 space-y-2">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Frente</p>
@@ -306,7 +346,6 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
           </div>
         )}
 
-        {/* Back diff */}
         {suggestedBack && originalBack !== suggestedBack && (
           <div className="px-4 py-3 space-y-2">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Verso</p>
@@ -330,7 +369,6 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['deck-suggestions-public', deckId],
     queryFn: async () => {
-      // Fetch suggestions with card info
       const { data, error } = await supabase
         .from('deck_suggestions')
         .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content')
@@ -340,15 +378,10 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
-      // Get suggester names
       const userIds = [...new Set(data.map(s => s.suggester_user_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .in('id', userIds);
+      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', userIds);
       const nameMap = new Map((profiles ?? []).map(p => [p.id, p.name]));
 
-      // Get original card content
       const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
       const { data: cards } = cardIds.length > 0
         ? await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds)
@@ -382,7 +415,6 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {filters.map(f => (
           <button
@@ -426,9 +458,9 @@ const PublicDeckPreview = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   // Fetch deck info
   const { data: deck, isLoading: deckLoading } = useQuery({
@@ -452,40 +484,13 @@ const PublicDeckPreview = () => {
     enabled: !!deckId,
   });
 
-  // Check ownership — user already has this deck or imported it
-  const { data: alreadyOwns } = useQuery({
-    queryKey: ['owns-deck', deckId, user?.id],
-    queryFn: async () => {
-      if (!user || !deckId) return false;
-      if (deck?.user_id === user.id) return true;
-      // Check if user has a deck linked via marketplace listing
-      const { data: listing } = await supabase
-        .from('marketplace_listings')
-        .select('id')
-        .eq('deck_id', deckId)
-        .limit(1)
-        .maybeSingle();
-      if (listing) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('source_listing_id', listing.id)
-          .limit(1);
-        if ((data?.length ?? 0) > 0) return true;
-      }
-      return false;
-    },
-    enabled: !!user && !!deckId && !!deck,
-  });
-
-  // Fetch cards
+  // Fetch cards (with all fields needed by CardContent)
   const { data: allCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['public-deck-cards', deckId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('cards')
-        .select('id, front_content, back_content, card_type')
+        .select('*')
         .eq('deck_id', deckId!)
         .order('created_at', { ascending: true })
         .limit(500);
@@ -511,59 +516,26 @@ const PublicDeckPreview = () => {
   const totalPages = Math.ceil(allCards.length / PAGE_SIZE);
   const paginatedCards = allCards.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Import mutation
-  const importDeck = useMutation({
-    mutationFn: async () => {
-      if (!user || !deck) throw new Error('Not authenticated');
+  // Group cloze cards for display (same logic as CardList)
+  const groupedCards = useMemo(() => {
+    const groups: { cards: typeof paginatedCards; isClozeGroup: boolean }[] = [];
+    const usedIds = new Set<string>();
 
-      // Find marketplace listing for this deck (if any) to set source_listing_id
-      const { data: listing } = await supabase
-        .from('marketplace_listings')
-        .select('id')
-        .eq('deck_id', deckId!)
-        .eq('is_published', true)
-        .limit(1)
-        .maybeSingle();
-
-      const { data: newDeck, error: deckError } = await supabase
-        .from('decks')
-        .insert({
-          user_id: user.id,
-          name: deck.name,
-          is_public: false,
-          ...(listing ? { source_listing_id: listing.id } : { is_live_deck: true }),
-        })
-        .select('id')
-        .single();
-      if (deckError) throw deckError;
-
-      if (allCards.length > 0) {
-        const cardsToInsert = allCards.map(c => ({
-          deck_id: newDeck.id,
-          front_content: c.front_content,
-          back_content: c.back_content,
-          card_type: c.card_type,
-          state: 0,
-          stability: 0,
-          difficulty: 0,
-        }));
-        for (let i = 0; i < cardsToInsert.length; i += 100) {
-          const batch = cardsToInsert.slice(i, i + 100);
-          const { error } = await supabase.from('cards').insert(batch);
-          if (error) throw error;
-        }
+    paginatedCards.forEach(card => {
+      if (usedIds.has(card.id)) return;
+      if (card.card_type === 'cloze') {
+        const siblings = paginatedCards.filter(
+          c => c.card_type === 'cloze' && c.front_content === card.front_content && !usedIds.has(c.id)
+        );
+        siblings.forEach(s => usedIds.add(s.id));
+        groups.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
+      } else {
+        usedIds.add(card.id);
+        groups.push({ cards: [card], isClozeGroup: false });
       }
-      return newDeck;
-    },
-    onSuccess: () => {
-      toast({ title: 'Deck importado com sucesso!' });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      navigate('/dashboard');
-    },
-    onError: () => {
-      toast({ title: 'Erro ao importar deck', variant: 'destructive' });
-    },
-  });
+    });
+    return groups;
+  }, [paginatedCards]);
 
   if (deckLoading) {
     return (
@@ -631,7 +603,7 @@ const PublicDeckPreview = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="cards" className="mt-4 space-y-6">
+          <TabsContent value="cards" className="mt-4">
             {cardsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -639,52 +611,52 @@ const PublicDeckPreview = () => {
             ) : allCards.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">Nenhum card neste baralho.</p>
             ) : (
-              <>
-                {/* Flashcard Viewer */}
-                <FlashcardViewer cards={allCards} />
-
-                {/* Card list */}
-                <div className="space-y-2.5">
-                  <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider px-1">
-                    Todos os cards ({allCards.length})
-                  </h3>
-                  {paginatedCards.map((card) => (
-                    <CardItem
-                      key={card.id}
-                      front={card.front_content}
-                      back={card.back_content}
-                      type={card.card_type}
-                    />
-                  ))}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 py-3">
-                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                        const pageNum = totalPages <= 5 ? i : (
-                          page < 3 ? i :
-                          page > totalPages - 3 ? totalPages - 5 + i :
-                          page - 2 + i
-                        );
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setPage(pageNum)}
-                            className={`h-7 w-7 rounded-md text-xs font-semibold transition-colors ${
-                              page === pageNum
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                            }`}
-                          >
-                            {pageNum + 1}
-                          </button>
-                        );
-                      })}
-                      {totalPages > 5 && (
-                        <span className="text-xs text-muted-foreground">... {totalPages}</span>
+              <div className="space-y-2.5">
+                {groupedCards.map((group) => {
+                  const card = group.cards[0];
+                  return (
+                    <div key={card.id} className="relative">
+                      {group.isClozeGroup && (
+                        <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
                       )}
+                      <CardListItem
+                        card={card}
+                        onClick={() => {
+                          const flatIdx = allCards.findIndex(c => c.id === card.id);
+                          setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
+                        }}
+                      />
                     </div>
-                  )}
-                </div>
-              </>
+                  );
+                })}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 py-3">
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      const pageNum = totalPages <= 5 ? i : (
+                        page < 3 ? i :
+                        page > totalPages - 3 ? totalPages - 5 + i :
+                        page - 2 + i
+                      );
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`h-7 w-7 rounded-md text-xs font-semibold transition-colors ${
+                            page === pageNum
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          }`}
+                        >
+                          {pageNum + 1}
+                        </button>
+                      );
+                    })}
+                    {totalPages > 5 && (
+                      <span className="text-xs text-muted-foreground">... {totalPages}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </TabsContent>
 
@@ -692,9 +664,15 @@ const PublicDeckPreview = () => {
             <CommunitySuggestions deckId={deck.id} />
           </TabsContent>
         </Tabs>
-
-        {/* Action bar removed — deck actions handled in community context */}
       </main>
+
+      {/* Full-screen card preview (same as DeckDetail) */}
+      <ReadOnlyPreviewSheet
+        cards={allCards}
+        initialIndex={previewIndex ?? 0}
+        open={previewIndex !== null}
+        onClose={() => setPreviewIndex(null)}
+      />
     </div>
   );
 };
