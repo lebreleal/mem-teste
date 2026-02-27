@@ -266,7 +266,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     if (hasPlanActive && planRootIds!.has(rootDeck.id)) {
       effectiveNew = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
     } else {
-      effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining, globalNewRemaining));
+      // No plan: only deck limit applies (global limit is a Study Plan feature)
+      effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining));
     }
     const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
     const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
