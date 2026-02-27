@@ -1,73 +1,68 @@
 
 
-## Separar ocultação de irmãos em 3 configurações (como Anki)
+## Plano: Enterrar Card + Remover Anexos
 
-### Situacao atual
-Existe apenas um campo booleano `bury_siblings` no baralho. Quando ativo, remove **todos** os irmãos cloze da fila independente do estado (novo, aprendendo, revisao). Isso e mais agressivo que o Anki e causa a situacao onde 9 novos aparecem no contador mas nao aparecem na sessao.
+### 1. Enterrar Card (Bury) na sessao de estudo
 
-### O que muda
+**O que e "Enterrar"?**
+No Anki, enterrar um card significa pula-lo por hoje -- ele desaparece da sessao atual e volta no dia seguinte. E diferente de congelar (que remove permanentemente).
 
-Dividir em 3 campos independentes, alinhados com o Anki:
-- `bury_new_siblings` -- Ocultar novos irmaos ate o dia seguinte
-- `bury_review_siblings` -- Ocultar irmaos de revisao ate o dia seguinte  
-- `bury_learning_siblings` -- Ocultar irmaos em aprendizado ate o dia seguinte
+**Quando aparece?**
+O botao de enterrar deve aparecer **tanto na frente quanto no verso** do card. O usuario pode querer pular o card antes mesmo de ver a resposta (ex: "nao quero estudar isso agora") ou depois de ver (ex: "ja sei, nao preciso revisar hoje"). No Anki, o bury esta disponivel em ambos os lados.
 
-Todos ativados por padrao (mantendo compatibilidade com o comportamento atual).
+**Onde fica?**
+Substituira o icone de "Notas pessoais" (`StickyNote`) no componente `StudyCardActions`. O icone sera uma pa (Shovel -- usaremos `Pickaxe` do Lucide ou similar). As notas pessoais continuam acessiveis, mas dentro do dropdown de editar (junto com congelar e editar).
 
-### Plano tecnico
+**Comportamento:**
+- Ao clicar no icone da pa, abre um AlertDialog explicando: "Enterrar este card? Ele sera removido da sessao de hoje e voltara amanha."
+- Ao confirmar, o card recebe `scheduled_date = inicio do dia seguinte` sem alterar `state`, `stability` ou `difficulty`
+- O card e removido da fila local (`localQueue`)
+- Irmao cloze tambem sao enterrados (mesmo comportamento do Anki)
 
-**1. Banco de dados -- adicionar 3 novas colunas na tabela `decks`**
+**Arquivos editados:**
+- `src/components/StudyCardActions.tsx` -- adicionar botao de enterrar (icone de pa) e AlertDialog explicativo; mover "Notas pessoais" para dentro do dropdown
+- `src/pages/Study.tsx` -- adicionar callback `onCardBuried` que remove o card (e irmaos cloze) da `localQueue`
+- `src/components/FlashCard.tsx` -- garantir que o botao de enterrar apareca tanto na frente quanto no verso (as actions ja sao renderizadas em ambos)
 
-Criar migracao SQL:
+### 2. Remover anexos dentro do deck (PublicDeckPreview)
+
+Atualmente o dono pode adicionar anexos, mas nao pode remove-los. Adicionaremos um botao de lixeira em cada arquivo quando `isOwner` for true.
+
+**Comportamento:**
+- Icone de lixeira aparece ao lado do icone de download para o dono
+- Ao clicar, confirma com toast ou AlertDialog simples
+- Remove o registro de `turma_lesson_files` e invalida a query
+
+**Arquivo editado:**
+- `src/pages/PublicDeckPreview.tsx` -- adicionar botao de remocao de arquivo na lista de anexos, com mutacao de delete
+
+### Detalhes tecnicos
+
+**Bury -- logica de banco:**
 ```sql
-ALTER TABLE decks 
-  ADD COLUMN bury_new_siblings boolean NOT NULL DEFAULT true,
-  ADD COLUMN bury_review_siblings boolean NOT NULL DEFAULT true,
-  ADD COLUMN bury_learning_siblings boolean NOT NULL DEFAULT true;
-
--- Copiar valor atual do bury_siblings para os 3 novos campos
-UPDATE decks SET 
-  bury_new_siblings = bury_siblings,
-  bury_review_siblings = bury_siblings,
-  bury_learning_siblings = bury_siblings;
+-- Agendar para o inicio do dia seguinte (meia-noite UTC+0 do proximo dia)
+UPDATE cards 
+SET scheduled_date = (CURRENT_DATE + INTERVAL '1 day')::timestamptz
+WHERE id = :cardId;
 ```
 
-**2. Logica da fila de estudo -- `src/services/studyService.ts`**
+**Bury -- sibling burying:**
+Reutilizar a funcao `getSiblingIds` ja existente em `Study.tsx` para encontrar irmaos cloze e remove-los da fila local tambem.
 
-Atualizar o select para incluir os 3 novos campos. Substituir a logica de burying unica por uma logica que verifica o estado de cada cartao:
-
-```text
-Para cada cartao cloze na fila:
-  - Se state=0 (novo) e bury_new_siblings=true --> ocultar se irmao ja visto
-  - Se state=2 (revisao) e bury_review_siblings=true --> ocultar se irmao ja visto
-  - Se state=1 ou 3 (aprendendo/reaprendendo) e bury_learning_siblings=true --> ocultar se irmao ja visto
+**Novo callback em StudyCardActions:**
+```typescript
+interface StudyCardActionsProps {
+  // ... existing props
+  onCardBuried: () => void;  // novo
+}
 ```
 
-O campo antigo `bury_siblings` sera mantido temporariamente mas nao mais utilizado na logica.
+**Remocao de arquivo:**
+```typescript
+const handleDeleteFile = async (fileId: string) => {
+  await supabase.from('turma_lesson_files').delete().eq('id', fileId);
+  queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
+  toast({ title: 'Arquivo removido' });
+};
+```
 
-**3. Logica na sessao de estudo -- `src/pages/Study.tsx`**
-
-A mesma logica de burying por estado tambem se aplica quando um cartao e respondido durante a sessao (remocao de irmaos em tempo real). Atualizar para respeitar as 3 flags.
-
-**4. Tela de configuracoes -- `src/pages/DeckSettings.tsx`**
-
-Substituir o toggle unico "Ocultar irmaos" por 3 toggles separados:
-- Ocultar novos irmaos ate o dia seguinte
-- Ocultar irmaos de revisao ate o dia seguinte
-- Ocultar irmaos em aprendizado ate o dia seguinte
-
-**5. Contadores do deck-detail -- `src/components/deck-detail/DeckDetailContext.tsx`**
-
-Garantir que os contadores exibidos no card superior reflitam a fila efetiva (com burying aplicado por estado), para que o numero de "novos" mostrado bata com o que realmente aparece na sessao.
-
-### Arquivos alterados
-- Nova migracao SQL em `supabase/migrations/`
-- `src/integrations/supabase/types.ts` (tipos gerados -- atualizados apos migracao)
-- `src/services/studyService.ts` (logica de burying por estado)
-- `src/pages/Study.tsx` (burying em tempo real por estado)
-- `src/pages/DeckSettings.tsx` (UI dos 3 toggles)
-- `src/components/deck-detail/DeckDetailContext.tsx` (contadores alinhados)
-
-### Compatibilidade
-- Baralhos existentes manterao o mesmo comportamento (todos os 3 campos herdam o valor atual de `bury_siblings`)
-- O campo antigo `bury_siblings` fica como fallback ate ser removido numa limpeza futura
