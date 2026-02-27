@@ -15,9 +15,9 @@ import {
 import { useDeckDetail } from './DeckDetailContext';
 import type { CardRow } from '@/types/deck';
 
-/* ─── Cloze helpers ─── */
+/* ─── Cloze helpers (exported for reuse) ─── */
 
-function renderClozePreview(html: string, revealed: boolean, targetNum?: number): string {
+export function renderClozePreview(html: string, revealed: boolean, targetNum?: number): string {
   return html.replace(/\{\{c(\d+)::(.+?)\}\}/g, (_, num, answer) => {
     const n = parseInt(num);
     if (targetNum !== undefined && n !== targetNum) return answer;
@@ -28,12 +28,12 @@ function renderClozePreview(html: string, revealed: boolean, targetNum?: number)
 
 /* ─── Virtual card types ─── */
 
-interface VirtualCard {
+export interface VirtualCard {
   card: CardRow;
   clozeTarget?: number;
 }
 
-function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
+export function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
 
@@ -62,7 +62,7 @@ function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
 
 /* ─── Card content renderer ─── */
 
-function CardContent({
+export function CardContent({
   vc, revealed, onClick, className = '',
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
