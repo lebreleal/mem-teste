@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CreatorPanelSheet from '@/components/turma-detail/CreatorPanelSheet';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -45,6 +46,7 @@ const TurmaSubHeader = ({
   const [showMembers, setShowMembers] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [showCreatorPanel, setShowCreatorPanel] = useState(false);
 
   // Rating
   const { myRating, submitRating } = useMyTurmaRating(turmaId);
@@ -98,9 +100,14 @@ const TurmaSubHeader = ({
                 </button>
               )}
               {isAdmin && (
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onShowSettings}>
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                <>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowCreatorPanel(true)} title="Painel do Criador">
+                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onShowSettings}>
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </>
               )}
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
                 <Users className="h-4 w-4 text-muted-foreground" />
@@ -229,6 +236,11 @@ const TurmaSubHeader = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Creator Panel Sheet */}
+      {isAdmin && (
+        <CreatorPanelSheet open={showCreatorPanel} onOpenChange={setShowCreatorPanel} turmaId={turmaId} />
+      )}
     </>
   );
 };
