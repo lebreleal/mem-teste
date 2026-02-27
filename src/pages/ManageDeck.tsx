@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { compressImage } from '@/lib/imageUtils';
 
 /* ─── Occlusion Editor Component ─── */
 
@@ -186,9 +187,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
     if (!file) return;
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop();
+      const compressed = await compressImage(file);
+      const ext = compressed.name.split('.').pop() || 'webp';
       const path = `${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, file);
+      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
       setImageUrl(urlData.publicUrl);

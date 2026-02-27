@@ -4,6 +4,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { markdownToHtml } from '@/lib/markdownToHtml';
+import { compressImage } from '@/lib/imageUtils';
 import type { CardRow } from '@/types/deck';
 export type { CardRow } from '@/types/deck';
 
@@ -103,9 +104,10 @@ export async function bulkDeleteCards(ids: string[]) {
 /** Upload a card image to storage. Returns the public URL. */
 export async function uploadCardImage(userId: string, file: File): Promise<string> {
   if (file.size > 5 * 1024 * 1024) throw new Error('Máximo 5MB');
-  const ext = file.name.split('.').pop() || 'png';
+  const compressed = await compressImage(file);
+  const ext = compressed.name.split('.').pop() || 'webp';
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('card-images').upload(path, file);
+  const { error } = await supabase.storage.from('card-images').upload(path, compressed);
   if (error) throw error;
   const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
   return urlData.publicUrl;

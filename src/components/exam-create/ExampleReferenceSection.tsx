@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Trash2, Loader2, Image, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { compressImage } from '@/lib/imageUtils';
 
 interface ExampleReferenceSectionProps {
   userId: string;
@@ -32,9 +33,10 @@ const ExampleReferenceSection = ({
   const uploadImage = async (file: File) => {
     setExampleImageUploading(true);
     try {
-      const ext = file.name.split('.').pop() || 'png';
+      const compressed = await compressImage(file);
+      const ext = compressed.name.split('.').pop() || 'webp';
       const path = `exam-examples/${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from('card-images').upload(path, file);
+      const { error } = await supabase.storage.from('card-images').upload(path, compressed);
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
       setExampleImageUrl(urlData.publicUrl);
