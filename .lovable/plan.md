@@ -1,68 +1,119 @@
 
 
-## Plano: Enterrar Card + Remover Anexos
+## Plano: Otimizar Carregamento de Imagens de Oclusao
 
-### 1. Enterrar Card (Bury) na sessao de estudo
+### Problema
+As imagens de oclusao sao armazenadas em tamanho original (ate 5MB) no Supabase Storage. Quando o usuario estuda, cada card carrega a imagem completa, causando lentidao -- especialmente em redes moveis.
 
-**O que e "Enterrar"?**
-No Anki, enterrar um card significa pula-lo por hoje -- ele desaparece da sessao atual e volta no dia seguinte. E diferente de congelar (que remove permanentemente).
+### Solucao: Compressao no Upload + Transformacao no Display
 
-**Quando aparece?**
-O botao de enterrar deve aparecer **tanto na frente quanto no verso** do card. O usuario pode querer pular o card antes mesmo de ver a resposta (ex: "nao quero estudar isso agora") ou depois de ver (ex: "ja sei, nao preciso revisar hoje"). No Anki, o bury esta disponivel em ambos os lados.
+#### 1. Comprimir imagens no momento do upload (client-side)
 
-**Onde fica?**
-Substituira o icone de "Notas pessoais" (`StickyNote`) no componente `StudyCardActions`. O icone sera uma pa (Shovel -- usaremos `Pickaxe` do Lucide ou similar). As notas pessoais continuam acessiveis, mas dentro do dropdown de editar (junto com congelar e editar).
+Criar uma funcao utilitaria `compressImage` em `src/lib/imageUtils.ts` que:
+- Usa Canvas API para redimensionar a imagem antes do upload
+- Limita a largura maxima a 1200px (suficiente para oclusao com boa qualidade)
+- Converte para WebP (80% qualidade) quando o browser suportar, senao JPEG 85%
+- Resultado tipico: imagem de 3MB vira ~100-200KB
 
-**Comportamento:**
-- Ao clicar no icone da pa, abre um AlertDialog explicando: "Enterrar este card? Ele sera removido da sessao de hoje e voltara amanha."
-- Ao confirmar, o card recebe `scheduled_date = inicio do dia seguinte` sem alterar `state`, `stability` ou `difficulty`
-- O card e removido da fila local (`localQueue`)
-- Irmao cloze tambem sao enterrados (mesmo comportamento do Anki)
+**Arquivo novo:** `src/lib/imageUtils.ts`
 
-**Arquivos editados:**
-- `src/components/StudyCardActions.tsx` -- adicionar botao de enterrar (icone de pa) e AlertDialog explicativo; mover "Notas pessoais" para dentro do dropdown
-- `src/pages/Study.tsx` -- adicionar callback `onCardBuried` que remove o card (e irmaos cloze) da `localQueue`
-- `src/components/FlashCard.tsx` -- garantir que o botao de enterrar apareca tanto na frente quanto no verso (as actions ja sao renderizadas em ambos)
+#### 2. Aplicar compressao em todos os pontos de upload de imagem
 
-### 2. Remover anexos dentro do deck (PublicDeckPreview)
+Modificar os seguintes arquivos para usar `compressImage` antes de fazer upload:
+- `src/services/cardService.ts` (`uploadCardImage`) -- usado pela maioria dos fluxos
+- `src/pages/ManageDeck.tsx` -- upload direto no editor de oclusao
+- `src/components/RichEditor.tsx` -- upload de imagens dentro de cards basicos
+- `src/components/deck-detail/DeckDetailContext.tsx` -- upload via attach/paste de oclusao
 
-Atualmente o dono pode adicionar anexos, mas nao pode remove-los. Adicionaremos um botao de lixeira em cada arquivo quando `isOwner` for true.
+#### 3. Usar Supabase Image Transformation para imagens existentes
 
-**Comportamento:**
-- Icone de lixeira aparece ao lado do icone de download para o dono
-- Ao clicar, confirma com toast ou AlertDialog simples
-- Remove o registro de `turma_lesson_files` e invalida a query
+O Supabase Storage suporta transformacao de imagens on-the-fly via query parameters. Para imagens ja existentes (que nao foram comprimidas), modificar a URL no momento da renderizacao:
 
-**Arquivo editado:**
-- `src/pages/PublicDeckPreview.tsx` -- adicionar botao de remocao de arquivo na lista de anexos, com mutacao de delete
+- Na funcao `renderOcclusion` em `FlashCard.tsx`, adicionar parametros de transformacao a URL da imagem:
+  `imageUrl + '?width=800&quality=75'` (se for URL do Supabase)
+- Isso funciona como cache automatico no CDN do Supabase
+
+**Nota:** Image Transformations precisa estar habilitado no projeto Supabase (e um recurso do plano Pro). Se nao estiver disponivel, as imagens existentes continuarao carregando normalmente, mas as novas ja serao comprimidas.
+
+#### 4. Lazy loading e placeholder
+
+Adicionar `loading="lazy"` nas tags `<img>` geradas por `renderOcclusion` para que o browser so carregue quando necessario.
 
 ### Detalhes tecnicos
 
-**Bury -- logica de banco:**
-```sql
--- Agendar para o inicio do dia seguinte (meia-noite UTC+0 do proximo dia)
-UPDATE cards 
-SET scheduled_date = (CURRENT_DATE + INTERVAL '1 day')::timestamptz
-WHERE id = :cardId;
-```
-
-**Bury -- sibling burying:**
-Reutilizar a funcao `getSiblingIds` ja existente em `Study.tsx` para encontrar irmaos cloze e remove-los da fila local tambem.
-
-**Novo callback em StudyCardActions:**
+**`src/lib/imageUtils.ts` (novo):**
 ```typescript
-interface StudyCardActionsProps {
-  // ... existing props
-  onCardBuried: () => void;  // novo
+export async function compressImage(
+  file: File,
+  maxWidth = 1200,
+  quality = 0.82
+): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      // Se ja e pequena, retorna original
+      if (img.width <= maxWidth && file.size < 300_000) {
+        resolve(file);
+        return;
+      }
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || blob.size >= file.size) {
+            resolve(file); // fallback ao original se ficou maior
+            return;
+          }
+          const ext = blob.type.includes('webp') ? 'webp' : 'jpg';
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, `.${ext}`), { type: blob.type }));
+        },
+        'image/webp', // tenta WebP primeiro
+        quality
+      );
+    };
+    img.src = URL.createObjectURL(file);
+  });
 }
 ```
 
-**Remocao de arquivo:**
+**Modificacao em `uploadCardImage`:**
 ```typescript
-const handleDeleteFile = async (fileId: string) => {
-  await supabase.from('turma_lesson_files').delete().eq('id', fileId);
-  queryClient.invalidateQueries({ queryKey: ['turma-deck-files'] });
-  toast({ title: 'Arquivo removido' });
-};
+import { compressImage } from '@/lib/imageUtils';
+
+export async function uploadCardImage(userId: string, file: File): Promise<string> {
+  if (file.size > 5 * 1024 * 1024) throw new Error('Maximo 5MB');
+  const compressed = await compressImage(file); // <-- nova linha
+  const ext = compressed.name.split('.').pop() || 'webp';
+  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from('card-images').upload(path, compressed);
+  // ...
+}
 ```
+
+**Modificacao em `renderOcclusion` (lazy loading):**
+```html
+<img src="${imageUrl}" loading="lazy" style="..." />
+```
+
+### Resumo de arquivos
+
+| Arquivo | Acao |
+|---------|------|
+| `src/lib/imageUtils.ts` | Criar (funcao de compressao) |
+| `src/services/cardService.ts` | Editar (usar compressImage no upload) |
+| `src/pages/ManageDeck.tsx` | Editar (usar compressImage no upload) |
+| `src/components/RichEditor.tsx` | Editar (usar compressImage nos 2 uploads) |
+| `src/components/FlashCard.tsx` | Editar (adicionar loading="lazy" na renderOcclusion) |
+
+### Impacto esperado
+
+- Imagens novas: ~80-90% menores (3MB -> 200KB tipico)
+- Carregamento durante estudo: significativamente mais rapido
+- Imagens existentes: melhoria com lazy loading; transformacao server-side se o plano suportar
+- Qualidade visual: imperceptivel para uso em flashcards (1200px de largura e mais que suficiente)
 
