@@ -356,7 +356,7 @@ const Dashboard = () => {
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrder}
             plansByDeckId={plansByDeckId}
-            globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+            globalNewRemaining={state.globalNewRemaining}
             distributedNewByDeck={state.distributedNewByDeck}
           />
         )}
