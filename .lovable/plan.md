@@ -1,54 +1,32 @@
 
 
-## Bug: Global profile limit silently overrides deck-level limit
+## Fix: Carousel deck cards ignoring deck-level limits when no plan is active
 
 ### Problem
 
-There are **two separate limits** controlling new cards per day:
+After the previous fix that always passes `globalNewRemaining` to the carousel, the individual deck cards (Histologia, Anatomia) in the top carousel section now use the global limit instead of deck-level limits. This causes them to show "0 new" when the global limit is exhausted, even though deck-level limits allow more cards.
 
-1. **Deck-level limit** (`daily_new_limit` on the deck) -- the one you changed to 100
-2. **Global profile limit** (`daily_new_cards_limit` on your profile) -- defaults to 30
-
-Even after increasing the deck limit to 100, the global profile limit (30) still caps everything. After studying 30 new cards today, `globalRemaining = 30 - 30 = 0`, so the system shows 0 new cards regardless of the deck setting.
+The banner totals (138 new, 10 learning, 10 review) are correct because `allDecksStats` already uses deck-level limits when no plan exists. But each `DeckStudyCard` receives `globalNewRemaining` and uses it to cap new cards.
 
 ### Root Cause
 
-The global profile limit (`daily_new_cards_limit`) was designed for the Study Plan feature but is **always applied**, even without an active plan. Its default value of 30 silently restricts all decks.
+In `src/pages/Dashboard.tsx` line 359, `globalNewRemaining` is always passed to the carousel. Inside `DeckCarousel.tsx`, each `DeckStudyCard` receives this value (line 283) and `getDeckTodayStats` uses it as a cap (line 42-44). When no plan is active, `globalNewRemaining` should not be passed to individual deck cards.
 
 ### Fix
 
-When there is **no active study plan**, the global profile limit should NOT be applied. Only the deck-level limit should govern new cards. This matches the expected behavior: if a user explicitly sets a deck to 100 new/day, that should be respected.
+**File: `src/pages/Dashboard.tsx`** (line 359)
 
-**3 files need the same logic change:**
+Revert to only passing `globalNewRemaining` when a plan is active:
 
-1. **`src/services/studyService.ts`** (the actual study queue)
-   - When no plan exists, use only `deckRemaining` instead of `Math.min(deckRemaining, globalRemaining)`
-
-2. **`src/components/deck-detail/DeckDetailContext.tsx`** (deck detail page counters)
-   - Same change: skip `globalRemaining` when `!isPlanControlled`
-
-3. **`src/components/dashboard/useDashboardState.ts`** (dashboard carousel counters)
-   - Same change: when no plan is active, use only deck limit
-
-### Technical Details
-
-In each file, the change is the same pattern:
-
-**Before:**
-```text
-// No plan: min(deck, global)
-effectiveNew = Math.min(deckRemaining, globalRemaining)
+```
+globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
 ```
 
-**After:**
-```text
-// No plan: only deck limit applies (global limit is a Study Plan feature)
-effectiveNew = deckRemaining
-```
+This was the original code before the earlier fix. The earlier fix was addressing a different issue (dashboard deck list showing wrong counts), which is now correctly handled by the `useDashboardState.ts` change to `getAggregateStats`. The carousel has its own independent stats calculation (`getDeckTodayStats`) that already handles the no-plan case correctly by using deck-level limits when `globalNewRemaining` is undefined.
 
-When a plan IS active, the global limit continues to work as before -- it governs the shared pool across all plan decks.
+### Why this is safe
 
-This ensures that:
-- Users without a Study Plan get exactly what their deck settings say
-- Users WITH a Study Plan get the global cap behavior they configured
-- Changing a deck's limit to 100 immediately shows the remaining cards
+- The deck list section (bottom) uses `getAggregateStats` from `useDashboardState.ts` -- already fixed to use only deck limits when no plan
+- The carousel banner uses `allDecksStats` -- already correct, uses deck limits when no plan
+- The carousel deck cards use `getDeckTodayStats` -- correctly uses deck limits when `globalNewRemaining` is `undefined`
+- When a plan IS active, `globalNewRemaining` continues to be passed and everything works as before
