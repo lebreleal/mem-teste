@@ -1,7 +1,7 @@
 import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send, ImageIcon } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send, ImageIcon, Shovel, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +37,7 @@ interface StudyCardActionsProps {
   isLiveDeck?: boolean;
   onCardUpdated: (updatedFields: { front_content: string; back_content: string }) => void;
   onCardFrozen: () => void;
+  onCardBuried?: () => void;
   /** Called after cloze sibling edits so Study.tsx can update all siblings in localQueue */
   onSiblingsUpdated?: (updates: { id: string; front_content: string; back_content: string }[], deletedIds: string[]) => void;
   onOpenChat?: () => void;
@@ -45,7 +46,7 @@ interface StudyCardActionsProps {
 
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
-const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
+const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCardBuried, onSiblingsUpdated, onOpenChat, chatHasMessages }: StudyCardActionsProps) => {
   const queryClient = useQueryClient();
   const { energy, spendEnergy } = useEnergy();
   const { model } = useAIModel();
@@ -54,6 +55,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [freezeConfirmOpen, setFreezeConfirmOpen] = useState(false);
+  const [buryConfirmOpen, setBuryConfirmOpen] = useState(false);
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [editorType, setEditorType] = useState<EditorCardType>('basic');
@@ -148,6 +150,24 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
       onCardFrozen();
     } catch {
       toast({ title: 'Erro ao congelar card', variant: 'destructive' });
+    }
+  };
+
+  const handleBury = async () => {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const { error } = await supabase
+        .from('cards')
+        .update({ scheduled_date: tomorrow.toISOString() })
+        .eq('id', card.id);
+      if (error) throw error;
+      toast({ title: '⛏️ Card enterrado', description: 'Ele voltará amanhã.' });
+      setBuryConfirmOpen(false);
+      onCardBuried?.();
+    } catch {
+      toast({ title: 'Erro ao enterrar card', variant: 'destructive' });
     }
   };
 
@@ -463,22 +483,35 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
           </Tooltip>
         )}
 
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setBuryConfirmOpen(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Enterrar card"
+            >
+              <Shovel className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
+        </Tooltip>
+
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <button
                   className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                  aria-label="Editar card"
+                  aria-label="Mais opções"
                   disabled={editLoading}
                 >
-                  {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                  {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
                 </button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent><p>Editar / Congelar</p></TooltipContent>
+            <TooltipContent><p>Mais opções</p></TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
+          <DropdownMenuContent align="end" className="min-w-[160px]">
             <DropdownMenuItem onClick={openEdit} className="gap-2">
               <Pencil className="h-3.5 w-3.5" /> Editar card
             </DropdownMenuItem>
@@ -506,6 +539,22 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onSib
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleFreeze}>Congelar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bury confirm */}
+      <AlertDialog open={buryConfirmOpen} onOpenChange={setBuryConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⛏️ Enterrar este card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>Enterrar</strong> significa pular o card por hoje. Ele será removido desta sessão e voltará amanhã automaticamente. É diferente de congelar — o card continua ativo no seu baralho.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBury}>Enterrar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

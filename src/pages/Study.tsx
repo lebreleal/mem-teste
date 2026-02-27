@@ -608,6 +608,27 @@ const Study = () => {
                   setCardKey(prev => prev + 1);
                 }}
                 onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
+                onCardBuried={() => {
+                  // Remove this card + cloze siblings from the local queue
+                  setLocalQueue(prev => {
+                    let filtered = prev.filter(c => c.id !== currentCard.id);
+                    if (currentCard.card_type === 'cloze') {
+                      const sibIds = getSiblingIds(currentCard, filtered);
+                      if (sibIds.length > 0) {
+                        // Bury siblings in DB too
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        tomorrow.setHours(0, 0, 0, 0);
+                        sibIds.forEach(sid => {
+                          supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
+                        });
+                        filtered = filtered.filter(c => !sibIds.includes(c.id));
+                      }
+                    }
+                    return filtered;
+                  });
+                  setCardKey(prev => prev + 1);
+                }}
                 onSiblingsUpdated={(updates, deletedIds) => {
                   setLocalQueue(prev => {
                     let q = prev.map(c => {
