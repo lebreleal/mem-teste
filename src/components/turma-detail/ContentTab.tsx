@@ -1,6 +1,7 @@
 /**
- * ContentTab – unified content view: subject folders + files + decks + exams.
- * Orchestrator component that delegates to sub-components and hooks.
+ * ContentTab – Sections-based community content view.
+ * Each section (subject) displays decks in a grid layout similar to marketplace.
+ * Clicking a deck navigates to /decks/:id/preview.
  */
 
 import { useState, useMemo, lazy, Suspense } from 'react';
@@ -9,9 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
-import { useDragReorder } from '@/hooks/useDragReorder';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -25,36 +24,212 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  ArrowLeft, Plus, FolderOpen, FolderPlus, ChevronRight, MoreVertical,
-  Layers, Pencil, Trash2, Paperclip, Eye, EyeOff,
-  Upload, Download, Lock, FileIcon, FileText, Image, Crown, Globe,
-  Copy, Link2, ClipboardList, Users, Clock, Import, LogIn,
-  CheckCheck, X, ArrowUpRight, Search, AlertTriangle,
+  Plus, FolderPlus, MoreVertical,
+  Layers, Pencil, Trash2, Eye,
+  Upload, Download, Lock, Crown, Globe,
+  Copy, Link2, ClipboardList, Clock, Import, LogIn,
+  Search, Sparkles,
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
 import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
-const PdfCanvasViewer = lazy(() => import('@/components/lesson-detail/PdfCanvasViewer'));
 
-const formatFileSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
+/* ── Deck Card (marketplace-style) ── */
+const DeckCard = ({
+  td,
+  onClick,
+  inCollection,
+  subscriberOnly,
+  canImport,
+  isOwner,
+  isAdmin,
+  onImport,
+  onGate,
+  onOpen,
+  onEditPricing,
+  onRemove,
+}: {
+  td: any;
+  onClick: () => void;
+  inCollection: boolean;
+  subscriberOnly: boolean;
+  canImport: boolean;
+  isOwner: boolean;
+  isAdmin: boolean;
+  onImport: () => void;
+  onGate: () => void;
+  onOpen: () => void;
+  onEditPricing: () => void;
+  onRemove: () => void;
+}) => (
+  <div
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={onClick}
+  >
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">
+          {td.deck_name}
+        </h3>
+        {subscriberOnly && <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />}
+        {inCollection && <Link2 className="h-3.5 w-3.5 shrink-0 text-info" />}
+      </div>
+    </div>
 
-const getFileIcon = (type: string) => {
-  if (type?.startsWith('image/')) return Image;
-  if (type?.includes('pdf')) return FileText;
-  return FileIcon;
-};
+    <div className="flex items-center gap-4">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-foreground" />
+        <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
+        cards
+      </span>
+    </div>
 
+    {inCollection ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Na coleção
+      </span>
+    ) : subscriberOnly && !canImport ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground gap-1">
+        <Lock className="h-3 w-3" /> Exclusivo
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Ver deck
+      </span>
+    )}
+
+    {/* Admin actions overlay */}
+    {(isAdmin || isOwner) && (
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm">
+              <MoreVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEditPricing}>
+              <Pencil className="mr-2 h-4 w-4" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>
+              <Trash2 className="mr-2 h-4 w-4" /> Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )}
+  </div>
+);
+
+/* ── Exam Card (compact) ── */
+const ExamCard = ({
+  exam,
+  imported,
+  isAdmin,
+  onImport,
+  onOpen,
+  onDelete,
+}: {
+  exam: any;
+  imported: boolean;
+  isAdmin: boolean;
+  onImport: () => void;
+  onOpen: () => void;
+  onDelete: () => void;
+}) => (
+  <div className="group relative cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    onClick={imported ? onOpen : onImport}
+  >
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">
+          {exam.title}
+        </h3>
+        {exam.subscribers_only && <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />}
+      </div>
+    </div>
+    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+      <span>{exam.total_questions} questões</span>
+      {exam.time_limit_seconds && (
+        <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>
+      )}
+    </div>
+    {imported ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Importada
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Fazer prova
+      </span>
+    )}
+    {isAdmin && (
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm">
+              <MoreVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )}
+  </div>
+);
+
+/* ── Section Header ── */
+const SectionHeader = ({
+  name,
+  canEdit,
+  isAdmin,
+  onEdit,
+  onDelete,
+}: {
+  name: string;
+  canEdit: boolean;
+  isAdmin: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => (
+  <div className="flex items-center justify-between mb-3">
+    <h2 className="font-display text-base font-bold text-foreground">{name}</h2>
+    {canEdit && (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="mr-2 h-4 w-4" /> Renomear Seção
+          </DropdownMenuItem>
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir Seção
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )}
+  </div>
+);
+
+/* ── Main ContentTab ── */
 const ContentTab = () => {
   const ctx = useTurmaDetail();
   const {
-    turmaId, turma, subjects, lessons, turmaDecks, turmaExams,
-    contentFolderId, setContentFolderId, contentBreadcrumb,
+    turmaId, turma, subjects, turmaDecks, turmaExams,
     canEdit, isAdmin, isMod, isSubscriber, user,
     mutations, examMutations, toast, navigate,
     setShowAddSubject, setNewName, setNewDesc,
@@ -66,128 +241,27 @@ const ContentTab = () => {
   const importLogic = useContentImport();
 
   // ── Local state ──
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDeck, setShowAddDeck] = useState(false);
+  const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckId, setSelectedDeckId] = useState('');
   const [priceType, setPriceType] = useState<'free' | 'money' | 'credits'>('free');
-  const [price, setPrice] = useState('');
   const [allowDownload, setAllowDownload] = useState(false);
   const [editingDeck, setEditingDeck] = useState<any>(null);
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
-  const [editPrice, setEditPrice] = useState('');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
-  const [previewDeck, setPreviewDeck] = useState<any>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewRestricted, setPdfPreviewRestricted] = useState(false);
-  const [editingFile, setEditingFile] = useState<any>(null);
-  const [editFileName, setEditFileName] = useState('');
-  const [editFilePriceType, setEditFilePriceType] = useState('free');
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [movingItem, setMovingItem] = useState<{ type: string; id: string; name: string } | null>(null);
-  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
 
-  // ── Data derivation ──
-  const currentFolders = subjects.filter((s: any) => s.parent_id === contentFolderId)
-    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
-  const lessonsForSubject = contentFolderId === null
-    ? lessons.filter(l => !l.subject_id)
-    : lessons.filter(l => l.subject_id === contentFolderId);
-  const lessonIdsForSubject = lessonsForSubject.map(l => l.id);
-
-  const currentDecks = contentFolderId === null
-    ? turmaDecks.filter(d => !d.lesson_id && !d.subject_id)
-    : turmaDecks.filter(d =>
-        d.subject_id === contentFolderId ||
-        (d.lesson_id && lessonIdsForSubject.includes(d.lesson_id))
-      );
-
-  const currentExams = contentFolderId === null
-    ? turmaExams.filter((e: any) => !e.lesson_id && !e.subject_id)
-    : turmaExams.filter((e: any) =>
-        e.subject_id === contentFolderId ||
-        (e.lesson_id && lessonIdsForSubject.includes(e.lesson_id))
-      );
-
-  const { data: currentFiles = [] } = useQuery({
-    queryKey: ['turma-content-files', turmaId, contentFolderId],
-    queryFn: async () => {
-      const ids = contentFolderId === null
-        ? lessons.filter(l => !l.subject_id).map(l => l.id)
-        : lessons.filter(l => l.subject_id === contentFolderId).map(l => l.id);
-      if (ids.length === 0) return [];
-      const { data } = await supabase.from('turma_lesson_files' as any)
-        .select('*').in('lesson_id', ids).order('sort_order', { ascending: true });
-      return (data ?? []) as any[];
-    },
-    enabled: !!turmaId,
-  });
-
-  const q = searchQuery.toLowerCase();
-  const filteredFolders = q ? currentFolders.filter((s: any) => s.name.toLowerCase().includes(q)) : currentFolders;
-  const filteredFiles = q ? currentFiles.filter((f: any) => f.file_name.toLowerCase().includes(q)) : currentFiles;
-  const filteredDecks = q ? currentDecks.filter((d: any) => (d.deck_name || '').toLowerCase().includes(q)) : currentDecks;
-  const filteredExams = q ? currentExams.filter((e: any) => (e.title || '').toLowerCase().includes(q)) : currentExams;
-
-  const hasContent = currentFolders.length > 0 || currentFiles.length > 0 || currentDecks.length > 0 || currentExams.length > 0;
-  const hasFilteredContent = filteredFolders.length > 0 || filteredFiles.length > 0 || filteredDecks.length > 0 || filteredExams.length > 0;
-
-  // ── Drag-to-reorder ──
-  const folderDrag = useDragReorder({
-    items: filteredFolders,
-    getId: (s: any) => s.id,
-    onReorder: (reordered) => contentMut.reorderSubjectsMut.mutate(reordered.map((s: any) => s.id)),
-  });
-  const fileDrag = useDragReorder({
-    items: filteredFiles,
-    getId: (f: any) => f.id,
-    onReorder: (reordered) => contentMut.reorderFilesMut.mutate(reordered.map((f: any) => f.id)),
-  });
-  const deckDrag = useDragReorder({
-    items: filteredDecks,
-    getId: (d: any) => d.id,
-    onReorder: (reordered) => contentMut.reorderDecksMut.mutate(reordered.map((d: any) => d.id)),
-  });
-  const examDrag = useDragReorder({
-    items: filteredExams,
-    getId: (e: any) => e.id,
-    onReorder: (reordered) => contentMut.reorderExamsMut.mutate(reordered.map((e: any) => e.id)),
-  });
-
-  // ── Selection helpers ──
-  const toggleItem = (key: string) => {
-    setSelectedItems(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
-  };
-  const exitSelectionMode = () => { setSelectionMode(false); setSelectedItems(new Set()); };
-
   // ── Subscriber-only validation ──
-  const canSetSubscribersOnly = subscriptionPrice > 0;
-
-  const handleToggleSubscribersOnly = (examId: string, currentValue: boolean) => {
-    if (!currentValue && !canSetSubscribersOnly) {
-      toast({
-        title: 'Defina um preço de assinatura primeiro',
-        description: 'Vá em Configurações → Assinatura para definir o preço antes de restringir conteúdo a assinantes.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    examMutations.toggleSubscribersOnly.mutate(
-      { examId, subscribersOnly: !currentValue },
-      { onSuccess: () => toast({ title: currentValue ? 'Prova liberada para todos' : 'Prova restrita a assinantes' }) }
-    );
-  };
+  const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
 
   const handleSetDeckPriceType = (newPriceType: string, setter: (v: any) => void) => {
     if (newPriceType === 'members_only' && !canSetSubscribersOnly) {
       toast({
         title: 'Defina um preço de assinatura primeiro',
-        description: 'Vá em Configurações → Assinatura para definir o preço antes de restringir conteúdo a assinantes.',
+        description: 'Vá em Configurações → Assinatura para definir o preço.',
         variant: 'destructive',
       });
       return;
@@ -195,486 +269,244 @@ const ContentTab = () => {
     setter(newPriceType);
   };
 
+  // ── Sections: root subjects only (no nesting) ──
+  const sections = useMemo(() => {
+    return subjects
+      .filter((s: any) => !s.parent_id)
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }, [subjects]);
+
+  // ── Decks grouped by section ──
+  const getDecksBySection = (sectionId: string | null) => {
+    const q = searchQuery.toLowerCase();
+    return turmaDecks
+      .filter((d: any) => d.subject_id === sectionId)
+      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q));
+  };
+
+  // ── Exams grouped by section ──
+  const getExamsBySection = (sectionId: string | null) => {
+    const q = searchQuery.toLowerCase();
+    return turmaExams
+      .filter((e: any) => e.subject_id === sectionId)
+      .filter((e: any) => !q || (e.title || '').toLowerCase().includes(q));
+  };
+
+  const rootDecks = getDecksBySection(null);
+  const rootExams = getExamsBySection(null);
+
+  const hasContent = turmaDecks.length > 0 || turmaExams.length > 0 || sections.length > 0;
+
   // ── Deck handlers ──
   const handleAddDeck = () => {
     if (!selectedDeckId) return;
-    const finalPrice = priceType === 'free' ? 0 : Number(price) || 0;
-    mutations.shareDeck.mutate({ deckId: selectedDeckId, subjectId: contentFolderId, lessonId: undefined, price: finalPrice, priceType, allowDownload } as any, {
-      onSuccess: () => { setShowAddDeck(false); setSelectedDeckId(''); setPrice(''); setPriceType('free'); setAllowDownload(false); toast({ title: 'Baralho adicionado!' }); },
+    const finalPrice = priceType === 'free' ? 0 : 0;
+    mutations.shareDeck.mutate({ deckId: selectedDeckId, subjectId: addDeckSectionId, lessonId: undefined, price: finalPrice, priceType, allowDownload } as any, {
+      onSuccess: () => { setShowAddDeck(false); setSelectedDeckId(''); setPriceType('free'); setAllowDownload(false); toast({ title: 'Baralho adicionado!' }); },
       onError: (e: any) => toast({ title: e.message?.includes('duplicate') ? 'Baralho já adicionado' : 'Erro', variant: 'destructive' }),
     });
   };
 
-  const openEditPricing = (td: any) => { setEditingDeck(td); setEditPriceType(td.price_type || 'free'); setEditPrice(td.price ? String(td.price) : ''); setEditAllowDownload(td.allow_download ?? false); };
+  const openEditPricing = (td: any) => {
+    setEditingDeck(td);
+    setEditPriceType(td.price_type || 'free');
+    setEditAllowDownload(td.allow_download ?? false);
+  };
+
   const handleEditPricing = () => {
     if (!editingDeck) return;
-    const finalPrice = editPriceType === 'free' ? 0 : Number(editPrice) || 0;
+    const finalPrice = editPriceType === 'free' ? 0 : 0;
     mutations.updateDeckPricing.mutate({ id: editingDeck.id, price: finalPrice, priceType: editPriceType, allowDownload: editAllowDownload }, {
       onSuccess: () => { setEditingDeck(null); toast({ title: 'Configuração atualizada!' }); },
       onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
     });
   };
 
-  const handleSaveFile = () => {
-    if (!editingFile) return;
-    const nameChanged = editFileName.trim() && editFileName.trim() !== editingFile.file_name;
-    const visChanged = editFilePriceType !== (editingFile.price_type || 'free');
-    if (nameChanged) contentMut.renameFileMut.mutate({ fileId: editingFile.id, newName: editFileName.trim() });
-    if (visChanged) contentMut.updateFileVisibility.mutate({ fileId: editingFile.id, pt: editFilePriceType });
-    setEditingFile(null);
-  };
+  const handleDeckClick = (td: any) => {
+    const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
+    const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
+    const inCollection = alreadyOwns || alreadyLinked;
+    const subscriberOnly = !importLogic.isDeckFree(td);
+    const canImportDeck = importLogic.canAccessDeck(td);
 
-  const handleBulkMove = () => {
-    const first = Array.from(selectedItems)[0];
-    if (!first) return;
-    setMovingItem({ type: 'bulk', id: '', name: `${selectedItems.size} itens` });
-    setMoveTargetId(null);
-  };
-
-  const confirmMove = () => {
-    if (!movingItem) return;
-    if (movingItem.type === 'bulk') {
-      for (const key of selectedItems) {
-        const [type, id] = key.split('::');
-        contentMut.moveItemMut.mutate({ type, id, targetSubjectId: moveTargetId });
-      }
-      exitSelectionMode();
-    } else {
-      contentMut.moveItemMut.mutate({ type: movingItem.type, id: movingItem.id, targetSubjectId: moveTargetId });
+    if (inCollection) {
+      const personalId = importLogic.getPersonalDeckId(td.id) || (alreadyOwns ? td.deck_id : null);
+      if (personalId) navigate(`/decks/${personalId}`, { state: { from: 'community', turmaId } });
+      return;
     }
-    setMovingItem(null);
+
+    if (subscriberOnly && !canImportDeck) {
+      setGateDeck(td);
+      return;
+    }
+
+    // Navigate to public deck preview
+    navigate(`/decks/${td.deck_id}/preview`);
   };
 
-  const allSubjectsFlat = subjects.filter((s: any) => s.turma_id === turmaId);
+  // ── Render section with its decks and exams ──
+  const renderSection = (sectionId: string | null, sectionName: string, sectionSubject?: any) => {
+    const sectionDecks = getDecksBySection(sectionId);
+    const sectionExams = getExamsBySection(sectionId);
 
-  // ── Render ──
+    if (sectionDecks.length === 0 && sectionExams.length === 0 && !canEdit) return null;
+
+    return (
+      <section key={sectionId ?? 'root'} className="mb-8">
+        {sectionId !== null && (
+          <SectionHeader
+            name={sectionName}
+            canEdit={canEdit}
+            isAdmin={isAdmin}
+            onEdit={() => {
+              if (sectionSubject) {
+                setEditingSubject({ id: sectionSubject.id, name: sectionSubject.name });
+                setEditItemName(sectionSubject.name);
+              }
+            }}
+            onDelete={() => {
+              mutations.deleteSubject.mutate(sectionSubject.id, {
+                onSuccess: () => toast({ title: 'Seção excluída' }),
+                onError: (e: any) => toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' }),
+              });
+            }}
+          />
+        )}
+
+        {/* Decks grid */}
+        {sectionDecks.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+            {sectionDecks.map((td: any) => {
+              const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
+              const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
+              const inCollection = alreadyOwns || alreadyLinked;
+              const subscriberOnly = !importLogic.isDeckFree(td);
+              const canImportDeck = importLogic.canAccessDeck(td);
+              const isOwner = td.shared_by === user?.id;
+
+              return (
+                <div key={td.id} className="relative">
+                  <DeckCard
+                    td={td}
+                    onClick={() => handleDeckClick(td)}
+                    inCollection={inCollection}
+                    subscriberOnly={subscriberOnly}
+                    canImport={canImportDeck}
+                    isOwner={isOwner}
+                    isAdmin={isAdmin}
+                    onImport={() => setConfirmImportItem({ type: 'deck', data: td })}
+                    onGate={() => setGateDeck(td)}
+                    onOpen={() => {
+                      const personalId = importLogic.getPersonalDeckId(td.id) || (alreadyOwns ? td.deck_id : null);
+                      if (personalId) navigate(`/decks/${personalId}`, { state: { from: 'community', turmaId } });
+                    }}
+                    onEditPricing={() => openEditPricing(td)}
+                    onRemove={() => mutations.unshareDeck.mutate(td.id, {
+                      onSuccess: () => toast({ title: 'Baralho removido' }),
+                      onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+                    })}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Exams grid */}
+        {sectionExams.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {sectionExams.map((exam: any) => {
+              const imported = importLogic.userHasImportedExam(exam.id);
+              const personalExamId = importLogic.getPersonalExamId(exam.id);
+              return (
+                <ExamCard
+                  key={exam.id}
+                  exam={exam}
+                  imported={imported}
+                  isAdmin={isAdmin || exam.created_by === user?.id}
+                  onImport={() => setConfirmImportItem({ type: 'exam', data: exam })}
+                  onOpen={() => { if (personalExamId) navigate(`/exam/${personalExamId}`, { state: { from: 'community', turmaId } }); }}
+                  onDelete={() => examMutations.deleteExam.mutate(exam.id, {
+                    onSuccess: () => toast({ title: 'Prova excluída' }),
+                    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+                  })}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty section (admin only) */}
+        {sectionDecks.length === 0 && sectionExams.length === 0 && canEdit && sectionId !== null && (
+          <div className="rounded-xl border-2 border-dashed border-border py-6 text-center">
+            <p className="text-sm text-muted-foreground">Seção vazia</p>
+            <Button variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => { setAddDeckSectionId(sectionId); setShowAddDeck(true); setAllowDownload(false); }}>
+              <Plus className="h-3.5 w-3.5" /> Adicionar deck
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+  };
+
   return (
-    <div className="space-y-3">
-      {/* Breadcrumb */}
-      {contentFolderId && (
-        <div className="flex items-center gap-1 text-sm mb-1">
-          {contentBreadcrumb.map((item, i) => (
-            <span key={item.id ?? 'root'} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-              <button onClick={() => setContentFolderId(item.id)}
-                className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted ${i === contentBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                {item.name}
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Title + Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {contentFolderId && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-              const current = subjects.find(s => s.id === contentFolderId);
-              setContentFolderId((current as any)?.parent_id ?? null);
-            }}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+    <div className="space-y-4">
+      {/* Actions bar */}
+      <div className="flex items-center gap-2">
+        {hasContent && (
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar decks e provas..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {canEdit && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => { setShowAddSubject(true); setNewName(''); setNewDesc(''); }} className="gap-1.5">
+                <FolderPlus className="h-4 w-4" /><span className="hidden sm:inline">Seção</span>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-4 w-4" /><span className="hidden sm:inline">Adicionar</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { setAddDeckSectionId(null); setShowAddDeck(true); setAllowDownload(false); }}>
+                    <Copy className="mr-2 h-4 w-4" /> Baralho
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => importLogic.setShowImportExam(true)}>
+                    <ClipboardList className="mr-2 h-4 w-4" /> Prova
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          {hasContent && (
-            <Button variant={searchOpen ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" onClick={() => { setSearchOpen(!searchOpen); if (searchOpen) setSearchQuery(''); }}>
-              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </Button>
-          )}
-          {hasContent && (isAdmin || isMod) && (
-            <Button variant={selectionMode ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}>
-              {selectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
-              <span className="hidden sm:inline">{selectionMode ? 'Cancelar' : 'Selecionar'}</span>
-            </Button>
-          )}
-          {!selectionMode && (isAdmin || isMod) && (
-            <Button variant="outline" size="sm" onClick={() => { setShowAddSubject(true); setNewName(''); setNewDesc(''); }} className="gap-2">
-              <FolderPlus className="h-4 w-4" /><span className="hidden sm:inline">Nova Pasta</span>
-            </Button>
-          )}
-          {!selectionMode && canEdit && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" /><span className="hidden sm:inline">Adicionar</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => contentMut.fileInputRef.current?.click()}>
-                  <Upload className="mr-2 h-4 w-4" /> Anexo
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setShowAddDeck(true); setAllowDownload(false); }}>
-                  <Copy className="mr-2 h-4 w-4" /> Baralho
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importLogic.setShowImportExam(true)}>
-                  <ClipboardList className="mr-2 h-4 w-4" /> Prova
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          <input ref={contentMut.fileInputRef} type="file" multiple className="hidden" onChange={contentMut.handleFileUpload} />
         </div>
       </div>
 
-      {/* Search bar */}
-      {searchOpen && (
-        <div className="mb-1">
-          <Input
-            placeholder="Buscar por nome..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            autoFocus
-            className="h-9"
-          />
-        </div>
-      )}
-      {/* Bulk selection bar */}
-      {selectionMode && selectedItems.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
-          <span className="text-sm font-medium text-foreground mr-auto">{selectedItems.size} selecionado{selectedItems.size > 1 ? 's' : ''}</span>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={handleBulkMove}>
-            <ArrowUpRight className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Mover</span>
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={() => contentMut.handleBulkDelete(selectedItems, exitSelectionMode)}>
-            <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Excluir</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Upload indicator */}
-      {contentMut.uploading && (
-        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <span className="text-sm font-medium text-foreground">Enviando arquivo(s)...</span>
-        </div>
-      )}
-
-      {/* Unified content list */}
+      {/* Content */}
       {!hasContent ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
-          <FolderOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center">
+          <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
           <h3 className="font-display text-lg font-bold text-foreground">Nenhum conteúdo ainda</h3>
-          <p className="mt-1 max-w-xs text-sm text-muted-foreground">Crie uma pasta ou adicione conteúdo.</p>
-        </div>
-      ) : !hasFilteredContent ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
-          <Search className="h-7 w-7 text-muted-foreground/40 mb-2" />
-          <p className="text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</p>
+          <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+            {canEdit ? 'Crie uma seção e adicione seus decks.' : 'O criador ainda não adicionou conteúdo.'}
+          </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
-          {/* Subject folders */}
-          {folderDrag.displayItems.map(subject => {
-            const fHandlers = canEdit ? folderDrag.getHandlers(subject) : null;
-            // Recursive counting: collect all descendant subject IDs
-            const getDescendantIds = (parentId: string): string[] => {
-              const children = subjects.filter((s: any) => s.parent_id === parentId);
-              return children.reduce((acc: string[], c: any) => [...acc, c.id, ...getDescendantIds(c.id)], []);
-            };
-            const allDescendantIds = getDescendantIds(subject.id);
-            const allFolderIds = [subject.id, ...allDescendantIds];
-            const directChildFolders = subjects.filter((s: any) => s.parent_id === subject.id);
-            const totalSubfolders = directChildFolders.length;
-            // Lessons in this folder or any descendant
-            const allRelatedLessons = lessons.filter(l => l.subject_id && allFolderIds.includes(l.subject_id));
-            const allRelatedLessonIds = allRelatedLessons.map(l => l.id);
-            // Decks in this folder or any descendant (or via related lessons)
-            const allRelatedDecks = turmaDecks.filter(d =>
-              (d.subject_id && allFolderIds.includes(d.subject_id)) ||
-              (d.lesson_id && allRelatedLessonIds.includes(d.lesson_id))
-            );
-            const totalCards = allRelatedDecks.reduce((sum: number, d: any) => sum + (d.card_count ?? 0), 0);
-            const totalAttachments = (ctx.lessonFiles as any[]).filter(f => allRelatedLessonIds.includes(f.lesson_id)).length;
-            const totalExams = turmaExams.filter((e: any) =>
-              (e.subject_id && allFolderIds.includes(e.subject_id)) ||
-              (e.lesson_id && allRelatedLessonIds.includes(e.lesson_id))
-            ).length;
-            return (
-              <div key={subject.id}
-                {...(fHandlers ? { draggable: fHandlers.draggable, onDragStart: fHandlers.onDragStart, onDragOver: fHandlers.onDragOver, onDragEnter: fHandlers.onDragEnter, onDragLeave: fHandlers.onDragLeave, onDrop: fHandlers.onDrop, onDragEnd: fHandlers.onDragEnd } : {})}
-                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 cursor-pointer transition-all hover:bg-muted/50 ${fHandlers?.className ?? ''}`}
-                onClick={() => selectionMode ? toggleItem(`subject::${subject.id}`) : setContentFolderId(subject.id)}>
-                {selectionMode && (
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <Checkbox checked={selectedItems.has(`subject::${subject.id}`)} onCheckedChange={() => toggleItem(`subject::${subject.id}`)} />
-                  </div>
-                )}
-                <FolderOpen className="h-5 w-5 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-card-foreground truncate">{subject.name}</h3>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                    {totalSubfolders > 0 && <span className="flex items-center gap-1"><FolderOpen className="h-3 w-3" /> {totalSubfolders}</span>}
-                    {totalAttachments > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" /> {totalAttachments}</span>}
-                    {totalCards > 0 && <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {totalCards}</span>}
-                    {totalExams > 0 && <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" /> {totalExams}</span>}
-                    {totalSubfolders === 0 && totalAttachments === 0 && totalCards === 0 && totalExams === 0 && <span>Vazio</span>}
-                  </div>
-                </div>
-                {!selectionMode && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canEdit && (
-                          <DropdownMenuItem onClick={() => { setEditingSubject({ id: subject.id, name: subject.name }); setEditItemName(subject.name); }}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar Nome
-                          </DropdownMenuItem>
-                        )}
-                        {(isAdmin || isMod) && (
-                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'subject', id: subject.id, name: subject.name }); setMoveTargetId(null); }}>
-                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                          </DropdownMenuItem>
-                        )}
-                        {isAdmin && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.deleteSubject.mutate(subject.id, { onSuccess: () => toast({ title: 'Pasta excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir pasta', description: e.message, variant: 'destructive' }) })}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                )}
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </div>
-            );
-          })}
+        <>
+          {/* Root decks/exams (without section) */}
+          {(rootDecks.length > 0 || rootExams.length > 0) && renderSection(null, 'Geral')}
 
-          {/* Files */}
-          {fileDrag.displayItems.map((file: any) => {
-            const fhFile = canEdit ? fileDrag.getHandlers(file) : null;
-            const Icon = getFileIcon(file.file_type);
-            const isImage = file.file_type?.startsWith('image/');
-            const isPdf = file.file_type?.includes('pdf');
-            const canPreview = isImage || isPdf;
-            const filePriceType = file.price_type || 'free';
-            const fileRestricted = filePriceType !== 'free' && !isSubscriber && !isAdmin && !isMod;
-            return (
-              <div key={file.id}
-                {...(fhFile ? { draggable: fhFile.draggable, onDragStart: fhFile.onDragStart, onDragOver: fhFile.onDragOver, onDragEnter: fhFile.onDragEnter, onDragLeave: fhFile.onDragLeave, onDrop: fhFile.onDrop, onDragEnd: fhFile.onDragEnd } : {})}
-                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all ${fhFile?.className ?? ''}`}
-                onClick={() => selectionMode ? toggleItem(`file::${file.id}`) : undefined}>
-                {selectionMode && (
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <Checkbox checked={selectedItems.has(`file::${file.id}`)} onCheckedChange={() => toggleItem(`file::${file.id}`)} />
-                  </div>
-                )}
-                <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
-                    {filePriceType !== 'free' && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] text-muted-foreground">{formatFileSize(file.file_size)}</p>
-                    {fileRestricted && isPdf && <span className="text-[10px] text-warning font-medium">Prévia limitada</span>}
-                  </div>
-                </div>
-                {!selectionMode && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    {canPreview && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
-                        if (isPdf) { setPdfPreviewUrl(file.file_url); setPdfPreviewRestricted(fileRestricted); }
-                        else window.open(file.file_url, '_blank');
-                      }}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {!fileRestricted ? (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
-                        <a href={file.file_url} download={file.file_name} target="_blank" rel="noopener noreferrer"><Download className="h-3.5 w-3.5" /></a>
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled>
-                        <Lock className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {canEdit && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setEditingFile(file); setEditFileName(file.file_name); setEditFilePriceType(file.price_type || 'free'); }}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'file', id: file.id, name: file.file_name }); setMoveTargetId(null); }}>
-                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => contentMut.deleteFile.mutate(file.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Remover
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Decks */}
-          {deckDrag.displayItems.map((td: any) => {
-            const dhDeck = canEdit ? deckDrag.getHandlers(td) : null;
-            const isOwner = td.shared_by === user?.id;
-            const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
-            const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
-            const subscriberOnly = !importLogic.isDeckFree(td);
-            const canImport = importLogic.canAccessDeck(td);
-            const inCollection = alreadyOwns || alreadyLinked;
-            const personalDeckId = importLogic.getPersonalDeckId(td.id);
-            return (
-              <div key={td.id}
-                {...(dhDeck ? { draggable: dhDeck.draggable, onDragStart: dhDeck.onDragStart, onDragOver: dhDeck.onDragOver, onDragEnter: dhDeck.onDragEnter, onDragLeave: dhDeck.onDragLeave, onDrop: dhDeck.onDrop, onDragEnd: dhDeck.onDragEnd } : {})}
-                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${dhDeck?.className ?? ''}`}
-                onClick={() => selectionMode ? toggleItem(`deck::${td.id}`) : undefined}>
-                {selectionMode && (
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <Checkbox checked={selectedItems.has(`deck::${td.id}`)} onCheckedChange={() => toggleItem(`deck::${td.id}`)} />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-semibold text-foreground truncate">{td.deck_name}</h3>
-                    {inCollection && <Link2 className="h-3 w-3 text-info shrink-0" />}
-                    {subscriberOnly && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{td.card_count ?? 0} cards</p>
-                </div>
-                {!selectionMode && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    {inCollection ? (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir baralho"
-                        onClick={() => { const id = personalDeckId || (alreadyOwns ? td.deck_id : null); if (id) navigate(`/decks/${id}`, { state: { from: 'community', turmaId } }); }}>
-                        <LogIn className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : subscriberOnly && !canImport ? (
-                      <>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Visualizar / Experimentar"
-                          onClick={() => setGateDeck(td)}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground/40 cursor-not-allowed" disabled title="Exclusivo para assinantes">
-                          <Lock className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    ) : (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
-                        onClick={() => setConfirmImportItem({ type: 'deck', data: td })}
-                        disabled={importLogic.addToCollection.isPending}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {td.allow_download && !inCollection && canImport && (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => importLogic.downloadDeck.mutate(td)} disabled={importLogic.downloadDeck.isPending}>
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {(isAdmin || isOwner) && (
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditPricing(td)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setMovingItem({ type: 'deck', id: td.id, name: td.deck_name || 'Baralho' }); setMoveTargetId(null); }}>
-                              <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => mutations.unshareDeck.mutate(td.id, { onSuccess: () => toast({ title: 'Baralho removido' }), onError: (e: any) => toast({ title: 'Erro ao remover baralho', description: e.message, variant: 'destructive' }) })}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Remover
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Exams */}
-          {examDrag.displayItems.map((exam: any) => {
-            const ehExam = canEdit ? examDrag.getHandlers(exam) : null;
-            const examImported = importLogic.userHasImportedExam(exam.id);
-            const personalExamId = importLogic.getPersonalExamId(exam.id);
-            return (
-              <div key={exam.id}
-                {...(ehExam ? { draggable: ehExam.draggable, onDragStart: ehExam.onDragStart, onDragOver: ehExam.onDragOver, onDragEnter: ehExam.onDragEnter, onDragLeave: ehExam.onDragLeave, onDrop: ehExam.onDrop, onDragEnd: ehExam.onDragEnd } : {})}
-                className={`group flex items-center gap-3 px-3 sm:px-5 py-4 transition-all hover:bg-muted/50 ${ehExam?.className ?? ''}`}
-                onClick={() => selectionMode ? toggleItem(`exam::${exam.id}`) : undefined}>
-                {selectionMode && (
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <Checkbox checked={selectedItems.has(`exam::${exam.id}`)} onCheckedChange={() => toggleItem(`exam::${exam.id}`)} />
-                  </div>
-                )}
-                <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-semibold text-foreground truncate">{exam.title}</h3>
-                    {examImported && <Link2 className="h-3 w-3 text-info shrink-0" />}
-                    {exam.subscribers_only && <Crown className="h-3 w-3 shrink-0" style={{ color: 'hsl(270 60% 55%)' }} />}
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
-                    <span>{exam.total_questions} questões</span>
-                    {exam.time_limit_seconds && (
-                      <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>
-                    )}
-                  </div>
-                </div>
-                {!selectionMode && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    {examImported ? (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Abrir prova"
-                        onClick={() => { if (personalExamId) navigate(`/exam/${personalExamId}`, { state: { from: 'community', turmaId } }); }}>
-                        <LogIn className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : exam.total_questions > 0 ? (
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Adicionar à coleção"
-                        onClick={() => setConfirmImportItem({ type: 'exam', data: exam })}
-                        disabled={importLogic.addExamToCollection.isPending}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : null}
-                    {(isAdmin || exam.created_by === user?.id) && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleToggleSubscribersOnly(exam.id, exam.subscribers_only)}>
-                            {exam.subscribers_only ? <Globe className="mr-2 h-4 w-4" /> : <Crown className="mr-2 h-4 w-4" />}
-                            {exam.subscribers_only ? 'Liberar para todos' : 'Só assinantes'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setMovingItem({ type: 'exam', id: exam.id, name: exam.title }); setMoveTargetId(null); }}>
-                            <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => examMutations.deleteExam.mutate(exam.id, { onSuccess: () => toast({ title: 'Prova excluída' }), onError: (e: any) => toast({ title: 'Erro ao excluir prova', description: e.message, variant: 'destructive' }) })}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          {/* Sections */}
+          {sections.map(section => renderSection(section.id, section.name, section))}
+        </>
       )}
 
       {/* ── Confirm Import Dialog ── */}
@@ -687,9 +519,6 @@ const ContentTab = () => {
             {confirmImportItem?.type === 'deck'
               ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
               : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            A cópia é independente — alterações no original não afetam a sua versão.
           </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
@@ -711,13 +540,20 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialogs ── */}
-
       {/* Add Deck Dialog */}
       <Dialog open={showAddDeck} onOpenChange={setShowAddDeck}>
         <DialogContent>
           <DialogHeader><DialogTitle>Adicionar Baralho</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {sections.length > 0 && (
+              <Select value={addDeckSectionId ?? '__root__'} onValueChange={v => setAddDeckSectionId(v === '__root__' ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Seção" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__root__">Sem seção</SelectItem>
+                  {sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
               <SelectTrigger><SelectValue placeholder="Selecione um baralho" /></SelectTrigger>
               <SelectContent>
@@ -771,29 +607,6 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit File Dialog */}
-      {editingFile && (
-        <Dialog open={!!editingFile} onOpenChange={open => !open && setEditingFile(null)}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader><DialogTitle className="font-display text-sm">Editar Anexo</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <Input value={editFileName} onChange={e => setEditFileName(e.target.value)} maxLength={200} autoFocus />
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-foreground">Visibilidade</p>
-                <div className="flex gap-2">
-                  {([{ value: 'free', label: 'Liberado', icon: Globe }, { value: 'members_only', label: 'Assinantes', icon: Lock }] as const).map(opt => (
-                    <Button key={opt.value} variant={editFilePriceType === opt.value ? 'default' : 'outline'} size="sm" onClick={() => handleSetDeckPriceType(opt.value, setEditFilePriceType)} className="gap-1.5 flex-1">
-                      <opt.icon className="h-3.5 w-3.5" /> {opt.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <Button className="w-full" disabled={!editFileName.trim()} onClick={handleSaveFile}>Salvar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
       {/* Import Exam Dialog */}
       <Dialog open={importLogic.showImportExam} onOpenChange={importLogic.setShowImportExam}>
         <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
@@ -835,72 +648,6 @@ const ContentTab = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Deck Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck} onOpenChange={open => !open && setPreviewDeck(null)}
-          deckId={previewDeck.deck_id} deckName={previewDeck.deck_name || 'Baralho'}
-          cardCount={previewDeck.card_count ?? 0}
-          alreadyLinked={importLogic.userHasLinkedDeck(previewDeck.id)} alreadyOwns={importLogic.userOwnsDeck(previewDeck.deck_id)}
-          allowDownload={previewDeck.allow_download ?? false}
-          onAddToCollection={() => importLogic.addToCollection.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
-          onDownload={() => importLogic.downloadDeck.mutate(previewDeck, { onSuccess: () => setPreviewDeck(null) })}
-          isAdding={importLogic.addToCollection.isPending} isDownloading={importLogic.downloadDeck.isPending}
-        />
-      )}
-
-      {/* PDF Preview Dialog */}
-      <Dialog open={!!pdfPreviewUrl} onOpenChange={open => !open && setPdfPreviewUrl(null)}>
-        <DialogContent className="sm:max-w-3xl h-[85vh] p-0 flex flex-col overflow-hidden">
-          <DialogHeader className="px-4 py-3 border-b border-border/50 shrink-0">
-            <DialogTitle className="font-display text-sm">
-              Visualizar PDF
-              {pdfPreviewRestricted && (
-                <span className="ml-2 text-[10px] font-semibold bg-muted px-2 py-0.5 rounded-full" style={{ color: 'hsl(270 60% 55%)' }}>
-                  Prévia limitada
-                </span>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {pdfPreviewUrl && <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><PdfCanvasViewer url={pdfPreviewUrl} restricted={pdfPreviewRestricted} /></Suspense>}
-        </DialogContent>
-      </Dialog>
-
-      {/* Move Dialog */}
-      <Dialog open={!!movingItem} onOpenChange={open => !open && setMovingItem(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="font-display">Mover "{movingItem?.name}"</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Selecione a pasta de destino:</p>
-            <Select value={moveTargetId ?? '__root__'} onValueChange={v => setMoveTargetId(v === '__root__' ? null : v)}>
-              <SelectTrigger><SelectValue placeholder="Selecionar pasta" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__root__">Raiz (sem pasta)</SelectItem>
-                {allSubjectsFlat
-                  .filter(s => {
-                    if (movingItem?.type === 'subject' && s.id === movingItem?.id) return false;
-                    if (movingItem?.type === 'subject' && movingItem?.id) {
-                      const descendants = contentMut.getDescendantIds(movingItem.id);
-                      if (descendants.has(s.id)) return false;
-                    }
-                    return true;
-                  })
-                  .map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))
-                }
-              </SelectContent>
-            </Select>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setMovingItem(null)}>Cancelar</Button>
-              <Button size="sm" onClick={confirmMove} disabled={contentMut.moveItemMut.isPending}>
-                {contentMut.moveItemMut.isPending ? 'Movendo...' : 'Mover'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Subscriber Gate Dialog */}
       <SubscriberGateDialog
         open={!!gateDeck}
@@ -914,7 +661,6 @@ const ContentTab = () => {
         }}
         onSubscribe={() => {
           setGateDeck(null);
-          // Trigger subscribe flow from context
           ctx.handleSubscribe?.();
         }}
       />
