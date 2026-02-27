@@ -92,6 +92,9 @@ interface TurmaDetailContextValue {
   handleCreateLesson: () => void;
   handleImportExam: (exam: any) => Promise<void>;
 
+  // Loading
+  isLoading: boolean;
+
   // Toast
   toast: ReturnType<typeof useToast>['toast'];
   navigate: ReturnType<typeof useNavigate>;
@@ -113,11 +116,11 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { turmas, updateTurma } = useTurmas();
+  const { turmas, updateTurma, isLoading: turmasLoading } = useTurmas();
   const myTurma = turmas.find(t => t.id === turmaId);
 
   // Fetch turma directly if user is not a member (public view)
-  const { data: fetchedTurma } = useQuery({
+  const { data: fetchedTurma, isLoading: fetchingTurma } = useQuery({
     queryKey: ['turma-public', turmaId],
     queryFn: async () => {
       if (!turmaId) return null;
@@ -129,6 +132,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const turma = myTurma ?? fetchedTurma;
+  const isLoading = turmasLoading || (!myTurma && fetchingTurma);
 
   // Queries
   const { data: myRole } = useTurmaRole(turmaId!);
@@ -308,7 +312,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const value: TurmaDetailContextValue = {
     turmaId: turmaId!,
-    turma, myRole, members, subjects, lessons, turmaExams, turmaDecks, lessonFiles, user,
+    turma, myRole, members, subjects, lessons, turmaExams, turmaDecks, lessonFiles, user, isLoading,
     isMember, isAdmin, isMod, canEdit,
     hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
     contentFolderId, setContentFolderId, examFolderId, setExamFolderId,

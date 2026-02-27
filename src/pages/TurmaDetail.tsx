@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
 import TurmaHeader from '@/components/turma-detail/TurmaHeader';
@@ -346,12 +347,23 @@ const MemberCommunityView = () => {
 
 // ─── Router: decide public or member view ───
 const TurmaDetailInner = () => {
-  const { turma, isMember } = useTurmaDetail();
+  const { turma, isMember, isLoading } = useTurmaDetail();
 
-  if (!turma) {
+  if (isLoading || !turma) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Comunidade não encontrada</p>
+      <div className="min-h-screen bg-background">
+        {/* Header skeleton */}
+        <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
+        <div className="container mx-auto px-4 max-w-2xl py-6 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }
