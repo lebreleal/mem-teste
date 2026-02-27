@@ -284,7 +284,5 @@ function formatInterval(output: FSRSOutput): string {
     return `${Math.round(mins / 60)}h`;
   }
   if (output.interval_days === 1) return '1d';
-  if (output.interval_days < 30) return `${output.interval_days}d`;
-  if (output.interval_days < 365) return `${Math.round(output.interval_days / 30)}m`;
-  return `${(output.interval_days / 365).toFixed(1)}a`;
+  return `${output.interval_days}d`;
 }
