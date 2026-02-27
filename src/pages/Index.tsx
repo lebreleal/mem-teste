@@ -6,7 +6,7 @@ import MemoCardsLogo from '@/components/MemoCardsLogo';
 import {
   ChevronDown, Plus, GraduationCap, Globe, Stethoscope, Scale,
   Star, Download, Users, Brain, FileText, ClipboardList, Sparkles,
-  BarChart3, Layers, ImageIcon,
+  BarChart3, Layers, ImageIcon, RefreshCw, BookOpen, Shield, Zap,
 } from 'lucide-react';
 
 /* ─── Placeholder image block ─── */
@@ -49,7 +49,7 @@ const objectives = [
   {
     key: 'exam', label: 'Preparação para exames', icon: GraduationCap,
     title: 'Preparação para exames',
-    text: 'Crie flashcards a partir dos seus materiais e deixe a repetição espaçada garantir que tudo esteja na ponta da língua no dia da prova. Com simulados integrados, você treina questões e acompanha seu desempenho.',
+    text: 'Crie flashcards a partir dos seus materiais e deixe o FSRS-6 garantir que tudo esteja na ponta da língua no dia da prova. Com simulados integrados, você treina questões e acompanha seu desempenho.',
     quote: 'Uso o MemoCards para estudar patologia e nunca mais esqueci nenhum conceito na hora da prova.',
     author: 'Estudante de Medicina',
     cards: '3.155 cartões',
@@ -57,7 +57,7 @@ const objectives = [
   {
     key: 'idiomas', label: 'Aprendizado de idiomas', icon: Globe,
     title: 'Aprendizado de idiomas',
-    text: 'Domine vocabulário e gramática com flashcards inteligentes. A repetição espaçada apresenta as palavras no momento exato para fixar na memória de longo prazo.',
+    text: 'Domine vocabulário e gramática com flashcards inteligentes. O algoritmo FSRS-6 apresenta as palavras no momento exato para fixar na memória de longo prazo.',
     quote: 'Aprendi mais vocabulário em 3 meses com MemoCards do que em 1 ano com outros apps.',
     author: 'Estudante de Inglês',
     cards: '1.240 cartões',
@@ -112,6 +112,7 @@ const Index = () => {
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Recursos</a>
+            <a href="#community" className="hover:text-foreground transition-colors">Comunidade</a>
             <a href="#objectives" className="hover:text-foreground transition-colors">Objetivos</a>
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
           </div>
@@ -122,14 +123,12 @@ const Index = () => {
         </div>
       </nav>
 
-      {/* ══════════ HERO (like Noji) ══════════ */}
+      {/* ══════════ HERO ══════════ */}
       <section className="relative overflow-hidden">
-        {/* coral/salmon top background */}
         <div className="absolute inset-x-0 top-0 h-[480px] md:h-[520px] bg-gradient-to-b from-[hsl(12,90%,95%)] to-background dark:from-[hsl(12,30%,12%)] dark:to-background" />
 
         <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-8 md:pt-20 md:pb-12">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            {/* text */}
             <div className="flex-1 text-center md:text-left">
               <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground leading-[1.1]">
                 MemoCards:<br />
@@ -138,7 +137,7 @@ const Index = () => {
               </h1>
               <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
                 Arrase nas provas, domine matérias difíceis e muito mais com a mágica da{' '}
-                <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência.
+                <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência. Junte-se à nossa comunidade!
               </p>
               <Button
                 size="lg"
@@ -148,7 +147,6 @@ const Index = () => {
                 Começar a aprender
               </Button>
             </div>
-            {/* hero image placeholder */}
             <div className="flex-1 max-w-md w-full">
               <Placeholder label="Imagem hero — app screenshot" className="aspect-square w-full" />
             </div>
@@ -180,7 +178,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ══════════ FEATURES 2x2 GRID (like Noji) ══════════ */}
+      {/* ══════════ FEATURES 2x2 GRID ══════════ */}
       <section id="features" className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-14">
@@ -188,7 +186,7 @@ const Index = () => {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
-            {/* Feature 1 */}
+            {/* Feature 1 — Flashcards */}
             <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -202,7 +200,7 @@ const Index = () => {
               <Placeholder label="Screenshot — editor de cards" className="aspect-[16/10] w-full" />
             </div>
 
-            {/* Feature 2 */}
+            {/* Feature 2 — IA */}
             <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -216,39 +214,109 @@ const Index = () => {
               <Placeholder label="Screenshot — geração por IA" className="aspect-[16/10] w-full" />
             </div>
 
-            {/* Feature 3 */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Crie e compartilhe baralhos com amigos</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Comunidades com pastas, materiais, provas e baralhos compartilhados.</p>
-                </div>
-              </div>
-              <Placeholder label="Screenshot — comunidade" className="aspect-[16/10] w-full" />
-            </div>
-
-            {/* Feature 4 */}
+            {/* Feature 3 — Repetição Espaçada FSRS-6 */}
             <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                   <Brain className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Aprenda com repetição espaçada</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Algoritmos FSRS e SM-2 calculam o momento ideal de cada revisão.</p>
+                  <h3 className="font-extrabold text-lg text-foreground">Repetição espaçada com FSRS-6</h3>
+                  <p className="text-sm text-muted-foreground mt-1">O mesmo algoritmo do Anki — com 21 parâmetros otimizados, calcula o momento ideal de cada revisão para máxima retenção.</p>
                 </div>
               </div>
               <Placeholder label="Screenshot — sessão de estudo" className="aspect-[16/10] w-full" />
+            </div>
+
+            {/* Feature 4 — Simulados */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <ClipboardList className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-foreground">Simulados e provas integradas</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Crie provas com questões objetivas e dissertativas, com correção por IA. Perfeito para testar seu conhecimento.</p>
+                </div>
+              </div>
+              <Placeholder label="Screenshot — simulados" className="aspect-[16/10] w-full" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ══════════ OBJECTIVES TABS (like Noji) ══════════ */}
-      <section id="objectives" className="bg-muted/30 px-4 py-16 md:py-24">
+      {/* ══════════ COMMUNITY & LIVE DECKS ══════════ */}
+      <section id="community" className="bg-muted/30 px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-4">
+            Comunidades & Cards Vivos
+          </h2>
+          <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-14">
+            Compartilhe baralhos, materiais e provas em comunidades colaborativas. Com os <strong className="text-foreground">Cards Vivos</strong>, todos ficam sincronizados automaticamente.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
+            {/* Community card 1 */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  <h3 className="font-extrabold text-lg text-foreground">Crie comunidades de estudo</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Organize disciplinas, semestres, aulas e materiais em um só lugar. Compartilhe baralhos, PDFs e provas com seus colegas de turma ou alunos.
+                </p>
+              </div>
+              <Placeholder label="Screenshot — comunidade" className="aspect-square w-full max-w-[200px] shrink-0" />
+            </div>
+
+            {/* Community card 2 — Live Decks */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 text-primary" />
+                  <h3 className="font-extrabold text-lg text-foreground">Cards Vivos — sempre atualizados</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Baralhos da comunidade mantêm vínculo de sincronização com o criador. Quando o professor corrige ou melhora um card, todos os alunos recebem a atualização — sem perder o progresso de estudo.
+                </p>
+              </div>
+              <Placeholder label="Screenshot — cards vivos" className="aspect-square w-full max-w-[200px] shrink-0" />
+            </div>
+
+            {/* Community card 3 — Sugestões */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <h3 className="font-extrabold text-lg text-foreground">Sugira correções colaborativas</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Encontrou um erro em um card? Envie uma sugestão de correção diretamente. O proprietário modera as sugestões no Painel do Criador e, ao aceitar, todos os assinantes recebem a melhoria automaticamente.
+                </p>
+              </div>
+              <Placeholder label="Screenshot — sugestão de correção" className="aspect-square w-full max-w-[200px] shrink-0" />
+            </div>
+
+            {/* Community card 4 — Performance */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  <h3 className="font-extrabold text-lg text-foreground">Estatísticas e desempenho</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Acompanhe seu progresso com gráficos de retenção, streaks, previsão de revisões e análise detalhada de cada baralho. Saiba exatamente onde focar seus estudos.
+                </p>
+              </div>
+              <Placeholder label="Screenshot — estatísticas" className="aspect-square w-full max-w-[200px] shrink-0" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════ OBJECTIVES TABS ══════════ */}
+      <section id="objectives" className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-10">
             Alcance seus objetivos!
@@ -292,7 +360,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ══════════ APP / INSTALL SECTION (like "Baixar App Mobile") ══════════ */}
+      {/* ══════════ APP / INSTALL SECTION ══════════ */}
       <section className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-5xl">
           <div className="rounded-3xl bg-gradient-to-br from-primary/5 to-accent/10 border border-border p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
@@ -330,7 +398,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ══════════ TESTIMONIALS GRID (like "Nossos Estudantes = Nossa Inspiração") ══════════ */}
+      {/* ══════════ TESTIMONIALS ══════════ */}
       <section className="bg-card border-y border-border px-4 py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-10">
@@ -346,7 +414,7 @@ const Index = () => {
             <TestimonialCard
               name="Carlos"
               handle="Concurseiro"
-              text="As comunidades me deram acesso a baralhos incríveis feitos por outros concurseiros. Passei no meu primeiro concurso!"
+              text="As comunidades com Cards Vivos me deram acesso a baralhos sempre atualizados, feitos por outros concurseiros. Passei no meu primeiro concurso!"
             />
             <TestimonialCard
               name="Marina"
@@ -356,7 +424,7 @@ const Index = () => {
             <TestimonialCard
               name="Lucas"
               handle="Professor"
-              text="App indispensável para quem está aprendendo. A versatilidade junto com algoritmos de repetição é uma vitória total para os alunos."
+              text="App indispensável para quem está aprendendo. O FSRS-6 junto com os Cards Vivos é uma vitória total para os alunos."
             />
           </div>
         </div>
@@ -386,16 +454,16 @@ const Index = () => {
             a="Sim! O MemoCards é gratuito para criar, estudar e compartilhar baralhos. Você recebe créditos de IA diários para gerar cards automaticamente."
           />
           <FaqItem
-            q="Como o MemoCards se diferencia de outros apps de estudo?"
-            a="Combinamos repetição espaçada com algoritmos avançados (FSRS e SM-2), comunidades para compartilhar baralhos, simulados integrados, geração de cards por IA e uma interface limpa e moderna."
+            q="O que é o FSRS-6?"
+            a="O FSRS-6 (Free Spaced Repetition Scheduler) é o algoritmo de repetição espaçada mais avançado do mercado, com 21 parâmetros otimizados. É o mesmo utilizado pelo Anki e calcula o momento ideal para você revisar cada card, maximizando a retenção com o menor esforço possível."
+          />
+          <FaqItem
+            q="O que são Cards Vivos?"
+            a="Cards Vivos são baralhos compartilhados em comunidades que mantêm um vínculo de sincronização com o criador. Quando o professor corrige ou melhora um card, todos os alunos que possuem o baralho recebem a atualização automaticamente — sem perder o progresso de estudo (agendamento FSRS)."
           />
           <FaqItem
             q="O que é repetição espaçada?"
-            a="É uma técnica cientificamente comprovada que apresenta as informações no momento ideal para fixação na memória de longo prazo."
-          />
-          <FaqItem
-            q="Como me preparar para um exame com o MemoCards?"
-            a="Crie ou importe flashcards do conteúdo da prova, estude diariamente usando a repetição espaçada e use os simulados integrados para testar seus conhecimentos."
+            a="É uma técnica cientificamente comprovada que apresenta as informações no momento ideal para fixação na memória de longo prazo. Em vez de estudar tudo de uma vez, você revisa no momento certo."
           />
           <FaqItem
             q="Posso importar cards do Anki?"
@@ -408,7 +476,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ══════════ FINAL CTA (like "Melhore seus estudos!") ══════════ */}
+      {/* ══════════ FINAL CTA ══════════ */}
       <section className="px-4 py-16 md:py-20">
         <div className="mx-auto max-w-3xl">
           <div className="rounded-3xl bg-gradient-to-r from-primary to-[hsl(207,80%,35%)] dark:to-[hsl(207,75%,55%)] p-8 md:p-12 text-center text-primary-foreground relative overflow-hidden">
@@ -430,29 +498,27 @@ const Index = () => {
       <footer className="border-t border-border bg-card px-4 py-10">
         <div className="mx-auto max-w-6xl">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* brand */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <MemoCardsLogo size={28} />
                 <span className="font-extrabold text-foreground">MemoCards</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Aprenda mais, estresse menos. Repetição espaçada respaldada pela ciência.
+                Aprenda mais, estresse menos. Repetição espaçada com FSRS-6.
               </p>
             </div>
 
-            {/* Produto */}
             <div>
               <h4 className="font-bold text-sm text-foreground mb-3">Produto</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Comunidades</button></li>
+                <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Cards Vivos</button></li>
                 <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Simulados</button></li>
                 <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Geração com IA</button></li>
                 <li><button onClick={() => navigate('/install')} className="hover:text-foreground transition-colors">Instalar App</button></li>
               </ul>
             </div>
 
-            {/* Ajuda */}
             <div>
               <h4 className="font-bold text-sm text-foreground mb-3">Ajuda</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
