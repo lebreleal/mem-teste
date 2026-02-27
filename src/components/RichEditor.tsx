@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { compressImage } from '@/lib/imageUtils';
 
 /* ─── Cloze Mark Extension ─── */
 const ClozeMark = Mark.create({
@@ -143,9 +144,10 @@ const RichEditor = ({ content, onChange, placeholder, onOcclusionPaste, onOcclus
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'Máximo 5MB', variant: 'destructive' }); return;
     }
-    const ext = file.name.split('.').pop() || 'png';
+    const compressed = await compressImage(file);
+    const ext = compressed.name.split('.').pop() || 'webp';
     const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('card-images').upload(path, file);
+    const { error } = await supabase.storage.from('card-images').upload(path, compressed);
     if (error) { toast({ title: 'Erro no upload', variant: 'destructive' }); return; }
     const { data: urlData } = supabase.storage.from('card-images').getPublicUrl(path);
     editor.chain().focus().setImage({ src: urlData.publicUrl }).run();
