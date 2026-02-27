@@ -689,6 +689,15 @@ const PublicDeckPreview = () => {
     return (data as any).id;
   };
 
+  const ALLOWED_FILE_TYPES = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/msword',
+    'application/vnd.ms-powerpoint',
+  ];
+  const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.pptx', '.ppt'];
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList?.length || !user || !turmaDeck) return;
@@ -696,6 +705,11 @@ const PublicDeckPreview = () => {
     try {
       const lessonId = await getOrCreateLesson();
       for (const file of Array.from(fileList)) {
+        const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+        if (!ALLOWED_FILE_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
+          toast({ title: 'Tipo não permitido', description: 'Apenas PDF, DOCX e PPTX.', variant: 'destructive' });
+          continue;
+        }
         if (file.size > 20 * 1024 * 1024) {
           toast({ title: 'Arquivo muito grande', description: 'Máximo 20MB.', variant: 'destructive' });
           continue;
@@ -812,6 +826,7 @@ const PublicDeckPreview = () => {
         <input
           ref={fileInputRef}
           type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx"
           multiple
           className="hidden"
           onChange={handleFileUpload}
