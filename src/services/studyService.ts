@@ -172,9 +172,10 @@ export async function fetchStudyQueue(
 
   // All plan decks share the same global remaining pool directly (no sequential splitting).
   // Priority only affects presentation order, not budget allocation.
+  // No plan: only deck limit applies (global limit is a Study Plan feature)
   const effectiveNewLimit = hasPlanActive
     ? globalRemaining
-    : Math.min(deckRemaining, globalRemaining);
+    : deckRemaining;
 
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
