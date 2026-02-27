@@ -197,8 +197,8 @@ const CardListItem = ({ card, onClick }: { card: any; onClick: () => void }) => 
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1">
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-muted/80 text-muted-foreground">
-              Novo
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono font-medium bg-muted/80 text-muted-foreground tracking-tight">
+              #{card.id.replace(/-/g, '').slice(0, 13).toUpperCase()}
             </span>
           </div>
           {isCloze ? (
