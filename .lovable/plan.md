@@ -1,39 +1,54 @@
 
-## Bug: Dashboard shows 20 new cards but study queue returns 0
+
+## Bug: Global profile limit silently overrides deck-level limit
+
+### Problem
+
+There are **two separate limits** controlling new cards per day:
+
+1. **Deck-level limit** (`daily_new_limit` on the deck) -- the one you changed to 100
+2. **Global profile limit** (`daily_new_cards_limit` on your profile) -- defaults to 30
+
+Even after increasing the deck limit to 100, the global profile limit (30) still caps everything. After studying 30 new cards today, `globalRemaining = 30 - 30 = 0`, so the system shows 0 new cards regardless of the deck setting.
 
 ### Root Cause
 
-There is an inconsistency in how the **global daily new card limit** (`daily_new_cards_limit` / `weekly_new_cards` from the user profile) is applied:
-
-| Component | Applies global limit? | Result |
-|---|---|---|
-| Dashboard Carousel (no plan) | NO - passes `undefined` | Shows 20 new |
-| Deck Detail page | YES - always | Shows 0 new |
-| Study Queue (`fetchStudyQueue`) | YES - always | Returns 0 cards |
-
-### Why it happens
-
-In `src/pages/Dashboard.tsx` (line 359):
-```text
-globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
-```
-
-When there is no active study plan, `globalNewRemaining` is passed as `undefined` to the carousel. Inside `getDeckTodayStats`, this causes the carousel to use only the **deck-level limit** (default 20), ignoring the global cap entirely.
-
-Meanwhile, the study queue in `studyService.ts` ALWAYS fetches the profile's `daily_new_cards_limit` and `weekly_new_cards`, applying it as a hard cap. If the user has already studied enough new cards from other decks today to exhaust this global limit, the study queue returns 0 cards -- but the carousel still shows 20.
+The global profile limit (`daily_new_cards_limit`) was designed for the Study Plan feature but is **always applied**, even without an active plan. Its default value of 30 silently restricts all decks.
 
 ### Fix
 
-**File: `src/pages/Dashboard.tsx`** (line 359)
-- Always pass `globalNewRemaining` to the carousel, regardless of whether a plan is active:
-```text
-globalNewRemaining={state.globalNewRemaining}
-```
+When there is **no active study plan**, the global profile limit should NOT be applied. Only the deck-level limit should govern new cards. This matches the expected behavior: if a user explicitly sets a deck to 100 new/day, that should be respected.
 
-This ensures the carousel display matches what the study queue will actually deliver.
+**3 files need the same logic change:**
+
+1. **`src/services/studyService.ts`** (the actual study queue)
+   - When no plan exists, use only `deckRemaining` instead of `Math.min(deckRemaining, globalRemaining)`
+
+2. **`src/components/deck-detail/DeckDetailContext.tsx`** (deck detail page counters)
+   - Same change: skip `globalRemaining` when `!isPlanControlled`
+
+3. **`src/components/dashboard/useDashboardState.ts`** (dashboard carousel counters)
+   - Same change: when no plan is active, use only deck limit
 
 ### Technical Details
 
-- `globalNewRemaining` is computed in `useDashboardState.ts` as `Math.max(0, todayGlobalLimit - globalNewReviewedToday)` and already handles both plan and non-plan scenarios correctly (scoping to plan roots when a plan exists, or all roots otherwise).
-- No changes needed to `studyService.ts` or `DeckDetailContext.tsx` -- they already apply the global limit correctly.
-- The `Study.tsx` progress counter fix from the previous edit is unrelated and did not introduce this bug.
+In each file, the change is the same pattern:
+
+**Before:**
+```text
+// No plan: min(deck, global)
+effectiveNew = Math.min(deckRemaining, globalRemaining)
+```
+
+**After:**
+```text
+// No plan: only deck limit applies (global limit is a Study Plan feature)
+effectiveNew = deckRemaining
+```
+
+When a plan IS active, the global limit continues to work as before -- it governs the shared pool across all plan decks.
+
+This ensures that:
+- Users without a Study Plan get exactly what their deck settings say
+- Users WITH a Study Plan get the global cap behavior they configured
+- Changing a deck's limit to 100 immediately shows the remaining cards
