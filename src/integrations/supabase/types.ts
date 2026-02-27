@@ -408,6 +408,9 @@ export type Database = {
         Row: {
           algorithm_mode: string
           allow_duplication: boolean
+          bury_learning_siblings: boolean
+          bury_new_siblings: boolean
+          bury_review_siblings: boolean
           bury_siblings: boolean
           community_id: string | null
           created_at: string
@@ -437,6 +440,9 @@ export type Database = {
         Insert: {
           algorithm_mode?: string
           allow_duplication?: boolean
+          bury_learning_siblings?: boolean
+          bury_new_siblings?: boolean
+          bury_review_siblings?: boolean
           bury_siblings?: boolean
           community_id?: string | null
           created_at?: string
@@ -466,6 +472,9 @@ export type Database = {
         Update: {
           algorithm_mode?: string
           allow_duplication?: boolean
+          bury_learning_siblings?: boolean
+          bury_new_siblings?: boolean
+          bury_review_siblings?: boolean
           bury_siblings?: boolean
           community_id?: string | null
           created_at?: string

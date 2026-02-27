@@ -87,7 +87,9 @@ const DeckSettings = () => {
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
   const [maxInterval, setMaxInterval] = useState(1000);
-  const [burySiblings, setBurySiblings] = useState(true);
+  const [buryNewSiblings, setBuryNewSiblings] = useState(true);
+  const [buryReviewSiblings, setBuryReviewSiblings] = useState(true);
+  const [buryLearningSiblings, setBuryLearningSiblings] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
@@ -176,7 +178,9 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
-      setBurySiblings((data as any).bury_siblings !== false);
+      setBuryNewSiblings((data as any).bury_new_siblings !== false);
+      setBuryReviewSiblings((data as any).bury_review_siblings !== false);
+      setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
       setLoading(false);
     });
   }, [deckId, user]);
@@ -219,7 +223,9 @@ const DeckSettings = () => {
       interval_modifier: intervalModifier,
       max_interval: maxInterval,
       requested_retention: requestedRetention,
-      bury_siblings: burySiblings,
+      bury_new_siblings: buryNewSiblings,
+      bury_review_siblings: buryReviewSiblings,
+      bury_learning_siblings: buryLearningSiblings,
     } as any);
     setStudySettingsModal(false);
     setAdvancedModal(false);
@@ -813,16 +819,27 @@ const DeckSettings = () => {
 
                 <Separator />
 
-                {/* Bury siblings toggle */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-foreground">Ocultar irmãos cloze</h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Quando ativo, ao revisar um card cloze, seus irmãos (cloze 1, cloze 2, etc.) são ocultados até o dia seguinte.
-                      </p>
+                {/* Bury siblings toggles (state-aware, like Anki) */}
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="font-semibold text-foreground">Ocultar irmãos cloze</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Ao revisar um card cloze, seus irmãos são ocultados até o dia seguinte conforme o estado.
+                    </p>
+                  </div>
+                  <div className="space-y-2 pl-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Ocultar novos irmãos</span>
+                      <Switch checked={buryNewSiblings} onCheckedChange={setBuryNewSiblings} />
                     </div>
-                    <Switch checked={burySiblings} onCheckedChange={setBurySiblings} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Ocultar irmãos de revisão</span>
+                      <Switch checked={buryReviewSiblings} onCheckedChange={setBuryReviewSiblings} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Ocultar irmãos em aprendizado</span>
+                      <Switch checked={buryLearningSiblings} onCheckedChange={setBuryLearningSiblings} />
+                    </div>
                   </div>
                 </div>
 
