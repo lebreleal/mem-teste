@@ -4,116 +4,89 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import MemoCardsLogo from '@/components/MemoCardsLogo';
 import {
-  Zap, BookOpen, Trophy, Users, Brain, FileText, ClipboardList,
-  ChevronDown, ChevronRight, Layers, BarChart3, Sparkles, GraduationCap,
-  Globe, Stethoscope, Scale, Calculator,
+  ChevronDown, Plus, GraduationCap, Globe, Stethoscope, Scale,
+  Star, Download, Users, Brain, FileText, ClipboardList, Sparkles,
+  BarChart3, Layers, ImageIcon,
 } from 'lucide-react';
 
-/* ─── FAQ accordion item ─── */
-const FaqItem = ({ question, answer }: { question: string; answer: string }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <button
-      onClick={() => setOpen(!open)}
-      className="w-full text-left border-b border-border py-5 group"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <span className="font-bold text-base md:text-lg text-foreground">{question}</span>
-        <ChevronDown
-          className={`h-5 w-5 text-muted-foreground shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        />
-      </div>
-      {open && (
-        <p className="mt-3 text-sm md:text-base text-muted-foreground leading-relaxed pr-8">
-          {answer}
-        </p>
-      )}
-    </button>
-  );
-};
-
-/* ─── Feature card ─── */
-const FeatureCard = ({
-  icon: Icon,
-  title,
-  description,
-  reverse = false,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  reverse?: boolean;
-}) => (
-  <div className={`flex flex-col ${reverse ? 'md:flex-row-reverse' : 'md:flex-row'} items-center gap-6 md:gap-12`}>
-    <div className="flex h-28 w-28 md:h-36 md:w-36 shrink-0 items-center justify-center rounded-3xl bg-primary/10">
-      <Icon className="h-12 w-12 md:h-16 md:w-16 text-primary" />
-    </div>
-    <div className={`text-center ${reverse ? 'md:text-right' : 'md:text-left'}`}>
-      <h3 className="text-xl md:text-2xl font-extrabold text-foreground">{title}</h3>
-      <p className="mt-2 text-sm md:text-base text-muted-foreground max-w-md leading-relaxed">
-        {description}
-      </p>
+/* ─── Placeholder image block ─── */
+const Placeholder = ({ label, className = '' }: { label: string; className?: string }) => (
+  <div className={`flex items-center justify-center rounded-2xl bg-muted border border-border ${className}`}>
+    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+      <ImageIcon className="h-10 w-10" />
+      <span className="text-xs font-medium text-center px-2">{label}</span>
     </div>
   </div>
 );
 
-/* ─── Objective tab ─── */
+/* ─── FAQ Item ─── */
+const FaqItem = ({ q, a }: { q: string; a: string }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <button onClick={() => setOpen(!open)} className="w-full text-left border-b border-border py-5">
+      <div className="flex items-center justify-between gap-4">
+        <span className="font-bold text-base md:text-lg text-foreground">{q}</span>
+        <Plus className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-45' : ''}`} />
+      </div>
+      {open && <p className="mt-3 text-sm text-muted-foreground leading-relaxed pr-8">{a}</p>}
+    </button>
+  );
+};
+
+/* ─── Testimonial card ─── */
+const TestimonialCard = ({ name, handle, text }: { name: string; handle: string; text: string }) => (
+  <div className="rounded-2xl border border-border bg-card p-5 space-y-3 text-sm">
+    <p className="text-muted-foreground leading-relaxed">{text}</p>
+    <div>
+      <p className="font-bold text-foreground">{name}</p>
+      <p className="text-xs text-muted-foreground">{handle}</p>
+    </div>
+  </div>
+);
+
+/* ─── Objective tabs ─── */
 const objectives = [
   {
-    key: 'exam',
-    label: 'Preparação para provas',
-    icon: GraduationCap,
-    title: 'Preparação para provas',
-    description:
-      'Crie flashcards a partir dos seus materiais e deixe a repetição espaçada garantir que tudo esteja na ponta da língua no dia da prova. Com simulados integrados, você treina questões e acompanha seu desempenho.',
-    quote:
-      'Uso o MemoCards para estudar patologia e nunca mais esqueci nenhum conceito na hora da prova. É como ter um tutor pessoal gerenciando minha revisão!',
+    key: 'exam', label: 'Preparação para exames', icon: GraduationCap,
+    title: 'Preparação para exames',
+    text: 'Crie flashcards a partir dos seus materiais e deixe a repetição espaçada garantir que tudo esteja na ponta da língua no dia da prova. Com simulados integrados, você treina questões e acompanha seu desempenho.',
+    quote: 'Uso o MemoCards para estudar patologia e nunca mais esqueci nenhum conceito na hora da prova.',
     author: 'Estudante de Medicina',
+    cards: '3.155 cartões',
   },
   {
-    key: 'idiomas',
-    label: 'Aprendizado de idiomas',
-    icon: Globe,
+    key: 'idiomas', label: 'Aprendizado de idiomas', icon: Globe,
     title: 'Aprendizado de idiomas',
-    description:
-      'Domine vocabulário e gramática com flashcards inteligentes. A repetição espaçada apresenta as palavras no momento exato para fixar na memória de longo prazo.',
-    quote:
-      'Aprendi mais vocabulário em 3 meses com MemoCards do que em 1 ano com outros apps. A repetição espaçada é incrível!',
+    text: 'Domine vocabulário e gramática com flashcards inteligentes. A repetição espaçada apresenta as palavras no momento exato para fixar na memória de longo prazo.',
+    quote: 'Aprendi mais vocabulário em 3 meses com MemoCards do que em 1 ano com outros apps.',
     author: 'Estudante de Inglês',
+    cards: '1.240 cartões',
   },
   {
-    key: 'concurso',
-    label: 'Concursos públicos',
-    icon: Scale,
+    key: 'concurso', label: 'Concursos', icon: Scale,
     title: 'Concursos públicos',
-    description:
-      'Organize seus estudos por matéria, crie simulados e acompanhe sua evolução. Ideal para quem precisa memorizar leis, jurisprudência e conteúdo extenso.',
-    quote:
-      'As comunidades do MemoCards me deram acesso a baralhos incríveis feitos por outros concurseiros. Passei no meu primeiro concurso!',
+    text: 'Organize seus estudos por matéria, crie simulados e acompanhe sua evolução. Ideal para quem precisa memorizar leis, jurisprudência e conteúdo extenso.',
+    quote: 'As comunidades do MemoCards me deram acesso a baralhos incríveis feitos por outros concurseiros.',
     author: 'Concurseiro aprovado',
+    cards: '4.320 cartões',
   },
   {
-    key: 'medicina',
-    label: 'Área da saúde',
-    icon: Stethoscope,
+    key: 'saude', label: 'Área da saúde', icon: Stethoscope,
     title: 'Área da saúde',
-    description:
-      'Anatomia, farmacologia, patologia — tudo organizado em baralhos com suporte a imagens, oclusão e cloze. Estude como nos melhores programas de residência.',
-    quote:
-      'A oclusão de imagem para estudar anatomia é perfeita. Consigo criar cards a partir dos meus atlas em segundos!',
+    text: 'Anatomia, farmacologia, patologia — tudo organizado em baralhos com suporte a imagens, oclusão e cloze. Estude como nos melhores programas de residência.',
+    quote: 'A oclusão de imagem para estudar anatomia é perfeita. Consigo criar cards a partir dos meus atlas em segundos!',
     author: 'Acadêmico de Medicina',
+    cards: '5.880 cartões',
   },
 ];
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [activeObjective, setActiveObjective] = useState('exam');
+  const [activeObj, setActiveObj] = useState('exam');
 
   useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true });
-    }
+    if (!loading && user) navigate('/dashboard', { replace: true });
   }, [user, loading, navigate]);
 
   if (loading) {
@@ -123,57 +96,328 @@ const Index = () => {
       </div>
     );
   }
-
   if (user) return null;
 
-  const currentObj = objectives.find(o => o.key === activeObjective) || objectives[0];
+  const obj = objectives.find(o => o.key === activeObj)!;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* ══════════════ NAV ══════════════ */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
+
+      {/* ══════════ NAVBAR ══════════ */}
+      <nav className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-lg">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <MemoCardsLogo size={36} />
-            <span className="font-extrabold text-lg text-foreground">MemoCards</span>
+          <div className="flex items-center gap-2.5">
+            <MemoCardsLogo size={32} />
+            <span className="font-extrabold text-lg text-foreground tracking-tight">MemoCards</span>
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
+            <a href="#features" className="hover:text-foreground transition-colors">Recursos</a>
+            <a href="#objectives" className="hover:text-foreground transition-colors">Objetivos</a>
+            <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>
-              Entrar
-            </Button>
-            <Button size="sm" onClick={() => navigate('/auth')}>
-              Começar grátis
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>Entrar</Button>
+            <Button size="sm" className="rounded-full px-5" onClick={() => navigate('/auth')}>Começar grátis</Button>
           </div>
         </div>
       </nav>
 
-      {/* ══════════════ HERO ══════════════ */}
-      <section className="relative overflow-hidden px-4 pt-16 pb-20 md:pt-24 md:pb-28">
-        {/* decorations */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-20 -right-20 h-72 w-72 rounded-full bg-primary/8 blur-3xl" />
-          <div className="absolute bottom-0 -left-32 h-96 w-96 rounded-full bg-accent/20 blur-3xl" />
+      {/* ══════════ HERO (like Noji) ══════════ */}
+      <section className="relative overflow-hidden">
+        {/* coral/salmon top background */}
+        <div className="absolute inset-x-0 top-0 h-[480px] md:h-[520px] bg-gradient-to-b from-[hsl(12,90%,95%)] to-background dark:from-[hsl(12,30%,12%)] dark:to-background" />
+
+        <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-8 md:pt-20 md:pb-12">
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            {/* text */}
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground leading-[1.1]">
+                MemoCards:<br />
+                <span className="text-primary">Aprenda Mais,</span><br />
+                <span className="text-primary">Estresse Menos</span>
+              </h1>
+              <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
+                Arrase nas provas, domine matérias difíceis e muito mais com a mágica da{' '}
+                <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência.
+              </p>
+              <Button
+                size="lg"
+                className="mt-6 rounded-full text-lg font-bold px-10 py-6 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
+                onClick={() => navigate('/auth')}
+              >
+                Começar a aprender
+              </Button>
+            </div>
+            {/* hero image placeholder */}
+            <div className="flex-1 max-w-md w-full">
+              <Placeholder label="Imagem hero — app screenshot" className="aspect-square w-full" />
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="relative mx-auto max-w-3xl text-center">
-          <MemoCardsLogo size={80} className="mx-auto mb-6" />
+      {/* ══════════ SOCIAL PROOF BAR ══════════ */}
+      <section className="border-y border-border bg-card">
+        <div className="mx-auto max-w-6xl px-4 py-8 md:py-10 flex flex-col md:flex-row items-center gap-6 md:gap-12">
+          <div className="flex-1">
+            <p className="text-lg md:text-xl font-extrabold text-foreground">
+              Estudantes que usam <span className="text-primary">repetição espaçada</span> melhoram suas notas significativamente
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              De acordo com estudos científicos sobre aprendizagem ativa.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4 rounded-full border-primary text-primary hover:bg-primary/5 font-bold"
+              onClick={() => navigate('/auth')}
+            >
+              Experimente grátis
+            </Button>
+          </div>
+          <div className="flex-1 max-w-xs w-full">
+            <Placeholder label="Gráfico — curva de esquecimento vs repetição espaçada" className="aspect-[4/3] w-full" />
+          </div>
+        </div>
+      </section>
 
-          <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl lg:text-7xl tracking-tight text-foreground leading-[1.1]">
-            MemoCards:{' '}
-            <span className="text-primary">Aprenda Mais,</span>{' '}
-            <span className="text-primary">Estresse Menos</span>
-          </h1>
+      {/* ══════════ FEATURES 2x2 GRID (like Noji) ══════════ */}
+      <section id="features" className="px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-14">
+            Estude de forma inteligente com o MemoCards
+          </h2>
 
-          <p className="mx-auto mt-5 max-w-xl text-base md:text-lg text-muted-foreground leading-relaxed">
-            Arrase nas provas, domine matérias difíceis e muito mais com a mágica da{' '}
-            <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência.
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
+            {/* Feature 1 */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Layers className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-foreground">Crie flashcards do jeito que você quiser</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Cards básicos, cloze, oclusão de imagem, TTS — com editor rico e anexos.</p>
+                </div>
+              </div>
+              <Placeholder label="Screenshot — editor de cards" className="aspect-[16/10] w-full" />
+            </div>
+
+            {/* Feature 2 */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-foreground">Gere cards com IA a partir de PDFs</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Envie PDF, PPTX ou cole texto — a IA cria um baralho completo em segundos.</p>
+                </div>
+              </div>
+              <Placeholder label="Screenshot — geração por IA" className="aspect-[16/10] w-full" />
+            </div>
+
+            {/* Feature 3 */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-foreground">Crie e compartilhe baralhos com amigos</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Comunidades com pastas, materiais, provas e baralhos compartilhados.</p>
+                </div>
+              </div>
+              <Placeholder label="Screenshot — comunidade" className="aspect-[16/10] w-full" />
+            </div>
+
+            {/* Feature 4 */}
+            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Brain className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-foreground">Aprenda com repetição espaçada</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Algoritmos FSRS e SM-2 calculam o momento ideal de cada revisão.</p>
+                </div>
+              </div>
+              <Placeholder label="Screenshot — sessão de estudo" className="aspect-[16/10] w-full" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════ OBJECTIVES TABS (like Noji) ══════════ */}
+      <section id="objectives" className="bg-muted/30 px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-10">
+            Alcance seus objetivos!
+          </h2>
+
+          {/* tabs */}
+          <div className="flex flex-wrap justify-center gap-2 mb-10">
+            {objectives.map(o => (
+              <button
+                key={o.key}
+                onClick={() => setActiveObj(o.key)}
+                className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all ${
+                  activeObj === o.key
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <o.icon className="h-4 w-4" />
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          {/* content */}
+          <div className="rounded-3xl bg-card border border-border shadow-sm overflow-hidden">
+            <div className="flex flex-col md:flex-row">
+              <div className="flex-1 p-6 md:p-10">
+                <h3 className="text-2xl font-extrabold text-foreground mb-3">{obj.title}</h3>
+                <p className="text-muted-foreground leading-relaxed mb-6">{obj.text}</p>
+                <div className="rounded-2xl bg-muted/50 border border-border p-5">
+                  <p className="text-sm text-foreground italic leading-relaxed">"{obj.quote}"</p>
+                  <p className="mt-3 text-xs font-bold text-muted-foreground">— {obj.author}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{obj.cards}</p>
+                </div>
+              </div>
+              <div className="flex-1 p-6 md:p-10 flex items-center justify-center">
+                <Placeholder label={`Imagem — ${obj.title}`} className="aspect-square w-full max-w-xs" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════ APP / INSTALL SECTION (like "Baixar App Mobile") ══════════ */}
+      <section className="px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl bg-gradient-to-br from-primary/5 to-accent/10 border border-border p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
+            <div className="flex-1 text-center md:text-left">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-foreground">
+                Instale o App
+              </h2>
+              <p className="text-muted-foreground mt-2 mb-6">
+                MemoCards é um PWA — instale direto no seu celular sem precisar de loja.
+              </p>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 mb-6">
+                {[
+                  { value: '4.8+', label: 'Classificação' },
+                  { value: 'PWA', label: 'Instalável' },
+                  { value: '∞', label: 'Cards' },
+                ].map(s => (
+                  <div key={s.label} className="text-center">
+                    <p className="text-2xl font-black text-foreground">{s.value}</p>
+                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <Button
+                className="rounded-full px-8 font-bold"
+                onClick={() => navigate('/install')}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Como instalar
+              </Button>
+            </div>
+            <div className="flex-1 max-w-xs w-full">
+              <Placeholder label="Imagem — app no celular" className="aspect-[9/16] w-full max-w-[200px] mx-auto" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════ TESTIMONIALS GRID (like "Nossos Estudantes = Nossa Inspiração") ══════════ */}
+      <section className="bg-card border-y border-border px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-10">
+            Nossos Estudantes = Nossa Inspiração
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <TestimonialCard
+              name="Ana"
+              handle="Estudante de Direito"
+              text="A repetição espaçada é como revisar no momento certo para fixar a informação. MemoCards mudou minha rotina de estudos completamente."
+            />
+            <TestimonialCard
+              name="Carlos"
+              handle="Concurseiro"
+              text="As comunidades me deram acesso a baralhos incríveis feitos por outros concurseiros. Passei no meu primeiro concurso!"
+            />
+            <TestimonialCard
+              name="Marina"
+              handle="Estudante de Medicina"
+              text="Experimentei o MemoCards para estudar para minhas provas e tirei A+. É tão fácil criar flashcards a partir dos meus materiais!"
+            />
+            <TestimonialCard
+              name="Lucas"
+              handle="Professor"
+              text="App indispensável para quem está aprendendo. A versatilidade junto com algoritmos de repetição é uma vitória total para os alunos."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════ SOCIAL MEDIA BAR ══════════ */}
+      <section className="bg-primary text-primary-foreground py-6 px-4">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="font-bold text-lg">
+            Milhares de estudantes já usam MemoCards 🚀
           </p>
+          <p className="text-primary-foreground/80 text-sm mt-1">
+            Junte-se à comunidade nas redes sociais
+          </p>
+        </div>
+      </section>
 
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+      {/* ══════════ FAQ ══════════ */}
+      <section id="faq" className="px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-10">
+            Perguntas? Respostas.
+          </h2>
+
+          <FaqItem
+            q="Posso usar o MemoCards gratuitamente?"
+            a="Sim! O MemoCards é gratuito para criar, estudar e compartilhar baralhos. Você recebe créditos de IA diários para gerar cards automaticamente."
+          />
+          <FaqItem
+            q="Como o MemoCards se diferencia de outros apps de estudo?"
+            a="Combinamos repetição espaçada com algoritmos avançados (FSRS e SM-2), comunidades para compartilhar baralhos, simulados integrados, geração de cards por IA e uma interface limpa e moderna."
+          />
+          <FaqItem
+            q="O que é repetição espaçada?"
+            a="É uma técnica cientificamente comprovada que apresenta as informações no momento ideal para fixação na memória de longo prazo."
+          />
+          <FaqItem
+            q="Como me preparar para um exame com o MemoCards?"
+            a="Crie ou importe flashcards do conteúdo da prova, estude diariamente usando a repetição espaçada e use os simulados integrados para testar seus conhecimentos."
+          />
+          <FaqItem
+            q="Posso importar cards do Anki?"
+            a="Sim! Você pode importar baralhos no formato .apkg do Anki diretamente para o MemoCards, mantendo todos os seus cards e formatação."
+          />
+          <FaqItem
+            q="O MemoCards é adequado para todos os tipos de estudantes?"
+            a="Sim! Seja para provas de faculdade, concursos públicos, idiomas, residência médica ou qualquer outra área — o MemoCards se adapta ao seu estilo de estudo."
+          />
+        </div>
+      </section>
+
+      {/* ══════════ FINAL CTA (like "Melhore seus estudos!") ══════════ */}
+      <section className="px-4 py-16 md:py-20">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-3xl bg-gradient-to-r from-primary to-[hsl(207,80%,35%)] dark:to-[hsl(207,75%,55%)] p-8 md:p-12 text-center text-primary-foreground relative overflow-hidden">
+            <h2 className="text-3xl md:text-4xl font-extrabold mb-3">Melhore seus estudos!</h2>
+            <p className="text-primary-foreground/80 mb-6">Comece agora mesmo — é grátis e leva menos de 1 minuto.</p>
             <Button
               size="lg"
-              className="w-full sm:w-auto text-lg font-bold px-8 py-6 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
+              variant="secondary"
+              className="rounded-full text-lg font-bold px-10 py-6"
               onClick={() => navigate('/auth')}
             >
               Começar a aprender
@@ -182,210 +426,46 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ══════════════ SOCIAL PROOF BAR ══════════════ */}
-      <section className="border-y border-border bg-card py-8 px-4">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="text-lg md:text-xl text-foreground font-bold">
-            Estudantes que usam repetição espaçada <span className="text-primary">melhoram suas notas</span> significativamente
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            De acordo com estudos científicos sobre aprendizagem ativa e repetição espaçada.
-          </p>
-          <div className="mt-6 flex items-center justify-center gap-8 md:gap-16">
-            {[
-              { value: 'FSRS + SM-2', label: 'Algoritmos' },
-              { value: 'IA', label: 'Geração de cards' },
-              { value: '∞', label: 'Cards grátis' },
-            ].map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <p className="text-2xl md:text-3xl font-black text-primary">{value}</p>
-                <p className="text-xs md:text-sm text-muted-foreground font-medium">{label}</p>
+      {/* ══════════ FOOTER ══════════ */}
+      <footer className="border-t border-border bg-card px-4 py-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* brand */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <MemoCardsLogo size={28} />
+                <span className="font-extrabold text-foreground">MemoCards</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ FEATURES GRID ══════════════ */}
-      <section className="px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-14">
-            Estude de forma inteligente com o MemoCards
-          </h2>
-
-          <div className="space-y-16">
-            <FeatureCard
-              icon={Layers}
-              title="Crie flashcards do jeito que você quiser"
-              description="Cards básicos, cloze (preencher a lacuna), oclusão de imagem — tudo com editor rico, anexos de imagens e áudio via TTS. Crie manualmente ou deixe a IA gerar a partir dos seus PDFs."
-            />
-            <FeatureCard
-              icon={Users}
-              title="Comunidades para estudar juntos"
-              description="Crie ou participe de comunidades, compartilhe baralhos, anexe materiais e crie provas para os membros. Perfeito para turmas de faculdade e grupos de estudo."
-              reverse
-            />
-            <FeatureCard
-              icon={Brain}
-              title="Aprenda com repetição espaçada"
-              description="Algoritmos FSRS e SM-2 calculam o momento ideal para você revisar cada card. Estude menos tempo, mas com mais eficiência — a ciência comprova."
-            />
-            <FeatureCard
-              icon={ClipboardList}
-              title="Simulados e provas integradas"
-              description="Crie provas com questões de múltipla escolha, dissertativas e mais. Gere provas automaticamente com IA a partir dos seus cards ou materiais."
-              reverse
-            />
-            <FeatureCard
-              icon={Sparkles}
-              title="Inteligência Artificial integrada"
-              description="Gere baralhos completos a partir de PDFs, PPTX ou texto colado. A IA cria cards de alta qualidade em segundos, prontos para revisar."
-            />
-            <FeatureCard
-              icon={BarChart3}
-              title="Acompanhe seu desempenho"
-              description="Gráficos de retenção, previsão de revisões, streaks diários e estatísticas detalhadas. Veja exatamente como está evoluindo."
-              reverse
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ OBJECTIVES (tabs like Noji) ══════════════ */}
-      <section className="bg-card border-y border-border px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-10">
-            Alcance seus objetivos!
-          </h2>
-
-          {/* tab buttons */}
-          <div className="flex flex-wrap justify-center gap-2 md:gap-3 mb-10">
-            {objectives.map(obj => (
-              <button
-                key={obj.key}
-                onClick={() => setActiveObjective(obj.key)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                  activeObjective === obj.key
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-muted text-muted-foreground hover:bg-accent'
-                }`}
-              >
-                <obj.icon className="h-4 w-4" />
-                {obj.label}
-              </button>
-            ))}
-          </div>
-
-          {/* active content */}
-          <div className="rounded-3xl bg-background border border-border p-6 md:p-10 shadow-sm">
-            <h3 className="text-2xl font-extrabold text-foreground mb-3">{currentObj.title}</h3>
-            <p className="text-muted-foreground leading-relaxed mb-6">{currentObj.description}</p>
-
-            <div className="rounded-2xl bg-muted/50 border border-border p-5">
-              <p className="text-sm md:text-base text-foreground italic leading-relaxed">
-                "{currentObj.quote}"
+              <p className="text-sm text-muted-foreground">
+                Aprenda mais, estresse menos. Repetição espaçada respaldada pela ciência.
               </p>
-              <p className="mt-3 text-xs font-bold text-muted-foreground">— {currentObj.author}</p>
+            </div>
+
+            {/* Produto */}
+            <div>
+              <h4 className="font-bold text-sm text-foreground mb-3">Produto</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Comunidades</button></li>
+                <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Simulados</button></li>
+                <li><button onClick={() => navigate('/auth')} className="hover:text-foreground transition-colors">Geração com IA</button></li>
+                <li><button onClick={() => navigate('/install')} className="hover:text-foreground transition-colors">Instalar App</button></li>
+              </ul>
+            </div>
+
+            {/* Ajuda */}
+            <div>
+              <h4 className="font-bold text-sm text-foreground mb-3">Ajuda</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><button onClick={() => navigate('/privacy')} className="hover:text-foreground transition-colors">Política de Privacidade</button></li>
+                <li><button onClick={() => navigate('/terms')} className="hover:text-foreground transition-colors">Termos de Uso</button></li>
+                <li><button onClick={() => navigate('/feedback')} className="hover:text-foreground transition-colors">Feedback</button></li>
+              </ul>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ══════════════ HIGHLIGHT FEATURES STRIP ══════════════ */}
-      <section className="px-4 py-16 md:py-20">
-        <div className="mx-auto max-w-5xl grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-10">
-          {[
-            { icon: Zap, label: 'Créditos IA', desc: 'Ganhe recompensas estudando' },
-            { icon: BookOpen, label: 'Repetição Espaçada', desc: 'FSRS & SM-2' },
-            { icon: Trophy, label: 'Gamificação', desc: 'Missões e conquistas' },
-            { icon: FileText, label: 'Importar de PDFs', desc: 'PDF, PPTX, DOCX' },
-          ].map(({ icon: Icon, label, desc }) => (
-            <div key={label} className="flex flex-col items-center text-center gap-3">
-              <div className="flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-2xl bg-primary/10">
-                <Icon className="h-7 w-7 md:h-8 md:w-8 text-primary" />
-              </div>
-              <h3 className="font-bold text-sm md:text-base text-foreground">{label}</h3>
-              <p className="text-xs md:text-sm text-muted-foreground">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════ FAQ ══════════════ */}
-      <section className="bg-card border-y border-border px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-10">
-            Perguntas? Respostas.
-          </h2>
-
-          <div>
-            <FaqItem
-              question="Posso usar o MemoCards gratuitamente?"
-              answer="Sim! O MemoCards é gratuito para criar, estudar e compartilhar baralhos. Você recebe créditos de IA diários para gerar cards automaticamente."
-            />
-            <FaqItem
-              question="Como o MemoCards se diferencia de outros apps?"
-              answer="Combinamos repetição espaçada com algoritmos avançados (FSRS e SM-2), comunidades para compartilhar baralhos, simulados integrados, geração de cards por IA e uma interface limpa e moderna."
-            />
-            <FaqItem
-              question="O que é repetição espaçada?"
-              answer="É uma técnica cientificamente comprovada que apresenta as informações no momento ideal para fixação na memória de longo prazo. Em vez de revisar tudo de uma vez, você revisa cada card no intervalo perfeito."
-            />
-            <FaqItem
-              question="Como me preparar para uma prova com o MemoCards?"
-              answer="Crie ou importe flashcards do conteúdo da prova, estude diariamente usando a repetição espaçada e use os simulados integrados para testar seus conhecimentos antes do grande dia."
-            />
-            <FaqItem
-              question="Posso importar cards de outros apps como o Anki?"
-              answer="Sim! Você pode importar baralhos no formato .apkg do Anki diretamente para o MemoCards, mantendo todos os seus cards e formatação."
-            />
-            <FaqItem
-              question="O MemoCards funciona offline?"
-              answer="O MemoCards é um PWA (Progressive Web App) e pode ser instalado no seu celular. A funcionalidade principal requer conexão, mas você pode acessá-lo como um app nativo."
-            />
+          <div className="mt-8 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+            © {new Date().getFullYear()} MemoCards. Todos os direitos reservados.
           </div>
-        </div>
-      </section>
-
-      {/* ══════════════ FINAL CTA ══════════════ */}
-      <section className="px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-4">
-            Melhore seus estudos!
-          </h2>
-          <p className="text-muted-foreground mb-8">
-            Junte-se a milhares de estudantes que já transformaram sua forma de aprender.
-          </p>
-          <Button
-            size="lg"
-            className="text-lg font-bold px-10 py-6 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
-            onClick={() => navigate('/auth')}
-          >
-            Começar a aprender
-          </Button>
-        </div>
-      </section>
-
-      {/* ══════════════ FOOTER ══════════════ */}
-      <footer className="border-t border-border bg-card px-4 py-8">
-        <div className="mx-auto max-w-5xl flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <MemoCardsLogo size={28} />
-            <span className="font-bold text-sm text-foreground">MemoCards</span>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-            <button onClick={() => navigate('/privacy')} className="hover:text-foreground transition-colors">
-              Política de Privacidade
-            </button>
-            <button onClick={() => navigate('/terms')} className="hover:text-foreground transition-colors">
-              Termos de Uso
-            </button>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} MemoCards
-          </p>
         </div>
       </footer>
     </div>
