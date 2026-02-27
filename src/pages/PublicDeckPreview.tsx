@@ -622,7 +622,7 @@ const PublicDeckPreview = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('turma_decks')
-        .select('id, turma_id, subject_id, lesson_id')
+        .select('id, turma_id, subject_id, lesson_id, content_folder_id')
         .eq('deck_id', deckId!)
         .limit(1)
         .maybeSingle();
@@ -632,7 +632,7 @@ const PublicDeckPreview = () => {
     enabled: !!deckId,
   });
 
-  // Fetch files linked to same lesson
+  // Fetch files linked to same lesson as this deck
   const { data: deckFiles = [] } = useQuery({
     queryKey: ['turma-deck-files', turmaDeck?.lesson_id],
     queryFn: async () => {
@@ -647,24 +647,21 @@ const PublicDeckPreview = () => {
     enabled: !!turmaDeck?.lesson_id,
   });
 
-  // Fetch exams linked to same subject/turma
+  // Fetch exams linked to same lesson as this deck
   const { data: deckExams = [] } = useQuery({
-    queryKey: ['turma-deck-exams', turmaDeck?.turma_id, turmaDeck?.subject_id],
+    queryKey: ['turma-deck-exams', turmaDeck?.turma_id, turmaDeck?.lesson_id],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('turma_exams')
         .select('id, title, description, total_questions, time_limit_seconds, created_at, is_published')
         .eq('turma_id', turmaDeck!.turma_id)
+        .eq('lesson_id', turmaDeck!.lesson_id!)
         .eq('is_published', true)
         .order('sort_order', { ascending: true });
-      if (turmaDeck!.subject_id) {
-        query = query.eq('subject_id', turmaDeck!.subject_id);
-      }
-      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!turmaDeck?.turma_id,
+    enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
 
   const totalPages = Math.ceil(allCards.length / PAGE_SIZE);
