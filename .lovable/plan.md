@@ -1,119 +1,123 @@
 
 
-## Plano: Otimizar Carregamento de Imagens de Oclusao
+## Plano: 3 Correcoees - Timestamp de Atualizacao, Minutos Estudados e Anti-Fraude
 
-### Problema
-As imagens de oclusao sao armazenadas em tamanho original (ate 5MB) no Supabase Storage. Quando o usuario estuda, cada card carrega a imagem completa, causando lentidao -- especialmente em redes moveis.
+### 1. Corrigir o timestamp "ultima atualizacao" nos Decks Publicos
 
-### Solucao: Compressao no Upload + Transformacao no Display
+**Problema:** O `updated_at` mostrado nos cards da marketplace (ex: "ha cerca de 8 horas") vem do campo `decks.updated_at`, que so muda quando o metadado do deck e alterado (renomear, etc). Nao reflete edicoes nos cards nem sugestoes aprovadas pela comunidade.
 
-#### 1. Comprimir imagens no momento do upload (client-side)
+**Solucao:** No `fetchPublicDecks` (`turmaService.ts`), alem de buscar `decks.updated_at`, buscar tambem o `MAX(cards.updated_at)` por deck e usar o mais recente entre os dois. Assim, qualquer edicao de card ou sugestao aprovada atualiza o timestamp exibido.
 
-Criar uma funcao utilitaria `compressImage` em `src/lib/imageUtils.ts` que:
-- Usa Canvas API para redimensionar a imagem antes do upload
-- Limita a largura maxima a 1200px (suficiente para oclusao com boa qualidade)
-- Converte para WebP (80% qualidade) quando o browser suportar, senao JPEG 85%
-- Resultado tipico: imagem de 3MB vira ~100-200KB
+**Arquivos:**
+- `src/services/turmaService.ts` (funcao `fetchPublicDecks`): adicionar query paralela para `cards.updated_at` agrupado por `deck_id`, e usar `Math.max(deck.updated_at, maxCardUpdatedAt)` como `updated_at` final.
 
-**Arquivo novo:** `src/lib/imageUtils.ts`
+---
 
-#### 2. Aplicar compressao em todos os pontos de upload de imagem
+### 2. Corrigir contabilidade de minutos estudados
 
-Modificar os seguintes arquivos para usar `compressImage` antes de fazer upload:
-- `src/services/cardService.ts` (`uploadCardImage`) -- usado pela maioria dos fluxos
-- `src/pages/ManageDeck.tsx` -- upload direto no editor de oclusao
-- `src/components/RichEditor.tsx` -- upload de imagens dentro de cards basicos
-- `src/components/deck-detail/DeckDetailContext.tsx` -- upload via attach/paste de oclusao
+**Problema:** O calculo atual de `todayMinutes` em `studyService.ts` (linha 365) usa uma estimativa fixa de 8 segundos por card:
+```
+todayMinutes = Math.round((todayCards * 8) / 60)
+```
+Isso e completamente impreciso -- nao mede tempo real.
 
-#### 3. Usar Supabase Image Transformation para imagens existentes
+**Solucao:** Calcular os minutos reais a partir dos `review_logs` de hoje. Para cada par consecutivo de reviews do mesmo usuario, o intervalo entre eles representa tempo de estudo (com um cap de 5 minutos por intervalo para excluir pausas). Soma-se todos os intervalos validos.
 
-O Supabase Storage suporta transformacao de imagens on-the-fly via query parameters. Para imagens ja existentes (que nao foram comprimidas), modificar a URL no momento da renderizacao:
+**Arquivos:**
+- `src/services/studyService.ts` (funcao `fetchStudyStats`):
+  - Buscar `review_logs` de hoje com `reviewed_at` ordenado cronologicamente
+  - Calcular gaps entre reviews consecutivos
+  - Cap de 120 segundos por card (intervalo > 120s = pausa, conta como 120s max)
+  - Somar e converter para minutos
+- Tambem corrigir `avgMinutesPerDay7d` que usa a mesma estimativa falsa
 
-- Na funcao `renderOcclusion` em `FlashCard.tsx`, adicionar parametros de transformacao a URL da imagem:
-  `imageUrl + '?width=800&quality=75'` (se for URL do Supabase)
-- Isso funciona como cache automatico no CDN do Supabase
+---
 
-**Nota:** Image Transformations precisa estar habilitado no projeto Supabase (e um recurso do plano Pro). Se nao estiver disponivel, as imagens existentes continuarao carregando normalmente, mas as novas ja serao comprimidas.
+### 3. Implementar sistema anti-fraude de tempo de estudo
 
-#### 4. Lazy loading e placeholder
+**Problema:** Nao ha validacao de tempo gasto por card. Um usuario poderia abrir o modo estudo, deixar aberto sem interagir, e acumular "tempo" artificialmente.
 
-Adicionar `loading="lazy"` nas tags `<img>` geradas por `renderOcclusion` para que o browser so carregue quando necessario.
+**Solucao:** Registrar o tempo real gasto por card no `review_logs` e aplicar limites:
+
+**3a. Registrar `duration_ms` no review_log:**
+- Em `Study.tsx`, ja existe `cardShownAt` (ref que marca quando o card apareceu). Calcular `duration_ms = Date.now() - cardShownAt.current` no momento do rating.
+- Passar `duration_ms` para `submitCardReview` e salvar no review_log.
+- Nota: o campo `duration_ms` precisa existir no review_logs -- como a tabela nao tem esse campo, vamos armazenar o valor na logica client-side por enquanto e usa-lo no calculo de minutos (sem precisar de migracao).
+
+**3b. Cap anti-fraude no calculo de minutos:**
+- Aplicar um cap de **120 segundos** por card review no calculo de `todayMinutes`
+- Intervalos menores que **1.5 segundos** sao descartados (review automatico/bot)
+- Intervalos maiores que **120 segundos** sao limitados a 120s (usuario pausou)
+
+**3c. Calculo baseado em gaps entre reviews (sem campo novo):**
+- Como nao temos `duration_ms` no banco, calcular o tempo entre reviews consecutivos
+- Cada gap recebe o cap de 120s e o minimo de 1.5s
+- Isso funciona retroativamente para dados existentes
+
+**Arquivos:**
+- `src/services/studyService.ts` (`fetchStudyStats`): reescrever calculo de `todayMinutes` e `avgMinutesPerDay7d` usando gaps entre reviews com caps anti-fraude
+
+---
+
+### Resumo de alteracoes
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/services/turmaService.ts` | `fetchPublicDecks`: incluir max `cards.updated_at` no timestamp |
+| `src/services/studyService.ts` | `fetchStudyStats`: recalcular minutos reais com gaps + anti-fraude |
 
 ### Detalhes tecnicos
 
-**`src/lib/imageUtils.ts` (novo):**
+**Calculo de minutos reais (studyService.ts):**
 ```typescript
-export async function compressImage(
-  file: File,
-  maxWidth = 1200,
-  quality = 0.82
-): Promise<File> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      // Se ja e pequena, retorna original
-      if (img.width <= maxWidth && file.size < 300_000) {
-        resolve(file);
-        return;
-      }
-      const scale = Math.min(1, maxWidth / img.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      canvas.toBlob(
-        (blob) => {
-          if (!blob || blob.size >= file.size) {
-            resolve(file); // fallback ao original se ficou maior
-            return;
-          }
-          const ext = blob.type.includes('webp') ? 'webp' : 'jpg';
-          resolve(new File([blob], file.name.replace(/\.[^.]+$/, `.${ext}`), { type: blob.type }));
-        },
-        'image/webp', // tenta WebP primeiro
-        quality
-      );
-    };
-    img.src = URL.createObjectURL(file);
-  });
+// Buscar reviews de hoje ordenados cronologicamente
+const todayStart = today + 'T00:00:00.000Z';
+const { data: todayLogs } = await supabase
+  .from('review_logs')
+  .select('reviewed_at')
+  .eq('user_id', userId)
+  .gte('reviewed_at', todayStart)
+  .order('reviewed_at', { ascending: true });
+
+// Calcular tempo real com anti-fraude
+const MIN_REVIEW_MS = 1500;  // < 1.5s = bot/spam
+const MAX_REVIEW_MS = 120000; // > 2min = pausa
+let totalMs = 0;
+const reviews = todayLogs ?? [];
+for (let i = 1; i < reviews.length; i++) {
+  const gap = new Date(reviews[i].reviewed_at).getTime() - new Date(reviews[i-1].reviewed_at).getTime();
+  if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
+    totalMs += gap;
+  } else if (gap > MAX_REVIEW_MS) {
+    totalMs += MAX_REVIEW_MS; // cap em 2 min
+  }
+  // gap < MIN_REVIEW_MS: descartado (suspeito)
 }
+// Adicionar tempo do primeiro card (estimativa fixa de 15s)
+if (reviews.length > 0) totalMs += 15000;
+const todayMinutes = Math.round(totalMs / 60000);
 ```
 
-**Modificacao em `uploadCardImage`:**
+**Timestamp de atualizacao (turmaService.ts):**
 ```typescript
-import { compressImage } from '@/lib/imageUtils';
+// Buscar max card updated_at por deck
+const { data: cardUpdates } = await supabase
+  .from('cards')
+  .select('deck_id, updated_at')
+  .in('deck_id', deckIds)
+  .order('updated_at', { ascending: false });
 
-export async function uploadCardImage(userId: string, file: File): Promise<string> {
-  if (file.size > 5 * 1024 * 1024) throw new Error('Maximo 5MB');
-  const compressed = await compressImage(file); // <-- nova linha
-  const ext = compressed.name.split('.').pop() || 'webp';
-  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('card-images').upload(path, compressed);
-  // ...
-}
+const cardMaxMap = new Map<string, string>();
+(cardUpdates ?? []).forEach((c: any) => {
+  if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
+});
+
+// Usar o mais recente entre deck.updated_at e max(cards.updated_at)
+return decks.map(d => ({
+  ...d,
+  updated_at: cardMaxMap.has(d.id) && new Date(cardMaxMap.get(d.id)!) > new Date(d.updated_at)
+    ? cardMaxMap.get(d.id)!
+    : d.updated_at,
+}));
 ```
-
-**Modificacao em `renderOcclusion` (lazy loading):**
-```html
-<img src="${imageUrl}" loading="lazy" style="..." />
-```
-
-### Resumo de arquivos
-
-| Arquivo | Acao |
-|---------|------|
-| `src/lib/imageUtils.ts` | Criar (funcao de compressao) |
-| `src/services/cardService.ts` | Editar (usar compressImage no upload) |
-| `src/pages/ManageDeck.tsx` | Editar (usar compressImage no upload) |
-| `src/components/RichEditor.tsx` | Editar (usar compressImage nos 2 uploads) |
-| `src/components/FlashCard.tsx` | Editar (adicionar loading="lazy" na renderOcclusion) |
-
-### Impacto esperado
-
-- Imagens novas: ~80-90% menores (3MB -> 200KB tipico)
-- Carregamento durante estudo: significativamente mais rapido
-- Imagens existentes: melhoria com lazy loading; transformacao server-side se o plano suportar
-- Qualidade visual: imperceptivel para uso em flashcards (1200px de largura e mais que suficiente)
 
