@@ -35,7 +35,7 @@ const Study = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
@@ -460,7 +460,7 @@ const Study = () => {
     }
   }, [undoSnapshot, queryClient, toast]);
 
-  if (isLoading) {
+  if (isLoading || (!queueInitialized && isFetching)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
