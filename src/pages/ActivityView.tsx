@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, BookOpen, GraduationCap, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, SquarePlus, RotateCcw, Layers } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,10 @@ const ActivityView = () => {
   const [freezeInfoOpen, setFreezeInfoOpen] = useState(false);
   const [bestStreakInfoOpen, setBestStreakInfoOpen] = useState(false);
   const [activeDaysInfoOpen, setActiveDaysInfoOpen] = useState(false);
+  const [newCardsInfoOpen, setNewCardsInfoOpen] = useState(false);
+  const [learningInfoOpen, setLearningInfoOpen] = useState(false);
+  const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
+  const [relearningInfoOpen, setRelearningInfoOpen] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -345,44 +349,28 @@ const ActivityView = () => {
                   <Clock className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="text-sm font-medium text-foreground">{selectedDayData.minutes}min de estudo</span>
                 </div>
-                {/* Card breakdown */}
-                <div className="grid grid-cols-2 gap-2">
-                  {selectedDayData.newCards > 0 && (
-                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
-                      <Sparkles className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.newCards}</p>
-                        <p className="text-[10px] text-muted-foreground">Novos</p>
-                      </div>
-                    </div>
-                  )}
-                  {selectedDayData.learning > 0 && (
-                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
-                      <BookOpen className="h-4 w-4 text-warning flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.learning}</p>
-                        <p className="text-[10px] text-muted-foreground">Aprendendo</p>
-                      </div>
-                    </div>
-                  )}
-                  {selectedDayData.review > 0 && (
-                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
-                      <GraduationCap className="h-4 w-4 text-success flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.review}</p>
-                        <p className="text-[10px] text-muted-foreground">Revisão</p>
-                      </div>
-                    </div>
-                  )}
-                  {selectedDayData.relearning > 0 && (
-                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
-                      <RotateCcw className="h-4 w-4 text-destructive flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.relearning}</p>
-                        <p className="text-[10px] text-muted-foreground">Reaprendendo</p>
-                      </div>
-                    </div>
-                  )}
+                {/* Card breakdown - single row, always show all */}
+                <div className="grid grid-cols-4 gap-2">
+                  <button onClick={() => setNewCardsInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-xl bg-muted/50 p-2.5 hover:bg-muted transition-colors">
+                    <SquarePlus className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.newCards}</span>
+                    <span className="text-[10px] text-muted-foreground">Novos</span>
+                  </button>
+                  <button onClick={() => setLearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-xl bg-muted/50 p-2.5 hover:bg-muted transition-colors">
+                    <RotateCcw className="h-4 w-4 text-warning" />
+                    <span className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.learning}</span>
+                    <span className="text-[10px] text-muted-foreground">Aprendendo</span>
+                  </button>
+                  <button onClick={() => setReviewInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-xl bg-muted/50 p-2.5 hover:bg-muted transition-colors">
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.review}</span>
+                    <span className="text-[10px] text-muted-foreground">Dominados</span>
+                  </button>
+                  <button onClick={() => setRelearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-xl bg-muted/50 p-2.5 hover:bg-muted transition-colors">
+                    <RotateCcw className="h-4 w-4 text-destructive" />
+                    <span className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.relearning}</span>
+                    <span className="text-[10px] text-muted-foreground">Reaprendendo</span>
+                  </button>
                 </div>
                 {/* Total */}
                 <p className="text-xs text-muted-foreground text-center">{selectedDayData.cards} cards no total</p>
@@ -392,6 +380,63 @@ const ActivityView = () => {
             ) : null}
           </div>
         )}
+
+        {/* Card type info dialogs */}
+        <Dialog open={newCardsInfoOpen} onOpenChange={setNewCardsInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <SquarePlus className="h-5 w-5 text-muted-foreground" />
+                Novos
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Cards que você viu pela primeira vez neste dia. São cartões que nunca foram estudados antes.
+            </p>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={learningInfoOpen} onOpenChange={setLearningInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5 text-warning" />
+                Aprendendo
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Cards na fase inicial de aprendizado. Eles aparecem várias vezes na mesma sessão até que você os memorize o suficiente para entrar na repetição espaçada.
+            </p>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={reviewInfoOpen} onOpenChange={setReviewInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-primary" />
+                Dominados
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Cards que já foram graduados e estão em repetição espaçada. Eles aparecem em intervalos cada vez maiores conforme você os domina.
+            </p>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={relearningInfoOpen} onOpenChange={setRelearningInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5 text-destructive" />
+                Reaprendendo
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Cards dominados que você errou durante a revisão. Eles voltam para a fase de aprendizado até serem memorizados novamente.
+            </p>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
