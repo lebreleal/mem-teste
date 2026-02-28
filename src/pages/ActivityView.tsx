@@ -4,7 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -167,19 +168,24 @@ const ActivityView = () => {
               <p className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Dias ativos</p>
             </div>
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
-              <Snowflake className="h-4 w-4 text-blue-400 mx-auto mb-1" />
+            <div className="rounded-xl bg-muted/50 p-3 text-center relative">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Snowflake className="h-4 w-4 text-blue-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Info className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[200px] text-xs">
+                    A cada 7 dias seguidos estudando, você ganha 1 congelamento. Se esquecer um dia, ele é usado automaticamente para manter sua sequência.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <p className="text-base font-bold text-foreground tabular-nums">{freezesAvailable}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Congelamentos</p>
             </div>
           </div>
-
-          {freezesUsed > 0 && (
-            <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-              <Snowflake className="h-3 w-3 text-blue-400" />
-              {freezesUsed} congelamento{freezesUsed > 1 ? 's' : ''} usado{freezesUsed > 1 ? 's' : ''}
-            </p>
-          )}
         </div>
 
         {/* Calendar */}
