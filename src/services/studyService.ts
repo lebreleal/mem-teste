@@ -179,7 +179,8 @@ export async function fetchStudyQueue(
 
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
-  // --- Sibling burying BEFORE limits (buried cards must not consume slots) ---
+  // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
+  // This prevents a new card that will be cut by the limit from burying a legitimate review.
   const buryNew = deckConfig?.bury_new_siblings !== false;
   const buryReview = deckConfig?.bury_review_siblings !== false;
   const buryLearning = deckConfig?.bury_learning_siblings !== false;
@@ -187,6 +188,10 @@ export async function fetchStudyQueue(
   let allLearning = cards.filter(c => c.state === 1 || c.state === 3);
   let allNew = cards.filter(c => c.state === 0);
   let allReview = cards.filter(c => c.state === 2);
+
+  // Apply daily limits BEFORE burying so cut cards don't bury others
+  allNew = allNew.slice(0, effectiveNewLimit);
+  allReview = allReview.slice(0, effectiveReviewLimit);
 
   if (buryNew || buryReview || buryLearning) {
     const seenFronts = new Set<string>();
@@ -198,18 +203,14 @@ export async function fetchStudyQueue(
       return true;
     };
     // Process in priority order: learning first (they keep their slot),
-    // then new, then review — so a learning sibling buries the new one, not vice-versa.
+    // then review (already earned), then new — so reviews are preserved over new cards.
     allLearning = allLearning.filter(c => buryFilter(c, buryLearning));
-    allNew = allNew.filter(c => buryFilter(c, buryNew));
     allReview = allReview.filter(c => buryFilter(c, buryReview));
+    allNew = allNew.filter(c => buryFilter(c, buryNew));
   }
 
-  // Apply daily limits AFTER burying
-  const newCards = allNew.slice(0, effectiveNewLimit);
-  const reviewCards = allReview.slice(0, effectiveReviewLimit);
-
   // Shuffle only applies to new + review cards; learning cards always go first
-  const nonLearning = [...newCards, ...reviewCards];
+  const nonLearning = [...allNew, ...allReview];
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   let queue = [...allLearning, ...orderedNonLearning];
 
