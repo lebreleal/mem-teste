@@ -180,11 +180,23 @@ const Dashboard = () => {
     }
   };
 
-  /** Check if deck is shared in a community before allowing deletion. */
+  /** Check if deck (or any sub-deck) is shared in a community before allowing deletion. */
   const handleDeleteDeckRequest = async (deck: { id: string; name: string }) => {
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', deck.id).limit(1);
+    // Collect this deck + all descendant sub-decks
+    const allIds = [deck.id];
+    const collectChildren = (parentIds: string[]) => {
+      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
+      children.forEach(c => allIds.push(c.id));
+      if (children.length > 0) collectChildren(children.map(c => c.id));
+    };
+    collectChildren([deck.id]);
+
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
     if (turmaRefs && turmaRefs.length > 0) {
-      setCommunityBlockTarget({ id: deck.id, name: deck.name, type: 'deck' });
+      const blockedId = turmaRefs[0].deck_id;
+      const blockedDeck = state.decks.find(d => d.id === blockedId);
+      const blockedName = blockedDeck ? blockedDeck.name : deck.name;
+      setCommunityBlockTarget({ id: deck.id, name: blockedName, type: 'deck' });
       return;
     }
     state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
