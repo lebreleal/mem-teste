@@ -13,7 +13,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2 } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Send } from 'lucide-react';
+import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -30,12 +31,15 @@ const stripHtml = (html: string) => {
 };
 
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
-const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose }: {
+const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner }: {
   cards: any[];
   initialIndex: number;
   open: boolean;
   onClose: () => void;
+  deckId?: string;
+  isOwner?: boolean;
 }) => {
+  const [suggestCard, setSuggestCard] = useState<any>(null);
   const isMobile = useIsMobile();
 
   const virtualCards = useMemo(() => {
@@ -135,7 +139,19 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose }: {
             </span>
           )}
         </div>
-        <div className="w-9" />
+        {!isOwner && vc?.card && deckId ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full bg-card/80 shadow-sm"
+            onClick={() => setSuggestCard(vc.card)}
+            title="Sugerir correção"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        ) : (
+          <div className="w-9" />
+        )}
       </header>
 
       <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0 px-4 sm:px-6">
@@ -164,6 +180,20 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose }: {
           <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
         </Button>
       </div>
+
+      {suggestCard && deckId && (
+        <SuggestCorrectionModal
+          open={!!suggestCard}
+          onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
+          card={{
+            id: suggestCard.id,
+            front_content: suggestCard.front_content,
+            back_content: suggestCard.back_content,
+            deck_id: deckId,
+            card_type: suggestCard.card_type,
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1068,6 +1098,8 @@ const PublicDeckPreview = () => {
         initialIndex={previewIndex ?? 0}
         open={previewIndex !== null}
         onClose={() => setPreviewIndex(null)}
+        deckId={deck?.id}
+        isOwner={deck?.user_id === user?.id}
       />
       {/* Edit warning dialog */}
       <AlertDialog open={showEditWarning} onOpenChange={setShowEditWarning}>
