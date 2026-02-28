@@ -288,7 +288,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const textBatches: { text: string; pageCount: number }[] = [];
     for (let i = 0; i < selected.length; i += PAGES_PER_BATCH) {
       const batchPages = selected.slice(i, i + PAGES_PER_BATCH);
-      const text = batchPages.map(p => p.textContent).join('\n\n');
+      const text = batchPages.map(p => `--- PÁGINA ${p.pageNumber} ---\n${p.textContent}`).join('\n\n');
       textBatches.push({ text, pageCount: batchPages.length });
     }
 

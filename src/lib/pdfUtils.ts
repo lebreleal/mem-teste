@@ -53,7 +53,31 @@ export async function extractPDFPages(
  * Split plain text into "pages" (chunks of ~2000 chars)
  */
 export function splitTextIntoPages(text: string, chunkSize = 2000): { pageNumber: number; textContent: string }[] {
-  const paragraphs = text.split(/\n{2,}/);
+  // 1. Primary split: double newlines (standard paragraphs)
+  let paragraphs = text.split(/\n{2,}/);
+
+  // 2. Fallback: if any chunk is still too large, re-split by single newlines
+  if (paragraphs.some(p => p.length > chunkSize)) {
+    paragraphs = paragraphs.flatMap(p =>
+      p.length > chunkSize ? p.split(/\n/) : [p]
+    );
+  }
+
+  // 3. Final fallback: force-split blocks with no line breaks at nearest space
+  paragraphs = paragraphs.flatMap(p => {
+    if (p.length <= chunkSize) return [p];
+    const subChunks: string[] = [];
+    let remaining = p;
+    while (remaining.length > chunkSize) {
+      let cutAt = remaining.lastIndexOf(' ', chunkSize);
+      if (cutAt <= 0) cutAt = chunkSize;
+      subChunks.push(remaining.slice(0, cutAt));
+      remaining = remaining.slice(cutAt).trimStart();
+    }
+    if (remaining) subChunks.push(remaining);
+    return subChunks;
+  });
+
   const pages: { pageNumber: number; textContent: string }[] = [];
   let current = '';
   let pageNum = 1;
