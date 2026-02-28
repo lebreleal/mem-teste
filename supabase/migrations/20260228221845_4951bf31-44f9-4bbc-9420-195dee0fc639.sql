@@ -1,0 +1,1 @@
+DELETE FROM turma_decks WHERE id = '3a8c4817-e422-47ba-a511-e90d37247810';
