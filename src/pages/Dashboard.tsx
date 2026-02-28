@@ -191,11 +191,13 @@ const Dashboard = () => {
     };
     collectChildren([deck.id]);
 
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id, turma_id').in('deck_id', allIds).limit(1);
+    console.log('[DELETE-CHECK] deck:', deck.name, 'allIds:', allIds, 'turmaRefs:', turmaRefs);
     if (turmaRefs && turmaRefs.length > 0) {
       const blockedId = turmaRefs[0].deck_id;
       const blockedDeck = state.decks.find(d => d.id === blockedId);
       const blockedName = blockedDeck ? blockedDeck.name : deck.name;
+      console.log('[DELETE-CHECK] BLOCKED by turma_decks row:', turmaRefs[0], 'blockedName:', blockedName);
       setCommunityBlockTarget({ id: deck.id, name: blockedName, type: 'deck' });
       return;
     }
