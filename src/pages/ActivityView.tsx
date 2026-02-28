@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,6 +20,7 @@ interface DayData {
 }
 
 const ActivityView = () => {
+  const [freezeInfoOpen, setFreezeInfoOpen] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -131,16 +132,14 @@ const ActivityView = () => {
         {/* Streak hero card */}
         <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className={cn(
-              "relative flex h-16 w-16 items-center justify-center rounded-full transition-all",
-              streak > 0
-                ? "bg-warning/15 border-2 border-warning/50"
-                : "bg-muted/50 border-2 border-muted-foreground/20"
-            )}>
+            <div className="relative flex h-16 w-16 items-center justify-center">
+              {streak > 0 && (
+                <div className="absolute inset-0 rounded-full bg-warning/15 blur-sm" />
+              )}
               <Flame
                 className={cn(
-                  "h-8 w-8 transition-all",
-                  streak > 0 ? "text-warning" : "text-muted-foreground/40"
+                  "h-9 w-9 transition-all relative z-10",
+                  streak > 0 ? "text-warning" : "text-muted-foreground/30"
                 )}
                 strokeWidth={isIntense ? 2.5 : 2}
                 style={streak > 0 ? {
@@ -168,22 +167,37 @@ const ActivityView = () => {
               <p className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Dias ativos</p>
             </div>
-            <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setFreezeInfoOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
               <Snowflake className="h-4 w-4 text-blue-400" />
               <span className="text-base font-bold text-foreground tabular-nums">{freezesAvailable}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[200px] text-xs">
-                  A cada 7 dias seguidos estudando, você ganha 1 congelamento. Se esquecer um dia, ele é usado automaticamente para manter sua sequência.
-                </TooltipContent>
-              </Tooltip>
-            </div>
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
         </div>
+
+        {/* Freeze info dialog */}
+        <Dialog open={freezeInfoOpen} onOpenChange={setFreezeInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Snowflake className="h-5 w-5 text-blue-400" />
+                Congelamentos
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>A cada <strong className="text-foreground">7 dias seguidos</strong> estudando, você ganha <strong className="text-foreground">1 congelamento</strong>.</p>
+              <p>Se você esquecer de estudar em um dia, um congelamento é usado automaticamente para manter sua sequência de dias seguidos.</p>
+              <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+                <Snowflake className="h-5 w-5 text-blue-400" />
+                <span className="text-foreground font-bold text-lg tabular-nums">{freezesAvailable}</span>
+                <span className="text-muted-foreground">disponíveis</span>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Calendar */}
         <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">

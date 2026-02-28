@@ -65,7 +65,6 @@ const WeekStrip = () => {
   // Fire intensity: bigger flame at streak >= 7
   const isIntense = streak >= 7;
   const flameSize = isIntense ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-5 w-5 sm:h-6 sm:w-6';
-  const ringSize = isIntense ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-10 w-10 sm:h-11 sm:w-11';
 
   return (
     <button
@@ -100,16 +99,15 @@ const WeekStrip = () => {
         ))}
       </div>
 
-      {/* Streak fire icon — orange, scales with streak */}
+      {/* Streak fire icon */}
       <div className="flex-shrink-0 relative flex items-center justify-center">
-        <div className={`relative flex items-center justify-center ${ringSize} rounded-full transition-all duration-300 ${
-          hasStreak
-            ? 'border-2 border-warning/60 bg-warning/10'
-            : 'border-2 border-muted-foreground/30 bg-muted/30'
-        }`}>
+        <div className="relative flex items-center justify-center h-10 w-10 sm:h-11 sm:w-11">
+          {hasStreak && (
+            <div className="absolute inset-0 rounded-full bg-warning/15 blur-sm" />
+          )}
           <Flame
-            className={`${flameSize} transition-all duration-300 ${
-              hasStreak ? 'text-warning' : 'text-muted-foreground/50'
+            className={`${flameSize} transition-all duration-300 relative z-10 ${
+              hasStreak ? 'text-warning' : 'text-muted-foreground/30'
             }`}
             strokeWidth={isIntense ? 2.5 : 2}
             style={hasStreak ? {
