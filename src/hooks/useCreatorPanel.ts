@@ -125,14 +125,20 @@ export const useCreatorStats = () => {
 
       const { data: members } = await supabase.from('turma_members').select('is_subscriber').in('turma_id', turmaIds);
       const { data: tDecks } = await supabase.from('turma_decks').select('deck_id').in('turma_id', turmaIds);
-      const deckIds = (tDecks ?? []).map((d: any) => d.deck_id);
+      const communityDeckIds = (tDecks ?? []).map((d: any) => d.deck_id);
+
+      // Also get ALL owned decks for suggestion counting
+      const { data: allOwnedDecks } = await supabase.from('decks').select('id').eq('user_id', user.id);
+      const allDeckIds = (allOwnedDecks ?? []).map((d: any) => d.id);
 
       let totalCards = 0;
       let pendingSuggestions = 0;
-      if (deckIds.length > 0) {
-        const { count } = await supabase.from('cards').select('id', { count: 'exact', head: true }).in('deck_id', deckIds);
+      if (communityDeckIds.length > 0) {
+        const { count } = await supabase.from('cards').select('id', { count: 'exact', head: true }).in('deck_id', communityDeckIds);
         totalCards = count ?? 0;
-        const { count: sugCount } = await supabase.from('deck_suggestions').select('id', { count: 'exact', head: true }).in('deck_id', deckIds).eq('status', 'pending');
+      }
+      if (allDeckIds.length > 0) {
+        const { count: sugCount } = await supabase.from('deck_suggestions').select('id', { count: 'exact', head: true }).in('deck_id', allDeckIds).eq('status', 'pending');
         pendingSuggestions = sugCount ?? 0;
       }
 
@@ -151,7 +157,7 @@ export const useCreatorStats = () => {
       return {
         totalCommunities: turmaIds.length,
         totalSubscribers: (members ?? []).filter((m: any) => m.is_subscriber).length,
-        totalDecks: deckIds.length,
+        totalDecks: communityDeckIds.length,
         totalCards,
         pendingSuggestions,
         monthlyRevenue,
@@ -169,12 +175,11 @@ export const usePendingSuggestions = () => {
     queryFn: async (): Promise<PendingSuggestion[]> => {
       if (!user) return [];
 
-      // Get all decks owned by user that are shared in communities
+      // Get all decks owned by user (community + public standalone)
       const { data: ownedDecks } = await supabase
         .from('decks')
         .select('id, name, community_id')
-        .eq('user_id', user.id)
-        .not('community_id', 'is', null);
+        .eq('user_id', user.id);
 
       if (!ownedDecks || ownedDecks.length === 0) return [];
 
