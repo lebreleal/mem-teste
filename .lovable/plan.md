@@ -1,55 +1,120 @@
 
 
-## Plano: Corrigir intervalos identicos (1d/1d/1d) para Dificil/Bom/Facil
+## Plano: Medir tempo real por card com timer
 
-### Problema
+### Problema atual
 
-Dois bugs combinados fazem com que Dificil, Bom e Facil mostrem "1d" identicos:
+O calculo de "minutos estudados" usa uma estimativa indireta: analisa os gaps entre timestamps de `reviewed_at` no `review_logs`, com heuristicas anti-fraude (descarta < 1.5s, cap em 2min). Isso e impreciso porque:
+- Nao mede o tempo real que voce ficou olhando/pensando no card
+- Pausas para ir ao banheiro, trocar de aba etc. distorcem os numeros
+- Cards de aprendizado (learning steps) ficam esperando timer e o gap inclui esse tempo de espera
 
-**Bug 1 - `last_reviewed_at` ausente no preview de multipla escolha (FlashCard.tsx, linha 251):**
-O card de multipla escolha constroi o `FSRSCard` sem `last_reviewed_at`, fazendo o algoritmo usar `scheduled_date` (que esta no futuro) como referencia. Isso gera `elapsedDays` negativo/zero, ativando erroneamente o caminho de "same-day review".
+### Solucao: Timer real por card
 
-**Bug 2 - Sem diferenciacao no caminho same-day (fsrs.ts, linhas 231-241):**
-Quando `elapsedDays < 1`, o codigo aplica `sameDayStability` e retorna `Math.max(interval, 1)` para todos os ratings (Hard/Good/Easy). Com estabilidade baixa, todos produzem intervalo = 1 dia. Diferente do caminho normal (linhas 258-265) que garante: Hard >= currentInterval, Good >= currentInterval+1, Easy >= currentInterval+2.
+**Conceito**: O `Study.tsx` ja tem um `cardShownAt` ref que marca quando o card apareceu. Basta calcular `elapsed = Date.now() - cardShownAt.current` no momento do rating, salvar isso no `review_logs`, e somar para calcular o tempo de estudo.
 
-### Solucao
+### Mudancas necessarias
 
-**Arquivo 1: `src/components/FlashCard.tsx`**
-- Linha 251: Adicionar `last_reviewed_at: lastReviewedAt` ao FSRSCard da preview de multipla escolha (igual a linha 628)
+**1. Adicionar coluna `elapsed_ms` na tabela `review_logs`** (migration)
+- Nova coluna `elapsed_ms integer` (nullable, default null) para nao quebrar logs antigos
+- Logs antigos sem essa coluna continuam usando o calculo de gap como fallback
 
-**Arquivo 2: `src/lib/fsrs.ts`**
-- Caminho same-day review (linhas 231-241): Adicionar diferenciacao de piso para os ratings:
-  - Hard: `Math.max(interval, 1)` (mantido)
-  - Good: `Math.max(interval, 2)` (minimo 2 dias)
-  - Easy: `Math.max(interval, 3)` (minimo 3 dias)
+**2. `src/services/studyService.ts` - submitCardReview**
+- Receber novo parametro `elapsedMs` (tempo real em ms)
+- Aplicar cap anti-fraude: minimo 1.5s, maximo 120s (mesmo limites atuais)
+- Salvar no INSERT do `review_logs`
 
-**Arquivo 3: `src/test/fsrs-long-sequence.test.ts`**
-- Adicionar teste especifico: card com baixa estabilidade em same-day review deve mostrar intervalos diferenciados (Hard < Good < Easy)
-- Adicionar teste: preview sem `last_reviewed_at` nao deve estagnar em 1d
+**3. `src/hooks/useStudySession.ts` - submitReview mutation**
+- Passar `elapsedMs` no mutationFn
+
+**4. `src/pages/Study.tsx` - handleRate**
+- Calcular `elapsed = Date.now() - cardShownAt.current` (ja existe na linha 322!)
+- Passar como `elapsedMs` no submitReview
+- Resetar `cardShownAt.current = Date.now()` quando o proximo card aparecer
+
+**5. `src/services/studyService.ts` - fetchStudyStats**
+- Para logs com `elapsed_ms`: somar diretamente
+- Para logs sem `elapsed_ms` (antigos): usar o calculo de gap atual como fallback
+- Resultado: `todayMinutes = (soma dos elapsed_ms de hoje) / 60000`
 
 ### Detalhes tecnicos
 
-**fsrs.ts - same-day review fix:**
+**Migration SQL:**
+```sql
+ALTER TABLE review_logs ADD COLUMN elapsed_ms integer;
+```
+
+**submitCardReview - novo parametro:**
 ```typescript
-// Same-day review (elapsed < 1 day)
-if (elapsedDays < 1) {
-  const s = sameDayStability(w, card.stability, rating);
-  if (rating === 1) {
-    // ... existing Again logic
-  }
-  const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
-  // Floor differentiation matching normal review behavior
-  let minInterval = 1;
-  if (rating === 3) minInterval = 2;
-  if (rating === 4) minInterval = 3;
-  const finalInterval = Math.max(interval, minInterval);
-  const scheduledDate = getLocalMidnight(finalInterval);
-  return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval, learning_step: 0 };
+export async function submitCardReview(
+  userId: string,
+  card: any,
+  rating: Rating,
+  algorithmMode: string,
+  deckConfig: any,
+  elapsedMs?: number,  // novo
+) {
+  // Cap anti-fraude
+  const cappedMs = elapsedMs 
+    ? Math.min(Math.max(elapsedMs, 1500), 120000) 
+    : null;
+  
+  // ... no insert do review_logs:
+  supabase.from('review_logs').insert({
+    ...existingFields,
+    elapsed_ms: cappedMs,
+  });
 }
 ```
 
-**FlashCard.tsx - linha 251 fix:**
+**fetchStudyStats - calculo hibrido:**
 ```typescript
-const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0, last_reviewed_at: lastReviewedAt };
+// Buscar logs com elapsed_ms
+const { data: logs } = await supabase
+  .from('review_logs')
+  .select('reviewed_at, elapsed_ms')
+  .eq('user_id', userId)
+  .gte('reviewed_at', thirtyDaysAgo.toISOString())
+  .order('reviewed_at', { ascending: true });
+
+// Para hoje: somar elapsed_ms quando disponivel, gap-based para antigos
+const todayLogs = logs.filter(l => l.reviewed_at >= todayStart);
+let todayMs = 0;
+for (let i = 0; i < todayLogs.length; i++) {
+  if (todayLogs[i].elapsed_ms) {
+    todayMs += todayLogs[i].elapsed_ms;
+  } else if (i > 0) {
+    // fallback: gap-based para logs antigos
+    const gap = new Date(todayLogs[i].reviewed_at).getTime() 
+              - new Date(todayLogs[i-1].reviewed_at).getTime();
+    if (gap >= 1500 && gap <= 120000) todayMs += gap;
+    else if (gap > 120000) todayMs += 120000;
+  }
+}
+todayMinutes = Math.round(todayMs / 60000);
 ```
 
+**Study.tsx - resetar timer no card change:**
+```typescript
+// Ja existe: cardShownAt.current reset ao mudar card
+useEffect(() => {
+  cardShownAt.current = Date.now();
+}, [cardKey]);
+```
+
+### Arquivos afetados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| Migration SQL | Adicionar coluna `elapsed_ms` em `review_logs` |
+| `src/services/studyService.ts` | Receber/salvar `elapsedMs`, calculo hibrido |
+| `src/hooks/useStudySession.ts` | Passar `elapsedMs` na mutation |
+| `src/pages/Study.tsx` | Enviar tempo real, resetar timer |
+| `src/integrations/supabase/types.ts` | Atualizar tipo de `review_logs` (se tipado) |
+
+### Vantagens
+
+- Tempo de estudo 100% preciso a partir de agora
+- Logs antigos continuam funcionando com fallback
+- Anti-fraude mantido (cap 1.5s-120s)
+- Nenhuma mudanca na UI necessaria - o `todayMinutes` ja e exibido no StatusBar
