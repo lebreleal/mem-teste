@@ -38,7 +38,7 @@ const TurmaHeader = () => {
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/activity?tab=streak')} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:bg-muted/50">
-              <Flame className={`h-4 w-4 transition-colors ${hasStreak ? 'text-warning' : 'text-muted-foreground/40'}`} strokeWidth={isIntense ? 2.5 : 2}
+              <Flame className={`h-4 w-4 transition-colors ${hasStreak ? 'text-warning fill-warning' : 'text-muted-foreground/30'}`} strokeWidth={isIntense ? 2.5 : 2}
                 style={hasStreak ? { filter: isIntense ? 'drop-shadow(0 0 4px hsl(var(--warning) / 0.5))' : 'drop-shadow(0 0 2px hsl(var(--warning) / 0.3))' } : undefined} />
               <span className="text-xs font-bold tabular-nums text-foreground">{streak}</span>
             </button>
