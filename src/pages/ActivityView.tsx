@@ -132,23 +132,18 @@ const ActivityView = () => {
         {/* Streak hero card */}
         <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="relative flex h-16 w-16 items-center justify-center">
-              {streak > 0 && (
-                <div className="absolute inset-0 rounded-full bg-warning/15 blur-sm" />
+            <Flame
+              className={cn(
+                "h-10 w-10 transition-all",
+                streak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30"
               )}
-              <Flame
-                className={cn(
-                  "h-9 w-9 transition-all relative z-10",
-                  streak > 0 ? "text-warning" : "text-muted-foreground/30"
-                )}
-                strokeWidth={isIntense ? 2.5 : 2}
-                style={streak > 0 ? {
-                  filter: isIntense
-                    ? 'drop-shadow(0 0 8px hsl(var(--warning) / 0.6))'
-                    : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
-                } : undefined}
-              />
-            </div>
+              strokeWidth={isIntense ? 2.5 : 2}
+              style={streak > 0 ? {
+                filter: isIntense
+                  ? 'drop-shadow(0 0 8px hsl(var(--warning) / 0.6))'
+                  : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
+              } : undefined}
+            />
             <div className="flex-1">
               <p className="text-4xl font-extrabold text-foreground tabular-nums leading-none">{streak}</p>
               <p className="text-sm text-muted-foreground mt-0.5">dias seguidos</p>

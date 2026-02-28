@@ -99,34 +99,27 @@ const WeekStrip = () => {
         ))}
       </div>
 
-      {/* Streak fire icon */}
-      <div className="flex-shrink-0 relative flex items-center justify-center">
-        <div className="relative flex items-center justify-center h-10 w-10 sm:h-11 sm:w-11">
-          {hasStreak && (
-            <div className="absolute inset-0 rounded-full bg-warning/15 blur-sm" />
-          )}
-          <Flame
-            className={`${flameSize} transition-all duration-300 relative z-10 ${
-              hasStreak ? 'text-warning' : 'text-muted-foreground/30'
-            }`}
-            strokeWidth={isIntense ? 2.5 : 2}
-            style={hasStreak ? {
-              filter: isIntense
-                ? 'drop-shadow(0 0 6px hsl(var(--warning) / 0.5))'
-                : 'drop-shadow(0 0 3px hsl(var(--warning) / 0.3))',
-              animation: isIntense
-                ? 'streak-flame 1.5s ease-in-out infinite'
-                : 'streak-pulse 2.5s ease-in-out infinite',
-            } : undefined}
-          />
-        </div>
-
-        {/* Streak badge — top right */}
-        {hasStreak && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-warning text-[10px] font-extrabold text-warning-foreground text-center leading-[18px] shadow-md ring-2 ring-card">
-            {streak}
-          </span>
-        )}
+      {/* Streak fire + count */}
+      <div className="flex-shrink-0 flex items-center gap-1">
+        <Flame
+          className={`${flameSize} transition-all duration-300 ${
+            hasStreak ? 'text-warning fill-warning' : 'text-muted-foreground/30'
+          }`}
+          strokeWidth={isIntense ? 2.5 : 2}
+          style={hasStreak ? {
+            filter: isIntense
+              ? 'drop-shadow(0 0 6px hsl(var(--warning) / 0.5))'
+              : 'drop-shadow(0 0 3px hsl(var(--warning) / 0.3))',
+            animation: isIntense
+              ? 'streak-flame 1.5s ease-in-out infinite'
+              : 'streak-pulse 2.5s ease-in-out infinite',
+          } : undefined}
+        />
+        <span className={`text-sm font-bold tabular-nums ${
+          hasStreak ? 'text-foreground' : 'text-muted-foreground/40'
+        }`}>
+          {streak}
+        </span>
       </div>
 
       <style>{`
