@@ -8,6 +8,7 @@ export interface FSRSCard {
   state: number; // 0=new, 1=learning, 2=review, 3=relearning
   scheduled_date: string;
   learning_step?: number; // current step index in learningSteps/relearningSteps
+  last_reviewed_at?: string; // ISO date of last review — used to compute real elapsed days
 }
 
 export interface FSRSOutput {
@@ -220,8 +221,11 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
   }
 
   // ═══ STATE 2: Review ═══
+  // Elapsed days = time since last review (preferred) or time since scheduled date (fallback)
+  const lastReviewTime = card.last_reviewed_at ? new Date(card.last_reviewed_at).getTime() : null;
   const scheduledTime = new Date(card.scheduled_date).getTime();
-  const elapsedDays = Math.max(0, (now.getTime() - scheduledTime) / (1000 * 60 * 60 * 24));
+  const referenceTime = lastReviewTime ?? scheduledTime;
+  const elapsedDays = Math.max(0, (now.getTime() - referenceTime) / (1000 * 60 * 60 * 24));
   const d = nextDifficulty(w, card.difficulty, rating);
 
   // Same-day review (elapsed < 1 day)

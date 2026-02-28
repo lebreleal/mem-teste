@@ -266,6 +266,7 @@ export async function submitCardReview(
       state: card.state,
       scheduled_date: card.scheduled_date,
       learning_step: card.learning_step ?? 0,
+      last_reviewed_at: card.last_reviewed_at ?? undefined,
     };
 
     result = fsrsSchedule(fsrsCard, rating, params);
