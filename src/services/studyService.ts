@@ -24,8 +24,11 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived')
     .eq('user_id', userId);
+
+  // Filter out archived decks from consideration
+  const activeDecks = (allDecks ?? []).filter(d => !d.is_archived);
 
   let deckIds: string[];
   let deckConfig: any;
@@ -37,22 +40,22 @@ export async function fetchStudyQueue(
       .select('id, parent_id')
       .eq('user_id', userId);
 
-    const rootDeckIds = collectFolderDeckIds(allDecks ?? [], allFolders ?? [], folderId);
-    const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(allDecks ?? [], id));
+    const rootDeckIds = collectFolderDeckIds(activeDecks, allFolders ?? [], folderId);
+    const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
     deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
-    const firstDeck = (allDecks ?? []).find(d => deckIds.includes(d.id));
+    const firstDeck = activeDecks.find(d => deckIds.includes(d.id));
     deckConfig = firstDeck ?? {};
     limitScopeIds = deckIds;
   } else {
-    const descendantIds = collectDescendantIds(allDecks ?? [], deckId);
+    const descendantIds = collectDescendantIds(activeDecks, deckId);
     deckIds = [deckId, ...descendantIds];
 
     // Root ancestor's config governs ALL descendants
-    const rootId = findRootAncestorId(allDecks ?? [], deckId);
-    deckConfig = (allDecks ?? []).find(d => d.id === rootId) ?? {};
+    const rootId = findRootAncestorId(activeDecks, deckId);
+    deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
 
     // Count limits across the ENTIRE root hierarchy
-    const rootDescendants = collectDescendantIds(allDecks ?? [], rootId);
+    const rootDescendants = collectDescendantIds(activeDecks, rootId);
     limitScopeIds = [rootId, ...rootDescendants];
   }
 
@@ -69,7 +72,7 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+    const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
@@ -123,7 +126,7 @@ export async function fetchStudyQueue(
     // Expand to include all descendants
     const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
     for (const pid of planDeckIdSet) {
-      const descendants = collectDescendantIds(allDecks ?? [], pid);
+      const descendants = collectDescendantIds(activeDecks, pid);
       for (const d of descendants) expandedPlanDeckIds.add(d);
     }
     const { data: planCards } = await supabase
@@ -139,7 +142,7 @@ export async function fetchStudyQueue(
     const { data: allCards } = await supabase
       .from('cards')
       .select('id')
-      .in('deck_id', (allDecks ?? []).map(d => d.id));
+      .in('deck_id', activeDecks.map(d => d.id));
     const allCardIds = (allCards ?? []).map((c: any) => c.id);
     if (allCardIds.length > 0) {
       globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: allCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
@@ -219,7 +222,7 @@ export async function fetchStudyQueue(
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   let queue = [...allLearning, ...orderedNonLearning];
 
-  const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+  const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
