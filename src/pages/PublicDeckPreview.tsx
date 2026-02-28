@@ -413,8 +413,8 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
       if (!data || data.length === 0) return [];
 
       const userIds = [...new Set(data.map(s => s.suggester_user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', userIds);
-      const nameMap = new Map((profiles ?? []).map(p => [p.id, p.name]));
+      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
       const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
       const { data: cards } = cardIds.length > 0
