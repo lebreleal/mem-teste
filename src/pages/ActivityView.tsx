@@ -144,50 +144,53 @@ const ActivityView = () => {
 
       <main className="container mx-auto px-4 py-5 max-w-lg space-y-4">
         {/* Streak hero card */}
-        <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <Flame
-              className={cn(
-                "h-8 w-8 transition-all flex-shrink-0",
-                streak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30"
-              )}
-              strokeWidth={isIntense ? 2.5 : 2}
-              style={streak > 0 ? {
-                filter: isIntense
-                  ? 'drop-shadow(0 0 8px hsl(var(--warning) / 0.6))'
-                  : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
-              } : undefined}
-            />
-            <p className="text-3xl font-extrabold text-foreground tabular-nums leading-none">{streak}</p>
-            <p className="text-sm text-muted-foreground">dias seguidos</p>
-          </div>
+        <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            {/* Streak */}
+            <div className="flex items-center gap-2">
+              <Flame
+                className={cn(
+                  "h-6 w-6 transition-all flex-shrink-0",
+                  streak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30"
+                )}
+                strokeWidth={isIntense ? 2.5 : 2}
+                style={streak > 0 ? {
+                  filter: isIntense
+                    ? 'drop-shadow(0 0 8px hsl(var(--warning) / 0.6))'
+                    : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
+                } : undefined}
+              />
+              <span className="text-2xl font-extrabold text-foreground tabular-nums leading-none">{streak}</span>
+              <span className="text-xs text-muted-foreground">dias<br/>seguidos</span>
+            </div>
 
-          {/* Stats row - all inline */}
-          <div className="flex items-center gap-4 mt-4 justify-between">
-            <button
-              onClick={() => setBestStreakInfoOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
-            >
-              <Trophy className="h-4 w-4 text-primary" />
-              <span className="text-base font-bold text-foreground tabular-nums">{bestStreak}</span>
-              <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-            <button
-              onClick={() => setActiveDaysInfoOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
-            >
-              <CheckCircle className="h-4 w-4 text-success" />
-              <span className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</span>
-              <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-            <button
-              onClick={() => setFreezeInfoOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
-            >
-              <Snowflake className="h-4 w-4 text-blue-400" />
-              <span className="text-base font-bold text-foreground tabular-nums">{freezesAvailable}</span>
-              <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
+            {/* Stats */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setBestStreakInfoOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{bestStreak}</span>
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => setActiveDaysInfoOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <CheckCircle className="h-4 w-4 text-success" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{totalActiveDays}</span>
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => setFreezeInfoOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <Snowflake className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{freezesAvailable}</span>
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </button>
+            </div>
           </div>
         </div>
 
