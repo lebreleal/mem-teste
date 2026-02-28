@@ -1417,7 +1417,9 @@ const StudyPlan = () => {
                   )}
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
+                  Cards que você nunca estudou. {plans.length > 0
+                    ? 'O sistema distribui entre seus objetivos proporcionalmente.'
+                    : 'Crie um objetivo para que este limite global seja aplicado na fila de estudo.'}
                 </p>
                 <Slider
                   value={[tempNewCards]}
@@ -1541,9 +1543,15 @@ const StudyPlan = () => {
                 <span className="block">
                   Você está alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
                 </span>
-                <span className="block text-amber-600 dark:text-amber-400">
-                  ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
-                </span>
+                {plans.length > 0 ? (
+                  <span className="block text-amber-600 dark:text-amber-400">
+                    ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
+                  </span>
+                ) : (
+                  <span className="block text-muted-foreground">
+                    Este valor será usado como referência na simulação. Sem objetivos ativos, cada baralho usa seu próprio limite individual.
+                  </span>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
