@@ -105,7 +105,7 @@ const Study = () => {
   // Lock the displayed card — only update when cardKey changes (user rated) or during init
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
-    if (!isTransitioning && nextCard) {
+    if (!isTransitioning) {
       setDisplayedCard(nextCard);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
