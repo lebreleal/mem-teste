@@ -1,111 +1,74 @@
 
 
-# Otimizacao do Prompt de Geracao de Cards com IA
+# Plano Completo: Otimizacao do Prompt + Correcao do Split de Paginas + Marcadores
 
-## Mudancas no prompt (6 melhorias)
-
-### Mudanca 1: Adicionar regra de PROGRESSAO LOGICA (nova regra 11)
-
-**ANTES:** Nao existe instrucao sobre conectar cards entre si.
-
-**DEPOIS:**
-```
-11. PROGRESSAO LOGICA: Os cartoes devem construir uma NARRATIVA de aprendizado.
-    Antes de testar um detalhe, garanta que o conceito-pai ja foi coberto.
-    Ex: primeiro "O que o diafragma faz na inspiracao", depois
-    "Por que a paralisia do diafragma causa dispneia".
-```
+Este plano inclui TODAS as melhorias pendentes: as 6 mudancas no prompt do generate-deck E as 2 correcoes no frontend.
 
 ---
 
-### Mudanca 2: Cobertura "standard" -- varredura por FOLHA, nao por paragrafo
+## Parte 1: Corrigir `splitTextIntoPages` (texto do Word vira 1 pagina so)
 
-**ANTES:**
-```
-"COBERTURA COMPLETA: Crie cartoes para TODOS os topicos, conceitos e
-mecanismos presentes no conteudo. NAO pule NENHUM tema..."
-```
+**Arquivo:** `src/lib/pdfUtils.ts` (funcao `splitTextIntoPages`, linhas 55-73)
 
-**DEPOIS:**
-```
-"COBERTURA COMPLETA: Faca uma varredura FOLHA POR FOLHA do conteudo
-fornecido. Para cada folha/secao, identifique os conceitos-chave e
-crie cartoes que cubram os pontos principais. Conecte conceitos entre
-folhas quando relevante. Ao final, verifique: cada secao do conteudo
-esta representada? Se nao, adicione os cartoes faltantes."
-```
+**Problema:** A funcao so divide por `\n{2,}` (quebra dupla). Texto do Word usa `\n` simples, entao o conteudo inteiro vira 1 unica "pagina".
 
-**Por que:** "Paragrafo por paragrafo" geraria centenas de cards desnecessarios. "Folha por folha" e o nivel certo -- garante cobertura sem explodir a quantidade, ja que cada folha/pagina do PDF e uma unidade natural de conteudo.
+**Solucao:** Adicionar fallbacks em cascata:
+1. Tenta dividir por quebra dupla (`\n\n`)
+2. Se algum bloco ainda e maior que `chunkSize`, re-divide por quebra simples (`\n`)
+3. Se AINDA e grande demais (texto sem nenhuma quebra), corta no espaco mais proximo do limite
+
+Resultado: um Word de 16 paginas vai gerar ~16 paginas no app tambem, independente do tipo de quebra de linha.
 
 ---
 
-### Mudanca 3: Refinar regra 5 de redundancia
+## Parte 2: Adicionar marcadores de pagina nos batches
 
-**ANTES:**
+**Arquivo:** `src/components/ai-deck/useAIDeckFlow.ts` (linha 291)
+
+**Problema:** As paginas sao concatenadas sem separador, entao a IA nao sabe onde cada folha comeca/termina.
+
+**Solucao:** Trocar:
 ```
-"5. REDUNDANCIA ESTRATEGICA: crie cartoes que testem o MESMO conceito
-de angulos diferentes. Ex: 'X causa Y' num cartao e 'Y e causado por
-{{c1::X}}' em outro."
+batchPages.map(p => p.textContent).join('\n\n')
+```
+Por:
+```
+batchPages.map(p => `--- PÁGINA ${p.pageNumber} ---\n${p.textContent}`).join('\n\n')
 ```
 
-**DEPOIS:**
-```
-"5. REDUNDANCIA ESTRATEGICA: Para conceitos CENTRAIS, teste ANGULOS
-COGNITIVOS DISTINTOS:
-   - Angulo 1: FATO (o que e/qual valor)
-   - Angulo 2: MECANISMO (como funciona)
-   - Angulo 3: CONSEQUENCIA (o que acontece se falhar)
-   ERRADO: 'X causa Y' + 'Y e causado por X' (mesma informacao invertida)
-   CERTO: 'X causa Y' + 'Se X falhar, qual a consequencia?'
-   Use redundancia apenas para conceitos CENTRAIS, nao para cada detalhe."
-```
+Agora a IA recebe marcadores claros e consegue fazer a varredura "folha por folha" de verdade.
 
 ---
 
-### Mudanca 4: Reforcar limite de resposta em basic (regra 2)
+## Parte 3: 6 melhorias no prompt do generate-deck
 
-**ANTES:** `"Resposta concisa (1 frase, maximo 2) no verso."`
+**Arquivo:** `supabase/functions/generate-deck/index.ts`
 
-**DEPOIS:** `"Resposta concisa no verso: MAXIMO 15 palavras. Se precisa de mais, divida em 2 cartoes. REGRA DE OURO: se a resposta nao cabe em 1 linha, o cartao esta mal formulado."`
+### 3.1 Nova regra 11 -- Progressao Logica
+Cards devem construir uma narrativa: conceito-pai antes do detalhe.
 
----
+### 3.2 Cobertura "standard" -- varredura FOLHA POR FOLHA
+Substitui instrucao generica por varredura sistematica folha por folha com verificacao final.
 
-### Mudanca 5: Teste de qualidade para cloze
+### 3.3 Redundancia com angulos cognitivos distintos (regra 5)
+Fato / Mecanismo / Consequencia em vez de inversao simples da mesma frase.
 
-**ANTES:** `"A frase deve ser respondivel quando a lacuna estiver oculta."`
+### 3.4 Limite de 15 palavras em basic (regra 2)
+"Se a resposta nao cabe em 1 linha, o cartao esta mal formulado."
 
-**DEPOIS:**
-```
-"TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS
-DE UMA resposta plausivel, o card esta ruim -- adicione mais contexto.
-ERRADO: 'O {{c1::diafragma}} e importante para a respiracao'
-CERTO: 'O principal musculo motor da inspiracao em repouso e o
-{{c1::diafragma}}, que se contrai e achata durante a inspiracao.'"
-```
+### 3.5 Teste de qualidade para cloze
+A resposta da lacuna deve ser unica e inequivoca. Exemplos de certo e errado.
 
----
-
-### Mudanca 6: Anti-padrao de cards triviais
-
-**ANTES:** Nao existe regra contra cards obvios.
-
-**DEPOIS (adicionar aos anti-padroes existentes):**
-```
-- Cards que testam informacao OBVIA que qualquer leigo saberia
-  (ex: "O coracao bombeia {{c1::sangue}}")
-- Cards com respostas que podem ser adivinhadas sem estudar o conteudo
-```
+### 3.6 Anti-padrao de cards triviais
+Proibido cards com informacao obvia ou que podem ser adivinhados sem estudar.
 
 ---
 
-## Detalhes tecnicos
+## Resumo de arquivos
 
-**Arquivo unico:** `supabase/functions/generate-deck/index.ts`
-
-1. **DEFAULT_SYSTEM_PROMPT** (linhas 5-40): Adicionar regra 11 (progressao logica), refinar regra 5 (redundancia com angulos distintos), reforcar limite de 15 palavras na regra 2, adicionar 2 anti-padroes de cards triviais
-2. **getDetailInstruction** (linha 46, case default/standard): Trocar texto por varredura folha-por-folha
-3. **getFormatInstructions** (linhas 64/85, bloco cloze): Adicionar teste de qualidade cloze com exemplos certo/errado
-4. Deploy automatico da edge function
-
-Sem mudancas no frontend -- todas as melhorias sao no prompt do backend.
+| Arquivo | Mudanca |
+|---|---|
+| `src/lib/pdfUtils.ts` | Refatorar `splitTextIntoPages` com fallbacks de quebra |
+| `src/components/ai-deck/useAIDeckFlow.ts` | Adicionar marcadores `--- PÁGINA X ---` na concatenacao |
+| `supabase/functions/generate-deck/index.ts` | 6 melhorias no prompt (regras 2, 5, 11, cobertura, cloze, anti-trivial) |
 
