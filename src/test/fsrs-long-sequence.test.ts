@@ -303,6 +303,32 @@ describe('FSRS Long Sequence Tests', () => {
     });
   });
 
+  describe('Same-day review should differentiate Hard/Good/Easy', () => {
+    it('Low-stability same-day review: Hard < Good < Easy intervals', () => {
+      // Card in review state with very low stability, reviewed today
+      const now = new Date();
+      const card: FSRSCard = {
+        stability: 0.5,
+        difficulty: 5,
+        state: 2,
+        scheduled_date: now.toISOString(),
+        learning_step: 0,
+        last_reviewed_at: new Date(now.getTime() - 30 * 60 * 1000).toISOString(), // 30 min ago
+      };
+
+      const hard = fsrsSchedule(card, 2);
+      const good = fsrsSchedule(card, 3);
+      const easy = fsrsSchedule(card, 4);
+
+      console.log('Same-day differentiation:', { hard: hard.interval_days, good: good.interval_days, easy: easy.interval_days });
+
+      expect(hard.interval_days).toBeGreaterThanOrEqual(1);
+      expect(good.interval_days).toBeGreaterThanOrEqual(2);
+      expect(easy.interval_days).toBeGreaterThanOrEqual(3);
+      expect(easy.interval_days).toBeGreaterThanOrEqual(good.interval_days);
+    });
+  });
+
   describe('Interval never stuck at 1d', () => {
     it('No matter the pattern, 15+ Good reviews should exceed 10d', () => {
       const patterns: Rating[][] = [
