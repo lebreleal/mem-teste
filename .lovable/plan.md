@@ -1,74 +1,96 @@
 
 
-## Ajustes no "Meu Plano" sem objetivos
+## Correção de Bugs na Sessão de Estudo
 
-### Problema 1: Mensagem do diálogo enganosa
-O diálogo "Alterar limite de novos cards?" diz que cotas serao redistribuidas entre objetivos, mas sem objetivos nao ha redistribuicao.
+### Bug 1: Cards enterrados aparecem na fila de estudo
 
-**Solucao:** Condicionar a mensagem do `AlertDialog` (linhas 1540-1546 de `StudyPlan.tsx`):
-- Com objetivos: manter mensagem atual sobre redistribuicao
-- Sem objetivos: mostrar mensagem como "Este limite sera usado como referencia na simulacao e quando voce criar um objetivo. No modo manual, cada baralho usa seu proprio limite nas configuracoes."
+**Causa raiz:** A query `fetchStudyQueue` usa o filtro:
+```
+state.eq.0,state.eq.1,state.eq.3,and(state.eq.2,scheduled_date.lte.now)
+```
+Para cards com **state 0** (novos), **state 1** (aprendendo) e **state 3** (reaprendendo), nao ha filtro por `scheduled_date`. Quando um card e enterrado, o `handleBury` muda apenas o `scheduled_date` para amanha, mas NAO muda o estado. Resultado: cards enterrados com state 0, 1 ou 3 continuam aparecendo na fila.
 
-### Problema 2: Slider de novos cards/dia sem efeito pratico
-No modo manual (sem planos), o limite global e ignorado pela fila de estudo (`fetchStudyQueue` so aplica globalLimit quando `hasPlanActive = true`). Alterar o slider da uma falsa impressao de controle.
+**Impacto:** O card de Anatomia enterrado continua aparecendo como "1 Dominado" E aparece na sessao de estudo.
 
-**Solucao:** Manter o slider visivel (ele afeta a simulacao e sera usado quando criar objetivos), mas adicionar uma nota informativa abaixo do slider quando `plans.length === 0`:
-- Texto: "Sem objetivos ativos, cada baralho usa seu proprio limite individual. Crie um objetivo para que este limite global seja aplicado."
-- Estilo: `text-[10px] text-amber-600 dark:text-amber-400` com icone de info
+**Correcao em `src/services/studyService.ts`:**
+- Calcular `endOfToday` (23:59:59 local em ISO)
+- Filtrar state 0: `and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.{endOfToday}))`
+- Filtrar state 1/3: `and(state.in.(1,3),scheduled_date.lte.{endOfToday})`
+- State 2 permanece: `and(state.eq.2,scheduled_date.lte.{now})`
 
-### Problema 3: Simulacao inclui decks arquivados
-A query `deck-hierarchy` nao filtra decks arquivados (`is_archived`), fazendo com que a simulacao considere cards de decks que o usuario ja arquivou.
+---
 
-**Solucao em `src/hooks/useStudyPlan.ts`** (linhas 156-161): adicionar filtro `.eq('is_archived', false)` (ou equivalente) na query de `deckHierarchyQuery`. Verificar se o campo existe na tabela.
+### Bug 2: Sessao de estudo em loop (quick_review)
 
-### Problema 4: Badges de alocacao por objetivo
-As badges (linhas 1506-1518) ja sao condicionais a `plans.map(...)`, entao nao aparecem sem objetivos. Nenhuma mudanca necessaria aqui.
+**Causa raiz:** Em `submitCardReview`, o modo `quick_review` retorna `interval_days: 0` sempre. Como o Study.tsx usa `result.interval_days === 0` para decidir manter o card na sessao, os cards NUNCA saem da fila, criando um loop infinito.
+
+**Correcao em `src/services/studyService.ts`:**
+- Mudar `interval_days: 0` para `interval_days: 1` no retorno do modo `quick_review`
+
+---
+
+### Bug 3: Barra de progresso nao avanca corretamente
+
+**Causa raiz:** O progresso usa `uniqueReviewedCount / initialQueueSize`. Quando um card em aprendizado e re-revisado, o ID ja esta no Set, entao `size` nao muda. A barra fica parada.
+
+**Correcao em `src/pages/Study.tsx`:**
+- Usar progresso baseado em cards que SAIRAM da fila: `(initialQueueSize - localQueue.length) / initialQueueSize * 100`
+- Atualizar o contador de texto para: `{cardsCompleted}/{totalCards}` onde `cardsCompleted = initialQueueSize - localQueue.length`
+- Isso garante que a barra so avanca quando cards realmente concluem (graduam ou sao removidos), dando feedback preciso ao usuario
+
+---
+
+### Bug 4: Timer do "Dificil" parece nao funcionar
+
+**Analise:** O timer funciona corretamente no codigo. Quando o usuario marca "Dificil" em um card de aprendizado, o card e reagendado com um intervalo (ex: 5.5min ou 22.5min dependendo dos learning_steps). Se ainda houver outros cards na fila (novos/revisao), eles sao mostrados ANTES do timer expirar. O usuario so ve a tela de espera quando TODOS os cards restantes estao aguardando.
+
+**Nao e um bug**, mas a UX pode confundir. O usuario ve o proximo card imediatamente e pensa que o timer nao esta funcionando. Nenhuma mudanca de codigo necessaria - o comportamento esta correto e alinhado com o Anki.
 
 ---
 
 ### Detalhes tecnicos
 
-**Arquivo: `src/pages/StudyPlan.tsx`**
+**Arquivo: `src/services/studyService.ts`**
 
-1. Linhas 1540-1546 - Condicionar mensagem do AlertDialog:
+1. Na funcao `fetchStudyQueue` (bloco de filtro de cards, ~linha 83):
 ```typescript
-<AlertDialogDescription className="space-y-2">
-  <span className="block">
-    Voce esta alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
-  </span>
-  {plans.length > 0 ? (
-    <span className="block text-amber-600 dark:text-amber-400">
-      As cotas diarias de novos cards serao recalculadas e redistribuidas entre seus objetivos. O progresso de cards ja estudados hoje nao e afetado.
-    </span>
-  ) : (
-    <span className="block text-muted-foreground">
-      Este valor sera usado como referencia na simulacao. Sem objetivos ativos, cada baralho usa seu proprio limite individual.
-    </span>
-  )}
-</AlertDialogDescription>
+const endOfToday = new Date();
+endOfToday.setHours(23, 59, 59, 999);
+const endOfTodayISO = endOfToday.toISOString();
+const nowISO = new Date().toISOString();
+
+// Filtro que exclui cards enterrados (scheduled_date > fim de hoje)
+.or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
 ```
 
-2. Linhas 1419-1421 - Adicionar nota informativa abaixo da descricao do slider quando sem objetivos:
+2. Na funcao `submitCardReview`, modo `quick_review` (~linha 235):
 ```typescript
-<p className="text-[10px] text-muted-foreground leading-relaxed">
-  Cards que voce nunca estudou. {plans.length > 0
-    ? 'O sistema distribui entre seus objetivos proporcionalmente.'
-    : 'Crie um objetivo para que este limite global seja aplicado na fila de estudo.'}
-</p>
+return {
+  state: newState,
+  stability: 0,
+  difficulty: 0,
+  scheduled_date: card.scheduled_date,
+  interval_days: 1  // era 0, causava loop infinito
+};
 ```
 
-**Arquivo: `src/hooks/useStudyPlan.ts`**
+**Arquivo: `src/pages/Study.tsx`**
 
-3. Linhas 156-161 - Filtrar decks arquivados na query de hierarquia. Precisamos verificar se o campo existe, mas assumindo que `is_archived` e um campo booleano na tabela `decks`:
+3. Progresso (linhas 154-156):
 ```typescript
-const { data } = await supabase
-  .from('decks')
-  .select('id, parent_deck_id')
-  .eq('user_id', userId!)
-  .or('is_archived.is.null,is_archived.eq.false');
+const cardsCompleted = initialQueueSize - localQueue.length;
+const progressPercent = initialQueueSize > 0
+  ? Math.min(100, (cardsCompleted / initialQueueSize) * 100)
+  : 0;
 ```
-Se o campo nao existir, usaremos o filtro equivalente disponivel (como excluir decks em pasta "Arquivo").
+
+4. Contador de texto (linha 556):
+```typescript
+<span className="text-xs font-bold text-muted-foreground tabular-nums">
+  {cardsCompleted}/{initialQueueSize}
+</span>
+```
 
 ### Arquivos modificados
-- `src/pages/StudyPlan.tsx` (mensagens condicionais)
-- `src/hooks/useStudyPlan.ts` (filtro de arquivados na hierarquia)
+- `src/services/studyService.ts` (filtro de fila + quick_review interval_days)
+- `src/pages/Study.tsx` (calculo de progresso + contador)
