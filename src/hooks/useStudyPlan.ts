@@ -157,7 +157,8 @@ export function useStudyPlan() {
       const { data } = await supabase
         .from('decks')
         .select('id, parent_deck_id')
-        .eq('user_id', userId!);
+        .eq('user_id', userId!)
+        .eq('is_archived', false);
       return data ?? [];
     },
     enabled: !!userId,
