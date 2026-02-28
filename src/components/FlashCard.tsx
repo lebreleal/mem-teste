@@ -208,6 +208,7 @@ const MultipleChoiceCard = ({
   difficulty,
   state,
   scheduledDate,
+  lastReviewedAt,
   learningStep = 0,
   canUndo,
   onUndo,
@@ -232,6 +233,7 @@ const MultipleChoiceCard = ({
   difficulty: number;
   state: number;
   scheduledDate: string;
+  lastReviewedAt?: string;
   learningStep?: number;
   canUndo?: boolean;
   onUndo?: () => void;
@@ -248,7 +250,7 @@ const MultipleChoiceCard = ({
   const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
   const intervals = (() => {
     if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0 };
+      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0, last_reviewed_at: lastReviewedAt };
       return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
     }
     const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
@@ -609,6 +611,7 @@ const FlashCard = ({
         difficulty={difficulty}
         state={state}
         scheduledDate={scheduledDate}
+        lastReviewedAt={lastReviewedAt}
         canUndo={canUndo}
         onUndo={onUndo}
         onOpenExplainChat={onOpenExplainChat}

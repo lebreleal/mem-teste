@@ -237,8 +237,13 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       return scheduleStep(now, stepMinutes, sForget, d, 3, 0);
     }
     const interval = stabilityToInterval(w, s, requestedRetention, maximumInterval);
-    const scheduledDate = getLocalMidnight(Math.max(interval, 1));
-    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: Math.max(interval, 1), learning_step: 0 };
+    // Floor differentiation matching normal review behavior
+    let minInterval = 1;
+    if (rating === 3) minInterval = 2;
+    if (rating === 4) minInterval = 3;
+    const finalInterval = Math.max(interval, minInterval);
+    const scheduledDate = getLocalMidnight(finalInterval);
+    return { stability: s, difficulty: d, state: 2, scheduled_date: scheduledDate.toISOString(), interval_days: finalInterval, learning_step: 0 };
   }
 
   const r = retrievability(w, card.stability, elapsedDays);
