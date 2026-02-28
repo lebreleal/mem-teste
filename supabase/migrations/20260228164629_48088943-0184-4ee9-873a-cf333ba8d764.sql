@@ -1,0 +1,1 @@
+ALTER TABLE public.review_logs ADD COLUMN elapsed_ms integer;

@@ -341,7 +341,7 @@ const Study = () => {
     setIsTransitioning(true);
 
     submitReview.mutate(
-      { card: currentCard, rating },
+      { card: currentCard, rating, elapsedMs: elapsed },
       {
         onSuccess: (result) => {
           setTimeout(() => {
