@@ -21,6 +21,8 @@ interface DayData {
 
 const ActivityView = () => {
   const [freezeInfoOpen, setFreezeInfoOpen] = useState(false);
+  const [bestStreakInfoOpen, setBestStreakInfoOpen] = useState(false);
+  const [activeDaysInfoOpen, setActiveDaysInfoOpen] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -150,18 +152,24 @@ const ActivityView = () => {
             </div>
           </div>
 
-          {/* Stats row */}
-          <div className="flex items-center gap-3 mt-4">
-            <div className="flex-1 rounded-xl bg-muted/50 p-3 text-center">
-              <Trophy className="h-4 w-4 text-primary mx-auto mb-1" />
-              <p className="text-base font-bold text-foreground tabular-nums">{bestStreak}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Melhor</p>
-            </div>
-            <div className="flex-1 rounded-xl bg-muted/50 p-3 text-center">
-              <CheckCircle className="h-4 w-4 text-success mx-auto mb-1" />
-              <p className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Dias ativos</p>
-            </div>
+          {/* Stats row - all inline */}
+          <div className="flex items-center gap-4 mt-4 justify-between">
+            <button
+              onClick={() => setBestStreakInfoOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <Trophy className="h-4 w-4 text-primary" />
+              <span className="text-base font-bold text-foreground tabular-nums">{bestStreak}</span>
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => setActiveDaysInfoOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <CheckCircle className="h-4 w-4 text-success" />
+              <span className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</span>
+              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
             <button
               onClick={() => setFreezeInfoOpen(true)}
               className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
@@ -173,7 +181,45 @@ const ActivityView = () => {
           </div>
         </div>
 
-        {/* Freeze info dialog */}
+        {/* Info dialogs */}
+        <Dialog open={bestStreakInfoOpen} onOpenChange={setBestStreakInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                Melhor sequência
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              O maior número de dias consecutivos que você estudou. Continue estudando todos os dias para bater seu recorde!
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+              <Trophy className="h-5 w-5 text-primary" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{bestStreak}</span>
+              <span className="text-muted-foreground">dias</span>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={activeDaysInfoOpen} onOpenChange={setActiveDaysInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-success" />
+                Dias ativos
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Total de dias em que você revisou pelo menos um card. Cada dia de estudo conta, mesmo que não sejam consecutivos.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+              <CheckCircle className="h-5 w-5 text-success" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{totalActiveDays}</span>
+              <span className="text-muted-foreground">dias</span>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={freezeInfoOpen} onOpenChange={setFreezeInfoOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
