@@ -74,12 +74,17 @@ export async function fetchStudyQueue(
   }
 
   // Fetch cards + scope card IDs in parallel (global scope will be computed after plan check)
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  const endOfTodayISO = endOfToday.toISOString();
+  const nowISO = new Date().toISOString();
+
   const [cardsResult, scopeResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
       .in('deck_id', deckIds)
-      .or(`state.eq.0,state.eq.1,state.eq.3,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
+      .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
     supabase
       .from('cards')
@@ -248,7 +253,7 @@ export async function submitCardReview(
       scheduled_date: new Date().toISOString(),
       elapsed_ms: cappedMs,
     } as any);
-    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 0 };
+    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 1 };
   }
 
   const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];

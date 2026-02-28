@@ -149,11 +149,11 @@ const Study = () => {
     return () => clearInterval(interval);
   }, [allWaiting, localQueue]);
 
-  // totalCards uses the initial queue size (stable denominator).
-  // uniqueReviewedCount = distinct cards reviewed (not counting re-reviews of learning cards).
-  const totalCards = initialQueueSize;
-  const uniqueReviewedCount = reviewedCardIdsRef.current.size;
-  const progressPercent = totalCards > 0 ? Math.min(100, (uniqueReviewedCount / totalCards) * 100) : 0;
+  // Progress based on cards that LEFT the queue (graduated or removed)
+  const cardsCompleted = initialQueueSize - localQueue.length;
+  const progressPercent = initialQueueSize > 0
+    ? Math.min(100, (cardsCompleted / initialQueueSize) * 100)
+    : 0;
 
   const tutorAbortRef = useRef<AbortController | null>(null);
 
@@ -477,7 +477,7 @@ const Study = () => {
           </div>
           <h1 className="font-display text-3xl font-bold text-foreground">Sessão Completa!</h1>
           <p className="mt-2 text-lg text-muted-foreground">
-            Você revisou <span className="font-bold text-primary">{uniqueReviewedCount}</span> {uniqueReviewedCount === 1 ? 'card' : 'cards'} hoje.
+            Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
           </p>
            <Button onClick={goBack} className="mt-8 gap-2">
              <ArrowLeft className="h-4 w-4" /> Voltar
@@ -553,7 +553,7 @@ const Study = () => {
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
-          <span className="text-xs font-bold text-muted-foreground tabular-nums">{Math.min(uniqueReviewedCount + 1, totalCards)}/{totalCards}</span>
+          <span className="text-xs font-bold text-muted-foreground tabular-nums">{cardsCompleted}/{initialQueueSize}</span>
         </div>
       </header>
 
