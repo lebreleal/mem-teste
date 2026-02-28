@@ -499,6 +499,19 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              onClick={() => setFreezeConfirmOpen(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Congelar card"
+            >
+              <Snowflake className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Congelar card</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
               onClick={openEdit}
               className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
               aria-label="Editar card"
@@ -508,19 +521,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
             </button>
           </TooltipTrigger>
           <TooltipContent><p>Editar card</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => setFreezeConfirmOpen(true)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              aria-label="Congelar card"
-            >
-              <Snowflake className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent><p>Congelar card</p></TooltipContent>
         </Tooltip>
 
         {isLiveDeck && (
