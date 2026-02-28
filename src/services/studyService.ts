@@ -224,7 +224,12 @@ export async function submitCardReview(
   rating: Rating,
   algorithmMode: string,
   deckConfig: any,
+  elapsedMs?: number,
 ) {
+  // Cap anti-fraude: min 1.5s, max 120s
+  const cappedMs = elapsedMs
+    ? Math.min(Math.max(elapsedMs, 1500), 120000)
+    : null;
   if (algorithmMode === 'quick_review') {
     // Update card state: rating > 2 = "Entendi" (state 2), otherwise "Não entendi" (state 1)
     const newState = rating > 2 ? 2 : 1;
@@ -240,7 +245,8 @@ export async function submitCardReview(
       stability: 0,
       difficulty: 0,
       scheduled_date: new Date().toISOString(),
-    });
+      elapsed_ms: cappedMs,
+    } as any);
     return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 0 };
   }
 
@@ -313,6 +319,7 @@ export async function submitCardReview(
           difficulty: result.difficulty,
           scheduled_date: result.scheduled_date,
           state: card.state,
+          elapsed_ms: cappedMs,
         } as any),
     ]);
     if (updateResult.error) throw updateResult.error;
@@ -343,7 +350,7 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
 
   const { data: logs } = await supabase
     .from('review_logs')
-    .select('reviewed_at')
+    .select('reviewed_at, elapsed_ms')
     .eq('user_id', userId)
     .gte('reviewed_at', thirtyDaysAgo.toISOString())
     .order('reviewed_at', { ascending: true });
@@ -356,28 +363,51 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const streak = calculateStreak(logs.map(l => l.reviewed_at));
   const mascotState = getMascotState(lastStudyDate);
 
-  // --- Anti-fraud gap-based minute calculation ---
-  const MIN_REVIEW_MS = 1500;   // < 1.5s = bot/spam, discard
-  const MAX_REVIEW_MS = 120000; // > 2min = pause, cap at 2min
+  // --- Hybrid minute calculation: elapsed_ms when available, gap-based fallback ---
+  const MIN_REVIEW_MS = 1500;
+  const MAX_REVIEW_MS = 120000;
 
-  const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string }[]): number => {
+  const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string; elapsed_ms?: number | null }[]): number => {
+    if (reviewLogs.length === 0) return 0;
     let totalMs = 0;
-    for (let i = 1; i < reviewLogs.length; i++) {
-      const gap = new Date(reviewLogs[i].reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
-      if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
-        totalMs += gap;
-      } else if (gap > MAX_REVIEW_MS) {
-        totalMs += MAX_REVIEW_MS;
-      }
-      // gap < MIN_REVIEW_MS: discarded (suspicious)
+    let sessions = 1;
+    // First card: use elapsed_ms if available, otherwise 15s estimate
+    if (reviewLogs[0].elapsed_ms) {
+      totalMs += reviewLogs[0].elapsed_ms;
+    } else {
+      totalMs += 15000;
     }
-    // Add fixed estimate for first card in session
-    if (reviewLogs.length > 0) totalMs += 15000;
+    for (let i = 1; i < reviewLogs.length; i++) {
+      const log = reviewLogs[i];
+      if (log.elapsed_ms) {
+        // Real timer data available
+        totalMs += log.elapsed_ms;
+      } else {
+        // Fallback: gap-based for old logs without elapsed_ms
+        const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
+        if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
+          totalMs += gap;
+        } else if (gap > MAX_REVIEW_MS) {
+          totalMs += MAX_REVIEW_MS;
+        }
+      }
+      // Detect new session (gap > 5 min)
+      const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
+      if (gap > 300000) sessions++;
+    }
+    // For old logs without elapsed_ms, add session bonuses (minus the first card already counted)
+    const hasElapsed = reviewLogs.some(l => l.elapsed_ms);
+    if (!hasElapsed) {
+      totalMs += (sessions - 1) * 15000;
+    }
     return Math.round(totalMs / 60000);
   };
 
-  const todayStart = today + 'T00:00:00.000Z';
-  const todayLogs = logs.filter(l => l.reviewed_at >= todayStart);
+  // Use local midnight for today filter
+  const now = new Date();
+  const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayStart = localMidnight.toISOString();
+  const todayLogs = (logs as any[]).filter(l => l.reviewed_at >= todayStart);
   const todayMinutes = calcMinutesFromLogs(todayLogs);
 
   const accountCreated = p?.created_at ? new Date(p.created_at) : new Date();
@@ -385,7 +415,7 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const activeDays = Math.min(daysSinceCreation, 7);
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const last7dLogs = logs.filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
+  const last7dLogs = (logs as any[]).filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
   const total7dMinutes = calcMinutesFromLogs(last7dLogs);
   const avgMinutesPerDay7d = Math.round(total7dMinutes / activeDays);
 
