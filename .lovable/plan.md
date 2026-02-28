@@ -1,120 +1,74 @@
 
 
-## Plano: Medir tempo real por card com timer
+## Ajustes no "Meu Plano" sem objetivos
 
-### Problema atual
+### Problema 1: Mensagem do diálogo enganosa
+O diálogo "Alterar limite de novos cards?" diz que cotas serao redistribuidas entre objetivos, mas sem objetivos nao ha redistribuicao.
 
-O calculo de "minutos estudados" usa uma estimativa indireta: analisa os gaps entre timestamps de `reviewed_at` no `review_logs`, com heuristicas anti-fraude (descarta < 1.5s, cap em 2min). Isso e impreciso porque:
-- Nao mede o tempo real que voce ficou olhando/pensando no card
-- Pausas para ir ao banheiro, trocar de aba etc. distorcem os numeros
-- Cards de aprendizado (learning steps) ficam esperando timer e o gap inclui esse tempo de espera
+**Solucao:** Condicionar a mensagem do `AlertDialog` (linhas 1540-1546 de `StudyPlan.tsx`):
+- Com objetivos: manter mensagem atual sobre redistribuicao
+- Sem objetivos: mostrar mensagem como "Este limite sera usado como referencia na simulacao e quando voce criar um objetivo. No modo manual, cada baralho usa seu proprio limite nas configuracoes."
 
-### Solucao: Timer real por card
+### Problema 2: Slider de novos cards/dia sem efeito pratico
+No modo manual (sem planos), o limite global e ignorado pela fila de estudo (`fetchStudyQueue` so aplica globalLimit quando `hasPlanActive = true`). Alterar o slider da uma falsa impressao de controle.
 
-**Conceito**: O `Study.tsx` ja tem um `cardShownAt` ref que marca quando o card apareceu. Basta calcular `elapsed = Date.now() - cardShownAt.current` no momento do rating, salvar isso no `review_logs`, e somar para calcular o tempo de estudo.
+**Solucao:** Manter o slider visivel (ele afeta a simulacao e sera usado quando criar objetivos), mas adicionar uma nota informativa abaixo do slider quando `plans.length === 0`:
+- Texto: "Sem objetivos ativos, cada baralho usa seu proprio limite individual. Crie um objetivo para que este limite global seja aplicado."
+- Estilo: `text-[10px] text-amber-600 dark:text-amber-400` com icone de info
 
-### Mudancas necessarias
+### Problema 3: Simulacao inclui decks arquivados
+A query `deck-hierarchy` nao filtra decks arquivados (`is_archived`), fazendo com que a simulacao considere cards de decks que o usuario ja arquivou.
 
-**1. Adicionar coluna `elapsed_ms` na tabela `review_logs`** (migration)
-- Nova coluna `elapsed_ms integer` (nullable, default null) para nao quebrar logs antigos
-- Logs antigos sem essa coluna continuam usando o calculo de gap como fallback
+**Solucao em `src/hooks/useStudyPlan.ts`** (linhas 156-161): adicionar filtro `.eq('is_archived', false)` (ou equivalente) na query de `deckHierarchyQuery`. Verificar se o campo existe na tabela.
 
-**2. `src/services/studyService.ts` - submitCardReview**
-- Receber novo parametro `elapsedMs` (tempo real em ms)
-- Aplicar cap anti-fraude: minimo 1.5s, maximo 120s (mesmo limites atuais)
-- Salvar no INSERT do `review_logs`
+### Problema 4: Badges de alocacao por objetivo
+As badges (linhas 1506-1518) ja sao condicionais a `plans.map(...)`, entao nao aparecem sem objetivos. Nenhuma mudanca necessaria aqui.
 
-**3. `src/hooks/useStudySession.ts` - submitReview mutation**
-- Passar `elapsedMs` no mutationFn
-
-**4. `src/pages/Study.tsx` - handleRate**
-- Calcular `elapsed = Date.now() - cardShownAt.current` (ja existe na linha 322!)
-- Passar como `elapsedMs` no submitReview
-- Resetar `cardShownAt.current = Date.now()` quando o proximo card aparecer
-
-**5. `src/services/studyService.ts` - fetchStudyStats**
-- Para logs com `elapsed_ms`: somar diretamente
-- Para logs sem `elapsed_ms` (antigos): usar o calculo de gap atual como fallback
-- Resultado: `todayMinutes = (soma dos elapsed_ms de hoje) / 60000`
+---
 
 ### Detalhes tecnicos
 
-**Migration SQL:**
-```sql
-ALTER TABLE review_logs ADD COLUMN elapsed_ms integer;
-```
+**Arquivo: `src/pages/StudyPlan.tsx`**
 
-**submitCardReview - novo parametro:**
+1. Linhas 1540-1546 - Condicionar mensagem do AlertDialog:
 ```typescript
-export async function submitCardReview(
-  userId: string,
-  card: any,
-  rating: Rating,
-  algorithmMode: string,
-  deckConfig: any,
-  elapsedMs?: number,  // novo
-) {
-  // Cap anti-fraude
-  const cappedMs = elapsedMs 
-    ? Math.min(Math.max(elapsedMs, 1500), 120000) 
-    : null;
-  
-  // ... no insert do review_logs:
-  supabase.from('review_logs').insert({
-    ...existingFields,
-    elapsed_ms: cappedMs,
-  });
-}
+<AlertDialogDescription className="space-y-2">
+  <span className="block">
+    Voce esta alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
+  </span>
+  {plans.length > 0 ? (
+    <span className="block text-amber-600 dark:text-amber-400">
+      As cotas diarias de novos cards serao recalculadas e redistribuidas entre seus objetivos. O progresso de cards ja estudados hoje nao e afetado.
+    </span>
+  ) : (
+    <span className="block text-muted-foreground">
+      Este valor sera usado como referencia na simulacao. Sem objetivos ativos, cada baralho usa seu proprio limite individual.
+    </span>
+  )}
+</AlertDialogDescription>
 ```
 
-**fetchStudyStats - calculo hibrido:**
+2. Linhas 1419-1421 - Adicionar nota informativa abaixo da descricao do slider quando sem objetivos:
 ```typescript
-// Buscar logs com elapsed_ms
-const { data: logs } = await supabase
-  .from('review_logs')
-  .select('reviewed_at, elapsed_ms')
-  .eq('user_id', userId)
-  .gte('reviewed_at', thirtyDaysAgo.toISOString())
-  .order('reviewed_at', { ascending: true });
-
-// Para hoje: somar elapsed_ms quando disponivel, gap-based para antigos
-const todayLogs = logs.filter(l => l.reviewed_at >= todayStart);
-let todayMs = 0;
-for (let i = 0; i < todayLogs.length; i++) {
-  if (todayLogs[i].elapsed_ms) {
-    todayMs += todayLogs[i].elapsed_ms;
-  } else if (i > 0) {
-    // fallback: gap-based para logs antigos
-    const gap = new Date(todayLogs[i].reviewed_at).getTime() 
-              - new Date(todayLogs[i-1].reviewed_at).getTime();
-    if (gap >= 1500 && gap <= 120000) todayMs += gap;
-    else if (gap > 120000) todayMs += 120000;
-  }
-}
-todayMinutes = Math.round(todayMs / 60000);
+<p className="text-[10px] text-muted-foreground leading-relaxed">
+  Cards que voce nunca estudou. {plans.length > 0
+    ? 'O sistema distribui entre seus objetivos proporcionalmente.'
+    : 'Crie um objetivo para que este limite global seja aplicado na fila de estudo.'}
+</p>
 ```
 
-**Study.tsx - resetar timer no card change:**
+**Arquivo: `src/hooks/useStudyPlan.ts`**
+
+3. Linhas 156-161 - Filtrar decks arquivados na query de hierarquia. Precisamos verificar se o campo existe, mas assumindo que `is_archived` e um campo booleano na tabela `decks`:
 ```typescript
-// Ja existe: cardShownAt.current reset ao mudar card
-useEffect(() => {
-  cardShownAt.current = Date.now();
-}, [cardKey]);
+const { data } = await supabase
+  .from('decks')
+  .select('id, parent_deck_id')
+  .eq('user_id', userId!)
+  .or('is_archived.is.null,is_archived.eq.false');
 ```
+Se o campo nao existir, usaremos o filtro equivalente disponivel (como excluir decks em pasta "Arquivo").
 
-### Arquivos afetados
-
-| Arquivo | Mudanca |
-|---------|---------|
-| Migration SQL | Adicionar coluna `elapsed_ms` em `review_logs` |
-| `src/services/studyService.ts` | Receber/salvar `elapsedMs`, calculo hibrido |
-| `src/hooks/useStudySession.ts` | Passar `elapsedMs` na mutation |
-| `src/pages/Study.tsx` | Enviar tempo real, resetar timer |
-| `src/integrations/supabase/types.ts` | Atualizar tipo de `review_logs` (se tipado) |
-
-### Vantagens
-
-- Tempo de estudo 100% preciso a partir de agora
-- Logs antigos continuam funcionando com fallback
-- Anti-fraude mantido (cap 1.5s-120s)
-- Nenhuma mudanca na UI necessaria - o `todayMinutes` ja e exibido no StatusBar
+### Arquivos modificados
+- `src/pages/StudyPlan.tsx` (mensagens condicionais)
+- `src/hooks/useStudyPlan.ts` (filtro de arquivados na hierarquia)

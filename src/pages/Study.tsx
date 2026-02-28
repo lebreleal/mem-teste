@@ -35,7 +35,7 @@ const Study = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
@@ -105,7 +105,7 @@ const Study = () => {
   // Lock the displayed card — only update when cardKey changes (user rated) or during init
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
-    if (!isTransitioning && nextCard) {
+    if (!isTransitioning) {
       setDisplayedCard(nextCard);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,6 +371,7 @@ const Study = () => {
             } else {
               // Future review (interval_days > 0): remove from session
               // Also bury cloze siblings if enabled (state-aware)
+              const buriedSiblingIds: string[] = [];
               setLocalQueue(prev => {
                 let filtered = prev.filter(c => c.id !== currentCard.id);
                 // Sibling burying: remove cloze siblings based on their state
@@ -384,9 +385,9 @@ const Study = () => {
                       filtered = filtered.filter(c => {
                         if (!siblingIds.includes(c.id)) return true;
                         // Only bury if the sibling's state matches a bury flag
-                        if (c.state === 0 && buryNew) return false;
-                        if (c.state === 2 && buryReview) return false;
-                        if ((c.state === 1 || c.state === 3) && buryLearning) return false;
+                        if (c.state === 0 && buryNew) { buriedSiblingIds.push(c.id); return false; }
+                        if (c.state === 2 && buryReview) { buriedSiblingIds.push(c.id); return false; }
+                        if ((c.state === 1 || c.state === 3) && buryLearning) { buriedSiblingIds.push(c.id); return false; }
                         return true;
                       });
                     }
@@ -394,6 +395,13 @@ const Study = () => {
                 }
                 return filtered;
               });
+              // Push buried siblings to tomorrow in DB so they don't show as pending today
+              if (buriedSiblingIds.length > 0) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
+              }
             }
 
             setCardKey(prev => prev + 1);
@@ -452,7 +460,7 @@ const Study = () => {
     }
   }, [undoSnapshot, queryClient, toast]);
 
-  if (isLoading) {
+  if (isLoading || (!queueInitialized && isFetching)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

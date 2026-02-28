@@ -1218,63 +1218,25 @@ const StudyPlan = () => {
   // ─── HOME / UNIFIED DASHBOARD ─────────────────────────
   // ═══════════════════════════════════════════════════════
 
-  // No plans? Show empty state
-  if (plans.length === 0) {
-    return (
-      <div className="min-h-screen bg-background pb-24">
-        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="font-display text-lg font-bold flex-1">Meu Plano de Estudos</h1>
-        </header>
-        <main className="container mx-auto px-4 py-4 max-w-2xl">
-          <div className="flex flex-col items-center justify-center py-10 sm:py-14 space-y-6 text-center">
-            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Target className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
-            </div>
-            <div className="space-y-3 max-w-sm">
-              <h2 className="text-lg sm:text-xl font-bold">Monte seu plano de estudos</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Um <strong>objetivo</strong> é uma meta de estudo — como uma prova, concurso ou matéria que você precisa dominar até uma data específica.
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Ao criar um objetivo, você escolhe quais baralhos fazem parte dele e define um prazo. O sistema calcula automaticamente quantos cards novos você precisa estudar por dia para chegar pronto na data.
-              </p>
-            </div>
-
-            <div className="w-full max-w-sm space-y-3">
-              <div className="rounded-xl border bg-muted/30 p-3 space-y-2 text-left">
-                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  Como funciona?
-                </p>
-                <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed">
-                  <li className="flex gap-2">
-                    <span className="font-bold text-primary shrink-0">1.</span>
-                    <span>Dê um nome ao objetivo (ex: <em>ENARE 2026</em>)</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="font-bold text-primary shrink-0">2.</span>
-                    <span>Selecione os baralhos que você precisa estudar</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="font-bold text-primary shrink-0">3.</span>
-                    <span>Defina a data limite — o app distribui os cards automaticamente até lá</span>
-                  </li>
-                </ul>
-              </div>
-
-              <Button size="lg" onClick={startNewPlan} className="w-full">
-                <Plus className="h-4 w-4 mr-2" /> Criar meu primeiro objetivo
-              </Button>
-            </div>
-          </div>
-        </main>
-        <BottomNav />
-      </div>
-    );
-  }
+  // No plans? Show non-blocking CTA instead of full gate
+  const noPlansCTA = plans.length === 0 ? (
+    <Card className="border-dashed border-primary/30">
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Target className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">Crie um objetivo</p>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Defina metas com prazo para que o sistema distribua seus cards automaticamente.
+          </p>
+        </div>
+        <Button size="sm" onClick={startNewPlan} className="shrink-0">
+          <Plus className="h-3.5 w-3.5 mr-1" /> Criar
+        </Button>
+      </CardContent>
+    </Card>
+  ) : null;
 
   // Build decks grouped by objective
   const decksByObjective = plans.map(p => {
@@ -1298,11 +1260,13 @@ const StudyPlan = () => {
 
       <main className="container mx-auto px-4 py-3 max-w-2xl space-y-4">
 
-        {/* ═══ 1. STATUS + CARGA DE HOJE ═══ */}
-        {metrics && (
+        {/* ═══ Non-blocking CTA when no plans ═══ */}
+        {noPlansCTA}
+
+        {/* ═══ 1. STATUS + CARGA DE HOJE (only with plans) ═══ */}
+        {plans.length > 0 && metrics && (
           <Card className={cn('border', HERO_GRADIENT[healthStatus])}>
             <CardContent className="p-4 md:p-5 space-y-3">
-              {/* Desktop: side-by-side status + load | Mobile: stacked */}
               {/* Carga de hoje */}
               <div className="flex flex-col justify-center">
                 <StudyLoadBar
@@ -1327,7 +1291,8 @@ const StudyPlan = () => {
           </Card>
         )}
 
-        {/* ═══ 2. MEUS OBJETIVOS ═══ */}
+        {/* ═══ 2. MEUS OBJETIVOS (only with plans) ═══ */}
+        {plans.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
             Meus Objetivos ({plans.length})
@@ -1430,6 +1395,7 @@ const StudyPlan = () => {
             </Button>
           )}
         </div>
+        )}
 
         {/* ═══ 3. CONFIGURAÇÕES ═══ */}
         <div className="space-y-2">
@@ -1451,7 +1417,9 @@ const StudyPlan = () => {
                   )}
                 </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Cards que você nunca estudou. O sistema distribui entre seus objetivos proporcionalmente.
+                  Cards que você nunca estudou. {plans.length > 0
+                    ? 'O sistema distribui entre seus objetivos proporcionalmente.'
+                    : 'Crie um objetivo para que este limite global seja aplicado na fila de estudo.'}
                 </p>
                 <Slider
                   value={[tempNewCards]}
@@ -1575,9 +1543,15 @@ const StudyPlan = () => {
                 <span className="block">
                   Você está alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
                 </span>
-                <span className="block text-amber-600 dark:text-amber-400">
-                  ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
-                </span>
+                {plans.length > 0 ? (
+                  <span className="block text-amber-600 dark:text-amber-400">
+                    ⚠️ As cotas diárias de novos cards serão recalculadas e redistribuídas entre seus objetivos. O progresso de cards já estudados hoje não é afetado.
+                  </span>
+                ) : (
+                  <span className="block text-muted-foreground">
+                    Este valor será usado como referência na simulação. Sem objetivos ativos, cada baralho usa seu próprio limite individual.
+                  </span>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
