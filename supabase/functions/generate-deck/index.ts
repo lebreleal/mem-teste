@@ -12,15 +12,22 @@ Os cartões NUNCA devem referenciar a origem do conhecimento. PROIBIDO usar expr
 PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
 
 1. COMPREENSÃO PRIMEIRO: Se o conteúdo menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
-2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Respostas com mais de 1 frase são PROIBIDAS para basic. Se precisar de mais, divida em cartões separados.
+2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado.
 3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
 4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se houver 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
-5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos críticos, crie cartões que testem o MESMO conceito de ângulos diferentes. Ex: "X causa Y" num cartão e "Y é causado por {{c1::X}}" em outro.
+5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos CENTRAIS, teste ÂNGULOS COGNITIVOS DISTINTOS:
+   - Ângulo 1: FATO (o que é/qual valor)
+   - Ângulo 2: MECANISMO (como funciona)
+   - Ângulo 3: CONSEQUÊNCIA (o que acontece se falhar)
+   ERRADO: 'X causa Y' + 'Y é causado por X' (mesma informação invertida)
+   CERTO: 'X causa Y' + 'Se X falhar, qual a consequência?'
+   Use redundância apenas para conceitos CENTRAIS, não para cada detalhe.
 6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
 7. PERSONALIZAÇÃO: Quando possível, use exemplos práticos/clínicos em vez de definições abstratas.
 8. EXCLUSIVIDADE: Use APENAS informações presentes no conteúdo fornecido. NUNCA invente dados, NUNCA adicione informações externas.
 9. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
 10. SEM DECOREBA: NÃO faça perguntas que podem ser respondidas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
+11. PROGRESSÃO LÓGICA: Os cartões devem construir uma NARRATIVA de aprendizado. Antes de testar um detalhe, garanta que o conceito-pai já foi coberto. Ex: primeiro "O que o diafragma faz na inspiração", depois "Por que a paralisia do diafragma causa dispneia". O estudante nunca deve encontrar um cartão que depende de um conceito não coberto por cartões anteriores.
 
 ANTI-PADRÕES (PROIBIDO):
 ❌ Perguntas "O que é X?" com respostas de dicionário
@@ -30,6 +37,8 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
 ❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
+❌ Cards que testam informação ÓBVIA que qualquer leigo saberia (ex: "O coração bombeia {{c1::sangue}}")
+❌ Cards com respostas que podem ser adivinhadas sem estudar o conteúdo
 
 MÉTODO ATIVO (obrigatório):
 - INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
@@ -43,7 +52,7 @@ function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
     case "comprehensive": return "COBERTURA TOTAL (100%): Crie cartões para CADA conceito, definição, mecanismo, exemplo e detalhe presente no conteúdo. O estudante deve conseguir dominar TODO o conteúdo apenas com os cartões. NÃO pule NENHUM parágrafo, NENHUM conceito, NENHUM detalhe. Cada informação relevante deve ter pelo menos um cartão dedicado. Extraia cada sub-tópico, exceção, exemplo concreto e caso especial. Se o texto citar uma EXCEÇÃO, crie um cartão. Se citar um EXEMPLO, crie um cartão. Se houver listas, cada item merece seu próprio cartão atômico.";
-    default: return "COBERTURA COMPLETA: Crie cartões para TODOS os tópicos, conceitos e mecanismos presentes no conteúdo. NÃO pule NENHUM tema, NENHUM conceito mencionado. Inclua conceitos-chave, mecanismos importantes e aplicações práticas.";
+    default: return "COBERTURA COMPLETA: Faça uma varredura FOLHA POR FOLHA do conteúdo fornecido. Para cada folha/seção, identifique os conceitos-chave e crie cartões que cubram os pontos principais. Conecte conceitos entre folhas quando relevante. Ao final, verifique: cada seção do conteúdo está representada? Se não, adicione os cartões faltantes.";
   }
 }
 
@@ -61,9 +70,12 @@ function getFormatInstructions(formats: string[]): string {
   Se o campo "front" NÃO contiver {{c1::, o cartão será DESCARTADO automaticamente.
 
   COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
-  A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta.
+   A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta.
+   TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS DE UMA resposta plausível, o card está ruim — adicione mais contexto. A resposta deve ser ÚNICA e INEQUÍVOCA.
+   ERRADO: 'O {{c1::diafragma}} é importante para a respiração' (muitos músculos são importantes)
+   CERTO: 'O principal músculo motor da inspiração em repouso é o {{c1::diafragma}}, que se contrai e achata durante a inspiração.'
 
-  REGRAS CLOZE:
+   REGRAS CLOZE:
     • A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número, local anatômico), nunca uma palavra trivial.
     • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes na mesma frase quando relevante.
     • Cloze é SEMPRE uma AFIRMAÇÃO DECLARATIVA, NUNCA uma pergunta.
@@ -82,8 +94,11 @@ function getFormatInstructions(formats: string[]): string {
     ❌ "Qual é o principal motor da inspiração? O {{c1::diafragma}}." → REJEITADO (mistura pergunta com cloze)`
     : `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
   COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
-  A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta (o aluno precisa ter contexto suficiente para deduzir a resposta).
-  REGRAS CLOZE:
+   A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta (o aluno precisa ter contexto suficiente para deduzir a resposta).
+   TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS DE UMA resposta plausível, o card está ruim — adicione mais contexto. A resposta deve ser ÚNICA e INEQUÍVOCA.
+   ERRADO: 'O {{c1::diafragma}} é importante para a respiração' (muitos músculos são importantes)
+   CERTO: 'O principal músculo motor da inspiração em repouso é o {{c1::diafragma}}, que se contrai e achata durante a inspiração.'
+   REGRAS CLOZE:
     • A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número, local anatômico), nunca uma palavra trivial como artigos ou preposições.
     • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes DENTRO DA MESMA frase quando relevante.
     • NUNCA coloque a lacuna na PERGUNTA — cloze é uma AFIRMAÇÃO com lacuna, não uma pergunta com lacuna.
@@ -92,7 +107,7 @@ function getFormatInstructions(formats: string[]): string {
     • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
 
   const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa (1 frase, máximo 2) no verso. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
     { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados. Múltipla escolha serve para DIFERENCIAÇÃO entre conceitos similares, não para perguntas triviais.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
