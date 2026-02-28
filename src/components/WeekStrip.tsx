@@ -62,8 +62,8 @@ const WeekStrip = () => {
 
   const streak = stats.streak;
   const hasStreak = streak > 0;
-  // Fire intensity: bigger flame at streak >= 3
-  const isIntense = streak >= 3;
+  // Fire intensity: bigger flame at streak >= 7
+  const isIntense = streak >= 7;
   const flameSize = isIntense ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-5 w-5 sm:h-6 sm:w-6';
   const ringSize = isIntense ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-10 w-10 sm:h-11 sm:w-11';
 
