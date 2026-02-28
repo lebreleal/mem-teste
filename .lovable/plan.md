@@ -1,96 +1,111 @@
 
 
-## Correção de Bugs na Sessão de Estudo
+# Otimizacao do Prompt de Geracao de Cards com IA
 
-### Bug 1: Cards enterrados aparecem na fila de estudo
+## Mudancas no prompt (6 melhorias)
 
-**Causa raiz:** A query `fetchStudyQueue` usa o filtro:
+### Mudanca 1: Adicionar regra de PROGRESSAO LOGICA (nova regra 11)
+
+**ANTES:** Nao existe instrucao sobre conectar cards entre si.
+
+**DEPOIS:**
 ```
-state.eq.0,state.eq.1,state.eq.3,and(state.eq.2,scheduled_date.lte.now)
+11. PROGRESSAO LOGICA: Os cartoes devem construir uma NARRATIVA de aprendizado.
+    Antes de testar um detalhe, garanta que o conceito-pai ja foi coberto.
+    Ex: primeiro "O que o diafragma faz na inspiracao", depois
+    "Por que a paralisia do diafragma causa dispneia".
 ```
-Para cards com **state 0** (novos), **state 1** (aprendendo) e **state 3** (reaprendendo), nao ha filtro por `scheduled_date`. Quando um card e enterrado, o `handleBury` muda apenas o `scheduled_date` para amanha, mas NAO muda o estado. Resultado: cards enterrados com state 0, 1 ou 3 continuam aparecendo na fila.
-
-**Impacto:** O card de Anatomia enterrado continua aparecendo como "1 Dominado" E aparece na sessao de estudo.
-
-**Correcao em `src/services/studyService.ts`:**
-- Calcular `endOfToday` (23:59:59 local em ISO)
-- Filtrar state 0: `and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.{endOfToday}))`
-- Filtrar state 1/3: `and(state.in.(1,3),scheduled_date.lte.{endOfToday})`
-- State 2 permanece: `and(state.eq.2,scheduled_date.lte.{now})`
 
 ---
 
-### Bug 2: Sessao de estudo em loop (quick_review)
+### Mudanca 2: Cobertura "standard" -- varredura por FOLHA, nao por paragrafo
 
-**Causa raiz:** Em `submitCardReview`, o modo `quick_review` retorna `interval_days: 0` sempre. Como o Study.tsx usa `result.interval_days === 0` para decidir manter o card na sessao, os cards NUNCA saem da fila, criando um loop infinito.
+**ANTES:**
+```
+"COBERTURA COMPLETA: Crie cartoes para TODOS os topicos, conceitos e
+mecanismos presentes no conteudo. NAO pule NENHUM tema..."
+```
 
-**Correcao em `src/services/studyService.ts`:**
-- Mudar `interval_days: 0` para `interval_days: 1` no retorno do modo `quick_review`
+**DEPOIS:**
+```
+"COBERTURA COMPLETA: Faca uma varredura FOLHA POR FOLHA do conteudo
+fornecido. Para cada folha/secao, identifique os conceitos-chave e
+crie cartoes que cubram os pontos principais. Conecte conceitos entre
+folhas quando relevante. Ao final, verifique: cada secao do conteudo
+esta representada? Se nao, adicione os cartoes faltantes."
+```
+
+**Por que:** "Paragrafo por paragrafo" geraria centenas de cards desnecessarios. "Folha por folha" e o nivel certo -- garante cobertura sem explodir a quantidade, ja que cada folha/pagina do PDF e uma unidade natural de conteudo.
 
 ---
 
-### Bug 3: Barra de progresso nao avanca corretamente
+### Mudanca 3: Refinar regra 5 de redundancia
 
-**Causa raiz:** O progresso usa `uniqueReviewedCount / initialQueueSize`. Quando um card em aprendizado e re-revisado, o ID ja esta no Set, entao `size` nao muda. A barra fica parada.
+**ANTES:**
+```
+"5. REDUNDANCIA ESTRATEGICA: crie cartoes que testem o MESMO conceito
+de angulos diferentes. Ex: 'X causa Y' num cartao e 'Y e causado por
+{{c1::X}}' em outro."
+```
 
-**Correcao em `src/pages/Study.tsx`:**
-- Usar progresso baseado em cards que SAIRAM da fila: `(initialQueueSize - localQueue.length) / initialQueueSize * 100`
-- Atualizar o contador de texto para: `{cardsCompleted}/{totalCards}` onde `cardsCompleted = initialQueueSize - localQueue.length`
-- Isso garante que a barra so avanca quando cards realmente concluem (graduam ou sao removidos), dando feedback preciso ao usuario
+**DEPOIS:**
+```
+"5. REDUNDANCIA ESTRATEGICA: Para conceitos CENTRAIS, teste ANGULOS
+COGNITIVOS DISTINTOS:
+   - Angulo 1: FATO (o que e/qual valor)
+   - Angulo 2: MECANISMO (como funciona)
+   - Angulo 3: CONSEQUENCIA (o que acontece se falhar)
+   ERRADO: 'X causa Y' + 'Y e causado por X' (mesma informacao invertida)
+   CERTO: 'X causa Y' + 'Se X falhar, qual a consequencia?'
+   Use redundancia apenas para conceitos CENTRAIS, nao para cada detalhe."
+```
 
 ---
 
-### Bug 4: Timer do "Dificil" parece nao funcionar
+### Mudanca 4: Reforcar limite de resposta em basic (regra 2)
 
-**Analise:** O timer funciona corretamente no codigo. Quando o usuario marca "Dificil" em um card de aprendizado, o card e reagendado com um intervalo (ex: 5.5min ou 22.5min dependendo dos learning_steps). Se ainda houver outros cards na fila (novos/revisao), eles sao mostrados ANTES do timer expirar. O usuario so ve a tela de espera quando TODOS os cards restantes estao aguardando.
+**ANTES:** `"Resposta concisa (1 frase, maximo 2) no verso."`
 
-**Nao e um bug**, mas a UX pode confundir. O usuario ve o proximo card imediatamente e pensa que o timer nao esta funcionando. Nenhuma mudanca de codigo necessaria - o comportamento esta correto e alinhado com o Anki.
+**DEPOIS:** `"Resposta concisa no verso: MAXIMO 15 palavras. Se precisa de mais, divida em 2 cartoes. REGRA DE OURO: se a resposta nao cabe em 1 linha, o cartao esta mal formulado."`
 
 ---
 
-### Detalhes tecnicos
+### Mudanca 5: Teste de qualidade para cloze
 
-**Arquivo: `src/services/studyService.ts`**
+**ANTES:** `"A frase deve ser respondivel quando a lacuna estiver oculta."`
 
-1. Na funcao `fetchStudyQueue` (bloco de filtro de cards, ~linha 83):
-```typescript
-const endOfToday = new Date();
-endOfToday.setHours(23, 59, 59, 999);
-const endOfTodayISO = endOfToday.toISOString();
-const nowISO = new Date().toISOString();
-
-// Filtro que exclui cards enterrados (scheduled_date > fim de hoje)
-.or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
+**DEPOIS:**
+```
+"TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS
+DE UMA resposta plausivel, o card esta ruim -- adicione mais contexto.
+ERRADO: 'O {{c1::diafragma}} e importante para a respiracao'
+CERTO: 'O principal musculo motor da inspiracao em repouso e o
+{{c1::diafragma}}, que se contrai e achata durante a inspiracao.'"
 ```
 
-2. Na funcao `submitCardReview`, modo `quick_review` (~linha 235):
-```typescript
-return {
-  state: newState,
-  stability: 0,
-  difficulty: 0,
-  scheduled_date: card.scheduled_date,
-  interval_days: 1  // era 0, causava loop infinito
-};
+---
+
+### Mudanca 6: Anti-padrao de cards triviais
+
+**ANTES:** Nao existe regra contra cards obvios.
+
+**DEPOIS (adicionar aos anti-padroes existentes):**
+```
+- Cards que testam informacao OBVIA que qualquer leigo saberia
+  (ex: "O coracao bombeia {{c1::sangue}}")
+- Cards com respostas que podem ser adivinhadas sem estudar o conteudo
 ```
 
-**Arquivo: `src/pages/Study.tsx`**
+---
 
-3. Progresso (linhas 154-156):
-```typescript
-const cardsCompleted = initialQueueSize - localQueue.length;
-const progressPercent = initialQueueSize > 0
-  ? Math.min(100, (cardsCompleted / initialQueueSize) * 100)
-  : 0;
-```
+## Detalhes tecnicos
 
-4. Contador de texto (linha 556):
-```typescript
-<span className="text-xs font-bold text-muted-foreground tabular-nums">
-  {cardsCompleted}/{initialQueueSize}
-</span>
-```
+**Arquivo unico:** `supabase/functions/generate-deck/index.ts`
 
-### Arquivos modificados
-- `src/services/studyService.ts` (filtro de fila + quick_review interval_days)
-- `src/pages/Study.tsx` (calculo de progresso + contador)
+1. **DEFAULT_SYSTEM_PROMPT** (linhas 5-40): Adicionar regra 11 (progressao logica), refinar regra 5 (redundancia com angulos distintos), reforcar limite de 15 palavras na regra 2, adicionar 2 anti-padroes de cards triviais
+2. **getDetailInstruction** (linha 46, case default/standard): Trocar texto por varredura folha-por-folha
+3. **getFormatInstructions** (linhas 64/85, bloco cloze): Adicionar teste de qualidade cloze com exemplos certo/errado
+4. Deploy automatico da edge function
+
+Sem mudancas no frontend -- todas as melhorias sao no prompt do backend.
+
