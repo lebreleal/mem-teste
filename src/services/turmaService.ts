@@ -491,17 +491,32 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
   const deckIds = decks.map((d: any) => d.id);
-  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
+  const [cardsResult, cardUpdatesResult] = await Promise.all([
+    supabase.from('cards').select('deck_id').in('deck_id', deckIds),
+    supabase.from('cards').select('deck_id, updated_at').in('deck_id', deckIds).order('updated_at', { ascending: false }),
+  ]);
   const countMap = new Map<string, number>();
-  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+  (cardsResult.data ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
 
-  return decks.map((d: any) => ({
-    id: d.id,
-    name: d.name,
-    card_count: countMap.get(d.id) ?? 0,
-    owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
-    owner_id: d.user_id,
-    created_at: d.created_at,
-    updated_at: d.updated_at,
-  }));
+  // Build max card updated_at per deck (sorted desc, first occurrence = max)
+  const cardMaxMap = new Map<string, string>();
+  (cardUpdatesResult.data ?? []).forEach((c: any) => {
+    if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
+  });
+
+  return decks.map((d: any) => {
+    const cardUpdated = cardMaxMap.get(d.id);
+    const effectiveUpdatedAt = cardUpdated && new Date(cardUpdated) > new Date(d.updated_at)
+      ? cardUpdated
+      : d.updated_at;
+    return {
+      id: d.id,
+      name: d.name,
+      card_count: countMap.get(d.id) ?? 0,
+      owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
+      owner_id: d.user_id,
+      created_at: d.created_at,
+      updated_at: effectiveUpdatedAt,
+    };
+  });
 }
