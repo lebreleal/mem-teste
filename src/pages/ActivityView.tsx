@@ -157,33 +157,30 @@ const ActivityView = () => {
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex-1 rounded-xl bg-muted/50 p-3 text-center">
               <Trophy className="h-4 w-4 text-primary mx-auto mb-1" />
               <p className="text-base font-bold text-foreground tabular-nums">{bestStreak}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Melhor</p>
             </div>
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
+            <div className="flex-1 rounded-xl bg-muted/50 p-3 text-center">
               <CheckCircle className="h-4 w-4 text-success mx-auto mb-1" />
               <p className="text-base font-bold text-foreground tabular-nums">{totalActiveDays}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Dias ativos</p>
             </div>
-            <div className="rounded-xl bg-muted/50 p-3 text-center relative">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <Snowflake className="h-4 w-4 text-blue-400" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="text-muted-foreground hover:text-foreground transition-colors">
-                      <Info className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[200px] text-xs">
-                    A cada 7 dias seguidos estudando, você ganha 1 congelamento. Se esquecer um dia, ele é usado automaticamente para manter sua sequência.
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <p className="text-base font-bold text-foreground tabular-nums">{freezesAvailable}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Congelamentos</p>
+            <div className="flex items-center gap-1.5">
+              <Snowflake className="h-4 w-4 text-blue-400" />
+              <span className="text-base font-bold text-foreground tabular-nums">{freezesAvailable}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[200px] text-xs">
+                  A cada 7 dias seguidos estudando, você ganha 1 congelamento. Se esquecer um dia, ele é usado automaticamente para manter sua sequência.
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
