@@ -141,13 +141,13 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
         </div>
         {!isOwner && vc?.card && deckId ? (
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-card/80 shadow-sm"
+            variant="outline"
+            size="sm"
+            className="rounded-full bg-card/80 shadow-sm gap-1.5 text-xs px-3"
             onClick={() => setSuggestCard(vc.card)}
-            title="Sugerir correção"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-3.5 w-3.5" />
+            Sugerir correção
           </Button>
         ) : (
           <div className="w-9" />
