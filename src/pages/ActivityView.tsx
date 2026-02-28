@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, BookOpen, GraduationCap, RotateCcw, Sparkles } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,10 @@ interface DayData {
   date: string;
   cards: number;
   minutes: number;
+  newCards: number;
+  learning: number;
+  review: number;
+  relearning: number;
 }
 
 const ActivityView = () => {
@@ -35,7 +39,7 @@ const ActivityView = () => {
 
       const { data: logs } = await supabase
         .from('review_logs')
-        .select('reviewed_at, elapsed_ms')
+        .select('reviewed_at, elapsed_ms, state')
         .eq('user_id', user.id)
         .order('reviewed_at', { ascending: true });
 
@@ -48,8 +52,16 @@ const ActivityView = () => {
       logs.forEach((log, i) => {
         const d = new Date(log.reviewed_at);
         const key = format(startOfDay(d), 'yyyy-MM-dd');
-        if (!dayMap[key]) dayMap[key] = { date: key, cards: 0, minutes: 0 };
+        if (!dayMap[key]) dayMap[key] = { date: key, cards: 0, minutes: 0, newCards: 0, learning: 0, review: 0, relearning: 0 };
         dayMap[key].cards += 1;
+
+        // Count by state
+        const state = log.state ?? null;
+        if (state === 0) dayMap[key].newCards += 1;
+        else if (state === 1) dayMap[key].learning += 1;
+        else if (state === 2) dayMap[key].review += 1;
+        else if (state === 3) dayMap[key].relearning += 1;
+        else dayMap[key].review += 1; // fallback
 
         // Accumulate real time per card
         let ms = 0;
@@ -133,10 +145,10 @@ const ActivityView = () => {
       <main className="container mx-auto px-4 py-5 max-w-lg space-y-4">
         {/* Streak hero card */}
         <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Flame
               className={cn(
-                "h-10 w-10 transition-all",
+                "h-8 w-8 transition-all flex-shrink-0",
                 streak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30"
               )}
               strokeWidth={isIntense ? 2.5 : 2}
@@ -146,10 +158,8 @@ const ActivityView = () => {
                   : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
               } : undefined}
             />
-            <div className="flex-1">
-              <p className="text-4xl font-extrabold text-foreground tabular-nums leading-none">{streak}</p>
-              <p className="text-sm text-muted-foreground mt-0.5">dias seguidos</p>
-            </div>
+            <p className="text-3xl font-extrabold text-foreground tabular-nums leading-none">{streak}</p>
+            <p className="text-sm text-muted-foreground">dias seguidos</p>
           </div>
 
           {/* Stats row - all inline */}
@@ -326,15 +336,53 @@ const ActivityView = () => {
               </div>
             )}
             {selectedDayData ? (
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="rounded-xl bg-muted/50 p-3 text-center">
-                  <p className="text-lg font-bold text-foreground tabular-nums">{selectedDayData.cards}</p>
-                  <p className="text-[10px] text-muted-foreground">Cards revisados</p>
+              <div className="space-y-3 pt-1">
+                {/* Time */}
+                <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+                  <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                  <span className="text-sm font-medium text-foreground">{selectedDayData.minutes}min de estudo</span>
                 </div>
-                <div className="rounded-xl bg-muted/50 p-3 text-center">
-                  <p className="text-lg font-bold text-foreground tabular-nums">{selectedDayData.minutes}m</p>
-                  <p className="text-[10px] text-muted-foreground">Tempo de estudo</p>
+                {/* Card breakdown */}
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedDayData.newCards > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
+                      <Sparkles className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.newCards}</p>
+                        <p className="text-[10px] text-muted-foreground">Novos</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedDayData.learning > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
+                      <BookOpen className="h-4 w-4 text-warning flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.learning}</p>
+                        <p className="text-[10px] text-muted-foreground">Aprendendo</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedDayData.review > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
+                      <GraduationCap className="h-4 w-4 text-success flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.review}</p>
+                        <p className="text-[10px] text-muted-foreground">Revisão</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedDayData.relearning > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-2.5">
+                      <RotateCcw className="h-4 w-4 text-destructive flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground tabular-nums">{selectedDayData.relearning}</p>
+                        <p className="text-[10px] text-muted-foreground">Reaprendendo</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+                {/* Total */}
+                <p className="text-xs text-muted-foreground text-center">{selectedDayData.cards} cards no total</p>
               </div>
             ) : !isFrozenDay ? (
               <p className="text-sm text-muted-foreground pt-1">Nenhum estudo registrado neste dia.</p>
