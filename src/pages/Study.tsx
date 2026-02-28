@@ -371,6 +371,7 @@ const Study = () => {
             } else {
               // Future review (interval_days > 0): remove from session
               // Also bury cloze siblings if enabled (state-aware)
+              const buriedSiblingIds: string[] = [];
               setLocalQueue(prev => {
                 let filtered = prev.filter(c => c.id !== currentCard.id);
                 // Sibling burying: remove cloze siblings based on their state
@@ -384,9 +385,9 @@ const Study = () => {
                       filtered = filtered.filter(c => {
                         if (!siblingIds.includes(c.id)) return true;
                         // Only bury if the sibling's state matches a bury flag
-                        if (c.state === 0 && buryNew) return false;
-                        if (c.state === 2 && buryReview) return false;
-                        if ((c.state === 1 || c.state === 3) && buryLearning) return false;
+                        if (c.state === 0 && buryNew) { buriedSiblingIds.push(c.id); return false; }
+                        if (c.state === 2 && buryReview) { buriedSiblingIds.push(c.id); return false; }
+                        if ((c.state === 1 || c.state === 3) && buryLearning) { buriedSiblingIds.push(c.id); return false; }
                         return true;
                       });
                     }
@@ -394,6 +395,13 @@ const Study = () => {
                 }
                 return filtered;
               });
+              // Push buried siblings to tomorrow in DB so they don't show as pending today
+              if (buriedSiblingIds.length > 0) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
+              }
             }
 
             setCardKey(prev => prev + 1);

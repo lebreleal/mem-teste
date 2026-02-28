@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, ChevronRight, Play, SquarePlus, RotateCcw, Layers, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -67,10 +67,15 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globa
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
   const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
 
+  const isComplete = pendingToday === 0 && totalToday > 0;
+
   return (
-    <div className="min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm">
+    <div className={`min-w-[200px] max-w-[260px] w-[72vw] sm:w-[240px] snap-center flex flex-col rounded-xl border bg-card p-3.5 space-y-2.5 shrink-0 shadow-sm transition-opacity ${isComplete ? 'opacity-50' : ''}`}>
       <div className="flex items-start justify-between gap-1">
-        <h4 className="font-semibold text-sm truncate">{deck.name}</h4>
+        <h4 className="font-semibold text-sm truncate flex items-center gap-1">
+          {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />}
+          {deck.name}
+        </h4>
         {objectiveName && (
           <Badge variant="secondary" className="text-[9px] h-4 px-1.5 shrink-0 bg-primary/10 text-primary border-0">
             {objectiveName}
@@ -127,6 +132,35 @@ interface DeckCarouselProps {
 export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
 
+  // Desktop drag-to-scroll
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragScrollLeft = useRef(0);
+  const hasDragged = useRef(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    isDragging.current = true;
+    hasDragged.current = false;
+    dragStartX.current = e.pageX;
+    dragScrollLeft.current = scrollRef.current.scrollLeft;
+    scrollRef.current.style.cursor = 'grabbing';
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    e.preventDefault();
+    const dx = e.pageX - dragStartX.current;
+    if (Math.abs(dx) > 3) hasDragged.current = true;
+    scrollRef.current.scrollLeft = dragScrollLeft.current - dx;
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false;
+    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+  }, []);
+
   const activeDecks = useMemo(() => {
     const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     if (hasPlan && planDeckIds && planDeckIds.length > 0) {
@@ -146,7 +180,6 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return roots;
   }, [decks, hasPlan, planDeckIds]);
 
-  // Sort by planDeckOrder; in plan mode show ALL plan decks (even with 0 pending)
   const sortedDecks = useMemo(() => {
     const sorted = [...activeDecks].sort((a, b) => {
       if (!planDeckOrder || planDeckOrder.length === 0) return 0;
@@ -155,15 +188,15 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       return (aPos === -1 ? Infinity : aPos) - (bPos === -1 ? Infinity : bPos);
     });
 
-    if (hasPlan) {
-      // In plan mode, show all plan decks (so the user sees them all)
-      return sorted;
-    }
-
-    return sorted.filter(deck => {
-      const allocated = distributedNewByDeck?.get(deck.id);
-      const { pendingToday } = getDeckTodayStats(deck, decks, allocated != null ? allocated : globalNewRemaining);
-      return pendingToday > 0;
+    // Move completed decks (0 pending) to the end instead of hiding them
+    return [...sorted].sort((a, b) => {
+      const allocA = distributedNewByDeck?.get(a.id);
+      const allocB = distributedNewByDeck?.get(b.id);
+      const pendA = getDeckTodayStats(a, decks, allocA != null ? allocA : globalNewRemaining).pendingToday;
+      const pendB = getDeckTodayStats(b, decks, allocB != null ? allocB : globalNewRemaining).pendingToday;
+      if (pendA > 0 && pendB === 0) return -1;
+      if (pendA === 0 && pendB > 0) return 1;
+      return 0;
     });
   }, [activeDecks, decks, planDeckOrder, globalNewRemaining, distributedNewByDeck, hasPlan]);
 
@@ -272,7 +305,15 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
 
       {/* Carousel - unified list (only show when there are decks to display) */}
       {sortedDecks.length > 0 && (
-        <div key={sortedDecks.map(d => d.id).join(',')} className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide">
+        <div
+          ref={scrollRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          key={sortedDecks.map(d => d.id).join(',')}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide cursor-grab select-none"
+        >
           {sortedDecks.map(deck => (
             <DeckStudyCard
               key={deck.id}
