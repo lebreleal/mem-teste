@@ -150,26 +150,6 @@ export function useStudyPlan() {
   const plans = plansQuery.data ?? [];
   const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
 
-  // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
-  const allDeckIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const p of plans) {
-      for (const id of (p.deck_ids ?? [])) ids.add(id);
-    }
-    return Array.from(ids);
-  }, [plans]);
-
-  const avgQuery = useQuery({
-    queryKey: ['avg-seconds-per-card', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_avg_seconds_per_card' as any, { p_user_id: userId });
-      if (error) throw error;
-      return Number(data) || 30;
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60_000,
-  });
-
   // ─── Deck hierarchy for child→root resolution ───
   const deckHierarchyQuery = useQuery({
     queryKey: ['deck-hierarchy', userId],
@@ -190,6 +170,31 @@ export function useStudyPlan() {
     if (!deck || !deck.parent_deck_id) return id;
     return findRoot(deck.parent_deck_id);
   }, [deckHierarchy]);
+
+  // ─── Aggregate all deck_ids from all objectives (deduplicated) ───
+  // When no plans exist, use all active root deck IDs for simulation
+  const allDeckIds = useMemo(() => {
+    if (plans.length > 0) {
+      const ids = new Set<string>();
+      for (const p of plans) {
+        for (const id of (p.deck_ids ?? [])) ids.add(id);
+      }
+      return Array.from(ids);
+    }
+    // No plans: use all root decks (no parent)
+    return deckHierarchy.filter(d => !d.parent_deck_id).map(d => d.id);
+  }, [plans, deckHierarchy]);
+
+  const avgQuery = useQuery({
+    queryKey: ['avg-seconds-per-card', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_avg_seconds_per_card' as any, { p_user_id: userId });
+      if (error) throw error;
+      return Number(data) || 30;
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+  });
 
   // Collect descendant IDs for plan decks (so we count new cards across the whole tree)
   const expandedDeckIds = useMemo(() => {
@@ -313,7 +318,7 @@ export function useStudyPlan() {
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (plans.length === 0 || avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
+    if (avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
     const avg = avgQuery.data;
 
@@ -338,15 +343,19 @@ export function useStudyPlan() {
     const globalNewBudget = getNewCardsForDayGlobal(globalCapacity.dailyNewCardsLimit, globalCapacity.weeklyNewCards);
     const perDeckNewCounts = perDeckStatsQuery.data ?? {};
 
-    const allocation = computeNewCardAllocation({
-      globalBudget: globalNewBudget,
-      plans: plans.map(p => ({ id: p.id, deck_ids: p.deck_ids, target_date: p.target_date, priority: p.priority })),
-      newPerRoot: perDeckNewCounts,
-      findRoot,
-    });
+    let deckNewAllocation: Record<string, number> = {};
+    let newCardsAllocation: Record<string, number> = {};
 
-    const deckNewAllocation = allocation.perDeck;
-    const newCardsAllocation = allocation.perPlan;
+    if (plans.length > 0) {
+      const allocation = computeNewCardAllocation({
+        globalBudget: globalNewBudget,
+        plans: plans.map(p => ({ id: p.id, deck_ids: p.deck_ids, target_date: p.target_date, priority: p.priority })),
+        newPerRoot: perDeckNewCounts,
+        findRoot,
+      });
+      deckNewAllocation = allocation.perDeck;
+      newCardsAllocation = allocation.perPlan;
+    }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);

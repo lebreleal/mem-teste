@@ -44,6 +44,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
     deckConfig: studyQueue.data?.deckConfig,
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
+    isFetching: studyQueue.isFetching,
     submitReview,
   };
 };
