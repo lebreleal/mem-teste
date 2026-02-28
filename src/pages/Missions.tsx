@@ -20,7 +20,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   crown: Crown, star: Star,
 };
 
-const MissionCard = ({ mission, onClaim }: { mission: MissionWithProgress; onClaim: () => void }) => {
+const MissionCard = ({ mission, onClaim, isClaiming }: { mission: MissionWithProgress; onClaim: () => void; isClaiming: boolean }) => {
   const Icon = ICON_MAP[mission.icon] || Star;
   const pct = mission.target_value > 0 ? Math.round((mission.currentProgress / mission.target_value) * 100) : 0;
   const canClaim = mission.isCompleted && !mission.isClaimed;
@@ -48,7 +48,7 @@ const MissionCard = ({ mission, onClaim }: { mission: MissionWithProgress; onCla
         </div>
       </div>
       {canClaim && (
-        <Button size="sm" onClick={onClaim} className="shrink-0 h-8 px-3 gap-1 text-xs"><Gift className="h-3.5 w-3.5" /> Resgatar</Button>
+        <Button size="sm" onClick={onClaim} disabled={isClaiming} className="shrink-0 h-8 px-3 gap-1 text-xs"><Gift className="h-3.5 w-3.5" /> Resgatar</Button>
       )}
     </div>
   );
@@ -109,7 +109,7 @@ const Missions = () => {
                     <h2 className="text-sm font-bold text-foreground">Missões Diárias</h2>
                     <span className="text-[10px] text-muted-foreground">Renovam todo dia</span>
                   </div>
-                  {dailyMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} />)}
+                  {dailyMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} isClaiming={claimReward.isPending} />)}
                 </section>
 
                 {/* Weekly */}
@@ -119,7 +119,7 @@ const Missions = () => {
                     <h2 className="text-sm font-bold text-foreground">Missões Semanais</h2>
                     <span className="text-[10px] text-muted-foreground">Renovam toda segunda</span>
                   </div>
-                  {weeklyMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} />)}
+                  {weeklyMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} isClaiming={claimReward.isPending} />)}
                 </section>
 
                 {/* Community Missions */}
@@ -130,7 +130,7 @@ const Missions = () => {
                       <h2 className="text-sm font-bold text-foreground">Missões da Comunidade</h2>
                       <span className="text-[10px] text-muted-foreground">Contribua com Decks Vivos</span>
                     </div>
-                    {communityMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} />)}
+                    {communityMissions.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} isClaiming={claimReward.isPending} />)}
                   </section>
                 )}
 
@@ -141,7 +141,7 @@ const Missions = () => {
                     <h2 className="text-sm font-bold text-foreground">Conquistas</h2>
                     <span className="text-[10px] text-muted-foreground">Completar uma vez</span>
                   </div>
-                  {achievements.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} />)}
+                  {achievements.map(m => <MissionCard key={m.id} mission={m} onClaim={() => claimReward.mutate(m)} isClaiming={claimReward.isPending} />)}
                 </section>
               </>
             )}

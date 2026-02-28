@@ -19,7 +19,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
   });
 
   const submitReview = useMutation({
-    mutationFn: async ({ card, rating }: { card: any; rating: Rating }) => {
+    mutationFn: async ({ card, rating, elapsedMs }: { card: any; rating: Rating; elapsedMs?: number }) => {
       if (!user) throw new Error('Not authenticated');
       return studyService.submitCardReview(
         user.id,
@@ -27,6 +27,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         rating,
         studyQueue.data?.algorithmMode || 'sm2',
         studyQueue.data?.deckConfig,
+        elapsedMs,
       );
     },
     onSettled: () => {

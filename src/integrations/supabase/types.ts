@@ -1180,6 +1180,7 @@ export type Database = {
         Row: {
           card_id: string
           difficulty: number
+          elapsed_ms: number | null
           id: string
           rating: number
           reviewed_at: string
@@ -1191,6 +1192,7 @@ export type Database = {
         Insert: {
           card_id: string
           difficulty?: number
+          elapsed_ms?: number | null
           id?: string
           rating: number
           reviewed_at?: string
@@ -1202,6 +1204,7 @@ export type Database = {
         Update: {
           card_id?: string
           difficulty?: number
+          elapsed_ms?: number | null
           id?: string
           rating?: number
           reviewed_at?: string

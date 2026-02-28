@@ -62,10 +62,9 @@ const WeekStrip = () => {
 
   const streak = stats.streak;
   const hasStreak = streak > 0;
-  // Fire intensity: bigger flame at streak >= 3
-  const isIntense = streak >= 3;
+  // Fire intensity: bigger flame at streak >= 7
+  const isIntense = streak >= 7;
   const flameSize = isIntense ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-5 w-5 sm:h-6 sm:w-6';
-  const ringSize = isIntense ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-10 w-10 sm:h-11 sm:w-11';
 
   return (
     <button
@@ -100,35 +99,27 @@ const WeekStrip = () => {
         ))}
       </div>
 
-      {/* Streak fire icon — orange, scales with streak */}
-      <div className="flex-shrink-0 relative flex items-center justify-center">
-        <div className={`relative flex items-center justify-center ${ringSize} rounded-full transition-all duration-300 ${
-          hasStreak
-            ? 'border-2 border-warning/60 bg-warning/10'
-            : 'border-2 border-muted-foreground/30 bg-muted/30'
+      {/* Streak fire + count */}
+      <div className="flex-shrink-0 flex items-center gap-1">
+        <Flame
+          className={`${flameSize} transition-all duration-300 ${
+            hasStreak ? 'text-warning fill-warning' : 'text-muted-foreground/30'
+          }`}
+          strokeWidth={isIntense ? 2.5 : 2}
+          style={hasStreak ? {
+            filter: isIntense
+              ? 'drop-shadow(0 0 6px hsl(var(--warning) / 0.5))'
+              : 'drop-shadow(0 0 3px hsl(var(--warning) / 0.3))',
+            animation: isIntense
+              ? 'streak-flame 1.5s ease-in-out infinite'
+              : 'streak-pulse 2.5s ease-in-out infinite',
+          } : undefined}
+        />
+        <span className={`text-sm font-bold tabular-nums ${
+          hasStreak ? 'text-foreground' : 'text-muted-foreground/40'
         }`}>
-          <Flame
-            className={`${flameSize} transition-all duration-300 ${
-              hasStreak ? 'text-warning' : 'text-muted-foreground/50'
-            }`}
-            strokeWidth={isIntense ? 2.5 : 2}
-            style={hasStreak ? {
-              filter: isIntense
-                ? 'drop-shadow(0 0 6px hsl(var(--warning) / 0.5))'
-                : 'drop-shadow(0 0 3px hsl(var(--warning) / 0.3))',
-              animation: isIntense
-                ? 'streak-flame 1.5s ease-in-out infinite'
-                : 'streak-pulse 2.5s ease-in-out infinite',
-            } : undefined}
-          />
-        </div>
-
-        {/* Streak badge — top right */}
-        {hasStreak && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-warning text-[10px] font-extrabold text-warning-foreground text-center leading-[18px] shadow-md ring-2 ring-card">
-            {streak}
-          </span>
-        )}
+          {streak}
+        </span>
       </div>
 
       <style>{`
