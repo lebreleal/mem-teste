@@ -1,61 +1,74 @@
 
 
-## Bug Fix: Study Queue Stale Cache + StudyPlan Without Objectives
+## Ajustes no "Meu Plano" sem objetivos
 
-### Problem 1: Farmacologia "Nenhum card para estudar"
+### Problema 1: Mensagem do diálogo enganosa
+O diálogo "Alterar limite de novos cards?" diz que cotas serao redistribuidas entre objetivos, mas sem objetivos nao ha redistribuicao.
 
-**Root cause:** When the user completes a study session, the study queue cache stores an empty result. When they return to study the same deck (now with 1 review card due), React Query has stale cached data (empty array). Because the hook uses `staleTime: Infinity`, `isLoading` is `false` (there IS cached data), so the loading spinner is skipped. The empty stale data renders the "Nenhum card para estudar" screen immediately, even though a background refetch is happening.
+**Solucao:** Condicionar a mensagem do `AlertDialog` (linhas 1540-1546 de `StudyPlan.tsx`):
+- Com objetivos: manter mensagem atual sobre redistribuicao
+- Sem objetivos: mostrar mensagem como "Este limite sera usado como referencia na simulacao e quando voce criar um objetivo. No modo manual, cada baralho usa seu proprio limite nas configuracoes."
 
-**Fix in `src/pages/Study.tsx`:**
-- Change the loading guard (line 463) to also show the spinner when the queue hasn't been initialized yet AND data is being fetched in the background: `if (isLoading || (!queueInitialized && isFetching))`
-- Expose `isFetching` from `useStudySession` hook
+### Problema 2: Slider de novos cards/dia sem efeito pratico
+No modo manual (sem planos), o limite global e ignorado pela fila de estudo (`fetchStudyQueue` so aplica globalLimit quando `hasPlanActive = true`). Alterar o slider da uma falsa impressao de controle.
 
-**Fix in `src/hooks/useStudySession.ts`:**
-- Export `isFetching: studyQueue.isFetching` alongside `isLoading`
+**Solucao:** Manter o slider visivel (ele afeta a simulacao e sera usado quando criar objetivos), mas adicionar uma nota informativa abaixo do slider quando `plans.length === 0`:
+- Texto: "Sem objetivos ativos, cada baralho usa seu proprio limite individual. Crie um objetivo para que este limite global seja aplicado."
+- Estilo: `text-[10px] text-amber-600 dark:text-amber-400` com icone de info
 
----
+### Problema 3: Simulacao inclui decks arquivados
+A query `deck-hierarchy` nao filtra decks arquivados (`is_archived`), fazendo com que a simulacao considere cards de decks que o usuario ja arquivou.
 
-### Problem 2: StudyPlan requires creating an objective
+**Solucao em `src/hooks/useStudyPlan.ts`** (linhas 156-161): adicionar filtro `.eq('is_archived', false)` (ou equivalente) na query de `deckHierarchyQuery`. Verificar se o campo existe na tabela.
 
-**Current behavior:** Line 1222 of `StudyPlan.tsx` gates the entire dashboard behind `plans.length === 0`, showing only a "Criar meu primeiro objetivo" empty state.
-
-**Desired behavior:** When no plans exist, the user should still see:
-- The simulation section (forecast) using ALL active decks and sub-decks
-- The "Novos cards por dia" slider configuration
-- A smaller CTA to create an objective (non-blocking)
-
-**Changes:**
-
-1. **`src/hooks/useStudyPlan.ts`** (lines 154-160 and 316):
-   - When `plans.length === 0`, set `allDeckIds` to all active root deck IDs (instead of empty)
-   - Adjust `expandedDeckIds` to include descendants of all active decks
-   - Allow `computed` metrics to work without plans (remove the `plans.length === 0` null guard on line 316, use fallback values)
-
-2. **`src/pages/StudyPlan.tsx`** (lines 1222-1277):
-   - Replace the full empty-state gate with a streamlined dashboard that shows:
-     - A compact CTA card encouraging the user to create an objective (not blocking)
-     - The "Novos cards por dia" config section (reuse existing code)
-     - The `ForecastSimulatorSection` with all active decks
-   - The "Meus Objetivos" section is conditionally shown only when `plans.length > 0`
+### Problema 4: Badges de alocacao por objetivo
+As badges (linhas 1506-1518) ja sao condicionais a `plans.map(...)`, entao nao aparecem sem objetivos. Nenhuma mudanca necessaria aqui.
 
 ---
 
-### Technical Details
+### Detalhes tecnicos
 
-**File: `src/hooks/useStudySession.ts`**
-- Add `isFetching: studyQueue.isFetching` to the return object
+**Arquivo: `src/pages/StudyPlan.tsx`**
 
-**File: `src/pages/Study.tsx`**
-- Destructure `isFetching` from `useStudySession`
-- Change loading condition: `if (isLoading || (!queueInitialized && isFetching))`
+1. Linhas 1540-1546 - Condicionar mensagem do AlertDialog:
+```typescript
+<AlertDialogDescription className="space-y-2">
+  <span className="block">
+    Voce esta alterando de <strong>{globalCapacity.dailyNewCardsLimit}</strong> para <strong>{tempNewCards}</strong> novos cards por dia.
+  </span>
+  {plans.length > 0 ? (
+    <span className="block text-amber-600 dark:text-amber-400">
+      As cotas diarias de novos cards serao recalculadas e redistribuidas entre seus objetivos. O progresso de cards ja estudados hoje nao e afetado.
+    </span>
+  ) : (
+    <span className="block text-muted-foreground">
+      Este valor sera usado como referencia na simulacao. Sem objetivos ativos, cada baralho usa seu proprio limite individual.
+    </span>
+  )}
+</AlertDialogDescription>
+```
 
-**File: `src/hooks/useStudyPlan.ts`**
-- In `allDeckIds` memo: when plans are empty, fetch all active root deck IDs from a new query
-- In `computed` memo: remove the `plans.length === 0` early return, provide fallback metrics without plan-specific data (no target date, no health status, just totals and simulation data)
+2. Linhas 1419-1421 - Adicionar nota informativa abaixo da descricao do slider quando sem objetivos:
+```typescript
+<p className="text-[10px] text-muted-foreground leading-relaxed">
+  Cards que voce nunca estudou. {plans.length > 0
+    ? 'O sistema distribui entre seus objetivos proporcionalmente.'
+    : 'Crie um objetivo para que este limite global seja aplicado na fila de estudo.'}
+</p>
+```
 
-**File: `src/pages/StudyPlan.tsx`**
-- Remove the `if (plans.length === 0) { return ... }` gate
-- Add a non-blocking "Criar objetivo" card inside the existing dashboard when `plans.length === 0`
-- When no plans exist, hide the "Meus Objetivos" section and the "Status + Carga de Hoje" hero card
-- Keep the "Configuracoes" (novos cards/dia) and "Simulador" sections always visible
+**Arquivo: `src/hooks/useStudyPlan.ts`**
 
+3. Linhas 156-161 - Filtrar decks arquivados na query de hierarquia. Precisamos verificar se o campo existe, mas assumindo que `is_archived` e um campo booleano na tabela `decks`:
+```typescript
+const { data } = await supabase
+  .from('decks')
+  .select('id, parent_deck_id')
+  .eq('user_id', userId!)
+  .or('is_archived.is.null,is_archived.eq.false');
+```
+Se o campo nao existir, usaremos o filtro equivalente disponivel (como excluir decks em pasta "Arquivo").
+
+### Arquivos modificados
+- `src/pages/StudyPlan.tsx` (mensagens condicionais)
+- `src/hooks/useStudyPlan.ts` (filtro de arquivados na hierarquia)
