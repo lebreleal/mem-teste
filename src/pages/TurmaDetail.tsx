@@ -6,14 +6,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
 import TurmaHeader from '@/components/turma-detail/TurmaHeader';
 import TurmaSubHeader from '@/components/turma-detail/TurmaSubHeader';
 import ContentTab from '@/components/turma-detail/ContentTab';
 import {
-  CreateSubjectDialog, CreateLessonDialog,
-  EditSubjectDialog, EditLessonDialog,
+  CreateSubjectDialog,
+  EditSubjectDialog,
 } from '@/components/turma-detail/TurmaDialogs';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -168,14 +169,10 @@ const PublicCommunityView = () => {
                 <p className="text-sm text-muted-foreground">Sem descrição</p>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
                 <p className="text-2xl font-bold text-foreground">{subjects.length}</p>
-                <p className="text-[11px] text-muted-foreground">Matérias</p>
-              </div>
-              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
-                <p className="text-2xl font-bold text-foreground">{lessons.length}</p>
-                <p className="text-[11px] text-muted-foreground">Aulas</p>
+                <p className="text-[11px] text-muted-foreground">Seções</p>
               </div>
               <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
                 <p className="text-2xl font-bold text-foreground">{exams.length}</p>
@@ -188,51 +185,42 @@ const PublicCommunityView = () => {
           <TabsContent value="content" className="space-y-2">
             {isLoading ? (
               <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)}</div>
-            ) : subjects.length === 0 && lessons.length === 0 ? (
+            ) : subjects.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border py-8 text-center">
                 <FolderOpen className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Nenhum conteúdo disponível</p>
               </div>
             ) : (
-              <div className="rounded-xl border border-border/50 bg-card divide-y divide-border/50 overflow-hidden">
-                {subjects.filter((s: any) => !s.parent_id).map((subject: any) => {
-                  const subLessons = lessons.filter((l: any) => l.subject_id === subject.id);
-                  return (
-                    <div key={subject.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <FolderOpen className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{subject.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{subLessons.length} aula{subLessons.length !== 1 ? 's' : ''}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {lessons.filter((l: any) => !l.subject_id).map((lesson: any) => (
-                  <div key={lesson.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/40">
-                      <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{lesson.name}</p>
+              <div className="space-y-4">
+                {subjects.filter((s: any) => !s.parent_id).map((subject: any) => (
+                  <div key={subject.id}>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">{subject.name}</h3>
+                    <div className="rounded-xl border border-border/50 bg-card p-3 text-center">
+                      <p className="text-[11px] text-muted-foreground">Conteúdo disponível para membros</p>
                     </div>
                   </div>
                 ))}
-                {exams.map((exam: any) => (
-                  <div key={exam.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <FileText className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{exam.title}</p>
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>{exam.total_questions} questões</span>
-                        {exam.time_limit_seconds && <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>}
-                      </div>
+                {exams.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Provas</h3>
+                    <div className="rounded-xl border border-border/50 bg-card divide-y divide-border/50 overflow-hidden">
+                      {exams.map((exam: any) => (
+                        <div key={exam.id} className="flex items-center gap-3 px-4 py-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <FileText className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{exam.title}</p>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                              <span>{exam.total_questions} questões</span>
+                              {exam.time_limit_seconds && <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" /> {Math.round(exam.time_limit_seconds / 60)}min</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </TabsContent>
@@ -280,17 +268,16 @@ const PublicCommunityView = () => {
 const MemberCommunityView = () => {
   const ctx = useTurmaDetail();
   const {
-    turmaId, turma, members, turmaDecks, turmaExams, lessonFiles,
+    turmaId, turma, members, turmaDecks, turmaExams,
     isAdmin, canEdit, user,
     hasSubscription, isSubscriber, activeSubscription, subscriptionPrice, subscribing, handleSubscribe,
     mutations, updateTurma,
     showSettings, setShowSettings,
-    showAddSubject, setShowAddSubject, showAddLesson, setShowAddLesson,
+    showAddSubject, setShowAddSubject,
     newName, setNewName, newDesc, setNewDesc,
-    newLessonPublished, setNewLessonPublished,
-    editingSubject, setEditingSubject, editingLesson, setEditingLesson,
-    editItemName, setEditItemName, editLessonDate, setEditLessonDate,
-    handleCreateSubject, handleCreateLesson,
+    editingSubject, setEditingSubject,
+    editItemName, setEditItemName,
+    handleCreateSubject,
     toast,
   } = ctx;
 
@@ -306,8 +293,7 @@ const MemberCommunityView = () => {
         hasSubscription={hasSubscription}
         hasExclusiveContent={
           turmaDecks.some((d: any) => d.price_type && d.price_type !== 'free') ||
-          turmaExams.some((e: any) => e.subscribers_only) ||
-          (lessonFiles as any[]).some((f: any) => f.price_type && f.price_type !== 'free')
+          turmaExams.some((e: any) => e.subscribers_only)
         }
         isSubscriber={isSubscriber}
         activeSubscription={activeSubscription}
@@ -344,12 +330,6 @@ const MemberCommunityView = () => {
         desc={newDesc} onDescChange={setNewDesc}
         onSubmit={handleCreateSubject} isPending={mutations.createSubject.isPending}
       />
-      <CreateLessonDialog
-        open={!!showAddLesson} onOpenChange={open => !open && setShowAddLesson(null)}
-        name={newName} onNameChange={setNewName}
-        isPublished={newLessonPublished} onPublishedChange={setNewLessonPublished}
-        onSubmit={handleCreateLesson} isPending={mutations.createLesson.isPending}
-      />
       <EditSubjectDialog
         open={!!editingSubject} onOpenChange={open => !open && setEditingSubject(null)}
         name={editItemName} onNameChange={setEditItemName}
@@ -361,29 +341,29 @@ const MemberCommunityView = () => {
         }}
         isPending={mutations.updateSubject.isPending}
       />
-      <EditLessonDialog
-        open={!!editingLesson} onOpenChange={open => !open && setEditingLesson(null)}
-        name={editItemName} onNameChange={setEditItemName}
-        onSubmit={() => {
-          mutations.updateLesson.mutate({ id: editingLesson!.id, name: editItemName.trim(), lessonDate: editLessonDate || null }, {
-            onSuccess: () => { setEditingLesson(null); toast({ title: 'Atualizado!' }); },
-            onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
-          });
-        }}
-        isPending={mutations.updateLesson.isPending}
-      />
     </div>
   );
 };
 
 // ─── Router: decide public or member view ───
 const TurmaDetailInner = () => {
-  const { turma, isMember } = useTurmaDetail();
+  const { turma, isMember, isLoading } = useTurmaDetail();
 
-  if (!turma) {
+  if (isLoading || !turma) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Comunidade não encontrada</p>
+      <div className="min-h-screen bg-background">
+        {/* Header skeleton */}
+        <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
+        <div className="container mx-auto px-4 max-w-2xl py-6 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-28 rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }

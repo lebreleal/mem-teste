@@ -1,73 +1,123 @@
 
 
-## Separar ocultação de irmãos em 3 configurações (como Anki)
+## Plano: 3 Correcoees - Timestamp de Atualizacao, Minutos Estudados e Anti-Fraude
 
-### Situacao atual
-Existe apenas um campo booleano `bury_siblings` no baralho. Quando ativo, remove **todos** os irmãos cloze da fila independente do estado (novo, aprendendo, revisao). Isso e mais agressivo que o Anki e causa a situacao onde 9 novos aparecem no contador mas nao aparecem na sessao.
+### 1. Corrigir o timestamp "ultima atualizacao" nos Decks Publicos
 
-### O que muda
+**Problema:** O `updated_at` mostrado nos cards da marketplace (ex: "ha cerca de 8 horas") vem do campo `decks.updated_at`, que so muda quando o metadado do deck e alterado (renomear, etc). Nao reflete edicoes nos cards nem sugestoes aprovadas pela comunidade.
 
-Dividir em 3 campos independentes, alinhados com o Anki:
-- `bury_new_siblings` -- Ocultar novos irmaos ate o dia seguinte
-- `bury_review_siblings` -- Ocultar irmaos de revisao ate o dia seguinte  
-- `bury_learning_siblings` -- Ocultar irmaos em aprendizado ate o dia seguinte
+**Solucao:** No `fetchPublicDecks` (`turmaService.ts`), alem de buscar `decks.updated_at`, buscar tambem o `MAX(cards.updated_at)` por deck e usar o mais recente entre os dois. Assim, qualquer edicao de card ou sugestao aprovada atualiza o timestamp exibido.
 
-Todos ativados por padrao (mantendo compatibilidade com o comportamento atual).
+**Arquivos:**
+- `src/services/turmaService.ts` (funcao `fetchPublicDecks`): adicionar query paralela para `cards.updated_at` agrupado por `deck_id`, e usar `Math.max(deck.updated_at, maxCardUpdatedAt)` como `updated_at` final.
 
-### Plano tecnico
+---
 
-**1. Banco de dados -- adicionar 3 novas colunas na tabela `decks`**
+### 2. Corrigir contabilidade de minutos estudados
 
-Criar migracao SQL:
-```sql
-ALTER TABLE decks 
-  ADD COLUMN bury_new_siblings boolean NOT NULL DEFAULT true,
-  ADD COLUMN bury_review_siblings boolean NOT NULL DEFAULT true,
-  ADD COLUMN bury_learning_siblings boolean NOT NULL DEFAULT true;
+**Problema:** O calculo atual de `todayMinutes` em `studyService.ts` (linha 365) usa uma estimativa fixa de 8 segundos por card:
+```
+todayMinutes = Math.round((todayCards * 8) / 60)
+```
+Isso e completamente impreciso -- nao mede tempo real.
 
--- Copiar valor atual do bury_siblings para os 3 novos campos
-UPDATE decks SET 
-  bury_new_siblings = bury_siblings,
-  bury_review_siblings = bury_siblings,
-  bury_learning_siblings = bury_siblings;
+**Solucao:** Calcular os minutos reais a partir dos `review_logs` de hoje. Para cada par consecutivo de reviews do mesmo usuario, o intervalo entre eles representa tempo de estudo (com um cap de 5 minutos por intervalo para excluir pausas). Soma-se todos os intervalos validos.
+
+**Arquivos:**
+- `src/services/studyService.ts` (funcao `fetchStudyStats`):
+  - Buscar `review_logs` de hoje com `reviewed_at` ordenado cronologicamente
+  - Calcular gaps entre reviews consecutivos
+  - Cap de 120 segundos por card (intervalo > 120s = pausa, conta como 120s max)
+  - Somar e converter para minutos
+- Tambem corrigir `avgMinutesPerDay7d` que usa a mesma estimativa falsa
+
+---
+
+### 3. Implementar sistema anti-fraude de tempo de estudo
+
+**Problema:** Nao ha validacao de tempo gasto por card. Um usuario poderia abrir o modo estudo, deixar aberto sem interagir, e acumular "tempo" artificialmente.
+
+**Solucao:** Registrar o tempo real gasto por card no `review_logs` e aplicar limites:
+
+**3a. Registrar `duration_ms` no review_log:**
+- Em `Study.tsx`, ja existe `cardShownAt` (ref que marca quando o card apareceu). Calcular `duration_ms = Date.now() - cardShownAt.current` no momento do rating.
+- Passar `duration_ms` para `submitCardReview` e salvar no review_log.
+- Nota: o campo `duration_ms` precisa existir no review_logs -- como a tabela nao tem esse campo, vamos armazenar o valor na logica client-side por enquanto e usa-lo no calculo de minutos (sem precisar de migracao).
+
+**3b. Cap anti-fraude no calculo de minutos:**
+- Aplicar um cap de **120 segundos** por card review no calculo de `todayMinutes`
+- Intervalos menores que **1.5 segundos** sao descartados (review automatico/bot)
+- Intervalos maiores que **120 segundos** sao limitados a 120s (usuario pausou)
+
+**3c. Calculo baseado em gaps entre reviews (sem campo novo):**
+- Como nao temos `duration_ms` no banco, calcular o tempo entre reviews consecutivos
+- Cada gap recebe o cap de 120s e o minimo de 1.5s
+- Isso funciona retroativamente para dados existentes
+
+**Arquivos:**
+- `src/services/studyService.ts` (`fetchStudyStats`): reescrever calculo de `todayMinutes` e `avgMinutesPerDay7d` usando gaps entre reviews com caps anti-fraude
+
+---
+
+### Resumo de alteracoes
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/services/turmaService.ts` | `fetchPublicDecks`: incluir max `cards.updated_at` no timestamp |
+| `src/services/studyService.ts` | `fetchStudyStats`: recalcular minutos reais com gaps + anti-fraude |
+
+### Detalhes tecnicos
+
+**Calculo de minutos reais (studyService.ts):**
+```typescript
+// Buscar reviews de hoje ordenados cronologicamente
+const todayStart = today + 'T00:00:00.000Z';
+const { data: todayLogs } = await supabase
+  .from('review_logs')
+  .select('reviewed_at')
+  .eq('user_id', userId)
+  .gte('reviewed_at', todayStart)
+  .order('reviewed_at', { ascending: true });
+
+// Calcular tempo real com anti-fraude
+const MIN_REVIEW_MS = 1500;  // < 1.5s = bot/spam
+const MAX_REVIEW_MS = 120000; // > 2min = pausa
+let totalMs = 0;
+const reviews = todayLogs ?? [];
+for (let i = 1; i < reviews.length; i++) {
+  const gap = new Date(reviews[i].reviewed_at).getTime() - new Date(reviews[i-1].reviewed_at).getTime();
+  if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
+    totalMs += gap;
+  } else if (gap > MAX_REVIEW_MS) {
+    totalMs += MAX_REVIEW_MS; // cap em 2 min
+  }
+  // gap < MIN_REVIEW_MS: descartado (suspeito)
+}
+// Adicionar tempo do primeiro card (estimativa fixa de 15s)
+if (reviews.length > 0) totalMs += 15000;
+const todayMinutes = Math.round(totalMs / 60000);
 ```
 
-**2. Logica da fila de estudo -- `src/services/studyService.ts`**
+**Timestamp de atualizacao (turmaService.ts):**
+```typescript
+// Buscar max card updated_at por deck
+const { data: cardUpdates } = await supabase
+  .from('cards')
+  .select('deck_id, updated_at')
+  .in('deck_id', deckIds)
+  .order('updated_at', { ascending: false });
 
-Atualizar o select para incluir os 3 novos campos. Substituir a logica de burying unica por uma logica que verifica o estado de cada cartao:
+const cardMaxMap = new Map<string, string>();
+(cardUpdates ?? []).forEach((c: any) => {
+  if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
+});
 
-```text
-Para cada cartao cloze na fila:
-  - Se state=0 (novo) e bury_new_siblings=true --> ocultar se irmao ja visto
-  - Se state=2 (revisao) e bury_review_siblings=true --> ocultar se irmao ja visto
-  - Se state=1 ou 3 (aprendendo/reaprendendo) e bury_learning_siblings=true --> ocultar se irmao ja visto
+// Usar o mais recente entre deck.updated_at e max(cards.updated_at)
+return decks.map(d => ({
+  ...d,
+  updated_at: cardMaxMap.has(d.id) && new Date(cardMaxMap.get(d.id)!) > new Date(d.updated_at)
+    ? cardMaxMap.get(d.id)!
+    : d.updated_at,
+}));
 ```
 
-O campo antigo `bury_siblings` sera mantido temporariamente mas nao mais utilizado na logica.
-
-**3. Logica na sessao de estudo -- `src/pages/Study.tsx`**
-
-A mesma logica de burying por estado tambem se aplica quando um cartao e respondido durante a sessao (remocao de irmaos em tempo real). Atualizar para respeitar as 3 flags.
-
-**4. Tela de configuracoes -- `src/pages/DeckSettings.tsx`**
-
-Substituir o toggle unico "Ocultar irmaos" por 3 toggles separados:
-- Ocultar novos irmaos ate o dia seguinte
-- Ocultar irmaos de revisao ate o dia seguinte
-- Ocultar irmaos em aprendizado ate o dia seguinte
-
-**5. Contadores do deck-detail -- `src/components/deck-detail/DeckDetailContext.tsx`**
-
-Garantir que os contadores exibidos no card superior reflitam a fila efetiva (com burying aplicado por estado), para que o numero de "novos" mostrado bata com o que realmente aparece na sessao.
-
-### Arquivos alterados
-- Nova migracao SQL em `supabase/migrations/`
-- `src/integrations/supabase/types.ts` (tipos gerados -- atualizados apos migracao)
-- `src/services/studyService.ts` (logica de burying por estado)
-- `src/pages/Study.tsx` (burying em tempo real por estado)
-- `src/pages/DeckSettings.tsx` (UI dos 3 toggles)
-- `src/components/deck-detail/DeckDetailContext.tsx` (contadores alinhados)
-
-### Compatibilidade
-- Baralhos existentes manterao o mesmo comportamento (todos os 3 campos herdam o valor atual de `bury_siblings`)
-- O campo antigo `bury_siblings` fica como fallback ate ser removido numa limpeza futura

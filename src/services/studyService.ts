@@ -266,6 +266,7 @@ export async function submitCardReview(
       state: card.state,
       scheduled_date: card.scheduled_date,
       learning_step: card.learning_step ?? 0,
+      last_reviewed_at: card.last_reviewed_at ?? undefined,
     };
 
     result = fsrsSchedule(fsrsCard, rating, params);
@@ -345,15 +346,39 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
     .select('reviewed_at')
     .eq('user_id', userId)
     .gte('reviewed_at', thirtyDaysAgo.toISOString())
-    .order('reviewed_at', { ascending: false });
+    .order('reviewed_at', { ascending: true });
 
   if (!logs || logs.length === 0) {
     return { lastStudyDate: null, streak: 0, energy, dailyEnergyEarned, mascotState: 'sleeping', todayCards, avgMinutesPerDay7d: 0, todayMinutes: 0 };
   }
 
-  const lastStudyDate = new Date(logs[0].reviewed_at);
+  const lastStudyDate = new Date(logs[logs.length - 1].reviewed_at);
   const streak = calculateStreak(logs.map(l => l.reviewed_at));
   const mascotState = getMascotState(lastStudyDate);
+
+  // --- Anti-fraud gap-based minute calculation ---
+  const MIN_REVIEW_MS = 1500;   // < 1.5s = bot/spam, discard
+  const MAX_REVIEW_MS = 120000; // > 2min = pause, cap at 2min
+
+  const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string }[]): number => {
+    let totalMs = 0;
+    for (let i = 1; i < reviewLogs.length; i++) {
+      const gap = new Date(reviewLogs[i].reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
+      if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
+        totalMs += gap;
+      } else if (gap > MAX_REVIEW_MS) {
+        totalMs += MAX_REVIEW_MS;
+      }
+      // gap < MIN_REVIEW_MS: discarded (suspicious)
+    }
+    // Add fixed estimate for first card in session
+    if (reviewLogs.length > 0) totalMs += 15000;
+    return Math.round(totalMs / 60000);
+  };
+
+  const todayStart = today + 'T00:00:00.000Z';
+  const todayLogs = logs.filter(l => l.reviewed_at >= todayStart);
+  const todayMinutes = calcMinutesFromLogs(todayLogs);
 
   const accountCreated = p?.created_at ? new Date(p.created_at) : new Date();
   const daysSinceCreation = Math.max(1, Math.ceil((Date.now() - accountCreated.getTime()) / (1000 * 60 * 60 * 24)));
@@ -361,8 +386,8 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const last7dLogs = logs.filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
-  const avgMinutesPerDay7d = Math.round((last7dLogs.length * 8) / 60 / activeDays);
-  const todayMinutes = Math.round((todayCards * 8) / 60);
+  const total7dMinutes = calcMinutesFromLogs(last7dLogs);
+  const avgMinutesPerDay7d = Math.round(total7dMinutes / activeDays);
 
   return { lastStudyDate, streak, energy, dailyEnergyEarned, mascotState, todayCards, avgMinutesPerDay7d, todayMinutes };
 }

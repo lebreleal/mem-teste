@@ -21,12 +21,12 @@ interface CreateSubjectDialogProps {
 export const CreateSubjectDialog = ({ open, onOpenChange, name, onNameChange, desc, onDescChange, onSubmit, isPending }: CreateSubjectDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent>
-      <DialogHeader><DialogTitle>Nova Pasta</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>Nova Seção</DialogTitle></DialogHeader>
       <div className="space-y-3">
-        <Input placeholder="Nome da pasta" maxLength={40} value={name} onChange={e => onNameChange(e.target.value)} />
+        <Input placeholder="Nome da seção" maxLength={40} value={name} onChange={e => onNameChange(e.target.value)} />
         <Input placeholder="Descrição (opcional)" value={desc} onChange={e => onDescChange(e.target.value)} />
         <Button onClick={onSubmit} disabled={!name.trim() || isPending} className="w-full">
-          {isPending ? 'Criando...' : 'Criar Pasta'}
+          {isPending ? 'Criando...' : 'Criar Seção'}
         </Button>
       </div>
     </DialogContent>
@@ -81,9 +81,9 @@ interface EditSubjectDialogProps {
 export const EditSubjectDialog = ({ open, onOpenChange, name, onNameChange, onSubmit, isPending }: EditSubjectDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="sm:max-w-sm">
-      <DialogHeader><DialogTitle>Editar Pasta</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>Editar Seção</DialogTitle></DialogHeader>
       <div className="space-y-3">
-        <Input placeholder="Nome da pasta" value={name} onChange={e => onNameChange(e.target.value)} />
+        <Input placeholder="Nome da seção" value={name} onChange={e => onNameChange(e.target.value)} />
         <Button className="w-full" disabled={!name.trim() || isPending} onClick={onSubmit}>
           {isPending ? 'Salvando...' : 'Salvar'}
         </Button>
