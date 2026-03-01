@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -470,7 +471,6 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
   const originalFront = suggestion.original_front ?? '';
   const originalBack = suggestion.original_back ?? '';
   const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
-  const [previewRevealed, setPreviewRevealed] = useState(false);
 
   const statusConfig: Record<string, { label: string; className: string }> = {
     pending: { label: 'Pendente', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' },
@@ -483,34 +483,13 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
   const hasContentChanges = (suggestedFront && originalFront !== suggestedFront) || (suggestedBack && originalBack !== suggestedBack);
   const hasTagChanges = tagChanges && (tagChanges.added?.length || tagChanges.removed?.length);
 
-  // Build virtual card for visual preview (shows suggested version)
-  const previewVirtualCard = useMemo(() => {
-    if (!suggestion.card_id || !suggestion.original_card_type) return null;
-    const cardType = suggestion.original_card_type;
-    const front = suggestedFront || originalFront;
-    const back = suggestedBack || originalBack;
-    if (!front) return null;
-
-    const mockCard = {
-      id: suggestion.card_id,
-      front_content: front,
-      back_content: back,
-      deck_id: suggestion.original_deck_id ?? '',
-      card_type: cardType,
-      difficulty: 0, stability: 0, state: 0, learning_step: 0,
-      scheduled_date: new Date().toISOString(),
-      last_reviewed_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any;
-
-    if (cardType === 'cloze') {
-      let clozeTarget = 1;
-      try { const p = JSON.parse(back); if (typeof p.clozeTarget === 'number') clozeTarget = p.clozeTarget; } catch {}
-      return { card: mockCard, clozeTarget };
-    }
-    return { card: mockCard };
-  }, [suggestion, suggestedFront, suggestedBack, originalFront, originalBack]);
+  /** Render HTML content preserving images */
+  const renderContent = (html: string) => (
+    <div
+      className="text-[11px] leading-relaxed prose prose-xs max-w-none [&_img]:max-w-full [&_img]:rounded [&_img]:max-h-32 [&_img]:object-contain"
+      dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
+    />
+  );
 
   return (
     <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
@@ -540,50 +519,50 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
             <p className="text-sm text-foreground leading-relaxed">{suggestion.rationale}</p>
           )}
 
-          {/* Card visual preview */}
-          {previewVirtualCard && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                {hasContentChanges ? '✏️ Alteração sugerida' : '📋 Card atual'}
-              </p>
-              <CardContent
-                vc={previewVirtualCard}
-                revealed={previewRevealed}
-                onClick={() => setPreviewRevealed(r => !r)}
-                className="!min-h-0 !max-h-none [&>div]:!min-h-[80px] [&>div]:!max-h-[200px] [&>div]:!p-4 !rounded-lg !shadow-none !border-border/30"
-              />
-              {!previewRevealed && (
-                <p className="text-center text-[9px] text-muted-foreground/50 animate-pulse">Toque para revelar</p>
+          {/* Diff sections */}
+          {(hasContentChanges || hasTagChanges || newCard) && (
+            <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
+              {suggestedFront && originalFront !== suggestedFront && (
+                <div className="px-3 py-2 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
+                  <div className="opacity-60 line-through">{renderContent(originalFront)}</div>
+                  <div className="text-emerald-600 dark:text-emerald-400">{renderContent(suggestedFront)}</div>
+                </div>
               )}
-            </div>
-          )}
-
-          {/* Tag changes */}
-          {hasTagChanges && (
-            <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Tags:</span>
-              {tagChanges!.removed?.map(t => (
-                <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-destructive/10 text-destructive line-through">
-                  {t.name}
-                </span>
-              ))}
-              {tagChanges!.added?.map(t => (
-                <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  + {t.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* New card suggestion */}
-          {newCard && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
-              <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                <Plus className="h-2.5 w-2.5" /> Novo card sugerido
-              </p>
-              <p className="text-xs text-foreground">{stripHtml(newCard.front_content)}</p>
-              {newCard.back_content && (
-                <p className="text-[11px] text-muted-foreground">{stripHtml(newCard.back_content)}</p>
+              {suggestedBack && originalBack !== suggestedBack && (
+                <div className="px-3 py-2 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
+                  <div className="opacity-60 line-through">{renderContent(originalBack)}</div>
+                  <div className="text-emerald-600 dark:text-emerald-400">{renderContent(suggestedBack)}</div>
+                </div>
+              )}
+              {hasTagChanges && (
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</p>
+                  <div className="flex flex-wrap gap-1">
+                    {tagChanges!.removed?.map(t => (
+                      <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-destructive/10 text-destructive line-through">
+                        {t.name}
+                      </span>
+                    ))}
+                    {tagChanges!.added?.map(t => (
+                      <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        + {t.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {newCard && (
+                <div className="px-3 py-2 space-y-1.5">
+                  <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                    <Plus className="h-2.5 w-2.5" /> Novo card sugerido
+                  </p>
+                  <div className="text-emerald-600 dark:text-emerald-400">{renderContent(newCard.front_content)}</div>
+                  {newCard.back_content && (
+                    <div className="text-emerald-600/70 dark:text-emerald-400/70">{renderContent(newCard.back_content)}</div>
+                  )}
+                </div>
               )}
             </div>
           )}
