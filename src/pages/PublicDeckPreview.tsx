@@ -339,29 +339,29 @@ interface Suggestion {
 const SuggestionVoteBar = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (vote: number) => void }) => {
   const { user } = useAuth();
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-col items-center gap-0 shrink-0">
       <button
-        onClick={() => onVote(suggestion.user_vote === 1 ? 0 : 1)}
-        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-colors ${
+        onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === 1 ? 0 : 1); }}
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
           suggestion.user_vote === 1
-            ? 'bg-primary/15 text-primary'
-            : 'text-muted-foreground hover:bg-muted'
+            ? 'text-primary font-bold'
+            : 'text-muted-foreground/50 hover:text-primary'
         }`}
         disabled={!user}
       >
         ▲
       </button>
-      <span className={`text-xs font-bold min-w-[1.5rem] text-center ${
+      <span className={`text-[11px] font-bold leading-none ${
         suggestion.vote_score > 0 ? 'text-primary' : suggestion.vote_score < 0 ? 'text-destructive' : 'text-muted-foreground'
       }`}>
         {suggestion.vote_score}
       </span>
       <button
-        onClick={() => onVote(suggestion.user_vote === -1 ? 0 : -1)}
-        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-colors ${
+        onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === -1 ? 0 : -1); }}
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
           suggestion.user_vote === -1
-            ? 'bg-destructive/15 text-destructive'
-            : 'text-muted-foreground hover:bg-muted'
+            ? 'text-destructive font-bold'
+            : 'text-muted-foreground/50 hover:text-destructive'
         }`}
         disabled={!user}
       >
@@ -371,7 +371,7 @@ const SuggestionVoteBar = ({ suggestion, onVote }: { suggestion: Suggestion; onV
   );
 };
 
-const SuggestionComments = ({ suggestionId }: { suggestionId: string }) => {
+const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: string; commentCount: number }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [newComment, setNewComment] = useState('');
@@ -415,39 +415,35 @@ const SuggestionComments = ({ suggestionId }: { suggestionId: string }) => {
   };
 
   return (
-    <div className="border-t border-border/30">
+    <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1.5 px-4 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1.5 px-1 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted/50"
       >
         <MessageSquare className="h-3 w-3" />
-        {expanded ? 'Ocultar comentários' : `Comentários`}
+        {commentCount > 0 ? `${commentCount} comentário${commentCount > 1 ? 's' : ''}` : 'Comentar'}
       </button>
       {expanded && (
-        <div className="px-4 pb-3 space-y-2">
+        <div className="mt-2 space-y-2.5 pl-1">
           {comments.length === 0 && (
             <p className="text-[11px] text-muted-foreground">Nenhum comentário ainda.</p>
           )}
           {comments.map(c => (
-            <div key={c.id} className="flex gap-2">
-              <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-muted-foreground shrink-0">
-                {c.user_name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px]">
-                  <span className="font-semibold text-foreground">{c.user_name}</span>
-                  <span className="text-muted-foreground ml-1.5">
-                    {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                </p>
-                <p className="text-xs text-foreground">{c.content}</p>
-              </div>
+            <div key={c.id} className="border-l-2 border-border/50 pl-3">
+              <p className="text-[11px]">
+                <span className="font-semibold text-primary">{c.user_name}</span>
+                <span className="text-muted-foreground/60 mx-1">·</span>
+                <span className="text-muted-foreground/60">
+                  {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </p>
+              <p className="text-xs text-foreground mt-0.5">{c.content}</p>
             </div>
           ))}
           {user && (
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-1">
               <input
-                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 rounded border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="Escrever comentário..."
                 value={newComment}
                 onChange={e => setNewComment(e.target.value)}
@@ -474,112 +470,94 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
   const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
 
   const statusConfig: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning border-warning/20' },
-    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning' },
+    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600' },
+    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive' },
   };
 
   const status = statusConfig[suggestion.status] ?? statusConfig.pending;
   const isDeckLevel = suggestion.suggestion_type === 'deck';
+  const hasContentChanges = (suggestedFront && originalFront !== suggestedFront) || (suggestedBack && originalBack !== suggestedBack);
+  const hasTagChanges = tagChanges && (tagChanges.added?.length || tagChanges.removed?.length);
 
   return (
-    <div className="border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
-        <div className="flex items-center gap-2 min-w-0">
-          <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
-          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-            {suggestion.suggester_name.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">
-              {suggestion.suggester_name}
-              {isDeckLevel && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-muted text-[9px] font-bold text-muted-foreground uppercase">deck</span>
-              )}
-            </p>
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Clock className="h-2.5 w-2.5" />
-              {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
-            </p>
-          </div>
+    <div className="flex gap-2">
+      {/* Reddit-style vertical vote bar */}
+      <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Header line */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-semibold text-primary">{suggestion.suggester_name}</span>
+          <span className="text-muted-foreground/40 text-[10px]">·</span>
+          <span className="text-[10px] text-muted-foreground/60">
+            {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
+          </span>
+          {isDeckLevel && (
+            <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-bold text-muted-foreground uppercase">deck</span>
+          )}
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${status.className}`}>
+            {status.label}
+          </span>
         </div>
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${status.className}`}>
-          {status.label}
-        </span>
-      </div>
 
-      {suggestion.rationale && (
-        <div className="px-4 py-2 bg-muted/20 border-b border-border/30">
-          <p className="text-xs text-muted-foreground italic">"{suggestion.rationale}"</p>
-        </div>
-      )}
-
-      <div className="divide-y divide-border/30">
-        {suggestedFront && originalFront !== suggestedFront && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Frente</p>
-            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
-              <p className="text-xs text-destructive line-through">{stripHtml(originalFront)}</p>
-            </div>
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedFront)}</p>
-            </div>
-          </div>
+        {/* Rationale as the main "post body" */}
+        {suggestion.rationale && (
+          <p className="text-sm text-foreground leading-relaxed">{suggestion.rationale}</p>
         )}
 
-        {suggestedBack && originalBack !== suggestedBack && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Verso</p>
-            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
-              <p className="text-xs text-destructive line-through">{stripHtml(originalBack)}</p>
-            </div>
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedBack)}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Tag changes */}
-        {tagChanges && (tagChanges.added?.length || tagChanges.removed?.length) && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Tags</p>
-            <div className="flex flex-wrap gap-1.5">
-              {tagChanges.removed?.map(t => (
-                <span key={t.id} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-destructive/10 text-destructive border border-destructive/20 line-through">
-                  {t.name}
-                </span>
-              ))}
-              {tagChanges.added?.map(t => (
-                <span key={t.id} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  + {t.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* New card suggestion */}
-        {newCard && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1">
-              <Plus className="h-3 w-3" /> Novo card sugerido
-            </p>
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 space-y-1">
-              <p className="text-[10px] font-semibold text-muted-foreground">Frente</p>
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(newCard.front_content)}</p>
-            </div>
-            {newCard.back_content && (
-              <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 space-y-1">
-                <p className="text-[10px] font-semibold text-muted-foreground">Verso</p>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(newCard.back_content)}</p>
+        {/* Diff sections - collapsible/compact */}
+        {(hasContentChanges || hasTagChanges || newCard) && (
+          <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
+            {suggestedFront && originalFront !== suggestedFront && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
+                <p className="text-destructive line-through text-[11px]">{stripHtml(originalFront)}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedFront)}</p>
+              </div>
+            )}
+            {suggestedBack && originalBack !== suggestedBack && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
+                <p className="text-destructive line-through text-[11px]">{stripHtml(originalBack)}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedBack)}</p>
+              </div>
+            )}
+            {hasTagChanges && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</p>
+                <div className="flex flex-wrap gap-1">
+                  {tagChanges!.removed?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/10 text-destructive line-through">
+                      {t.name}
+                    </span>
+                  ))}
+                  {tagChanges!.added?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      + {t.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {newCard && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <Plus className="h-2.5 w-2.5" /> Novo card
+                </p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(newCard.front_content)}</p>
+                {newCard.back_content && (
+                  <p className="text-emerald-600/70 dark:text-emerald-400/70 text-[11px]">{stripHtml(newCard.back_content)}</p>
+                )}
               </div>
             )}
           </div>
         )}
-      </div>
 
-      {/* Comments section */}
-      <SuggestionComments suggestionId={suggestion.id} />
+        {/* Action bar (comments) */}
+        <SuggestionComments suggestionId={suggestion.id} commentCount={suggestion.comment_count} />
+      </div>
     </div>
   );
 };
