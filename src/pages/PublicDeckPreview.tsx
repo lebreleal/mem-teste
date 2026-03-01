@@ -331,8 +331,6 @@ interface Suggestion {
   tags_status: string;
   original_front: string | null;
   original_back: string | null;
-  original_card_type: string | null;
-  original_deck_id: string | null;
   vote_score: number;
   user_vote: number;
   comment_count: number;
@@ -341,29 +339,29 @@ interface Suggestion {
 const SuggestionVoteBar = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (vote: number) => void }) => {
   const { user } = useAuth();
   return (
-    <div className="flex flex-col items-center gap-0.5 shrink-0 pt-1">
+    <div className="flex flex-col items-center gap-0 shrink-0">
       <button
         onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === 1 ? 0 : 1); }}
-        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-all ${
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
           suggestion.user_vote === 1
-            ? 'text-primary bg-primary/10 font-bold'
-            : 'text-muted-foreground/40 hover:text-primary hover:bg-primary/5'
+            ? 'text-primary font-bold'
+            : 'text-muted-foreground/50 hover:text-primary'
         }`}
         disabled={!user}
       >
         ▲
       </button>
-      <span className={`text-xs font-bold leading-none tabular-nums ${
-        suggestion.vote_score > 0 ? 'text-primary' : suggestion.vote_score < 0 ? 'text-destructive' : 'text-muted-foreground/60'
+      <span className={`text-[11px] font-bold leading-none ${
+        suggestion.vote_score > 0 ? 'text-primary' : suggestion.vote_score < 0 ? 'text-destructive' : 'text-muted-foreground'
       }`}>
         {suggestion.vote_score}
       </span>
       <button
         onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === -1 ? 0 : -1); }}
-        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-all ${
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
           suggestion.user_vote === -1
-            ? 'text-destructive bg-destructive/10 font-bold'
-            : 'text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5'
+            ? 'text-destructive font-bold'
+            : 'text-muted-foreground/50 hover:text-destructive'
         }`}
         disabled={!user}
       >
@@ -470,12 +468,11 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
   const originalFront = suggestion.original_front ?? '';
   const originalBack = suggestion.original_back ?? '';
   const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
-  const [previewRevealed, setPreviewRevealed] = useState(false);
 
   const statusConfig: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Pendente', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' },
-    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' },
-    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive border border-destructive/20' },
+    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning' },
+    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600' },
+    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive' },
   };
 
   const status = statusConfig[suggestion.status] ?? statusConfig.pending;
@@ -483,114 +480,83 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
   const hasContentChanges = (suggestedFront && originalFront !== suggestedFront) || (suggestedBack && originalBack !== suggestedBack);
   const hasTagChanges = tagChanges && (tagChanges.added?.length || tagChanges.removed?.length);
 
-  // Build virtual card for visual preview (shows suggested version)
-  const previewVirtualCard = useMemo(() => {
-    if (!suggestion.card_id || !suggestion.original_card_type) return null;
-    const cardType = suggestion.original_card_type;
-    const front = suggestedFront || originalFront;
-    const back = suggestedBack || originalBack;
-    if (!front) return null;
-
-    const mockCard = {
-      id: suggestion.card_id,
-      front_content: front,
-      back_content: back,
-      deck_id: suggestion.original_deck_id ?? '',
-      card_type: cardType,
-      difficulty: 0, stability: 0, state: 0, learning_step: 0,
-      scheduled_date: new Date().toISOString(),
-      last_reviewed_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any;
-
-    if (cardType === 'cloze') {
-      let clozeTarget = 1;
-      try { const p = JSON.parse(back); if (typeof p.clozeTarget === 'number') clozeTarget = p.clozeTarget; } catch {}
-      return { card: mockCard, clozeTarget };
-    }
-    return { card: mockCard };
-  }, [suggestion, suggestedFront, suggestedBack, originalFront, originalBack]);
-
   return (
-    <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
-      <div className="flex gap-3 p-3">
-        {/* Vote bar */}
-        <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
+    <div className="flex gap-2">
+      {/* Reddit-style vertical vote bar */}
+      <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
 
-        {/* Content */}
-        <div className="flex-1 min-w-0 space-y-2">
-          {/* Header */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-primary">{suggestion.suggester_name}</span>
-            <span className="text-muted-foreground/30">·</span>
-            <span className="text-[10px] text-muted-foreground/60">
-              {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
-            </span>
-            {isDeckLevel && (
-              <span className="px-1.5 py-0.5 rounded-md bg-muted text-[9px] font-bold text-muted-foreground uppercase tracking-wider">deck</span>
-            )}
-            <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${status.className}`}>
-              {status.label}
-            </span>
-          </div>
-
-          {/* Rationale */}
-          {suggestion.rationale && (
-            <p className="text-sm text-foreground leading-relaxed">{suggestion.rationale}</p>
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Header line */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-semibold text-primary">{suggestion.suggester_name}</span>
+          <span className="text-muted-foreground/40 text-[10px]">·</span>
+          <span className="text-[10px] text-muted-foreground/60">
+            {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
+          </span>
+          {isDeckLevel && (
+            <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-bold text-muted-foreground uppercase">deck</span>
           )}
-
-          {/* Card visual preview */}
-          {previewVirtualCard && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                {hasContentChanges ? '✏️ Alteração sugerida' : '📋 Card atual'}
-              </p>
-              <CardContent
-                vc={previewVirtualCard}
-                revealed={previewRevealed}
-                onClick={() => setPreviewRevealed(r => !r)}
-                className="!min-h-0 !max-h-none [&>div]:!min-h-[80px] [&>div]:!max-h-[200px] [&>div]:!p-4 !rounded-lg !shadow-none !border-border/30"
-              />
-              {!previewRevealed && (
-                <p className="text-center text-[9px] text-muted-foreground/50 animate-pulse">Toque para revelar</p>
-              )}
-            </div>
-          )}
-
-          {/* Tag changes */}
-          {hasTagChanges && (
-            <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Tags:</span>
-              {tagChanges!.removed?.map(t => (
-                <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-destructive/10 text-destructive line-through">
-                  {t.name}
-                </span>
-              ))}
-              {tagChanges!.added?.map(t => (
-                <span key={t.id} className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  + {t.name}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* New card suggestion */}
-          {newCard && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
-              <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                <Plus className="h-2.5 w-2.5" /> Novo card sugerido
-              </p>
-              <p className="text-xs text-foreground">{stripHtml(newCard.front_content)}</p>
-              {newCard.back_content && (
-                <p className="text-[11px] text-muted-foreground">{stripHtml(newCard.back_content)}</p>
-              )}
-            </div>
-          )}
-
-          {/* Comments */}
-          <SuggestionComments suggestionId={suggestion.id} commentCount={suggestion.comment_count} />
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${status.className}`}>
+            {status.label}
+          </span>
         </div>
+
+        {/* Rationale as the main "post body" */}
+        {suggestion.rationale && (
+          <p className="text-sm text-foreground leading-relaxed">{suggestion.rationale}</p>
+        )}
+
+        {/* Diff sections - collapsible/compact */}
+        {(hasContentChanges || hasTagChanges || newCard) && (
+          <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
+            {suggestedFront && originalFront !== suggestedFront && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
+                <p className="text-destructive line-through text-[11px]">{stripHtml(originalFront)}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedFront)}</p>
+              </div>
+            )}
+            {suggestedBack && originalBack !== suggestedBack && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
+                <p className="text-destructive line-through text-[11px]">{stripHtml(originalBack)}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedBack)}</p>
+              </div>
+            )}
+            {hasTagChanges && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</p>
+                <div className="flex flex-wrap gap-1">
+                  {tagChanges!.removed?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/10 text-destructive line-through">
+                      {t.name}
+                    </span>
+                  ))}
+                  {tagChanges!.added?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      + {t.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {newCard && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <Plus className="h-2.5 w-2.5" /> Novo card
+                </p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(newCard.front_content)}</p>
+                {newCard.back_content && (
+                  <p className="text-emerald-600/70 dark:text-emerald-400/70 text-[11px]">{stripHtml(newCard.back_content)}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action bar (comments) */}
+        <SuggestionComments suggestionId={suggestion.id} commentCount={suggestion.comment_count} />
       </div>
     </div>
   );
@@ -620,7 +586,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
 
       const cardIds = data.map(s => s.card_id).filter(Boolean) as string[];
       const { data: cards } = cardIds.length > 0
-        ? await supabase.from('cards').select('id, front_content, back_content, card_type, deck_id').in('id', cardIds)
+        ? await supabase.from('cards').select('id, front_content, back_content').in('id', cardIds)
         : { data: [] };
       const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
 
@@ -654,8 +620,6 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
         original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
         original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
-        original_card_type: s.card_id ? cardMap.get(s.card_id)?.card_type ?? null : null,
-        original_deck_id: s.card_id ? cardMap.get(s.card_id)?.deck_id ?? null : null,
         vote_score: voteMap.get(s.id)?.score ?? 0,
         user_vote: voteMap.get(s.id)?.userVote ?? 0,
         comment_count: commentCountMap.get(s.id) ?? 0,
