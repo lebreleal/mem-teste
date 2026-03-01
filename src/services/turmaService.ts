@@ -183,11 +183,36 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const { data: decks } = await supabase.from('decks').select('id, name, parent_deck_id').in('id', deckIds);
   const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
   const deckMap = new Map((decks ?? []).map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
-  const countMap = new Map<string, number>();
-  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+  const directCountMap = new Map<string, number>();
+  (cards ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
+
+  // Build hierarchy to aggregate card counts: parent shows own + all descendants' cards
+  const childrenOf = new Map<string, string[]>();
+  for (const id of deckIds) {
+    const info = deckMap.get(id);
+    if (info?.parent_deck_id && deckIds.includes(info.parent_deck_id)) {
+      if (!childrenOf.has(info.parent_deck_id)) childrenOf.set(info.parent_deck_id, []);
+      childrenOf.get(info.parent_deck_id)!.push(id);
+    }
+  }
+  const getAggregatedCount = (deckId: string): number => {
+    let total = directCountMap.get(deckId) ?? 0;
+    for (const childId of (childrenOf.get(deckId) ?? [])) {
+      total += getAggregatedCount(childId);
+    }
+    return total;
+  };
+
   return data.map((d: any) => {
     const deckInfo = deckMap.get(d.deck_id);
-    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: countMap.get(d.deck_id) ?? 0, parent_deck_id: deckInfo?.parent_deck_id ?? null };
+    const hasChildren = childrenOf.has(d.deck_id);
+    return {
+      ...d,
+      deck_name: deckInfo?.name || 'Sem nome',
+      card_count: hasChildren ? getAggregatedCount(d.deck_id) : (directCountMap.get(d.deck_id) ?? 0),
+      own_card_count: directCountMap.get(d.deck_id) ?? 0,
+      parent_deck_id: deckInfo?.parent_deck_id ?? null,
+    };
   });
 }
 
