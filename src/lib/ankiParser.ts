@@ -475,22 +475,32 @@ async function buildCards(
     const tagsSelect = notesTagsColumn ? `, n.${notesTagsColumn}` : ", ''";
     const ordSelect = cardOrdColumn ? `, c.${cardOrdColumn}` : ', NULL';
 
-    const rowsResult = db.exec(
-      `SELECT c.${cardNoteColumn}, c.${cardDeckColumn}${ordSelect}, n.${notesModelColumn}, n.${notesFieldsColumn}${tagsSelect}
+    const sql = `SELECT c.${cardNoteColumn}, c.${cardDeckColumn}${ordSelect}, n.${notesModelColumn}, n.${notesFieldsColumn}${tagsSelect}
        FROM cards c
-       JOIN notes n ON n.${notesIdColumn} = c.${cardNoteColumn}`
-    );
+       JOIN notes n ON n.${notesIdColumn} = c.${cardNoteColumn}`;
 
-    if (rowsResult.length > 0) {
-      cardRows = rowsResult[0].values.map((row) => ({
+    console.log('[ANKI] buildCards SQL prepare start');
+    const stmt = db.prepare(sql);
+    let rowCount = 0;
+    while (stmt.step()) {
+      const row = stmt.get();
+      cardRows.push({
         noteId: normalizeAnkiId(row[0] as string | number),
         deckId: normalizeAnkiId(row[1] as string | number),
         templateOrd: row[2] == null ? null : Number(row[2]),
         mid: normalizeAnkiId(row[3] as string | number),
         flds: (row[4] as string) || '',
         tags: (row[5] as string) || '',
-      }));
+      });
+      rowCount++;
+      // Yield every 2000 rows to keep browser alive
+      if (rowCount % 2000 === 0) {
+        await yieldToUI();
+        console.log(`[ANKI] buildCards read ${rowCount} rows...`);
+      }
     }
+    stmt.free();
+    console.log(`[ANKI] buildCards SQL done, total rows: ${rowCount}`);
   } catch (error) {
     console.warn('Failed to read cards/notes join, falling back to notes table:', error);
   }
