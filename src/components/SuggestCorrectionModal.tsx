@@ -1,40 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import LazyRichEditor from '@/components/LazyRichEditor';
+import { TagInput } from '@/components/TagInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Flag } from 'lucide-react';
+import { useDeckTags } from '@/hooks/useTags';
+import { Loader2, Flag, Tag as TagIcon } from 'lucide-react';
+import type { Tag } from '@/types/tag';
 
 interface SuggestCorrectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  card: {
+  /** If provided, this is a card-level suggestion */
+  card?: {
     id: string;
     front_content: string;
     back_content: string;
     deck_id: string;
     card_type: string;
   };
+  /** If provided without card, this is a deck-level suggestion */
+  deckId: string;
+  deckName?: string;
 }
 
-const SuggestCorrectionModal = ({ open, onOpenChange, card }: SuggestCorrectionModalProps) => {
+const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: SuggestCorrectionModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [front, setFront] = useState(card.front_content);
-  const [back, setBack] = useState(card.back_content);
+  const [front, setFront] = useState(card?.front_content ?? '');
+  const [back, setBack] = useState(card?.back_content ?? '');
   const [rationale, setRationale] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [suggestedTags, setSuggestedTags] = useState<Tag[]>([]);
 
-  // Reset when card changes
-  const resetForm = () => {
-    setFront(card.front_content);
-    setBack(card.back_content);
-    setRationale('');
-  };
+  const { data: currentDeckTags = [] } = useDeckTags(deckId);
+
+  const isDeckLevel = !card;
+
+  useEffect(() => {
+    if (open) {
+      setFront(card?.front_content ?? '');
+      setBack(card?.back_content ?? '');
+      setRationale('');
+      setSuggestedTags(currentDeckTags);
+    }
+  }, [open, card?.front_content, card?.back_content]);
+
+  // Sync when tags load
+  useEffect(() => {
+    if (open && currentDeckTags.length > 0 && suggestedTags.length === 0) {
+      setSuggestedTags(currentDeckTags);
+    }
+  }, [currentDeckTags, open]);
 
   const handleSubmit = async () => {
     if (!rationale.trim()) {
@@ -45,31 +66,58 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card }: SuggestCorrectionM
 
     setIsSubmitting(true);
     try {
-      const suggestedContent = {
-        front_content: front !== card.front_content ? front : undefined,
-        back_content: back !== card.back_content ? back : undefined,
-      };
+      let suggestedContent: any = {};
+      let suggestedTagsPayload: any = null;
 
-      // Check if anything actually changed
-      if (!suggestedContent.front_content && !suggestedContent.back_content) {
-        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo do card antes de enviar.', variant: 'destructive' });
+      if (card) {
+        // Card-level: check content changes
+        if (front !== card.front_content) suggestedContent.front_content = front;
+        if (back !== card.back_content) suggestedContent.back_content = back;
+      }
+
+      // Check tag changes
+      const currentTagIds = new Set(currentDeckTags.map(t => t.id));
+      const suggestedTagIds = new Set(suggestedTags.map(t => t.id));
+      const addedTags = suggestedTags.filter(t => !currentTagIds.has(t.id));
+      const removedTags = currentDeckTags.filter(t => !suggestedTagIds.has(t.id));
+
+      if (addedTags.length > 0 || removedTags.length > 0) {
+        suggestedTagsPayload = {
+          added: addedTags.map(t => ({ id: t.id, name: t.name })),
+          removed: removedTags.map(t => ({ id: t.id, name: t.name })),
+        };
+      }
+
+      // For card-level: require at least content or tag change
+      if (card && !suggestedContent.front_content && !suggestedContent.back_content && !suggestedTagsPayload) {
+        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo ou as tags antes de enviar.', variant: 'destructive' });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // For deck-level: require at least tag change or rationale
+      if (isDeckLevel && !suggestedTagsPayload) {
+        toast({ title: 'Nenhuma alteração', description: 'Modifique as tags do deck antes de enviar.', variant: 'destructive' });
         setIsSubmitting(false);
         return;
       }
 
       const { error } = await supabase.from('deck_suggestions').insert({
         suggester_user_id: user.id,
-        deck_id: card.deck_id,
-        card_id: card.id,
-        suggested_content: suggestedContent,
+        deck_id: deckId,
+        card_id: card?.id ?? null,
+        suggested_content: Object.keys(suggestedContent).length > 0 ? suggestedContent : {},
+        suggested_tags: suggestedTagsPayload,
+        suggestion_type: isDeckLevel ? 'deck' : 'card',
         rationale: rationale.trim(),
         status: 'pending',
+        content_status: Object.keys(suggestedContent).length > 0 ? 'pending' : 'none',
+        tags_status: suggestedTagsPayload ? 'pending' : 'none',
       } as any);
 
       if (error) throw error;
 
       toast({ title: '✅ Sugestão enviada!', description: 'O criador do baralho será notificado.' });
-      resetForm();
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar sugestão', description: err.message, variant: 'destructive' });
@@ -78,29 +126,57 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card }: SuggestCorrectionM
     }
   };
 
-  const isMultipleChoice = card.card_type === 'multiple_choice';
+  const isMultipleChoice = card?.card_type === 'multiple_choice';
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Flag className="h-4 w-4 text-primary" /> Reportar / Sugerir Correção
+            <Flag className="h-4 w-4 text-primary" />
+            {isDeckLevel ? `Reportar / Sugerir Tags — ${deckName || 'Deck'}` : 'Reportar / Sugerir Correção'}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <Label className="mb-1.5 block">Frente (Pergunta)</Label>
-            <LazyRichEditor content={front} onChange={setFront} placeholder="Frente do card..." />
-          </div>
+          {/* Card content editing (only for card-level suggestions) */}
+          {card && (
+            <>
+              <div>
+                <Label className="mb-1.5 block">Frente (Pergunta)</Label>
+                <LazyRichEditor content={front} onChange={setFront} placeholder="Frente do card..." />
+              </div>
 
-          {!isMultipleChoice && (
-            <div>
-              <Label className="mb-1.5 block">Verso (Resposta)</Label>
-              <LazyRichEditor content={back} onChange={setBack} placeholder="Verso do card..." />
-            </div>
+              {!isMultipleChoice && (
+                <div>
+                  <Label className="mb-1.5 block">Verso (Resposta)</Label>
+                  <LazyRichEditor content={back} onChange={setBack} placeholder="Verso do card..." />
+                </div>
+              )}
+            </>
           )}
+
+          {/* Tag editing section */}
+          <div>
+            <Label className="mb-1.5 block flex items-center gap-1.5">
+              <TagIcon className="h-3.5 w-3.5" />
+              Tags sugeridas
+            </Label>
+            <TagInput
+              tags={suggestedTags}
+              onAdd={(tag) => {
+                if (typeof tag === 'string') return; // Only accept Tag objects
+                setSuggestedTags(prev => [...prev, tag]);
+              }}
+              onRemove={(tagId) => setSuggestedTags(prev => prev.filter(t => t.id !== tagId))}
+              placeholder="Adicionar ou remover tags..."
+            />
+            {currentDeckTags.length > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Tags atuais: {currentDeckTags.map(t => t.name).join(', ')}
+              </p>
+            )}
+          </div>
 
           <div>
             <Label className="mb-1.5 block">

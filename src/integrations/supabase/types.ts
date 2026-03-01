@@ -392,6 +392,7 @@ export type Database = {
       deck_suggestions: {
         Row: {
           card_id: string | null
+          content_status: string
           created_at: string
           deck_id: string
           id: string
@@ -399,11 +400,15 @@ export type Database = {
           rationale: string
           status: string
           suggested_content: Json
+          suggested_tags: Json | null
           suggester_user_id: string
+          suggestion_type: string
+          tags_status: string
           updated_at: string
         }
         Insert: {
           card_id?: string | null
+          content_status?: string
           created_at?: string
           deck_id: string
           id?: string
@@ -411,11 +416,15 @@ export type Database = {
           rationale?: string
           status?: string
           suggested_content?: Json
+          suggested_tags?: Json | null
           suggester_user_id: string
+          suggestion_type?: string
+          tags_status?: string
           updated_at?: string
         }
         Update: {
           card_id?: string | null
+          content_status?: string
           created_at?: string
           deck_id?: string
           id?: string
@@ -423,7 +432,10 @@ export type Database = {
           rationale?: string
           status?: string
           suggested_content?: Json
+          suggested_tags?: Json | null
           suggester_user_id?: string
+          suggestion_type?: string
+          tags_status?: string
           updated_at?: string
         }
         Relationships: [
@@ -1344,6 +1356,70 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suggestion_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          suggestion_id: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          suggestion_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          suggestion_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggestion_comments_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "deck_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suggestion_votes: {
+        Row: {
+          created_at: string
+          id: string
+          suggestion_id: string
+          user_id: string
+          vote: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          suggestion_id: string
+          user_id: string
+          vote: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          suggestion_id?: string
+          user_id?: string
+          vote?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggestion_votes_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "deck_suggestions"
             referencedColumns: ["id"]
           },
         ]

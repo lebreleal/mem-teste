@@ -790,6 +790,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
             open={suggestOpen}
             onOpenChange={setSuggestOpen}
             card={card}
+            deckId={card.deck_id}
           />
         </Suspense>
       )}

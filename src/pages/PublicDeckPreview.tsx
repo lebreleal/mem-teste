@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag } from 'lucide-react';
+
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -192,6 +193,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             deck_id: deckId,
             card_type: suggestCard.card_type,
           }}
+          deckId={deckId}
         />
       )}
     </div>
@@ -313,25 +315,162 @@ const CardListItem = ({ card, onClick }: { card: any; onClick: () => void }) => 
   );
 };
 
-/* ─── Suggestion Card (AnkiHub-style) ─── */
+/* ─── Suggestion Card with Voting & Comments ─── */
 interface Suggestion {
   id: string;
   status: string;
   rationale: string;
   created_at: string;
   suggester_name: string;
+  suggester_user_id: string;
   card_id: string | null;
+  suggestion_type: string;
   suggested_content: Json;
+  suggested_tags: Json;
+  content_status: string;
+  tags_status: string;
   original_front: string | null;
   original_back: string | null;
+  vote_score: number;
+  user_vote: number;
+  comment_count: number;
 }
 
-const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
+const SuggestionVoteBar = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (vote: number) => void }) => {
+  const { user } = useAuth();
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onVote(suggestion.user_vote === 1 ? 0 : 1)}
+        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-colors ${
+          suggestion.user_vote === 1
+            ? 'bg-primary/15 text-primary'
+            : 'text-muted-foreground hover:bg-muted'
+        }`}
+        disabled={!user}
+      >
+        ▲
+      </button>
+      <span className={`text-xs font-bold min-w-[1.5rem] text-center ${
+        suggestion.vote_score > 0 ? 'text-primary' : suggestion.vote_score < 0 ? 'text-destructive' : 'text-muted-foreground'
+      }`}>
+        {suggestion.vote_score}
+      </span>
+      <button
+        onClick={() => onVote(suggestion.user_vote === -1 ? 0 : -1)}
+        className={`h-7 w-7 rounded-md flex items-center justify-center text-xs transition-colors ${
+          suggestion.user_vote === -1
+            ? 'bg-destructive/15 text-destructive'
+            : 'text-muted-foreground hover:bg-muted'
+        }`}
+        disabled={!user}
+      >
+        ▼
+      </button>
+    </div>
+  );
+};
+
+const SuggestionComments = ({ suggestionId }: { suggestionId: string }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: comments = [] } = useQuery({
+    queryKey: ['suggestion-comments', suggestionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('suggestion_comments')
+        .select('id, content, created_at, user_id')
+        .eq('suggestion_id', suggestionId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) return [];
+      const userIds = [...new Set(data.map(c => c.user_id))];
+      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+      return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
+    },
+    enabled: expanded,
+  });
+
+  const handleSubmit = async () => {
+    if (!newComment.trim() || !user) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('suggestion_comments').insert({
+        suggestion_id: suggestionId,
+        user_id: user.id,
+        content: newComment.trim(),
+      } as any);
+      if (error) throw error;
+      setNewComment('');
+      queryClient.invalidateQueries({ queryKey: ['suggestion-comments', suggestionId] });
+    } catch {
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-border/30">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-1.5 px-4 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <MessageSquare className="h-3 w-3" />
+        {expanded ? 'Ocultar comentários' : `Comentários`}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-3 space-y-2">
+          {comments.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">Nenhum comentário ainda.</p>
+          )}
+          {comments.map(c => (
+            <div key={c.id} className="flex gap-2">
+              <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-muted-foreground shrink-0">
+                {c.user_name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px]">
+                  <span className="font-semibold text-foreground">{c.user_name}</span>
+                  <span className="text-muted-foreground ml-1.5">
+                    {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR })}
+                  </span>
+                </p>
+                <p className="text-xs text-foreground">{c.content}</p>
+              </div>
+            </div>
+          ))}
+          {user && (
+            <div className="flex gap-2 mt-2">
+              <input
+                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Escrever comentário..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              />
+              <Button size="sm" className="h-7 text-xs" onClick={handleSubmit} disabled={submitting || !newComment.trim()}>
+                Enviar
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (suggestionId: string, vote: number) => void }) => {
   const content = suggestion.suggested_content as { front_content?: string; back_content?: string } | null;
   const suggestedFront = content?.front_content ?? '';
   const suggestedBack = content?.back_content ?? '';
   const originalFront = suggestion.original_front ?? '';
   const originalBack = suggestion.original_back ?? '';
+  const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
 
   const statusConfig: Record<string, { label: string; className: string }> = {
     pending: { label: 'Pendente', className: 'bg-warning/10 text-warning border-warning/20' },
@@ -340,16 +479,23 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
   };
 
   const status = statusConfig[suggestion.status] ?? statusConfig.pending;
+  const isDeckLevel = suggestion.suggestion_type === 'deck';
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
         <div className="flex items-center gap-2 min-w-0">
+          <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
           <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
             {suggestion.suggester_name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{suggestion.suggester_name}</p>
+            <p className="text-xs font-semibold text-foreground truncate">
+              {suggestion.suggester_name}
+              {isDeckLevel && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-muted text-[9px] font-bold text-muted-foreground uppercase">deck</span>
+              )}
+            </p>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Clock className="h-2.5 w-2.5" />
               {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
@@ -391,13 +537,37 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
             </div>
           </div>
         )}
+
+        {/* Tag changes */}
+        {tagChanges && (tagChanges.added?.length || tagChanges.removed?.length) && (
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Tags</p>
+            <div className="flex flex-wrap gap-1.5">
+              {tagChanges.removed?.map(t => (
+                <span key={t.id} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-destructive/10 text-destructive border border-destructive/20 line-through">
+                  {t.name}
+                </span>
+              ))}
+              {tagChanges.added?.map(t => (
+                <span key={t.id} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  + {t.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Comments section */}
+      <SuggestionComments suggestionId={suggestion.id} />
     </div>
   );
 };
 
 /* ─── Community Suggestions Section ─── */
 const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
 
   const { data: suggestions = [], isLoading } = useQuery({
@@ -405,7 +575,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deck_suggestions')
-        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content')
+        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content, suggestion_type, suggested_tags, content_status, tags_status')
         .eq('deck_id', deckId)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -422,17 +592,63 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         : { data: [] };
       const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
 
+      // Fetch votes
+      const suggestionIds = data.map(s => s.id);
+      const { data: votes } = await supabase
+        .from('suggestion_votes')
+        .select('suggestion_id, vote, user_id')
+        .in('suggestion_id', suggestionIds);
+      
+      const voteMap = new Map<string, { score: number; userVote: number }>();
+      (votes ?? []).forEach((v: any) => {
+        const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
+        existing.score += v.vote;
+        if (v.user_id === user?.id) existing.userVote = v.vote;
+        voteMap.set(v.suggestion_id, existing);
+      });
+
+      // Fetch comment counts
+      const { data: commentCounts } = await supabase
+        .from('suggestion_comments')
+        .select('suggestion_id')
+        .in('suggestion_id', suggestionIds);
+      const commentCountMap = new Map<string, number>();
+      (commentCounts ?? []).forEach((c: any) => {
+        commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
+      });
+
       return data.map(s => ({
         ...s,
         suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
         original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
         original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
+        vote_score: voteMap.get(s.id)?.score ?? 0,
+        user_vote: voteMap.get(s.id)?.userVote ?? 0,
+        comment_count: commentCountMap.get(s.id) ?? 0,
       })) as Suggestion[];
     },
     enabled: !!deckId,
   });
 
+  const handleVote = async (suggestionId: string, vote: number) => {
+    if (!user) return;
+    try {
+      if (vote === 0) {
+        await supabase.from('suggestion_votes').delete().eq('suggestion_id', suggestionId).eq('user_id', user.id);
+      } else {
+        await supabase.from('suggestion_votes').upsert({
+          suggestion_id: suggestionId,
+          user_id: user.id,
+          vote,
+        } as any, { onConflict: 'suggestion_id,user_id' });
+      }
+      queryClient.invalidateQueries({ queryKey: ['deck-suggestions-public', deckId] });
+    } catch {}
+  };
+
   const filtered = filter === 'all' ? suggestions : suggestions.filter(s => s.status === filter);
+  // Sort by vote score descending
+  const sorted = [...filtered].sort((a, b) => b.vote_score - a.vote_score);
   const counts = {
     all: suggestions.length,
     pending: suggestions.filter(s => s.status === 'pending').length,
@@ -469,7 +685,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         <div className="flex items-center justify-center py-12">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground">Nenhuma sugestão {filter !== 'all' ? `${filters.find(f => f.value === filter)?.label.toLowerCase()}` : 'da comunidade'}.</p>
@@ -477,8 +693,8 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(suggestion => (
-            <SuggestionCard key={suggestion.id} suggestion={suggestion} />
+          {sorted.map(suggestion => (
+            <SuggestionCard key={suggestion.id} suggestion={suggestion} onVote={handleVote} />
           ))}
         </div>
       )}
@@ -601,6 +817,7 @@ const PublicDeckPreview = () => {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showDeckReport, setShowDeckReport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch deck info
@@ -837,6 +1054,17 @@ const PublicDeckPreview = () => {
               por <span className="font-semibold text-foreground">{deck.owner_name}</span>
             </p>
           </div>
+          {!isOwner && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs shrink-0"
+              onClick={() => setShowDeckReport(true)}
+            >
+              <Flag className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Reportar</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -1121,6 +1349,16 @@ const PublicDeckPreview = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Deck-level report modal */}
+      {!isOwner && deckId && (
+        <SuggestCorrectionModal
+          open={showDeckReport}
+          onOpenChange={setShowDeckReport}
+          deckId={deckId}
+          deckName={deck?.name}
+        />
+      )}
     </div>
   );
 };
