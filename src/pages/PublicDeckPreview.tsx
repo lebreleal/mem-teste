@@ -462,17 +462,26 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
 };
 
 const DiffLine = ({ segments, mode }: { segments: DiffSegment[]; mode: 'old' | 'new' }) => (
-  <p className={`text-[11px] leading-relaxed ${mode === 'old' ? 'text-destructive/80' : 'text-foreground'}`}>
-    {segments.map((seg, i) => {
-      if (seg.type === 'removed') {
-        return <span key={i} className="bg-destructive/20 text-destructive line-through rounded-sm px-px">{seg.text}</span>;
-      }
-      if (seg.type === 'added') {
-        return <span key={i} className="bg-primary/15 text-primary font-semibold rounded-sm px-px">{seg.text}</span>;
-      }
-      return <span key={i}>{seg.text}</span>;
-    })}
-  </p>
+  <div className={`flex items-start gap-1.5 text-[11px] leading-relaxed rounded px-2 py-1 font-mono ${
+    mode === 'old' 
+      ? 'bg-destructive/8 border-l-2 border-destructive/40' 
+      : 'bg-emerald-500/8 border-l-2 border-emerald-500/40'
+  }`}>
+    <span className={`select-none font-bold shrink-0 ${mode === 'old' ? 'text-destructive/70' : 'text-emerald-600/70'}`}>
+      {mode === 'old' ? '−' : '+'}
+    </span>
+    <p className={`flex-1 ${mode === 'old' ? 'text-muted-foreground' : 'text-foreground'}`}>
+      {segments.map((seg, i) => {
+        if (seg.type === 'removed') {
+          return <span key={i} className="bg-destructive/20 text-destructive rounded-sm px-0.5">{seg.text}</span>;
+        }
+        if (seg.type === 'added') {
+          return <span key={i} className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm px-0.5">{seg.text}</span>;
+        }
+        return <span key={i}>{seg.text}</span>;
+      })}
+    </p>
+  </div>
 );
 
 const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (suggestionId: string, vote: number) => void }) => {
