@@ -525,30 +525,22 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
               {suggestedFront && originalFront !== suggestedFront && (
                 <div className="px-3 py-2 space-y-1.5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
-                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
-                      <div className="line-through decoration-destructive/60">{renderContent(originalFront)}</div>
-                    </div>
-                    <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
-                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Sugerido</p>
-                      {renderContent(suggestedFront)}
-                    </div>
+                  <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
+                    <div className="line-through decoration-destructive/60">{renderContent(originalFront)}</div>
+                  </div>
+                  <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
+                    {renderContent(suggestedFront)}
                   </div>
                 </div>
               )}
               {suggestedBack && originalBack !== suggestedBack && (
                 <div className="px-3 py-2 space-y-1.5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
-                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
-                      <div className="line-through decoration-destructive/60">{renderContent(originalBack)}</div>
-                    </div>
-                    <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
-                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Sugerido</p>
-                      {renderContent(suggestedBack)}
-                    </div>
+                  <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
+                    <div className="line-through decoration-destructive/60">{renderContent(originalBack)}</div>
+                  </div>
+                  <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
+                    {renderContent(suggestedBack)}
                   </div>
                 </div>
               )}
