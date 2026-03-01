@@ -7,7 +7,7 @@ import LazyRichEditor from '@/components/LazyRichEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Flag } from 'lucide-react';
 
 interface SuggestCorrectionModalProps {
   open: boolean;
@@ -85,7 +85,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card }: SuggestCorrectionM
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Send className="h-4 w-4 text-primary" /> Sugerir Correção
+            <Flag className="h-4 w-4 text-primary" /> Reportar / Sugerir Correção
           </DialogTitle>
         </DialogHeader>
 

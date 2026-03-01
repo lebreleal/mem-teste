@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Send } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag } from 'lucide-react';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -146,8 +146,8 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             className="rounded-full bg-card/80 shadow-sm gap-1.5 text-xs px-3"
             onClick={() => setSuggestCard(vc.card)}
           >
-            <Send className="h-3.5 w-3.5" />
-            Sugerir correção
+            <Flag className="h-3.5 w-3.5" />
+            Reportar
           </Button>
         ) : (
           <div className="w-9" />
