@@ -120,6 +120,86 @@ export async function getAllTags(limit = 100): Promise<Tag[]> {
   return data ?? [];
 }
 
+/** Get tags for multiple decks at once (batch). */
+export async function getDeckTagsBatch(deckIds: string[]): Promise<Record<string, Tag[]>> {
+  if (deckIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('deck_tags')
+    .select('deck_id, tag_id, tags(*)')
+    .in('deck_id', deckIds);
+  if (error) throw error;
+  
+  const result: Record<string, Tag[]> = {};
+  (data ?? []).forEach((dt: any) => {
+    if (!dt.tags) return;
+    if (!result[dt.deck_id]) result[dt.deck_id] = [];
+    result[dt.deck_id].push(dt.tags);
+  });
+  return result;
+}
+
+export interface TagSuggestion {
+  name: string;
+  isExisting: boolean;
+  usageCount: number;
+}
+
+/** Ask AI to suggest tags for content. */
+export async function suggestTags(params: {
+  textContent?: string;
+  deckName?: string;
+  existingTagNames?: string[];
+}): Promise<TagSuggestion[]> {
+  const { data, error } = await supabase.functions.invoke('suggest-tags', {
+    body: params,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data?.suggestions ?? [];
+}
+
+/** Merge tags (admin only). Reassigns all associations from source to target. */
+export async function mergeTags(sourceId: string, targetId: string): Promise<void> {
+  // Move deck_tags
+  const { data: deckAssocs } = await supabase
+    .from('deck_tags')
+    .select('deck_id')
+    .eq('tag_id', sourceId);
+  
+  for (const assoc of (deckAssocs ?? [])) {
+    await supabase.from('deck_tags')
+      .upsert({ deck_id: assoc.deck_id, tag_id: targetId, added_by: null }, { onConflict: 'deck_id,tag_id' });
+  }
+  await supabase.from('deck_tags').delete().eq('tag_id', sourceId);
+
+  // Move card_tags
+  const { data: cardAssocs } = await supabase
+    .from('card_tags')
+    .select('card_id')
+    .eq('tag_id', sourceId);
+  
+  for (const assoc of (cardAssocs ?? [])) {
+    await supabase.from('card_tags')
+      .upsert({ card_id: assoc.card_id, tag_id: targetId, added_by: null }, { onConflict: 'card_id,tag_id' });
+  }
+  await supabase.from('card_tags').delete().eq('tag_id', sourceId);
+
+  // Mark source as merged
+  await supabase.from('tags').update({ merged_into_id: targetId }).eq('id', sourceId);
+}
+
+/** Update tag (admin). */
+export async function updateTag(id: string, updates: { name?: string; is_official?: boolean; description?: string }): Promise<void> {
+  const { error } = await supabase.from('tags').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+/** Delete tag (admin). */
+export async function deleteTag(id: string): Promise<void> {
+  const { error } = await supabase.from('tags').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Helpers ----
 
 function generateSlug(name: string): string {

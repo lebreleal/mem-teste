@@ -10,8 +10,10 @@ import type { Tag } from '@/types/tag';
 const KEYS = {
   search: (q: string) => ['tags', 'search', q] as const,
   deckTags: (deckId: string) => ['tags', 'deck', deckId] as const,
+  deckTagsBatch: (ids: string) => ['tags', 'deck-batch', ids] as const,
   cardTags: (cardId: string) => ['tags', 'card', cardId] as const,
   all: ['tags', 'all'] as const,
+  suggestions: (key: string) => ['tags', 'suggestions', key] as const,
 };
 
 /** Search/autocomplete tags. */
@@ -32,6 +34,17 @@ export const useDeckTags = (deckId: string | undefined) =>
     staleTime: 60_000,
   });
 
+/** Get tags for multiple decks (batch). */
+export const useDeckTagsBatch = (deckIds: string[]) => {
+  const key = deckIds.sort().join(',');
+  return useQuery({
+    queryKey: KEYS.deckTagsBatch(key),
+    queryFn: () => tagService.getDeckTagsBatch(deckIds),
+    enabled: deckIds.length > 0,
+    staleTime: 60_000,
+  });
+};
+
 /** Get tags for a card. */
 export const useCardTags = (cardId: string | undefined) =>
   useQuery({
@@ -40,6 +53,21 @@ export const useCardTags = (cardId: string | undefined) =>
     enabled: !!cardId,
     staleTime: 60_000,
   });
+
+/** All tags (for admin dashboard). */
+export const useAllTags = () =>
+  useQuery({
+    queryKey: KEYS.all,
+    queryFn: () => tagService.getAllTags(200),
+    staleTime: 30_000,
+  });
+
+/** AI tag suggestions. */
+export const useTagSuggestions = () => {
+  return useMutation({
+    mutationFn: tagService.suggestTags,
+  });
+};
 
 /** Mutations for managing deck tags. */
 export const useDeckTagMutations = (deckId: string) => {
@@ -103,4 +131,28 @@ export const useCardTagMutations = (cardId: string) => {
   });
 
   return { addTag, removeTag };
+};
+
+/** Admin mutations for tag management. */
+export const useTagAdminMutations = () => {
+  const qc = useQueryClient();
+
+  const updateTag = useMutation({
+    mutationFn: ({ id, ...updates }: { id: string; name?: string; is_official?: boolean; description?: string }) =>
+      tagService.updateTag(id, updates),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+
+  const deleteTag = useMutation({
+    mutationFn: tagService.deleteTag,
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+
+  const mergeTags = useMutation({
+    mutationFn: ({ sourceId, targetId }: { sourceId: string; targetId: string }) =>
+      tagService.mergeTags(sourceId, targetId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+
+  return { updateTag, deleteTag, mergeTags };
 };

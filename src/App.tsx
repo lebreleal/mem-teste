@@ -56,6 +56,7 @@ const AIAgent = lazyRetry(() => import("./pages/AIAgent"));
 const AdminIA = lazyRetry(() => import("./pages/AdminIA"));
 const AdminUsers = lazyRetry(() => import("./pages/AdminUsers"));
 const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
+const AdminTags = lazyRetry(() => import("./pages/AdminTags"));
 
 const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
@@ -117,6 +118,7 @@ const App = () => (
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
+                <Route path="/admin/tags" element={<ProtectedRoute><AdminTags /></ProtectedRoute>} />
                 
                 <Route path="/install" element={<Install />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />

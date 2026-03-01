@@ -10,6 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
+import { useDeckTagsBatch } from '@/hooks/useTags';
+import type { Tag } from '@/types/tag';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +50,7 @@ const DeckCard = ({
   onOpen,
   onEditPricing,
   onRemove,
+  tags,
 }: {
   td: any;
   onClick: () => void;
@@ -61,6 +64,7 @@ const DeckCard = ({
   onOpen: () => void;
   onEditPricing: () => void;
   onRemove: () => void;
+  tags?: Tag[];
 }) => (
   <div
     className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
@@ -75,6 +79,20 @@ const DeckCard = ({
         {inCollection && <Link2 className="h-3.5 w-3.5 shrink-0 text-info" />}
       </div>
     </div>
+
+    {/* Tags */}
+    {tags && tags.length > 0 && (
+      <div className="flex flex-wrap gap-1">
+        {tags.slice(0, 3).map(tag => (
+          <span key={tag.id} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {tag.name}
+          </span>
+        ))}
+        {tags.length > 3 && (
+          <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+        )}
+      </div>
+    )}
 
     <div className="flex items-center gap-4">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -249,6 +267,7 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
@@ -261,6 +280,19 @@ const ContentTab = () => {
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
+
+  // ── Batch tags for all community decks ──
+  const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
+  const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
+
+  // ── All unique tags across community decks ──
+  const allCommunityTags = useMemo(() => {
+    const tagMap = new Map<string, Tag>();
+    Object.values(deckTagsMap).forEach(tags => {
+      tags.forEach(tag => tagMap.set(tag.id, tag));
+    });
+    return Array.from(tagMap.values()).sort((a, b) => b.usage_count - a.usage_count);
+  }, [deckTagsMap]);
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
@@ -289,7 +321,12 @@ const ContentTab = () => {
     const q = searchQuery.toLowerCase();
     return turmaDecks
       .filter((d: any) => d.subject_id === sectionId)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q));
+      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
+      .filter((d: any) => {
+        if (!selectedTagFilter) return true;
+        const tags = deckTagsMap[d.deck_id] ?? [];
+        return tags.some(t => t.id === selectedTagFilter);
+      });
   };
 
   // ── Exams grouped by section ──
@@ -415,6 +452,7 @@ const ContentTab = () => {
                       onSuccess: () => toast({ title: 'Baralho removido' }),
                       onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
                     })}
+                    tags={deckTagsMap[td.deck_id]}
                   />
                 </div>
               );
@@ -475,6 +513,39 @@ const ContentTab = () => {
           </div>
         )}
         <div className="flex items-center gap-2 shrink-0">
+
+      {/* Tag filter chips */}
+      {allCommunityTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSelectedTagFilter(null)}
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              !selectedTagFilter
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            Todos
+          </button>
+          {allCommunityTags.slice(0, 10).map(tag => (
+            <button
+              key={tag.id}
+              type="button"
+              onClick={() => setSelectedTagFilter(selectedTagFilter === tag.id ? null : tag.id)}
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                selectedTagFilter === tag.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              {tag.is_official && <Crown className="h-3 w-3 mr-1" />}
+              {tag.name}
+              <span className="ml-1 opacity-60">{tag.usage_count}</span>
+            </button>
+          ))}
+        </div>
+      )}
           {canEdit && (
             <>
               <Button variant="outline" size="sm" onClick={() => { setShowAddSubject(true); setNewName(''); setNewDesc(''); }} className="gap-1.5">
