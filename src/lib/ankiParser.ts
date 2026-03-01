@@ -45,6 +45,9 @@ interface AnkiModel {
 
 /* ── helpers ── */
 
+/** Yield to event loop so UI can update */
+const yieldToUI = () => new Promise<void>(r => setTimeout(r, 0));
+
 function replaceMediaRefs(html: string, mediaMap: Map<string, string>): string {
   return html.replace(/src="([^"]+)"/g, (match, filename) => {
     const dataUrl = mediaMap.get(filename);
@@ -657,17 +660,39 @@ export async function parseApkgFile(
   file: File,
   onProgress?: AnkiProgressCallback,
 ): Promise<AnkiParseResult> {
+  const t0 = performance.now();
+  const log = (msg: string) => console.log(`[ANKI] ${msg} (+${Math.round(performance.now() - t0)}ms)`);
+
   onProgress?.('Abrindo arquivo...');
+  log(`File: ${file.name}, size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+  await yieldToUI();
+
+  log('initSqlJs start');
   const SQL = await initSqlJs();
+  log('initSqlJs done');
+  await yieldToUI();
 
   // Open package (supports wrapper .zip/.apkg recursively)
+  log('resolveAnkiArchive start');
+  onProgress?.('Descompactando arquivo...');
+  await yieldToUI();
   const zip = await resolveAnkiArchive(file);
+  log('resolveAnkiArchive done, files: ' + Object.keys(zip.files).length);
+  await yieldToUI();
 
   onProgress?.('Lendo banco de dados...');
+  await yieldToUI();
 
   // Find and open SQLite DB
+  log('findDatabaseFile start');
   const { dbBytes, isModernFormat } = await findDatabaseFile(zip);
+  log(`findDatabaseFile done, dbBytes: ${(dbBytes.length / 1024).toFixed(0)}KB, modern: ${isModernFormat}`);
+  await yieldToUI();
+
+  log('SQL.Database start');
   const db: Database = new SQL.Database(dbBytes);
+  log('SQL.Database done');
+  await yieldToUI();
 
   // Parse models — try modern tables first, fallback to legacy col table
   let models: Record<string, AnkiModel> = {};
@@ -704,6 +729,7 @@ export async function parseApkgFile(
     }
   }
 
+  log('Parsing models done, models: ' + Object.keys(models).length + ', decks: ' + Object.keys(deckNamesById).length);
   onProgress?.('Processando cartões...');
 
   // Build cards WITHOUT media first (pass empty map)
@@ -711,7 +737,9 @@ export async function parseApkgFile(
   let cards: AnkiCard[] = [];
 
   try {
+    log('buildCards start');
     cards = buildCards(db, models, emptyMedia, deckNamesById);
+    log('buildCards done, cards: ' + cards.length);
   } catch (e) {
     console.error('Failed to parse notes:', e);
     throw new Error('Erro ao extrair cartões do arquivo Anki');
@@ -731,11 +759,14 @@ export async function parseApkgFile(
   const subdecks = buildSubdecks(cards, deckName);
 
   db.close();
+  log('db closed');
 
   // Now extract only referenced media using Blob URLs
   onProgress?.('Extraindo mídia...');
   const referencedFiles = collectReferencedMedia(cards);
+  log('referencedMedia: ' + referencedFiles.size);
   const { mediaMap, totalMediaCount } = await extractMediaLazy(zip, referencedFiles, onProgress);
+  log('mediaExtracted: ' + mediaMap.size + '/' + totalMediaCount);
 
   // Replace media references in cards with Blob URLs
   if (mediaMap.size > 0) {
@@ -745,6 +776,7 @@ export async function parseApkgFile(
       card.back = replaceMediaRefs(card.back, mediaMap);
       card.media = mediaMap;
     }
+    log('media refs replaced');
   }
 
   // Cleanup function to revoke all Blob URLs
