@@ -199,6 +199,45 @@ export type Database = {
         }
         Relationships: []
       }
+      card_tags: {
+        Row: {
+          added_by: string | null
+          card_id: string
+          created_at: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          card_id: string
+          created_at?: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          added_by?: string | null
+          card_id?: string
+          created_at?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_tags_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cards: {
         Row: {
           back_content: string
@@ -400,6 +439,45 @@ export type Database = {
             columns: ["deck_id"]
             isOneToOne: false
             referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_tags: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          deck_id: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          deck_id: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          deck_id?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_tags_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deck_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
             referencedColumns: ["id"]
           },
         ]
@@ -1266,6 +1344,63 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          is_official: boolean
+          merged_into_id: string | null
+          name: string
+          parent_id: string | null
+          slug: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          is_official?: boolean
+          merged_into_id?: string | null
+          name: string
+          parent_id?: string | null
+          slug: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          is_official?: boolean
+          merged_into_id?: string | null
+          name?: string
+          parent_id?: string | null
+          slug?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tags_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
             referencedColumns: ["id"]
           },
         ]
@@ -2312,6 +2447,7 @@ export type Database = {
           subscription_price: number
         }[]
       }
+      generate_tag_slug: { Args: { p_name: string }; Returns: string }
       get_all_user_deck_stats: {
         Args: { p_tz_offset_minutes?: number; p_user_id: string }
         Returns: {

@@ -2,6 +2,8 @@ import { useLocation } from 'react-router-dom';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
+import { TagInput } from '@/components/TagInput';
+import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -59,10 +61,28 @@ const DeckDetailContent = () => {
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
         <DeckStatsCard />
+        <DeckTagsSection deckId={deckId!} />
         <CardList />
       </main>
 
       <DeckDetailDialogs />
+    </div>
+  );
+};
+
+const DeckTagsSection = ({ deckId }: { deckId: string }) => {
+  const { data: tags = [] } = useDeckTags(deckId);
+  const { addTag, removeTag } = useDeckTagMutations(deckId);
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">Tags</p>
+      <TagInput
+        tags={tags}
+        onAdd={(tag) => addTag.mutate(tag)}
+        onRemove={(tagId) => removeTag.mutate(tagId)}
+        placeholder="Buscar ou criar tag..."
+      />
     </div>
   );
 };
