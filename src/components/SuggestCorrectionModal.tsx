@@ -66,7 +66,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
 
   const handleSubmit = async () => {
     if (!rationale.trim()) {
-      toast({ title: 'Justificativa obrigatória', description: 'Explique o motivo da sugestão.', variant: 'destructive' });
+      toast({ title: 'Descreva sua sugestão', description: 'Explique o que você sugere ou o problema encontrado.', variant: 'destructive' });
       return;
     }
     if (!user) return;
@@ -226,12 +226,12 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
 
           <div>
             <Label className="mb-1.5 block">
-              Justificativa <span className="text-destructive">*</span>
+              O que você sugere? <span className="text-destructive">*</span>
             </Label>
             <Textarea
               value={rationale}
               onChange={(e) => setRationale(e.target.value)}
-              placeholder="Explique por que esta sugestão é necessária..."
+              placeholder="Descreva sua sugestão ou o problema encontrado..."
               rows={3}
               className="resize-none"
             />
