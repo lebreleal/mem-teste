@@ -1,13 +1,14 @@
 /**
- * Tag input component with autocomplete.
+ * Tag input component with autocomplete and AI suggestions.
  * Used for associating tags to decks and cards.
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Tag as TagIcon, Crown } from 'lucide-react';
+import { X, Plus, Tag as TagIcon, Crown, Sparkles, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useTagSearch } from '@/hooks/useTags';
+import { Button } from '@/components/ui/button';
+import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
 
 interface TagInputProps {
@@ -17,6 +18,8 @@ interface TagInputProps {
   disabled?: boolean;
   placeholder?: string;
   maxTags?: number;
+  /** Content text to send to AI for tag suggestions */
+  aiContext?: { textContent?: string; deckName?: string };
 }
 
 export function TagInput({
@@ -26,6 +29,7 @@ export function TagInput({
   disabled = false,
   placeholder = 'Adicionar tag...',
   maxTags = 20,
+  aiContext,
 }: TagInputProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -33,6 +37,10 @@ export function TagInput({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: suggestions = [] } = useTagSearch(query);
+  const aiSuggest = useTagSuggestions();
+
+  // AI suggestions state
+  const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
 
   // Filter out already-added tags
   const filtered = suggestions.filter(
@@ -82,6 +90,30 @@ export function TagInput({
     }
   };
 
+  const handleAISuggest = async () => {
+    if (!aiContext) return;
+    try {
+      const result = await aiSuggest.mutateAsync({
+        textContent: aiContext.textContent,
+        deckName: aiContext.deckName,
+        existingTagNames: tags.map(t => t.name),
+      });
+      setAiSuggestions(result);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleAcceptAISuggestion = (name: string) => {
+    const existing = suggestions.find(s => s.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      onAdd(existing);
+    } else {
+      onAdd(name);
+    }
+    setAiSuggestions(prev => prev.filter(s => s.name !== name));
+  };
+
   const atLimit = tags.length >= maxTags;
 
   return (
@@ -110,63 +142,111 @@ export function TagInput({
         ))}
       </div>
 
-      {/* Input */}
+      {/* AI Suggestions */}
+      {aiSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1 mr-1">
+            <Sparkles className="h-3 w-3 text-primary" /> Sugestões IA:
+          </span>
+          {aiSuggestions.map(s => (
+            <button
+              key={s.name}
+              type="button"
+              onClick={() => handleAcceptAISuggestion(s.name)}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              {s.name}
+              {s.isExisting && <Crown className="h-2.5 w-2.5 text-warning" />}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setAiSuggestions([])}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
+      {/* Input + AI button */}
       {!disabled && !atLimit && (
-        <div className="relative">
-          <Input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            className="h-8 text-sm"
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="h-8 text-sm"
+            />
 
-          {/* Dropdown */}
-          {open && (query || filtered.length > 0) && (
-            <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
-              {filtered.map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => handleSelect(tag)}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-                >
-                  {tag.is_official && <Crown className="h-3 w-3 text-warning shrink-0" />}
-                  <TagIcon className="h-3 w-3 opacity-50 shrink-0" />
-                  <span className="truncate">{tag.name}</span>
-                  <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                    {tag.usage_count}
-                  </span>
-                </button>
-              ))}
+            {/* Dropdown */}
+            {open && (query || filtered.length > 0) && (
+              <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                {filtered.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => handleSelect(tag)}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                  >
+                    {tag.is_official && <Crown className="h-3 w-3 text-warning shrink-0" />}
+                    <TagIcon className="h-3 w-3 opacity-50 shrink-0" />
+                    <span className="truncate">{tag.name}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                      {tag.usage_count}
+                    </span>
+                  </button>
+                ))}
 
-              {/* Create new option */}
-              {query.trim() && !filtered.some(
-                (t) => t.name.toLowerCase() === query.trim().toLowerCase()
-              ) && (
-                <button
-                  type="button"
-                  onClick={handleCreateNew}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left border-t border-border"
-                >
-                  <Plus className="h-3 w-3 text-primary shrink-0" />
-                  <span>
-                    Criar "<span className="font-medium">{query.trim()}</span>"
-                  </span>
-                </button>
+                {/* Create new option */}
+                {query.trim() && !filtered.some(
+                  (t) => t.name.toLowerCase() === query.trim().toLowerCase()
+                ) && (
+                  <button
+                    type="button"
+                    onClick={handleCreateNew}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left border-t border-border"
+                  >
+                    <Plus className="h-3 w-3 text-primary shrink-0" />
+                    <span>
+                      Criar "<span className="font-medium">{query.trim()}</span>"
+                    </span>
+                  </button>
+                )}
+
+                {!query.trim() && filtered.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    Nenhuma tag encontrada
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* AI Suggest button */}
+          {aiContext && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={handleAISuggest}
+              disabled={aiSuggest.isPending}
+              title="Sugerir tags com IA"
+            >
+              {aiSuggest.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
               )}
-
-              {!query.trim() && filtered.length === 0 && (
-                <div className="px-3 py-2 text-sm text-muted-foreground">
-                  Nenhuma tag encontrada
-                </div>
-              )}
-            </div>
+            </Button>
           )}
         </div>
       )}

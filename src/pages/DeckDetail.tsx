@@ -71,6 +71,7 @@ const DeckDetailContent = () => {
 };
 
 const DeckTagsSection = ({ deckId }: { deckId: string }) => {
+  const { deck } = useDeckDetail();
   const { data: tags = [] } = useDeckTags(deckId);
   const { addTag, removeTag } = useDeckTagMutations(deckId);
 
@@ -82,6 +83,7 @@ const DeckTagsSection = ({ deckId }: { deckId: string }) => {
         onAdd={(tag) => addTag.mutate(tag)}
         onRemove={(tagId) => removeTag.mutate(tagId)}
         placeholder="Buscar ou criar tag..."
+        aiContext={{ deckName: (deck as any)?.name }}
       />
     </div>
   );

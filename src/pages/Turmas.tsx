@@ -3,6 +3,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useAllTags } from '@/hooks/useTags';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw,
+  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
@@ -159,10 +160,12 @@ const Turmas = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
 
   const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
   const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
+  const { data: allTags = [] } = useAllTags();
 
   const myTurmaIds = new Set(turmas.map(t => t.id));
 
@@ -271,6 +274,37 @@ const Turmas = () => {
               </button>
             ))}
           </div>
+
+          {/* Tag filter chips */}
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <TagIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <button
+                onClick={() => setSelectedTag(null)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  !selectedTag
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                }`}
+              >
+                Todas tags
+              </button>
+              {allTags.slice(0, 12).map(tag => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                    selectedTag === tag.id
+                      ? 'bg-primary/15 text-primary border border-primary/30'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                  }`}
+                >
+                  {tag.is_official && <Crown className="h-3 w-3 inline mr-0.5" />}
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {loading ? (

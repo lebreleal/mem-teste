@@ -8,9 +8,11 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send, Upload, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send, Upload, ZoomIn, ZoomOut, RotateCcw, Tag as TagIcon } from 'lucide-react';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { TagInput } from '@/components/TagInput';
+import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -302,6 +304,43 @@ const CARD_TYPES: { value: EditorCardType; label: string; icon: React.ReactNode;
   { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
   { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
 ];
+
+/** Inline tag display for card list items */
+const CardTagsInline = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  if (tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {tags.slice(0, 3).map(tag => (
+        <span key={tag.id} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {tag.name}
+        </span>
+      ))}
+      {tags.length > 3 && (
+        <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+      )}
+    </div>
+  );
+};
+
+/** Tag editor for card edit dialog */
+const CardTagEditor = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  const { addTag, removeTag } = useCardTagMutations(cardId);
+  return (
+    <div className="space-y-1.5 border-t border-border/50 pt-3">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <TagIcon className="h-3 w-3" /> Tags do card
+      </p>
+      <TagInput
+        tags={tags}
+        onAdd={(tag) => addTag.mutate(tag)}
+        onRemove={(tagId) => removeTag.mutate(tagId)}
+        placeholder="Adicionar tag ao card..."
+      />
+    </div>
+  );
+};
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -861,6 +900,11 @@ const ManageDeck = () => {
             </Button>
           )}
 
+          {/* Card Tags (only when editing existing card) */}
+          {editingId && (
+            <CardTagEditor cardId={editingId} />
+          )}
+
           <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => { setEditorOpen(false); resetForm(); }}>Cancelar</Button>
             {!editingId && (
@@ -998,6 +1042,7 @@ const ManageDeck = () => {
                       return <p className="mt-1 text-xs text-muted-foreground">{mc.options?.length || 0} opções · Resposta: {mc.options?.[mc.correctIndex]}</p>;
                     } catch { return null; }
                   })()}
+                  <CardTagsInline cardId={card.id} />
                 </div>
                 <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   {isCommunityDeck ? (
