@@ -523,28 +523,32 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
           {(hasContentChanges || hasTagChanges || newCard) && (
             <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
               {suggestedFront && originalFront !== suggestedFront && (
-                <div className="px-3 py-2 space-y-2">
+                <div className="px-3 py-2 space-y-1.5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
-                  <div className="rounded-md border border-border/30 bg-background/50 px-2.5 py-1.5">
-                    <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
-                    {renderContent(originalFront)}
-                  </div>
-                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5">
-                    <p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 mb-1">✏️ Sugerido</p>
-                    {renderContent(suggestedFront)}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
+                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
+                      <div className="line-through decoration-destructive/60">{renderContent(originalFront)}</div>
+                    </div>
+                    <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
+                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Sugerido</p>
+                      {renderContent(suggestedFront)}
+                    </div>
                   </div>
                 </div>
               )}
               {suggestedBack && originalBack !== suggestedBack && (
-                <div className="px-3 py-2 space-y-2">
+                <div className="px-3 py-2 space-y-1.5">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
-                  <div className="rounded-md border border-border/30 bg-background/50 px-2.5 py-1.5">
-                    <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
-                    {renderContent(originalBack)}
-                  </div>
-                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5">
-                    <p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 mb-1">✏️ Sugerido</p>
-                    {renderContent(suggestedBack)}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-md bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
+                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Atual</p>
+                      <div className="line-through decoration-destructive/60">{renderContent(originalBack)}</div>
+                    </div>
+                    <div className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5">
+                      <p className="text-[9px] font-medium text-muted-foreground/70 mb-1">Sugerido</p>
+                      {renderContent(suggestedBack)}
+                    </div>
                   </div>
                 </div>
               )}
