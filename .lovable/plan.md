@@ -1,101 +1,63 @@
 
 
-# Correcao: Importacao de .apkg grandes trava/nao carrega
+# Corrigir Calculo de Tempo de Estudo e Adicionar Estatisticas
 
 ## Problema
 
-O parser atual do Anki (`src/lib/ankiParser.ts`) extrai **todas** as midias do arquivo .apkg de uma vez, convertendo cada uma para data URL (base64) via `FileReader`. Isso e:
+O calculo de tempo de estudo no StatusBar/Dashboard esta inflado (mostra 45min quando foram ~30min reais). A causa esta na funcao `calcMinutesFromLogs` em `studyService.ts`:
 
-1. **Extremamente lento** -- cada arquivo passa por: descompressao ZIP -> blob -> FileReader -> base64. Sequencialmente.
-2. **Consome muita memoria** -- um .apkg com 500 imagens de 200KB cada = ~100MB de data URLs em memoria (base64 infla ~33%).
-3. **Bloqueia a thread principal** -- nao ha feedback de progresso, o app parece travar.
-
-O Anki desktop lê do disco sob demanda; nosso parser tenta tudo de uma vez no browser.
+1. **Sem validacao de range**: usa `elapsed_ms` direto, sem verificar se esta entre 1.5s e 120s (a tela de Atividade faz essa validacao corretamente)
+2. **Possivel dupla contagem**: quando `elapsed_ms` existe, ele e somado integralmente, mas o bonus de sessao tambem pode ser adicionado indiretamente
+3. **Falta estatisticas**: nao ha breakdown mostrando distribuicao dos cards por estado (Novos, Aprendendo, Dominados, Reaprendendo)
 
 ## Solucao
 
-Substituir data URLs por **Blob URLs** (`URL.createObjectURL`) e fazer a extracao de forma **lazy** (sob demanda) + **paralela** (em lotes).
+### Mudanca 1: Corrigir `calcMinutesFromLogs` em `studyService.ts`
 
-### Mudanca 1: Extracao lazy com Blob URLs
+Reescrever a funcao para alinhar com a logica correta da `ActivityView`:
 
-**Arquivo:** `src/lib/ankiParser.ts` -- funcao `extractMedia`
+- Usar `elapsed_ms` **somente** se estiver entre 1500ms e 120000ms
+- Se `elapsed_ms` ausente ou fora do range, usar fallback baseado no gap entre reviews
+- Gap > 5min = quebra de sessao, conceder bonus de 15s (nao o gap inteiro)
+- Primeiro card da sessao = 15s de estimativa se nao tiver `elapsed_ms`
 
-Em vez de ler todos os arquivos e converter para base64:
-- Ler apenas o mapeamento JSON (`media` file) para saber quais nomes existem
-- Criar um `LazyMediaMap` que resolve midias sob demanda quando referenciadas
-- Usar `URL.createObjectURL(blob)` em vez de `FileReader.readAsDataURL` (instantaneo, sem overhead de encoding)
-
-Isso reduz o tempo de parse de minutos para segundos, pois so descomprime as midias que sao realmente usadas nos cards.
-
-### Mudanca 2: Resolver midias apenas nos cards referenciados
-
-**Arquivo:** `src/lib/ankiParser.ts` -- funcao `replaceMediaRefs` e fluxo principal
-
-- Apos construir os cards, fazer um scan dos `src="..."` para identificar quais midias sao realmente usadas
-- Extrair apenas essas do ZIP (em paralelo, lotes de 20)
-- Substituir as referencias nos cards com os Blob URLs
-
-### Mudanca 3: Feedback de progresso durante o parse
-
-**Arquivo:** `src/components/ImportCardsDialog.tsx`
-
-- Adicionar um estado de progresso (`ankiProgress`) com mensagens tipo "Lendo banco de dados...", "Extraindo imagens (42/180)..."
-- Mostrar uma barra de progresso durante o carregamento do Anki
-- Para isso, `parseApkgFile` recebera um callback opcional `onProgress`
-
-## Detalhes tecnicos
-
-### Nova funcao `extractMedia` (simplificada)
-
-```typescript
-async function extractMedia(
-  zip: JSZip,
-  referencedFiles: Set<string>,
-  onProgress?: (current: number, total: number) => void,
-): Promise<Map<string, string>> {
-  // 1. Ler mapeamento
-  const mediaMapping = JSON.parse(await zip.files['media'].async('text'));
-
-  // 2. Filtrar apenas midias referenciadas
-  const needed = Object.entries(mediaMapping)
-    .filter(([_, name]) => referencedFiles.has(name as string));
-
-  // 3. Extrair em lotes paralelos com Blob URLs
-  const BATCH = 20;
-  const mediaMap = new Map<string, string>();
-  for (let i = 0; i < needed.length; i += BATCH) {
-    const batch = needed.slice(i, i + BATCH);
-    await Promise.all(batch.map(async ([num, name]) => {
-      const blob = await zip.files[num].async('blob');
-      mediaMap.set(name, URL.createObjectURL(blob));
-    }));
-    onProgress?.(Math.min(i + BATCH, needed.length), needed.length);
-  }
-  return mediaMap;
+**Antes (bugado):**
+```text
+if (log.elapsed_ms) {
+  totalMs += log.elapsed_ms;  // Sem validacao!
 }
 ```
 
-### Fluxo revisado no `parseApkgFile`
+**Depois (corrigido):**
+```text
+if (log.elapsed_ms && log.elapsed_ms >= 1500 && log.elapsed_ms <= 120000) {
+  ms = log.elapsed_ms;
+} else if (gap >= 1500 && gap <= 120000) {
+  ms = gap;
+} else if (gap > 120000) {
+  ms = 15000; // bonus de sessao
+}
+```
 
-1. Abrir ZIP e banco SQLite (rapido)
-2. Parsear models e construir cards **sem midias** (rapido)
-3. Scan dos cards para coletar nomes de midias referenciadas
-4. Extrair apenas midias usadas, em paralelo, com Blob URLs
-5. Substituir referencias nos cards
+### Mudanca 2: Adicionar resumo de estatisticas na ActivityView
 
-### Limpeza de Blob URLs
+Adicionar uma secao de estatisticas no `ActivityView.tsx` mostrando:
 
-Adicionar limpeza dos Blob URLs quando o dialog fecha ou o import finaliza, para evitar memory leaks. Isso sera feito no `reset()` do `ImportCardsDialog`.
+- Distribuicao por estado: % Novos, % Aprendendo, % Dominados, % Reaprendendo
+- Tempo medio por card
+- Total acumulado do mes selecionado
+
+Usa os dados de `review_logs` ja carregados (sem chamadas extras ao banco).
 
 ## Arquivos modificados
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/lib/ankiParser.ts` | Refatorar `extractMedia` para lazy + Blob URLs; adicionar callback `onProgress`; reordenar fluxo para extrair midia apos scan dos cards |
-| `src/components/ImportCardsDialog.tsx` | Adicionar estado de progresso; passar callback; limpar Blob URLs no reset |
+| `src/services/studyService.ts` | Reescrever `calcMinutesFromLogs` com validacao de range alinhada ao ActivityView |
+| `src/pages/ActivityView.tsx` | Adicionar secao de estatisticas com breakdown por estado dos cards |
 
 ## Impacto esperado
 
-- Arquivo com 1000+ midias: de **minutos** (ou timeout) para **segundos**
-- Uso de memoria: reducao de ~33% (sem overhead de base64)
-- UX: usuario ve progresso em vez de tela travada
+- Tempo de estudo no Dashboard/StatusBar passa a bater com o tempo real
+- Usuario ve estatisticas uteis sobre a composicao do seu estudo
+
