@@ -72,9 +72,10 @@ export const useContentImport = () => {
   };
 
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
-  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
+  // Only show root decks (no parent) since children are shared automatically with parent
+  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id && !(d as any).parent_deck_id);
 
-  // ── Add to collection (independent copy) ──
+  // ── Add to collection (independent copy, supports hierarchy) ──
   const addToCollection = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
@@ -88,6 +89,9 @@ export const useContentImport = () => {
         const folderName = resolveNameConflict(turma.name, existingFolderNames);
         turmaFolder = await createFolder.mutateAsync({ name: folderName }) as any;
       }
+
+      const importMode: 'hierarchy' | 'flat' = td._importMode ?? 'hierarchy';
+      const childTds: any[] = td._childTds ?? [];
 
       // Resolve subject name from the turma deck's subject_id
       const subjectId = td.subject_id || contentFolderId;
@@ -110,19 +114,52 @@ export const useContentImport = () => {
         } else { parentDeckId = parentDeck.id; }
       }
 
-      const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === parentDeckId).map((d: any) => d.name);
-      const childName = resolveNameConflict(od.name, existingChildNames);
-      const { data: newDeck } = await supabase.from('decks').insert({
-        name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
-        parent_deck_id: parentDeckId, algorithm_mode: od.algorithm_mode,
-        daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
-        source_turma_deck_id: td.id,
-      } as any).select().single();
-      if (newDeck) {
-        const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', td.deck_id);
-        if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
+      // Helper to copy a single deck
+      const copyDeck = async (sourceDeckId: string, deckName: string, deckParentId: string | null, sourceTurmaDeckId: string) => {
+        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
+        const sd = srcDeck as any;
+        const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === deckParentId).map((d: any) => d.name);
+        const childName = resolveNameConflict(deckName, existingChildNames);
+        const { data: newDeck } = await supabase.from('decks').insert({
+          name: childName, user_id: user!.id, folder_id: (turmaFolder as any).id,
+          parent_deck_id: deckParentId, algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
+          daily_new_limit: sd?.daily_new_limit ?? 20, daily_review_limit: sd?.daily_review_limit ?? 9999,
+          source_turma_deck_id: sourceTurmaDeckId,
+        } as any).select().single();
+        if (newDeck) {
+          const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', sourceDeckId);
+          if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
+        }
+        return newDeck;
+      };
+
+      if (importMode === 'flat' && childTds.length > 0) {
+        // Flat import: create one deck with all cards from parent + children
+        const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === parentDeckId).map((d: any) => d.name);
+        const childName = resolveNameConflict(od.name, existingChildNames);
+        const { data: newDeck } = await supabase.from('decks').insert({
+          name: childName, user_id: user.id, folder_id: (turmaFolder as any).id,
+          parent_deck_id: parentDeckId, algorithm_mode: od.algorithm_mode,
+          daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
+          source_turma_deck_id: td.id,
+        } as any).select().single();
+        if (newDeck) {
+          // Collect all cards from parent + children
+          const allSourceIds = [td.deck_id, ...childTds.map((c: any) => c.deck_id)];
+          const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').in('deck_id', allSourceIds);
+          if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
+        }
+        return newDeck;
       }
-      return newDeck;
+
+      // Hierarchy import: create parent deck, then children
+      const mainDeck = await copyDeck(td.deck_id, od.name, parentDeckId, td.id);
+      if (childTds.length > 0 && mainDeck) {
+        for (const childTd of childTds) {
+          await copyDeck(childTd.deck_id, childTd.deck_name || 'Sub-deck', (mainDeck as any).id, childTd.id);
+        }
+      }
+      return mainDeck;
     },
     onSuccess: (newDeck: any) => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });

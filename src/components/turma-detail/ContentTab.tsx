@@ -278,6 +278,7 @@ const ContentTab = () => {
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
+  const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
 
@@ -319,11 +320,13 @@ const ContentTab = () => {
       .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }, [subjects]);
 
-  // ── Decks grouped by section ──
+  // ── Decks grouped by section, with hierarchy awareness ──
+  const sharedDeckIdSet = useMemo(() => new Set(turmaDecks.map((d: any) => d.deck_id)), [turmaDecks]);
+
   const getDecksBySection = (sectionId: string | null) => {
     const q = searchQuery.toLowerCase();
     const tagSet = descendantIds ? new Set(descendantIds) : null;
-    return turmaDecks
+    const sectionDecks = turmaDecks
       .filter((d: any) => d.subject_id === sectionId)
       .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
       .filter((d: any) => {
@@ -331,6 +334,14 @@ const ContentTab = () => {
         const tags = deckTagsMap[d.deck_id] ?? [];
         return tags.some(t => tagSet.has(t.id));
       });
+
+    // Only show root-level decks (no parent, or parent not in shared set)
+    const rootDecks = sectionDecks.filter((d: any) => !d.parent_deck_id || !sharedDeckIdSet.has(d.parent_deck_id));
+    return rootDecks;
+  };
+
+  const getChildDecks = (parentDeckId: string) => {
+    return turmaDecks.filter((d: any) => d.parent_deck_id === parentDeckId && sharedDeckIdSet.has(d.parent_deck_id));
   };
 
   // ── Exams grouped by section ──
@@ -424,40 +435,66 @@ const ContentTab = () => {
           />
         )}
 
-        {/* Decks grid */}
+        {/* Decks grid with hierarchy */}
         {sectionDecks.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <div className="space-y-3 mb-4">
             {sectionDecks.map((td: any) => {
-              const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
-              const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
-              const inCollection = alreadyOwns || alreadyLinked;
-              const subscriberOnly = !importLogic.isDeckFree(td);
-              const canImportDeck = importLogic.canAccessDeck(td);
-              const isOwner = td.shared_by === user?.id;
+              const children = getChildDecks(td.deck_id);
+              const renderDeckCard = (deckTd: any, isChild = false) => {
+                const alreadyLinked = importLogic.userHasLinkedDeck(deckTd.id);
+                const alreadyOwns = importLogic.userOwnsDeck(deckTd.deck_id);
+                const inCollection = alreadyOwns || alreadyLinked;
+                const subscriberOnly = !importLogic.isDeckFree(deckTd);
+                const canImportDeck = importLogic.canAccessDeck(deckTd);
+                const isDeckOwner = deckTd.shared_by === user?.id;
+                return (
+                  <div key={deckTd.id} className="relative">
+                    <DeckCard
+                      td={deckTd}
+                      onClick={() => handleDeckClick(deckTd)}
+                      inCollection={inCollection}
+                      subscriberOnly={subscriberOnly}
+                      canImport={canImportDeck}
+                      isOwner={isDeckOwner}
+                      isAdmin={isAdmin}
+                      onImport={() => setConfirmImportItem({ type: 'deck', data: deckTd })}
+                      onGate={() => setGateDeck(deckTd)}
+                      onOpen={() => {
+                        const personalId = importLogic.getPersonalDeckId(deckTd.id) || (alreadyOwns ? deckTd.deck_id : null);
+                        if (personalId) navigate(`/decks/${personalId}`, { state: { from: 'community', turmaId } });
+                      }}
+                      onEditPricing={() => openEditPricing(deckTd)}
+                      onRemove={() => mutations.unshareDeck.mutate(deckTd.id, {
+                        onSuccess: () => toast({ title: 'Baralho removido' }),
+                        onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+                      })}
+                      tags={deckTagsMap[deckTd.deck_id]}
+                    />
+                  </div>
+                );
+              };
 
+              if (children.length === 0) {
+                // No children — render in the grid normally
+                return (
+                  <div key={td.id} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {renderDeckCard(td)}
+                  </div>
+                );
+              }
+
+              // Has children — render as a collapsible tree
               return (
-                <div key={td.id} className="relative">
-                  <DeckCard
-                    td={td}
-                    onClick={() => handleDeckClick(td)}
-                    inCollection={inCollection}
-                    subscriberOnly={subscriberOnly}
-                    canImport={canImportDeck}
-                    isOwner={isOwner}
-                    isAdmin={isAdmin}
-                    onImport={() => setConfirmImportItem({ type: 'deck', data: td })}
-                    onGate={() => setGateDeck(td)}
-                    onOpen={() => {
-                      const personalId = importLogic.getPersonalDeckId(td.id) || (alreadyOwns ? td.deck_id : null);
-                      if (personalId) navigate(`/decks/${personalId}`, { state: { from: 'community', turmaId } });
-                    }}
-                    onEditPricing={() => openEditPricing(td)}
-                    onRemove={() => mutations.unshareDeck.mutate(td.id, {
-                      onSuccess: () => toast({ title: 'Baralho removido' }),
-                      onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
-                    })}
-                    tags={deckTagsMap[td.deck_id]}
-                  />
+                <div key={td.id} className="rounded-xl border border-border/60 bg-card/50 p-3 space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {renderDeckCard(td)}
+                  </div>
+                  <div className="pl-4 border-l-2 border-primary/20 space-y-2">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Sub-decks ({children.length})</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {children.map(child => renderDeckCard(child, true))}
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -589,7 +626,7 @@ const ContentTab = () => {
       )}
 
       {/* ── Confirm Import Dialog ── */}
-      <Dialog open={!!confirmImportItem} onOpenChange={(open) => !open && setConfirmImportItem(null)}>
+      <Dialog open={!!confirmImportItem} onOpenChange={(open) => { if (!open) { setConfirmImportItem(null); setImportMode('hierarchy'); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Adicionar à coleção?</DialogTitle>
@@ -599,13 +636,42 @@ const ContentTab = () => {
               ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
               : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
           </p>
+
+          {/* Hierarchy choice for decks with children */}
+          {confirmImportItem?.type === 'deck' && getChildDecks(confirmImportItem?.data?.deck_id).length > 0 && (
+            <div className="space-y-2 mt-2">
+              <p className="text-xs font-semibold text-muted-foreground">Este deck possui sub-decks. Como importar?</p>
+              <div className="flex gap-2">
+                <Button
+                  variant={importMode === 'hierarchy' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setImportMode('hierarchy')}
+                >
+                  Manter hierarquia
+                </Button>
+                <Button
+                  variant={importMode === 'flat' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setImportMode('flat')}
+                >
+                  Tudo em 1 deck
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
-                importLogic.addToCollection.mutate(confirmImportItem.data, {
-                  onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); },
-                });
+                const children = getChildDecks(confirmImportItem.data.deck_id);
+                const childTds = children.length > 0 ? children : [];
+                importLogic.addToCollection.mutate(
+                  { ...confirmImportItem.data, _importMode: importMode, _childTds: childTds },
+                  { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+                );
               } else if (confirmImportItem?.type === 'exam') {
                 importLogic.addExamToCollection.mutate(confirmImportItem.data, {
                   onSuccess: (result: any) => { if (result?.examId) navigate(`/exam/${result.examId}`, { state: { from: 'community', turmaId } }); },
