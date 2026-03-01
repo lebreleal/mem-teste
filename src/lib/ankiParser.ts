@@ -662,135 +662,225 @@ export async function parseApkgFile(
 ): Promise<AnkiParseResult> {
   const t0 = performance.now();
   const log = (msg: string) => console.log(`[ANKI] ${msg} (+${Math.round(performance.now() - t0)}ms)`);
+  const elapsed = () => Math.round(performance.now() - t0);
 
-  onProgress?.('Abrindo arquivo...');
-  log(`File: ${file.name}, size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-  await yieldToUI();
-
-  log('initSqlJs start');
-  const SQL = await initSqlJs();
-  log('initSqlJs done');
-  await yieldToUI();
-
-  // Open package (supports wrapper .zip/.apkg recursively)
-  log('resolveAnkiArchive start');
-  onProgress?.('Descompactando arquivo...');
-  await yieldToUI();
-  const zip = await resolveAnkiArchive(file);
-  log('resolveAnkiArchive done, files: ' + Object.keys(zip.files).length);
-  await yieldToUI();
-
-  onProgress?.('Lendo banco de dados...');
-  await yieldToUI();
-
-  // Find and open SQLite DB
-  log('findDatabaseFile start');
-  const { dbBytes, isModernFormat } = await findDatabaseFile(zip);
-  log(`findDatabaseFile done, dbBytes: ${(dbBytes.length / 1024).toFixed(0)}KB, modern: ${isModernFormat}`);
-  await yieldToUI();
-
-  log('SQL.Database start');
-  const db: Database = new SQL.Database(dbBytes);
-  log('SQL.Database done');
-  await yieldToUI();
-
-  // Parse models — try modern tables first, fallback to legacy col table
-  let models: Record<string, AnkiModel> = {};
-  let deckName = 'Anki Import';
-  let deckNamesById: Record<string, string> = {};
-
-  if (isModernFormat) {
-    const result = parseModelsFromTables(db);
-    models = result.models;
-    deckName = result.deckName;
-    deckNamesById = result.deckNamesById;
-  }
-
-  if (Object.keys(models).length === 0) {
-    const result = parseModelsFromCol(db);
-    models = result.models;
-    deckNamesById = Object.keys(deckNamesById).length > 0 ? deckNamesById : result.deckNamesById;
-    if (result.deckName !== 'Anki Import') deckName = result.deckName;
-  }
-
-  if (Object.keys(models).length === 0) {
-    const result = parseModelsFromTables(db);
-    models = result.models;
-    deckNamesById = Object.keys(deckNamesById).length > 0 ? deckNamesById : result.deckNamesById;
-    if (result.deckName !== 'Anki Import') deckName = result.deckName;
-  }
-
-  if (Object.keys(deckNamesById).length === 0) {
-    const tableDeckNames = parseDeckNamesFromDecksTable(db);
-    if (Object.keys(tableDeckNames).length > 0) {
-      deckNamesById = tableDeckNames;
-      const candidate = Object.values(tableDeckNames).find(name => name !== 'Default' && name !== 'Padrão');
-      if (candidate) deckName = candidate;
+  // Global timeout: 120s
+  const TIMEOUT_MS = 120_000;
+  const checkTimeout = (stage: string) => {
+    if (performance.now() - t0 > TIMEOUT_MS) {
+      throw new Error(`Timeout na etapa "${stage}" — arquivo muito grande para processar no navegador (${elapsed()}ms)`);
     }
-  }
-
-  log('Parsing models done, models: ' + Object.keys(models).length + ', decks: ' + Object.keys(deckNamesById).length);
-  onProgress?.('Processando cartões...');
-
-  // Build cards WITHOUT media first (pass empty map)
-  const emptyMedia = new Map<string, string>();
-  let cards: AnkiCard[] = [];
+  };
 
   try {
-    log('buildCards start');
-    cards = buildCards(db, models, emptyMedia, deckNamesById);
-    log('buildCards done, cards: ' + cards.length);
-  } catch (e) {
-    console.error('Failed to parse notes:', e);
-    throw new Error('Erro ao extrair cartões do arquivo Anki');
-  }
+    // ── Stage 1: Init SQL.js ──
+    onProgress?.('Inicializando...');
+    log(`File: ${file.name}, size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+    await yieldToUI();
 
-  const rootDeckCounts = new Map<string, number>();
-  for (const card of cards) {
-    const root = splitDeckPath(card.deckName)[0];
-    if (!root) continue;
-    rootDeckCounts.set(root, (rootDeckCounts.get(root) || 0) + 1);
-  }
+    log('initSqlJs start');
+    let SQL: Awaited<ReturnType<typeof initSqlJs>>;
+    try {
+      SQL = await initSqlJs();
+    } catch (e) {
+      log('initSqlJs FAILED: ' + e);
+      throw new Error('Falha ao inicializar o mecanismo SQL. Recarregue a página e tente novamente.');
+    }
+    log('initSqlJs done');
+    await yieldToUI();
+    checkTimeout('initSqlJs');
 
-  if (rootDeckCounts.size > 0) {
-    deckName = [...rootDeckCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  }
+    // ── Stage 2: Open ZIP ──
+    onProgress?.('Descompactando arquivo...');
+    await yieldToUI();
+    log('resolveAnkiArchive start');
+    let zip: JSZip;
+    try {
+      zip = await resolveAnkiArchive(file);
+    } catch (e) {
+      log('resolveAnkiArchive FAILED: ' + e);
+      throw new Error('Falha ao descompactar o arquivo. Verifique se o .apkg não está corrompido.');
+    }
+    const fileCount = Object.keys(zip.files).length;
+    log('resolveAnkiArchive done, files: ' + fileCount);
+    await yieldToUI();
+    checkTimeout('descompactação');
 
-  const subdecks = buildSubdecks(cards, deckName);
+    // ── Stage 3: Find & open SQLite DB ──
+    onProgress?.('Lendo banco de dados...');
+    await yieldToUI();
+    log('findDatabaseFile start');
+    let dbBytes: Uint8Array;
+    let isModernFormat: boolean;
+    try {
+      const result = await findDatabaseFile(zip);
+      dbBytes = result.dbBytes;
+      isModernFormat = result.isModernFormat;
+    } catch (e) {
+      log('findDatabaseFile FAILED: ' + e);
+      throw new Error('Banco de dados SQLite não encontrado no arquivo .apkg.');
+    }
+    log(`findDatabaseFile done, dbBytes: ${(dbBytes.length / 1024 / 1024).toFixed(2)}MB, modern: ${isModernFormat}`);
+    await yieldToUI();
+    checkTimeout('findDatabaseFile');
 
-  db.close();
-  log('db closed');
+    // ── Stage 4: Open SQLite ──
+    onProgress?.('Abrindo banco de dados...');
+    await yieldToUI();
+    log('SQL.Database start');
+    let db: Database;
+    try {
+      db = new SQL.Database(dbBytes);
+    } catch (e) {
+      log('SQL.Database FAILED: ' + e);
+      throw new Error('Falha ao abrir o banco de dados Anki. O arquivo pode estar corrompido.');
+    }
+    log('SQL.Database done');
+    await yieldToUI();
+    checkTimeout('SQL.Database');
 
-  // Now extract only referenced media using Blob URLs
-  onProgress?.('Extraindo mídia...');
-  const referencedFiles = collectReferencedMedia(cards);
-  log('referencedMedia: ' + referencedFiles.size);
-  const { mediaMap, totalMediaCount } = await extractMediaLazy(zip, referencedFiles, onProgress);
-  log('mediaExtracted: ' + mediaMap.size + '/' + totalMediaCount);
+    // ── Stage 5: Parse models ──
+    onProgress?.('Lendo modelos...');
+    await yieldToUI();
+    let models: Record<string, AnkiModel> = {};
+    let deckName = 'Anki Import';
+    let deckNamesById: Record<string, string> = {};
 
-  // Replace media references in cards with Blob URLs
-  if (mediaMap.size > 0) {
-    onProgress?.('Vinculando mídia aos cartões...');
+    try {
+      if (isModernFormat) {
+        const result = parseModelsFromTables(db);
+        models = result.models;
+        deckName = result.deckName;
+        deckNamesById = result.deckNamesById;
+      }
+
+      if (Object.keys(models).length === 0) {
+        const result = parseModelsFromCol(db);
+        models = result.models;
+        deckNamesById = Object.keys(deckNamesById).length > 0 ? deckNamesById : result.deckNamesById;
+        if (result.deckName !== 'Anki Import') deckName = result.deckName;
+      }
+
+      if (Object.keys(models).length === 0) {
+        const result = parseModelsFromTables(db);
+        models = result.models;
+        deckNamesById = Object.keys(deckNamesById).length > 0 ? deckNamesById : result.deckNamesById;
+        if (result.deckName !== 'Anki Import') deckName = result.deckName;
+      }
+
+      if (Object.keys(deckNamesById).length === 0) {
+        const tableDeckNames = parseDeckNamesFromDecksTable(db);
+        if (Object.keys(tableDeckNames).length > 0) {
+          deckNamesById = tableDeckNames;
+          const candidate = Object.values(tableDeckNames).find(name => name !== 'Default' && name !== 'Padrão');
+          if (candidate) deckName = candidate;
+        }
+      }
+    } catch (e) {
+      log('parseModels FAILED: ' + e);
+      // Continue — we can still try buildCards with empty models
+    }
+
+    log('Parsing models done, models: ' + Object.keys(models).length + ', decks: ' + Object.keys(deckNamesById).length);
+    await yieldToUI();
+    checkTimeout('parseModels');
+
+    // ── Stage 6: Build cards ──
+    onProgress?.('Processando cartões...');
+    await yieldToUI();
+
+    const emptyMedia = new Map<string, string>();
+    let cards: AnkiCard[] = [];
+
+    try {
+      log('buildCards start');
+      cards = buildCards(db, models, emptyMedia, deckNamesById);
+      log('buildCards done, cards: ' + cards.length);
+    } catch (e) {
+      log('buildCards FAILED: ' + e);
+      console.error('Failed to parse notes:', e);
+      throw new Error('Erro ao extrair cartões do arquivo Anki. O banco pode ter um formato não suportado.');
+    }
+
+    await yieldToUI();
+    checkTimeout('buildCards');
+
+    if (cards.length === 0) {
+      db.close();
+      throw new Error('Nenhum cartão encontrado no arquivo Anki.');
+    }
+
+    const rootDeckCounts = new Map<string, number>();
     for (const card of cards) {
-      card.front = replaceMediaRefs(card.front, mediaMap);
-      card.back = replaceMediaRefs(card.back, mediaMap);
-      card.media = mediaMap;
+      const root = splitDeckPath(card.deckName)[0];
+      if (!root) continue;
+      rootDeckCounts.set(root, (rootDeckCounts.get(root) || 0) + 1);
     }
-    log('media refs replaced');
+
+    if (rootDeckCounts.size > 0) {
+      deckName = [...rootDeckCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    const subdecks = buildSubdecks(cards, deckName);
+
+    db.close();
+    log('db closed');
+    await yieldToUI();
+
+    // ── Stage 7: Extract referenced media ──
+    onProgress?.('Extraindo mídia...');
+    await yieldToUI();
+    const referencedFiles = collectReferencedMedia(cards);
+    log('referencedMedia: ' + referencedFiles.size);
+
+    let mediaMap = new Map<string, string>();
+    let totalMediaCount = 0;
+
+    try {
+      const result = await extractMediaLazy(zip, referencedFiles, onProgress);
+      mediaMap = result.mediaMap;
+      totalMediaCount = result.totalMediaCount;
+      log('mediaExtracted: ' + mediaMap.size + '/' + totalMediaCount);
+    } catch (e) {
+      log('extractMedia FAILED (continuing without media): ' + e);
+      // Continue without media — cards still work, just without images
+    }
+
+    // Replace media references in cards with Blob URLs
+    if (mediaMap.size > 0) {
+      onProgress?.('Vinculando mídia aos cartões...');
+      await yieldToUI();
+      for (let i = 0; i < cards.length; i++) {
+        cards[i].front = replaceMediaRefs(cards[i].front, mediaMap);
+        cards[i].back = replaceMediaRefs(cards[i].back, mediaMap);
+        cards[i].media = mediaMap;
+        // Yield every 500 cards to keep UI responsive
+        if (i % 500 === 0 && i > 0) {
+          await yieldToUI();
+          checkTimeout('replaceMediaRefs');
+        }
+      }
+      log('media refs replaced');
+    }
+
+    log(`DONE — ${cards.length} cards, ${mediaMap.size} media, total ${elapsed()}ms`);
+
+    // Cleanup function to revoke all Blob URLs
+    const cleanup = () => {
+      for (const url of mediaMap.values()) {
+        try { URL.revokeObjectURL(url); } catch {}
+      }
+    };
+
+    return {
+      deckName,
+      cards,
+      mediaCount: totalMediaCount,
+      subdecks: subdecks.length > 0 ? subdecks : undefined,
+      cleanup,
+    };
+  } catch (error) {
+    log(`FAILED at ${elapsed()}ms: ${error}`);
+    throw error;
   }
-
-  // Cleanup function to revoke all Blob URLs
-  const cleanup = () => {
-    for (const url of mediaMap.values()) {
-      try { URL.revokeObjectURL(url); } catch {}
-    }
-  };
-
-  return {
-    deckName,
-    cards,
-    mediaCount: totalMediaCount,
-    subdecks: subdecks.length > 0 ? subdecks : undefined,
-    cleanup,
-  };
 }

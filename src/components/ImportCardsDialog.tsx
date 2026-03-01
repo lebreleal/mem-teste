@@ -358,7 +358,13 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       });
     } catch (err: any) {
       console.error('Anki parse error:', err);
-      toast({ title: 'Erro ao ler arquivo Anki', description: err.message, variant: 'destructive' });
+      const msg = err?.message || 'Erro desconhecido';
+      toast({ 
+        title: 'Erro ao ler arquivo Anki', 
+        description: msg.length > 200 ? msg.slice(0, 200) + '...' : msg, 
+        variant: 'destructive',
+        duration: 8000,
+      });
       setSource(null);
     } finally {
       setAnkiLoading(false);
