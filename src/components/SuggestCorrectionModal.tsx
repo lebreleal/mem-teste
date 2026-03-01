@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useDeckTags } from '@/hooks/useTags';
+import { createTag } from '@/services/tagService';
 import { Loader2, Flag, Tag as TagIcon, Plus, Eye, EyeOff, Pencil } from 'lucide-react';
 import type { Tag } from '@/types/tag';
 import type { CardRow } from '@/types/deck';
@@ -272,8 +273,17 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
             </Label>
             <TagInput
               tags={suggestedTags}
-              onAdd={(tag) => {
-                if (typeof tag === 'string') return;
+              onAdd={async (tag) => {
+                if (typeof tag === 'string') {
+                  if (!user) return;
+                  try {
+                    const newTag = await createTag(tag, user.id);
+                    setSuggestedTags(prev => [...prev, newTag]);
+                  } catch (err: any) {
+                    toast({ title: 'Erro ao criar tag', description: err.message, variant: 'destructive' });
+                  }
+                  return;
+                }
                 setSuggestedTags(prev => [...prev, tag]);
               }}
               onRemove={(tagId) => setSuggestedTags(prev => prev.filter(t => t.id !== tagId))}
