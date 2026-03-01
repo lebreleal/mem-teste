@@ -1152,6 +1152,7 @@ const ManageDeck = () => {
           open={!!suggestCard}
           onOpenChange={(open) => { if (!open) setSuggestCard(null); }}
           card={suggestCard}
+          deckId={suggestCard.deck_id}
         />
       )}
     </div>
