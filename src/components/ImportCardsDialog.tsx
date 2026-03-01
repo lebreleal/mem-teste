@@ -182,12 +182,19 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
   // Anki state
   const [ankiLoading, setAnkiLoading] = useState(false);
+  const [ankiProgress, setAnkiProgress] = useState('');
   const [ankiResult, setAnkiResult] = useState<AnkiParseResult | null>(null);
+  const ankiCleanupRef = useRef<(() => void) | null>(null);
 
   const csvFileRef = useRef<HTMLInputElement>(null);
   const ankiFileRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
+    // Revoke Blob URLs to free memory
+    if (ankiCleanupRef.current) {
+      ankiCleanupRef.current();
+      ankiCleanupRef.current = null;
+    }
     setSource(null);
     setRawText('');
     setDeckName('');
@@ -196,6 +203,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setUseRFC(true);
     setAutoDetected(false);
     setAnkiResult(null);
+    setAnkiProgress('');
     setSubdecks(null);
     setOrganizing(false);
   };
@@ -331,9 +339,16 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     if (!file) return;
     e.target.value = '';
     setAnkiLoading(true);
+    setAnkiProgress('Abrindo arquivo...');
     try {
       const { parseApkgFile } = await import('@/lib/ankiParser');
-      const result = await parseApkgFile(file);
+      const result = await parseApkgFile(file, (msg) => {
+        setAnkiProgress(msg);
+      });
+      // Store cleanup for Blob URL revocation
+      if (result.cleanup) {
+        ankiCleanupRef.current = result.cleanup;
+      }
       setAnkiResult(result);
       setSubdecks(result.subdecks ? normalizeSubdeckHierarchy(result.subdecks as SubdeckOrganization[]) : null);
       if (!deckName) setDeckName(result.deckName);
@@ -347,6 +362,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       setSource(null);
     } finally {
       setAnkiLoading(false);
+      setAnkiProgress('');
     }
   };
 
@@ -663,7 +679,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             {ankiLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Analisando arquivo Anki...</p>
+                <p className="text-sm text-muted-foreground">{ankiProgress || 'Analisando arquivo Anki...'}</p>
               </div>
             ) : ankiResult ? (
               <div className="space-y-4">

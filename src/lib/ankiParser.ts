@@ -30,7 +30,11 @@ export interface AnkiParseResult {
   cards: AnkiCard[];
   mediaCount: number;
   subdecks?: AnkiSubdeck[];
+  /** Call this to revoke all Blob URLs and free memory */
+  cleanup?: () => void;
 }
+
+export type AnkiProgressCallback = (message: string, current?: number, total?: number) => void;
 
 interface AnkiModel {
   name: string;
@@ -188,39 +192,79 @@ async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isMo
   return fallback!;
 }
 
-/* ── extract media ── */
+/* ── extract media (lazy, Blob URLs, parallel batches) ── */
 
-async function extractMedia(zip: JSZip): Promise<Map<string, string>> {
-  const mediaMapping: Record<string, string> = {};
-  if (zip.files['media']) {
-    try {
-      const mediaText = await zip.files['media'].async('text');
-      Object.assign(mediaMapping, JSON.parse(mediaText));
-    } catch {}
+function parseMediaMapping(zip: JSZip): Record<string, string> {
+  return {};  // placeholder, actual parsing is async
+}
+
+async function loadMediaMapping(zip: JSZip): Promise<Record<string, string>> {
+  if (!zip.files['media']) return {};
+  try {
+    const mediaText = await zip.files['media'].async('text');
+    return JSON.parse(mediaText) as Record<string, string>;
+  } catch {
+    return {};
   }
+}
+
+/** Scan all cards to find which media filenames are actually referenced */
+function collectReferencedMedia(cards: AnkiCard[]): Set<string> {
+  const refs = new Set<string>();
+  const srcRegex = /src="([^"]+)"/g;
+  const soundRegex = /\[sound:([^\]]+)\]/g;
+  for (const card of cards) {
+    for (const html of [card.front, card.back]) {
+      let m: RegExpExecArray | null;
+      srcRegex.lastIndex = 0;
+      while ((m = srcRegex.exec(html))) refs.add(m[1]);
+      soundRegex.lastIndex = 0;
+      while ((m = soundRegex.exec(html))) refs.add(m[1]);
+    }
+  }
+  return refs;
+}
+
+const MIME_MAP: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+};
+
+async function extractMediaLazy(
+  zip: JSZip,
+  referencedFiles: Set<string>,
+  onProgress?: AnkiProgressCallback,
+): Promise<{ mediaMap: Map<string, string>; totalMediaCount: number }> {
+  const mediaMapping = await loadMediaMapping(zip);
+  const totalMediaCount = Object.keys(mediaMapping).length;
+
+  // Filter to only needed files
+  const needed = Object.entries(mediaMapping)
+    .filter(([_, name]) => referencedFiles.has(name));
 
   const mediaMap = new Map<string, string>();
-  for (const [numericName, actualFilename] of Object.entries(mediaMapping)) {
-    const mediaFile = zip.files[numericName];
-    if (!mediaFile) continue;
-    try {
-      const blob = await mediaFile.async('blob');
-      const ext = actualFilename.split('.').pop()?.toLowerCase() || '';
-      const mimeMap: Record<string, string> = {
-        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-        gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-        mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
-      };
-      const mimeType = mimeMap[ext] || 'application/octet-stream';
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(new Blob([blob], { type: mimeType }));
-      });
-      mediaMap.set(actualFilename, dataUrl);
-    } catch {}
+  if (needed.length === 0) return { mediaMap, totalMediaCount };
+
+  const BATCH = 20;
+  for (let i = 0; i < needed.length; i += BATCH) {
+    const batch = needed.slice(i, i + BATCH);
+    await Promise.all(batch.map(async ([num, name]) => {
+      const file = zip.files[num];
+      if (!file) return;
+      try {
+        const blob = await file.async('blob');
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        const mimeType = MIME_MAP[ext] || 'application/octet-stream';
+        const typedBlob = new Blob([blob], { type: mimeType });
+        mediaMap.set(name, URL.createObjectURL(typedBlob));
+      } catch {}
+    }));
+    const done = Math.min(i + BATCH, needed.length);
+    onProgress?.(`Extraindo mídia (${done}/${needed.length})...`, done, needed.length);
   }
-  return mediaMap;
+
+  return { mediaMap, totalMediaCount };
 }
 
 /* ── parse models from legacy col table ── */
@@ -609,14 +653,17 @@ function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
 
 /* ── main entry point ── */
 
-export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
+export async function parseApkgFile(
+  file: File,
+  onProgress?: AnkiProgressCallback,
+): Promise<AnkiParseResult> {
+  onProgress?.('Abrindo arquivo...');
   const SQL = await initSqlJs();
 
   // Open package (supports wrapper .zip/.apkg recursively)
   const zip = await resolveAnkiArchive(file);
 
-  // Extract media
-  const mediaMap = await extractMedia(zip);
+  onProgress?.('Lendo banco de dados...');
 
   // Find and open SQLite DB
   const { dbBytes, isModernFormat } = await findDatabaseFile(zip);
@@ -656,10 +703,15 @@ export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
       if (candidate) deckName = candidate;
     }
   }
+
+  onProgress?.('Processando cartões...');
+
+  // Build cards WITHOUT media first (pass empty map)
+  const emptyMedia = new Map<string, string>();
   let cards: AnkiCard[] = [];
 
   try {
-    cards = buildCards(db, models, mediaMap, deckNamesById);
+    cards = buildCards(db, models, emptyMedia, deckNamesById);
   } catch (e) {
     console.error('Failed to parse notes:', e);
     throw new Error('Erro ao extrair cartões do arquivo Anki');
@@ -680,10 +732,33 @@ export async function parseApkgFile(file: File): Promise<AnkiParseResult> {
 
   db.close();
 
+  // Now extract only referenced media using Blob URLs
+  onProgress?.('Extraindo mídia...');
+  const referencedFiles = collectReferencedMedia(cards);
+  const { mediaMap, totalMediaCount } = await extractMediaLazy(zip, referencedFiles, onProgress);
+
+  // Replace media references in cards with Blob URLs
+  if (mediaMap.size > 0) {
+    onProgress?.('Vinculando mídia aos cartões...');
+    for (const card of cards) {
+      card.front = replaceMediaRefs(card.front, mediaMap);
+      card.back = replaceMediaRefs(card.back, mediaMap);
+      card.media = mediaMap;
+    }
+  }
+
+  // Cleanup function to revoke all Blob URLs
+  const cleanup = () => {
+    for (const url of mediaMap.values()) {
+      try { URL.revokeObjectURL(url); } catch {}
+    }
+  };
+
   return {
     deckName,
     cards,
-    mediaCount: mediaMap.size,
+    mediaCount: totalMediaCount,
     subdecks: subdecks.length > 0 ? subdecks : undefined,
+    cleanup,
   };
 }
