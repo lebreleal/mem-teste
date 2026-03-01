@@ -18,23 +18,12 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon,
+  Globe, Lock, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
 const DESC_MAX = 2000;
 
-const CATEGORIES = [
-  { value: '', label: 'Todas' },
-  { value: 'medicina', label: 'Medicina' },
-  { value: 'direito', label: 'Direito' },
-  { value: 'engenharia', label: 'Engenharia' },
-  { value: 'concursos', label: 'Concursos' },
-  { value: 'idiomas', label: 'Idiomas' },
-  { value: 'tecnologia', label: 'Tecnologia' },
-  { value: 'vestibular', label: 'Vestibular' },
-  { value: 'outros', label: 'Outros' },
-];
 
 const formatCount = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
@@ -157,7 +146,6 @@ const Turmas = () => {
   const [description, setDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -179,12 +167,10 @@ const Turmas = () => {
   const communities = useMemo(() => {
     if (viewMode === 'mine') {
       return turmas
-        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
-    return (discoverTurmas ?? [])
-      .filter(t => !selectedCategory || (t as any).category === selectedCategory);
-  }, [viewMode, turmas, discoverTurmas, searchQuery, selectedCategory]);
+    return discoverTurmas ?? [];
+  }, [viewMode, turmas, discoverTurmas, searchQuery]);
 
   const filteredDecks = useMemo(() => {
     if (viewMode === 'mine') return [];
@@ -275,22 +261,6 @@ const Turmas = () => {
               className="pl-9"
             />
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                  selectedCategory === cat.value
-                    ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
           {/* Tag filter chips */}
           {allTags.length > 0 && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
