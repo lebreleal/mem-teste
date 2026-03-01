@@ -1,24 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { TagInput } from '@/components/TagInput';
+import { CardContent, type VirtualCard } from '@/components/deck-detail/CardPreviewSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useDeckTags } from '@/hooks/useTags';
-import { Loader2, Flag, Tag as TagIcon, Plus, Shuffle } from 'lucide-react';
+import { Loader2, Flag, Tag as TagIcon, Plus, Eye, EyeOff, Pencil } from 'lucide-react';
 import type { Tag } from '@/types/tag';
-
-const CARD_TYPE_OPTIONS = [
-  { value: 'basic', label: 'Pergunta / Resposta' },
-  { value: 'cloze', label: 'Preencha o espaço (Cloze)' },
-  { value: 'multiple_choice', label: 'Múltipla escolha' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem' },
-] as const;
+import type { CardRow } from '@/types/deck';
 
 interface SuggestCorrectionModalProps {
   open: boolean;
@@ -40,12 +34,13 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
   const [front, setFront] = useState(card?.front_content ?? '');
   const [back, setBack] = useState(card?.back_content ?? '');
   const [rationale, setRationale] = useState('');
-  const [suggestedCardType, setSuggestedCardType] = useState(card?.card_type ?? 'basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<Tag[]>([]);
   const [suggestNewCard, setSuggestNewCard] = useState(false);
   const [newCardFront, setNewCardFront] = useState('');
   const [newCardBack, setNewCardBack] = useState('');
+  const [showEditor, setShowEditor] = useState(false);
+  const [previewRevealed, setPreviewRevealed] = useState(false);
 
   const { data: currentDeckTags = [] } = useDeckTags(deckId);
 
@@ -56,11 +51,12 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       setFront(card?.front_content ?? '');
       setBack(card?.back_content ?? '');
       setRationale('');
-      setSuggestedCardType(card?.card_type ?? 'basic');
       setSuggestedTags(currentDeckTags);
       setSuggestNewCard(false);
       setNewCardFront('');
       setNewCardBack('');
+      setShowEditor(false);
+      setPreviewRevealed(false);
     }
   }, [open, card?.front_content, card?.back_content]);
 
@@ -69,6 +65,39 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       setSuggestedTags(currentDeckTags);
     }
   }, [currentDeckTags, open]);
+
+  // Build a virtual card for the live preview
+  const previewVirtualCard: VirtualCard | null = useMemo(() => {
+    if (!card) return null;
+    const previewCard: CardRow = {
+      id: card.id,
+      front_content: front,
+      back_content: back,
+      deck_id: card.deck_id,
+      card_type: card.card_type,
+      difficulty: 0,
+      stability: 0,
+      state: 0,
+      learning_step: 0,
+      scheduled_date: new Date().toISOString(),
+      last_reviewed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (card.card_type === 'cloze') {
+      let clozeTarget = 1;
+      try {
+        const parsed = JSON.parse(back);
+        if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
+      } catch {}
+      return { card: previewCard, clozeTarget };
+    }
+
+    return { card: previewCard };
+  }, [card, front, back]);
+
+  const hasContentChanges = card && (front !== card.front_content || back !== card.back_content);
 
   const handleSubmit = async () => {
     if (!rationale.trim()) {
@@ -85,7 +114,6 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       if (card) {
         if (front !== card.front_content) suggestedContent.front_content = front;
         if (back !== card.back_content) suggestedContent.back_content = back;
-        if (suggestedCardType !== card.card_type) suggestedContent.card_type = suggestedCardType;
       }
 
       if (isDeckLevel && suggestNewCard) {
@@ -112,8 +140,8 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         };
       }
 
-      if (card && !suggestedContent.front_content && !suggestedContent.back_content && !suggestedContent.card_type && !suggestedTagsPayload) {
-        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo, formato ou as tags antes de enviar.', variant: 'destructive' });
+      if (card && !suggestedContent.front_content && !suggestedContent.back_content && !suggestedTagsPayload) {
+        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo ou as tags antes de enviar.', variant: 'destructive' });
         setIsSubmitting(false);
         return;
       }
@@ -161,47 +189,56 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         </DialogHeader>
 
         <div className="space-y-4">
-          {card && (
-            <>
-              <div>
-                <Label className="mb-1.5 block">Frente (Pergunta)</Label>
-                <LazyRichEditor content={front} onChange={setFront} placeholder="Frente do card..." />
+          {/* Card visual preview (card-level only) */}
+          {card && previewVirtualCard && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {previewRevealed ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  Prévia do card {hasContentChanges && <span className="text-primary font-medium">(editado)</span>}
+                </Label>
+                <Button
+                  variant={showEditor ? 'secondary' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs gap-1.5"
+                  onClick={() => setShowEditor(prev => !prev)}
+                >
+                  <Pencil className="h-3 w-3" />
+                  {showEditor ? 'Esconder editor' : 'Editar conteúdo'}
+                </Button>
               </div>
 
+              <CardContent
+                vc={previewVirtualCard}
+                revealed={previewRevealed}
+                onClick={() => setPreviewRevealed(r => !r)}
+                className="!min-h-0 !max-h-none [&>div]:!min-h-[120px] [&>div]:!max-h-[300px]"
+              />
+              {!previewRevealed && (
+                <p className="text-center text-[10px] text-muted-foreground animate-pulse">
+                  Toque para revelar
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Editor (toggled for card-level) */}
+          {card && showEditor && (
+            <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3 animate-fade-in">
+              <div>
+                <Label className="mb-1.5 block text-xs">Frente (Pergunta)</Label>
+                <LazyRichEditor content={front} onChange={setFront} placeholder="Frente do card..." />
+              </div>
               {!isMultipleChoice && (
                 <div>
-                  <Label className="mb-1.5 block">Verso (Resposta)</Label>
+                  <Label className="mb-1.5 block text-xs">Verso (Resposta)</Label>
                   <LazyRichEditor content={back} onChange={setBack} placeholder="Verso do card..." />
                 </div>
               )}
-
-              {/* Card format suggestion */}
-              <div>
-                <Label className="mb-1.5 block flex items-center gap-1.5">
-                  <Shuffle className="h-3.5 w-3.5" />
-                  Formato do card
-                </Label>
-                <Select value={suggestedCardType} onValueChange={setSuggestedCardType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CARD_TYPE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {suggestedCardType !== card.card_type && (
-                  <p className="text-[10px] text-primary mt-1">
-                    Atual: {CARD_TYPE_OPTIONS.find(o => o.value === card.card_type)?.label ?? card.card_type}
-                  </p>
-                )}
-              </div>
-            </>
+            </div>
           )}
 
+          {/* Suggest new card (deck-level only) */}
           {isDeckLevel && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -227,6 +264,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
             </div>
           )}
 
+          {/* Tag editing section */}
           <div>
             <Label className="mb-1.5 block flex items-center gap-1.5">
               <TagIcon className="h-3.5 w-3.5" />
