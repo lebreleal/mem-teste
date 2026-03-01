@@ -372,43 +372,34 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const streak = calculateStreak(logs.map(l => l.reviewed_at));
   const mascotState = getMascotState(lastStudyDate);
 
-  // --- Hybrid minute calculation: elapsed_ms when available, gap-based fallback ---
+  // --- Hybrid minute calculation: aligned with ActivityView logic ---
   const MIN_REVIEW_MS = 1500;
   const MAX_REVIEW_MS = 120000;
 
   const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string; elapsed_ms?: number | null }[]): number => {
     if (reviewLogs.length === 0) return 0;
     let totalMs = 0;
-    let sessions = 1;
-    // First card: use elapsed_ms if available, otherwise 15s estimate
-    if (reviewLogs[0].elapsed_ms) {
-      totalMs += reviewLogs[0].elapsed_ms;
-    } else {
-      totalMs += 15000;
-    }
-    for (let i = 1; i < reviewLogs.length; i++) {
+
+    for (let i = 0; i < reviewLogs.length; i++) {
       const log = reviewLogs[i];
-      if (log.elapsed_ms) {
-        // Real timer data available
-        totalMs += log.elapsed_ms;
-      } else {
-        // Fallback: gap-based for old logs without elapsed_ms
+      let ms = 0;
+
+      if (log.elapsed_ms && log.elapsed_ms >= MIN_REVIEW_MS && log.elapsed_ms <= MAX_REVIEW_MS) {
+        ms = log.elapsed_ms;
+      } else if (i > 0) {
         const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
         if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
-          totalMs += gap;
+          ms = gap;
         } else if (gap > MAX_REVIEW_MS) {
-          totalMs += MAX_REVIEW_MS;
+          ms = 15000; // session break bonus
         }
+      } else {
+        ms = 15000; // first card estimate
       }
-      // Detect new session (gap > 5 min)
-      const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
-      if (gap > 300000) sessions++;
+
+      totalMs += ms;
     }
-    // For old logs without elapsed_ms, add session bonuses (minus the first card already counted)
-    const hasElapsed = reviewLogs.some(l => l.elapsed_ms);
-    if (!hasElapsed) {
-      totalMs += (sessions - 1) * 15000;
-    }
+
     return Math.round(totalMs / 60000);
   };
 
