@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag, UserPlus } from 'lucide-react';
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { useToast } from '@/hooks/use-toast';
@@ -148,7 +148,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             onClick={() => setSuggestCard(vc.card)}
           >
             <Flag className="h-3.5 w-3.5" />
-            Reportar
+            Sugestão
           </Button>
         ) : (
           <div className="w-9" />
@@ -465,9 +465,10 @@ const SuggestionComments = ({ suggestionId }: { suggestionId: string }) => {
 };
 
 const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (suggestionId: string, vote: number) => void }) => {
-  const content = suggestion.suggested_content as { front_content?: string; back_content?: string } | null;
+  const content = suggestion.suggested_content as { front_content?: string; back_content?: string; new_card?: { front_content: string; back_content: string } } | null;
   const suggestedFront = content?.front_content ?? '';
   const suggestedBack = content?.back_content ?? '';
+  const newCard = content?.new_card;
   const originalFront = suggestion.original_front ?? '';
   const originalBack = suggestion.original_back ?? '';
   const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
@@ -554,6 +555,25 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
                 </span>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* New card suggestion */}
+        {newCard && (
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1">
+              <Plus className="h-3 w-3" /> Novo card sugerido
+            </p>
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 space-y-1">
+              <p className="text-[10px] font-semibold text-muted-foreground">Frente</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(newCard.front_content)}</p>
+            </div>
+            {newCard.back_content && (
+              <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground">Verso</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(newCard.back_content)}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -818,6 +838,7 @@ const PublicDeckPreview = () => {
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showDeckReport, setShowDeckReport] = useState(false);
+  const [joining, setJoining] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch deck info
@@ -918,6 +939,42 @@ const PublicDeckPreview = () => {
     },
     enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
+
+  // Check if user is already a member of the turma
+  const { data: isTurmaMember = false } = useQuery({
+    queryKey: ['turma-membership-check', turmaDeck?.turma_id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('turma_members')
+        .select('id')
+        .eq('turma_id', turmaDeck!.turma_id)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    },
+    enabled: !!turmaDeck?.turma_id && !!user,
+  });
+
+  const handleJoinTurma = async () => {
+    if (!turmaDeck?.turma_id || !user || joining) return;
+    setJoining(true);
+    try {
+      const { error } = await supabase.from('turma_members').insert({
+        turma_id: turmaDeck.turma_id,
+        user_id: user.id,
+        role: 'member',
+      } as any);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
+      queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      toast({ title: '✅ Inscrito na comunidade!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao se inscrever', description: err.message, variant: 'destructive' });
+    } finally {
+      setJoining(false);
+    }
+  };
 
   const isOwner = !!(user && deck && deck.user_id === user.id);
 
@@ -1054,17 +1111,31 @@ const PublicDeckPreview = () => {
               por <span className="font-semibold text-foreground">{deck.owner_name}</span>
             </p>
           </div>
-          {!isOwner && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs shrink-0"
-              onClick={() => setShowDeckReport(true)}
-            >
-              <Flag className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Reportar</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {!isOwner && turmaDeck?.turma_id && !isTurmaMember && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={handleJoinTurma}
+                disabled={joining}
+              >
+                {joining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">Se inscrever</span>
+              </Button>
+            )}
+            {!isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setShowDeckReport(true)}
+              >
+                <Flag className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Sugestão</span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 

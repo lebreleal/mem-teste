@@ -1,7 +1,7 @@
 import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send, ImageIcon, Shovel, StickyNote } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Shovel, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -531,10 +531,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
                 className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                 aria-label="Sugerir correção"
               >
-                <Send className="h-3.5 w-3.5" />
+                <Flag className="h-3.5 w-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent><p>Sugerir correção</p></TooltipContent>
+            <TooltipContent><p>Sugestão</p></TooltipContent>
           </Tooltip>
         )}
       </div>
