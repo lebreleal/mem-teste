@@ -109,17 +109,15 @@ const PublicDeckCard = ({
       </p>
     </div>
 
-    <div className="flex items-center justify-between text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <Layers className="h-3.5 w-3.5 text-foreground" />
-        <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
-        cards
-      </span>
-      <span className="flex items-center gap-1 text-[11px]">
-        <RefreshCw className="h-3 w-3" />
+    <p className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
+      <Layers className="h-3 w-3 text-foreground shrink-0" />
+      <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
+      <span>cards</span>
+      <span className="text-border">·</span>
+      <span className="truncate">
         {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
       </span>
-    </div>
+    </p>
 
     {isOwner ? (
       <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
