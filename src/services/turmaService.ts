@@ -180,12 +180,15 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const { data } = await supabase.from('turma_decks').select('*').eq('turma_id', turmaId);
   if (!data || data.length === 0) return [];
   const deckIds = data.map((d: any) => d.deck_id);
-  const { data: decks } = await supabase.from('decks').select('id, name').in('id', deckIds);
+  const { data: decks } = await supabase.from('decks').select('id, name, parent_deck_id').in('id', deckIds);
   const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
-  const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
+  const deckMap = new Map((decks ?? []).map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
   const countMap = new Map<string, number>();
   (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
-  return data.map((d: any) => ({ ...d, deck_name: deckMap.get(d.deck_id) || 'Sem nome', card_count: countMap.get(d.deck_id) ?? 0 }));
+  return data.map((d: any) => {
+    const deckInfo = deckMap.get(d.deck_id);
+    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: countMap.get(d.deck_id) ?? 0, parent_deck_id: deckInfo?.parent_deck_id ?? null };
+  });
 }
 
 // ── Hierarchy Mutations ──
@@ -226,7 +229,43 @@ export async function updateLessonContent(id: string, params: { summary?: string
   const { error } = await supabase.from('turma_lessons').update(updateData).eq('id', id); if (error) throw error;
 }
 export async function shareDeck(turmaId: string, userId: string, params: { deckId: string; subjectId?: string | null; lessonId?: string | null; price?: number; priceType?: string; allowDownload?: boolean }) {
-  const { error } = await supabase.from('turma_decks').insert({ turma_id: turmaId, deck_id: params.deckId, subject_id: params.subjectId ?? null, lesson_id: params.lessonId ?? null, shared_by: userId, price: params.price ?? 0, price_type: params.priceType ?? 'free', allow_download: params.allowDownload ?? false } as any);
+  // Fetch all user decks to find hierarchy
+  const { data: allDecks } = await supabase.from('decks').select('id, parent_deck_id, name').eq('user_id', userId);
+  const decks = allDecks ?? [];
+
+  // Collect this deck + all descendants
+  const collectDescendants = (parentId: string): string[] => {
+    const children = decks.filter(d => d.parent_deck_id === parentId);
+    const result: string[] = [];
+    for (const child of children) {
+      result.push(child.id);
+      result.push(...collectDescendants(child.id));
+    }
+    return result;
+  };
+
+  const allDeckIds = [params.deckId, ...collectDescendants(params.deckId)];
+
+  // Check which are already shared in this turma
+  const { data: existingShares } = await supabase.from('turma_decks').select('id, deck_id').eq('turma_id', turmaId).in('deck_id', allDeckIds);
+  const alreadyShared = new Set((existingShares ?? []).map(s => s.deck_id));
+
+  // Insert only the ones not yet shared
+  const toInsert = allDeckIds.filter(id => !alreadyShared.has(id));
+  if (toInsert.length === 0) return;
+
+  const rows = toInsert.map(deckId => ({
+    turma_id: turmaId,
+    deck_id: deckId,
+    subject_id: params.subjectId ?? null,
+    lesson_id: params.lessonId ?? null,
+    shared_by: userId,
+    price: params.price ?? 0,
+    price_type: params.priceType ?? 'free',
+    allow_download: params.allowDownload ?? false,
+  }));
+
+  const { error } = await supabase.from('turma_decks').insert(rows as any);
   if (error) throw error;
 }
 export async function updateDeckPricing(id: string, params: { price: number; priceType: string; allowDownload?: boolean }) {
