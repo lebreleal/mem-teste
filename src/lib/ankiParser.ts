@@ -641,6 +641,8 @@ async function buildCards(
       await yieldToUI();
     }
   }
+
+  return cards;
 }
 
 function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
