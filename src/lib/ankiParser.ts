@@ -8,7 +8,7 @@
 
 import JSZip from 'jszip';
 import * as fzstd from 'fzstd';
-import initSqlJs, { type Database } from 'sql.js/dist/sql-asm.js';
+import initSqlJs, { type Database } from 'sql.js';
 
 export interface AnkiCard {
   front: string;
@@ -425,12 +425,12 @@ function parseDeckNamesFromDecksTable(db: Database): Record<string, string> {
 
 /* ── build cards from notes ── */
 
-function buildCards(
+async function buildCards(
   db: Database,
   models: Record<string, AnkiModel>,
   mediaMap: Map<string, string>,
   deckNamesById: Record<string, string>,
-): AnkiCard[] {
+): Promise<AnkiCard[]> {
   const cards: AnkiCard[] = [];
 
   let cardRows: Array<{
@@ -512,7 +512,9 @@ function buildCards(
     }
   }
 
-  for (const row of cardRows) {
+  const CARD_CHUNK = 500;
+  for (let ci = 0; ci < cardRows.length; ci++) {
+    const row = cardRows[ci];
     const normalizedMid = normalizeAnkiId(row.mid);
     const normalizedDeckId = normalizeAnkiId(row.deckId);
     const model = models[normalizedMid];
@@ -605,9 +607,12 @@ function buildCards(
       const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
       if (front.trim()) cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
     }
-  }
 
-  return cards;
+    // Yield every CARD_CHUNK cards to keep browser responsive
+    if (ci > 0 && ci % CARD_CHUNK === 0) {
+      await yieldToUI();
+    }
+  }
 }
 
 function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
@@ -678,15 +683,15 @@ export async function parseApkgFile(
     log(`File: ${file.name}, size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
     await yieldToUI();
 
-    log('initSqlJs start');
+    log('initSqlJs start (wasm)');
     let SQL: Awaited<ReturnType<typeof initSqlJs>>;
     try {
-      SQL = await initSqlJs();
+      SQL = await initSqlJs({ locateFile: () => '/sql-wasm.wasm' });
     } catch (e) {
       log('initSqlJs FAILED: ' + e);
       throw new Error('Falha ao inicializar o mecanismo SQL. Recarregue a página e tente novamente.');
     }
-    log('initSqlJs done');
+    log('initSqlJs done (wasm)');
     await yieldToUI();
     checkTimeout('initSqlJs');
 
@@ -794,7 +799,7 @@ export async function parseApkgFile(
 
     try {
       log('buildCards start');
-      cards = buildCards(db, models, emptyMedia, deckNamesById);
+      cards = await buildCards(db, models, emptyMedia, deckNamesById);
       log('buildCards done, cards: ' + cards.length);
     } catch (e) {
       log('buildCards FAILED: ' + e);
