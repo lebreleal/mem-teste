@@ -20,6 +20,7 @@ import { charDiff, type DiffSegment } from '@/lib/charDiff';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
+import { Share2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -1145,40 +1146,60 @@ const PublicDeckPreview = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center gap-3 px-4 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <div className="container mx-auto flex items-center gap-3 px-4 py-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-base sm:text-xl font-bold text-foreground truncate">
+            <h1 className="font-display text-base font-bold text-foreground truncate">
               {deck.name}
             </h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               por <span className="font-semibold text-foreground">{deck.owner_name}</span>
+              <span className="mx-1.5 text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                {allCards.length} cards
+              </span>
+              <span className="mx-1.5 text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <RefreshCw className="h-2.5 w-2.5" />
+                {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+              </span>
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {!isOwner && turmaDeck?.turma_id && !isTurmaMember && (
               <Button
                 variant="default"
                 size="sm"
-                className="gap-1.5 text-xs"
+                className="gap-1.5 text-xs h-8"
                 onClick={handleJoinTurma}
                 disabled={joining}
               >
                 {joining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">Se inscrever</span>
+                Se inscrever
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast({ title: 'Link copiado!' });
+              }}
+            >
+              <Share2 className="h-4 w-4 text-muted-foreground" />
+            </Button>
             {!isOwner && (
               <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
                 onClick={() => setShowDeckReport(true)}
               >
-                <Flag className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Sugestão</span>
+                <Flag className="h-4 w-4 text-muted-foreground" />
               </Button>
             )}
           </div>
@@ -1186,17 +1207,6 @@ const PublicDeckPreview = () => {
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {/* Stats bar */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Layers className="h-3.5 w-3.5 text-foreground" />
-            <span className="font-bold text-foreground">{allCards.length}</span> cards
-          </span>
-          <span className="flex items-center gap-1">
-            <RefreshCw className="h-3 w-3" />
-            {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-          </span>
-        </div>
 
         {/* Hidden file input for owner uploads */}
         <input
