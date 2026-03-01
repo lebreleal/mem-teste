@@ -84,7 +84,6 @@ export interface TurmaDeck {
   allow_download: boolean;
   deck_name?: string;
   card_count?: number;
-  own_card_count?: number;
   parent_deck_id?: string | null;
 }
 

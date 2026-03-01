@@ -92,23 +92,11 @@ export async function resolveUniqueDeckName(userId: string, baseName: string): P
   return `${baseName} (${i})`;
 }
 
-/** Create a new deck. Auto-publishes if parent is public. */
+/** Create a new deck. */
 export async function createDeck(userId: string, name: string, folderId?: string | null, parentDeckId?: string | null, algorithmMode?: string) {
-  // Check if parent is public to inherit visibility
-  let inheritPublic = false;
-  if (parentDeckId) {
-    const { data: parent } = await supabase.from('decks').select('is_public').eq('id', parentDeckId).single();
-    if (parent && (parent as any).is_public) inheritPublic = true;
-  }
-
   const { data, error } = await supabase
     .from('decks')
-    .insert({
-      name, user_id: userId, folder_id: folderId ?? null,
-      parent_deck_id: parentDeckId ?? null,
-      ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-      ...(inheritPublic ? { is_public: true } : {}),
-    } as any)
+    .insert({ name, user_id: userId, folder_id: folderId ?? null, parent_deck_id: parentDeckId ?? null, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
     .select()
     .single();
   if (error) throw error;
@@ -139,32 +127,13 @@ export async function renameDeck(id: string, name: string) {
   if (error) throw error;
 }
 
-/** Move a deck to a different folder and/or parent deck. Auto-publishes if new parent is public. */
+/** Move a deck to a different folder and/or parent deck. */
 export async function moveDeck(id: string, folderId: string | null, parentDeckId?: string | null) {
   const { error } = await supabase.from('decks').update({
     folder_id: folderId,
     parent_deck_id: parentDeckId ?? null,
   } as any).eq('id', id);
   if (error) throw error;
-
-  // Auto-publish if moving under a public parent
-  if (parentDeckId) {
-    const { data: parent } = await supabase.from('decks').select('is_public').eq('id', parentDeckId).single();
-    if (parent && (parent as any).is_public) {
-      await setPublicRecursive(id, true);
-    }
-  }
-}
-
-/** Recursively set is_public on a deck and all its descendants. */
-export async function setPublicRecursive(deckId: string, isPublic: boolean) {
-  await supabase.from('decks').update({ is_public: isPublic } as any).eq('id', deckId);
-  const { data: children } = await supabase.from('decks').select('id').eq('parent_deck_id', deckId);
-  if (children && children.length > 0) {
-    for (const child of children) {
-      await setPublicRecursive(child.id, isPublic);
-    }
-  }
 }
 
 /** Bulk move decks to a folder. */

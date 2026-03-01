@@ -100,11 +100,6 @@ const DeckCard = ({
         <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
         cards
       </span>
-      {td.own_card_count !== undefined && td.own_card_count !== td.card_count && (
-        <span className="text-[10px] text-muted-foreground">
-          ({td.own_card_count} próprios)
-        </span>
-      )}
     </div>
 
     {inCollection ? (
@@ -642,45 +637,39 @@ const ContentTab = () => {
               : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
           </p>
 
-          {/* Hierarchy choice for parent decks with children */}
-          {confirmImportItem?.type === 'deck' && (() => {
-            const children = getChildDecks(confirmImportItem?.data?.deck_id);
-            const isChildDeck = !!confirmImportItem?.data?.parent_deck_id && sharedDeckIdSet.has(confirmImportItem?.data?.parent_deck_id);
-            if (isChildDeck || children.length === 0) return null;
-            return (
-              <div className="space-y-2 mt-2">
-                <p className="text-xs font-semibold text-muted-foreground">Este deck possui {children.length} sub-deck(s). Como importar?</p>
-                <div className="flex gap-2">
-                  <Button
-                    variant={importMode === 'hierarchy' ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => setImportMode('hierarchy')}
-                  >
-                    Manter hierarquia
-                  </Button>
-                  <Button
-                    variant={importMode === 'flat' ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => setImportMode('flat')}
-                  >
-                    Tudo em 1 deck
-                  </Button>
-                </div>
+          {/* Hierarchy choice for decks with children */}
+          {confirmImportItem?.type === 'deck' && getChildDecks(confirmImportItem?.data?.deck_id).length > 0 && (
+            <div className="space-y-2 mt-2">
+              <p className="text-xs font-semibold text-muted-foreground">Este deck possui sub-decks. Como importar?</p>
+              <div className="flex gap-2">
+                <Button
+                  variant={importMode === 'hierarchy' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setImportMode('hierarchy')}
+                >
+                  Manter hierarquia
+                </Button>
+                <Button
+                  variant={importMode === 'flat' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => setImportMode('flat')}
+                >
+                  Tudo em 1 deck
+                </Button>
               </div>
-            );
-          })()}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
-                const isChildDeck = !!confirmImportItem.data.parent_deck_id && sharedDeckIdSet.has(confirmImportItem.data.parent_deck_id);
-                const children = isChildDeck ? [] : getChildDecks(confirmImportItem.data.deck_id);
+                const children = getChildDecks(confirmImportItem.data.deck_id);
                 const childTds = children.length > 0 ? children : [];
                 importLogic.addToCollection.mutate(
-                  { ...confirmImportItem.data, _importMode: isChildDeck ? 'flat' : importMode, _childTds: childTds },
+                  { ...confirmImportItem.data, _importMode: importMode, _childTds: childTds },
                   { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
                 );
               } else if (confirmImportItem?.type === 'exam') {

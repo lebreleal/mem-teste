@@ -507,14 +507,9 @@ const DeckSettings = () => {
                   rightContent={
                     <Switch
                       checked={isPublic}
-                      onCheckedChange={async (checked) => {
+                      onCheckedChange={(checked) => {
                         setIsPublic(checked);
-                        if (deckId) {
-                          await deckService.setPublicRecursive(deckId, checked);
-                          queryClient.invalidateQueries({ queryKey: ['decks'] });
-                          queryClient.invalidateQueries({ queryKey: ['public-decks'] });
-                          toast({ title: checked ? 'Deck publicado (com sub-decks)' : 'Deck despublicado' });
-                        }
+                        saveSettings({ is_public: checked });
                       }}
                     />
                   }
