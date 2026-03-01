@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from './TurmaDetailContext';
 import { useContentMutations } from './content/useContentMutations';
 import { useContentImport } from './content/useContentImport';
-import { useDeckTagsBatch } from '@/hooks/useTags';
+import { useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -285,6 +285,9 @@ const ContentTab = () => {
   const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
   const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
 
+  // ── Hierarchy-aware tag filtering ──
+  const { data: descendantIds } = useTagDescendants(selectedTagFilter);
+
   // ── All unique tags across community decks ──
   const allCommunityTags = useMemo(() => {
     const tagMap = new Map<string, Tag>();
@@ -319,13 +322,14 @@ const ContentTab = () => {
   // ── Decks grouped by section ──
   const getDecksBySection = (sectionId: string | null) => {
     const q = searchQuery.toLowerCase();
+    const tagSet = descendantIds ? new Set(descendantIds) : null;
     return turmaDecks
       .filter((d: any) => d.subject_id === sectionId)
       .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
       .filter((d: any) => {
-        if (!selectedTagFilter) return true;
+        if (!selectedTagFilter || !tagSet) return true;
         const tags = deckTagsMap[d.deck_id] ?? [];
-        return tags.some(t => t.id === selectedTagFilter);
+        return tags.some(t => tagSet.has(t.id));
       });
   };
 

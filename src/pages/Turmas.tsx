@@ -3,7 +3,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useAllTags } from '@/hooks/useTags';
+import { useAllTags, useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -167,6 +167,13 @@ const Turmas = () => {
   const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
   const { data: allTags = [] } = useAllTags();
 
+  // Fetch tags for public decks to enable tag filtering
+  const publicDeckIds = useMemo(() => (publicDecks ?? []).map((d: any) => d.id), [publicDecks]);
+  const { data: deckTagsMap = {} } = useDeckTagsBatch(publicDeckIds);
+
+  // Get descendant IDs for inclusive hierarchy filtering
+  const { data: descendantIds } = useTagDescendants(selectedTag);
+
   const myTurmaIds = new Set(turmas.map(t => t.id));
 
   const communities = useMemo(() => {
@@ -181,8 +188,17 @@ const Turmas = () => {
 
   const filteredDecks = useMemo(() => {
     if (viewMode === 'mine') return [];
-    return publicDecks ?? [];
-  }, [viewMode, publicDecks]);
+    let decks = publicDecks ?? [];
+    // Apply tag filter (with hierarchy: includes descendants)
+    if (selectedTag && descendantIds) {
+      const tagSet = new Set(descendantIds);
+      decks = decks.filter((d: any) => {
+        const tags = deckTagsMap[d.id] ?? [];
+        return tags.some(t => tagSet.has(t.id));
+      });
+    }
+    return decks;
+  }, [viewMode, publicDecks, selectedTag, descendantIds, deckTagsMap]);
 
   const handleCreate = () => {
     if (!name.trim()) return;

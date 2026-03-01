@@ -1,5 +1,6 @@
 /**
  * React Query hooks for the tagging system.
+ * Supports hierarchy, synonyms, and semantic search.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,16 +14,45 @@ const KEYS = {
   deckTagsBatch: (ids: string) => ['tags', 'deck-batch', ids] as const,
   cardTags: (cardId: string) => ['tags', 'card', cardId] as const,
   all: ['tags', 'all'] as const,
+  tree: ['tags', 'tree'] as const,
+  children: (parentId: string) => ['tags', 'children', parentId] as const,
+  descendants: (tagId: string) => ['tags', 'descendants', tagId] as const,
   suggestions: (key: string) => ['tags', 'suggestions', key] as const,
 };
 
-/** Search/autocomplete tags. */
+/** Search/autocomplete tags (now includes synonym matching + hierarchy paths). */
 export const useTagSearch = (query: string) =>
   useQuery({
     queryKey: KEYS.search(query),
     queryFn: () => tagService.searchTags(query),
     staleTime: 30_000,
     enabled: true,
+  });
+
+/** Get full tag tree. */
+export const useTagTree = () =>
+  useQuery({
+    queryKey: KEYS.tree,
+    queryFn: () => tagService.getTagTree(),
+    staleTime: 60_000,
+  });
+
+/** Get children of a tag. */
+export const useTagChildren = (parentId: string | undefined) =>
+  useQuery({
+    queryKey: KEYS.children(parentId!),
+    queryFn: () => tagService.getTagChildren(parentId!),
+    enabled: !!parentId,
+    staleTime: 60_000,
+  });
+
+/** Get all descendant IDs (for inclusive filtering). */
+export const useTagDescendants = (tagId: string | null) =>
+  useQuery({
+    queryKey: KEYS.descendants(tagId!),
+    queryFn: () => tagService.getDescendantIds(tagId!),
+    enabled: !!tagId,
+    staleTime: 60_000,
   });
 
 /** Get tags for a deck. */
@@ -138,20 +168,29 @@ export const useTagAdminMutations = () => {
   const qc = useQueryClient();
 
   const updateTag = useMutation({
-    mutationFn: ({ id, ...updates }: { id: string; name?: string; is_official?: boolean; description?: string }) =>
+    mutationFn: ({ id, ...updates }: { id: string; name?: string; is_official?: boolean; description?: string; parent_id?: string | null; synonyms?: string[] }) =>
       tagService.updateTag(id, updates),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.tree });
+    },
   });
 
   const deleteTag = useMutation({
     mutationFn: tagService.deleteTag,
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.tree });
+    },
   });
 
   const mergeTags = useMutation({
     mutationFn: ({ sourceId, targetId }: { sourceId: string; targetId: string }) =>
       tagService.mergeTags(sourceId, targetId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.tree });
+    },
   });
 
   return { updateTag, deleteTag, mergeTags };

@@ -1359,6 +1359,7 @@ export type Database = {
           name: string
           parent_id: string | null
           slug: string
+          synonyms: string[]
           updated_at: string
           usage_count: number
         }
@@ -1372,6 +1373,7 @@ export type Database = {
           name: string
           parent_id?: string | null
           slug: string
+          synonyms?: string[]
           updated_at?: string
           usage_count?: number
         }
@@ -1385,6 +1387,7 @@ export type Database = {
           name?: string
           parent_id?: string | null
           slug?: string
+          synonyms?: string[]
           updated_at?: string
           usage_count?: number
         }
