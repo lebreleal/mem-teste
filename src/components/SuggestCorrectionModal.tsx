@@ -2,21 +2,27 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { TagInput } from '@/components/TagInput';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useDeckTags } from '@/hooks/useTags';
-import { Loader2, Flag, Tag as TagIcon, Plus } from 'lucide-react';
+import { Loader2, Flag, Tag as TagIcon, Plus, Shuffle } from 'lucide-react';
 import type { Tag } from '@/types/tag';
+
+const CARD_TYPE_OPTIONS = [
+  { value: 'basic', label: 'Pergunta / Resposta' },
+  { value: 'cloze', label: 'Preencha o espaço (Cloze)' },
+  { value: 'multiple_choice', label: 'Múltipla escolha' },
+  { value: 'image_occlusion', label: 'Oclusão de imagem' },
+] as const;
 
 interface SuggestCorrectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** If provided, this is a card-level suggestion */
   card?: {
     id: string;
     front_content: string;
@@ -24,7 +30,6 @@ interface SuggestCorrectionModalProps {
     deck_id: string;
     card_type: string;
   };
-  /** If provided without card, this is a deck-level suggestion */
   deckId: string;
   deckName?: string;
 }
@@ -35,6 +40,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
   const [front, setFront] = useState(card?.front_content ?? '');
   const [back, setBack] = useState(card?.back_content ?? '');
   const [rationale, setRationale] = useState('');
+  const [suggestedCardType, setSuggestedCardType] = useState(card?.card_type ?? 'basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<Tag[]>([]);
   const [suggestNewCard, setSuggestNewCard] = useState(false);
@@ -50,6 +56,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       setFront(card?.front_content ?? '');
       setBack(card?.back_content ?? '');
       setRationale('');
+      setSuggestedCardType(card?.card_type ?? 'basic');
       setSuggestedTags(currentDeckTags);
       setSuggestNewCard(false);
       setNewCardFront('');
@@ -57,7 +64,6 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
     }
   }, [open, card?.front_content, card?.back_content]);
 
-  // Sync when tags load
   useEffect(() => {
     if (open && currentDeckTags.length > 0 && suggestedTags.length === 0) {
       setSuggestedTags(currentDeckTags);
@@ -66,7 +72,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
 
   const handleSubmit = async () => {
     if (!rationale.trim()) {
-      toast({ title: 'Descreva sua sugestão', description: 'Explique o que você sugere ou o problema encontrado.', variant: 'destructive' });
+      toast({ title: 'Descreva sua sugestão', description: 'Explique as razões para a mudança sugerida.', variant: 'destructive' });
       return;
     }
     if (!user) return;
@@ -77,12 +83,11 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       let suggestedTagsPayload: any = null;
 
       if (card) {
-        // Card-level: check content changes
         if (front !== card.front_content) suggestedContent.front_content = front;
         if (back !== card.back_content) suggestedContent.back_content = back;
+        if (suggestedCardType !== card.card_type) suggestedContent.card_type = suggestedCardType;
       }
 
-      // New card suggestion (deck-level only)
       if (isDeckLevel && suggestNewCard) {
         if (!newCardFront.trim()) {
           toast({ title: 'Preencha a frente do card', variant: 'destructive' });
@@ -95,7 +100,6 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         };
       }
 
-      // Check tag changes
       const currentTagIds = new Set(currentDeckTags.map(t => t.id));
       const suggestedTagIds = new Set(suggestedTags.map(t => t.id));
       const addedTags = suggestedTags.filter(t => !currentTagIds.has(t.id));
@@ -108,14 +112,12 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         };
       }
 
-      // For card-level: require at least content or tag change
-      if (card && !suggestedContent.front_content && !suggestedContent.back_content && !suggestedTagsPayload) {
-        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo ou as tags antes de enviar.', variant: 'destructive' });
+      if (card && !suggestedContent.front_content && !suggestedContent.back_content && !suggestedContent.card_type && !suggestedTagsPayload) {
+        toast({ title: 'Nenhuma alteração', description: 'Modifique o conteúdo, formato ou as tags antes de enviar.', variant: 'destructive' });
         setIsSubmitting(false);
         return;
       }
 
-      // For deck-level: require at least tag change, new card, or rationale
       if (isDeckLevel && !suggestedTagsPayload && !suggestedContent.new_card) {
         toast({ title: 'Nenhuma alteração', description: 'Sugira um novo card ou modifique as tags.', variant: 'destructive' });
         setIsSubmitting(false);
@@ -159,7 +161,6 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Card content editing (only for card-level suggestions) */}
           {card && (
             <>
               <div>
@@ -173,10 +174,34 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
                   <LazyRichEditor content={back} onChange={setBack} placeholder="Verso do card..." />
                 </div>
               )}
+
+              {/* Card format suggestion */}
+              <div>
+                <Label className="mb-1.5 block flex items-center gap-1.5">
+                  <Shuffle className="h-3.5 w-3.5" />
+                  Formato do card
+                </Label>
+                <Select value={suggestedCardType} onValueChange={setSuggestedCardType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CARD_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {suggestedCardType !== card.card_type && (
+                  <p className="text-[10px] text-primary mt-1">
+                    Atual: {CARD_TYPE_OPTIONS.find(o => o.value === card.card_type)?.label ?? card.card_type}
+                  </p>
+                )}
+              </div>
             </>
           )}
 
-          {/* Suggest new card (deck-level only) */}
           {isDeckLevel && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -202,7 +227,6 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
             </div>
           )}
 
-          {/* Tag editing section */}
           <div>
             <Label className="mb-1.5 block flex items-center gap-1.5">
               <TagIcon className="h-3.5 w-3.5" />
@@ -211,7 +235,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
             <TagInput
               tags={suggestedTags}
               onAdd={(tag) => {
-                if (typeof tag === 'string') return; // Only accept Tag objects
+                if (typeof tag === 'string') return;
                 setSuggestedTags(prev => [...prev, tag]);
               }}
               onRemove={(tagId) => setSuggestedTags(prev => prev.filter(t => t.id !== tagId))}
@@ -226,14 +250,15 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
 
           <div>
             <Label className="mb-1.5 block">
-              O que você sugere? <span className="text-destructive">*</span>
+              Razões para a mudança <span className="text-destructive">*</span>
             </Label>
-            <Textarea
+            <textarea
               value={rationale}
               onChange={(e) => setRationale(e.target.value)}
-              placeholder="Descreva sua sugestão ou o problema encontrado..."
+              onKeyDown={(e) => e.stopPropagation()}
+              placeholder="Descreva as razões da sua sugestão..."
               rows={3}
-              className="resize-none"
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
             />
           </div>
         </div>
