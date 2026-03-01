@@ -520,42 +520,79 @@ export interface PublicDeckItem {
 }
 
 export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
+  // Fetch only root-level public decks (parent_deck_id IS NULL)
   let query = supabase.from('decks').select('id, name, user_id, created_at, updated_at').eq('is_public', true).is('parent_deck_id', null);
   if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
-  const { data: decks } = await query.order('created_at', { ascending: false }).limit(60);
-  if (!decks || decks.length === 0) return [];
+  const { data: rootDecks } = await query.order('created_at', { ascending: false }).limit(60);
+  if (!rootDecks || rootDecks.length === 0) return [];
 
-  const ownerIds = [...new Set(decks.map((d: any) => d.user_id))];
+  const ownerIds = [...new Set(rootDecks.map((d: any) => d.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const deckIds = decks.map((d: any) => d.id);
-  const [cardsResult, cardUpdatesResult] = await Promise.all([
-    supabase.from('cards').select('deck_id').in('deck_id', deckIds),
-    supabase.from('cards').select('deck_id, updated_at').in('deck_id', deckIds).order('updated_at', { ascending: false }),
-  ]);
-  const countMap = new Map<string, number>();
-  (cardsResult.data ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+  // Fetch ALL public decks by these owners to build hierarchy card counts
+  const { data: allPublicDecks } = await supabase
+    .from('decks')
+    .select('id, parent_deck_id, user_id, updated_at')
+    .eq('is_public', true)
+    .in('user_id', ownerIds);
 
-  // Build max card updated_at per deck (sorted desc, first occurrence = max)
+  const allDecks = allPublicDecks ?? [];
+  const rootIds = new Set(rootDecks.map((d: any) => d.id));
+
+  // Build a map: rootId -> all descendant deck IDs (inclusive)
+  const rootDescendants = new Map<string, string[]>();
+  const findRoot = (deckId: string): string | null => {
+    const visited = new Set<string>();
+    let cur = deckId;
+    while (cur) {
+      if (visited.has(cur)) return null;
+      visited.add(cur);
+      if (rootIds.has(cur)) return cur;
+      const deck = allDecks.find(d => d.id === cur);
+      if (!deck?.parent_deck_id) return null;
+      cur = deck.parent_deck_id;
+    }
+    return null;
+  };
+
+  for (const d of allDecks) {
+    const root = findRoot(d.id);
+    if (root) {
+      if (!rootDescendants.has(root)) rootDescendants.set(root, []);
+      rootDescendants.get(root)!.push(d.id);
+    }
+  }
+
+  // Fetch card counts for all relevant deck IDs
+  const allRelevantDeckIds = [...new Set(Array.from(rootDescendants.values()).flat())];
+  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', allRelevantDeckIds);
+  const countMap = new Map<string, number>();
+  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+
+  // Fetch latest card update per deck
+  const { data: cardUpdates } = await supabase.from('cards').select('deck_id, updated_at').in('deck_id', allRelevantDeckIds).order('updated_at', { ascending: false });
   const cardMaxMap = new Map<string, string>();
-  (cardUpdatesResult.data ?? []).forEach((c: any) => {
+  (cardUpdates ?? []).forEach((c: any) => {
     if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
   });
 
-  return decks.map((d: any) => {
-    const cardUpdated = cardMaxMap.get(d.id);
-    const effectiveUpdatedAt = cardUpdated && new Date(cardUpdated) > new Date(d.updated_at)
-      ? cardUpdated
-      : d.updated_at;
+  return rootDecks.map((d: any) => {
+    const descendantIds = rootDescendants.get(d.id) ?? [d.id];
+    const totalCards = descendantIds.reduce((sum, id) => sum + (countMap.get(id) ?? 0), 0);
+    let latestUpdate = d.updated_at;
+    for (const id of descendantIds) {
+      const cu = cardMaxMap.get(id);
+      if (cu && new Date(cu) > new Date(latestUpdate)) latestUpdate = cu;
+    }
     return {
       id: d.id,
       name: d.name,
-      card_count: countMap.get(d.id) ?? 0,
+      card_count: totalCards,
       owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
       owner_id: d.user_id,
       created_at: d.created_at,
-      updated_at: effectiveUpdatedAt,
+      updated_at: latestUpdate,
     };
-  });
+  }).filter(d => d.card_count > 0);
 }
