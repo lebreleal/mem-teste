@@ -32,6 +32,16 @@ const stripHtml = (html: string) => {
   return div.textContent || div.innerText || '';
 };
 
+const extractImages = (html: string): string[] => {
+  const regex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  const images: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    images.push(match[1]);
+  }
+  return images;
+};
+
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
 const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner }: {
   cards: any[];
@@ -536,21 +546,49 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
           <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
             {suggestedFront && originalFront !== suggestedFront && (() => {
               const { oldSegments, newSegments } = charDiff(stripHtml(originalFront), stripHtml(suggestedFront));
+              const oldImages = extractImages(originalFront);
+              const newImages = extractImages(suggestedFront);
               return (
                 <div className="px-3 py-2 space-y-1">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
                   <DiffLine segments={oldSegments} mode="old" />
                   <DiffLine segments={newSegments} mode="new" />
+                  {newImages.filter(img => !oldImages.includes(img)).map((src, i) => (
+                    <div key={`added-img-front-${i}`} className="border-l-2 border-emerald-500/40 bg-emerald-500/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-emerald-600/70 font-bold font-mono text-[11px]">+</span>
+                      <img src={src} alt="Imagem adicionada" className="max-h-24 rounded object-contain" />
+                    </div>
+                  ))}
+                  {oldImages.filter(img => !newImages.includes(img)).map((src, i) => (
+                    <div key={`removed-img-front-${i}`} className="border-l-2 border-destructive/40 bg-destructive/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-destructive/70 font-bold font-mono text-[11px]">−</span>
+                      <img src={src} alt="Imagem removida" className="max-h-24 rounded object-contain opacity-50" />
+                    </div>
+                  ))}
                 </div>
               );
             })()}
             {suggestedBack && originalBack !== suggestedBack && (() => {
               const { oldSegments, newSegments } = charDiff(stripHtml(originalBack), stripHtml(suggestedBack));
+              const oldImages = extractImages(originalBack);
+              const newImages = extractImages(suggestedBack);
               return (
                 <div className="px-3 py-2 space-y-1">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
                   <DiffLine segments={oldSegments} mode="old" />
                   <DiffLine segments={newSegments} mode="new" />
+                  {newImages.filter(img => !oldImages.includes(img)).map((src, i) => (
+                    <div key={`added-img-back-${i}`} className="border-l-2 border-emerald-500/40 bg-emerald-500/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-emerald-600/70 font-bold font-mono text-[11px]">+</span>
+                      <img src={src} alt="Imagem adicionada" className="max-h-24 rounded object-contain" />
+                    </div>
+                  ))}
+                  {oldImages.filter(img => !newImages.includes(img)).map((src, i) => (
+                    <div key={`removed-img-back-${i}`} className="border-l-2 border-destructive/40 bg-destructive/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-destructive/70 font-bold font-mono text-[11px]">−</span>
+                      <img src={src} alt="Imagem removida" className="max-h-24 rounded object-contain opacity-50" />
+                    </div>
+                  ))}
                 </div>
               );
             })()}
