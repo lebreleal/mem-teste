@@ -329,54 +329,6 @@ const ActivityView = () => {
           </div>
         </div>
 
-        {/* Monthly stats summary */}
-        {(() => {
-          const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
-          const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-          const monthEntries = Object.values(dayMap).filter(d => d.date >= monthStart && d.date <= monthEnd);
-          const totalCards = monthEntries.reduce((s, d) => s + d.cards, 0);
-          const totalMin = monthEntries.reduce((s, d) => s + d.minutes, 0);
-          const totalNew = monthEntries.reduce((s, d) => s + d.newCards, 0);
-          const totalLearning = monthEntries.reduce((s, d) => s + d.learning, 0);
-          const totalReview = monthEntries.reduce((s, d) => s + d.review, 0);
-          const totalRelearning = monthEntries.reduce((s, d) => s + d.relearning, 0);
-          if (totalCards === 0) return null;
-          const pct = (v: number) => Math.round((v / totalCards) * 100);
-          const avgSec = Math.round((totalMin * 60) / totalCards);
-          return (
-            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm space-y-3">
-              <p className="text-sm font-semibold text-foreground">
-                Estatísticas de {format(currentMonth, 'MMMM', { locale: ptBR })}
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-muted/50 p-3 text-center">
-                  <p className="text-lg font-bold text-foreground tabular-nums">{totalCards}</p>
-                  <p className="text-[10px] text-muted-foreground">Cards revisados</p>
-                </div>
-                <div className="rounded-xl bg-muted/50 p-3 text-center">
-                  <p className="text-lg font-bold text-foreground tabular-nums">{totalMin}min</p>
-                  <p className="text-[10px] text-muted-foreground">Tempo total</p>
-                </div>
-              </div>
-              {/* Distribution bar */}
-              <div className="space-y-1.5">
-                <div className="flex h-3 rounded-full overflow-hidden">
-                  {totalNew > 0 && <div className="bg-muted-foreground/40" style={{ width: `${pct(totalNew)}%` }} />}
-                  {totalLearning > 0 && <div className="bg-warning" style={{ width: `${pct(totalLearning)}%` }} />}
-                  {totalReview > 0 && <div className="bg-primary" style={{ width: `${pct(totalReview)}%` }} />}
-                  {totalRelearning > 0 && <div className="bg-destructive" style={{ width: `${pct(totalRelearning)}%` }} />}
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full bg-muted-foreground/40 inline-block" />Novos {pct(totalNew)}%</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full bg-warning inline-block" />Aprendendo {pct(totalLearning)}%</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full bg-primary inline-block" />Dominados {pct(totalReview)}%</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="h-2 w-2 rounded-full bg-destructive inline-block" />Reaprendendo {pct(totalRelearning)}%</span>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground text-center">Tempo médio por card: {avgSec}s</p>
-            </div>
-          );
-        })()}
 
         {/* Selected day detail */}
         {selectedDate && (

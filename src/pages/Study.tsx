@@ -405,6 +405,7 @@ const Study = () => {
             }
 
             setCardKey(prev => prev + 1);
+            cardShownAt.current = Date.now();
             setIsTransitioning(false);
             submittingRef.current = null;
           }, 150);
