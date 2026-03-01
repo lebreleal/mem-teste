@@ -476,9 +476,9 @@ async function buildCards(
     const ordSelect = cardOrdColumn ? `, c.${cardOrdColumn}` : ', NULL';
 
     const rowsResult = db.exec(
-      `SELECT CAST(c.${cardNoteColumn} AS TEXT), CAST(c.${cardDeckColumn} AS TEXT)${ordSelect}, CAST(n.${notesModelColumn} AS TEXT), n.${notesFieldsColumn}${tagsSelect}
+      `SELECT c.${cardNoteColumn}, c.${cardDeckColumn}${ordSelect}, n.${notesModelColumn}, n.${notesFieldsColumn}${tagsSelect}
        FROM cards c
-       JOIN notes n ON CAST(n.${notesIdColumn} AS TEXT) = CAST(c.${cardNoteColumn} AS TEXT)`
+       JOIN notes n ON n.${notesIdColumn} = c.${cardNoteColumn}`
     );
 
     if (rowsResult.length > 0) {
