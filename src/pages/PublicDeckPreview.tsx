@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag, UserPlus } from 'lucide-react';
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { charDiff, type DiffSegment } from '@/lib/charDiff';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
@@ -460,6 +461,20 @@ const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: stri
   );
 };
 
+const DiffLine = ({ segments, mode }: { segments: DiffSegment[]; mode: 'old' | 'new' }) => (
+  <p className={`text-[11px] leading-relaxed ${mode === 'old' ? 'text-destructive/80' : 'text-foreground'}`}>
+    {segments.map((seg, i) => {
+      if (seg.type === 'removed') {
+        return <span key={i} className="bg-destructive/20 text-destructive line-through rounded-sm px-px">{seg.text}</span>;
+      }
+      if (seg.type === 'added') {
+        return <span key={i} className="bg-primary/15 text-primary font-semibold rounded-sm px-px">{seg.text}</span>;
+      }
+      return <span key={i}>{seg.text}</span>;
+    })}
+  </p>
+);
+
 const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (suggestionId: string, vote: number) => void }) => {
   const content = suggestion.suggested_content as { front_content?: string; back_content?: string; new_card?: { front_content: string; back_content: string } } | null;
   const suggestedFront = content?.front_content ?? '';
@@ -510,20 +525,26 @@ const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote
         {/* Diff sections - collapsible/compact */}
         {(hasContentChanges || hasTagChanges || newCard) && (
           <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
-            {suggestedFront && originalFront !== suggestedFront && (
-              <div className="px-3 py-2 space-y-1">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
-                <p className="text-destructive line-through text-[11px]">{stripHtml(originalFront)}</p>
-                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedFront)}</p>
-              </div>
-            )}
-            {suggestedBack && originalBack !== suggestedBack && (
-              <div className="px-3 py-2 space-y-1">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
-                <p className="text-destructive line-through text-[11px]">{stripHtml(originalBack)}</p>
-                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(suggestedBack)}</p>
-              </div>
-            )}
+            {suggestedFront && originalFront !== suggestedFront && (() => {
+              const { oldSegments, newSegments } = charDiff(stripHtml(originalFront), stripHtml(suggestedFront));
+              return (
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
+                  <DiffLine segments={oldSegments} mode="old" />
+                  <DiffLine segments={newSegments} mode="new" />
+                </div>
+              );
+            })()}
+            {suggestedBack && originalBack !== suggestedBack && (() => {
+              const { oldSegments, newSegments } = charDiff(stripHtml(originalBack), stripHtml(suggestedBack));
+              return (
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
+                  <DiffLine segments={oldSegments} mode="old" />
+                  <DiffLine segments={newSegments} mode="new" />
+                </div>
+              );
+            })()}
             {hasTagChanges && (
               <div className="px-3 py-2 space-y-1">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</p>
