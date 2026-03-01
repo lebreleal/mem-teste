@@ -13,6 +13,7 @@ export interface Tag {
   created_by: string | null;
   created_at: string;
   merged_into_id: string | null;
+  synonyms: string[];
 }
 
 export interface DeckTag {

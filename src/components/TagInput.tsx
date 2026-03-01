@@ -1,15 +1,15 @@
 /**
- * Tag input component with autocomplete and AI suggestions.
- * Used for associating tags to decks and cards.
+ * Tag input component with autocomplete, hierarchy paths, and AI suggestions.
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Tag as TagIcon, Crown, Sparkles, Loader2 } from 'lucide-react';
+import { X, Plus, Tag as TagIcon, Crown, Sparkles, Loader2, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
+import type { TagTreeNode } from '@/services/tagService';
 
 interface TagInputProps {
   tags: Tag[];
@@ -18,7 +18,6 @@ interface TagInputProps {
   disabled?: boolean;
   placeholder?: string;
   maxTags?: number;
-  /** Content text to send to AI for tag suggestions */
   aiContext?: { textContent?: string; deckName?: string };
 }
 
@@ -39,7 +38,6 @@ export function TagInput({
   const { data: suggestions = [] } = useTagSearch(query);
   const aiSuggest = useTagSuggestions();
 
-  // AI suggestions state
   const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
 
   // Filter out already-added tags
@@ -115,6 +113,26 @@ export function TagInput({
   };
 
   const atLimit = tags.length >= maxTags;
+
+  /** Render path segments with chevrons for hierarchy */
+  const renderTagPath = (tag: TagTreeNode) => {
+    if (!tag.pathLabel || !tag.pathLabel.includes(' > ')) {
+      return <span className="truncate">{tag.name}</span>;
+    }
+    const segments = tag.pathLabel.split(' > ');
+    return (
+      <span className="flex items-center gap-0.5 truncate">
+        {segments.map((seg, i) => (
+          <span key={i} className="flex items-center gap-0.5">
+            {i > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />}
+            <span className={i === segments.length - 1 ? 'font-medium' : 'text-muted-foreground'}>
+              {seg}
+            </span>
+          </span>
+        ))}
+      </span>
+    );
+  };
 
   return (
     <div ref={containerRef} className="relative">
@@ -199,8 +217,8 @@ export function TagInput({
                   >
                     {tag.is_official && <Crown className="h-3 w-3 text-warning shrink-0" />}
                     <TagIcon className="h-3 w-3 opacity-50 shrink-0" />
-                    <span className="truncate">{tag.name}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                    {renderTagPath(tag as TagTreeNode)}
+                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums shrink-0">
                       {tag.usage_count}
                     </span>
                   </button>

@@ -1,40 +1,156 @@
 /**
  * Service layer for tag CRUD operations.
+ * Supports hierarchy (parent_id), synonyms, and semantic search.
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Tag } from '@/types/tag';
 
-/** Search tags by name with fuzzy matching, ordered by usage. */
-export async function searchTags(query: string, limit = 20): Promise<Tag[]> {
-  if (!query.trim()) {
-    // Return most popular tags
-    const { data, error } = await supabase
-      .from('tags')
-      .select('*')
-      .is('merged_into_id', null)
-      .order('usage_count', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return data ?? [];
-  }
+// ---- Hierarchy helpers ----
 
+export interface TagTreeNode extends Tag {
+  children: TagTreeNode[];
+  /** Full path label, e.g. "Medicina > Cardiologia > Hipertensão" */
+  pathLabel: string;
+}
+
+/** Build a flat list into a tree structure. */
+function buildTree(tags: Tag[], parentId: string | null = null, prefix = ''): TagTreeNode[] {
+  return tags
+    .filter(t => t.parent_id === parentId)
+    .sort((a, b) => b.usage_count - a.usage_count)
+    .map(t => {
+      const pathLabel = prefix ? `${prefix} > ${t.name}` : t.name;
+      return {
+        ...t,
+        pathLabel,
+        children: buildTree(tags, t.id, pathLabel),
+      };
+    });
+}
+
+/** Flatten a tree back to a list preserving path labels. */
+function flattenTree(nodes: TagTreeNode[]): TagTreeNode[] {
+  const result: TagTreeNode[] = [];
+  for (const node of nodes) {
+    result.push(node);
+    result.push(...flattenTree(node.children));
+  }
+  return result;
+}
+
+/** Get all tags as a tree. */
+export async function getTagTree(): Promise<TagTreeNode[]> {
   const { data, error } = await supabase
     .from('tags')
     .select('*')
     .is('merged_into_id', null)
-    .ilike('name', `%${query}%`)
-    .order('usage_count', { ascending: false })
-    .limit(limit);
+    .order('usage_count', { ascending: false });
+  if (error) throw error;
+  return buildTree(data ?? []);
+}
+
+/** Get flat list with path labels for autocomplete. */
+export async function getTagsFlat(): Promise<TagTreeNode[]> {
+  const tree = await getTagTree();
+  return flattenTree(tree);
+}
+
+/** Get children of a specific tag. */
+export async function getTagChildren(parentId: string): Promise<Tag[]> {
+  const { data, error } = await supabase
+    .from('tags')
+    .select('*')
+    .eq('parent_id', parentId)
+    .is('merged_into_id', null)
+    .order('usage_count', { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
+/** Get all descendant IDs of a tag (for inclusive filtering). */
+export async function getDescendantIds(tagId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('tags')
+    .select('id, parent_id')
+    .is('merged_into_id', null);
+  if (error) throw error;
+  const all = data ?? [];
+  const result: string[] = [tagId];
+  const queue = [tagId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const t of all) {
+      if (t.parent_id === current && !result.includes(t.id)) {
+        result.push(t.id);
+        queue.push(t.id);
+      }
+    }
+  }
+  return result;
+}
+
+// ---- Search (with synonym support) ----
+
+/** Search tags by name AND synonyms with fuzzy matching, ordered by usage. */
+export async function searchTags(query: string, limit = 20): Promise<TagTreeNode[]> {
+  // Fetch all non-merged tags to support hierarchy + synonym search
+  const { data, error } = await supabase
+    .from('tags')
+    .select('*')
+    .is('merged_into_id', null)
+    .order('usage_count', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  const all = (data ?? []) as Tag[];
+
+  if (!query.trim()) {
+    const tree = buildTree(all);
+    return flattenTree(tree).slice(0, limit);
+  }
+
+  const q = query.toLowerCase();
+
+  // Match by name or synonyms
+  const matched = all.filter(t => {
+    if (t.name.toLowerCase().includes(q)) return true;
+    const synonyms = (t as any).synonyms as string[] | undefined;
+    if (synonyms && synonyms.some((s: string) => s.toLowerCase().includes(q))) return true;
+    return false;
+  });
+
+  // Build tree from matched + their ancestors
+  const matchedIds = new Set(matched.map(t => t.id));
+  // Add ancestors for context
+  const withAncestors = new Set(matchedIds);
+  for (const t of matched) {
+    let parentId = t.parent_id;
+    while (parentId) {
+      withAncestors.add(parentId);
+      const parent = all.find(p => p.id === parentId);
+      parentId = parent?.parent_id ?? null;
+    }
+  }
+
+  const subset = all.filter(t => withAncestors.has(t.id));
+  const tree = buildTree(subset);
+  const flat = flattenTree(tree);
+  
+  // Prioritize direct matches
+  return flat
+    .sort((a, b) => {
+      const aMatch = matchedIds.has(a.id) ? 1 : 0;
+      const bMatch = matchedIds.has(b.id) ? 1 : 0;
+      if (bMatch !== aMatch) return bMatch - aMatch;
+      return b.usage_count - a.usage_count;
+    })
+    .slice(0, limit);
+}
+
 /** Create a new tag. Returns the created tag. */
-export async function createTag(name: string, userId: string): Promise<Tag> {
+export async function createTag(name: string, userId: string, parentId?: string): Promise<Tag> {
   const slug = generateSlug(name);
   
-  // Check if slug already exists
   const { data: existing } = await supabase
     .from('tags')
     .select('*')
@@ -43,9 +159,12 @@ export async function createTag(name: string, userId: string): Promise<Tag> {
   
   if (existing) return existing as Tag;
 
+  const insertData: any = { name: name.trim(), slug, created_by: userId };
+  if (parentId) insertData.parent_id = parentId;
+
   const { data, error } = await supabase
     .from('tags')
-    .insert({ name: name.trim(), slug, created_by: userId })
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
@@ -160,7 +279,6 @@ export async function suggestTags(params: {
 
 /** Merge tags (admin only). Reassigns all associations from source to target. */
 export async function mergeTags(sourceId: string, targetId: string): Promise<void> {
-  // Move deck_tags
   const { data: deckAssocs } = await supabase
     .from('deck_tags')
     .select('deck_id')
@@ -172,7 +290,6 @@ export async function mergeTags(sourceId: string, targetId: string): Promise<voi
   }
   await supabase.from('deck_tags').delete().eq('tag_id', sourceId);
 
-  // Move card_tags
   const { data: cardAssocs } = await supabase
     .from('card_tags')
     .select('card_id')
@@ -184,12 +301,11 @@ export async function mergeTags(sourceId: string, targetId: string): Promise<voi
   }
   await supabase.from('card_tags').delete().eq('tag_id', sourceId);
 
-  // Mark source as merged
   await supabase.from('tags').update({ merged_into_id: targetId }).eq('id', sourceId);
 }
 
 /** Update tag (admin). */
-export async function updateTag(id: string, updates: { name?: string; is_official?: boolean; description?: string }): Promise<void> {
+export async function updateTag(id: string, updates: { name?: string; is_official?: boolean; description?: string; parent_id?: string | null; synonyms?: string[] }): Promise<void> {
   const { error } = await supabase.from('tags').update(updates).eq('id', id);
   if (error) throw error;
 }
@@ -207,7 +323,7 @@ function generateSlug(name: string): string {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');

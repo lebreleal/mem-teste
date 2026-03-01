@@ -1,7 +1,7 @@
 /**
  * suggest-tags edge function
  * Analyzes text content and suggests relevant tags using AI.
- * Prioritizes existing "Leader Tags" (high usage_count).
+ * Prioritizes existing "Leader Tags" and respects tag hierarchy.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -41,15 +41,32 @@ serve(async (req) => {
       });
     }
 
-    // Fetch top existing tags (Leader Tags) for context
+    // Fetch top existing tags with hierarchy info
     const { data: leaderTags } = await supabase
       .from("tags")
-      .select("name, slug, usage_count")
+      .select("id, name, slug, usage_count, parent_id, synonyms")
       .is("merged_into_id", null)
       .order("usage_count", { ascending: false })
       .limit(100);
 
-    const existingTagList = (leaderTags ?? []).map((t: any) => t.name).join(", ");
+    const allTags = leaderTags ?? [];
+    
+    // Build hierarchy labels for context
+    const tagMap = new Map(allTags.map((t: any) => [t.id, t]));
+    const getPath = (t: any): string => {
+      if (!t.parent_id) return t.name;
+      const parent = tagMap.get(t.parent_id);
+      return parent ? `${getPath(parent)} > ${t.name}` : t.name;
+    };
+
+    const tagListWithHierarchy = allTags
+      .map((t: any) => {
+        const path = getPath(t);
+        const syns = (t.synonyms ?? []).length > 0 ? ` (sinônimos: ${t.synonyms.join(", ")})` : "";
+        return `${path}${syns} [${t.usage_count} usos]`;
+      })
+      .join("\n");
+
     const alreadyApplied = (existingTagNames ?? []).join(", ");
 
     const apiKey = Deno.env.get("GOOGLE_AI_KEY");
@@ -64,13 +81,16 @@ serve(async (req) => {
 
 REGRAS:
 1. Prefira tags da lista de tags existentes quando possível (Leader Tags)
-2. Crie novas tags apenas se nenhuma existente se encaixa
-3. Tags devem ser curtas (1-3 palavras), em português
-4. Use termos técnicos padronizados da área
-5. Não repita tags já aplicadas
-6. Retorne APENAS um JSON array de strings
+2. Respeite a hierarquia: se existe "Medicina > Cardiologia > Hipertensão", sugira a tag mais específica aplicável
+3. Crie novas tags apenas se nenhuma existente se encaixa
+4. Tags devem ser curtas (1-3 palavras), em português
+5. Use termos técnicos padronizados da área
+6. Não repita tags já aplicadas
+7. Retorne APENAS um JSON array de strings com os NOMES exatos das tags (sem o caminho hierárquico)
 
-TAGS EXISTENTES (priorize estas): ${existingTagList || "nenhuma ainda"}
+TAGS EXISTENTES (com hierarquia e sinônimos):
+${tagListWithHierarchy || "nenhuma ainda"}
+
 TAGS JÁ APLICADAS (não repita): ${alreadyApplied || "nenhuma"}
 
 NOME DO DECK: ${deckName || "não informado"}
@@ -111,7 +131,6 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
     const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
-    // Extract JSON array from response
     let suggestedTags: string[] = [];
     try {
       const match = rawContent.match(/\[[\s\S]*?\]/);
@@ -122,15 +141,13 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
       console.error("Failed to parse AI response:", rawContent);
     }
 
-    // Filter out already-applied tags
     const existingSet = new Set((existingTagNames ?? []).map((n: string) => n.toLowerCase()));
     suggestedTags = suggestedTags
       .filter((t: string) => typeof t === "string" && t.trim())
       .map((t: string) => t.trim())
       .filter((t: string) => !existingSet.has(t.toLowerCase()));
 
-    // Match with existing tags
-    const tagNameMap = new Map((leaderTags ?? []).map((t: any) => [t.name.toLowerCase(), t]));
+    const tagNameMap = new Map(allTags.map((t: any) => [t.name.toLowerCase(), t]));
     const result = suggestedTags.map((name: string) => {
       const existing = tagNameMap.get(name.toLowerCase());
       return {
