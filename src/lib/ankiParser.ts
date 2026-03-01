@@ -347,22 +347,40 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
       }
     }
 
-    const tmplResult = db.exec('SELECT ntid, ord, name, qfmt, afmt FROM templates ORDER BY ord');
-    if (tmplResult.length > 0) {
-      for (const row of tmplResult[0].values) {
-        const ntId = normalizeAnkiId(row[0] as string | number);
-        if (models[ntId]) {
-          const qfmt = row[3] as string;
-          models[ntId].tmpls.push({
-            name: row[2] as string,
-            qfmt,
-            afmt: row[4] as string,
-            ord: row[1] as number,
-          });
-          if (/\{\{cloze:/i.test(qfmt)) {
-            models[ntId].type = 1;
+    // Check which columns exist in templates table
+    const tmplTableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='templates'");
+    if (tmplTableCheck.length > 0 && tmplTableCheck[0].values.length > 0) {
+      const tmplCols = db.exec('PRAGMA table_info(templates)');
+      const tmplColSet = new Set<string>();
+      if (tmplCols.length > 0) {
+        for (const row of tmplCols[0].values) tmplColSet.add(String(row[1]));
+      }
+
+      const hasQfmt = tmplColSet.has('qfmt');
+      const hasAfmt = tmplColSet.has('afmt');
+
+      if (hasQfmt && hasAfmt) {
+        const tmplResult = db.exec('SELECT ntid, ord, name, qfmt, afmt FROM templates ORDER BY ord');
+        if (tmplResult.length > 0) {
+          for (const row of tmplResult[0].values) {
+            const ntId = normalizeAnkiId(row[0] as string | number);
+            if (models[ntId]) {
+              const qfmt = row[3] as string;
+              models[ntId].tmpls.push({
+                name: row[2] as string,
+                qfmt,
+                afmt: row[4] as string,
+                ord: row[1] as number,
+              });
+              if (/\{\{cloze:/i.test(qfmt)) {
+                models[ntId].type = 1;
+              }
+            }
           }
         }
+      } else {
+        // Templates table exists but with different schema (e.g. config blob) — skip
+        console.warn('[ANKI] templates table missing qfmt/afmt columns, skipping template parsing');
       }
     }
 
@@ -827,7 +845,7 @@ export async function parseApkgFile(
 
     const rootDeckCounts = new Map<string, number>();
     for (const card of cards) {
-      const root = splitDeckPath(card.deckName)[0];
+      const root = splitDeckPath(card.deckName || '')[0];
       if (!root) continue;
       rootDeckCounts.set(root, (rootDeckCounts.get(root) || 0) + 1);
     }
