@@ -202,11 +202,43 @@ function parseMediaMapping(zip: JSZip): Record<string, string> {
 }
 
 async function loadMediaMapping(zip: JSZip): Promise<Record<string, string>> {
-  if (!zip.files['media']) return {};
+  if (!zip.files['media']) {
+    console.warn('[ANKI] loadMediaMapping: no "media" file in zip');
+    // Fallback: look for numbered files directly (some apkg have media files without a mapping)
+    const mapping: Record<string, string> = {};
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      // Numbered files like "0", "1", "2" are media in Anki archives
+      if (/^\d+$/.test(name)) {
+        // Without a mapping we can't know the real filename, so use the number as-is
+        mapping[name] = name;
+      }
+    }
+    if (Object.keys(mapping).length > 0) {
+      console.log(`[ANKI] loadMediaMapping: found ${Object.keys(mapping).length} numbered files without mapping`);
+    }
+    return mapping;
+  }
   try {
-    const mediaText = await zip.files['media'].async('text');
-    return JSON.parse(mediaText) as Record<string, string>;
-  } catch {
+    const raw = await zip.files['media'].async('uint8array');
+    // Try to detect if it's zstd-compressed
+    let text: string;
+    if (isLikelyZstd(raw)) {
+      try {
+        const decompressed = fzstd.decompress(raw);
+        text = new TextDecoder().decode(decompressed);
+      } catch {
+        text = new TextDecoder().decode(raw);
+      }
+    } else {
+      text = new TextDecoder().decode(raw);
+    }
+    
+    const parsed = JSON.parse(text) as Record<string, string>;
+    console.log(`[ANKI] loadMediaMapping: parsed ${Object.keys(parsed).length} entries`);
+    return parsed;
+  } catch (e) {
+    console.warn('[ANKI] loadMediaMapping: failed to parse media file:', e);
     return {};
   }
 }
@@ -242,9 +274,22 @@ async function extractMediaLazy(
   const mediaMapping = await loadMediaMapping(zip);
   const totalMediaCount = Object.keys(mediaMapping).length;
 
+  // Build reverse mapping: filename -> zip entry number
+  const reverseMap = new Map<string, string>();
+  for (const [num, name] of Object.entries(mediaMapping)) {
+    reverseMap.set(name, num);
+  }
+
   // Filter to only needed files
-  const needed = Object.entries(mediaMapping)
-    .filter(([_, name]) => referencedFiles.has(name));
+  const needed: Array<[string, string]> = [];
+  for (const refName of referencedFiles) {
+    const zipNum = reverseMap.get(refName);
+    if (zipNum && zip.files[zipNum]) {
+      needed.push([zipNum, refName]);
+    }
+  }
+
+  console.log(`[ANKI] extractMediaLazy: totalMapping=${totalMediaCount}, referenced=${referencedFiles.size}, needed=${needed.length}`);
 
   const mediaMap = new Map<string, string>();
   if (needed.length === 0) return { mediaMap, totalMediaCount };
