@@ -166,11 +166,100 @@ async function parseMediaMapping(zip: JSZip): Promise<Record<string, string>> {
   const mediaFile = zip.file('media');
   if (!mediaFile) return {};
   try {
-    const text = await mediaFile.async('text');
-    return JSON.parse(text);
-  } catch {
-    return {};
+    const bytes = await mediaFile.async('uint8array');
+    // Try JSON first (Legacy formats)
+    try {
+      const text = new TextDecoder().decode(bytes);
+      const parsed = JSON.parse(text);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed;
+      }
+    } catch {
+      // Not JSON — try Protobuf (⚡ Latest format)
+    }
+
+    // Parse Protobuf MediaEntries: repeated MediaEntry entries = 1;
+    // MediaEntry: string name = 1; uint32 size = 2; bytes sha1 = 3;
+    // We only need the names, indexed by position.
+    const result: Record<string, string> = {};
+    let entryIndex = 0;
+    let offset = 0;
+
+    while (offset < bytes.length) {
+      const [fieldTag, newOffset] = readVarint(bytes, offset);
+      offset = newOffset;
+      const fieldNum = fieldTag >> 3;
+      const wireType = fieldTag & 0x7;
+
+      if (wireType === 2) { // length-delimited
+        const [len, lenOffset] = readVarint(bytes, offset);
+        offset = lenOffset;
+        if (fieldNum === 1) {
+          // This is a MediaEntry sub-message
+          const entryBytes = bytes.subarray(offset, offset + len);
+          const name = parseMediaEntryName(entryBytes);
+          if (name) {
+            result[String(entryIndex)] = name;
+          }
+          entryIndex++;
+        }
+        offset += len;
+      } else if (wireType === 0) { // varint
+        const [, vOffset] = readVarint(bytes, offset);
+        offset = vOffset;
+      } else {
+        // Unknown wire type, bail
+        break;
+      }
+    }
+
+    if (Object.keys(result).length > 0) {
+      console.log('[ANKI] Parsed protobuf media mapping:', Object.keys(result).length, 'entries');
+      return result;
+    }
+  } catch (err) {
+    console.warn('[ANKI] Failed to parse media mapping:', err);
   }
+  return {};
+}
+
+function readVarint(bytes: Uint8Array, offset: number): [number, number] {
+  let result = 0;
+  let shift = 0;
+  while (offset < bytes.length) {
+    const byte = bytes[offset++];
+    result |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) break;
+    shift += 7;
+    if (shift > 35) break; // safety
+  }
+  return [result >>> 0, offset];
+}
+
+function parseMediaEntryName(bytes: Uint8Array): string | null {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const [fieldTag, newOffset] = readVarint(bytes, offset);
+    offset = newOffset;
+    const fieldNum = fieldTag >> 3;
+    const wireType = fieldTag & 0x7;
+
+    if (wireType === 2) {
+      const [len, lenOffset] = readVarint(bytes, offset);
+      offset = lenOffset;
+      if (fieldNum === 1) {
+        // string name = 1
+        return new TextDecoder().decode(bytes.subarray(offset, offset + len));
+      }
+      offset += len;
+    } else if (wireType === 0) {
+      const [, vOffset] = readVarint(bytes, offset);
+      offset = vOffset;
+    } else {
+      break;
+    }
+  }
+  return null;
 }
 
 async function loadMediaMapping(zip: JSZip): Promise<Map<string, string>> {
@@ -222,6 +311,7 @@ async function extractMediaLazy(
   const keyToName = await loadMediaMapping(zip);
   const allMediaFiles = Object.keys(zip.files).filter(name => /^\d+$/.test(name));
   const totalMediaCount = allMediaFiles.length;
+  console.log('[ANKI] mediaMapping entries:', keyToName.size, ', numbered ZIP files:', totalMediaCount);
 
   let processed = 0;
   for (const key of allMediaFiles) {
