@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import {
   Plus, FolderPlus, MoreVertical,
-  Layers, Pencil, Trash2, Eye,
+  Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe,
   Copy, Link2, ClipboardList, Clock, Import, LogIn,
   Search, Sparkles,
@@ -50,6 +50,7 @@ const DeckCard = ({
   onOpen,
   onEditPricing,
   onRemove,
+  onTogglePublish,
   tags,
 }: {
   td: any;
@@ -64,10 +65,11 @@ const DeckCard = ({
   onOpen: () => void;
   onEditPricing: () => void;
   onRemove: () => void;
+  onTogglePublish?: () => void;
   tags?: Tag[];
 }) => (
   <div
-    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
+    className={`group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3 ${td.is_published === false ? 'opacity-50' : ''}`}
     onClick={onClick}
   >
     <div className="space-y-1">
@@ -75,6 +77,7 @@ const DeckCard = ({
         <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">
           {td.deck_name}
         </h3>
+        {td.is_published === false && (isAdmin || isOwner) && <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
         {subscriberOnly && <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />}
         {inCollection && <Link2 className="h-3.5 w-3.5 shrink-0 text-info" />}
       </div>
@@ -126,6 +129,12 @@ const DeckCard = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onTogglePublish && (
+              <DropdownMenuItem onClick={onTogglePublish}>
+                {td.is_published === false ? <Eye className="mr-2 h-4 w-4" /> : <EyeOff className="mr-2 h-4 w-4" />}
+                {td.is_published === false ? 'Publicar' : 'Despublicar'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={onEditPricing}>
               <Pencil className="mr-2 h-4 w-4" /> Editar
             </DropdownMenuItem>
@@ -328,6 +337,7 @@ const ContentTab = () => {
     const tagSet = descendantIds ? new Set(descendantIds) : null;
     const sectionDecks = turmaDecks
       .filter((d: any) => d.subject_id === sectionId)
+      .filter((d: any) => isAdmin || d.is_published !== false)
       .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
       .filter((d: any) => {
         if (!selectedTagFilter || !tagSet) return true;
@@ -468,6 +478,12 @@ const ContentTab = () => {
                         onSuccess: () => toast({ title: 'Baralho removido' }),
                         onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
                       })}
+                      onTogglePublish={(isAdmin || isDeckOwner) ? () => {
+                        mutations.toggleDeckPublished.mutate({ id: deckTd.id, isPublished: deckTd.is_published === false }, {
+                          onSuccess: () => toast({ title: deckTd.is_published === false ? 'Deck publicado' : 'Deck despublicado' }),
+                          onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+                        });
+                      } : undefined}
                       tags={deckTagsMap[deckTd.deck_id]}
                     />
                   </div>

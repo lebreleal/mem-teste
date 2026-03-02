@@ -1491,6 +1491,7 @@ export type Database = {
           created_at: string
           deck_id: string
           id: string
+          is_published: boolean
           lesson_id: string | null
           price: number
           price_type: string
@@ -1505,6 +1506,7 @@ export type Database = {
           created_at?: string
           deck_id: string
           id?: string
+          is_published?: boolean
           lesson_id?: string | null
           price?: number
           price_type?: string
@@ -1519,6 +1521,7 @@ export type Database = {
           created_at?: string
           deck_id?: string
           id?: string
+          is_published?: boolean
           lesson_id?: string | null
           price?: number
           price_type?: string

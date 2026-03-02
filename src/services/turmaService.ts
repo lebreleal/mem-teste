@@ -183,12 +183,36 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const { data: decks } = await supabase.from('decks').select('id, name, parent_deck_id').in('id', deckIds);
   const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
   const deckMap = new Map((decks ?? []).map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
-  const countMap = new Map<string, number>();
-  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+  const directCountMap = new Map<string, number>();
+  (cards ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
+
+  // Build turma_deck lookup by deck_id
+  const tdByDeckId = new Map(data.map((d: any) => [d.deck_id, d]));
+
+  // Collect published subtree deck_ids for aggregated card_count
+  const collectPublishedSubtree = (rootDeckId: string): string[] => {
+    const result: string[] = [rootDeckId];
+    const children = (decks ?? []).filter((d: any) => d.parent_deck_id === rootDeckId);
+    for (const child of children) {
+      const td = tdByDeckId.get(child.id);
+      if (td && td.is_published !== false) {
+        result.push(...collectPublishedSubtree(child.id));
+      }
+    }
+    return result;
+  };
+
   return data.map((d: any) => {
     const deckInfo = deckMap.get(d.deck_id);
-    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: countMap.get(d.deck_id) ?? 0, parent_deck_id: deckInfo?.parent_deck_id ?? null };
+    const subtreeIds = collectPublishedSubtree(d.deck_id);
+    const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
+    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: aggregatedCount, parent_deck_id: deckInfo?.parent_deck_id ?? null, is_published: d.is_published ?? true };
   });
+}
+
+export async function toggleDeckPublished(id: string, isPublished: boolean) {
+  const { error } = await supabase.from('turma_decks').update({ is_published: isPublished } as any).eq('id', id);
+  if (error) throw error;
 }
 
 // ── Hierarchy Mutations ──
