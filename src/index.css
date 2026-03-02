@@ -4,13 +4,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide scrollbar but keep scroll functional */
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* Desktop auto-hide scrollbar */
+@media (min-width: 768px) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+  }
+  *:hover {
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+    transition: background 0.3s ease;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
 }
-*::-webkit-scrollbar {
-  display: none;
+
+/* Hide scrollbar on mobile */
+@media (max-width: 767px) {
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
