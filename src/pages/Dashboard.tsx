@@ -133,7 +133,10 @@ const Dashboard = () => {
       });
       state.setAiDeckOpen(true);
     }
-    // generating status: just open the AI dialog (user can see progress text in dashboard)
+    // generating status: open the AI dialog so user can see progress or continue creating
+    if (pending.status === 'generating') {
+      state.setAiDeckOpen(true);
+    }
   }, [state]);
 
   // Handlers that perform side effects or complex logic
