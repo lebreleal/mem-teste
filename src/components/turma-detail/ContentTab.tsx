@@ -84,21 +84,16 @@ const DeckListItem = ({
       </div>
       <div className="flex items-center gap-3 mt-0.5">
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Layers className="h-3 w-3 shrink-0" /> {td.card_count ?? 0} cards
+          <Layers className="h-3 w-3 text-foreground shrink-0" /> <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
         </span>
         {(fileCount ?? 0) > 0 && (
-          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
+          <span className="text-[11px] text-foreground flex items-center gap-1">
+            <Paperclip className="h-3 w-3 shrink-0" /> <span className="font-bold">{fileCount}</span>
           </span>
         )}
         {(examCount ?? 0) > 0 && (
-          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
-          </span>
-        )}
-        {tags && tags.length > 0 && (
-          <span className="text-[11px] text-muted-foreground">
-            · {tags.slice(0, 2).map(t => t.name).join(', ')}
+          <span className="text-[11px] text-foreground flex items-center gap-1">
+            <ClipboardList className="h-3 w-3 shrink-0" /> <span className="font-bold">{examCount}</span>
           </span>
         )}
       </div>
@@ -226,20 +221,19 @@ const TopDeckCard = ({
       )}
     </div>
 
-    <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+    <div className="flex items-center gap-3 text-[11px] text-foreground">
       <span className="flex items-center gap-1">
-        <Layers className="h-3 w-3 text-foreground shrink-0" />
-        <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
-        cards
+        <Layers className="h-3 w-3 shrink-0" />
+        <span className="font-bold">{td.card_count ?? 0}</span>
       </span>
       {(fileCount ?? 0) > 0 && (
         <span className="flex items-center gap-1">
-          <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
+          <Paperclip className="h-3 w-3 shrink-0" /> <span className="font-bold">{fileCount}</span>
         </span>
       )}
       {(examCount ?? 0) > 0 && (
         <span className="flex items-center gap-1">
-          <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
+          <ClipboardList className="h-3 w-3 shrink-0" /> <span className="font-bold">{examCount}</span>
         </span>
       )}
     </div>
