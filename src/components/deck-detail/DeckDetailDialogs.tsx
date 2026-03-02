@@ -43,10 +43,10 @@ const DeckDetailDialogs = () => {
               <p className="text-sm text-muted-foreground">Selecione o tipo do flashcard</p>
               <div className="grid grid-cols-1 gap-2">
                 {[
-                  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-5 w-5 text-primary" />, desc: 'Pergunta na frente, resposta no verso' },
-                  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-warning" />, desc: 'Pergunta com alternativas' },
-                  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
-                  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <ImageIcon className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
+                  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta na frente, resposta no verso' },
+                  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta com alternativas' },
+                  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-muted-foreground" />, desc: 'Texto com lacunas para preencher' },
+                  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <ImageIcon className="h-5 w-5 text-muted-foreground" />, desc: 'Oculte partes de uma imagem' },
                 ].map(type => (
                   <button key={type.value} onClick={() => ctx.setCardType(type.value)} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">{type.icon}</div>

@@ -299,10 +299,10 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
 const CARD_TYPES: { value: EditorCardType; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'basic', label: 'Texto', icon: <MessageSquareText className="h-5 w-5 text-primary" />, desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-warning" />, desc: 'Pergunta com alternativas' },
-  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
+  { value: 'basic', label: 'Texto', icon: <MessageSquareText className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta na frente, resposta no verso' },
+  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta com alternativas' },
+  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-muted-foreground" />, desc: 'Texto com lacunas para preencher' },
+  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-muted-foreground" />, desc: 'Oculte partes de uma imagem' },
 ];
 
 /** Inline tag display for card list items */
