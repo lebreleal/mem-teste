@@ -205,7 +205,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId);
+  const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
   const { createExam } = useExams();

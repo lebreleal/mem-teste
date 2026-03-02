@@ -5,14 +5,15 @@ import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 
 export type { CardRow } from '@/services/cardService';
 
-export const useCards = (deckId: string) => {
+export const useCards = (deckId: string, opts?: { enableQuery?: boolean }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const enableQuery = opts?.enableQuery !== false;
 
   const cardsQuery = useQuery({
     queryKey: ['cards', deckId],
     queryFn: () => cardService.fetchCards(deckId),
-    enabled: !!user && !!deckId,
+    enabled: enableQuery && !!user && !!deckId,
   });
 
   const createCard = useMutation({
