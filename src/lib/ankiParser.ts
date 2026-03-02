@@ -173,9 +173,11 @@ async function parseMediaMapping(zip: JSZip): Promise<Record<string, string>> {
 
 async function loadMediaMapping(zip: JSZip): Promise<Map<string, string>> {
   const mapping = await parseMediaMapping(zip);
+  // mapping is { "0": "image.jpg", "1": "photo.png" }
+  // We need numericKey → filename so extractMediaLazy can look up by zip entry name
   const result = new Map<string, string>();
   for (const [key, value] of Object.entries(mapping)) {
-    result.set(value, key);
+    result.set(key, value);
   }
   return result;
 }
@@ -215,13 +217,13 @@ async function extractMediaLazy(
   onProgress?: AnkiProgressCallback,
 ): Promise<{ mediaMap: Map<string, string>; totalMediaCount: number }> {
   const mediaMap = new Map<string, string>();
-  const nameToKey = await loadMediaMapping(zip);
+  const keyToName = await loadMediaMapping(zip);
   const allMediaFiles = Object.keys(zip.files).filter(name => /^\d+$/.test(name));
   const totalMediaCount = allMediaFiles.length;
 
   let processed = 0;
   for (const key of allMediaFiles) {
-    const filename = nameToKey.get(key);
+    const filename = keyToName.get(key);
     if (!filename || !referencedFiles.has(filename)) {
       processed++;
       continue;
