@@ -1047,24 +1047,31 @@ const PublicDeckPreview = () => {
   const { data: isFollowing = false } = useQuery({
     queryKey: ['deck-following', deckId, user?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      // Check via source_turma_deck_id (turma decks) or parent_deck_id match
+      let query = supabase
         .from('decks')
         .select('id')
-        .eq('user_id', user!.id)
-        .eq('source_turma_deck_id', turmaDeck!.id)
-        .limit(1)
-        .maybeSingle();
+        .eq('user_id', user!.id);
+
+      if (turmaDeck?.id) {
+        query = query.eq('source_turma_deck_id', turmaDeck.id);
+      } else {
+        // For non-turma public decks, check if user has a copy linked by name + source
+        query = query.eq('source_listing_id', deckId!);
+      }
+
+      const { data } = await query.limit(1).maybeSingle();
       return !!data;
     },
-    enabled: !!user && !!turmaDeck?.id && !isOwner,
+    enabled: !!user && !!deckId && !isOwner,
   });
 
   const handleFollowDeck = async () => {
-    if (!user || !deck || !turmaDeck || following || isFollowing) return;
+    if (!user || !deck || following || isFollowing) return;
     setFollowing(true);
     try {
       // Join turma if not already a member
-      if (!isTurmaMember && turmaDeck.turma_id) {
+      if (turmaDeck && !isTurmaMember && turmaDeck.turma_id) {
         await supabase.from('turma_members').insert({
           turma_id: turmaDeck.turma_id,
           user_id: user.id,
@@ -1075,13 +1082,19 @@ const PublicDeckPreview = () => {
       }
 
       // Create a linked deck in user's personal decks
-      const { error } = await supabase.from('decks').insert({
+      const insertData: any = {
         name: deck.name,
         user_id: user.id,
-        source_turma_deck_id: turmaDeck.id,
         is_public: false,
-        community_id: turmaDeck.turma_id,
-      } as any);
+      };
+      if (turmaDeck?.id) {
+        insertData.source_turma_deck_id = turmaDeck.id;
+        insertData.community_id = turmaDeck.turma_id;
+      } else {
+        insertData.source_listing_id = deckId;
+      }
+
+      const { error } = await supabase.from('decks').insert(insertData);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
@@ -1237,7 +1250,7 @@ const PublicDeckPreview = () => {
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {!isOwner && turmaDeck && (
+            {!isOwner && (
               <Button
                 variant={isFollowing ? 'outline' : 'default'}
                 size="sm"
