@@ -308,7 +308,7 @@ const CardReviewStep = ({
       return (
         <div className="space-y-3">
           <div>
-            <Label className="mb-1.5 block">Texto com lacunas</Label>
+            <Label className="mb-1.5 block">Frente</Label>
             <LazyRichEditor
               content={editFront}
               onChange={onEditFrontChange}
