@@ -672,11 +672,11 @@ const ContentTab = () => {
               const filteredIds = new Set(filtered.map(d => d.id));
               const allSelected = filtered.length > 0 && filtered.every(d => selectedDeckIds.has(d.id));
 
-              // Build hierarchy: roots first, then children indented
-              const roots = filtered.filter(d => !(d as any).parent_deck_id || !filteredIds.has((d as any).parent_deck_id));
+              // Build hierarchy
+              const roots = filtered.filter(d => !d.parent_deck_id || !filteredIds.has(d.parent_deck_id));
               const childrenMap = new Map<string, typeof filtered>();
               filtered.forEach(d => {
-                const pid = (d as any).parent_deck_id;
+                const pid = d.parent_deck_id;
                 if (pid && filteredIds.has(pid)) {
                   if (!childrenMap.has(pid)) childrenMap.set(pid, []);
                   childrenMap.get(pid)!.push(d);
@@ -691,6 +691,30 @@ const ContentTab = () => {
                 });
               };
               walk(roots, 0);
+
+              // Collect all descendants of a deck
+              const getDescendants = (id: string): string[] => {
+                const kids = childrenMap.get(id) ?? [];
+                const result: string[] = [];
+                kids.forEach(k => { result.push(k.id); result.push(...getDescendants(k.id)); });
+                return result;
+              };
+
+              // Toggle with cascading to descendants
+              const toggleDeck = (id: string) => {
+                const next = new Set(selectedDeckIds);
+                const descendants = getDescendants(id);
+                if (next.has(id)) {
+                  next.delete(id);
+                  descendants.forEach(cid => next.delete(cid));
+                } else {
+                  next.add(id);
+                  descendants.forEach(cid => next.add(cid));
+                }
+                setSelectedDeckIds(next);
+              };
+
+              const getCardCount = (d: typeof filtered[0]) => (d.new_count ?? 0) + (d.learning_count ?? 0) + (d.review_count ?? 0);
 
               return (
                 <div className="flex-1 overflow-y-auto border border-border rounded-lg divide-y divide-border">
@@ -713,26 +737,17 @@ const ContentTab = () => {
                         <span className="text-xs font-semibold text-muted-foreground">Selecionar todos ({filtered.length})</span>
                       </label>
                       {flatList.map(({ deck: d, depth }) => (
-                        <label key={d.id} className="flex items-center gap-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" style={{ paddingLeft: `${12 + depth * 20}px`, paddingRight: 12 }}>
-                          {depth > 0 && (
-                            <span className="w-3 shrink-0 flex items-center justify-center">
-                              <span className="h-px w-3 bg-border/60" />
-                            </span>
-                          )}
+                        <label key={d.id} className="flex items-center gap-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" style={{ paddingLeft: `${12 + depth * 16}px`, paddingRight: 12 }}>
                           <Checkbox
                             checked={selectedDeckIds.has(d.id)}
-                            onCheckedChange={() => {
-                              const next = new Set(selectedDeckIds);
-                              if (next.has(d.id)) next.delete(d.id); else next.add(d.id);
-                              setSelectedDeckIds(next);
-                            }}
+                            onCheckedChange={() => toggleDeck(d.id)}
                             onClick={(e) => e.stopPropagation()}
                           />
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm truncate ${depth === 0 ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>{d.name}</p>
                           </div>
                           <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                            <Layers className="h-3 w-3" /> {(d as any).card_count ?? 0}
+                            <Layers className="h-3 w-3" /> {getCardCount(d)}
                           </span>
                         </label>
                       ))}
