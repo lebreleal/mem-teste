@@ -1047,20 +1047,42 @@ const PublicDeckPreview = () => {
   const { data: isFollowing = false } = useQuery({
     queryKey: ['deck-following', deckId, user?.id],
     queryFn: async () => {
-      // Check via source_turma_deck_id (turma decks) or parent_deck_id match
-      let query = supabase
+      if (turmaDeck?.id) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('source_turma_deck_id', turmaDeck.id)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      }
+      // For non-turma public decks, check via marketplace listing or is_live_deck + name
+      const { data: listing } = await supabase
+        .from('marketplace_listings')
+        .select('id')
+        .eq('deck_id', deckId!)
+        .eq('is_published', true)
+        .maybeSingle();
+      if (listing) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('source_listing_id', listing.id)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      }
+      // Fallback: check by name match + is_live_deck
+      const { data } = await supabase
         .from('decks')
         .select('id')
-        .eq('user_id', user!.id);
-
-      if (turmaDeck?.id) {
-        query = query.eq('source_turma_deck_id', turmaDeck.id);
-      } else {
-        // For non-turma public decks, check if user has a copy linked by name + source
-        query = query.eq('source_listing_id', deckId!);
-      }
-
-      const { data } = await query.limit(1).maybeSingle();
+        .eq('user_id', user!.id)
+        .eq('is_live_deck', true)
+        .eq('name', deck?.name ?? '')
+        .limit(1)
+        .maybeSingle();
       return !!data;
     },
     enabled: !!user && !!deckId && !isOwner,
@@ -1086,12 +1108,23 @@ const PublicDeckPreview = () => {
         name: deck.name,
         user_id: user.id,
         is_public: false,
+        is_live_deck: true,
       };
       if (turmaDeck?.id) {
         insertData.source_turma_deck_id = turmaDeck.id;
         insertData.community_id = turmaDeck.turma_id;
-      } else {
-        insertData.source_listing_id = deckId;
+      }
+      // For non-turma public decks, check if there's a marketplace listing
+      if (!turmaDeck) {
+        const { data: listing } = await supabase
+          .from('marketplace_listings')
+          .select('id')
+          .eq('deck_id', deckId!)
+          .eq('is_published', true)
+          .maybeSingle();
+        if (listing) {
+          insertData.source_listing_id = listing.id;
+        }
       }
 
       const { error } = await supabase.from('decks').insert(insertData);
@@ -1258,8 +1291,8 @@ const PublicDeckPreview = () => {
                 onClick={handleFollowDeck}
                 disabled={following || isFollowing}
               >
-                {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isFollowing ? <Check className="h-3.5 w-3.5" /> : <BookmarkPlus className="h-3.5 w-3.5" />}
-                {isFollowing ? 'Inscrito' : 'Inscrever-se'}
+                {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {isFollowing ? 'Inscrito ✓' : 'Inscrever-se'}
               </Button>
             )}
             <Button
