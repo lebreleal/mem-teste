@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, Fragment } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -552,11 +552,11 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     };
   }, [ankiResult, deckName, source]);
 
-  const DetectedAnkiNode = ({ node, depth = 0 }: { node: DetectedDeckNode; depth?: number }) => {
+  const renderDetectedAnkiNode = (node: DetectedDeckNode, depth = 0): React.ReactNode => {
     const hasChildren = node.children.length > 0;
 
     return (
-      <div style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
+      <div key={`${node.name}-${depth}`} style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
@@ -567,9 +567,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
         {hasChildren && (
           <div className="mt-0.5 space-y-0.5">
-            {node.children.map((child, index) => (
-              <DetectedAnkiNode key={`${child.name}-${index}`} node={child} depth={depth + 1} />
-            ))}
+            {node.children.map((child, index) => renderDetectedAnkiNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -578,11 +576,11 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
 
   // Recursive node renderer for subdeck preview
-  const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
+  const renderSubdeckNode = (node: SubdeckOrganization, depth = 0): React.ReactNode => {
     const hasChildren = node.children && node.children.length > 0;
     const totalInBranch = countTreeCards(node);
     return (
-      <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
+      <div key={`${node.name}-${depth}`} style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
@@ -594,17 +592,15 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
         </div>
         {hasChildren && (
           <div className="mt-0.5 space-y-0.5">
-            {node.children!.map((child, j) => (
-              <SubdeckNode key={j} node={child} depth={depth + 1} />
-            ))}
+            {node.children!.map((child, j) => renderSubdeckNode(child, depth + 1))}
           </div>
         )}
       </div>
     );
   };
 
-  // Subdeck organization preview component
-  const SubdeckPreview = () => {
+  // Subdeck organization preview render
+  const renderSubdeckPreview = () => {
     if (!subdecks || subdecks.length === 0 || !subdeckStats) return null;
 
     return (
@@ -620,9 +616,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
           </Button>
         </div>
         <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2">
-          {subdecks.map((sd, i) => (
-            <SubdeckNode key={i} node={sd} />
-          ))}
+          {subdecks.map((sd, i) => renderSubdeckNode(sd))}
         </div>
         <p className="text-[11px] text-muted-foreground">
           {hasHierarchy
@@ -633,8 +627,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     );
   };
 
-  // AI organize button
-  const OrganizeButton = ({ cards }: { cards: ParsedCard[] | { front: string; back: string }[] }) => {
+  // AI organize button render
+  const renderOrganizeButton = (cards: ParsedCard[] | { front: string; back: string }[]) => {
     if (cards.length < 5) return null;
     return (
       <Button
@@ -766,10 +760,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 )}
 
                 {/* AI organize button */}
-                <OrganizeButton cards={ankiResult.cards} />
+                {renderOrganizeButton(ankiResult.cards)}
 
                 {/* Subdeck preview */}
-                <SubdeckPreview />
+                {renderSubdeckPreview()}
 
                 {/* Hierarquia detectada no arquivo Anki */}
                 {detectedAnkiHierarchy.nodes.length > 0 && (
@@ -780,7 +774,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                     </Label>
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/20 p-2">
                       {detectedAnkiHierarchy.nodes.slice(0, 50).map((node, index) => (
-                        <DetectedAnkiNode key={`${node.name}-${index}`} node={node} />
+                        <Fragment key={`${node.name}-${index}`}>{renderDetectedAnkiNode(node)}</Fragment>
                       ))}
                       {detectedAnkiHierarchy.nodes.length > 50 && (
                         <p className="text-center text-xs text-muted-foreground py-1">...e mais {detectedAnkiHierarchy.nodes.length - 50} decks</p>
@@ -964,12 +958,10 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               )}
 
               {/* AI Organize button */}
-              {parsedCards.length >= 5 && (
-                <OrganizeButton cards={parsedCards} />
-              )}
+              {parsedCards.length >= 5 && renderOrganizeButton(parsedCards)}
 
               {/* Subdeck preview */}
-              <SubdeckPreview />
+              {renderSubdeckPreview()}
 
               {/* Preview */}
               <div>
