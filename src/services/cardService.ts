@@ -178,36 +178,86 @@ export async function enhanceCard(params: {
   return data;
 }
 
-/** Fetch aggregated cards for a deck and all descendants. */
-export async function fetchAggregatedCards(deckIds: string[]) {
+/** Lightweight metadata for all cards (for counts/filters). */
+export type CardMeta = { id: string; state: number | null; card_type: string; scheduled_date: string; front_content: string };
+
+export async function fetchAggregatedCardsMeta(deckIds: string[]): Promise<CardMeta[]> {
   if (deckIds.length === 0) return [];
-  // If only one deck, use eq instead of in for simpler URL
   if (deckIds.length === 1) {
-    return paginatedFetch((from) =>
-      supabase
-        .from('cards')
-        .select('*')
-        .eq('deck_id', deckIds[0])
-        .order('created_at', { ascending: false })
-        .range(from, from + PAGE_SIZE - 1)
+    return paginatedFetch<CardMeta>((from) =>
+      supabase.from('cards').select('id, state, card_type, scheduled_date, front_content').eq('deck_id', deckIds[0]).range(from, from + PAGE_SIZE - 1)
     );
   }
-  // Batch deck IDs to avoid URL length issues
+  const results: CardMeta[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const rows = await paginatedFetch<CardMeta>((from) =>
+      supabase.from('cards').select('id, state, card_type, scheduled_date, front_content').in('deck_id', batch).range(from, from + PAGE_SIZE - 1)
+    );
+    results.push(...rows);
+  }
+  return results;
+}
+
+/** Fetch paginated full cards for display. */
+export async function fetchAggregatedCardsPage(deckIds: string[], limit: number, offset: number) {
+  if (deckIds.length === 0) return [];
+  if (deckIds.length === 1) {
+    const { data, error } = await withRetry(async () => {
+      const res = await supabase.from('cards').select('*').eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+      return res as { data: CardRow[] | null; error: any };
+    });
+    if (error) throw error;
+    return (data ?? []) as CardRow[];
+  }
+  // For multiple deck IDs, fetch in batches and manually paginate
+  const results: CardRow[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const rows = await paginatedFetch<CardRow>((from) =>
+      supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+    );
+    results.push(...rows);
+  }
+  results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return results.slice(offset, offset + limit);
+}
+
+/** Fetch aggregated cards for a deck and all descendants (FULL - kept for backward compat). */
+export async function fetchAggregatedCards(deckIds: string[]) {
+  if (deckIds.length === 0) return [];
+  if (deckIds.length === 1) {
+    return paginatedFetch((from) =>
+      supabase.from('cards').select('*').eq('deck_id', deckIds[0]).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
+    );
+  }
   const results: any[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
     const rows = await paginatedFetch((from) =>
-      supabase
-        .from('cards')
-        .select('*')
-        .in('deck_id', batch)
-        .order('created_at', { ascending: false })
-        .range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
     );
     results.push(...rows);
   }
-  // Sort all results by created_at descending
   results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return results;
+}
+
+/** Fetch cloze siblings by front_content (for edit/delete). */
+export async function fetchClozeSiblings(deckIds: string[], frontContent: string): Promise<CardRow[]> {
+  if (deckIds.length === 0) return [];
+  if (deckIds.length === 1) {
+    const { data, error } = await supabase.from('cards').select('*').eq('deck_id', deckIds[0]).eq('card_type', 'cloze').eq('front_content', frontContent);
+    if (error) throw error;
+    return (data ?? []) as CardRow[];
+  }
+  const results: CardRow[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const { data, error } = await supabase.from('cards').select('*').in('deck_id', batch).eq('card_type', 'cloze').eq('front_content', frontContent);
+    if (error) throw error;
+    if (data) results.push(...(data as CardRow[]));
+  }
   return results;
 }
 

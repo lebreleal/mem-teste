@@ -16,7 +16,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -78,12 +78,12 @@ const CardList = () => {
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
     getStateInfo, stripHtml, otherDecks, isFrozenCard, unfreezeCard,
+    cardsMeta, loadMoreCards, hasMoreCards,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
   const isLinkedDeck = (() => {
     if ((deck as any)?.source_turma_deck_id) return true;
-    // Check ancestors
     let parentId = (deck as any)?.parent_deck_id;
     while (parentId) {
       const parent = decks.find((d: any) => d.id === parentId);
@@ -91,7 +91,6 @@ const CardList = () => {
       if ((parent as any).source_turma_deck_id) return true;
       parentId = (parent as any).parent_deck_id;
     }
-    // Check descendants
     const hasLinkedDescendant = (id: string): boolean => {
       const children = decks.filter((d: any) => d.parent_deck_id === id);
       return children.some((c: any) => c.source_turma_deck_id || hasLinkedDescendant(c.id));
@@ -105,9 +104,14 @@ const CardList = () => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE_UI);
   const hasActiveFilter = typeFilter !== 'all' || stateFilter !== 'all';
 
-  const frozenCount = allCards.filter(c => isFrozenCard(c)).length;
+  // Use cardsMeta (lightweight) for counts instead of allCards
+  const isFrozenMeta = useCallback((c: { scheduled_date: string }) => {
+    const fiftyYears = Date.now() + 50 * 365.25 * 24 * 60 * 60 * 1000;
+    return new Date(c.scheduled_date).getTime() > fiftyYears;
+  }, []);
 
-  const relearningCount = allCards.filter(c => c.state === 3 && !isFrozenCard(c)).length;
+  const frozenCount = useMemo(() => cardsMeta.filter(c => isFrozenMeta(c)).length, [cardsMeta, isFrozenMeta]);
+  const relearningCount = useMemo(() => cardsMeta.filter(c => c.state === 3 && !isFrozenMeta(c)).length, [cardsMeta, isFrozenMeta]);
 
   const stateOptions = isQuickReview
     ? [
@@ -134,21 +138,21 @@ const CardList = () => {
     { value: 'image_occlusion', label: 'Oclusão' },
   ].filter(f => {
     if (f.value === 'all') return true;
-    return allCards.some(c => f.value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === f.value);
+    return cardsMeta.some(c => f.value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === f.value);
   });
 
   const getTypeCount = (value: string) => {
-    if (value === 'all') return allCards.length;
-    return allCards.filter(c => value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === value).length;
+    if (value === 'all') return cardsMeta.length;
+    return cardsMeta.filter(c => value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === value).length;
   };
 
   const getStateCount = (value: string) => {
-    if (value === 'all') return allCards.length;
+    if (value === 'all') return cardsMeta.length;
     if (value === 'frozen') return frozenCount;
-    if (value === 'new') return allCards.filter(c => (c.state === 0 || c.state == null) && !isFrozenCard(c)).length;
-    if (value === 'learning') return allCards.filter(c => c.state === 1 && !isFrozenCard(c)).length;
-    if (value === 'relearning') return allCards.filter(c => c.state === 3 && !isFrozenCard(c)).length;
-    return allCards.filter(c => c.state === 2 && !isFrozenCard(c)).length;
+    if (value === 'new') return cardsMeta.filter(c => (c.state === 0 || c.state == null) && !isFrozenMeta(c)).length;
+    if (value === 'learning') return cardsMeta.filter(c => c.state === 1 && !isFrozenMeta(c)).length;
+    if (value === 'relearning') return cardsMeta.filter(c => c.state === 3 && !isFrozenMeta(c)).length;
+    return cardsMeta.filter(c => c.state === 2 && !isFrozenMeta(c)).length;
   };
 
   return (
@@ -348,6 +352,9 @@ const CardList = () => {
           unfreezeCard={unfreezeCard}
           openEdit={openEdit}
           setDeleteId={setDeleteId}
+          hasMoreCards={hasMoreCards}
+          loadMoreCards={loadMoreCards}
+          totalCards={totalCards}
         />
       )}
     </div>
@@ -368,10 +375,11 @@ const CardListContent = ({
   selectionMode, selectedCards, toggleCardSelection,
   setPreviewIndex, getStateInfo, stripHtml,
   isFrozenCard, unfreezeCard, openEdit, setDeleteId,
+  hasMoreCards, loadMoreCards, totalCards,
 }: any) => {
-  // Only show first N cards
+  // Only show first N cards from already-loaded set
   const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
-  const hasMore = visibleCount < filteredCards.length;
+  const hasMoreVisible = visibleCount < filteredCards.length;
 
   // Batch fetch tags only for visible cards
   const visibleCardIds = useMemo(() => visibleCards.map((c: any) => c.id), [visibleCards]);
@@ -592,15 +600,25 @@ const CardListContent = ({
         );
       })}
 
-      {/* Load more button */}
-      {hasMore && (
+      {/* Load more button – first show more from loaded cards, then fetch more from server */}
+      {hasMoreVisible && (
         <Button
           variant="outline"
           className="w-full gap-2"
           onClick={() => setVisibleCount((v: number) => v + PAGE_SIZE_UI)}
         >
           <ChevronDown className="h-4 w-4" />
-          Mostrar mais ({filteredCards.length - visibleCount} restantes)
+          Mostrar mais ({filteredCards.length - visibleCount} restantes dos carregados)
+        </Button>
+      )}
+      {!hasMoreVisible && hasMoreCards && (
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          onClick={loadMoreCards}
+        >
+          <ChevronDown className="h-4 w-4" />
+          Carregar mais cartões ({totalCards - filteredCards.length} restantes)
         </Button>
       )}
     </div>

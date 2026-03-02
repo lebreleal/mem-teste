@@ -10,6 +10,8 @@ export function invalidateDeckRelatedQueries(queryClient: QueryClient, deckId?: 
   queryClient.invalidateQueries({ queryKey: ['decks'] });
   queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
   queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+  queryClient.invalidateQueries({ queryKey: ['cards-meta'] });
+  queryClient.invalidateQueries({ queryKey: ['cards-display'] });
   queryClient.invalidateQueries({ queryKey: ['study-queue'] });
   if (deckId) {
     queryClient.invalidateQueries({ queryKey: ['cards', deckId] });
@@ -22,5 +24,7 @@ export function invalidateStudyQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['decks'] });
   queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
   queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+  queryClient.invalidateQueries({ queryKey: ['cards-meta'] });
+  queryClient.invalidateQueries({ queryKey: ['cards-display'] });
   queryClient.invalidateQueries({ queryKey: ['study-queue'] });
 }
