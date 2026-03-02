@@ -130,8 +130,9 @@ const CardReviewStep = ({
   const { data: searchResults = [] } = useTagSearch(tagQuery);
   const aiSuggest = useTagSuggestions();
 
-  // Auto-trigger AI suggestions on mount
+  // Auto-trigger AI suggestions on mount — skip if suggestions already cached
   useEffect(() => {
+    if (aiSuggestions.length > 0) return; // already have suggestions, don't re-fetch
     const fetchSuggestions = async () => {
       if (!deckName && !textSample) return;
       setAiLoading(true);
@@ -194,11 +195,6 @@ const CardReviewStep = ({
   const handleSaveClick = () => {
     if (!hasMinTags) {
       setShowTagWarning(true);
-      toast({
-        title: '🏷️ Selecione pelo menos 1 tag',
-        description: 'Escolha uma das tags sugeridas ou crie a sua própria para categorizar o baralho.',
-        variant: 'destructive',
-      });
       return;
     }
     onSave(selectedTags);
@@ -433,18 +429,11 @@ const CardReviewStep = ({
       </Dialog>
 
       {/* ── Tag Selection (mandatory) ── */}
-      <div className={`space-y-2.5 border-t pt-3 ${showTagWarning && !hasMinTags ? 'border-destructive' : 'border-border'}`}>
+      <div className="space-y-2.5 border-t border-border pt-3">
         <div className="flex items-center gap-2">
           <TagIcon className="h-4 w-4 text-primary" />
           <p className="text-sm font-semibold text-foreground">Tags do baralho</p>
-          <span className={`text-[10px] ${showTagWarning && !hasMinTags ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>(obrigatório)</span>
         </div>
-
-        {showTagWarning && !hasMinTags && (
-          <p className="text-xs text-destructive flex items-center gap-1">
-            ⚠️ Selecione pelo menos 1 tag das sugestões abaixo ou crie a sua.
-          </p>
-        )}
 
         {/* Selected tags */}
         {selectedTags.length > 0 && (
@@ -470,7 +459,10 @@ const CardReviewStep = ({
               <Sparkles className="h-3 w-3 text-primary" /> Sugestões:
             </span>
             {aiLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span className="animate-pulse">Gerando tags...</span>
+              </span>
             ) : (
               aiSuggestions.map(s => (
                 <button
@@ -501,8 +493,8 @@ const CardReviewStep = ({
               }
               if (e.key === 'Escape') setTagDropdownOpen(false);
             }}
-            placeholder="Buscar ou criar tag..."
-            className={`h-9 text-sm ${showTagWarning && !hasMinTags ? 'border-destructive' : ''}`}
+            placeholder={showTagWarning && !hasMinTags ? "Selecione ou crie pelo menos 1 tag..." : "Buscar ou criar tag..."}
+            className={`h-9 text-sm transition-colors ${showTagWarning && !hasMinTags ? 'border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/60' : ''}`}
           />
           {tagDropdownOpen && (tagQuery || filteredSearch.length > 0) && (
             <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-36 overflow-y-auto">
