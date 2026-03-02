@@ -30,7 +30,7 @@ import {
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
   Copy, Link2, ClipboardList, Clock, Import, LogIn,
-  Search, Sparkles, ArrowLeft, TrendingUp,
+  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip,
 } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
@@ -50,6 +50,8 @@ const DeckListItem = ({
   onTogglePublish,
   tags,
   downloads,
+  fileCount,
+  examCount,
 }: {
   td: any;
   onClick: () => void;
@@ -63,6 +65,8 @@ const DeckListItem = ({
   onTogglePublish?: () => void;
   tags?: Tag[];
   downloads?: number;
+  fileCount?: number;
+  examCount?: number;
 }) => (
   <div
     className={`group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${td.is_published === false ? 'opacity-50' : ''}`}
@@ -82,6 +86,16 @@ const DeckListItem = ({
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
           <Layers className="h-3 w-3 shrink-0" /> {td.card_count ?? 0} cards
         </span>
+        {(fileCount ?? 0) > 0 && (
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
+          </span>
+        )}
+        {(examCount ?? 0) > 0 && (
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
+          </span>
+        )}
         {tags && tags.length > 0 && (
           <span className="text-[11px] text-muted-foreground">
             · {tags.slice(0, 2).map(t => t.name).join(', ')}
@@ -191,11 +205,15 @@ const TopDeckCard = ({
   onClick,
   inCollection,
   downloads,
+  fileCount,
+  examCount,
 }: {
   td: any;
   onClick: () => void;
   inCollection: boolean;
   downloads: number;
+  fileCount?: number;
+  examCount?: number;
 }) => (
   <div
     className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
@@ -208,11 +226,23 @@ const TopDeckCard = ({
       )}
     </div>
 
-    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-      <Layers className="h-3 w-3 text-foreground shrink-0" />
-      <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
-      <span>cards</span>
-    </p>
+    <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+      <span className="flex items-center gap-1">
+        <Layers className="h-3 w-3 text-foreground shrink-0" />
+        <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
+        cards
+      </span>
+      {(fileCount ?? 0) > 0 && (
+        <span className="flex items-center gap-1">
+          <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
+        </span>
+      )}
+      {(examCount ?? 0) > 0 && (
+        <span className="flex items-center gap-1">
+          <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
+        </span>
+      )}
+    </div>
 
     {inCollection ? (
       <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
@@ -294,7 +324,47 @@ const ContentTab = () => {
     staleTime: 5 * 60_000,
   });
 
-  // ── Current folder's sub-folders ──
+  // ── Count files per lesson_id ──
+  const { data: fileCountsByLesson = {} } = useQuery({
+    queryKey: ['turma-file-counts', turmaId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('turma_lesson_files' as any)
+        .select('lesson_id')
+        .eq('turma_id', turmaId);
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((f: any) => {
+        counts[f.lesson_id] = (counts[f.lesson_id] || 0) + 1;
+      });
+      return counts;
+    },
+    enabled: !!turmaId,
+    staleTime: 5 * 60_000,
+  });
+
+  // ── Count exams per lesson_id ──
+  const { data: examCountsByLesson = {} } = useQuery({
+    queryKey: ['turma-exam-counts-by-lesson', turmaId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('turma_exams' as any)
+        .select('lesson_id')
+        .eq('turma_id', turmaId)
+        .eq('is_published', true);
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((e: any) => {
+        if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1;
+      });
+      return counts;
+    },
+    enabled: !!turmaId,
+    staleTime: 5 * 60_000,
+  });
+
+  // ── Helper: get file/exam count for a turma_deck ──
+  const getDeckFilesCount = (td: any) => td.lesson_id ? (fileCountsByLesson[td.lesson_id] || 0) : 0;
+  const getDeckExamsCount = (td: any) => td.lesson_id ? (examCountsByLesson[td.lesson_id] || 0) : 0;
+
   const currentFolders = useMemo(() => {
     return subjects
       .filter((s: any) => (s.parent_id ?? null) === contentFolderId)
@@ -454,6 +524,8 @@ const ContentTab = () => {
                       onClick={() => handleDeckClick(td)}
                       inCollection={alreadyOwns || alreadyLinked}
                       downloads={downloadCounts[td.id] || 0}
+                      fileCount={getDeckFilesCount(td)}
+                      examCount={getDeckExamsCount(td)}
                     />
                   );
                 })}
@@ -520,6 +592,8 @@ const ContentTab = () => {
                     } : undefined}
                     tags={deckTagsMap[td.deck_id]}
                     downloads={downloadCounts[td.id] || 0}
+                    fileCount={getDeckFilesCount(td)}
+                    examCount={getDeckExamsCount(td)}
                   />
                 );
               })}
