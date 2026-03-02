@@ -4,6 +4,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
+import type { CardMeta } from '@/services/cardService';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
@@ -30,6 +31,9 @@ interface DeckDetailContextValue {
   allCards: CardRow[];
   allCardsLoading: boolean;
   filteredCards: CardRow[];
+  cardsMeta: CardMeta[];
+  loadMoreCards: () => void;
+  hasMoreCards: boolean;
   stats: { new_count: number; learning_count: number; review_count: number; reviewed_today: number } | undefined;
   decks: ReturnType<typeof useDecks>['decks'];
 
@@ -266,11 +270,30 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
-  const { data: allCards = [], isLoading: allCardsLoading } = useQuery({
-    queryKey: ['cards-aggregated', deckId, descendantIds],
-    queryFn: () => cardService.fetchAggregatedCards(allDeckIds),
+  const CARDS_PAGE = 200;
+  const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
+
+  // Lightweight metadata for counts/filters (fetches all cards but only id, state, card_type, scheduled_date, front_content)
+  const { data: cardsMeta = [], isLoading: cardsMetaLoading } = useQuery({
+    queryKey: ['cards-meta', deckId, descendantIds],
+    queryFn: () => cardService.fetchAggregatedCardsMeta(allDeckIds),
     enabled: !!user && !!deckId,
   });
+
+  // Full card content – only first N cards for display
+  const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
+    queryKey: ['cards-display', deckId, descendantIds, displayLimit],
+    queryFn: () => cardService.fetchAggregatedCardsPage(allDeckIds, displayLimit, 0),
+    enabled: !!user && !!deckId,
+  });
+
+  const allCardsLoading = cardsMetaLoading || displayCardsLoading;
+  // allCards = displayCards (paginated full content for rendering)
+  const allCards = displayCards;
+
+  const loadMoreCards = useCallback(() => {
+    setDisplayLimit(prev => prev + CARDS_PAGE);
+  }, []);
 
   const { data: stats } = useQuery({
     queryKey: ['deck-stats', deckId, descendantIds],
@@ -375,7 +398,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
-  const totalCards = allCards.length;
+  const totalCards = cardsMeta.length;
   const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
 
@@ -621,12 +644,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
       if (editingId) {
-        // Find all sibling cloze cards (same front_content as the card being edited)
-        const editingCard = allCards.find(c => c.id === editingId);
-        const siblings = editingCard
-          ? allCards.filter(c => c.card_type === 'cloze' && c.front_content === editingCard.front_content && c.id !== editingId)
+        // Find all sibling cloze cards from server (same front_content as the card being edited)
+        const editingCard = allCards.find(c => c.id === editingId) ?? cardsMeta.find(c => c.id === editingId);
+        const allSiblingCards = editingCard
+          ? await cardService.fetchClozeSiblings(allDeckIds, editingCard.front_content)
           : [];
-        const allSiblingCards = editingCard ? [editingCard, ...siblings] : [];
 
         // Map existing cloze targets to card IDs
         const existingTargets = new Map<number, string>();
@@ -693,14 +715,14 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
       else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
     }
-  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, deckId, queryClient]);
+  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, cardsMeta, allDeckIds, deckId, queryClient]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     // For cloze cards, delete all siblings with same front_content
-    const card = allCards.find(c => c.id === deleteId);
+    const card = allCards.find(c => c.id === deleteId) ?? cardsMeta.find(c => c.id === deleteId);
     if (card?.card_type === 'cloze') {
-      const siblings = allCards.filter(c => c.card_type === 'cloze' && c.front_content === card.front_content);
+      const siblings = await cardService.fetchClozeSiblings(allDeckIds, card.front_content);
       const ids = siblings.map(c => c.id);
       try {
         await cardService.bulkDeleteCards(ids);
@@ -713,7 +735,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     } else {
       deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
-  }, [deleteId, deleteCard, toast, allCards, deckId, queryClient]);
+  }, [deleteId, deleteCard, toast, allCards, cardsMeta, allDeckIds, deckId, queryClient]);
 
   const handleMoveCard = useCallback(async () => {
     if (!moveCardId || !moveTargetDeck) return;
@@ -933,8 +955,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast]);
 
+  const hasMoreCards = displayLimit < cardsMeta.length;
+
   const value: DeckDetailContextValue = {
-    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, stats, decks,
+    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardsMeta, loadMoreCards, hasMoreCards, stats, decks,
     dailyNewLimit, dailyReviewLimit, isPlanControlled, newCountToday, learningCount, masteredToday,
     isQuickReview, totalDue, studyPending, totalCards, actualNewCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,
