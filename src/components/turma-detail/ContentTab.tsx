@@ -200,7 +200,7 @@ const TopDeckCard = ({
     onClick={onClick}
   >
     <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 mb-2">
-      <TrendingUp className="h-5 w-5 text-primary" />
+      <Layers className="h-5 w-5 text-primary" />
     </div>
     <h3 className="font-semibold text-xs text-foreground line-clamp-2 leading-snug mb-1">{td.deck_name}</h3>
     <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -427,8 +427,7 @@ const ContentTab = () => {
           {/* ── Top Decks (only at root level) ── */}
           {isRoot && topDecks.length > 0 && !searchQuery && (
             <section>
-              <h2 className="font-display text-sm font-bold text-foreground mb-2 flex items-center gap-1.5">
-                <TrendingUp className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-sm font-bold text-foreground mb-2">
                 Mais Inscritos
               </h2>
               <div className="flex gap-2.5 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
