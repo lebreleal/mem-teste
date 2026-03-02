@@ -11,6 +11,8 @@ import ImageOcclusion from '@/components/ImageOcclusion';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import ImportCardsDialog from '@/components/ImportCardsDialog';
 import AIModelSelector from '@/components/AIModelSelector';
+import { TagInput } from '@/components/TagInput';
+import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -24,7 +26,27 @@ import {
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Loader2,
   RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon, Crown,
+  Tag as TagIcon,
 } from 'lucide-react';
+
+/** Tag editor for card edit dialog */
+const CardTagEditor = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  const { addTag, removeTag } = useCardTagMutations(cardId);
+  return (
+    <div className="space-y-1.5 border-t border-border/50 pt-3">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <TagIcon className="h-3 w-3" /> Tags do card
+      </p>
+      <TagInput
+        tags={tags}
+        onAdd={(tag) => addTag.mutate(tag)}
+        onRemove={(tagId) => removeTag.mutate(tagId)}
+        placeholder="Adicionar tag ao card..."
+      />
+    </div>
+  );
+};
 
 const DeckDetailDialogs = () => {
   const ctx = useDeckDetail();
@@ -192,6 +214,11 @@ const DeckDetailDialogs = () => {
                   {ctx.isImproving ? 'Melhorando...' : 'Melhorar com IA'}
                   <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
                 </Button>
+              )}
+
+              {/* Card Tags (only when editing existing card) */}
+              {ctx.editingId && (
+                <CardTagEditor cardId={ctx.editingId} />
               )}
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
