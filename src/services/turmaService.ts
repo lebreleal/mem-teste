@@ -179,23 +179,79 @@ export async function fetchTurmaLessons(turmaId: string): Promise<TurmaLesson[]>
 export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const { data } = await supabase.from('turma_decks').select('*').eq('turma_id', turmaId);
   if (!data || data.length === 0) return [];
+
   const deckIds = data.map((d: any) => d.deck_id);
-  const { data: decks } = await supabase.from('decks').select('id, name, parent_deck_id').in('id', deckIds);
-  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
-  const deckMap = new Map((decks ?? []).map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
+  const tdByDeckId = new Map<string, any>(data.map((d: any) => [d.deck_id, d]));
+
+  // Fetch shared decks
+  const { data: sharedDecks } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('id', deckIds);
+
+  // Recursively fetch ALL children from decks table (even if not in turma_decks)
+  let allDecks = [...(sharedDecks ?? [])];
+  const seenIds = new Set(deckIds);
+  let parentIdsToCheck = [...deckIds];
+
+  while (parentIdsToCheck.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('parent_deck_id', parentIdsToCheck);
+    const newChildren = (children ?? []).filter((c: any) => !seenIds.has(c.id));
+    if (newChildren.length === 0) break;
+    newChildren.forEach((c: any) => seenIds.add(c.id));
+    allDecks.push(...newChildren);
+    parentIdsToCheck = newChildren.map((c: any) => c.id);
+  }
+
+  // Auto-create missing turma_deck entries for discovered children
+  const missingChildren = allDecks.filter((d: any) => !tdByDeckId.has(d.id));
+  if (missingChildren.length > 0) {
+    const rows = missingChildren.map((child: any) => {
+      // Find closest ancestor with a turma_deck entry for inheriting settings
+      let parentTd: any = null;
+      let cur: any = child;
+      while (cur?.parent_deck_id) {
+        parentTd = tdByDeckId.get(cur.parent_deck_id);
+        if (parentTd) break;
+        cur = allDecks.find((d: any) => d.id === cur.parent_deck_id);
+      }
+      return {
+        turma_id: turmaId,
+        deck_id: child.id,
+        subject_id: parentTd?.subject_id ?? null,
+        lesson_id: parentTd?.lesson_id ?? null,
+        shared_by: parentTd?.shared_by ?? child.user_id,
+        price: 0,
+        price_type: 'free',
+        allow_download: parentTd?.allow_download ?? false,
+      };
+    });
+    try {
+      const { data: inserted } = await supabase.from('turma_decks').insert(rows as any).select();
+      if (inserted) {
+        inserted.forEach((td: any) => {
+          data.push(td);
+          tdByDeckId.set(td.deck_id, td);
+        });
+      }
+    } catch {
+      // Permission denied for non-admin – ignore, counting still works
+    }
+  }
+
+  // Fetch card counts for all discovered decks
+  const allDeckIdsExpanded = allDecks.map((d: any) => d.id);
+  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', allDeckIdsExpanded);
   const directCountMap = new Map<string, number>();
   (cards ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
 
-  // Build turma_deck lookup by deck_id
-  const tdByDeckId = new Map(data.map((d: any) => [d.deck_id, d]));
+  const deckMap = new Map(allDecks.map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
 
-  // Collect published subtree deck_ids for aggregated card_count
+  // Collect published subtree using FULL hierarchy (not just turma_decks)
   const collectPublishedSubtree = (rootDeckId: string): string[] => {
     const result: string[] = [rootDeckId];
-    const children = (decks ?? []).filter((d: any) => d.parent_deck_id === rootDeckId);
+    const children = allDecks.filter((d: any) => d.parent_deck_id === rootDeckId);
     for (const child of children) {
       const td = tdByDeckId.get(child.id);
-      if (td && td.is_published !== false) {
+      // If no turma_deck entry exists yet, include it; if entry exists, check is_published
+      if (!td || td.is_published !== false) {
         result.push(...collectPublishedSubtree(child.id));
       }
     }
