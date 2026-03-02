@@ -645,9 +645,15 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
       if (editingId) {
         // Find all sibling cloze cards from server (same front_content as the card being edited)
-        const editingCard = allCards.find(c => c.id === editingId) ?? cardsMeta.find(c => c.id === editingId);
-        const allSiblingCards = editingCard
-          ? await cardService.fetchClozeSiblings(allDeckIds, editingCard.front_content)
+        const editingCard = allCards.find(c => c.id === editingId);
+        let frontContentForCloze = editingCard?.front_content;
+        if (!frontContentForCloze && editingId) {
+          // Card not in display page, fetch from server
+          const { data } = await supabase.from('cards').select('front_content').eq('id', editingId).single();
+          frontContentForCloze = data?.front_content;
+        }
+        const allSiblingCards = frontContentForCloze
+          ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForCloze)
           : [];
 
         // Map existing cloze targets to card IDs
@@ -720,9 +726,16 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     // For cloze cards, delete all siblings with same front_content
-    const card = allCards.find(c => c.id === deleteId) ?? cardsMeta.find(c => c.id === deleteId);
-    if (card?.card_type === 'cloze') {
-      const siblings = await cardService.fetchClozeSiblings(allDeckIds, card.front_content);
+    const card = allCards.find(c => c.id === deleteId);
+    const metaCard = !card ? cardsMeta.find(c => c.id === deleteId) : null;
+    const isCloze = card?.card_type === 'cloze' || metaCard?.card_type === 'cloze';
+    if (isCloze) {
+      let frontContent = card?.front_content;
+      if (!frontContent) {
+        const { data } = await supabase.from('cards').select('front_content').eq('id', deleteId).single();
+        frontContent = data?.front_content;
+      }
+      const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
       try {
         await cardService.bulkDeleteCards(ids);

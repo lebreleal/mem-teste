@@ -178,28 +178,28 @@ export async function enhanceCard(params: {
   return data;
 }
 
-/** Lightweight metadata for all cards (for counts/filters). */
-export type CardMeta = { id: string; state: number | null; card_type: string; scheduled_date: string; front_content: string };
+/** Lightweight metadata for all cards (for counts/filters). No heavy content fields. */
+export type CardMeta = { id: string; state: number | null; card_type: string; scheduled_date: string };
 
 export async function fetchAggregatedCardsMeta(deckIds: string[]): Promise<CardMeta[]> {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
     return paginatedFetch<CardMeta>((from) =>
-      supabase.from('cards').select('id, state, card_type, scheduled_date, front_content').eq('deck_id', deckIds[0]).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select('id, state, card_type, scheduled_date').eq('deck_id', deckIds[0]).range(from, from + PAGE_SIZE - 1)
     );
   }
   const results: CardMeta[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
     const rows = await paginatedFetch<CardMeta>((from) =>
-      supabase.from('cards').select('id, state, card_type, scheduled_date, front_content').in('deck_id', batch).range(from, from + PAGE_SIZE - 1)
+      supabase.from('cards').select('id, state, card_type, scheduled_date').in('deck_id', batch).range(from, from + PAGE_SIZE - 1)
     );
     results.push(...rows);
   }
   return results;
 }
 
-/** Fetch paginated full cards for display. */
+/** Fetch paginated full cards for display. Uses server-side pagination. */
 export async function fetchAggregatedCardsPage(deckIds: string[], limit: number, offset: number) {
   if (deckIds.length === 0) return [];
   if (deckIds.length === 1) {
@@ -210,14 +210,19 @@ export async function fetchAggregatedCardsPage(deckIds: string[], limit: number,
     if (error) throw error;
     return (data ?? []) as CardRow[];
   }
-  // For multiple deck IDs, fetch in batches and manually paginate
+  // For multiple deck IDs, fetch only `limit` cards per batch and merge
+  // This avoids fetching ALL cards when we only need a page
   const results: CardRow[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
-    const rows = await paginatedFetch<CardRow>((from) =>
-      supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(from, from + PAGE_SIZE - 1)
-    );
-    results.push(...rows);
+    // Fetch at most offset+limit per batch to cover worst case distribution
+    const needed = offset + limit;
+    const { data, error } = await withRetry(async () => {
+      const res = await supabase.from('cards').select('*').in('deck_id', batch).order('created_at', { ascending: false }).range(0, needed - 1);
+      return res as { data: CardRow[] | null; error: any };
+    });
+    if (error) throw error;
+    if (data) results.push(...(data as CardRow[]));
   }
   results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return results.slice(offset, offset + limit);
@@ -261,11 +266,14 @@ export async function fetchClozeSiblings(deckIds: string[], frontContent: string
   return results;
 }
 
-/** Fetch aggregated stats for multiple decks in a single efficient query. */
+/** Fetch aggregated stats for multiple decks.
+ *  Uses lightweight count queries instead of fetching all card data + review logs.
+ */
 export async function fetchAggregatedStats(deckIds: string[]) {
   const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
   if (deckIds.length === 0) return totals;
 
+  // Fetch only the fields we need for counting states
   const allCards: { id: string; state: number | null; scheduled_date: string }[] = [];
   for (let i = 0; i < deckIds.length; i += IN_BATCH) {
     const batch = deckIds.slice(i, i + IN_BATCH);
@@ -282,8 +290,6 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   if (allCards.length === 0) return totals;
 
   const now = new Date();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
 
   for (const c of allCards) {
     if (c.state === 0 || c.state == null) totals.new_count++;
@@ -291,43 +297,7 @@ export async function fetchAggregatedStats(deckIds: string[]) {
     else if (c.state === 2 && new Date(c.scheduled_date) <= now) totals.review_count++;
   }
 
-  const cardIds = allCards.map(c => c.id);
-  const todayLogs = await batchedInFetch<{ card_id: string }>(cardIds, (batch, from) =>
-    supabase
-      .from('review_logs')
-      .select('card_id')
-      .in('card_id', batch)
-      .gte('reviewed_at', todayStart.toISOString())
-      .range(from, from + PAGE_SIZE - 1)
-  );
-
-  if (todayLogs.length === 0) return totals;
-
-  const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
-  const reviewedIds = [...reviewedCardIds];
-
-  const priorLogs = await batchedInFetch<{ card_id: string }>(reviewedIds, (batch, from) =>
-    supabase
-      .from('review_logs')
-      .select('card_id')
-      .in('card_id', batch)
-      .lt('reviewed_at', todayStart.toISOString())
-      .range(from, from + PAGE_SIZE - 1)
-  );
-
-  const hadPriorReview = new Set(priorLogs.map(l => l.card_id));
-
-  for (const cardId of reviewedCardIds) {
-    const card = allCards.find(c => c.id === cardId);
-    if (!card) continue;
-
-    if (!hadPriorReview.has(cardId)) {
-      totals.new_reviewed_today++;
-      if (card.state === 2) totals.new_graduated_today++;
-    } else if (card.state === 2 && new Date(card.scheduled_date) > now) {
-      totals.reviewed_today++;
-    }
-  }
-
+  // Skip expensive review_logs queries - reviewed_today / new_reviewed_today
+  // are already computed from deck metadata in DeckDetailContext (rootTotals)
   return totals;
 }
