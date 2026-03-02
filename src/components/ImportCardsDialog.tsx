@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X } from 'lucide-react';
 import ankiLogo from '@/assets/anki-logo.svg';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -201,8 +201,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
 
-  // AI organize subdecks state
-  const [organizing, setOrganizing] = useState(false);
+  // Subdecks from Anki hierarchy (no longer AI-organized)
   const [subdecks, setSubdecks] = useState<SubdeckOrganization[] | null>(null);
 
   // Anki state
@@ -231,7 +230,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setAnkiResult(null);
     setAnkiProgress('');
     setSubdecks(null);
-    setOrganizing(false);
   };
 
   const handleClose = (v: boolean) => {
@@ -298,35 +296,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     }
   }, []);
 
-  // AI organize into subdecks
-  const organizeWithAI = useCallback(async (cards: ParsedCard[]) => {
-    if (cards.length < 5) {
-      toast({ title: 'Poucos cartões para organizar', description: 'São necessários pelo menos 5 cartões.', variant: 'destructive' });
-      return;
-    }
-    setOrganizing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('organize-import', {
-        body: {
-          cards: cards.map(c => ({ front: c.front, back: c.back })),
-          deckName: deckName || undefined,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.subdecks && data.subdecks.length > 0) {
-        setSubdecks(normalizeSubdeckHierarchy(data.subdecks as SubdeckOrganization[]));
-        toast({ title: `${data.subdecks.length} subdecks identificados pela IA!` });
-      } else {
-        toast({ title: 'Não foi possível identificar temas distintos', variant: 'destructive' });
-      }
-    } catch (err: any) {
-      console.error('Organize failed:', err);
-      toast({ title: 'Erro ao organizar', description: err.message, variant: 'destructive' });
-    } finally {
-      setOrganizing(false);
-    }
-  }, [toast, deckName]);
 
   // CSV file upload
   const handleCsvFormatClick = () => {
@@ -575,89 +544,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   };
 
 
-  // Recursive node renderer for subdeck preview
-  const renderSubdeckNode = (node: SubdeckOrganization, depth = 0): React.ReactNode => {
-    const hasChildren = node.children && node.children.length > 0;
-    const totalInBranch = countTreeCards(node);
-    return (
-      <div key={`${node.name}-${depth}`} style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
-        <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
-          <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
-            {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
-            {getDeckNodeTitle(node.name)}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            {hasChildren ? `${totalInBranch} cartões` : `${node.card_indices.length} cartões`}
-          </span>
-        </div>
-        {hasChildren && (
-          <div className="mt-0.5 space-y-0.5">
-            {node.children!.map((child, j) => renderSubdeckNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Subdeck organization preview render
-  const renderSubdeckPreview = () => {
-    if (!subdecks || subdecks.length === 0 || !subdeckStats) return null;
-
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold flex items-center gap-1.5">
-            <FolderTree className="h-4 w-4 text-primary" />
-            Organização sugerida ({subdeckStats.decks} decks)
-          </Label>
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
-            <X className="h-3 w-3 mr-1" />
-            Remover
-          </Button>
-        </div>
-        <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2">
-          {subdecks.map((sd, i) => renderSubdeckNode(sd))}
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {hasHierarchy
-            ? `Serão criados ${subdeckStats.decks} deck(s), ${subdeckStats.cards} cartões e profundidade máxima ${subdeckStats.maxDepth}.`
-            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões, incluindo subníveis.`}
-        </p>
-      </div>
-    );
-  };
-
-  // AI organize button render
-  const renderOrganizeButton = (cards: ParsedCard[] | { front: string; back: string }[]) => {
-    if (cards.length < 5) return null;
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
-        onClick={() => organizeWithAI(cards.map(c => ({ front: c.front, back: c.back })))}
-        disabled={organizing}
-      >
-        {organizing ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Organizando...
-          </>
-        ) : subdecks ? (
-          <>
-            <Check className="h-3.5 w-3.5" />
-            Reorganizar com IA
-          </>
-        ) : (
-          <>
-            <FolderTree className="h-3.5 w-3.5" />
-            Organizar em subdecks com IA
-          </>
-        )}
-      </Button>
-    );
-  };
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -759,11 +645,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   </label>
                 )}
 
-                {/* AI organize button */}
-                {renderOrganizeButton(ankiResult.cards)}
-
-                {/* Subdeck preview */}
-                {renderSubdeckPreview()}
 
                 {/* Hierarquia detectada no arquivo Anki */}
                 {detectedAnkiHierarchy.nodes.length > 0 && (
@@ -786,40 +667,78 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   </div>
                 )}
 
-                {/* Preview */}
+                {/* Preview - same layout as deck detail CardList */}
                 <div>
                   <Label className="mb-2 block text-sm font-semibold">
                     Prévia ({ankiResult.cards.length} cartões)
                   </Label>
-                  <div className="max-h-48 overflow-y-auto space-y-2">
-                    {ankiResult.cards.slice(0, 20).map((card, i) => (
-                      <div key={i} className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            card.cardType === 'cloze' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                          }`}>
-                            {card.cardType === 'cloze' ? 'Cloze' : 'Básico'}
-                          </span>
-                          {card.deckName && (
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
-                              title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
-                            >
-                              {getDeckNodeTitle(card.deckName)}
+                  <div className="max-h-64 overflow-y-auto space-y-2.5">
+                    {ankiResult.cards.slice(0, 20).map((card, i) => {
+                      const isCloze = card.cardType === 'cloze';
+                      const typeLabel = isCloze ? 'CLOZE' : 'BÁSICO';
+                      const typeBadgeClass = isCloze
+                        ? 'bg-primary/15 text-primary border-primary/30'
+                        : 'bg-muted text-muted-foreground border-border';
+
+                      return (
+                        <div key={i} className="rounded-xl border border-border/60 bg-card p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                {card.deckName && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
+                                    title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
+                                  >
+                                    {getDeckNodeTitle(card.deckName)}
+                                  </span>
+                                )}
+                              </div>
+                              {isCloze ? (
+                                <p className="text-sm font-semibold text-foreground leading-snug">
+                                  {(() => {
+                                    const plain = card.front.replace(/<[^>]*>/g, '').replace(/<img[^>]*>/g, '[imagem]');
+                                    const parts: React.ReactNode[] = [];
+                                    const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                                    let lastIdx = 0;
+                                    let m;
+                                    let k = 0;
+                                    while ((m = regex.exec(plain)) !== null) {
+                                      if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                                      const n = parseInt(m[1]);
+                                      parts.push(
+                                        <span key={k++} className="inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold bg-primary/15 text-primary border-b-2 border-primary/50 rounded">
+                                          <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
+                                          {m[2]}
+                                        </span>
+                                      );
+                                      lastIdx = m.index + m[0].length;
+                                    }
+                                    if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                                    return parts.length > 0 ? parts : plain;
+                                  })()}
+                                </p>
+                              ) : (
+                                <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2"
+                                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front.replace(/<img[^>]*>/g, '[imagem]')) }} />
+                              )}
+                              {!isCloze && card.back && (
+                                <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2"
+                                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back.replace(/<img[^>]*>/g, '[imagem]')) }} />
+                              )}
+                            </div>
+                            <span className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0 ${typeBadgeClass}`}>
+                              {isCloze && (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                                  <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {typeLabel}
                             </span>
-                          )}
-                          {card.tags.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground">{card.tags.slice(0, 3).join(', ')}</span>
-                          )}
+                          </div>
                         </div>
-                        <p className="font-medium text-card-foreground text-xs line-clamp-2"
-                           dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front.replace(/<img[^>]*>/g, '[imagem]')) }} />
-                        {card.cardType !== 'cloze' && card.back && (
-                          <p className="mt-1 text-muted-foreground text-xs line-clamp-2"
-                             dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back.replace(/<img[^>]*>/g, '[imagem]')) }} />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                     {ankiResult.cards.length > 20 && (
                       <p className="text-center text-xs text-muted-foreground">...e mais {ankiResult.cards.length - 20} cartões</p>
                     )}
@@ -957,27 +876,29 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
               )}
 
-              {/* AI Organize button */}
-              {parsedCards.length >= 5 && renderOrganizeButton(parsedCards)}
 
-              {/* Subdeck preview */}
-              {renderSubdeckPreview()}
-
-              {/* Preview */}
+              {/* Preview - same layout as deck detail */}
               <div>
                 <Label className="mb-2 block text-sm font-semibold">Prévia dos cartões ({parsedCards.length})</Label>
                 {parsedCards.length > 0 ? (
-                  <div className="max-h-48 overflow-y-auto space-y-2">
+                  <div className="max-h-64 overflow-y-auto space-y-2.5">
                     {parsedCards.slice(0, 20).map((card, i) => (
-                      <div key={i} className={`rounded-lg border p-3 text-sm ${
-                        !card.back?.trim() ? 'border-warning/50 bg-warning/5' : 'border-border bg-muted/30'
+                      <div key={i} className={`rounded-xl border p-4 ${
+                        !card.back?.trim() ? 'border-warning/50 bg-warning/5' : 'border-border/60 bg-card'
                       }`}>
-                        <p className="font-medium text-card-foreground text-xs">{card.front}</p>
-                        {card.back ? (
-                          <p className="mt-1 text-muted-foreground text-xs line-clamp-3">{card.back}</p>
-                        ) : (
-                          <p className="mt-1 text-warning text-[11px] italic">Sem verso</p>
-                        )}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{card.front}</p>
+                            {card.back ? (
+                              <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">{card.back}</p>
+                            ) : (
+                              <p className="mt-1.5 text-warning text-[11px] italic">Sem verso</p>
+                            )}
+                          </div>
+                          <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0 bg-muted text-muted-foreground border-border">
+                            BÁSICO
+                          </span>
+                        </div>
                       </div>
                     ))}
                     {parsedCards.length > 20 && (
@@ -995,10 +916,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                 <Button onClick={handleImport} disabled={parsedCards.length === 0 || !deckName.trim() || loading}>
-                  {loading ? 'Importando...' : subdecks && subdeckStats
-                    ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
-                    : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`
-                  }
+                  {loading ? 'Importando...' : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`}
                 </Button>
               </div>
             </div>
