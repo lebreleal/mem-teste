@@ -86,10 +86,8 @@ export async function createCard(deckId: string, input: { frontContent: string; 
   return data;
 }
 
-/** Create multiple cards at once (batch insert). Splits into batches of 200 to avoid payload limits. */
+/** Create multiple cards at once (batch insert). Uses parallel batches for speed. */
 export async function createCards(deckId: string, cards: { frontContent: string; backContent: string; cardType: string }[]) {
-  // Use incrementing created_at timestamps so insertion order is preserved
-  // This ensures that when shuffle is disabled, cards appear in the original order
   const baseTime = Date.now();
   const rows = cards.map((c, idx) => ({
     deck_id: deckId,
@@ -101,13 +99,23 @@ export async function createCards(deckId: string, cards: { frontContent: string;
     difficulty: 0,
     created_at: new Date(baseTime + idx).toISOString(),
   }));
-  const BATCH_SIZE = 200;
+  const BATCH_SIZE = 500;
+  const CONCURRENT = 5;
   const allData: any[] = [];
+  const batches: typeof rows[] = [];
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { data, error } = await supabase.from('cards').insert(batch).select();
-    if (error) throw error;
-    if (data) allData.push(...data);
+    batches.push(rows.slice(i, i + BATCH_SIZE));
+  }
+  // Process batches in parallel groups
+  for (let i = 0; i < batches.length; i += CONCURRENT) {
+    const group = batches.slice(i, i + CONCURRENT);
+    const results = await Promise.all(
+      group.map(batch => supabase.from('cards').insert(batch).select())
+    );
+    for (const { data, error } of results) {
+      if (error) throw error;
+      if (data) allData.push(...data);
+    }
   }
   return allData;
 }
