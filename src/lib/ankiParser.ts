@@ -228,7 +228,7 @@ async function extractMediaLazy(
       const bytes = await zipEntry.async('uint8array');
       const ext = filename.split('.').pop()?.toLowerCase() || '';
       const mimeType = MIME_MAP[ext] || 'application/octet-stream';
-      const blob = new Blob([bytes], { type: mimeType });
+      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeType });
       const blobUrl = URL.createObjectURL(blob);
       mediaMap.set(filename, blobUrl);
     } catch (err) {
