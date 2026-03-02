@@ -214,8 +214,69 @@ export async function createAlgorithmCopy(userId: string, deckId: string, algori
   return newDeck;
 }
 
-/** Import a deck with cards. Returns the new deck. */
-export async function importDeck(userId: string, name: string, folderId: string | null, cards: { frontContent: string; backContent: string; cardType: string }[], algorithmMode?: string) {
+/** Card with optional progress data for import. */
+export interface CardImportInput {
+  frontContent: string;
+  backContent: string;
+  cardType: string;
+  progress?: {
+    state: number;
+    stability: number;
+    difficulty: number;
+    scheduledDate: string;
+    learningStep: number;
+    lastReviewedAt?: string;
+  };
+}
+
+/** Revlog entry referencing card by index. */
+export interface RevlogImportEntry {
+  cardIndex: number;
+  rating: number;
+  reviewedAt: string;
+  stability: number;
+  difficulty: number;
+  scheduledDate: string;
+  state: number | null;
+  elapsedMs: number | null;
+}
+
+/** Helper to batch-insert revlog entries using a card ID mapping. */
+async function insertRevlogBatch(
+  userId: string,
+  revlog: RevlogImportEntry[],
+  cardIdMap: Map<number, string>,
+) {
+  const BATCH = 500;
+  const rows = revlog
+    .filter(r => cardIdMap.has(r.cardIndex))
+    .map(r => ({
+      card_id: cardIdMap.get(r.cardIndex)!,
+      user_id: userId,
+      rating: r.rating,
+      reviewed_at: r.reviewedAt,
+      stability: r.stability,
+      difficulty: r.difficulty,
+      scheduled_date: r.scheduledDate,
+      state: r.state,
+      elapsed_ms: r.elapsedMs,
+    }));
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const { error } = await supabase.from('review_logs').insert(batch as any);
+    if (error) console.warn('Revlog insert error (continuing):', error.message);
+  }
+}
+
+/** Import a deck with cards and optional progress/revlog. Returns the new deck. */
+export async function importDeck(
+  userId: string,
+  name: string,
+  folderId: string | null,
+  cards: CardImportInput[],
+  algorithmMode?: string,
+  revlog?: RevlogImportEntry[],
+) {
   const { data: newDeck, error: deckErr } = await supabase
     .from('decks')
     .insert({ name, user_id: userId, folder_id: folderId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
@@ -228,16 +289,34 @@ export async function importDeck(userId: string, name: string, folderId: string 
     front_content: c.frontContent,
     back_content: c.backContent,
     card_type: c.cardType,
-    state: 0,
-    stability: 0,
-    difficulty: 0,
+    state: c.progress?.state ?? 0,
+    stability: c.progress?.stability ?? 0,
+    difficulty: c.progress?.difficulty ?? 0,
+    scheduled_date: c.progress?.scheduledDate ?? new Date().toISOString(),
+    learning_step: c.progress?.learningStep ?? 0,
+    ...(c.progress?.lastReviewedAt ? { last_reviewed_at: c.progress.lastReviewedAt } : {}),
   }));
-  // Batch insert to avoid payload limits
+
+  // Batch insert and collect IDs for revlog mapping
   const BATCH_SIZE = 200;
+  const cardIdMap = new Map<number, string>();
+  let globalIdx = 0;
+
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error: cardsErr } = await supabase.from('cards').insert(batch as any);
+    const { data: inserted, error: cardsErr } = await supabase.from('cards').insert(batch as any).select('id');
     if (cardsErr) throw cardsErr;
+    if (inserted) {
+      for (const row of inserted) {
+        cardIdMap.set(globalIdx, row.id);
+        globalIdx++;
+      }
+    }
+  }
+
+  // Insert revlog if provided
+  if (revlog && revlog.length > 0 && cardIdMap.size > 0) {
+    await insertRevlogBatch(userId, revlog, cardIdMap);
   }
   
   return newDeck;
@@ -255,30 +334,41 @@ export async function importDeckWithSubdecks(
   userId: string,
   parentName: string,
   folderId: string | null,
-  cards: { frontContent: string; backContent: string; cardType: string }[],
+  cards: CardImportInput[],
   subdecks: SubdeckNode[],
   algorithmMode?: string,
+  revlog?: RevlogImportEntry[],
 ) {
-  // Helper to insert cards for a deck
+  // Global mapping: original card index → inserted card ID (for revlog)
+  const globalCardIdMap = new Map<number, string>();
 
-  // Helper to insert cards for a deck (batched)
+  // Helper to insert cards for a deck (batched) with progress
   const insertCards = async (deckId: string, indices: number[]) => {
-    const validCards = indices
-      .filter(idx => idx >= 0 && idx < cards.length)
-      .map(idx => ({
-        deck_id: deckId,
-        front_content: cards[idx].frontContent,
-        back_content: cards[idx].backContent,
-        card_type: cards[idx].cardType,
-        state: 0,
-        stability: 0,
-        difficulty: 0,
-      }));
+    const validIndices = indices.filter(idx => idx >= 0 && idx < cards.length);
+    const rows = validIndices.map(idx => ({
+      deck_id: deckId,
+      front_content: cards[idx].frontContent,
+      back_content: cards[idx].backContent,
+      card_type: cards[idx].cardType,
+      state: cards[idx].progress?.state ?? 0,
+      stability: cards[idx].progress?.stability ?? 0,
+      difficulty: cards[idx].progress?.difficulty ?? 0,
+      scheduled_date: cards[idx].progress?.scheduledDate ?? new Date().toISOString(),
+      learning_step: cards[idx].progress?.learningStep ?? 0,
+      ...(cards[idx].progress?.lastReviewedAt ? { last_reviewed_at: cards[idx].progress.lastReviewedAt } : {}),
+    }));
     const BATCH_SIZE = 200;
-    for (let i = 0; i < validCards.length; i += BATCH_SIZE) {
-      const batch = validCards.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase.from('cards').insert(batch as any);
+    let localIdx = 0;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { data: inserted, error } = await supabase.from('cards').insert(batch as any).select('id');
       if (error) throw error;
+      if (inserted) {
+        for (const row of inserted) {
+          globalCardIdMap.set(validIndices[localIdx], row.id);
+          localIdx++;
+        }
+      }
     }
   };
 
@@ -332,12 +422,16 @@ export async function importDeckWithSubdecks(
   const parentId = (parentDeck as any).id;
 
   for (const sd of subdecks) {
-    // If AI marked a subdeck as unrelated (standalone), create it at root level (no parent)
     if ((sd as any).standalone) {
       await createDeckTree(sd, null, folderId);
     } else {
       await createDeckTree(sd, parentId, folderId);
     }
+  }
+
+  // Insert revlog after all cards have been created
+  if (revlog && revlog.length > 0 && globalCardIdMap.size > 0) {
+    await insertRevlogBatch(userId, revlog, globalCardIdMap);
   }
 
   return parentDeck;

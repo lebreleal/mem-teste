@@ -35,10 +35,35 @@ interface DetectedDeckNode {
   children: DetectedDeckNode[];
 }
 
+interface CardImportData {
+  frontContent: string;
+  backContent: string;
+  cardType: string;
+  progress?: {
+    state: number;
+    stability: number;
+    difficulty: number;
+    scheduledDate: string;
+    learningStep: number;
+    lastReviewedAt?: string;
+  };
+}
+
+interface RevlogImportData {
+  cardIndex: number;
+  rating: number;
+  reviewedAt: string;
+  stability: number;
+  difficulty: number;
+  scheduledDate: string;
+  state: number | null;
+  elapsedMs: number | null;
+}
+
 interface ImportCardsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (deckName: string, cards: { frontContent: string; backContent: string; cardType: string }[], subdecks?: SubdeckOrganization[]) => void;
+  onImport: (deckName: string, cards: CardImportData[], subdecks?: SubdeckOrganization[], revlog?: RevlogImportData[]) => void;
   loading?: boolean;
 }
 
@@ -185,6 +210,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [ankiProgress, setAnkiProgress] = useState('');
   const [ankiResult, setAnkiResult] = useState<AnkiParseResult | null>(null);
   const ankiCleanupRef = useRef<(() => void) | null>(null);
+  const [importProgress, setImportProgress] = useState(true);
 
   const csvFileRef = useRef<HTMLInputElement>(null);
   const ankiFileRef = useRef<HTMLInputElement>(null);
@@ -376,17 +402,23 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const handleImport = () => {
     if (source === 'anki' && ankiResult) {
       if (!deckName.trim()) return;
-      const cards = ankiResult.cards.map(c => ({
+      const cards: CardImportData[] = ankiResult.cards.map((c, i) => ({
         frontContent: c.front,
         backContent: c.back,
         cardType: c.cardType,
+        ...(importProgress && ankiResult.progress?.[i] ? { progress: ankiResult.progress[i] } : {}),
       }));
-      onImport(deckName.trim(), cards, subdecks ?? undefined);
+      onImport(
+        deckName.trim(),
+        cards,
+        subdecks ?? undefined,
+        importProgress && ankiResult.revlog ? ankiResult.revlog : undefined,
+      );
       reset();
       return;
     }
     if (parsedCards.length === 0 || !deckName.trim()) return;
-    const cards = parsedCards.map(c => ({
+    const cards: CardImportData[] = parsedCards.map(c => ({
       frontContent: c.front,
       backContent: c.back,
       cardType: c.cardType || 'basic',
@@ -699,6 +731,24 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                     <Package className="h-4 w-4 text-primary" />
                     <span className="text-xs text-foreground">{ankiResult.mediaCount} arquivos de mídia incluídos</span>
                   </div>
+                )}
+
+                {/* Progress import toggle */}
+                {ankiResult.hasProgress && (
+                  <label className="flex items-center justify-between gap-3 rounded-xl bg-accent/30 border border-accent px-3 py-2.5 cursor-pointer">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground">Importar progresso</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Traz estados, intervalos{ankiResult.revlog && ankiResult.revlog.length > 0 ? ` e ${ankiResult.revlog.length.toLocaleString()} revisões` : ''} do Anki
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={importProgress}
+                      onChange={e => setImportProgress(e.target.checked)}
+                      className="accent-primary h-4 w-4"
+                    />
+                  </label>
                 )}
 
                 {/* AI organize button */}

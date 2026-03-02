@@ -25,11 +25,34 @@ export interface AnkiSubdeck {
   children?: AnkiSubdeck[];
 }
 
+export interface AnkiCardProgress {
+  state: number;       // 0=new, 1=learning, 2=review, 3=relearning
+  stability: number;   // from ivl (days)
+  difficulty: number;  // from factor (converted to FSRS 1-10 scale)
+  scheduledDate: string; // ISO string
+  learningStep: number;
+  lastReviewedAt?: string;
+}
+
+export interface AnkiReviewLogEntry {
+  cardIndex: number;   // index in the cards output array
+  rating: number;      // 1-4
+  reviewedAt: string;  // ISO string
+  stability: number;
+  difficulty: number;
+  scheduledDate: string;
+  state: number | null;
+  elapsedMs: number | null;
+}
+
 export interface AnkiParseResult {
   deckName: string;
   cards: AnkiCard[];
   mediaCount: number;
   subdecks?: AnkiSubdeck[];
+  progress?: AnkiCardProgress[];
+  revlog?: AnkiReviewLogEntry[];
+  hasProgress?: boolean;
   /** Call this to revoke all Blob URLs and free memory */
   cleanup?: () => void;
 }
@@ -37,233 +60,144 @@ export interface AnkiParseResult {
 export type AnkiProgressCallback = (message: string, current?: number, total?: number) => void;
 
 interface AnkiModel {
+  id: string;
   name: string;
-  flds: { name: string; ord: number }[];
-  type: number; // 0 = standard, 1 = cloze
-  tmpls: { name: string; qfmt: string; afmt: string; ord: number }[];
+  type: number;
+  flds: Array<{ name: string; ord: number }>;
+  tmpls: Array<{ name: string; qfmt: string; afmt: string; ord: number }>;
 }
 
-/* ── helpers ── */
-
-/** Yield to event loop so UI can update */
-const yieldToUI = () => new Promise<void>(r => setTimeout(r, 0));
+async function yieldToUI() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
 
 function replaceMediaRefs(html: string, mediaMap: Map<string, string>): string {
-  return html.replace(/src="([^"]+)"/g, (match, filename) => {
-    const dataUrl = mediaMap.get(filename);
-    return dataUrl ? `src="${dataUrl}"` : match;
+  return html.replace(/src="([^"]+)"/gi, (match, filename) => {
+    const blobUrl = mediaMap.get(filename);
+    return blobUrl ? `src="${blobUrl}"` : match;
   });
 }
 
-function stripAnkiTemplateSyntax(html: string): string {
-  return html
-    .replace(/\{\{FrontSide\}\}/gi, '')
-    .replace(/\{\{type:[^}]+\}\}/gi, '')
-    .replace(/<hr\s*id="answer"\s*\/?>/gi, '')
-    .replace(/\{\{#[^}]+\}\}[\s\S]*?\{\{\/[^}]+\}\}/g, '')
+function stripAnkiTemplateSyntax(text: string): string {
+  return text
+    .replace(/\{\{[^}]+\}\}/g, '')
+    .replace(/<[^>]+>/g, '')
     .trim();
 }
 
 function renderTemplate(template: string, fields: Record<string, string>): string {
-  const esc = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let result = template;
-
-  // Conditional sections {{#Field}}...{{/Field}}
-  result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/gi, (_m, name: string, content: string) => {
-    return fields[name]?.trim() ? content : '';
-  });
-  // Inverse {{^Field}}...{{/Field}}
-  result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/gi, (_m, name: string, content: string) => {
-    return fields[name]?.trim() ? '' : content;
-  });
-
-  for (const [name, value] of Object.entries(fields)) {
-    const e = esc(name);
-    result = result.replace(new RegExp(`\\{\\{${e}\\}\\}`, 'gi'), value);
-    result = result.replace(new RegExp(`\\{\\{text:${e}\\}\\}`, 'gi'), value.replace(/<[^>]*>/g, ''));
-    result = result.replace(new RegExp(`\\{\\{cloze:${e}\\}\\}`, 'gi'), value);
+  for (const [key, value] of Object.entries(fields)) {
+    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+    result = result.replace(regex, value || '');
   }
-  return stripAnkiTemplateSyntax(result);
+  result = result.replace(/\{\{[^}]+\}\}/g, '');
+  return result;
 }
 
 function convertClozeFormat(text: string): string {
-  return text.replace(/\{\{c(\d+)::([^:}]+)(?:::[^}]*)?\}\}/g, '{{c$1::$2}}');
+  return text.replace(/\{\{c(\d+)::([^}]+)\}\}/g, '{{c$1::$2}}');
 }
 
 function isLikelySQLite(bytes: Uint8Array): boolean {
   if (bytes.length < 16) return false;
-  const header = Array.from(bytes.slice(0, 16)).map(b => String.fromCharCode(b)).join('');
-  return header === 'SQLite format 3\0';
+  const header = String.fromCharCode(...bytes.slice(0, 16));
+  return header.startsWith('SQLite format 3');
 }
 
 function isLikelyZstd(bytes: Uint8Array): boolean {
-  return bytes.length >= 4 && bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd;
+  if (bytes.length < 4) return false;
+  return bytes[0] === 0x28 && bytes[1] === 0xb5 && bytes[2] === 0x2f && bytes[3] === 0xfd;
 }
 
-function normalizeAnkiId(value: string | number | null | undefined): string {
-  if (value == null) return '';
-  const raw = String(value).trim();
-  if (!raw) return '';
-
-  if (/^-?\d+(\.0+)?$/.test(raw)) {
-    return raw.replace(/\.0+$/, '');
-  }
-
-  if (/^-?\d+(\.\d+)?e[+-]?\d+$/i.test(raw)) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      return Math.trunc(parsed).toString();
-    }
-  }
-
-  return raw;
+function normalizeAnkiId(val: string | number): string {
+  return String(val);
 }
 
-function splitDeckPath(rawDeckName: string): string[] {
-  const raw = rawDeckName.trim();
-  if (!raw) return [];
-
-  const parts = raw
-    .split(/::|\u001f|[\|｜¦]/g)
-    .map(part => part.trim())
-    .filter(Boolean);
-
-  return parts.length > 0 ? parts : [raw];
+function splitDeckPath(deckName: string): string[] {
+  return deckName.split('::').map(s => s.trim()).filter(Boolean);
 }
 
 async function resolveAnkiArchive(file: File): Promise<JSZip> {
-  let zip = await JSZip.loadAsync(file);
-
-  for (let depth = 0; depth < 3; depth++) {
-    const hasCollection = Object.values(zip.files).some(
-      entry => !entry.dir && /(^|\/)collection\.anki(21b|21|2)$/i.test(entry.name)
-    );
-    if (hasCollection) return zip;
-
-    const innerArchive = Object.values(zip.files).find(
-      entry => !entry.dir && /\.(apkg|colpkg|zip)$/i.test(entry.name)
-    );
-    if (!innerArchive) return zip;
-
-    const innerBlob = await innerArchive.async('blob');
-    zip = await JSZip.loadAsync(innerBlob);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (isLikelyZstd(bytes)) {
+    const decompressed = fzstd.decompress(bytes);
+    return await JSZip.loadAsync(decompressed);
   }
-
-  return zip;
+  return await JSZip.loadAsync(bytes);
 }
 
 async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isModernFormat: boolean }> {
-  const files = Object.values(zip.files).filter(entry => !entry.dir);
-
-  const candidates = files
-    .filter(entry => /(^|\/)collection\.anki(21b|21|2)$/i.test(entry.name))
-    .map(entry => {
-      const lower = entry.name.toLowerCase();
-      const priority = lower.endsWith('collection.anki21b') ? 0 : lower.endsWith('collection.anki21') ? 1 : 2;
-      return { entry, priority };
-    })
-    .sort((a, b) => a.priority - b.priority);
-
-  if (candidates.length === 0) {
-    throw new Error('Arquivo .apkg inválido: banco de dados não encontrado');
-  }
-
-  let fallback: { dbBytes: Uint8Array; isModernFormat: boolean } | null = null;
-
-  for (const { entry } of candidates) {
-    const rawBytes = await entry.async('uint8array');
-    const isModernFormat = /collection\.anki21b$/i.test(entry.name);
-
-    let dbBytes = rawBytes;
-    if (!isLikelySQLite(dbBytes) && isLikelyZstd(dbBytes)) {
-      try {
-        dbBytes = fzstd.decompress(dbBytes);
-      } catch (error) {
-        console.warn('Falha ao descompactar banco Anki em zstd:', error);
-      }
+  const collectionAnki21 = zip.file('collection.anki21');
+  if (collectionAnki21) {
+    const bytes = await collectionAnki21.async('uint8array');
+    if (isLikelySQLite(bytes)) {
+      return { dbBytes: bytes, isModernFormat: true };
     }
-
-    if (!fallback) {
-      fallback = { dbBytes, isModernFormat };
-    }
-
-    if (isLikelySQLite(dbBytes)) {
-      return { dbBytes, isModernFormat };
+    if (isLikelyZstd(bytes)) {
+      const decompressed = fzstd.decompress(bytes);
+      return { dbBytes: decompressed, isModernFormat: true };
     }
   }
 
-  return fallback!;
+  const collectionAnki2 = zip.file('collection.anki2');
+  if (collectionAnki2) {
+    const bytes = await collectionAnki2.async('uint8array');
+    if (isLikelySQLite(bytes)) {
+      return { dbBytes: bytes, isModernFormat: false };
+    }
+  }
+
+  throw new Error('Arquivo de banco de dados não encontrado no .apkg');
 }
 
-/* ── extract media (lazy, Blob URLs, parallel batches) ── */
-
-function parseMediaMapping(zip: JSZip): Record<string, string> {
-  return {};  // placeholder, actual parsing is async
-}
-
-async function loadMediaMapping(zip: JSZip): Promise<Record<string, string>> {
-  if (!zip.files['media']) {
-    console.warn('[ANKI] loadMediaMapping: no "media" file in zip');
-    // Fallback: look for numbered files directly (some apkg have media files without a mapping)
-    const mapping: Record<string, string> = {};
-    for (const [name, entry] of Object.entries(zip.files)) {
-      if (entry.dir) continue;
-      // Numbered files like "0", "1", "2" are media in Anki archives
-      if (/^\d+$/.test(name)) {
-        // Without a mapping we can't know the real filename, so use the number as-is
-        mapping[name] = name;
-      }
-    }
-    if (Object.keys(mapping).length > 0) {
-      console.log(`[ANKI] loadMediaMapping: found ${Object.keys(mapping).length} numbered files without mapping`);
-    }
-    return mapping;
-  }
+async function parseMediaMapping(zip: JSZip): Promise<Record<string, string>> {
+  const mediaFile = zip.file('media');
+  if (!mediaFile) return {};
   try {
-    const raw = await zip.files['media'].async('uint8array');
-    // Try to detect if it's zstd-compressed
-    let text: string;
-    if (isLikelyZstd(raw)) {
-      try {
-        const decompressed = fzstd.decompress(raw);
-        text = new TextDecoder().decode(decompressed);
-      } catch {
-        text = new TextDecoder().decode(raw);
-      }
-    } else {
-      text = new TextDecoder().decode(raw);
-    }
-    
-    const parsed = JSON.parse(text) as Record<string, string>;
-    console.log(`[ANKI] loadMediaMapping: parsed ${Object.keys(parsed).length} entries`);
-    return parsed;
-  } catch (e) {
-    console.warn('[ANKI] loadMediaMapping: failed to parse media file:', e);
+    const text = await mediaFile.async('text');
+    return JSON.parse(text);
+  } catch {
     return {};
   }
 }
 
-/** Scan all cards to find which media filenames are actually referenced */
+async function loadMediaMapping(zip: JSZip): Promise<Map<string, string>> {
+  const mapping = await parseMediaMapping(zip);
+  const result = new Map<string, string>();
+  for (const [key, value] of Object.entries(mapping)) {
+    result.set(value, key);
+  }
+  return result;
+}
+
 function collectReferencedMedia(cards: AnkiCard[]): Set<string> {
-  const refs = new Set<string>();
-  const srcRegex = /src="([^"]+)"/g;
-  const soundRegex = /\[sound:([^\]]+)\]/g;
+  const referenced = new Set<string>();
+  const srcRegex = /src="([^"]+)"/gi;
   for (const card of cards) {
-    for (const html of [card.front, card.back]) {
-      let m: RegExpExecArray | null;
-      srcRegex.lastIndex = 0;
-      while ((m = srcRegex.exec(html))) refs.add(m[1]);
-      soundRegex.lastIndex = 0;
-      while ((m = soundRegex.exec(html))) refs.add(m[1]);
+    let match;
+    while ((match = srcRegex.exec(card.front)) !== null) {
+      referenced.add(match[1]);
+    }
+    while ((match = srcRegex.exec(card.back)) !== null) {
+      referenced.add(match[1]);
     }
   }
-  return refs;
+  return referenced;
 }
 
 const MIME_MAP: Record<string, string> = {
-  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-  gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
 };
 
 async function extractMediaLazy(
@@ -271,218 +205,141 @@ async function extractMediaLazy(
   referencedFiles: Set<string>,
   onProgress?: AnkiProgressCallback,
 ): Promise<{ mediaMap: Map<string, string>; totalMediaCount: number }> {
-  const mediaMapping = await loadMediaMapping(zip);
-  const totalMediaCount = Object.keys(mediaMapping).length;
-
-  // Build reverse mapping: filename -> zip entry number
-  const reverseMap = new Map<string, string>();
-  for (const [num, name] of Object.entries(mediaMapping)) {
-    reverseMap.set(name, num);
-  }
-
-  // Filter to only needed files
-  const needed: Array<[string, string]> = [];
-  for (const refName of referencedFiles) {
-    const zipNum = reverseMap.get(refName);
-    if (zipNum && zip.files[zipNum]) {
-      needed.push([zipNum, refName]);
-    }
-  }
-
-  console.log(`[ANKI] extractMediaLazy: totalMapping=${totalMediaCount}, referenced=${referencedFiles.size}, needed=${needed.length}`);
-
   const mediaMap = new Map<string, string>();
-  if (needed.length === 0) return { mediaMap, totalMediaCount };
+  const nameToKey = await loadMediaMapping(zip);
+  const allMediaFiles = Object.keys(zip.files).filter(name => /^\d+$/.test(name));
+  const totalMediaCount = allMediaFiles.length;
 
-  const BATCH = 20;
-  for (let i = 0; i < needed.length; i += BATCH) {
-    const batch = needed.slice(i, i + BATCH);
-    await Promise.all(batch.map(async ([num, name]) => {
-      const file = zip.files[num];
-      if (!file) return;
-      try {
-        const blob = await file.async('blob');
-        const ext = name.split('.').pop()?.toLowerCase() || '';
-        const mimeType = MIME_MAP[ext] || 'application/octet-stream';
-        const typedBlob = new Blob([blob], { type: mimeType });
-        mediaMap.set(name, URL.createObjectURL(typedBlob));
-      } catch {}
-    }));
-    const done = Math.min(i + BATCH, needed.length);
-    onProgress?.(`Extraindo mídia (${done}/${needed.length})...`, done, needed.length);
+  let processed = 0;
+  for (const key of allMediaFiles) {
+    const filename = nameToKey.get(key);
+    if (!filename || !referencedFiles.has(filename)) {
+      processed++;
+      continue;
+    }
+
+    const zipEntry = zip.file(key);
+    if (!zipEntry) {
+      processed++;
+      continue;
+    }
+
+    try {
+      const bytes = await zipEntry.async('uint8array');
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      const mimeType = MIME_MAP[ext] || 'application/octet-stream';
+      const blob = new Blob([bytes], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+      mediaMap.set(filename, blobUrl);
+    } catch (err) {
+      console.warn(`Failed to extract media ${filename}:`, err);
+    }
+
+    processed++;
+    if (processed % 10 === 0) {
+      onProgress?.('Extraindo mídia...', processed, totalMediaCount);
+      await yieldToUI();
+    }
   }
 
   return { mediaMap, totalMediaCount };
 }
 
-/* ── parse models from legacy col table ── */
-
 function parseModelsFromCol(db: Database): { models: Record<string, AnkiModel>; deckName: string; deckNamesById: Record<string, string> } {
   const models: Record<string, AnkiModel> = {};
-  const deckNamesById: Record<string, string> = {};
   let deckName = 'Anki Import';
+  const deckNamesById: Record<string, string> = {};
 
   try {
     const colResult = db.exec('SELECT models, decks FROM col LIMIT 1');
-    if (colResult.length > 0 && colResult[0].values.length > 0) {
-      const modelsRaw = colResult[0].values[0][0] as string;
-      if (modelsRaw && modelsRaw.startsWith('{')) {
-        const modelsJson = JSON.parse(modelsRaw);
-        for (const [mid, model] of Object.entries(modelsJson)) {
-          const m = model as any;
-          const normalizedMid = normalizeAnkiId(mid);
-          models[normalizedMid] = {
-            name: m.name || '',
-            flds: (m.flds || []).map((f: any) => ({ name: f.name, ord: f.ord })).sort((a: any, b: any) => a.ord - b.ord),
-            type: m.type || 0,
-            tmpls: (m.tmpls || []).map((t: any) => ({ name: t.name, qfmt: t.qfmt, afmt: t.afmt, ord: t.ord })),
-          };
-        }
-      }
-
-      const decksRaw = colResult[0].values[0][1] as string;
-      if (decksRaw && decksRaw.startsWith('{')) {
-        const decksJson = JSON.parse(decksRaw) as Record<string, any>;
-        for (const [id, deck] of Object.entries(decksJson)) {
-          if (deck?.name) deckNamesById[normalizeAnkiId(id)] = String(deck.name);
-        }
-
-        const deckEntries = Object.values(decksJson) as any[];
-        const nonDefault = deckEntries.find((d: any) => d.name !== 'Default' && d.name !== 'Padrão');
-        if (nonDefault) deckName = nonDefault.name;
-        else if (deckEntries.length > 0) deckName = deckEntries[0].name;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse col table:', e);
-  }
-
-  return { models, deckName, deckNamesById };
-}
-
-/* ── parse models from anki21b tables (notetypes, fields, templates) ── */
-
-function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel>; deckName: string; deckNamesById: Record<string, string> } {
-  const models: Record<string, AnkiModel> = {};
-  const deckNamesById: Record<string, string> = {};
-  let deckName = 'Anki Import';
-
-  try {
-    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='notetypes'");
-    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+    if (colResult.length === 0 || colResult[0].values.length === 0) {
       return { models, deckName, deckNamesById };
     }
 
-    const ntResult = db.exec('SELECT id, name, config FROM notetypes');
-    if (ntResult.length > 0) {
-      for (const row of ntResult[0].values) {
-        const ntId = normalizeAnkiId(row[0] as string | number);
-        const ntName = row[1] as string;
-        models[ntId] = { name: ntName, flds: [], type: 0, tmpls: [] };
+    const row = colResult[0].values[0];
+    const modelsJson = row[0] as string;
+    const decksJson = row[1] as string;
+
+    if (modelsJson) {
+      const modelsObj = JSON.parse(modelsJson);
+      for (const [id, model] of Object.entries(modelsObj)) {
+        const m = model as any;
+        models[normalizeAnkiId(id)] = {
+          id: normalizeAnkiId(id),
+          name: m.name || 'Unknown',
+          type: m.type || 0,
+          flds: (m.flds || []).map((f: any) => ({ name: f.name, ord: f.ord })),
+          tmpls: (m.tmpls || []).map((t: any) => ({ name: t.name, qfmt: t.qfmt, afmt: t.afmt, ord: t.ord })),
+        };
       }
     }
 
-    const fieldsResult = db.exec('SELECT ntid, ord, name FROM fields ORDER BY ord');
-    if (fieldsResult.length > 0) {
-      for (const row of fieldsResult[0].values) {
-        const ntId = normalizeAnkiId(row[0] as string | number);
-        if (models[ntId]) {
-          models[ntId].flds.push({ name: row[2] as string, ord: row[1] as number });
+    if (decksJson) {
+      const decksObj = JSON.parse(decksJson);
+      for (const [id, deck] of Object.entries(decksObj)) {
+        const d = deck as any;
+        const name = d.name || 'Default';
+        deckNamesById[normalizeAnkiId(id)] = name;
+        if (name !== 'Default' && name !== 'Padrão') {
+          deckName = name;
         }
       }
     }
-
-    // Check which columns exist in templates table
-    const tmplTableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='templates'");
-    if (tmplTableCheck.length > 0 && tmplTableCheck[0].values.length > 0) {
-      const tmplCols = db.exec('PRAGMA table_info(templates)');
-      const tmplColSet = new Set<string>();
-      if (tmplCols.length > 0) {
-        for (const row of tmplCols[0].values) tmplColSet.add(String(row[1]));
-      }
-
-      const hasQfmt = tmplColSet.has('qfmt');
-      const hasAfmt = tmplColSet.has('afmt');
-
-      if (hasQfmt && hasAfmt) {
-        const tmplResult = db.exec('SELECT ntid, ord, name, qfmt, afmt FROM templates ORDER BY ord');
-        if (tmplResult.length > 0) {
-          for (const row of tmplResult[0].values) {
-            const ntId = normalizeAnkiId(row[0] as string | number);
-            if (models[ntId]) {
-              const qfmt = row[3] as string;
-              models[ntId].tmpls.push({
-                name: row[2] as string,
-                qfmt,
-                afmt: row[4] as string,
-                ord: row[1] as number,
-              });
-              if (/\{\{cloze:/i.test(qfmt)) {
-                models[ntId].type = 1;
-              }
-            }
-          }
-        }
-      } else {
-        // Templates table exists but with different schema (e.g. config blob) — skip
-        console.warn('[ANKI] templates table missing qfmt/afmt columns, skipping template parsing');
-      }
-    }
-
-    const decksCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='decks'");
-    if (decksCheck.length > 0 && decksCheck[0].values.length > 0) {
-      const decksResult = db.exec('SELECT CAST(id AS TEXT), name FROM decks');
-      if (decksResult.length > 0) {
-        for (const row of decksResult[0].values) {
-          const dId = normalizeAnkiId(row[0] as string | number);
-          const dName = row[1] as string;
-          if (dName) deckNamesById[dId] = dName;
-          if (dName && dName !== 'Default' && dName !== 'Padrão' && deckName === 'Anki Import') {
-            deckName = dName;
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse anki21b tables:', e);
+  } catch (err) {
+    console.warn('parseModelsFromCol failed:', err);
   }
 
   return { models, deckName, deckNamesById };
 }
 
-
-function parseDeckNamesFromDecksTable(db: Database): Record<string, string> {
+function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel>; deckName: string; deckNamesById: Record<string, string> } {
+  const models: Record<string, AnkiModel> = {};
+  let deckName = 'Anki Import';
   const deckNamesById: Record<string, string> = {};
 
   try {
-    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='decks'");
-    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) return deckNamesById;
+    const notetypesResult = db.exec('SELECT CAST(id AS TEXT), name, config FROM notetypes');
+    if (notetypesResult.length > 0) {
+      for (const row of notetypesResult[0].values) {
+        const id = normalizeAnkiId(row[0] as string);
+        const name = (row[1] as string) || 'Unknown';
+        const configJson = row[2] as string;
+        let type = 0;
+        try {
+          const config = JSON.parse(configJson);
+          type = config.type || 0;
+        } catch {}
 
-    const columns = db.exec('PRAGMA table_info(decks)');
-    const colSet = new Set<string>();
-    if (columns.length > 0) {
-      for (const row of columns[0].values) {
-        colSet.add(String(row[1]));
+        const fieldsResult = db.exec(`SELECT name, ord FROM fields WHERE notetype_id = ${id} ORDER BY ord`);
+        const flds = fieldsResult.length > 0
+          ? fieldsResult[0].values.map(r => ({ name: r[0] as string, ord: Number(r[1]) }))
+          : [];
+
+        const templatesResult = db.exec(`SELECT name, qfmt, afmt, ord FROM templates WHERE notetype_id = ${id} ORDER BY ord`);
+        const tmpls = templatesResult.length > 0
+          ? templatesResult[0].values.map(r => ({ name: r[0] as string, qfmt: r[1] as string, afmt: r[2] as string, ord: Number(r[3]) }))
+          : [];
+
+        models[id] = { id, name, type, flds, tmpls };
       }
     }
-
-    const idCol = colSet.has('id') ? 'id' : colSet.has('deck_id') ? 'deck_id' : colSet.has('did') ? 'did' : null;
-    const nameCol = colSet.has('name') ? 'name' : colSet.has('title') ? 'title' : null;
-
-    if (!idCol || !nameCol) return deckNamesById;
-
-    const result = db.exec(`SELECT CAST(${idCol} AS TEXT), ${nameCol} FROM decks`);
-    if (result.length === 0) return deckNamesById;
-
-    for (const row of result[0].values) {
-      const id = normalizeAnkiId(row[0] as string | number);
-      const name = row[1] as string;
-      if (id && name) deckNamesById[id] = name;
-    }
-  } catch (e) {
-    console.warn('Failed to parse decks table directly:', e);
+  } catch (err) {
+    console.warn('parseModelsFromTables failed:', err);
   }
 
+  return { models, deckName, deckNamesById };
+}
+
+function parseDeckNamesFromDecksTable(db: Database): Record<string, string> {
+  const deckNamesById: Record<string, string> = {};
+  try {
+    const decksResult = db.exec('SELECT CAST(id AS TEXT), name FROM decks');
+    if (decksResult.length > 0) {
+      for (const row of decksResult[0].values) {
+        deckNamesById[normalizeAnkiId(row[0] as string)] = (row[1] as string) || 'Default';
+      }
+    }
+  } catch {}
   return deckNamesById;
 }
 
@@ -493,8 +350,9 @@ async function buildCards(
   models: Record<string, AnkiModel>,
   mediaMap: Map<string, string>,
   deckNamesById: Record<string, string>,
-): Promise<AnkiCard[]> {
+): Promise<{ cards: AnkiCard[]; ankiCardIds: string[] }> {
   const cards: AnkiCard[] = [];
+  const ankiCardIds: string[] = [];
 
   let cardRows: Array<{
     noteId: string;
@@ -503,6 +361,7 @@ async function buildCards(
     mid: string;
     flds: string;
     tags: string;
+    ankiCardId: string;
   }> = [];
 
   try {
@@ -538,7 +397,7 @@ async function buildCards(
     const tagsSelect = notesTagsColumn ? `, n.${notesTagsColumn}` : ", ''";
     const ordSelect = cardOrdColumn ? `, c.${cardOrdColumn}` : ', NULL';
 
-    const sql = `SELECT c.${cardNoteColumn}, c.${cardDeckColumn}${ordSelect}, n.${notesModelColumn}, n.${notesFieldsColumn}${tagsSelect}
+    const sql = `SELECT c.${cardNoteColumn}, c.${cardDeckColumn}${ordSelect}, n.${notesModelColumn}, n.${notesFieldsColumn}${tagsSelect}, CAST(c.id AS TEXT)
        FROM cards c
        JOIN notes n ON n.${notesIdColumn} = c.${cardNoteColumn}`;
 
@@ -554,6 +413,7 @@ async function buildCards(
         mid: normalizeAnkiId(row[3] as string | number),
         flds: (row[4] as string) || '',
         tags: (row[5] as string) || '',
+        ankiCardId: normalizeAnkiId(row[6] as string | number),
       });
       rowCount++;
       // Yield every 2000 rows to keep browser alive
@@ -571,7 +431,7 @@ async function buildCards(
   if (cardRows.length === 0) {
     // Fallback compatível com parsers antigos
     const notesResult = db.exec('SELECT CAST(id AS TEXT), CAST(mid AS TEXT), flds, tags FROM notes');
-    if (notesResult.length === 0) return cards;
+    if (notesResult.length === 0) return { cards, ankiCardIds };
 
     for (const row of notesResult[0].values) {
       cardRows.push({
@@ -581,6 +441,7 @@ async function buildCards(
         mid: normalizeAnkiId(row[1] as string | number),
         flds: (row[2] as string) || '',
         tags: (row[3] as string) || '',
+        ankiCardId: '',
       });
     }
   }
@@ -600,6 +461,7 @@ async function buildCards(
       const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
       if (front.trim()) {
         cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
+        ankiCardIds.push(row.ankiCardId);
       }
       continue;
     }
@@ -622,6 +484,7 @@ async function buildCards(
           media: mediaMap,
           deckName,
         });
+        ankiCardIds.push(row.ankiCardId);
       } else {
         const clozeNums = new Set<number>();
         frontContent.replace(/\{\{c(\d+)::/g, (_, n) => { clozeNums.add(parseInt(n)); return ''; });
@@ -635,6 +498,7 @@ async function buildCards(
               media: mediaMap,
               deckName,
             });
+            ankiCardIds.push(row.ankiCardId);
           }
         }
       }
@@ -655,6 +519,7 @@ async function buildCards(
             media: mediaMap,
             deckName,
           });
+          ankiCardIds.push(row.ankiCardId);
         }
         continue;
       }
@@ -673,12 +538,16 @@ async function buildCards(
             media: mediaMap,
             deckName,
           });
+          ankiCardIds.push(row.ankiCardId);
         }
       }
     } else {
       const front = replaceMediaRefs(fieldValues[0] || '', mediaMap);
       const back = replaceMediaRefs(fieldValues.slice(1).join('<br>'), mediaMap);
-      if (front.trim()) cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
+      if (front.trim()) {
+        cards.push({ front, back, cardType: 'basic', tags, media: mediaMap, deckName });
+        ankiCardIds.push(row.ankiCardId);
+      }
     }
 
     // Yield every CARD_CHUNK cards to keep browser responsive
@@ -687,51 +556,244 @@ async function buildCards(
     }
   }
 
-  return cards;
+  return { cards, ankiCardIds };
 }
 
 function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
-  const tree: AnkiSubdeck[] = [];
+  const deckMap = new Map<string, { indices: number[]; children: Map<string, any> }>();
 
-  const ensureChild = (nodes: AnkiSubdeck[], name: string) => {
-    let child = nodes.find(n => n.name === name);
-    if (!child) {
-      child = { name, card_indices: [], children: [] };
-      nodes.push(child);
-    }
-    return child;
-  };
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    if (!card.deckName) continue;
 
-  cards.forEach((card, cardIndex) => {
-    if (!card.deckName) return;
     const parts = splitDeckPath(card.deckName);
-    if (parts.length === 0) return;
+    if (parts.length === 0) continue;
 
-    const relative = parts[0] === rootDeckName ? parts.slice(1) : parts;
-    if (relative.length === 0) return;
+    let currentPath = '';
+    for (let j = 0; j < parts.length; j++) {
+      const part = parts[j];
+      const parentPath = currentPath;
+      currentPath = currentPath ? `${currentPath}::${part}` : part;
 
-    let level = tree;
-    let current: AnkiSubdeck | null = null;
-    for (const part of relative) {
-      current = ensureChild(level, part);
-      if (!current.children) current.children = [];
-      level = current.children;
-    }
+      if (!deckMap.has(currentPath)) {
+        deckMap.set(currentPath, { indices: [], children: new Map() });
+      }
 
-    if (current) current.card_indices.push(cardIndex);
-  });
+      if (j === parts.length - 1) {
+        deckMap.get(currentPath)!.indices.push(i);
+      }
 
-  const sortTree = (nodes: AnkiSubdeck[]): AnkiSubdeck[] => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    for (const node of nodes) {
-      if (node.children && node.children.length > 0) {
-        sortTree(node.children);
+      if (parentPath && deckMap.has(parentPath)) {
+        deckMap.get(parentPath)!.children.set(currentPath, true);
       }
     }
-    return nodes;
-  };
+  }
 
-  return sortTree(tree);
+  function buildTree(path: string): AnkiSubdeck | null {
+    const node = deckMap.get(path);
+    if (!node) return null;
+
+    const parts = splitDeckPath(path);
+    const name = parts[parts.length - 1];
+
+    const children: AnkiSubdeck[] = [];
+    for (const childPath of node.children.keys()) {
+      const child = buildTree(childPath);
+      if (child) children.push(child);
+    }
+
+    return {
+      name,
+      card_indices: node.indices,
+      children: children.length > 0 ? children : undefined,
+    };
+  }
+
+  const rootPaths = new Set<string>();
+  for (const path of deckMap.keys()) {
+    const parts = splitDeckPath(path);
+    if (parts.length > 0) {
+      rootPaths.add(parts[0]);
+    }
+  }
+
+  const result: AnkiSubdeck[] = [];
+  for (const rootPath of rootPaths) {
+    const tree = buildTree(rootPath);
+    if (tree) result.push(tree);
+  }
+
+  return result;
+}
+
+/* ── progress extraction helpers ── */
+
+function extractCollectionCreatedAt(db: Database): number {
+  try {
+    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='col'");
+    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) return 0;
+    const result = db.exec('SELECT crt FROM col LIMIT 1');
+    if (result.length > 0 && result[0].values.length > 0) {
+      return Number(result[0].values[0][0]) || 0;
+    }
+  } catch {}
+  return 0;
+}
+
+function extractRawCardProgress(db: Database): Map<string, { type: number; ivl: number; due: number; factor: number; queue: number }> {
+  const map = new Map<string, { type: number; ivl: number; due: number; factor: number; queue: number }>();
+  try {
+    const cols = db.exec('PRAGMA table_info(cards)');
+    const colSet = new Set<string>();
+    if (cols.length > 0) for (const r of cols[0].values) colSet.add(String(r[1]));
+
+    const hasType = colSet.has('type');
+    const hasIvl = colSet.has('ivl');
+    const hasDue = colSet.has('due');
+    const hasFactor = colSet.has('factor');
+    const hasQueue = colSet.has('queue');
+
+    if (!hasType && !hasIvl) return map;
+
+    const selectCols = ['CAST(id AS TEXT)'];
+    if (hasType) selectCols.push('type'); else selectCols.push('0');
+    if (hasIvl) selectCols.push('ivl'); else selectCols.push('0');
+    if (hasDue) selectCols.push('due'); else selectCols.push('0');
+    if (hasFactor) selectCols.push('factor'); else selectCols.push('0');
+    if (hasQueue) selectCols.push('queue'); else selectCols.push('0');
+
+    const stmt = db.prepare(`SELECT ${selectCols.join(', ')} FROM cards`);
+    while (stmt.step()) {
+      const r = stmt.get();
+      map.set(normalizeAnkiId(r[0] as string), {
+        type: Number(r[1]) || 0,
+        ivl: Number(r[2]) || 0,
+        due: Number(r[3]) || 0,
+        factor: Number(r[4]) || 0,
+        queue: Number(r[5]) || 0,
+      });
+    }
+    stmt.free();
+  } catch (e) {
+    console.warn('[ANKI] extractRawCardProgress failed:', e);
+  }
+  return map;
+}
+
+function extractRawRevlog(db: Database): Array<{ cid: string; ease: number; ivl: number; factor: number; time: number; type: number; reviewedAt: number }> {
+  const entries: Array<{ cid: string; ease: number; ivl: number; factor: number; time: number; type: number; reviewedAt: number }> = [];
+  try {
+    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='revlog'");
+    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) return entries;
+
+    const stmt = db.prepare('SELECT id, CAST(cid AS TEXT), ease, ivl, factor, time, type FROM revlog ORDER BY id');
+    while (stmt.step()) {
+      const r = stmt.get();
+      entries.push({
+        cid: normalizeAnkiId(r[1] as string),
+        ease: Number(r[2]) || 3,
+        ivl: Number(r[3]) || 0,
+        factor: Number(r[4]) || 0,
+        time: Number(r[5]) || 0,
+        type: Number(r[6]) || 0,
+        reviewedAt: Number(r[0]) || 0,
+      });
+    }
+    stmt.free();
+    console.log(`[ANKI] extractRawRevlog: ${entries.length} entries`);
+  } catch (e) {
+    console.warn('[ANKI] extractRawRevlog failed:', e);
+  }
+  return entries;
+}
+
+function ankiFactorToFsrsDifficulty(factor: number): number {
+  if (factor <= 0) return 5;
+  return Math.round(Math.max(1, Math.min(10, 11 - factor / 250)) * 100) / 100;
+}
+
+function ankiDueToScheduledDate(due: number, type: number, crt: number): string {
+  if (type === 0) return new Date().toISOString();
+  if (type === 1 || type === 3) {
+    return due > 1e9 ? new Date(due * 1000).toISOString() : new Date().toISOString();
+  }
+  // Review card: due = day number relative to collection creation
+  if (crt > 0) {
+    const dayStart = Math.floor(crt / 86400) * 86400;
+    const ts = (dayStart + due * 86400) * 1000;
+    // Sanity check: if result is wildly in the past or future, use current date
+    const now = Date.now();
+    if (ts < now - 365 * 86400000 * 5 || ts > now + 365 * 86400000 * 10) {
+      return new Date().toISOString();
+    }
+    return new Date(ts).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function buildProgressData(
+  ankiCardIds: string[],
+  rawProgressMap: Map<string, { type: number; ivl: number; due: number; factor: number; queue: number }>,
+  crt: number,
+): { progress: AnkiCardProgress[]; hasProgress: boolean } {
+  let hasProgress = false;
+  const progress = ankiCardIds.map(ankiId => {
+    const raw = rawProgressMap.get(ankiId);
+    if (!raw || (raw.type === 0 && raw.ivl === 0)) {
+      return { state: 0, stability: 0, difficulty: 0, scheduledDate: new Date().toISOString(), learningStep: 0 };
+    }
+    hasProgress = true;
+    const scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
+    const stability = Math.max(0, raw.ivl);
+    // Approximate lastReviewedAt for review cards: scheduled - interval
+    const lastReviewedAt = raw.type === 2 && stability > 0
+      ? new Date(new Date(scheduledDate).getTime() - stability * 86400000).toISOString()
+      : undefined;
+    return {
+      state: raw.type,
+      stability,
+      difficulty: ankiFactorToFsrsDifficulty(raw.factor),
+      scheduledDate,
+      learningStep: raw.type === 1 || raw.type === 3 ? 1 : 0,
+      lastReviewedAt,
+    };
+  });
+  return { progress, hasProgress };
+}
+
+function buildRevlogData(
+  rawRevlog: Array<{ cid: string; ease: number; ivl: number; factor: number; time: number; type: number; reviewedAt: number }>,
+  ankiCardIdToIndices: Map<string, number[]>,
+  crt: number,
+): AnkiReviewLogEntry[] {
+  const entries: AnkiReviewLogEntry[] = [];
+  for (const raw of rawRevlog) {
+    const indices = ankiCardIdToIndices.get(raw.cid);
+    if (!indices || indices.length === 0) continue;
+
+    const rating = Math.max(1, Math.min(4, raw.ease));
+    const reviewedAt = raw.reviewedAt > 1e12
+      ? new Date(raw.reviewedAt).toISOString()
+      : new Date(raw.reviewedAt * 1000).toISOString();
+    const stability = Math.max(0, raw.ivl);
+    const difficulty = ankiFactorToFsrsDifficulty(raw.factor);
+    // Map Anki revlog type to our state: 0=learn→1, 1=review→2, 2=relearn→3, 3=filtered→2
+    const state = raw.type === 0 ? 1 : raw.type === 1 ? 2 : raw.type === 2 ? 3 : 2;
+
+    for (const idx of indices) {
+      entries.push({
+        cardIndex: idx,
+        rating,
+        reviewedAt,
+        stability,
+        difficulty,
+        scheduledDate: reviewedAt,
+        state,
+        elapsedMs: raw.time > 0 ? raw.time : null,
+      });
+    }
+  }
+  return entries;
 }
 
 /* ── main entry point ── */
@@ -858,7 +920,6 @@ export async function parseApkgFile(
       }
     } catch (e) {
       log('parseModels FAILED: ' + e);
-      // Continue — we can still try buildCards with empty models
     }
 
     log('Parsing models done, models: ' + Object.keys(models).length + ', decks: ' + Object.keys(deckNamesById).length);
@@ -871,10 +932,13 @@ export async function parseApkgFile(
 
     const emptyMedia = new Map<string, string>();
     let cards: AnkiCard[] = [];
+    let ankiCardIds: string[] = [];
 
     try {
       log('buildCards start');
-      cards = await buildCards(db, models, emptyMedia, deckNamesById);
+      const buildResult = await buildCards(db, models, emptyMedia, deckNamesById);
+      cards = buildResult.cards;
+      ankiCardIds = buildResult.ankiCardIds;
       log('buildCards done, cards: ' + cards.length);
     } catch (e) {
       log('buildCards FAILED: ' + e);
@@ -903,6 +967,28 @@ export async function parseApkgFile(
 
     const subdecks = buildSubdecks(cards, deckName);
 
+    // ── Stage 6.5: Extract progress + revlog ──
+    onProgress?.('Extraindo progresso...');
+    await yieldToUI();
+
+    const crt = extractCollectionCreatedAt(db);
+    const rawProgressMap = extractRawCardProgress(db);
+    const rawRevlog = extractRawRevlog(db);
+
+    // Build ankiCardId → output indices mapping
+    const ankiCardIdToIndices = new Map<string, number[]>();
+    ankiCardIds.forEach((id, idx) => {
+      if (!id) return;
+      const existing = ankiCardIdToIndices.get(id) || [];
+      existing.push(idx);
+      ankiCardIdToIndices.set(id, existing);
+    });
+
+    const { progress, hasProgress } = buildProgressData(ankiCardIds, rawProgressMap, crt);
+    const revlog = rawRevlog.length > 0 ? buildRevlogData(rawRevlog, ankiCardIdToIndices, crt) : [];
+
+    log(`Progress: hasProgress=${hasProgress}, rawProgress=${rawProgressMap.size}, revlog entries: ${revlog.length}`);
+
     db.close();
     log('db closed');
     await yieldToUI();
@@ -923,7 +1009,6 @@ export async function parseApkgFile(
       log('mediaExtracted: ' + mediaMap.size + '/' + totalMediaCount);
     } catch (e) {
       log('extractMedia FAILED (continuing without media): ' + e);
-      // Continue without media — cards still work, just without images
     }
 
     // Replace media references in cards with Blob URLs
@@ -934,7 +1019,6 @@ export async function parseApkgFile(
         cards[i].front = replaceMediaRefs(cards[i].front, mediaMap);
         cards[i].back = replaceMediaRefs(cards[i].back, mediaMap);
         cards[i].media = mediaMap;
-        // Yield every 500 cards to keep UI responsive
         if (i % 500 === 0 && i > 0) {
           await yieldToUI();
           checkTimeout('replaceMediaRefs');
@@ -943,9 +1027,8 @@ export async function parseApkgFile(
       log('media refs replaced');
     }
 
-    log(`DONE — ${cards.length} cards, ${mediaMap.size} media, total ${elapsed()}ms`);
+    log(`DONE — ${cards.length} cards, ${mediaMap.size} media, progress=${hasProgress}, revlog=${revlog.length}, total ${elapsed()}ms`);
 
-    // Cleanup function to revoke all Blob URLs
     const cleanup = () => {
       for (const url of mediaMap.values()) {
         try { URL.revokeObjectURL(url); } catch {}
@@ -957,6 +1040,9 @@ export async function parseApkgFile(
       cards,
       mediaCount: totalMediaCount,
       subdecks: subdecks.length > 0 ? subdecks : undefined,
+      progress: hasProgress ? progress : undefined,
+      revlog: revlog.length > 0 ? revlog : undefined,
+      hasProgress,
       cleanup,
     };
   } catch (error) {

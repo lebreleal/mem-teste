@@ -629,7 +629,7 @@ const Dashboard = () => {
         {state.importOpen && (
           <ImportCardsDialog
             open={state.importOpen} onOpenChange={state.setImportOpen}
-            onImport={async (deckName, cards, subdecks) => {
+            onImport={async (deckName, cards, subdecks, revlog) => {
               const pendingStore = usePendingDecks.getState();
               const pendingId = `import-${Date.now()}`;
               const totalCards = subdecks && subdecks.length > 0
@@ -653,20 +653,24 @@ const Dashboard = () => {
                     user!.id,
                     deckName,
                     state.currentFolderId,
-                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
                     subdecks,
-                    defaultAlgorithm
+                    defaultAlgorithm,
+                    revlog as any,
                   );
-                  toast({ title: `${totalCards} cartões importados em "${deckName}"!` });
+                  const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
+                  toast({ title: `${totalCards} cartões importados em "${deckName}"!${revlogMsg}` });
                 } else {
                   await importDeck(
                     user!.id,
                     deckName,
                     state.currentFolderId,
-                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
-                    defaultAlgorithm
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
+                    defaultAlgorithm,
+                    revlog as any,
                   );
-                  toast({ title: `${cards.length} cartões importados!` });
+                  const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
+                  toast({ title: `${cards.length} cartões importados!${revlogMsg}` });
                 }
                 pendingStore.updatePending(pendingId, { status: 'done', progress: { current: totalCards, total: totalCards } });
                 await queryClient.invalidateQueries({ queryKey: ['decks'] });
