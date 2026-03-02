@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import LazyRichEditor from '@/components/LazyRichEditor';
-import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, Crown, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
+import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
@@ -26,7 +26,7 @@ interface CardReviewStepProps {
   onEditFrontChange: (v: string) => void;
   onEditBackChange: (v: string) => void;
   onStartEdit: (i: number) => void;
-  onSaveEdit: () => void;
+  onSaveEdit: (extraData?: { mcOptions?: string[]; mcCorrectIndex?: number }) => void;
   onCancelEdit: () => void;
   onDeleteCard: (i: number) => void;
   onToggleType: (i: number) => void;
@@ -79,7 +79,7 @@ const ClozePreview = ({ text }: { text: string }) => {
 
   return (
     <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-      <div className="p-3 text-xs leading-relaxed">{parts}</div>
+      <div className="p-3 text-sm leading-relaxed">{parts}</div>
       <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center gap-2 flex-wrap">
         {sortedNumbers.map((n, i) => (
           <span key={n} className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
@@ -87,6 +87,11 @@ const ClozePreview = ({ text }: { text: string }) => {
             Cloze {n}
           </span>
         ))}
+        {sortedNumbers.length > 1 && (
+          <span className="text-[10px] text-muted-foreground ml-auto">
+            {sortedNumbers.length} cards vinculados
+          </span>
+        )}
       </div>
     </div>
   );
@@ -194,12 +199,23 @@ const CardReviewStep = ({
     else if (editMcCorrectIndex > idx) setEditMcCorrectIndex(editMcCorrectIndex - 1);
   };
 
+  const handleSaveEditClick = () => {
+    if (editingIdx !== null && cards[editingIdx]?.type === 'multiple_choice') {
+      onSaveEdit({ mcOptions: editMcOptions, mcCorrectIndex: editMcCorrectIndex });
+    } else {
+      onSaveEdit();
+    }
+  };
+
+  /**
+   * Renders the card editor form — mirrors ManageDeck.tsx exactly
+   */
   const renderCardEditor = (card: GeneratedCard) => {
     if (card.type === 'multiple_choice') {
       return (
-        <>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Pergunta</Label>
+        <div className="space-y-4">
+          <div>
+            <Label className="mb-1.5 block">Pergunta</Label>
             <LazyRichEditor
               content={editFront}
               onChange={onEditFrontChange}
@@ -207,7 +223,7 @@ const CardReviewStep = ({
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">Opções</Label>
+            <Label className="block">Opções</Label>
             <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
               {editMcOptions.map((opt, idx) => (
                 <div
@@ -249,15 +265,15 @@ const CardReviewStep = ({
             )}
             <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
           </div>
-        </>
+        </div>
       );
     }
 
     if (card.type === 'cloze') {
       return (
-        <>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Texto com lacunas</Label>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-1.5 block">Texto com lacunas</Label>
             <LazyRichEditor
               content={editFront}
               onChange={onEditFrontChange}
@@ -270,16 +286,19 @@ const CardReviewStep = ({
             <p className="text-xs text-muted-foreground">
               Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
             </p>
+            <p className="text-[11px] text-muted-foreground">
+              Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
+            </p>
           </div>
-        </>
+        </div>
       );
     }
 
-    // Basic (qa)
+    // Basic (qa) — matches ManageDeck exactly
     return (
-      <>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Frente (Pergunta)</Label>
+      <div className="space-y-4">
+        <div>
+          <Label className="mb-1.5 block">Frente (Pergunta)</Label>
           <LazyRichEditor
             content={editFront}
             onChange={onEditFrontChange}
@@ -287,8 +306,8 @@ const CardReviewStep = ({
             hideCloze
           />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Verso (Resposta)</Label>
+        <div>
+          <Label className="mb-1.5 block">Verso (Resposta)</Label>
           <LazyRichEditor
             content={editBack}
             onChange={onEditBackChange}
@@ -296,7 +315,7 @@ const CardReviewStep = ({
             hideCloze
           />
         </div>
-      </>
+      </div>
     );
   };
 
@@ -304,6 +323,12 @@ const CardReviewStep = ({
     if (type === 'cloze') return <PenLine className="h-3 w-3" />;
     if (type === 'multiple_choice') return <CheckSquare className="h-3 w-3" />;
     return <MessageSquareText className="h-3 w-3" />;
+  };
+
+  const getTypeBadge = (type: string) => {
+    if (type === 'cloze') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-primary/40 bg-primary/10 text-primary">Cloze</span>;
+    if (type === 'multiple_choice') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-warning/40 bg-warning/10 text-warning">Múltipla</span>;
+    return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-border">Básico</span>;
   };
 
   return (
@@ -321,46 +346,43 @@ const CardReviewStep = ({
               {editingIdx === idx ? (
                 <>
                   {renderCardEditor(card)}
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="ghost" size="sm" onClick={onCancelEdit}>Cancelar</Button>
-                    <Button size="sm" onClick={onSaveEdit} className="gap-1"><Check className="h-3 w-3" /> Salvar</Button>
+                  <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={onCancelEdit}>Cancelar</Button>
+                    <Button onClick={handleSaveEditClick} className="gap-1"><Check className="h-3 w-3" /> Salvar</Button>
                   </div>
                 </>
               ) : (
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
+                    {/* Type badge */}
+                    <div className="mb-1">{getTypeBadge(card.type)}</div>
                     <div
                       className="text-xs font-bold text-foreground leading-snug [&_img]:max-h-20 [&_img]:rounded"
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front) }}
                     />
                     {card.type === 'multiple_choice' && card.options ? (
-                      <div className="mt-1 space-y-0.5">
+                      <div className="mt-1.5 rounded-lg border border-border overflow-hidden divide-y divide-border">
                         {card.options.map((opt, oi) => (
-                          <div key={oi} className={`text-[10px] leading-snug ${oi === card.correctIndex ? 'text-success font-bold' : 'text-muted-foreground'}`}>
-                            {oi === card.correctIndex ? '✓ ' : '  '}
+                          <div key={oi} className={`flex items-center gap-2 px-2.5 py-1.5 text-[11px] ${oi === card.correctIndex ? 'bg-success/10 text-success font-semibold' : 'text-muted-foreground'}`}>
+                            <div className={`flex-shrink-0 h-3.5 w-3.5 rounded border flex items-center justify-center ${oi === card.correctIndex ? 'border-success bg-success text-white' : 'border-muted-foreground/30'}`}>
+                              {oi === card.correctIndex && <span className="text-[7px] font-bold">✓</span>}
+                            </div>
                             <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt) }} />
                           </div>
                         ))}
                       </div>
-                    ) : (card.type !== 'cloze' && card.back) ? (
+                    ) : card.type === 'cloze' ? (
+                      <div className="mt-1.5">
+                        <ClozePreview text={card.front} />
+                      </div>
+                    ) : card.back ? (
                       <div
                         className="text-xs text-muted-foreground mt-1 leading-snug [&_img]:max-h-20 [&_img]:rounded"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}
                       />
-                    ) : card.type === 'cloze' ? (
-                      <ClozePreview text={card.front} />
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => onToggleType(idx)}
-                      className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border transition-colors ${
-                        card.type === 'cloze' ? 'border-primary/40 bg-primary/10 text-primary'
-                        : card.type === 'multiple_choice' ? 'border-warning/40 bg-warning/10 text-warning'
-                        : 'border-border hover:bg-muted'
-                      }`}>
-                      {getTypeIcon(card.type)}
-                      {card.type === 'cloze' ? 'Cloze' : card.type === 'multiple_choice' ? 'Múltipla' : 'Básico'}
-                    </button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onStartEdit(idx)}><Pencil className="h-3 w-3" /></Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDeleteCard(idx)}><Trash2 className="h-3 w-3" /></Button>
                   </div>
@@ -372,7 +394,7 @@ const CardReviewStep = ({
       </div>
 
       {/* ── Tag Selection (mandatory) ── */}
-      <div className={`space-y-2 border-t pt-3 ${showTagWarning && !hasMinTags ? 'border-destructive' : 'border-border'}`}>
+      <div className={`space-y-2.5 border-t pt-3 ${showTagWarning && !hasMinTags ? 'border-destructive' : 'border-border'}`}>
         <div className="flex items-center gap-2">
           <TagIcon className="h-4 w-4 text-primary" />
           <p className="text-sm font-semibold text-foreground">Tags do baralho</p>
@@ -389,13 +411,15 @@ const CardReviewStep = ({
         {selectedTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {selectedTags.map((tag, idx) => (
-              <Badge key={getTagId(tag)} variant="secondary" className="gap-1 pr-1 text-xs">
-                <TagIcon className="h-3 w-3 opacity-50" />
+              <span
+                key={getTagId(tag)}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium"
+              >
                 {getTagName(tag)}
-                <button type="button" onClick={() => removeTag(idx)} className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 transition-colors">
+                <button type="button" onClick={() => removeTag(idx)} className="ml-0.5 rounded-full p-0.5 hover:bg-primary/20 transition-colors">
                   <X className="h-3 w-3" />
                 </button>
-              </Badge>
+              </span>
             ))}
           </div>
         )}
@@ -414,11 +438,10 @@ const CardReviewStep = ({
                   key={s.name}
                   type="button"
                   onClick={() => addTag(s.name)}
-                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                   {s.name}
-                  {s.isExisting && <Crown className="h-2.5 w-2.5 text-warning" />}
                 </button>
               ))
             )}
@@ -440,7 +463,7 @@ const CardReviewStep = ({
               if (e.key === 'Escape') setTagDropdownOpen(false);
             }}
             placeholder="Buscar ou criar tag..."
-            className={`h-8 text-sm ${showTagWarning && !hasMinTags ? 'border-destructive' : ''}`}
+            className={`h-9 text-sm ${showTagWarning && !hasMinTags ? 'border-destructive' : ''}`}
           />
           {tagDropdownOpen && (tagQuery || filteredSearch.length > 0) && (
             <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-36 overflow-y-auto">
@@ -451,8 +474,7 @@ const CardReviewStep = ({
                   onClick={() => addTag(tag)}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
                 >
-                  {tag.is_official && <Crown className="h-3 w-3 text-warning shrink-0" />}
-                  <TagIcon className="h-3 w-3 opacity-50 shrink-0" />
+                  <TagIcon className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="truncate">{(tag as TagTreeNode).pathLabel || tag.name}</span>
                   <span className="ml-auto text-[10px] text-muted-foreground tabular-nums shrink-0">{tag.usage_count}</span>
                 </button>

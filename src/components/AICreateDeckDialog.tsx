@@ -138,7 +138,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
             onEditBackChange={flow.setEditBack}
             onStartEdit={flow.startEdit}
             onSaveEdit={flow.saveEdit}
-            onCancelEdit={() => flow.setStep('review')}
+            onCancelEdit={() => flow.cancelEdit()}
             onDeleteCard={flow.deleteCard}
             onToggleType={flow.toggleType}
             onSave={flow.handleSave}

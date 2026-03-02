@@ -476,7 +476,20 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   // === Edit helpers ===
   const startEdit = useCallback((i: number) => { setEditingIdx(i); setEditFront(cards[i].front); setEditBack(cards[i].back); }, [cards]);
-  const saveEdit = useCallback(() => { if (editingIdx === null) return; setCards(p => p.map((c, i) => i === editingIdx ? { ...c, front: editFront, back: editBack } : c)); setEditingIdx(null); }, [editingIdx, editFront, editBack]);
+  const saveEdit = useCallback((extraData?: { mcOptions?: string[]; mcCorrectIndex?: number }) => {
+    if (editingIdx === null) return;
+    setCards(p => p.map((c, i) => {
+      if (i !== editingIdx) return c;
+      const updated = { ...c, front: editFront, back: editBack };
+      if (extraData?.mcOptions) {
+        updated.options = extraData.mcOptions;
+        updated.correctIndex = extraData.mcCorrectIndex ?? 0;
+      }
+      return updated;
+    }));
+    setEditingIdx(null);
+  }, [editingIdx, editFront, editBack]);
+  const cancelEdit = useCallback(() => { setEditingIdx(null); }, []);
   const deleteCard = useCallback((i: number) => { setCards(p => p.filter((_, j) => j !== i)); if (editingIdx === i) setEditingIdx(null); }, [editingIdx]);
   const toggleType = useCallback((i: number) => {
     setCards(p => p.map((c, j) => {
@@ -500,7 +513,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
     handleGenerate, handleSave, handleDismissToBackground,
-    startEdit, saveEdit, deleteCard, toggleType,
+    startEdit, saveEdit, cancelEdit, deleteCard, toggleType,
     getCost,
   };
 }
