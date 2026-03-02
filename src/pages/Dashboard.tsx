@@ -675,9 +675,9 @@ const Dashboard = () => {
                 await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
                 setTimeout(() => pendingStore.removePending(pendingId), 2000);
               } catch (err) {
+                console.error('Import error:', err);
                 pendingStore.updatePending(pendingId, { status: 'error' });
-                toast({ title: 'Erro ao importar', variant: 'destructive' });
-                setTimeout(() => pendingStore.removePending(pendingId), 4000);
+                toast({ title: 'Erro ao importar', description: 'Toque no item para remover.', variant: 'destructive' });
               }
             }}
           />

@@ -298,7 +298,7 @@ export async function importDeck(
   }));
 
   // Batch insert and collect IDs for revlog mapping
-  const BATCH_SIZE = 200;
+  const BATCH_SIZE = 500;
   const cardIdMap = new Map<number, string>();
   let globalIdx = 0;
 
@@ -357,7 +357,7 @@ export async function importDeckWithSubdecks(
       learning_step: cards[idx].progress?.learningStep ?? 0,
       ...(cards[idx].progress?.lastReviewedAt ? { last_reviewed_at: cards[idx].progress.lastReviewedAt } : {}),
     }));
-    const BATCH_SIZE = 200;
+    const BATCH_SIZE = 500;
     let localIdx = 0;
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);

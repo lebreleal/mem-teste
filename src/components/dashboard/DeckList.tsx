@@ -6,7 +6,7 @@
 
 import {
   FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2, Loader2, Search, Tag as TagIcon, CheckCircle2,
+  ChevronRight, GraduationCap, Link2, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -140,13 +140,14 @@ const DeckList = ({
     if (pending.status === 'review_ready') return 'Pronto para revisão';
     if (pending.status === 'saving') return 'Salvando...';
     if (pending.status === 'done') return 'Criando tags...';
-    if (pending.status === 'error') return 'Erro';
+    if (pending.status === 'error') return 'Erro — toque para remover';
     return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;
   };
 
   const getPendingIcon = (pending: PendingDeck) => {
     if (pending.status === 'review_ready') return <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in-50" />;
     if (pending.status === 'done') return <TagIcon className="h-5 w-5 text-primary animate-pulse" />;
+    if (pending.status === 'error') return <XCircle className="h-5 w-5 text-destructive" />;
     return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
   };
 
@@ -155,16 +156,19 @@ const DeckList = ({
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
-        const isClickable = pending.status === 'review_ready';
+        const isClickable = pending.status === 'review_ready' || pending.status === 'error';
         return (
           <div
             key={pending.id}
             className={`flex items-center gap-3 px-5 py-4 transition-colors ${
               isClickable
                 ? 'cursor-pointer hover:bg-muted/50'
-                : pending.status === 'generating' ? '' : 'opacity-50 pointer-events-none select-none'
-            } ${pending.status === 'review_ready' ? 'bg-success/5 border-l-2 border-l-success' : ''}`}
-            onClick={() => isClickable && onPendingClick?.(pending)}
+                : pending.status === 'generating' ? '' : 'opacity-70 select-none'
+            } ${pending.status === 'review_ready' ? 'bg-success/5 border-l-2 border-l-success' : ''} ${pending.status === 'error' ? 'bg-destructive/5 border-l-2 border-l-destructive' : ''}`}
+            onClick={() => {
+              if (pending.status === 'error') { usePendingDecks.getState().removePending(pending.id); return; }
+              if (isClickable) onPendingClick?.(pending);
+            }}
           >
             <div className="flex h-6 w-6 items-center justify-center shrink-0">
               {getPendingIcon(pending)}
