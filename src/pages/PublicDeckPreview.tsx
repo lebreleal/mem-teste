@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Flag, UserPlus } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check } from 'lucide-react';
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { charDiff, type DiffSegment } from '@/lib/charDiff';
@@ -159,7 +159,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             className="rounded-full bg-card/80 shadow-sm gap-1.5 text-xs px-3"
             onClick={() => setSuggestCard(vc.card)}
           >
-            <Flag className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
             Sugestão
           </Button>
         ) : (
@@ -886,6 +886,7 @@ const PublicDeckPreview = () => {
   const [uploading, setUploading] = useState(false);
   const [showDeckReport, setShowDeckReport] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [following, setFollowing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch deck info
@@ -1042,6 +1043,56 @@ const PublicDeckPreview = () => {
 
   const isOwner = !!(user && deck && deck.user_id === user.id);
 
+  // Check if user already follows this deck (has a linked copy)
+  const { data: isFollowing = false } = useQuery({
+    queryKey: ['deck-following', deckId, user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('decks')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('source_turma_deck_id', turmaDeck!.id)
+        .limit(1)
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user && !!turmaDeck?.id && !isOwner,
+  });
+
+  const handleFollowDeck = async () => {
+    if (!user || !deck || !turmaDeck || following || isFollowing) return;
+    setFollowing(true);
+    try {
+      // Join turma if not already a member
+      if (!isTurmaMember && turmaDeck.turma_id) {
+        await supabase.from('turma_members').insert({
+          turma_id: turmaDeck.turma_id,
+          user_id: user.id,
+          role: 'member',
+        } as any).throwOnError();
+        queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
+        queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      }
+
+      // Create a linked deck in user's personal decks
+      const { error } = await supabase.from('decks').insert({
+        name: deck.name,
+        user_id: user.id,
+        source_turma_deck_id: turmaDeck.id,
+        is_public: false,
+        community_id: turmaDeck.turma_id,
+      } as any);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: '✅ Deck adicionado aos seus baralhos!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao seguir deck', description: err.message, variant: 'destructive' });
+    } finally {
+      setFollowing(false);
+    }
+  };
+
   // ── File upload for owner ──
   const getOrCreateLesson = async (): Promise<string> => {
     if (turmaDeck?.lesson_id) return turmaDeck.lesson_id;
@@ -1186,16 +1237,16 @@ const PublicDeckPreview = () => {
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {!isOwner && turmaDeck?.turma_id && !isTurmaMember && (
+            {!isOwner && turmaDeck && (
               <Button
-                variant="default"
+                variant={isFollowing ? 'outline' : 'default'}
                 size="sm"
                 className="gap-1.5 text-xs h-8"
-                onClick={handleJoinTurma}
-                disabled={joining}
+                onClick={handleFollowDeck}
+                disabled={following || isFollowing}
               >
-                {joining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-                Se inscrever
+                {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isFollowing ? <Check className="h-3.5 w-3.5" /> : <BookmarkPlus className="h-3.5 w-3.5" />}
+                {isFollowing ? 'Inscrito' : 'Inscrever-se'}
               </Button>
             )}
             <Button
@@ -1216,7 +1267,7 @@ const PublicDeckPreview = () => {
                 className="h-8 w-8"
                 onClick={() => setShowDeckReport(true)}
               >
-                <Flag className="h-4 w-4 text-muted-foreground" />
+                <Pencil className="h-4 w-4 text-muted-foreground" />
               </Button>
             )}
           </div>
