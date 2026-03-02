@@ -37,10 +37,11 @@ const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDele
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
-import { usePendingDecks } from '@/stores/usePendingDecks';
+import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { supabase } from '@/integrations/supabase/client';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
+import type { GeneratedCard } from '@/types/ai';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -113,6 +114,27 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
   const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
+  const [pendingReviewData, setPendingReviewData] = useState<{
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null>(null);
+
+  const handlePendingClick = useCallback((pending: PendingDeck) => {
+    if (pending.status === 'review_ready' && pending.cards) {
+      setPendingReviewData({
+        pendingId: pending.id,
+        cards: pending.cards as GeneratedCard[],
+        deckName: pending.name,
+        folderId: pending.folderId,
+        textSample: pending.textSample,
+      });
+      state.setAiDeckOpen(true);
+    }
+    // generating status: just open the AI dialog (user can see progress text in dashboard)
+  }, [state]);
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -473,6 +495,7 @@ const Dashboard = () => {
             onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
             onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
             onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+            onPendingClick={handlePendingClick}
           />
         )}
 
@@ -658,7 +681,17 @@ const Dashboard = () => {
       </Suspense>
 
       <Suspense fallback={<SuspenseLoading />}>
-        {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
+        {state.aiDeckOpen && (
+          <AICreateDeckDialog
+            open={state.aiDeckOpen}
+            onOpenChange={(open) => {
+              state.setAiDeckOpen(open);
+              if (!open) setPendingReviewData(null);
+            }}
+            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            pendingReviewData={pendingReviewData}
+          />
+        )}
       </Suspense>
       <Suspense fallback={<SuspenseLoading />}>
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}

@@ -1,17 +1,19 @@
 /**
  * Card review step: edit, delete, toggle type, and save generated cards.
  * Includes mandatory tag selection with AI suggestions before saving.
+ * Card editing layout matches ManageDeck.tsx for consistency.
  */
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import LazyRichEditor from '@/components/LazyRichEditor';
-import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, Crown, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import LazyRichEditor from '@/components/LazyRichEditor';
+import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, Crown, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
+import { useToast } from '@/hooks/use-toast';
 import type { Tag } from '@/types/tag';
 import type { TagTreeNode } from '@/services/tagService';
 import type { GeneratedCard } from './types';
@@ -29,11 +31,66 @@ interface CardReviewStepProps {
   onDeleteCard: (i: number) => void;
   onToggleType: (i: number) => void;
   onSave: (selectedTags: (Tag | string)[]) => void;
-  onBack: () => void;
+  onBack?: (() => void) | undefined;
   isSaving: boolean;
   deckName?: string;
   textSample?: string;
 }
+
+/* Cloze preview colors */
+const CLOZE_COLORS = [
+  'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40',
+  'bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40',
+  'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40',
+  'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40',
+  'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40',
+];
+const DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+
+const ClozePreview = ({ text }: { text: string }) => {
+  const plainText = text.replace(/<[^>]*>/g, '');
+  const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
+  const clozeNumbers = new Set<number>();
+  let match;
+  while ((match = clozeRegex.exec(plainText)) !== null) {
+    clozeNumbers.add(parseInt(match[1]));
+  }
+  const sortedNumbers = Array.from(clozeNumbers).sort((a, b) => a - b);
+  if (sortedNumbers.length === 0) return null;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex2 = /\{\{c(\d+)::([^}]*)\}\}/g;
+  let m;
+  let key = 0;
+  while ((m = regex2.exec(plainText)) !== null) {
+    if (m.index > lastIndex) parts.push(<span key={key++}>{plainText.slice(lastIndex, m.index)}</span>);
+    const num = parseInt(m[1]);
+    const colorIdx = sortedNumbers.indexOf(num) % CLOZE_COLORS.length;
+    parts.push(
+      <span key={key++} className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 border font-medium ${CLOZE_COLORS[colorIdx]}`}>
+        <span className="text-[9px] font-bold opacity-70">{num}</span>
+        {m[2]}
+      </span>
+    );
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < plainText.length) parts.push(<span key={key++}>{plainText.slice(lastIndex)}</span>);
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+      <div className="p-3 text-xs leading-relaxed">{parts}</div>
+      <div className="border-t border-border bg-muted/30 px-3 py-2 flex items-center gap-2 flex-wrap">
+        {sortedNumbers.map((n, i) => (
+          <span key={n} className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <span className={`h-2 w-2 rounded-full ${DOT_COLORS[i % DOT_COLORS.length]}`} />
+            Cloze {n}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const CardReviewStep = ({
   cards, editingIdx, editFront, editBack,
@@ -41,12 +98,18 @@ const CardReviewStep = ({
   onDeleteCard, onToggleType, onSave, onBack, isSaving,
   deckName, textSample,
 }: CardReviewStepProps) => {
+  const { toast } = useToast();
   // Tag state
   const [selectedTags, setSelectedTags] = useState<(Tag | string)[]>([]);
   const [tagQuery, setTagQuery] = useState('');
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [showTagWarning, setShowTagWarning] = useState(false);
+
+  // MC editing state for inline editing
+  const [editMcOptions, setEditMcOptions] = useState<string[]>(['', '', '', '']);
+  const [editMcCorrectIndex, setEditMcCorrectIndex] = useState(0);
 
   const { data: searchResults = [] } = useTagSearch(tagQuery);
   const aiSuggest = useTagSuggestions();
@@ -73,6 +136,15 @@ const CardReviewStep = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Parse MC data when starting edit on MC card
+  useEffect(() => {
+    if (editingIdx !== null && cards[editingIdx]?.type === 'multiple_choice') {
+      const card = cards[editingIdx];
+      setEditMcOptions(card.options || ['', '', '', '']);
+      setEditMcCorrectIndex(card.correctIndex ?? 0);
+    }
+  }, [editingIdx, cards]);
+
   const getTagName = (t: Tag | string) => typeof t === 'string' ? t : t.name;
   const getTagId = (t: Tag | string) => typeof t === 'string' ? t : t.id;
 
@@ -82,7 +154,7 @@ const CardReviewStep = ({
     setSelectedTags(prev => [...prev, tag]);
     setTagQuery('');
     setTagDropdownOpen(false);
-    // Remove from AI suggestions
+    setShowTagWarning(false);
     setAiSuggestions(prev => prev.filter(s => s.name.toLowerCase() !== name));
   };
 
@@ -95,6 +167,144 @@ const CardReviewStep = ({
   );
 
   const hasMinTags = selectedTags.length >= 1;
+
+  const handleSaveClick = () => {
+    if (!hasMinTags) {
+      setShowTagWarning(true);
+      toast({
+        title: '🏷️ Selecione pelo menos 1 tag',
+        description: 'Escolha uma das tags sugeridas ou crie a sua própria para categorizar o baralho.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    onSave(selectedTags);
+  };
+
+  const addMcOption = () => {
+    if (editMcOptions.length < 6) setEditMcOptions([...editMcOptions, '']);
+  };
+
+  const removeMcOption = (idx: number) => {
+    if (editMcOptions.length <= 2) return;
+    const newOpts = editMcOptions.filter((_, i) => i !== idx);
+    setEditMcOptions(newOpts);
+    if (editMcCorrectIndex >= newOpts.length) setEditMcCorrectIndex(newOpts.length - 1);
+    else if (editMcCorrectIndex === idx) setEditMcCorrectIndex(0);
+    else if (editMcCorrectIndex > idx) setEditMcCorrectIndex(editMcCorrectIndex - 1);
+  };
+
+  const renderCardEditor = (card: GeneratedCard) => {
+    if (card.type === 'multiple_choice') {
+      return (
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pergunta</Label>
+            <LazyRichEditor
+              content={editFront}
+              onChange={onEditFrontChange}
+              placeholder="Qual organela é responsável pela produção de energia?"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Opções</Label>
+            <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+              {editMcOptions.map((opt, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setEditMcCorrectIndex(idx)}
+                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                    editMcCorrectIndex === idx ? 'bg-success/10' : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    editMcCorrectIndex === idx ? 'border-success bg-success text-white' : 'border-muted-foreground/30'
+                  }`}>
+                    {editMcCorrectIndex === idx && <span className="text-[10px] font-bold">✓</span>}
+                  </div>
+                  <Input
+                    value={opt}
+                    onChange={e => {
+                      e.stopPropagation();
+                      const newOpts = [...editMcOptions];
+                      newOpts[idx] = e.target.value;
+                      setEditMcOptions(newOpts);
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    placeholder={`Opção ${idx + 1}`}
+                    className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-auto py-0"
+                  />
+                  {editMcOptions.length > 2 && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); removeMcOption(idx); }}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {editMcOptions.length < 6 && (
+              <Button variant="ghost" size="sm" onClick={addMcOption} className="gap-1 w-full text-muted-foreground hover:text-foreground">
+                <Plus className="h-3 w-3" /> Adicionar opção
+              </Button>
+            )}
+            <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
+          </div>
+        </>
+      );
+    }
+
+    if (card.type === 'cloze') {
+      return (
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Texto com lacunas</Label>
+            <LazyRichEditor
+              content={editFront}
+              onChange={onEditFrontChange}
+              placeholder="A {{c1::mitocôndria}} é responsável pela respiração celular."
+            />
+          </div>
+          <ClozePreview text={editFront} />
+          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
+            <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
+            <p className="text-xs text-muted-foreground">
+              Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
+            </p>
+          </div>
+        </>
+      );
+    }
+
+    // Basic (qa)
+    return (
+      <>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Frente (Pergunta)</Label>
+          <LazyRichEditor
+            content={editFront}
+            onChange={onEditFrontChange}
+            placeholder="Qual é a capital da França?"
+            hideCloze
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Verso (Resposta)</Label>
+          <LazyRichEditor
+            content={editBack}
+            onChange={onEditBackChange}
+            placeholder="Paris"
+            hideCloze
+          />
+        </div>
+      </>
+    );
+  };
+
+  const getTypeIcon = (type: string) => {
+    if (type === 'cloze') return <PenLine className="h-3 w-3" />;
+    if (type === 'multiple_choice') return <CheckSquare className="h-3 w-3" />;
+    return <MessageSquareText className="h-3 w-3" />;
+  };
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -110,26 +320,7 @@ const CardReviewStep = ({
             <div key={idx} className="rounded-xl border border-border bg-card p-3 space-y-2">
               {editingIdx === idx ? (
                 <>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Frente</Label>
-                    <LazyRichEditor
-                      content={editFront}
-                      onChange={onEditFrontChange}
-                      placeholder="Frente do cartão"
-                      hideCloze={card.type !== 'cloze'}
-                    />
-                  </div>
-                  {card.type !== 'multiple_choice' && card.type !== 'cloze' && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Verso</Label>
-                      <LazyRichEditor
-                        content={editBack}
-                        onChange={onEditBackChange}
-                        placeholder="Verso do cartão"
-                        hideCloze
-                      />
-                    </div>
-                  )}
+                  {renderCardEditor(card)}
                   <div className="flex gap-2 justify-end">
                     <Button variant="ghost" size="sm" onClick={onCancelEdit}>Cancelar</Button>
                     <Button size="sm" onClick={onSaveEdit} className="gap-1"><Check className="h-3 w-3" /> Salvar</Button>
@@ -156,15 +347,18 @@ const CardReviewStep = ({
                         className="text-xs text-muted-foreground mt-1 leading-snug [&_img]:max-h-20 [&_img]:rounded"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}
                       />
+                    ) : card.type === 'cloze' ? (
+                      <ClozePreview text={card.front} />
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => onToggleType(idx)}
-                      className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border transition-colors ${
+                      className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border transition-colors ${
                         card.type === 'cloze' ? 'border-primary/40 bg-primary/10 text-primary'
                         : card.type === 'multiple_choice' ? 'border-warning/40 bg-warning/10 text-warning'
                         : 'border-border hover:bg-muted'
                       }`}>
+                      {getTypeIcon(card.type)}
                       {card.type === 'cloze' ? 'Cloze' : card.type === 'multiple_choice' ? 'Múltipla' : 'Básico'}
                     </button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onStartEdit(idx)}><Pencil className="h-3 w-3" /></Button>
@@ -178,12 +372,18 @@ const CardReviewStep = ({
       </div>
 
       {/* ── Tag Selection (mandatory) ── */}
-      <div className="space-y-2 border-t border-border pt-3">
+      <div className={`space-y-2 border-t pt-3 ${showTagWarning && !hasMinTags ? 'border-destructive' : 'border-border'}`}>
         <div className="flex items-center gap-2">
           <TagIcon className="h-4 w-4 text-primary" />
           <p className="text-sm font-semibold text-foreground">Tags do baralho</p>
-          <span className="text-[10px] text-muted-foreground">(obrigatório)</span>
+          <span className={`text-[10px] ${showTagWarning && !hasMinTags ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>(obrigatório)</span>
         </div>
+
+        {showTagWarning && !hasMinTags && (
+          <p className="text-xs text-destructive flex items-center gap-1">
+            ⚠️ Selecione pelo menos 1 tag das sugestões abaixo ou crie a sua.
+          </p>
+        )}
 
         {/* Selected tags */}
         {selectedTags.length > 0 && (
@@ -240,7 +440,7 @@ const CardReviewStep = ({
               if (e.key === 'Escape') setTagDropdownOpen(false);
             }}
             placeholder="Buscar ou criar tag..."
-            className="h-8 text-sm"
+            className={`h-8 text-sm ${showTagWarning && !hasMinTags ? 'border-destructive' : ''}`}
           />
           {tagDropdownOpen && (tagQuery || filteredSearch.length > 0) && (
             <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-36 overflow-y-auto">
@@ -273,14 +473,15 @@ const CardReviewStep = ({
       </div>
 
       <div className="flex gap-2 pt-1">
-        <Button variant="outline" onClick={onBack} className="gap-1.5">
-          <ChevronLeft className="h-3.5 w-3.5" /> Reconfigurar
-        </Button>
+        {onBack && (
+          <Button variant="outline" onClick={onBack} className="gap-1.5">
+            <ChevronLeft className="h-3.5 w-3.5" /> Reconfigurar
+          </Button>
+        )}
         <Button
-          onClick={() => onSave(selectedTags)}
-          disabled={cards.length === 0 || isSaving || !hasMinTags}
+          onClick={handleSaveClick}
+          disabled={cards.length === 0 || isSaving}
           className="flex-1 gap-2"
-          title={!hasMinTags ? 'Selecione pelo menos 1 tag' : undefined}
         >
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Salvar {cards.length} cartões
