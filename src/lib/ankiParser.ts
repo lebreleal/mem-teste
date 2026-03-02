@@ -809,26 +809,41 @@ function ankiFactorToFsrsDifficulty(factor: number): number {
 function ankiDueToScheduledDate(due: number, type: number, crt: number): string {
   if (type === 0) return new Date().toISOString();
   if (type === 1 || type === 3) {
-    return due > 1e9 ? new Date(due * 1000).toISOString() : new Date().toISOString();
+    // Learning/relearning: due is seconds since epoch or relative
+    if (due > 1e9) return new Date(due * 1000).toISOString();
+    return new Date().toISOString();
   }
-  // Review card: due = day number relative to collection creation
+  // Review card (type === 2): due is day number
+  // In Anki, for review cards, "due" is always days since collection creation (crt)
+  // BUT if the deck was exported from a newer Anki version, due might be days since epoch
+  
+  // Strategy 1: Try as days since crt
   if (crt > 0) {
     const dayStart = Math.floor(crt / 86400) * 86400;
     const ts = (dayStart + due * 86400) * 1000;
-    // Sanity check: if result is wildly in the past or future, use current date
     const now = Date.now();
-    if (ts < now - 365 * 86400000 * 5 || ts > now + 365 * 86400000 * 10) {
-      return new Date().toISOString();
+    // Accept dates from 20 years in the past to 10 years in the future
+    if (ts > now - 365.25 * 86400000 * 20 && ts < now + 365.25 * 86400000 * 10) {
+      return new Date(ts).toISOString();
     }
-    return new Date(ts).toISOString();
   }
-  // crt=0: due might be absolute epoch-day or relative. Try interpreting as epoch-days from 1970.
-  // Anki stores due as days since epoch for review cards when crt is unknown
-  if (due > 15000 && due < 30000) {
-    // Likely epoch-day (15000 ~ 2011, 30000 ~ 2052)
+  
+  // Strategy 2: due as absolute days since Unix epoch (common in some Anki versions)
+  if (due > 10000 && due < 40000) {
+    // 10000 days ~ 1997, 40000 days ~ 2079
     const ts = due * 86400 * 1000;
+    const now = Date.now();
+    if (ts > now - 365.25 * 86400000 * 20 && ts < now + 365.25 * 86400000 * 10) {
+      return new Date(ts).toISOString();
+    }
+  }
+  
+  // Strategy 3: due might be relative days from now (small numbers)
+  if (due >= -365 && due <= 3650) {
+    const ts = Date.now() + due * 86400 * 1000;
     return new Date(ts).toISOString();
   }
+
   return new Date().toISOString();
 }
 
@@ -852,8 +867,11 @@ function buildProgressData(
     else if (raw.type === 2) stateCounts.s2++;
     else if (raw.type === 3) stateCounts.s3++;
     const scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
-    if (loggedSamples < 3) {
-      console.log(`[ANKI] Progress sample: type=${raw.type} ivl=${raw.ivl} due=${raw.due} factor=${raw.factor} → scheduled=${scheduledDate}`);
+    if (loggedSamples < 5) {
+      const dayStart = crt > 0 ? Math.floor(crt / 86400) * 86400 : 0;
+      const tsFromCrt = crt > 0 ? (dayStart + raw.due * 86400) * 1000 : 0;
+      const tsFromEpoch = raw.due * 86400 * 1000;
+      console.log(`[ANKI] Progress #${loggedSamples}: ankiId=${ankiId} type=${raw.type} ivl=${raw.ivl} due=${raw.due} factor=${raw.factor} queue=${raw.queue} | crt=${crt} | tsFromCrt=${tsFromCrt > 0 ? new Date(tsFromCrt).toISOString() : 'N/A'} | tsFromEpoch=${new Date(tsFromEpoch).toISOString()} | result=${scheduledDate}`);
       loggedSamples++;
     }
     const stability = Math.max(0, raw.ivl);
