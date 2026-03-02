@@ -1,58 +1,64 @@
 
+# Corrigir carregamento infinito na visualizacao de decks grandes
 
-# Correcao: Erro ao Gerar Deck com IA (Mensagem Enganosa)
+## Problema identificado
 
-## Problema
-Quando o texto e dividido em 12 paginas, as chamadas em lote para a API do Google AI falham por rate limit (HTTP 429). O codigo atual nao diferencia esse erro de "conteudo insuficiente", mostrando a mensagem errada ao usuario.
+Quando voce abre um deck com muitos subdecks (ex: 1000+ subdecks, 10k+ cards), o sistema faz **dezenas de requisicoes HTTP** sequenciais porque:
 
-## Causa Raiz
-No `useAIDeckFlow.ts`, o `Promise.allSettled` captura os erros silenciosamente (apenas `console.error`). Quando TODOS os lotes falham, `allCards` fica vazio e o codigo cai no toast generico "O conteudo pode ser insuficiente".
+1. **`fetchAggregatedCardsMeta`**: Busca metadados de TODOS os cards enviando os 1000+ deck IDs em lotes de 300 -- isso gera 4+ rounds de requisicoes, cada um paginando 1000 rows por vez
+2. **`fetchAggregatedStats`**: Faz a MESMA coisa -- busca todos os cards de novo so para contar estados (novo/aprendendo/dominado)
+3. **`fetchAggregatedCardsPage`**: Tambem precisa lidar com 1000+ deck IDs para exibir apenas 200 cards
 
-## Solucao
+No Anki, tudo e instantaneo porque ele usa banco local. Aqui, cada operacao vira multiplas chamadas de rede.
 
-### Arquivo: `src/components/ai-deck/useAIDeckFlow.ts`
+## Solucao: 3 otimizacoes
 
-**1. Rastrear falhas nos lotes** -- Adicionar contadores `failedCount` e `lastErrorMsg` no loop de geracao (apos `Promise.allSettled`, linhas ~355-369):
+### 1. Eliminar `fetchAggregatedStats` -- usar dados que ja existem
 
-```typescript
-let failedCount = 0;
-let lastErrorMsg = '';
+O `useDecks()` ja traz stats por deck (`new_count`, `learning_count`, `review_count`) via RPC `get_all_user_deck_stats`. Em vez de buscar todos os cards de novo, vamos **somar os stats dos decks descendentes** que ja estao em memoria.
 
-for (const result of results) {
-  if (result.status === 'fulfilled') {
-    allCards.push(...result.value.cards);
-    // ... tracking existente
-  } else {
-    failedCount++;
-    const msg = result.reason?.message || '';
-    if (msg) lastErrorMsg = msg;
-    console.error('Batch call failed:', result.reason);
-  }
-}
+- **Antes**: Query separada buscando todos os 10k+ cards para contar estados
+- **Depois**: Soma simples de dados ja carregados (0 requisicoes)
+
+### 2. Criar RPC `get_descendant_cards_page` no banco
+
+Uma funcao SQL que usa CTE recursivo para encontrar todos os subdecks e retornar uma pagina de cards em **uma unica query**:
+
+```text
+get_descendant_cards_page(p_deck_id, p_limit, p_offset)
+  -> WITH RECURSIVE descendant_decks AS (...)
+     SELECT * FROM cards WHERE deck_id IN descendant_decks
+     ORDER BY created_at DESC
+     LIMIT p_limit OFFSET p_offset
 ```
 
-**2. Diferenciar mensagens de erro** -- Nos dois pontos onde verificamos `dedupedCards.length === 0` (linhas ~393-415), substituir a mensagem generica:
+- **Antes**: 4+ requisicoes HTTP com lotes de 300 IDs
+- **Depois**: 1 unica query SQL
 
-```typescript
-// Logica para ambos os caminhos (background e foreground)
-if (dedupedCards.length === 0) {
-  const allFailed = failedCount === totalBatches;
-  const title = allFailed
-    ? 'Erro ao gerar cartoes'
-    : 'Nenhum cartao gerado';
-  const description = allFailed
-    ? (lastErrorMsg || 'Servico de IA indisponivel. Tente novamente em alguns segundos.')
-    : 'O conteudo pode ser insuficiente.';
+### 3. Criar RPC `count_descendant_cards_by_state` para contagem de metadados
 
-  toast({ title, description, variant: 'destructive' });
-  // ... resto da logica existente (setStep('config') ou removePending)
-}
+Para os filtros (contagem por tipo e estado), criar uma funcao que retorna contagens agrupadas sem transferir dados de cards:
+
+```text
+count_descendant_cards_by_state(p_deck_id)
+  -> Retorna: total, new_count, learning_count, review_count,
+             basic_count, cloze_count, mc_count, occlusion_count, frozen_count
 ```
 
-**3. Mover declaracao das variaveis** -- `failedCount` e `lastErrorMsg` serao declaradas ANTES do loop principal de lotes (antes do `for` na linha ~313), para acumular erros de todos os grupos de lotes.
+- **Antes**: Transfere 10k+ rows de metadados para o browser
+- **Depois**: Retorna ~10 numeros em 1 query
 
-## Escopo
-- Apenas 1 arquivo modificado: `useAIDeckFlow.ts`
-- Sem alteracao de prompts ou edge functions
-- A edge function `generate-deck` ja retorna mensagens claras para 429/503/502
+## Arquivos que serao alterados
 
+| Arquivo | Mudanca |
+|---------|---------|
+| **Migration SQL** | Criar 2 RPCs: `get_descendant_cards_page` e `count_descendant_cards_by_state` |
+| `src/services/cardService.ts` | Adicionar funcoes que chamam os novos RPCs |
+| `src/components/deck-detail/DeckDetailContext.tsx` | Usar stats dos `decks` em vez de query separada; usar novos RPCs para cards e contagens |
+| `src/components/deck-detail/CardList.tsx` | Usar contagens do novo RPC em vez de iterar `cardsMeta` |
+
+## Resultado esperado
+
+- **Abertura do deck**: De 10-30 segundos para < 1 segundo
+- **Requisicoes HTTP**: De 20-40 para 2-3
+- **Dados transferidos**: De megabytes de metadata para kilobytes de contagens
