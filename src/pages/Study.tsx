@@ -614,9 +614,11 @@ const Study = () => {
               <StudyCardActions
                 card={currentCard}
                 isLiveDeck={isLiveDeck}
-                onCardUpdated={(updatedFields) => {
+              onCardUpdated={(updatedFields) => {
                   setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
-                  setCardKey(prev => prev + 1);
+                  // Update displayedCard directly so the edit is visible
+                  // WITHOUT bumping cardKey (which would swap to a queued learning card)
+                  setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
                 }}
                 onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
                 onCardBuried={() => {
