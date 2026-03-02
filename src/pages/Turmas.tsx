@@ -58,22 +58,21 @@ const CommunityCard = ({
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
         <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">{turma.name}</h3>
-        {(turma.subscription_price ?? 0) > 0 && (
-          <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />
-        )}
       </div>
       <p className="text-xs text-muted-foreground">
         por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
       </p>
     </div>
 
-    <div className="flex items-center gap-4">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Layers className="h-3.5 w-3.5 text-foreground" />
-        <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
-        decks
+    <div className="flex items-center gap-3">
+      <span className="flex items-center gap-1 text-[11px] text-foreground">
+        <Layers className="h-3 w-3 shrink-0" />
+        <span className="font-bold">{formatCount(turma.member_count ?? 0)}</span>
       </span>
       <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
+      {(turma.subscription_price ?? 0) > 0 && (
+        <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />
+      )}
     </div>
 
     {isMine ? (
@@ -113,10 +112,9 @@ const PublicDeckCard = ({
       </p>
     </div>
 
-    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-      <Layers className="h-3 w-3 text-foreground shrink-0" />
-      <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
-      <span>cards</span>
+    <p className="text-[11px] text-foreground flex items-center gap-1">
+      <Layers className="h-3 w-3 shrink-0" />
+      <span className="font-bold">{formatCount(deck.card_count)}</span>
     </p>
 
     {isOwner ? (
