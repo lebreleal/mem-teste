@@ -649,28 +649,11 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
     return result;
   };
 
-  // Count cards per deck — paginate to avoid 1000-row limit
+  // Count cards per deck using server-side RPC (avoids 1000-row limit)
   const allDeckIds = [...allFetchedIds];
   const directCountMap = new Map<string, number>();
-  const BATCH = 50;
-  for (let i = 0; i < allDeckIds.length; i += BATCH) {
-    const batch = allDeckIds.slice(i, i + BATCH);
-    let from = 0;
-    const PAGE = 1000;
-    while (true) {
-      const { data: cardsData } = await supabase
-        .from('cards')
-        .select('deck_id')
-        .in('deck_id', batch)
-        .range(from, from + PAGE - 1);
-      if (!cardsData || cardsData.length === 0) break;
-      cardsData.forEach((c: any) =>
-        directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1)
-      );
-      if (cardsData.length < PAGE) break;
-      from += PAGE;
-    }
-  }
+  const { data: counts } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
+  (counts ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
 
   return decks.map((d: any) => {
     const subtreeIds = collectSubtree(d.id);
