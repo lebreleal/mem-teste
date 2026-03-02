@@ -49,6 +49,8 @@ export interface AnkiParseResult {
   deckName: string;
   cards: AnkiCard[];
   mediaCount: number;
+  /** Number of media files referenced in cards but not found in the archive */
+  missingMediaCount: number;
   subdecks?: AnkiSubdeck[];
   progress?: AnkiCardProgress[];
   revlog?: AnkiReviewLogEntry[];
@@ -1240,10 +1242,13 @@ export async function parseApkgFile(
       }
     };
 
+    const missingMediaCount = referencedFiles.size - mediaMap.size;
+
     return {
       deckName,
       cards,
-      mediaCount: totalMediaCount,
+      mediaCount: mediaMap.size,
+      missingMediaCount: missingMediaCount > 0 ? missingMediaCount : 0,
       subdecks: subdecks.length > 0 ? subdecks : undefined,
       progress: hasProgress ? progress : undefined,
       revlog: revlog.length > 0 ? revlog : undefined,
