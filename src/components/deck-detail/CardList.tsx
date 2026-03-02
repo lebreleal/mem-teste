@@ -7,6 +7,7 @@ import CardPreviewSheet from './CardPreviewSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Trash2, X, CheckCheck, ArrowUpRight, PenLine, Sparkles, Download, Filter,
   MoreVertical, Eye, Flame,
@@ -15,6 +16,22 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
+import { useCardTags } from '@/hooks/useTags';
+
+/** Inline tag display for card list items */
+const CardTagsInline = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  if (tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {tags.map(tag => (
+        <Badge key={tag.id} variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-normal">
+          {tag.name}
+        </Badge>
+      ))}
+    </div>
+  );
+};
 
 const CardList = () => {
   const {
@@ -455,6 +472,7 @@ const CardList = () => {
                           </p>
                         ) : null}
 
+                        <CardTagsInline cardId={card.id} />
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
