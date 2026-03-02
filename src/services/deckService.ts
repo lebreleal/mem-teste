@@ -329,7 +329,8 @@ interface SubdeckNode {
   children?: SubdeckNode[];
 }
 
-/** Import a deck organized into subdecks. Supports recursive hierarchy (up to N levels). */
+/** Import a deck organized into subdecks. Supports recursive hierarchy (up to N levels).
+ *  Optimised: creates decks level-by-level in bulk batches instead of one-by-one. */
 export async function importDeckWithSubdecks(
   userId: string,
   parentName: string,
@@ -339,12 +340,73 @@ export async function importDeckWithSubdecks(
   algorithmMode?: string,
   revlog?: RevlogImportEntry[],
 ) {
-  // Global mapping: original card index → inserted card ID (for revlog)
   const globalCardIdMap = new Map<number, string>();
 
-  // Helper to insert cards for a deck (batched) with progress
-  const insertCards = async (deckId: string, indices: number[]) => {
+  // 1. Create the root parent deck
+  const { data: parentDeck, error: parentErr } = await supabase
+    .from('decks')
+    .insert({
+      name: parentName, user_id: userId, folder_id: folderId,
+      ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+    } as any).select().single();
+  if (parentErr || !parentDeck) throw parentErr;
+  const parentId = (parentDeck as any).id;
+
+  // 2. BFS: process the tree level-by-level, bulk-inserting decks
+  type QueueItem = { node: SubdeckNode; resolvedParentId: string | null };
+  let queue: QueueItem[] = subdecks.map(sd => ({
+    node: sd,
+    resolvedParentId: (sd as any).standalone ? null : parentId,
+  }));
+
+  // Collect all card assignments: { deckId, indices }
+  const deckCards: { deckId: string; indices: number[] }[] = [];
+  const DECK_BATCH = 200;
+
+  while (queue.length > 0) {
+    const nextQueue: QueueItem[] = [];
+
+    for (let i = 0; i < queue.length; i += DECK_BATCH) {
+      const batch = queue.slice(i, i + DECK_BATCH);
+      const rows = batch.map(item => ({
+        name: item.node.name,
+        user_id: userId,
+        folder_id: folderId,
+        parent_deck_id: item.resolvedParentId,
+        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+      }));
+
+      const { data: inserted, error } = await supabase
+        .from('decks').insert(rows as any).select('id');
+      if (error) throw error;
+
+      if (inserted) {
+        for (let j = 0; j < inserted.length; j++) {
+          const deckId = (inserted[j] as any).id;
+          const node = batch[j].node;
+
+          if (node.card_indices.length > 0) {
+            deckCards.push({ deckId, indices: node.card_indices });
+          }
+
+          if (node.children?.length) {
+            for (const child of node.children) {
+              nextQueue.push({ node: child, resolvedParentId: deckId });
+            }
+          }
+        }
+      }
+    }
+
+    queue = nextQueue;
+  }
+
+  // 3. Bulk-insert all cards
+  const CARD_BATCH = 500;
+  for (const { deckId, indices } of deckCards) {
     const validIndices = indices.filter(idx => idx >= 0 && idx < cards.length);
+    if (validIndices.length === 0) continue;
+
     const rows = validIndices.map(idx => ({
       deck_id: deckId,
       front_content: cards[idx].frontContent,
@@ -357,79 +419,21 @@ export async function importDeckWithSubdecks(
       learning_step: cards[idx].progress?.learningStep ?? 0,
       ...(cards[idx].progress?.lastReviewedAt ? { last_reviewed_at: cards[idx].progress.lastReviewedAt } : {}),
     }));
-    const BATCH_SIZE = 500;
-    let localIdx = 0;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+
+    for (let i = 0; i < rows.length; i += CARD_BATCH) {
+      const batch = rows.slice(i, i + CARD_BATCH);
       const { data: inserted, error } = await supabase.from('cards').insert(batch as any).select('id');
       if (error) throw error;
       if (inserted) {
-        for (const row of inserted) {
-          globalCardIdMap.set(validIndices[localIdx], row.id);
-          localIdx++;
+        for (let j = 0; j < inserted.length; j++) {
+          const cardOrigIdx = validIndices[i + j];
+          globalCardIdMap.set(cardOrigIdx, (inserted[j] as any).id);
         }
       }
     }
-  };
-
-  // Recursive helper to create a deck tree
-  const createDeckTree = async (
-    node: SubdeckNode,
-    parentDeckId: string | null,
-    nodeFolderId: string | null,
-  ) => {
-    const { data: deck, error } = await supabase
-      .from('decks')
-      .insert({
-        name: node.name,
-        user_id: userId,
-        folder_id: nodeFolderId,
-        parent_deck_id: parentDeckId,
-        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-      } as any)
-      .select()
-      .single();
-    if (error || !deck) throw error;
-
-    const deckId = (deck as any).id;
-
-    if (node.card_indices.length > 0) {
-      await insertCards(deckId, node.card_indices);
-    }
-
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        await createDeckTree(child, deckId, nodeFolderId);
-      }
-    }
-
-    return deck;
-  };
-
-  // Always create a parent deck and nest subdecks under it
-  const { data: parentDeck, error: parentErr } = await supabase
-    .from('decks')
-    .insert({
-      name: parentName,
-      user_id: userId,
-      folder_id: folderId,
-      ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-    } as any)
-    .select()
-    .single();
-  if (parentErr || !parentDeck) throw parentErr;
-
-  const parentId = (parentDeck as any).id;
-
-  for (const sd of subdecks) {
-    if ((sd as any).standalone) {
-      await createDeckTree(sd, null, folderId);
-    } else {
-      await createDeckTree(sd, parentId, folderId);
-    }
   }
 
-  // Insert revlog after all cards have been created
+  // 4. Insert revlog
   if (revlog && revlog.length > 0 && globalCardIdMap.size > 0) {
     await insertRevlogBatch(userId, revlog, globalCardIdMap);
   }
