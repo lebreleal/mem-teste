@@ -600,40 +600,43 @@ export interface PublicDeckItem {
 }
 
 export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
-  let query = supabase.from('decks').select('id, name, user_id, created_at, updated_at').eq('is_public', true).is('parent_deck_id', null);
+  // Fetch ALL public decks (not just roots) — each level appears independently
+  let query = supabase.from('decks').select('id, name, user_id, parent_deck_id, created_at, updated_at').eq('is_public', true);
   if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
-  const { data: decks } = await query.order('created_at', { ascending: false }).limit(60);
+  const { data: decks } = await query.order('created_at', { ascending: false }).limit(200);
   if (!decks || decks.length === 0) return [];
 
   const ownerIds = [...new Set(decks.map((d: any) => d.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const rootDeckIds = decks.map((d: any) => d.id);
-
-  // Recursively fetch ALL descendants of root decks
-  let allDescendantDecks: { id: string; parent_deck_id: string | null; updated_at: string }[] = [];
-  let parentIds = [...rootDeckIds];
-  const seenIds = new Set(rootDeckIds);
-
-  while (parentIds.length > 0) {
-    const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
-    const newChildren = (children ?? []).filter((c: any) => !seenIds.has(c.id));
-    if (newChildren.length === 0) break;
-    newChildren.forEach((c: any) => seenIds.add(c.id));
-    allDescendantDecks.push(...newChildren);
-    parentIds = newChildren.map((c: any) => c.id);
-  }
-
-  // Build parent→children map for subtree collection
+  // Build parent→children map from the fetched decks themselves
   const childrenMap = new Map<string, string[]>();
-  allDescendantDecks.forEach((d: any) => {
-    if (d.parent_deck_id) {
+  const deckMap = new Map(decks.map((d: any) => [d.id, d]));
+  decks.forEach((d: any) => {
+    if (d.parent_deck_id && deckMap.has(d.parent_deck_id)) {
       const list = childrenMap.get(d.parent_deck_id) ?? [];
       list.push(d.id);
       childrenMap.set(d.parent_deck_id, list);
     }
   });
+
+  // Also fetch children that might not be public themselves but belong to hierarchy
+  // (for card counting purposes)
+  const allFetchedIds = new Set(decks.map((d: any) => d.id));
+  let parentIds = [...allFetchedIds];
+  while (parentIds.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
+    const newChildren = (children ?? []).filter((c: any) => !allFetchedIds.has(c.id));
+    if (newChildren.length === 0) break;
+    newChildren.forEach((c: any) => {
+      allFetchedIds.add(c.id);
+      const list = childrenMap.get(c.parent_deck_id) ?? [];
+      list.push(c.id);
+      childrenMap.set(c.parent_deck_id, list);
+    });
+    parentIds = newChildren.map((c: any) => c.id);
+  }
 
   const collectSubtree = (rootId: string): string[] => {
     const result = [rootId];
@@ -643,41 +646,15 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
     return result;
   };
 
-  // All deck IDs (roots + descendants) for card queries
-  const allDeckIds = [...seenIds];
-
-  const [cardsResult, cardUpdatesResult] = await Promise.all([
-    supabase.from('cards').select('deck_id').in('deck_id', allDeckIds),
-    supabase.from('cards').select('deck_id, updated_at').in('deck_id', allDeckIds).order('updated_at', { ascending: false }),
-  ]);
-
+  // Fetch cards for ALL deck IDs in any subtree
+  const allDeckIds = [...allFetchedIds];
+  const { data: cardsData } = await supabase.from('cards').select('deck_id').in('deck_id', allDeckIds);
   const directCountMap = new Map<string, number>();
-  (cardsResult.data ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
-
-  // Max updated_at per deck
-  const cardMaxMap = new Map<string, string>();
-  (cardUpdatesResult.data ?? []).forEach((c: any) => {
-    if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
-  });
-
-  // Descendant updated_at map
-  const descUpdatedMap = new Map<string, string>();
-  allDescendantDecks.forEach((d: any) => {
-    if (!descUpdatedMap.has(d.id)) descUpdatedMap.set(d.id, d.updated_at);
-  });
+  (cardsData ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
 
   return decks.map((d: any) => {
     const subtreeIds = collectSubtree(d.id);
     const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
-
-    // Find the most recent updated_at across the entire subtree (deck + cards)
-    let latestUpdate = new Date(d.updated_at);
-    for (const sid of subtreeIds) {
-      const cardUp = cardMaxMap.get(sid);
-      if (cardUp && new Date(cardUp) > latestUpdate) latestUpdate = new Date(cardUp);
-      const deckUp = descUpdatedMap.get(sid);
-      if (deckUp && new Date(deckUp) > latestUpdate) latestUpdate = new Date(deckUp);
-    }
 
     return {
       id: d.id,
@@ -686,7 +663,7 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
       owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
       owner_id: d.user_id,
       created_at: d.created_at,
-      updated_at: latestUpdate.toISOString(),
+      updated_at: d.updated_at,
     };
   });
 }
