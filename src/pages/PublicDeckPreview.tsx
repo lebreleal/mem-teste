@@ -910,16 +910,54 @@ const PublicDeckPreview = () => {
     enabled: !!deckId,
   });
 
-  // Fetch cards (with all fields needed by CardContent)
+  // Fetch cards from published subtree (aggregated hierarchy)
   const { data: allCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['public-deck-cards', deckId],
     queryFn: async () => {
+      // 1. Find turma_decks for this deck's turma
+      const { data: tdLink } = await supabase
+        .from('turma_decks')
+        .select('turma_id')
+        .eq('deck_id', deckId!)
+        .limit(1)
+        .maybeSingle();
+
+      if (!tdLink) {
+        // Not in a turma — just fetch own cards
+        const { data, error } = await supabase.from('cards').select('*').eq('deck_id', deckId!).order('created_at', { ascending: true }).limit(500);
+        if (error) throw error;
+        return data ?? [];
+      }
+
+      // 2. Fetch all turma_decks + deck hierarchy
+      const { data: allTd } = await supabase.from('turma_decks').select('deck_id, is_published').eq('turma_id', tdLink.turma_id);
+      const tdDeckIds = (allTd ?? []).map((t: any) => t.deck_id);
+      const { data: allDecks } = await supabase.from('decks').select('id, parent_deck_id').in('id', tdDeckIds);
+
+      const tdMap = new Map((allTd ?? []).map((t: any) => [t.deck_id, t]));
+
+      // 3. Collect published subtree from this deck
+      const collectSubtree = (rootId: string): string[] => {
+        const result = [rootId];
+        for (const d of (allDecks ?? [])) {
+          if (d.parent_deck_id === rootId) {
+            const td = tdMap.get(d.id);
+            if (td && td.is_published !== false) {
+              result.push(...collectSubtree(d.id));
+            }
+          }
+        }
+        return result;
+      };
+      const subtreeIds = collectSubtree(deckId!);
+
+      // 4. Fetch cards from all subtree decks
       const { data, error } = await supabase
         .from('cards')
         .select('*')
-        .eq('deck_id', deckId!)
+        .in('deck_id', subtreeIds)
         .order('created_at', { ascending: true })
-        .limit(500);
+        .limit(2000);
       if (error) throw error;
       return data ?? [];
     },
