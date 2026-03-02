@@ -72,8 +72,8 @@ export const useContentImport = () => {
   };
 
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
-  // Only show root decks (no parent) since children are shared automatically with parent
-  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id && !(d as any).parent_deck_id);
+  // Show all decks (including sub-decks) so the user can pick from the full hierarchy
+  const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
 
   // ── Add to collection (independent copy, supports hierarchy) ──
   const addToCollection = useMutation({
