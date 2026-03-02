@@ -11,18 +11,20 @@ import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hook
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon,
+  Globe, Lock, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon, MessageCircle, LogOut,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
-const DESC_MAX = 2000;
 
 
 const formatCount = (n: number) => {
@@ -134,12 +136,10 @@ const Turmas = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { turmas, isLoading, createTurma, joinTurma, leaveTurma } = useTurmas();
+  const { turmas, isLoading, joinTurma, leaveTurma } = useTurmas();
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
@@ -182,14 +182,6 @@ const Turmas = () => {
     return decks;
   }, [viewMode, publicDecks, selectedTag, descendantIds, deckTagsMap]);
 
-  const handleCreate = () => {
-    if (!name.trim()) return;
-    createTurma.mutate({ name: name.trim(), description: description.trim() }, {
-      onSuccess: () => { setShowCreate(false); setName(''); setDescription(''); toast({ title: 'Comunidade criada!' }); },
-      onError: () => toast({ title: 'Erro ao criar', variant: 'destructive' }),
-    });
-  };
-
   const handleJoin = () => {
     if (!inviteCode.trim()) return;
     joinTurma.mutate(inviteCode.trim(), {
@@ -218,7 +210,7 @@ const Turmas = () => {
             <Button variant="outline" size="sm" onClick={() => setShowJoin(true)} className="gap-1.5">
               <LogIn className="h-4 w-4" /> <span className="hidden sm:inline">Código</span>
             </Button>
-            <Button size="sm" onClick={() => { setShowCreate(true); setName(''); setDescription(''); }} className="gap-1.5">
+            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
               <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Criar</span>
             </Button>
           </div>
@@ -305,12 +297,22 @@ const Turmas = () => {
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {communities.map(turma => (
-                    <CommunityCard
-                      key={turma.id}
-                      turma={turma}
-                      onClick={() => navigate(`/turmas/${turma.id}`)}
-                      isMine={myTurmaIds.has(turma.id)}
-                    />
+                    <div key={turma.id} className="relative">
+                      <CommunityCard
+                        turma={turma}
+                        onClick={() => navigate(`/turmas/${turma.id}`)}
+                        isMine={myTurmaIds.has(turma.id)}
+                      />
+                      {viewMode === 'mine' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmLeave(turma.id); }}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-card/90 border border-border/50 text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-colors shadow-sm"
+                          title="Desinscrever-se"
+                        >
+                          <LogOut className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </section>
@@ -356,27 +358,30 @@ const Turmas = () => {
         )}
       </main>
 
-      {/* Create Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Criar Comunidade</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <Input placeholder="Nome da comunidade" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
-            <div className="space-y-1">
-              <Textarea
-                placeholder="Descrição (opcional)"
-                value={description}
-                onChange={e => { if (e.target.value.length <= DESC_MAX) setDescription(e.target.value); }}
-                maxLength={DESC_MAX}
-              />
-              <p className="text-[11px] text-muted-foreground text-right">{description.length}/{DESC_MAX}</p>
-            </div>
-            <Button onClick={handleCreate} disabled={!name.trim() || createTurma.isPending} className="w-full">
-              {createTurma.isPending ? 'Criando...' : 'Criar Comunidade'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Create Dialog - WhatsApp contact */}
+      <AlertDialog open={showCreate} onOpenChange={setShowCreate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Criar Comunidade</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Para criar uma comunidade personalizada, entre em contato conosco pelo WhatsApp. Nossa equipe vai te ajudar a configurar tudo!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Fechar</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <a
+                href="https://wa.me/5514998958122?text=Ol%C3%A1!%20Gostaria%20de%20criar%20uma%20comunidade%20no%20MemoCards."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2"
+              >
+                <MessageCircle className="h-4 w-4" /> Falar no WhatsApp
+              </a>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Join by Code Dialog */}
       <Dialog open={showJoin} onOpenChange={setShowJoin}>
