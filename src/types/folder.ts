@@ -10,4 +10,6 @@ export interface Folder {
   created_at: string;
   updated_at: string;
   user_id: string;
+  source_turma_id?: string | null;
+  source_turma_subject_id?: string | null;
 }
