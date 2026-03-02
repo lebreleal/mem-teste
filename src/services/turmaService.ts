@@ -609,33 +609,84 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const deckIds = decks.map((d: any) => d.id);
-  const [cardsResult, cardUpdatesResult] = await Promise.all([
-    supabase.from('cards').select('deck_id').in('deck_id', deckIds),
-    supabase.from('cards').select('deck_id, updated_at').in('deck_id', deckIds).order('updated_at', { ascending: false }),
-  ]);
-  const countMap = new Map<string, number>();
-  (cardsResult.data ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
+  const rootDeckIds = decks.map((d: any) => d.id);
 
-  // Build max card updated_at per deck (sorted desc, first occurrence = max)
+  // Recursively fetch ALL descendants of root decks
+  let allDescendantDecks: { id: string; parent_deck_id: string | null; updated_at: string }[] = [];
+  let parentIds = [...rootDeckIds];
+  const seenIds = new Set(rootDeckIds);
+
+  while (parentIds.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
+    const newChildren = (children ?? []).filter((c: any) => !seenIds.has(c.id));
+    if (newChildren.length === 0) break;
+    newChildren.forEach((c: any) => seenIds.add(c.id));
+    allDescendantDecks.push(...newChildren);
+    parentIds = newChildren.map((c: any) => c.id);
+  }
+
+  // Build parent→children map for subtree collection
+  const childrenMap = new Map<string, string[]>();
+  allDescendantDecks.forEach((d: any) => {
+    if (d.parent_deck_id) {
+      const list = childrenMap.get(d.parent_deck_id) ?? [];
+      list.push(d.id);
+      childrenMap.set(d.parent_deck_id, list);
+    }
+  });
+
+  const collectSubtree = (rootId: string): string[] => {
+    const result = [rootId];
+    for (const childId of (childrenMap.get(rootId) ?? [])) {
+      result.push(...collectSubtree(childId));
+    }
+    return result;
+  };
+
+  // All deck IDs (roots + descendants) for card queries
+  const allDeckIds = [...seenIds];
+
+  const [cardsResult, cardUpdatesResult] = await Promise.all([
+    supabase.from('cards').select('deck_id').in('deck_id', allDeckIds),
+    supabase.from('cards').select('deck_id, updated_at').in('deck_id', allDeckIds).order('updated_at', { ascending: false }),
+  ]);
+
+  const directCountMap = new Map<string, number>();
+  (cardsResult.data ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
+
+  // Max updated_at per deck
   const cardMaxMap = new Map<string, string>();
   (cardUpdatesResult.data ?? []).forEach((c: any) => {
     if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
   });
 
+  // Descendant updated_at map
+  const descUpdatedMap = new Map<string, string>();
+  allDescendantDecks.forEach((d: any) => {
+    if (!descUpdatedMap.has(d.id)) descUpdatedMap.set(d.id, d.updated_at);
+  });
+
   return decks.map((d: any) => {
-    const cardUpdated = cardMaxMap.get(d.id);
-    const effectiveUpdatedAt = cardUpdated && new Date(cardUpdated) > new Date(d.updated_at)
-      ? cardUpdated
-      : d.updated_at;
+    const subtreeIds = collectSubtree(d.id);
+    const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
+
+    // Find the most recent updated_at across the entire subtree (deck + cards)
+    let latestUpdate = new Date(d.updated_at);
+    for (const sid of subtreeIds) {
+      const cardUp = cardMaxMap.get(sid);
+      if (cardUp && new Date(cardUp) > latestUpdate) latestUpdate = new Date(cardUp);
+      const deckUp = descUpdatedMap.get(sid);
+      if (deckUp && new Date(deckUp) > latestUpdate) latestUpdate = new Date(deckUp);
+    }
+
     return {
       id: d.id,
       name: d.name,
-      card_count: countMap.get(d.id) ?? 0,
+      card_count: aggregatedCount,
       owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
       owner_id: d.user_id,
       created_at: d.created_at,
-      updated_at: effectiveUpdatedAt,
+      updated_at: latestUpdate.toISOString(),
     };
   });
 }
