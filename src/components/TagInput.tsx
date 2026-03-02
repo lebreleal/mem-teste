@@ -3,7 +3,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Tag as TagIcon, Crown, Sparkles, Loader2, ChevronRight } from 'lucide-react';
+import { X, Plus, Tag as TagIcon, BadgeCheck, Sparkles, Loader2, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -144,7 +144,7 @@ export function TagInput({
             variant="secondary"
             className="gap-1 pr-1 text-xs"
           >
-            {tag.is_official && <Crown className="h-3 w-3 text-warning" />}
+            {tag.is_official && <BadgeCheck className="h-3.5 w-3.5 text-blue-500" />}
             <TagIcon className="h-3 w-3 opacity-50" />
             {tag.name}
             {!disabled && (
@@ -175,7 +175,7 @@ export function TagInput({
             >
               <Plus className="h-3 w-3" />
               {s.name}
-              {s.isExisting && <Crown className="h-2.5 w-2.5 text-warning" />}
+              {s.isExisting && <BadgeCheck className="h-3 w-3 text-blue-500" />}
             </button>
           ))}
           <button
@@ -215,7 +215,7 @@ export function TagInput({
                     onClick={() => handleSelect(tag)}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
                   >
-                    {tag.is_official && <Crown className="h-3 w-3 text-warning shrink-0" />}
+                    {tag.is_official && <BadgeCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
                     <TagIcon className="h-3 w-3 opacity-50 shrink-0" />
                     {renderTagPath(tag as TagTreeNode)}
                     <span className="ml-auto text-[10px] text-muted-foreground tabular-nums shrink-0">

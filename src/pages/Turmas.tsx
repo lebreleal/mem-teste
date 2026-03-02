@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
+  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown, BadgeCheck,
   Globe, Lock, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon, MessageCircle, LogOut,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
@@ -273,7 +273,7 @@ const Turmas = () => {
                       : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
                   }`}
                 >
-                  {tag.is_official && <Crown className="h-3 w-3 inline mr-0.5" />}
+                  {tag.is_official && <BadgeCheck className="h-3 w-3 inline mr-0.5 text-blue-500" />}
                   {tag.name}
                 </button>
               ))}
