@@ -857,26 +857,38 @@ function buildProgressData(
   let loggedSamples = 0;
   let stateCounts = { s0: 0, s1: 0, s2: 0, s3: 0, noRaw: 0 };
 
-  // Build per-card last-review from revlog for more accurate scheduling
+  // Build per-card best-review from revlog for more accurate scheduling
+  // We want the last review with a MEANINGFUL interval (ivl > 1), not reset/learn entries
+  const bestReviewByCard = new Map<string, { ivl: number; factor: number; reviewedAt: number; type: number }>();
   const lastReviewByCard = new Map<string, { ivl: number; factor: number; reviewedAt: number; type: number }>();
   if (rawRevlog && rawRevlog.length > 0) {
     for (const entry of rawRevlog) {
-      const existing = lastReviewByCard.get(entry.cid);
-      if (!existing || entry.reviewedAt > existing.reviewedAt) {
-        lastReviewByCard.set(entry.cid, {
-          ivl: entry.ivl,
-          factor: entry.factor,
-          reviewedAt: entry.reviewedAt,
-          type: entry.type,
-        });
+      // Track absolute last review
+      const existingLast = lastReviewByCard.get(entry.cid);
+      if (!existingLast || entry.reviewedAt > existingLast.reviewedAt) {
+        lastReviewByCard.set(entry.cid, { ivl: entry.ivl, factor: entry.factor, reviewedAt: entry.reviewedAt, type: entry.type });
+      }
+      // Track best review: prefer entries with meaningful intervals (type=1 review with ivl>1)
+      if (entry.ivl > 1 && (entry.type === 1 || entry.type === 2)) {
+        const existingBest = bestReviewByCard.get(entry.cid);
+        if (!existingBest || entry.reviewedAt > existingBest.reviewedAt) {
+          bestReviewByCard.set(entry.cid, { ivl: entry.ivl, factor: entry.factor, reviewedAt: entry.reviewedAt, type: entry.type });
+        }
       }
     }
-    console.log(`[ANKI] lastReviewByCard built from revlog: ${lastReviewByCard.size} cards`);
-    // Log a sample
-    const sample = [...lastReviewByCard.entries()].slice(0, 3);
-    for (const [cid, v] of sample) {
+    console.log(`[ANKI] Revlog analysis: lastReview=${lastReviewByCard.size} cards, bestReview(ivl>1)=${bestReviewByCard.size} cards`);
+    // Log samples
+    const sampleBest = [...bestReviewByCard.entries()].slice(0, 3);
+    for (const [cid, v] of sampleBest) {
       const reviewDate = v.reviewedAt > 1e12 ? new Date(v.reviewedAt).toISOString() : new Date(v.reviewedAt * 1000).toISOString();
-      console.log(`[ANKI] Revlog last review sample: cid=${cid} ivl=${v.ivl} factor=${v.factor} type=${v.type} reviewedAt=${reviewDate}`);
+      console.log(`[ANKI] Best review sample: cid=${cid} ivl=${v.ivl} factor=${v.factor} type=${v.type} reviewedAt=${reviewDate}`);
+    }
+    if (sampleBest.length === 0) {
+      const sampleLast = [...lastReviewByCard.entries()].slice(0, 3);
+      for (const [cid, v] of sampleLast) {
+        const reviewDate = v.reviewedAt > 1e12 ? new Date(v.reviewedAt).toISOString() : new Date(v.reviewedAt * 1000).toISOString();
+        console.log(`[ANKI] Last review sample (no best found): cid=${cid} ivl=${v.ivl} factor=${v.factor} type=${v.type} reviewedAt=${reviewDate}`);
+      }
     }
   }
 
@@ -885,9 +897,9 @@ function buildProgressData(
   for (const [, raw] of rawProgressMap) {
     if (raw.type === 2) reviewIvls.add(raw.ivl);
   }
-  const cardsTableSuspicious = reviewIvls.size === 1 && lastReviewByCard.size > 0;
+  const cardsTableSuspicious = reviewIvls.size <= 1 && (bestReviewByCard.size > 0 || lastReviewByCard.size > 0);
   if (cardsTableSuspicious) {
-    console.log(`[ANKI] Cards table data looks suspicious (all review cards have ivl=${[...reviewIvls][0]}). Using revlog for scheduling.`);
+    console.log(`[ANKI] Cards table data looks suspicious (review cards have ${reviewIvls.size} unique ivls). Using revlog for scheduling.`);
   }
 
   const progress = ankiCardIds.map(ankiId => {
@@ -903,20 +915,23 @@ function buildProgressData(
     else if (raw.type === 3) stateCounts.s3++;
 
     // Try to use revlog data for more accurate scheduling
+    // Prefer bestReview (last review with ivl>1) over lastReview (which might be a reset/learn entry)
+    const bestReview = bestReviewByCard.get(ankiId);
     const lastReview = lastReviewByCard.get(ankiId);
+    const revlogSource = bestReview || lastReview;
     let stability: number;
     let scheduledDate: string;
     let lastReviewedAt: string | undefined;
     let difficulty: number;
 
-    if (lastReview && (cardsTableSuspicious || raw.type === 2)) {
+    if (revlogSource && (cardsTableSuspicious || raw.type === 2)) {
       // Use revlog-derived data
-      const ivlDays = Math.abs(lastReview.ivl);
+      const ivlDays = Math.abs(revlogSource.ivl);
       stability = Math.max(1, ivlDays);
-      difficulty = ankiFactorToFsrsDifficulty(lastReview.factor);
-      const reviewMs = lastReview.reviewedAt > 1e12
-        ? lastReview.reviewedAt
-        : lastReview.reviewedAt * 1000;
+      difficulty = ankiFactorToFsrsDifficulty(revlogSource.factor);
+      const reviewMs = revlogSource.reviewedAt > 1e12
+        ? revlogSource.reviewedAt
+        : revlogSource.reviewedAt * 1000;
       lastReviewedAt = new Date(reviewMs).toISOString();
       // scheduled = last review + interval
       const scheduledMs = reviewMs + stability * 86400000;
@@ -932,7 +947,7 @@ function buildProgressData(
     }
 
     if (loggedSamples < 5) {
-      console.log(`[ANKI] Progress #${loggedSamples}: ankiId=${ankiId} type=${raw.type} stability=${stability} scheduled=${scheduledDate} lastReviewed=${lastReviewedAt || 'N/A'} source=${lastReview ? 'revlog' : 'cards_table'}`);
+      console.log(`[ANKI] Progress #${loggedSamples}: ankiId=${ankiId} type=${raw.type} stability=${stability} scheduled=${scheduledDate} lastReviewed=${lastReviewedAt || 'N/A'} source=${bestReview ? 'best_revlog' : revlogSource ? 'last_revlog' : 'cards_table'}`);
       loggedSamples++;
     }
 
