@@ -1332,7 +1332,9 @@ export async function parseApkgFile(
       }
     };
 
-    const missingMediaCount = referencedFiles.size - mediaMap.size;
+    // Only report missing media if the ZIP actually contained some media files
+    // (totalMediaCount > 0). If it has zero, the export simply didn't include media.
+    const missingMediaCount = totalMediaCount > 0 ? Math.max(0, referencedFiles.size - mediaMap.size) : 0;
 
     return {
       deckName,
