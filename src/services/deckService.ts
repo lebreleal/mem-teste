@@ -9,17 +9,34 @@ import type { DeckWithStats } from '@/types/deck';
 /** Fetch all user decks with computed stats using batch RPC (single query). */
 export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
   // Parallel fetch: decks + stats run concurrently
-  const [decksResult, statsResult] = await Promise.all([
-    supabase
-      .from('decks')
-      .select('*')
-      .eq('user_id', userId)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false }),
+  // Supabase defaults to 1000 rows — users with many sub-decks can exceed this.
+  // Fetch in pages of 1000 to get ALL decks.
+  const fetchAllDecks = async () => {
+    const PAGE = 1000;
+    let allDecks: any[] = [];
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('decks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      if (data) allDecks = allDecks.concat(data);
+      hasMore = (data?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+    return allDecks;
+  };
+
+  const [decks, statsResult] = await Promise.all([
+    fetchAllDecks(),
     supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: -new Date().getTimezoneOffset() }),
   ]);
-  if (decksResult.error) throw decksResult.error;
-  const decks = decksResult.data;
+  // decks already resolved from fetchAllDecks()
   const allStats = statsResult.data;
   const statsMap = new Map<string, { new_count: number; learning_count: number; review_count: number; reviewed_today: number; new_reviewed_today: number; new_graduated_today: number }>();
   if (allStats) {
