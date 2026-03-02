@@ -697,25 +697,37 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                               {isCloze ? (
                                 <p className="text-sm font-semibold text-foreground leading-snug">
                                   {(() => {
-                                    const plain = card.front.replace(/<[^>]*>/g, '').replace(/<img[^>]*>/g, '[imagem]');
+                                    // Replace <img> with placeholder BEFORE stripping other HTML
+                                    const withImgPlaceholder = card.front.replace(/<img[^>]*>/gi, ' [imagem] ');
+                                    // Strip remaining HTML but preserve cloze markers
+                                    const plain = withImgPlaceholder.replace(/<[^>]*>/g, '').trim();
                                     const parts: React.ReactNode[] = [];
-                                    const regex = /\{\{c(\d+)::([^}]*)\}\}/g;
+                                    // Use non-greedy match to handle SVG/HTML inside cloze markers (Image Occlusion)
+                                    const regex = /\{\{c(\d+)::([\s\S]*?)\}\}/g;
                                     let lastIdx = 0;
                                     let m;
                                     let k = 0;
                                     while ((m = regex.exec(plain)) !== null) {
                                       if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
                                       const n = parseInt(m[1]);
+                                      // For Image Occlusion, the cloze content may be SVG data — show a placeholder
+                                      const clozeText = m[2].replace(/<[^>]*>/g, '').trim();
+                                      const displayText = clozeText || '[oclusão]';
                                       parts.push(
                                         <span key={k++} className="inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold bg-primary/15 text-primary border-b-2 border-primary/50 rounded">
                                           <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
-                                          {m[2]}
+                                          {displayText}
                                         </span>
                                       );
                                       lastIdx = m.index + m[0].length;
                                     }
                                     if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
-                                    return parts.length > 0 ? parts : plain;
+                                    // If no cloze markers found but it's an image-heavy card, show image indicator
+                                    if (parts.length === 0) {
+                                      const hasImage = card.front.includes('<img');
+                                      return hasImage ? '🖼️ Oclusão de imagem' : (plain || '[cloze]');
+                                    }
+                                    return parts;
                                   })()}
                                 </p>
                               ) : (
