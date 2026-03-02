@@ -396,16 +396,24 @@ const ContentTab = () => {
   // ── Deck handlers ──
   const handleAddDeck = () => {
     if (selectedDeckIds.size === 0) return;
-    const deckArray = Array.from(selectedDeckIds);
+    // Only share root-level selected decks (parent NOT also selected)
+    // The sharing system auto-publishes the subtree
+    const allAvailable = importLogic.availableDecks;
+    const rootsToShare = Array.from(selectedDeckIds).filter(id => {
+      const deck = allAvailable.find(d => d.id === id);
+      if (!deck?.parent_deck_id) return true;
+      return !selectedDeckIds.has(deck.parent_deck_id);
+    });
+    if (rootsToShare.length === 0) return;
     let completed = 0;
-    deckArray.forEach(deckId => {
+    rootsToShare.forEach(deckId => {
       const finalPrice = priceType === 'free' ? 0 : 0;
       mutations.shareDeck.mutate({ deckId, subjectId: addDeckSectionId, lessonId: undefined, price: finalPrice, priceType, allowDownload } as any, {
         onSuccess: () => {
           completed++;
-          if (completed === deckArray.length) {
+          if (completed === rootsToShare.length) {
             setShowAddDeck(false); setSelectedDeckIds(new Set()); setPriceType('free'); setAllowDownload(false); setDeckSearchQuery('');
-            toast({ title: `${deckArray.length} baralho(s) adicionado(s)!` });
+            toast({ title: `${rootsToShare.length} baralho(s) adicionado(s)!` });
           }
         },
         onError: (e: any) => toast({ title: e.message?.includes('duplicate') ? 'Baralho já adicionado' : 'Erro', variant: 'destructive' }),
@@ -714,7 +722,12 @@ const ContentTab = () => {
                 setSelectedDeckIds(next);
               };
 
-              const getCardCount = (d: typeof filtered[0]) => (d.new_count ?? 0) + (d.learning_count ?? 0) + (d.review_count ?? 0);
+              // Recursive card count: sum own cards + all descendants
+              const getCardCount = (d: typeof filtered[0]): number => {
+                const own = (d.new_count ?? 0) + (d.learning_count ?? 0) + (d.review_count ?? 0);
+                const kids = childrenMap.get(d.id) ?? [];
+                return own + kids.reduce((sum, kid) => sum + getCardCount(kid), 0);
+              };
 
               return (
                 <div className="flex-1 overflow-y-auto border border-border rounded-lg divide-y divide-border">
