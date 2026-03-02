@@ -86,6 +86,16 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync state when pendingReviewData changes (e.g. clicking a review_ready pending deck while dialog is already mounted)
+  useEffect(() => {
+    if (pendingReviewData) {
+      setStep('review');
+      setCards(pendingReviewData.cards);
+      setDeckName(pendingReviewData.deckName);
+      textSampleRef.current = pendingReviewData.textSample || '';
+    }
+  }, [pendingReviewData]);
+
   const selectedPages = pages.filter(p => p.selected);
   const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE, isPremium);
   const busy = isLoading || isSaving;
