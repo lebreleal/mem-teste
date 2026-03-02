@@ -16,6 +16,7 @@ import GenerationProgress from '@/components/ai-deck/GenerationProgress';
 import CardReviewStep from '@/components/ai-deck/CardReviewStep';
 import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 import { CREDITS_PER_PAGE } from '@/types/ai';
+import type { GeneratedCard } from '@/types/ai';
 
 interface AICreateDeckDialogProps {
   open: boolean;
@@ -23,10 +24,18 @@ interface AICreateDeckDialogProps {
   folderId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
+  /** Pre-loaded data from a pending background deck for review */
+  pendingReviewData?: {
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null;
 }
 
-const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, existingDeckName }: AICreateDeckDialogProps) => {
-  const flow = useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName });
+const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: AICreateDeckDialogProps) => {
+  const flow = useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData });
 
   const stepTitle: Record<string, string> = {
     pages: 'Selecione as páginas',
@@ -37,7 +46,6 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
   // During generation, allow dismiss to background instead of blocking close
   const handleDialogChange = (v: boolean) => {
     if (!v && flow.step === 'generating') {
-      // X button during generation → dismiss to background
       flow.handleDismissToBackground();
       return;
     }
@@ -134,8 +142,10 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
             onDeleteCard={flow.deleteCard}
             onToggleType={flow.toggleType}
             onSave={flow.handleSave}
-            onBack={() => { flow.setStep('config'); }}
+            onBack={pendingReviewData ? undefined : () => { flow.setStep('config'); }}
             isSaving={flow.isSaving}
+            deckName={flow.deckName}
+            textSample={flow.textSample}
           />
         )}
       </DialogContent>

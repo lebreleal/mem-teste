@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.suggest-tags]
 verify_jwt = false
+
+[functions.auto-tag-cards]
+verify_jwt = false
