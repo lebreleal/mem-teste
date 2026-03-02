@@ -181,14 +181,34 @@ export async function enhanceCard(params: {
 /** Fetch aggregated cards for a deck and all descendants. */
 export async function fetchAggregatedCards(deckIds: string[]) {
   if (deckIds.length === 0) return [];
-  return paginatedFetch((from) =>
-    supabase
-      .from('cards')
-      .select('*')
-      .in('deck_id', deckIds)
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1)
-  );
+  // If only one deck, use eq instead of in for simpler URL
+  if (deckIds.length === 1) {
+    return paginatedFetch((from) =>
+      supabase
+        .from('cards')
+        .select('*')
+        .eq('deck_id', deckIds[0])
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1)
+    );
+  }
+  // Batch deck IDs to avoid URL length issues
+  const results: any[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const rows = await paginatedFetch((from) =>
+      supabase
+        .from('cards')
+        .select('*')
+        .in('deck_id', batch)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1)
+    );
+    results.push(...rows);
+  }
+  // Sort all results by created_at descending
+  results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return results;
 }
 
 /** Fetch aggregated stats for multiple decks in a single efficient query. */
@@ -196,13 +216,18 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
   if (deckIds.length === 0) return totals;
 
-  const allCards = await paginatedFetch<{ id: string; state: number | null; scheduled_date: string }>((from) =>
-    supabase
-      .from('cards')
-      .select('id, state, scheduled_date')
-      .in('deck_id', deckIds)
-      .range(from, from + PAGE_SIZE - 1)
-  );
+  const allCards: { id: string; state: number | null; scheduled_date: string }[] = [];
+  for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+    const batch = deckIds.slice(i, i + IN_BATCH);
+    const rows = await paginatedFetch<{ id: string; state: number | null; scheduled_date: string }>((from) =>
+      supabase
+        .from('cards')
+        .select('id, state, scheduled_date')
+        .in('deck_id', batch)
+        .range(from, from + PAGE_SIZE - 1)
+    );
+    allCards.push(...rows);
+  }
 
   if (allCards.length === 0) return totals;
 
