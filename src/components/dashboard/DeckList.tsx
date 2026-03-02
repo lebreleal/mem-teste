@@ -155,14 +155,14 @@ const DeckList = ({
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
-        const isClickable = pending.status === 'review_ready' || pending.status === 'generating';
+        const isClickable = pending.status === 'review_ready';
         return (
           <div
             key={pending.id}
             className={`flex items-center gap-3 px-5 py-4 transition-colors ${
               isClickable
                 ? 'cursor-pointer hover:bg-muted/50'
-                : 'opacity-50 pointer-events-none select-none'
+                : pending.status === 'generating' ? '' : 'opacity-50 pointer-events-none select-none'
             } ${pending.status === 'review_ready' ? 'bg-success/5 border-l-2 border-l-success' : ''}`}
             onClick={() => isClickable && onPendingClick?.(pending)}
           >
