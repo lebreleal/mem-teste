@@ -128,21 +128,30 @@ async function resolveAnkiArchive(file: File): Promise<JSZip> {
 }
 
 async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isModernFormat: boolean }> {
-  const collectionAnki21 = zip.file('collection.anki21');
+  const allFiles = Object.keys(zip.files);
+  console.log('[ANKI] ZIP contains files:', allFiles.join(', '));
+
+  // Check for anki21b / anki21 first (modern format)
+  const collectionAnki21 = zip.file('collection.anki21') || zip.file('collection.anki21b');
   if (collectionAnki21) {
+    console.log('[ANKI] Found modern collection file:', collectionAnki21.name);
     const bytes = await collectionAnki21.async('uint8array');
+    console.log('[ANKI] collection.anki21 size:', bytes.length, 'isSQLite:', isLikelySQLite(bytes), 'isZstd:', isLikelyZstd(bytes));
     if (isLikelySQLite(bytes)) {
       return { dbBytes: bytes, isModernFormat: true };
     }
     if (isLikelyZstd(bytes)) {
       const decompressed = fzstd.decompress(bytes);
+      console.log('[ANKI] Decompressed anki21 size:', decompressed.length, 'isSQLite:', isLikelySQLite(decompressed));
       return { dbBytes: decompressed, isModernFormat: true };
     }
+    console.warn('[ANKI] collection.anki21 exists but is neither SQLite nor zstd');
   }
 
   const collectionAnki2 = zip.file('collection.anki2');
   if (collectionAnki2) {
     const bytes = await collectionAnki2.async('uint8array');
+    console.log('[ANKI] Using collection.anki2, size:', bytes.length);
     if (isLikelySQLite(bytes)) {
       return { dbBytes: bytes, isModernFormat: false };
     }
@@ -300,6 +309,16 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
   try {
     const notetypesResult = db.exec('SELECT CAST(id AS TEXT), name, config FROM notetypes');
     if (notetypesResult.length > 0) {
+      // Check if templates table has qfmt/afmt columns (absent in anki21b)
+      let hasQfmt = false;
+      try {
+        const tmplCols = db.exec('PRAGMA table_info(templates)');
+        if (tmplCols.length > 0) {
+          const colNames = new Set(tmplCols[0].values.map(r => String(r[1])));
+          hasQfmt = colNames.has('qfmt') && colNames.has('afmt');
+        }
+      } catch {}
+
       for (const row of notetypesResult[0].values) {
         const id = normalizeAnkiId(row[0] as string);
         const name = (row[1] as string) || 'Unknown';
@@ -315,10 +334,21 @@ function parseModelsFromTables(db: Database): { models: Record<string, AnkiModel
           ? fieldsResult[0].values.map(r => ({ name: r[0] as string, ord: Number(r[1]) }))
           : [];
 
-        const templatesResult = db.exec(`SELECT name, qfmt, afmt, ord FROM templates WHERE notetype_id = ${id} ORDER BY ord`);
-        const tmpls = templatesResult.length > 0
-          ? templatesResult[0].values.map(r => ({ name: r[0] as string, qfmt: r[1] as string, afmt: r[2] as string, ord: Number(r[3]) }))
-          : [];
+        let tmpls: Array<{ name: string; qfmt: string; afmt: string; ord: number }> = [];
+        if (hasQfmt) {
+          const templatesResult = db.exec(`SELECT name, qfmt, afmt, ord FROM templates WHERE notetype_id = ${id} ORDER BY ord`);
+          tmpls = templatesResult.length > 0
+            ? templatesResult[0].values.map(r => ({ name: r[0] as string, qfmt: r[1] as string, afmt: r[2] as string, ord: Number(r[3]) }))
+            : [];
+        } else {
+          // anki21b: templates table has config blob instead of qfmt/afmt — use empty templates (fallback to field-based rendering)
+          try {
+            const templatesResult = db.exec(`SELECT name, ord FROM templates WHERE notetype_id = ${id} ORDER BY ord`);
+            tmpls = templatesResult.length > 0
+              ? templatesResult[0].values.map(r => ({ name: r[0] as string, qfmt: '', afmt: '', ord: Number(r[1]) }))
+              : [];
+          } catch {}
+        }
 
         models[id] = { id, name, type, flds, tmpls };
       }
