@@ -659,14 +659,75 @@ function buildSubdecks(cards: AnkiCard[], rootDeckName: string): AnkiSubdeck[] {
 /* ── progress extraction helpers ── */
 
 function extractCollectionCreatedAt(db: Database): number {
+  // Try legacy `col` table first
   try {
     const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='col'");
-    if (tableCheck.length === 0 || tableCheck[0].values.length === 0) return 0;
-    const result = db.exec('SELECT crt FROM col LIMIT 1');
-    if (result.length > 0 && result[0].values.length > 0) {
-      return Number(result[0].values[0][0]) || 0;
+    if (tableCheck.length > 0 && tableCheck[0].values.length > 0) {
+      const result = db.exec('SELECT crt FROM col LIMIT 1');
+      if (result.length > 0 && result[0].values.length > 0) {
+        const crt = Number(result[0].values[0][0]) || 0;
+        if (crt > 0) {
+          console.log('[ANKI] crt from col table:', crt, new Date(crt * 1000).toISOString());
+          return crt;
+        }
+      }
     }
   } catch {}
+
+  // Modern format (anki21b): try `config` table with key='_crt'
+  try {
+    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='config'");
+    if (tableCheck.length > 0 && tableCheck[0].values.length > 0) {
+      // config table may have key/val columns
+      const cols = db.exec('PRAGMA table_info(config)');
+      const colNames = new Set(cols.length > 0 ? cols[0].values.map(r => String(r[1])) : []);
+      if (colNames.has('key') && colNames.has('val')) {
+        // Try to get creation_offset or creationOffset from config
+        const result = db.exec("SELECT key, val FROM config");
+        if (result.length > 0) {
+          for (const row of result[0].values) {
+            const key = String(row[0]);
+            if (key === 'creationOffset' || key === 'creation_offset' || key === '_crt') {
+              const val = Number(row[1]);
+              if (val > 1e9) {
+                console.log(`[ANKI] crt from config table (${key}):`, val, new Date(val * 1000).toISOString());
+                return val;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback: estimate from earliest card due date or earliest revlog
+  try {
+    const revResult = db.exec('SELECT MIN(id) FROM revlog');
+    if (revResult.length > 0 && revResult[0].values.length > 0) {
+      const minId = Number(revResult[0].values[0][0]);
+      if (minId > 1e12) {
+        // revlog id is timestamp in ms
+        const crt = Math.floor(minId / 1000) - 86400; // subtract 1 day as buffer
+        console.log('[ANKI] crt estimated from revlog:', crt, new Date(crt * 1000).toISOString());
+        return crt;
+      }
+    }
+  } catch {}
+
+  // Last fallback: estimate from earliest note id (also timestamp in ms in Anki)
+  try {
+    const noteResult = db.exec('SELECT MIN(id) FROM notes');
+    if (noteResult.length > 0 && noteResult[0].values.length > 0) {
+      const minId = Number(noteResult[0].values[0][0]);
+      if (minId > 1e12) {
+        const crt = Math.floor(minId / 1000);
+        console.log('[ANKI] crt estimated from notes:', crt, new Date(crt * 1000).toISOString());
+        return crt;
+      }
+    }
+  } catch {}
+
+  console.warn('[ANKI] Could not determine collection creation time, using 0');
   return 0;
 }
 
@@ -758,6 +819,13 @@ function ankiDueToScheduledDate(due: number, type: number, crt: number): string 
     }
     return new Date(ts).toISOString();
   }
+  // crt=0: due might be absolute epoch-day or relative. Try interpreting as epoch-days from 1970.
+  // Anki stores due as days since epoch for review cards when crt is unknown
+  if (due > 15000 && due < 30000) {
+    // Likely epoch-day (15000 ~ 2011, 30000 ~ 2052)
+    const ts = due * 86400 * 1000;
+    return new Date(ts).toISOString();
+  }
   return new Date().toISOString();
 }
 
@@ -767,12 +835,18 @@ function buildProgressData(
   crt: number,
 ): { progress: AnkiCardProgress[]; hasProgress: boolean } {
   let hasProgress = false;
+  let stateCounts = { s0: 0, s1: 0, s2: 0, s3: 0, noRaw: 0 };
   const progress = ankiCardIds.map(ankiId => {
     const raw = rawProgressMap.get(ankiId);
     if (!raw || (raw.type === 0 && raw.ivl === 0)) {
+      stateCounts.noRaw++;
       return { state: 0, stability: 0, difficulty: 0, scheduledDate: new Date().toISOString(), learningStep: 0 };
     }
     hasProgress = true;
+    if (raw.type === 0) stateCounts.s0++;
+    else if (raw.type === 1) stateCounts.s1++;
+    else if (raw.type === 2) stateCounts.s2++;
+    else if (raw.type === 3) stateCounts.s3++;
     const scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
     const stability = Math.max(0, raw.ivl);
     // Approximate lastReviewedAt for review cards: scheduled - interval
@@ -788,6 +862,7 @@ function buildProgressData(
       lastReviewedAt,
     };
   });
+  console.log('[ANKI] buildProgressData states:', stateCounts, 'crt:', crt, 'hasProgress:', hasProgress);
   return { progress, hasProgress };
 }
 
