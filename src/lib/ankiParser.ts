@@ -105,7 +105,8 @@ function renderTemplate(template: string, fields: Record<string, string>): strin
 }
 
 function convertClozeFormat(text: string): string {
-  return text.replace(/\{\{c(\d+)::([^}]+)\}\}/g, '{{c$1::$2}}');
+  // Handle nested braces in cloze content (e.g. SVG attributes in Image Occlusion)
+  return text.replace(/\{\{c(\d+)::([\s\S]*?)\}\}/g, '{{c$1::$2}}');
 }
 
 function isLikelySQLite(bytes: Uint8Array): boolean {
@@ -682,7 +683,41 @@ async function buildCards(
     });
 
     if (model.type === 1) {
-      const frontContent = convertClozeFormat(replaceMediaRefs(fieldValues[0] || '', mediaMap));
+      // For Image Occlusion notes, cloze markers may be in a non-first field
+      // (e.g. "Question Mask" in IOE add-on, "occlusion" in built-in IO).
+      // Scan ALL fields for cloze markers and build a combined front.
+      let clozeFieldIdx = 0;
+      let imageFieldIdx = -1;
+      const clozeRegex = /\{\{c\d+::/;
+      for (let fi = 0; fi < fieldValues.length; fi++) {
+        if (clozeRegex.test(fieldValues[fi])) {
+          clozeFieldIdx = fi;
+        }
+        if (/<img\s/i.test(fieldValues[fi]) && imageFieldIdx < 0) {
+          imageFieldIdx = fi;
+        }
+      }
+
+      // Build front: include image field + cloze field (if different)
+      let frontParts: string[] = [];
+      if (imageFieldIdx >= 0 && imageFieldIdx !== clozeFieldIdx) {
+        frontParts.push(replaceMediaRefs(fieldValues[imageFieldIdx], mediaMap));
+      }
+      frontParts.push(convertClozeFormat(replaceMediaRefs(fieldValues[clozeFieldIdx] || '', mediaMap)));
+      // Add any extra text fields (header, footer) for context
+      for (let fi = 0; fi < fieldValues.length; fi++) {
+        if (fi === clozeFieldIdx || fi === imageFieldIdx) continue;
+        const val = fieldValues[fi]?.trim();
+        if (val && !clozeRegex.test(val) && !/<img\s/i.test(val)) {
+          // Only include if it has meaningful text content
+          const textOnly = val.replace(/<[^>]*>/g, '').trim();
+          if (textOnly.length > 0 && textOnly.length < 500) {
+            frontParts.push(replaceMediaRefs(val, mediaMap));
+          }
+        }
+      }
+      const frontContent = frontParts.join('<br>');
+
       const targetFromOrd = row.templateOrd != null && row.templateOrd >= 0 ? row.templateOrd + 1 : null;
 
       if (targetFromOrd) {
