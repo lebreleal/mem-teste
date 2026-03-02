@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ArrowLeft, Crown, Search, Trash2, Merge, Shield,
+  ArrowLeft, BadgeCheck, Search, Trash2, Merge, Shield,
   Tag as TagIcon, Pencil, X, Plus, ChevronRight, BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -261,7 +261,7 @@ const AdminTags = () => {
                 <div key={tag.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
                     {tag.is_official ? (
-                      <Crown className="h-4 w-4 text-warning" />
+                      <BadgeCheck className="h-4 w-4 text-blue-500" />
                     ) : (
                       <TagIcon className="h-4 w-4 text-muted-foreground" />
                     )}

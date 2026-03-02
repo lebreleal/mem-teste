@@ -96,20 +96,45 @@ export async function updateTurma(turmaId: string, updates: { name?: string; des
 
 export async function fetchDiscoverTurmas(userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string })[]> {
   let query = supabase.from('turmas').select('*').eq('is_private', false);
-  if (searchQuery.trim()) query = query.or(`name.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+  const q = searchQuery.trim();
+  if (q) query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
   const { data: turmas } = await query.order('created_at', { ascending: false }).limit(50);
-  if (!turmas || turmas.length === 0) return [];
+  
+  // Also find turmas via deck tags if searching
+  let tagMatchedTurmaIds = new Set<string>();
+  if (q) {
+    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
+    if (matchingTags && matchingTags.length > 0) {
+      const tagIds = matchingTags.map((t: any) => t.id);
+      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
+      if (deckTagRows && deckTagRows.length > 0) {
+        const deckIds = deckTagRows.map((r: any) => r.deck_id);
+        const { data: decksWithCommunity } = await supabase.from('decks').select('community_id').in('id', deckIds).not('community_id', 'is', null);
+        (decksWithCommunity ?? []).forEach((d: any) => { if (d.community_id) tagMatchedTurmaIds.add(d.community_id); });
+      }
+    }
+  }
 
-  const ownerIds = [...new Set(turmas.map((t: any) => t.owner_id))];
+  const nameMatchedIds = new Set((turmas ?? []).map((t: any) => t.id));
+  const extraIds = [...tagMatchedTurmaIds].filter(id => !nameMatchedIds.has(id));
+  let allTurmas = [...(turmas ?? [])];
+  if (extraIds.length > 0) {
+    const { data: extraTurmas } = await supabase.from('turmas').select('*').eq('is_private', false).in('id', extraIds.slice(0, 50));
+    if (extraTurmas) allTurmas.push(...extraTurmas);
+  }
+
+  if (allTurmas.length === 0) return [];
+
+  const ownerIds = [...new Set(allTurmas.map((t: any) => t.owner_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const turmaIds = turmas.map((t: any) => t.id);
+  const turmaIds = allTurmas.map((t: any) => t.id);
   const { data: members } = await supabase.from('turma_members').select('turma_id').in('turma_id', turmaIds);
   const countMap = new Map<string, number>();
   (members ?? []).forEach((m: any) => countMap.set(m.turma_id, (countMap.get(m.turma_id) ?? 0) + 1));
 
-  return turmas.map((t: any) => ({
+  return allTurmas.map((t: any) => ({
     ...t, member_count: countMap.get(t.id) ?? 0, owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
     avg_rating: t.avg_rating ?? 0, rating_count: t.rating_count ?? 0,
   }));
@@ -605,18 +630,53 @@ export interface PublicDeckItem {
 export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
   // Fetch ALL public decks (not just roots) — each level appears independently
   let query = supabase.from('decks').select('id, name, user_id, parent_deck_id, created_at, updated_at').eq('is_public', true);
-  if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
+  const q = searchQuery.trim();
+  if (q) query = query.ilike('name', `%${q}%`);
   const { data: decks } = await query.order('created_at', { ascending: false }).limit(200);
-  if (!decks || decks.length === 0) return [];
 
-  const ownerIds = [...new Set(decks.map((d: any) => d.user_id))];
+  // If searching, also find decks via tag names (deck_tags + card_tags)
+  let tagMatchedDeckIds = new Set<string>();
+  if (q) {
+    // Find tags matching the search query
+    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
+    if (matchingTags && matchingTags.length > 0) {
+      const tagIds = matchingTags.map((t: any) => t.id);
+      // Find decks directly tagged
+      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
+      (deckTagRows ?? []).forEach((r: any) => tagMatchedDeckIds.add(r.deck_id));
+      // Find decks via card tags
+      const { data: cardTagRows } = await supabase.from('card_tags').select('card_id').in('tag_id', tagIds);
+      if (cardTagRows && cardTagRows.length > 0) {
+        const cardIds = cardTagRows.map((r: any) => r.card_id);
+        const { data: cards } = await supabase.from('cards').select('deck_id').in('id', cardIds.slice(0, 500));
+        (cards ?? []).forEach((c: any) => tagMatchedDeckIds.add(c.deck_id));
+      }
+    }
+  }
+
+  // Merge: name-matched + tag-matched decks
+  const nameMatchedIds = new Set((decks ?? []).map((d: any) => d.id));
+  const extraIds = [...tagMatchedDeckIds].filter(id => !nameMatchedIds.has(id));
+
+  let allDecks = [...(decks ?? [])];
+  if (extraIds.length > 0) {
+    const { data: extraDecks } = await supabase.from('decks')
+      .select('id, name, user_id, parent_deck_id, created_at, updated_at')
+      .eq('is_public', true)
+      .in('id', extraIds.slice(0, 100));
+    if (extraDecks) allDecks.push(...extraDecks);
+  }
+
+  if (allDecks.length === 0) return [];
+
+  const ownerIds = [...new Set(allDecks.map((d: any) => d.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
   // Build parent→children map from the fetched decks themselves
   const childrenMap = new Map<string, string[]>();
-  const deckMap = new Map(decks.map((d: any) => [d.id, d]));
-  decks.forEach((d: any) => {
+  const deckMap = new Map(allDecks.map((d: any) => [d.id, d]));
+  allDecks.forEach((d: any) => {
     if (d.parent_deck_id && deckMap.has(d.parent_deck_id)) {
       const list = childrenMap.get(d.parent_deck_id) ?? [];
       list.push(d.id);
@@ -626,7 +686,7 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
 
   // Also fetch children that might not be public themselves but belong to hierarchy
   // (for card counting purposes)
-  const allFetchedIds = new Set(decks.map((d: any) => d.id));
+  const allFetchedIds = new Set(allDecks.map((d: any) => d.id));
   let parentIds = [...allFetchedIds];
   while (parentIds.length > 0) {
     const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
@@ -655,7 +715,7 @@ export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckI
   const { data: counts } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
   (counts ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
 
-  return decks.map((d: any) => {
+  return allDecks.map((d: any) => {
     const subtreeIds = collectSubtree(d.id);
     const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
 
