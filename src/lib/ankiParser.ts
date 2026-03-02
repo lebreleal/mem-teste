@@ -851,10 +851,45 @@ function buildProgressData(
   ankiCardIds: string[],
   rawProgressMap: Map<string, { type: number; ivl: number; due: number; factor: number; queue: number }>,
   crt: number,
+  rawRevlog?: Array<{ cid: string; ease: number; ivl: number; factor: number; time: number; type: number; reviewedAt: number }>,
 ): { progress: AnkiCardProgress[]; hasProgress: boolean } {
   let hasProgress = false;
   let loggedSamples = 0;
   let stateCounts = { s0: 0, s1: 0, s2: 0, s3: 0, noRaw: 0 };
+
+  // Build per-card last-review from revlog for more accurate scheduling
+  const lastReviewByCard = new Map<string, { ivl: number; factor: number; reviewedAt: number; type: number }>();
+  if (rawRevlog && rawRevlog.length > 0) {
+    for (const entry of rawRevlog) {
+      const existing = lastReviewByCard.get(entry.cid);
+      if (!existing || entry.reviewedAt > existing.reviewedAt) {
+        lastReviewByCard.set(entry.cid, {
+          ivl: entry.ivl,
+          factor: entry.factor,
+          reviewedAt: entry.reviewedAt,
+          type: entry.type,
+        });
+      }
+    }
+    console.log(`[ANKI] lastReviewByCard built from revlog: ${lastReviewByCard.size} cards`);
+    // Log a sample
+    const sample = [...lastReviewByCard.entries()].slice(0, 3);
+    for (const [cid, v] of sample) {
+      const reviewDate = v.reviewedAt > 1e12 ? new Date(v.reviewedAt).toISOString() : new Date(v.reviewedAt * 1000).toISOString();
+      console.log(`[ANKI] Revlog last review sample: cid=${cid} ivl=${v.ivl} factor=${v.factor} type=${v.type} reviewedAt=${reviewDate}`);
+    }
+  }
+
+  // Detect if cards table data is suspicious (all same ivl for review cards)
+  const reviewIvls = new Set<number>();
+  for (const [, raw] of rawProgressMap) {
+    if (raw.type === 2) reviewIvls.add(raw.ivl);
+  }
+  const cardsTableSuspicious = reviewIvls.size === 1 && lastReviewByCard.size > 0;
+  if (cardsTableSuspicious) {
+    console.log(`[ANKI] Cards table data looks suspicious (all review cards have ivl=${[...reviewIvls][0]}). Using revlog for scheduling.`);
+  }
+
   const progress = ankiCardIds.map(ankiId => {
     const raw = rawProgressMap.get(ankiId);
     if (!raw || (raw.type === 0 && raw.ivl === 0)) {
@@ -866,29 +901,51 @@ function buildProgressData(
     else if (raw.type === 1) stateCounts.s1++;
     else if (raw.type === 2) stateCounts.s2++;
     else if (raw.type === 3) stateCounts.s3++;
-    const scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
+
+    // Try to use revlog data for more accurate scheduling
+    const lastReview = lastReviewByCard.get(ankiId);
+    let stability: number;
+    let scheduledDate: string;
+    let lastReviewedAt: string | undefined;
+    let difficulty: number;
+
+    if (lastReview && (cardsTableSuspicious || raw.type === 2)) {
+      // Use revlog-derived data
+      const ivlDays = Math.abs(lastReview.ivl);
+      stability = Math.max(1, ivlDays);
+      difficulty = ankiFactorToFsrsDifficulty(lastReview.factor);
+      const reviewMs = lastReview.reviewedAt > 1e12
+        ? lastReview.reviewedAt
+        : lastReview.reviewedAt * 1000;
+      lastReviewedAt = new Date(reviewMs).toISOString();
+      // scheduled = last review + interval
+      const scheduledMs = reviewMs + stability * 86400000;
+      scheduledDate = new Date(scheduledMs).toISOString();
+    } else {
+      // Fallback to cards table data
+      scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
+      stability = Math.max(0, raw.ivl);
+      difficulty = ankiFactorToFsrsDifficulty(raw.factor);
+      lastReviewedAt = raw.type === 2 && stability > 0
+        ? new Date(new Date(scheduledDate).getTime() - stability * 86400000).toISOString()
+        : undefined;
+    }
+
     if (loggedSamples < 5) {
-      const dayStart = crt > 0 ? Math.floor(crt / 86400) * 86400 : 0;
-      const tsFromCrt = crt > 0 ? (dayStart + raw.due * 86400) * 1000 : 0;
-      const tsFromEpoch = raw.due * 86400 * 1000;
-      console.log(`[ANKI] Progress #${loggedSamples}: ankiId=${ankiId} type=${raw.type} ivl=${raw.ivl} due=${raw.due} factor=${raw.factor} queue=${raw.queue} | crt=${crt} | tsFromCrt=${tsFromCrt > 0 ? new Date(tsFromCrt).toISOString() : 'N/A'} | tsFromEpoch=${new Date(tsFromEpoch).toISOString()} | result=${scheduledDate}`);
+      console.log(`[ANKI] Progress #${loggedSamples}: ankiId=${ankiId} type=${raw.type} stability=${stability} scheduled=${scheduledDate} lastReviewed=${lastReviewedAt || 'N/A'} source=${lastReview ? 'revlog' : 'cards_table'}`);
       loggedSamples++;
     }
-    const stability = Math.max(0, raw.ivl);
-    // Approximate lastReviewedAt for review cards: scheduled - interval
-    const lastReviewedAt = raw.type === 2 && stability > 0
-      ? new Date(new Date(scheduledDate).getTime() - stability * 86400000).toISOString()
-      : undefined;
+
     return {
       state: raw.type,
       stability,
-      difficulty: ankiFactorToFsrsDifficulty(raw.factor),
+      difficulty,
       scheduledDate,
       learningStep: raw.type === 1 || raw.type === 3 ? 1 : 0,
       lastReviewedAt,
     };
   });
-  console.log('[ANKI] buildProgressData states:', stateCounts, 'crt:', crt, 'hasProgress:', hasProgress);
+  console.log('[ANKI] buildProgressData states:', stateCounts, 'crt:', crt, 'hasProgress:', hasProgress, 'usedRevlog:', cardsTableSuspicious);
   return { progress, hasProgress };
 }
 
@@ -1115,7 +1172,7 @@ export async function parseApkgFile(
       ankiCardIdToIndices.set(id, existing);
     });
 
-    const { progress, hasProgress } = buildProgressData(ankiCardIds, rawProgressMap, crt);
+    const { progress, hasProgress } = buildProgressData(ankiCardIds, rawProgressMap, crt, rawRevlog);
     const revlog = rawRevlog.length > 0 ? buildRevlogData(rawRevlog, ankiCardIdToIndices, crt) : [];
 
     log(`Progress: hasProgress=${hasProgress}, rawProgress=${rawProgressMap.size}, revlog entries: ${revlog.length}`);
