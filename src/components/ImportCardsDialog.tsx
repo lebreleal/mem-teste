@@ -779,9 +779,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                       Estrutura original do arquivo ({detectedAnkiHierarchy.deckCount} decks)
                     </Label>
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/20 p-2">
-                      {detectedAnkiHierarchy.nodes.map((node, index) => (
+                      {detectedAnkiHierarchy.nodes.slice(0, 50).map((node, index) => (
                         <DetectedAnkiNode key={`${node.name}-${index}`} node={node} />
                       ))}
+                      {detectedAnkiHierarchy.nodes.length > 50 && (
+                        <p className="text-center text-xs text-muted-foreground py-1">...e mais {detectedAnkiHierarchy.nodes.length - 50} decks</p>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       Profundidade máxima detectada: {detectedAnkiHierarchy.maxDepth} nível(is).
