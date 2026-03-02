@@ -54,7 +54,7 @@ serve(async (req) => {
     // Fetch cards and existing tags in parallel
     const [cardsRes, tagsRes] = await Promise.all([
       serviceSupabase.from("cards")
-        .select("id, front_content, back_content")
+        .select("id, front_content, back_content, card_type")
         .eq("deck_id", deckId)
         .limit(100),
       serviceSupabase.from("tags")
@@ -77,9 +77,10 @@ serve(async (req) => {
 
     // Build compact summaries (limit total prompt size)
     const cardSummaries = cards.map((c: any, idx: number) => {
-      const front = stripHtml(c.front_content).substring(0, 120);
-      const back = stripHtml(c.back_content).substring(0, 120);
-      return `[${idx}] ${front} | ${back}`;
+      const front = stripHtml(c.front_content).substring(0, 150);
+      const back = stripHtml(c.back_content).substring(0, 150);
+      const type = c.card_type || "basic";
+      return `[${idx}](${type}) ${front} | ${back}`;
     }).join("\n");
 
     const apiKey = Deno.env.get("GOOGLE_AI_KEY");
@@ -97,8 +98,20 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "gemini-2.5-flash",
           messages: [
-            { role: "system", content: "Classificador de conteúdo. Responda APENAS JSON válido." },
-            { role: "user", content: `Gere 1-2 tags curtas (português) para cada cartão. Prefira tags existentes: ${tagListStr || "nenhuma"}\n\nCARTÕES:\n${cardSummaries}\n\nJSON: {"0":["Tag1"],"1":["Tag2"]}` },
+            { role: "system", content: "Você extrai palavras-chave específicas de cartões de estudo. Responda APENAS JSON válido, sem markdown." },
+            { role: "user", content: `Para CADA cartão abaixo, extraia 1-3 palavras-chave ESPECÍFICAS do conteúdo daquele cartão individual. As tags devem ser termos técnicos, conceitos ou entidades mencionados diretamente no texto do cartão — NÃO categorias genéricas ou nomes de disciplinas.
+
+REGRAS:
+- Extraia termos concretos do texto (ex: "mitocôndria", "lei de Ohm", "artéria femoral")
+- NÃO use categorias amplas (ex: "Biologia", "Semiologia", "Anatomia")
+- Cada tag deve ter 1-3 palavras no máximo
+- TODOS os cartões devem receber tags, independente do tipo (basic, cloze, multiple_choice)
+- Prefira reutilizar tags existentes quando o conceito for igual: ${tagListStr || "nenhuma"}
+
+CARTÕES:
+${cardSummaries}
+
+Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
           ],
           temperature: 0.2,
         }),
