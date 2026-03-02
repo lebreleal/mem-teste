@@ -74,10 +74,17 @@ async function yieldToUI() {
 }
 
 function replaceMediaRefs(html: string, mediaMap: Map<string, string>): string {
-  return html.replace(/src="([^"]+)"/gi, (match, filename) => {
+  // Replace src="filename" references (images/video)
+  let result = html.replace(/src="([^"]+)"/gi, (match, filename) => {
     const blobUrl = mediaMap.get(filename);
     return blobUrl ? `src="${blobUrl}"` : match;
   });
+  // Replace [sound:filename] references (Anki audio syntax)
+  result = result.replace(/\[sound:([^\]]+)\]/gi, (match, filename) => {
+    const blobUrl = mediaMap.get(filename);
+    return blobUrl ? `<audio controls src="${blobUrl}"></audio>` : match;
+  });
+  return result;
 }
 
 function stripAnkiTemplateSyntax(text: string): string {
@@ -163,24 +170,38 @@ async function findDatabaseFile(zip: JSZip): Promise<{ dbBytes: Uint8Array; isMo
 }
 
 async function parseMediaMapping(zip: JSZip): Promise<Record<string, string>> {
-  const mediaFile = zip.file('media');
-  if (!mediaFile) return {};
+  // zip.file('media') returns null if 'media' is a directory — try both approaches
+  let mediaFile = zip.file('media');
+  if (!mediaFile) {
+    // Some archives store media mapping under different paths
+    const candidates = Object.keys(zip.files).filter(
+      name => name.toLowerCase() === 'media' && !zip.files[name].dir,
+    );
+    if (candidates.length > 0) mediaFile = zip.file(candidates[0]);
+  }
+  if (!mediaFile) {
+    console.log('[ANKI] No media mapping file found in ZIP');
+    return {};
+  }
   try {
     const bytes = await mediaFile.async('uint8array');
+    console.log('[ANKI] media file size:', bytes.length, 'first bytes:', Array.from(bytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+    
     // Try JSON first (Legacy formats)
     try {
       const text = new TextDecoder().decode(bytes);
       const parsed = JSON.parse(text);
       if (typeof parsed === 'object' && parsed !== null) {
+        console.log('[ANKI] Parsed JSON media mapping:', Object.keys(parsed).length, 'entries');
         return parsed;
       }
     } catch {
       // Not JSON — try Protobuf (⚡ Latest format)
+      console.log('[ANKI] media file is not JSON, trying Protobuf');
     }
 
     // Parse Protobuf MediaEntries: repeated MediaEntry entries = 1;
     // MediaEntry: string name = 1; uint32 size = 2; bytes sha1 = 3;
-    // We only need the names, indexed by position.
     const result: Record<string, string> = {};
     let entryIndex = 0;
     let offset = 0;
@@ -217,12 +238,13 @@ async function parseMediaMapping(zip: JSZip): Promise<Record<string, string>> {
       console.log('[ANKI] Parsed protobuf media mapping:', Object.keys(result).length, 'entries');
       return result;
     }
+    
+    console.warn('[ANKI] Could not parse media file as JSON or Protobuf');
   } catch (err) {
     console.warn('[ANKI] Failed to parse media mapping:', err);
   }
   return {};
 }
-
 function readVarint(bytes: Uint8Array, offset: number): [number, number] {
   let result = 0;
   let shift = 0;
@@ -264,8 +286,6 @@ function parseMediaEntryName(bytes: Uint8Array): string | null {
 
 async function loadMediaMapping(zip: JSZip): Promise<Map<string, string>> {
   const mapping = await parseMediaMapping(zip);
-  // mapping is { "0": "image.jpg", "1": "photo.png" }
-  // We need numericKey → filename so extractMediaLazy can look up by zip entry name
   const result = new Map<string, string>();
   for (const [key, value] of Object.entries(mapping)) {
     result.set(key, value);
@@ -276,12 +296,19 @@ async function loadMediaMapping(zip: JSZip): Promise<Map<string, string>> {
 function collectReferencedMedia(cards: AnkiCard[]): Set<string> {
   const referenced = new Set<string>();
   const srcRegex = /src="([^"]+)"/gi;
+  const soundRegex = /\[sound:([^\]]+)\]/gi;
   for (const card of cards) {
     let match;
     while ((match = srcRegex.exec(card.front)) !== null) {
       referenced.add(match[1]);
     }
     while ((match = srcRegex.exec(card.back)) !== null) {
+      referenced.add(match[1]);
+    }
+    while ((match = soundRegex.exec(card.front)) !== null) {
+      referenced.add(match[1]);
+    }
+    while ((match = soundRegex.exec(card.back)) !== null) {
       referenced.add(match[1]);
     }
   }
@@ -309,11 +336,38 @@ async function extractMediaLazy(
 ): Promise<{ mediaMap: Map<string, string>; totalMediaCount: number }> {
   const mediaMap = new Map<string, string>();
   const keyToName = await loadMediaMapping(zip);
+  
+  // Strategy 1: Look for numbered files at root (Legacy format)
   const allMediaFiles = Object.keys(zip.files).filter(name => /^\d+$/.test(name));
-  const totalMediaCount = allMediaFiles.length;
-  console.log('[ANKI] mediaMapping entries:', keyToName.size, ', numbered ZIP files:', totalMediaCount);
+  
+  // Strategy 2: Build a map of all non-special ZIP entries by basename for direct matching
+  const allZipFiles = Object.keys(zip.files).filter(name => {
+    const f = zip.files[name];
+    return !f.dir && 
+      name !== 'media' && name !== 'meta' && 
+      !name.startsWith('collection.') &&
+      !/^\d+$/.test(name); // exclude already-handled numbered files
+  });
+  
+  // Build basename → full path map for files stored with original names or in subdirectories
+  const basenameToPath = new Map<string, string>();
+  for (const fullPath of allZipFiles) {
+    const basename = fullPath.includes('/') ? fullPath.split('/').pop()! : fullPath;
+    if (basename) basenameToPath.set(basename, fullPath);
+  }
+  
+  const totalMediaCount = allMediaFiles.length + basenameToPath.size;
+  console.log('[ANKI] mediaMapping entries:', keyToName.size, ', numbered ZIP files:', allMediaFiles.length, ', named ZIP files:', basenameToPath.size);
+
+  // Log some sample ZIP entries for debugging
+  if (allMediaFiles.length === 0 && basenameToPath.size === 0) {
+    const sampleFiles = Object.keys(zip.files).slice(0, 20);
+    console.log('[ANKI] ZIP sample files (no media found):', sampleFiles);
+  }
 
   let processed = 0;
+  
+  // Extract numbered media files using mapping
   for (const key of allMediaFiles) {
     const filename = keyToName.get(key);
     if (!filename || !referencedFiles.has(filename)) {
@@ -343,6 +397,38 @@ async function extractMediaLazy(
       onProgress?.('Extraindo mídia...', processed, totalMediaCount);
       await yieldToUI();
     }
+  }
+
+  // Extract media files stored with original names (direct filename match)
+  // This handles archives where media is stored with real names instead of numbered
+  if (basenameToPath.size > 0) {
+    for (const refFile of referencedFiles) {
+      if (mediaMap.has(refFile)) continue; // already extracted via numbered mapping
+      
+      const fullPath = basenameToPath.get(refFile);
+      if (!fullPath) continue;
+
+      const zipEntry = zip.file(fullPath);
+      if (!zipEntry) continue;
+
+      try {
+        const bytes = await zipEntry.async('uint8array');
+        const ext = refFile.split('.').pop()?.toLowerCase() || '';
+        const mimeType = MIME_MAP[ext] || 'application/octet-stream';
+        const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        mediaMap.set(refFile, blobUrl);
+      } catch (err) {
+        console.warn(`Failed to extract named media ${refFile}:`, err);
+      }
+
+      processed++;
+      if (processed % 10 === 0) {
+        onProgress?.('Extraindo mídia...', processed, totalMediaCount);
+        await yieldToUI();
+      }
+    }
+    console.log('[ANKI] Direct name-matched media:', mediaMap.size - allMediaFiles.length);
   }
 
   return { mediaMap, totalMediaCount };
