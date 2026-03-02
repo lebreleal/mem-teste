@@ -102,14 +102,16 @@ const Study = () => {
     [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
 
-  // Lock the displayed card — only update when cardKey changes (user rated) or during init
+  // Lock the displayed card — only update when cardKey changes (user rated) or during init.
+  // Using queueInitialized ensures displayedCard is set on first load so the
+  // volatile `nextCard` fallback is never used during an active review.
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
     if (!isTransitioning) {
       setDisplayedCard(nextCard);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardKey, isTransitioning]);
+  }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
   // Force re-render when the soonest learning card's timer expires
