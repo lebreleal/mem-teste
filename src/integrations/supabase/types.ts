@@ -917,6 +917,8 @@ export type Database = {
           name: string
           parent_id: string | null
           sort_order: number
+          source_turma_id: string | null
+          source_turma_subject_id: string | null
           updated_at: string
           user_id: string
         }
@@ -927,6 +929,8 @@ export type Database = {
           name: string
           parent_id?: string | null
           sort_order?: number
+          source_turma_id?: string | null
+          source_turma_subject_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -937,6 +941,8 @@ export type Database = {
           name?: string
           parent_id?: string | null
           sort_order?: number
+          source_turma_id?: string | null
+          source_turma_subject_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -946,6 +952,20 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_source_turma_id_fkey"
+            columns: ["source_turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_source_turma_subject_id_fkey"
+            columns: ["source_turma_subject_id"]
+            isOneToOne: false
+            referencedRelation: "turma_subjects"
             referencedColumns: ["id"]
           },
         ]
