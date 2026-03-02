@@ -318,6 +318,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     let totalEnergyCost = 0;
     let usedModel = '';
+    let failedCount = 0;
+    let lastErrorMsg = '';
 
     // Bloco 5: Refined density factor (chars per card)
     const densityFactor = detailLevel === 'comprehensive' ? 120 : detailLevel === 'essential' ? 600 : 250;
@@ -364,6 +366,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
           if (modelConfig) usedModel = modelConfig.backendModel as string;
         } else {
+          failedCount++;
+          const msg = result.reason?.message || '';
+          if (msg) lastErrorMsg = msg;
           console.error(`Batch call failed:`, result.reason);
         }
       }
@@ -400,7 +405,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         });
         toast({ title: '✅ Cartões prontos para revisão', description: `${dedupedCards.length} cartões aguardando revisão.` });
       } else {
-        toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
+        const allFailed = failedCount === totalBatches;
+        toast({
+          title: allFailed ? 'Erro ao gerar cartões' : 'Nenhum cartão gerado',
+          description: allFailed
+            ? (lastErrorMsg || 'Serviço de IA indisponível. Tente novamente em alguns segundos.')
+            : 'O conteúdo pode ser insuficiente.',
+          variant: 'destructive',
+        });
         removePending(pendingIdRef.current);
       }
       resetState();
@@ -408,7 +420,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     }
 
     if (dedupedCards.length === 0) {
-      toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
+      const allFailed = failedCount === totalBatches;
+      toast({
+        title: allFailed ? 'Erro ao gerar cartões' : 'Nenhum cartão gerado',
+        description: allFailed
+          ? (lastErrorMsg || 'Serviço de IA indisponível. Tente novamente em alguns segundos.')
+          : 'O conteúdo pode ser insuficiente.',
+        variant: 'destructive',
+      });
       setStep('config');
     } else {
       setCards(dedupedCards); setStep('review');
