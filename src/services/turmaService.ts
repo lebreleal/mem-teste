@@ -345,6 +345,9 @@ export async function shareDeck(turmaId: string, userId: string, params: { deckI
     allow_download: params.allowDownload ?? false,
   }));
 
+  // Mark all decks in hierarchy as public so they're visible via RLS
+  await supabase.from('decks').update({ is_public: true } as any).in('id', toInsert);
+
   const { error } = await supabase.from('turma_decks').insert(rows as any);
   if (error) throw error;
 }
