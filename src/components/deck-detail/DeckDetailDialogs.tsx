@@ -68,7 +68,7 @@ const DeckDetailDialogs = () => {
 
               <div>
                 <Label className="mb-1.5 block">
-                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
+                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
                 <LazyRichEditor
                   content={ctx.front}
@@ -179,9 +179,9 @@ const DeckDetailDialogs = () => {
                 </div>
               )}
 
-              {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
+              {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion' || ctx.cardType === 'cloze') && (
                 <div>
-                  <Label className="mb-1.5 block">{ctx.cardType === 'image_occlusion' ? 'Verso (Resposta)' : 'Verso'}</Label>
+                  <Label className="mb-1.5 block">Verso (Resposta)</Label>
                   <LazyRichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}

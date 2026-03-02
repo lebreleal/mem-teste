@@ -586,7 +586,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
                 {editorType === 'multiple_choice'
                   ? 'Pergunta'
                   : editorType === 'cloze'
-                    ? 'Texto com lacunas'
+                    ? 'Frente'
                     : editorType === 'image_occlusion'
                       ? 'Frente (Pergunta)'
                       : 'Frente (Pergunta)'}
