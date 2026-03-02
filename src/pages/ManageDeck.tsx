@@ -793,8 +793,14 @@ const ManageDeck = () => {
               <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
             </div>
           ) : editorType === 'cloze' ? (
-            <div className="space-y-3">
-              {/* Visual cloze preview */}
+            <>
+              {/* Verso field - same layout as basic */}
+              <div>
+                <Label className="mb-1.5 block">Verso (Resposta)</Label>
+                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
+              </div>
+
+              {/* Visual cloze preview / hint */}
               {(() => {
                 const plainText = front.replace(/<[^>]*>/g, '');
                 const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
@@ -876,13 +882,7 @@ const ManageDeck = () => {
                   </div>
                 );
               })()}
-
-              {/* Verso / Extra field for cloze */}
-              <div>
-                <Label className="mb-1.5 block">Verso</Label>
-                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
-              </div>
-            </div>
+            </>
           ) : (
             <div>
               <Label className="mb-1.5 block">Verso (Resposta)</Label>
