@@ -865,14 +865,23 @@ const ManageDeck = () => {
                 return null;
               })()}
 
+              {/* Como usar Cloze */}
               <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
+                <p className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1.5">
+                  <PenLine className="h-3 w-3" /> Como usar Cloze
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
+                  Selecione o texto e clique para criar um <span className="font-semibold text-foreground">cloze</span>. Clozes com mesmo número viram o <span className="font-semibold text-foreground">mesmo card</span>.
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
+                  Cria um cloze com <span className="font-semibold text-primary">número novo</span>, gerando um <span className="font-semibold text-foreground">card separado</span>.
                 </p>
+              </div>
+
+              {/* Verso / Extra field for cloze */}
+              <div>
+                <Label className="mb-1.5 block">Verso (nota extra)</Label>
+                <LazyRichEditor content={back} onChange={setBack} placeholder="Informação adicional exibida no verso do card" hideCloze />
               </div>
             </div>
           ) : (
