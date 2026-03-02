@@ -1,119 +1,97 @@
 
+# Sistema de Publicacao Hierarquica de Decks
 
-# Melhorias Estrategicas do Sistema de Tags - Plano de Implementacao
+## Resumo
 
-## Visao Geral
+Quando um deck pai e publicado na comunidade, ele mostra os cards de toda a sua arvore de descendentes publicados. Cada nivel da hierarquia tambem pode ser acessado individualmente, mostrando apenas seus cards + descendentes publicados (sem incluir ancestrais). Os cards sao compartilhados por referencia (mesmo card_id), sem duplicacao.
 
-5 melhorias estrategicas que expandem o sistema de tags existente: hierarquia pai/filho, perfil de estudo, busca semantica, feedback da comunidade e visualizacao de tags relacionadas.
+## Modelo Visual
 
----
+```text
+Anatomia (pai, 0 cards proprios)
+  └─ 25-02-26 (filho, 10 cards)
+       └─ Sub-deck (neto, 5 cards)
 
-## 1. Hierarquia de Tags (Parent_ID)
+Na comunidade:
+  "Anatomia"  -> 15 cards (0+10+5, toda a arvore)
+  "25-02-26"  -> 15 cards (10+5, sem o pai)
+  "Sub-deck"  -> 5 cards (apenas seus proprios)
+```
 
-O campo `parent_id` ja existe na tabela `tags` mas nao e utilizado. Vamos ativa-lo.
+- Despublicar "25-02-26" remove seus 10 cards de "Anatomia" (mas o sub-deck de 25-02 continua se estiver ativo)
+- Sugestoes sao por card_id, entao aparecem em qualquer publicacao que contenha aquele card
 
-**Alteracoes:**
+## Mudancas
 
-### Backend
-- **AdminTags.tsx**: Adicionar campo "Tag Pai" no painel admin (select dropdown) para definir hierarquias. Ao editar/criar tag, permitir selecionar um parent.
-- **tagService.ts**: Nova funcao `getTagTree()` que retorna tags organizadas hierarquicamente. Nova funcao `getTagChildren(parentId)`.
-- **useTags.ts**: Novo hook `useTagTree()` e `useTagChildren()`.
+### 1. Migracao SQL - campo `is_published` na tabela `turma_decks`
 
-### Frontend
-- **TagInput.tsx**: No dropdown de autocomplete, exibir tags com indentacao visual mostrando a hierarquia (ex: "Medicina > Cardiologia > Hipertensao"). Ao digitar, buscar em todos os niveis.
-- **ContentTab.tsx** e **Turmas.tsx**: Ao selecionar uma tag pai no filtro, incluir automaticamente decks/cards que tenham qualquer tag filha.
+Adicionar coluna `is_published boolean NOT NULL DEFAULT true` a `turma_decks`. Isso permite controlar individualmente a visibilidade de cada deck na hierarquia sem deletar o registro.
 
-### IA
-- **suggest-tags edge function**: Atualizar o prompt para que a IA sugira tags respeitando hierarquias existentes (enviar a arvore de tags no contexto).
+### 2. `turmaService.ts` - fetchTurmaDecks com contagem agregada
 
----
+Atualizar `fetchTurmaDecks` para:
+- Buscar `is_published` junto com os outros campos
+- Calcular `card_count` como agregado: cards do deck + cards de todos descendentes **publicados** (percorrendo a arvore via `parent_deck_id` nos decks e verificando `is_published` nos turma_decks)
+- Retornar `is_published` no resultado
 
-## 2. Contextualizacao por Perfil de Estudo
+### 3. `turmaService.ts` - nova funcao `toggleDeckPublished`
 
-Permitir que usuarios definam seu "perfil de estudo" para filtragem automatica de conteudo.
+Criar funcao para alternar `is_published` de um `turma_deck` individual. Isso permite que o admin despublique um filho sem remover da arvore.
 
-**Alteracoes:**
+### 4. `turmaService.ts` - shareDeck ja recursivo (manter)
 
-### Database
-- Nova migration: adicionar coluna `study_context` (text, nullable, default null) na tabela `profiles`. Valores possiveis: `ciclo_basico`, `ciclo_clinico`, `internato`, `residencia`, `concurso`, etc.
+O `shareDeck` ja insere pai + descendentes. Manter esse comportamento. Cada um entra com `is_published = true` por padrao.
 
-### Frontend
-- **Profile.tsx**: Adicionar secao "Perfil de Estudo" com um select de contextos predefinidos. O usuario escolhe seu perfil uma vez.
-- **Turmas.tsx** e **ContentTab.tsx**: Quando o usuario tem um `study_context` definido, priorizar automaticamente tags relacionadas ao contexto no filtro (ex: se perfil = "residencia", tags como "ENARE", "Prova pratica" aparecem primeiro).
-- **useAuth.tsx** ou novo hook `useStudyContext()`: Carregar o `study_context` do perfil e disponibilizar globalmente.
+### 5. `PublicDeckPreview` - carregar cards da sub-arvore publicada
 
-### Logica de priorizacao
-- Criar um mapeamento `CONTEXT_TAG_BOOST` que associa cada perfil a tags relevantes. Nao e filtragem exclusiva -- apenas reordena as tags e resultados colocando os mais relevantes primeiro.
+Na query `public-deck-cards`, ao inves de buscar `cards WHERE deck_id = deckId`, buscar:
+1. Todos os `turma_decks` da mesma turma
+2. Filtrar descendentes publicados do deck atual (percorrer arvore de `parent_deck_id` onde `is_published = true`)
+3. Buscar cards de todos esses deck_ids + o proprio deck
 
----
+As sugestoes ja funcionam por `card_id`, entao aparecem naturalmente.
 
-## 3. Busca Semantica Aprimorada
+### 6. `ContentTab.tsx` - exibicao e controle de publicacao
 
-Quando o usuario pesquisar um termo, a busca mapeia sinonimos para Leader Tags.
+- Mostrar `card_count` agregado (ja vira atualizado do fetchTurmaDecks)
+- Para admins: adicionar toggle de olho (publicado/despublicado) no dropdown de cada deck
+- Decks com `is_published = false` aparecem com opacidade reduzida + icone de olho fechado (apenas para admins)
+- Membros comuns so veem decks publicados
 
-**Alteracoes:**
+### 7. `turma.ts` - tipo TurmaDeck
 
-### Database
-- Nova migration: adicionar coluna `synonyms` (text[], default '{}') na tabela `tags`. Ex: a tag "Hipertensao Arterial" teria synonyms = ["pressao alta", "HAS", "hipertensao"].
+Adicionar `is_published?: boolean` ao tipo `TurmaDeck`.
 
-### Admin
-- **AdminTags.tsx**: Adicionar campo editavel de sinonimos para cada tag (input com chips, similar ao TagInput).
+### 8. `useTurmaHierarchy.ts` - mutation toggleDeckPublished
 
-### Busca
-- **tagService.ts**: Atualizar `searchTags()` para tambem buscar no array `synonyms` usando `@>` ou funcao SQL customizada. Quando usuario digitar "pressao alta", retornar "Hipertensao Arterial".
-- **ContentTab.tsx** e **Turmas.tsx**: A busca textual existente passara a resolver sinonimos antes de filtrar.
-
----
-
-## 4. Feedback da Comunidade sobre Tags
-
-Usuarios podem reportar tags problematicas diretamente do frontend.
-
-**Alteracoes:**
-
-### Database
-- Nova migration: tabela `tag_reports` com colunas: `id`, `tag_id`, `user_id`, `reason` (enum: 'duplicada', 'irrelevante', 'ofensiva', 'sugestao_fusao'), `suggested_merge_target` (text, nullable), `status` (pending/resolved), `created_at`.
-- RLS: usuarios inserem seus proprios reports, admins veem todos.
-
-### Frontend
-- **TagInput.tsx**: Adicionar um icone de "..." ou flag em cada badge de tag exibida, abrindo um mini-menu com "Reportar tag" (dialog simples com motivo).
-- **AdminTags.tsx**: Nova secao "Reports" mostrando tag reports pendentes com acoes rapidas (resolver, mesclar, ignorar).
-
-### Service
-- **tagService.ts**: Novas funcoes `reportTag()` e `getTagReports()`.
-- **useTags.ts**: Novos hooks `useTagReport()` e `useTagReports()`.
-
----
-
-## 5. Visualizacao de Tags Relacionadas
-
-Mostrar tags co-ocorrentes para melhorar a descoberta.
-
-**Alteracoes:**
-
-### Backend
-- **tagService.ts**: Nova funcao `getRelatedTags(tagId)` que consulta `deck_tags` e `card_tags` para encontrar tags que frequentemente aparecem juntas com a tag selecionada (co-ocorrencia).
-- Query SQL: buscar deck_ids que possuem a tag X, depois contar quais outras tags aparecem nesses mesmos decks, ordenar por frequencia.
-
-### Frontend
-- **Turmas.tsx** e **ContentTab.tsx**: Quando usuario seleciona uma tag no filtro, exibir abaixo uma linha "Tags relacionadas:" com chips clicaveis das tags mais co-ocorrentes (top 5).
-- Componente simples `RelatedTags` que recebe um `tagId` e mostra as tags relacionadas.
-
----
-
-## Sequencia de Implementacao
-
-1. **Hierarquia de Tags** -- usa infraestrutura existente (`parent_id`), menor risco
-2. **Sinonimos / Busca Semantica** -- migration simples + melhoria na busca
-3. **Perfil de Estudo** -- migration em `profiles` + UI no perfil + priorizacao
-4. **Feedback da Comunidade** -- nova tabela + UI de report + admin
-5. **Tags Relacionadas** -- query de co-ocorrencia + UI de chips
+Adicionar mutation para chamar a nova funcao `toggleDeckPublished` e invalidar queries.
 
 ## Detalhes Tecnicos
 
-- Todas as migrations usam a ferramenta de migration do Supabase
-- Novas colunas sao nullable ou com defaults para nao quebrar dados existentes
-- RLS segue o padrao ja estabelecido (autenticados leem, donos gerenciam, admins administram)
-- Nenhuma dependencia nova e necessaria -- tudo usa React Query, Supabase client e componentes UI existentes
-- A busca semantica por sinonimos usa operadores nativos do Postgres (array contains ou ILIKE nos elementos)
+### Algoritmo de contagem agregada (fetchTurmaDecks)
 
+```text
+Para cada turma_deck TD:
+  1. Encontrar todos descendentes de TD.deck_id via parent_deck_id
+  2. Filtrar apenas os que tem turma_deck com is_published = true
+  3. Somar cards de TD.deck_id + descendentes publicados
+  4. Retornar como card_count
+```
+
+### Algoritmo de carregamento de cards (PublicDeckPreview)
+
+```text
+1. Buscar turma_decks WHERE turma_id = X
+2. Construir arvore de parent_deck_id
+3. A partir do deck atual, coletar deck_ids da sub-arvore onde is_published = true
+4. Buscar cards WHERE deck_id IN (deck_ids_da_subtree)
+```
+
+### Logica de despublicacao
+
+Quando admin desativa `is_published` de um deck filho:
+- O deck filho desaparece da view de membros
+- Os cards desse filho sao removidos da contagem do pai
+- Mas se o filho tem sub-decks publicados, esses sub-decks continuam aparecendo e seus cards continuam na contagem do pai (pois o caminho vai direto do avo pro neto)
+
+Correcao: na verdade, se o pai direto esta despublicado, os netos tambem devem sumir do pai. A arvore e cortada no ponto despublicado. Ou seja, percorrer descendentes para somente enquanto `is_published = true` em cada nivel.
