@@ -288,12 +288,13 @@ const CardList = () => {
             const groups: { cards: typeof filteredCards; isClozeGroup: boolean }[] = [];
             const usedIds = new Set<string>();
 
+            const isClozeCard = (c: typeof filteredCards[0]) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
             filteredCards.forEach(card => {
               if (usedIds.has(card.id)) return;
-              if (card.card_type === 'cloze') {
+              if (isClozeCard(card)) {
                 // Find all cloze cards with same front_content
                 const siblings = filteredCards.filter(
-                  c => c.card_type === 'cloze' && c.front_content === card.front_content && !usedIds.has(c.id)
+                  c => isClozeCard(c) && c.front_content === card.front_content && !usedIds.has(c.id)
                 );
                 siblings.forEach(s => usedIds.add(s.id));
                 groups.push({ cards: siblings, isClozeGroup: siblings.length > 1 });
@@ -315,7 +316,7 @@ const CardList = () => {
 
             return groups.map((group, gi) => {
                const card = group.cards[0];
-               const isCloze = card.card_type === 'cloze';
+               const isCloze = card.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(card.front_content);
                const isMultiple = card.card_type === 'multiple_choice';
                const isOcclusion = card.card_type === 'image_occlusion';
                const isSelected = selectedCards.has(card.id);
