@@ -37,19 +37,28 @@ export function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
 
+  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
+
   cards.forEach(card => {
-    if (card.card_type === 'cloze') {
+    if (hasClozeContent(card)) {
       const groupKey = card.front_content;
       if (processedClozeGroups.has(groupKey)) return;
       processedClozeGroups.add(groupKey);
 
-      const siblings = cards.filter(c => c.card_type === 'cloze' && c.front_content === groupKey);
+      const siblings = cards.filter(c => hasClozeContent(c) && c.front_content === groupKey);
       siblings.forEach(sibling => {
         let clozeTarget = 1;
         try {
           const parsed = JSON.parse(sibling.back_content);
           if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
-        } catch {}
+        } catch {
+          // If back_content isn't JSON, extract cloze numbers from front
+          const nums = [...sibling.front_content.matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
+          const uniqueNums = [...new Set(nums)].sort((a, b) => a - b);
+          // Find this card's index in siblings to assign the right cloze target
+          const sibIdx = siblings.indexOf(sibling);
+          clozeTarget = uniqueNums[sibIdx] || uniqueNums[0] || 1;
+        }
         result.push({ card: sibling, clozeTarget });
       });
     } else {
@@ -67,7 +76,7 @@ export function CardContent({
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
 
-  const isCloze = card?.card_type === 'cloze';
+  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
   const isMultiple = card?.card_type === 'multiple_choice';
   const isOcclusion = card?.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
@@ -168,7 +177,25 @@ export function CardContent({
       }
       if (isCloze) {
         const html = renderClozePreview(card.front_content, revealed, clozeTarget);
-        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
+        // Parse extra back content for cloze
+        let extraBack = '';
+        try {
+          const parsed = JSON.parse(card.back_content);
+          extraBack = parsed.extra || '';
+        } catch {
+          // If not JSON, use back_content directly as extra (for imported cards)
+          if (card.back_content && !/^\{/.test(card.back_content.trim())) {
+            extraBack = card.back_content;
+          }
+        }
+        return (
+          <div>
+            <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+            {revealed && extraBack && extraBack.replace(/<[^>]*>/g, '').trim() && (
+              <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(extraBack) }} />
+            )}
+          </div>
+        );
       }
       if (/<[a-z][\s\S]*>/i.test(card.front_content))
         return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />;
@@ -320,7 +347,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   if (!open || !card) return null;
 
-  const isCloze = card?.card_type === 'cloze';
+  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
   const clozeTarget = vc?.clozeTarget;
 
 
