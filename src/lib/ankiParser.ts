@@ -765,6 +765,9 @@ function extractRawCardProgress(db: Database): Map<string, { type: number; ivl: 
       });
     }
     stmt.free();
+    // Diagnostic: log sample of raw progress values
+    const sample = [...map.entries()].slice(0, 5);
+    console.log('[ANKI] Raw progress sample:', sample.map(([id, v]) => ({ id, ...v })));
   } catch (e) {
     console.warn('[ANKI] extractRawCardProgress failed:', e);
   }
@@ -835,6 +838,7 @@ function buildProgressData(
   crt: number,
 ): { progress: AnkiCardProgress[]; hasProgress: boolean } {
   let hasProgress = false;
+  let loggedSamples = 0;
   let stateCounts = { s0: 0, s1: 0, s2: 0, s3: 0, noRaw: 0 };
   const progress = ankiCardIds.map(ankiId => {
     const raw = rawProgressMap.get(ankiId);
@@ -848,6 +852,10 @@ function buildProgressData(
     else if (raw.type === 2) stateCounts.s2++;
     else if (raw.type === 3) stateCounts.s3++;
     const scheduledDate = ankiDueToScheduledDate(raw.due, raw.type, crt);
+    if (loggedSamples < 3) {
+      console.log(`[ANKI] Progress sample: type=${raw.type} ivl=${raw.ivl} due=${raw.due} factor=${raw.factor} → scheduled=${scheduledDate}`);
+      loggedSamples++;
+    }
     const stability = Math.max(0, raw.ivl);
     // Approximate lastReviewedAt for review cards: scheduled - interval
     const lastReviewedAt = raw.type === 2 && stability > 0
