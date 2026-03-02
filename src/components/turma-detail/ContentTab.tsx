@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
@@ -678,19 +679,27 @@ const ContentTab = () => {
                   ) : (
                     <>
                       <label className="flex items-center gap-3 px-3 py-2.5 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <input type="checkbox" checked={allSelected} onChange={() => {
-                          if (allSelected) setSelectedDeckIds(new Set());
-                          else setSelectedDeckIds(new Set(filtered.map(d => d.id)));
-                        }} className="h-4 w-4 rounded border-primary text-primary accent-primary" />
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={() => {
+                            if (allSelected) setSelectedDeckIds(new Set());
+                            else setSelectedDeckIds(new Set(filtered.map(d => d.id)));
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         <span className="text-xs font-semibold text-muted-foreground">Selecionar todos ({filtered.length})</span>
                       </label>
                       {filtered.map(d => (
                         <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors">
-                          <input type="checkbox" checked={selectedDeckIds.has(d.id)} onChange={() => {
-                            const next = new Set(selectedDeckIds);
-                            if (next.has(d.id)) next.delete(d.id); else next.add(d.id);
-                            setSelectedDeckIds(next);
-                          }} className="h-4 w-4 rounded border-primary text-primary accent-primary" />
+                          <Checkbox
+                            checked={selectedDeckIds.has(d.id)}
+                            onCheckedChange={() => {
+                              const next = new Set(selectedDeckIds);
+                              if (next.has(d.id)) next.delete(d.id); else next.add(d.id);
+                              setSelectedDeckIds(next);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
                           </div>
