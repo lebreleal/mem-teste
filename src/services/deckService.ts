@@ -241,13 +241,14 @@ export interface RevlogImportEntry {
   elapsedMs: number | null;
 }
 
-/** Helper to batch-insert revlog entries using a card ID mapping. */
+/** Helper to batch-insert revlog entries using a card ID mapping. Uses parallel inserts. */
 async function insertRevlogBatch(
   userId: string,
   revlog: RevlogImportEntry[],
   cardIdMap: Map<number, string>,
 ) {
   const BATCH = 500;
+  const CONCURRENT = 5;
   const rows = revlog
     .filter(r => cardIdMap.has(r.cardIndex))
     .map(r => ({
@@ -261,10 +262,18 @@ async function insertRevlogBatch(
       state: r.state,
       elapsed_ms: r.elapsedMs,
     }));
+  const batches: typeof rows[] = [];
   for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH);
-    const { error } = await supabase.from('review_logs').insert(batch as any);
-    if (error) console.warn('Revlog insert error (continuing):', error.message);
+    batches.push(rows.slice(i, i + BATCH));
+  }
+  for (let i = 0; i < batches.length; i += CONCURRENT) {
+    const group = batches.slice(i, i + CONCURRENT);
+    const results = await Promise.all(
+      group.map(batch => supabase.from('review_logs').insert(batch as any))
+    );
+    for (const { error } of results) {
+      if (error) console.warn('Revlog insert error (continuing):', error.message);
+    }
   }
 }
 
@@ -302,14 +311,25 @@ export async function importDeck(
   const cardIdMap = new Map<number, string>();
   let globalIdx = 0;
 
+  const CONCURRENT = 5;
+  const cardBatches: { batch: typeof rows; startIdx: number }[] = [];
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { data: inserted, error: cardsErr } = await supabase.from('cards').insert(batch as any).select('id');
-    if (cardsErr) throw cardsErr;
-    if (inserted) {
-      for (const row of inserted) {
-        cardIdMap.set(globalIdx, row.id);
-        globalIdx++;
+    cardBatches.push({ batch: rows.slice(i, i + BATCH_SIZE), startIdx: i });
+  }
+  for (let i = 0; i < cardBatches.length; i += CONCURRENT) {
+    const group = cardBatches.slice(i, i + CONCURRENT);
+    const results = await Promise.all(
+      group.map(g => supabase.from('cards').insert(g.batch as any).select('id'))
+    );
+    for (let g = 0; g < results.length; g++) {
+      const { data: inserted, error: cardsErr } = results[g];
+      if (cardsErr) throw cardsErr;
+      if (inserted) {
+        const startIdx = group[g].startIdx;
+        for (let j = 0; j < inserted.length; j++) {
+          cardIdMap.set(startIdx + j, inserted[j].id);
+          globalIdx++;
+        }
       }
     }
   }
@@ -401,8 +421,12 @@ export async function importDeckWithSubdecks(
     queue = nextQueue;
   }
 
-  // 3. Bulk-insert all cards
+  // 3. Bulk-insert all cards (parallel batches for speed)
   const CARD_BATCH = 500;
+  const CONCURRENT = 5;
+
+  // Flatten all card rows with their original indices for mapping
+  const allCardJobs: { deckId: string; rows: any[]; originalIndices: number[] }[] = [];
   for (const { deckId, indices } of deckCards) {
     const validIndices = indices.filter(idx => idx >= 0 && idx < cards.length);
     if (validIndices.length === 0) continue;
@@ -421,13 +445,27 @@ export async function importDeckWithSubdecks(
     }));
 
     for (let i = 0; i < rows.length; i += CARD_BATCH) {
-      const batch = rows.slice(i, i + CARD_BATCH);
-      const { data: inserted, error } = await supabase.from('cards').insert(batch as any).select('id');
+      allCardJobs.push({
+        deckId,
+        rows: rows.slice(i, i + CARD_BATCH),
+        originalIndices: validIndices.slice(i, i + CARD_BATCH),
+      });
+    }
+  }
+
+  // Execute card inserts in parallel groups
+  for (let i = 0; i < allCardJobs.length; i += CONCURRENT) {
+    const group = allCardJobs.slice(i, i + CONCURRENT);
+    const results = await Promise.all(
+      group.map(job => supabase.from('cards').insert(job.rows as any).select('id'))
+    );
+    for (let g = 0; g < results.length; g++) {
+      const { data: inserted, error } = results[g];
       if (error) throw error;
       if (inserted) {
+        const job = group[g];
         for (let j = 0; j < inserted.length; j++) {
-          const cardOrigIdx = validIndices[i + j];
-          globalCardIdMap.set(cardOrigIdx, (inserted[j] as any).id);
+          globalCardIdMap.set(job.originalIndices[j], (inserted[j] as any).id);
         }
       }
     }
