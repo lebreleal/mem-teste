@@ -9,23 +9,55 @@ import type { CardRow } from '@/types/deck';
 export type { CardRow } from '@/types/deck';
 
 const PAGE_SIZE = 1000;
+const MAX_RETRIES = 3;
 
-/** Fetch all cards for a deck. */
-export async function fetchCards(deckId: string) {
-  const rows: any[] = [];
+/** Helper: execute a fn with retry on network errors */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (attempt < MAX_RETRIES - 1 && (
+        msg.includes('Failed to fetch') ||
+        msg.includes('ERR_') ||
+        msg.includes('NetworkError') ||
+        msg.includes('PGRST000')
+      )) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+/** Paginated fetch helper with retry */
+async function paginatedFetch<T>(
+  buildQuery: (from: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const rows: T[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('deck_id', deckId)
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
+    const { data, error } = await withRetry(() => buildQuery(from) as Promise<{ data: T[] | null; error: any }>);
     if (error) throw error;
     const batch = data ?? [];
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) break;
   }
   return rows;
+}
+
+/** Fetch all cards for a deck. */
+export async function fetchCards(deckId: string) {
+  return paginatedFetch((from) =>
+    supabase
+      .from('cards')
+      .select('*')
+      .eq('deck_id', deckId)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+  );
 }
 
 /** Create a single card. */
@@ -134,22 +166,14 @@ export async function enhanceCard(params: {
 /** Fetch aggregated cards for a deck and all descendants. */
 export async function fetchAggregatedCards(deckIds: string[]) {
   if (deckIds.length === 0) return [];
-
-  const rows: any[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+  return paginatedFetch((from) =>
+    supabase
       .from('cards')
       .select('*')
       .in('deck_id', deckIds)
       .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = data ?? [];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
-
-  return rows;
+      .range(from, from + PAGE_SIZE - 1)
+  );
 }
 
 /** Fetch aggregated stats for multiple decks in a single efficient query. */
@@ -157,18 +181,13 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   const totals = { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
   if (deckIds.length === 0) return totals;
 
-  const allCards: Array<{ id: string; state: number | null; scheduled_date: string }> = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+  const allCards = await paginatedFetch<{ id: string; state: number | null; scheduled_date: string }>((from) =>
+    supabase
       .from('cards')
       .select('id, state, scheduled_date')
       .in('deck_id', deckIds)
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as Array<{ id: string; state: number | null; scheduled_date: string }>;
-    allCards.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+      .range(from, from + PAGE_SIZE - 1)
+  );
 
   if (allCards.length === 0) return totals;
 
@@ -183,38 +202,28 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   }
 
   const cardIds = allCards.map(c => c.id);
-  const todayLogs: Array<{ card_id: string }> = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+  const todayLogs = await paginatedFetch<{ card_id: string }>((from) =>
+    supabase
       .from('review_logs')
       .select('card_id')
       .in('card_id', cardIds)
       .gte('reviewed_at', todayStart.toISOString())
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as Array<{ card_id: string }>;
-    todayLogs.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+      .range(from, from + PAGE_SIZE - 1)
+  );
 
   if (todayLogs.length === 0) return totals;
 
   const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
   const reviewedIds = [...reviewedCardIds];
 
-  const priorLogs: Array<{ card_id: string }> = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+  const priorLogs = await paginatedFetch<{ card_id: string }>((from) =>
+    supabase
       .from('review_logs')
       .select('card_id')
       .in('card_id', reviewedIds)
       .lt('reviewed_at', todayStart.toISOString())
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as Array<{ card_id: string }>;
-    priorLogs.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+      .range(from, from + PAGE_SIZE - 1)
+  );
 
   const hadPriorReview = new Set(priorLogs.map(l => l.card_id));
 
