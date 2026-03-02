@@ -78,8 +78,10 @@ const DeckListItem = ({
         {subscriberOnly && <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />}
         {inCollection && <Link2 className="h-3 w-3 shrink-0 text-primary" />}
       </div>
-      <div className="flex items-center gap-2 mt-0.5">
-        <span className="text-[11px] text-muted-foreground">{td.card_count ?? 0} cards</span>
+      <div className="flex items-center gap-3 mt-0.5">
+        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <Layers className="h-3 w-3 shrink-0" /> {td.card_count ?? 0} cards
+        </span>
         {tags && tags.length > 0 && (
           <span className="text-[11px] text-muted-foreground">
             · {tags.slice(0, 2).map(t => t.name).join(', ')}
@@ -201,11 +203,16 @@ const TopDeckCard = ({
   >
     <div className="space-y-1">
       <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
-      <p className="text-[11px] text-muted-foreground">{td.card_count ?? 0} cards</p>
       {downloads > 0 && (
         <p className="text-[11px] text-muted-foreground">{downloads} inscritos</p>
       )}
     </div>
+
+    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+      <Layers className="h-3 w-3 text-foreground shrink-0" />
+      <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
+      <span>cards</span>
+    </p>
 
     {inCollection ? (
       <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
