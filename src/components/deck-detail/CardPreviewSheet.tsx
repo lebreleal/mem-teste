@@ -4,7 +4,7 @@
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -255,7 +255,7 @@ interface Props {
   onClose: () => void;
 }
 
-const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
+const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
   const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard } = useDeckDetail();
   const isMobile = useIsMobile();
 
@@ -440,6 +440,8 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
       </div>
     </div>
   );
-};
+});
+
+CardPreviewSheet.displayName = 'CardPreviewSheet';
 
 export default CardPreviewSheet;
