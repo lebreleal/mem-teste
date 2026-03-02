@@ -794,12 +794,6 @@ const ManageDeck = () => {
             </div>
           ) : editorType === 'cloze' ? (
             <>
-              {/* Verso field - same layout as basic */}
-              <div>
-                <Label className="mb-1.5 block">Verso (Resposta)</Label>
-                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
-              </div>
-
               {/* Visual cloze preview / hint */}
               {(() => {
                 const plainText = front.replace(/<[^>]*>/g, '');
@@ -867,7 +861,6 @@ const ManageDeck = () => {
                   );
                 }
 
-                // Show hint only when no clozes exist yet
                 return (
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
                     <p className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1.5">
@@ -882,6 +875,12 @@ const ManageDeck = () => {
                   </div>
                 );
               })()}
+
+              {/* Verso field - same as basic */}
+              <div>
+                <Label className="mb-1.5 block">Verso (Resposta)</Label>
+                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
+              </div>
             </>
           ) : (
             <div>
