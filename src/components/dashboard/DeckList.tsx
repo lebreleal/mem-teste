@@ -6,7 +6,7 @@
 
 import {
   FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2, Loader2, Search,
+  ChevronRight, GraduationCap, Link2, Loader2, Search, Tag as TagIcon, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
-import { usePendingDecks } from '@/stores/usePendingDecks';
+import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
@@ -60,6 +60,9 @@ interface DeckListProps {
 
   // Pending updates for community decks
   decksWithPendingUpdates?: Set<string>;
+
+  // Pending deck click handler
+  onPendingClick?: (pending: PendingDeck) => void;
 }
 
 const DeckList = ({
@@ -67,7 +70,7 @@ const DeckList = ({
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
   folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
-  decksWithPendingUpdates,
+  decksWithPendingUpdates, onPendingClick,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
@@ -133,25 +136,48 @@ const DeckList = ({
     );
   }
 
+  const getPendingStatusLabel = (pending: PendingDeck) => {
+    if (pending.status === 'review_ready') return 'Pronto para revisão';
+    if (pending.status === 'saving') return 'Salvando...';
+    if (pending.status === 'done') return 'Criando tags...';
+    if (pending.status === 'error') return 'Erro';
+    return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;
+  };
+
+  const getPendingIcon = (pending: PendingDeck) => {
+    if (pending.status === 'review_ready') return <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in-50" />;
+    if (pending.status === 'done') return <TagIcon className="h-5 w-5 text-primary animate-pulse" />;
+    return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
+  };
+
   return (
     <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
+        const isClickable = pending.status === 'review_ready' || pending.status === 'generating';
         return (
           <div
             key={pending.id}
-            className="flex items-center gap-3 px-5 py-4 opacity-50 pointer-events-none select-none"
+            className={`flex items-center gap-3 px-5 py-4 transition-colors ${
+              isClickable
+                ? 'cursor-pointer hover:bg-muted/50'
+                : 'opacity-50 pointer-events-none select-none'
+            } ${pending.status === 'review_ready' ? 'bg-success/5 border-l-2 border-l-success' : ''}`}
+            onClick={() => isClickable && onPendingClick?.(pending)}
           >
             <div className="flex h-6 w-6 items-center justify-center shrink-0">
-              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              {getPendingIcon(pending)}
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-display font-semibold text-foreground truncate">{pending.name}</h3>
               <div className="flex items-center gap-2 mt-1">
-                <Progress value={progressPct} className="h-1.5 flex-1 max-w-[120px]" />
-                <p className="text-[10px] text-muted-foreground">
-                  {pending.status === 'saving' ? 'Salvando...' : `Gerando lote ${pending.progress.current}/${pending.progress.total}`}
+                {pending.status !== 'review_ready' && (
+                  <Progress value={progressPct} className="h-1.5 flex-1 max-w-[120px]" />
+                )}
+                <p className={`text-[10px] ${pending.status === 'review_ready' ? 'text-success font-semibold' : 'text-muted-foreground'}`}>
+                  {getPendingStatusLabel(pending)}
+                  {pending.status === 'review_ready' && pending.cards && ` · ${pending.cards.length} cartões`}
                 </p>
               </div>
             </div>

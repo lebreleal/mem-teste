@@ -142,7 +142,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
             onDeleteCard={flow.deleteCard}
             onToggleType={flow.toggleType}
             onSave={flow.handleSave}
-            onBack={pendingReviewData ? undefined : () => { flow.setStep('config'); }}
+            onBack={pendingReviewData ? undefined : () => flow.setStep('config')}
             isSaving={flow.isSaving}
             deckName={flow.deckName}
             textSample={flow.textSample}
