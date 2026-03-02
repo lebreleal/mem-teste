@@ -380,7 +380,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
-        description: result.mediaCount > 0 ? `${result.mediaCount} arquivos de mídia extraídos` : undefined,
+        description: result.mediaCount > 0 
+          ? `${result.mediaCount} arquivos de mídia extraídos` 
+          : result.missingMediaCount > 0
+            ? `⚠️ ${result.missingMediaCount} imagens referenciadas não foram encontradas no arquivo. Exporte novamente do Anki com "Incluir mídia" ativado.`
+            : undefined,
+        duration: result.missingMediaCount > 0 ? 10000 : 5000,
       });
     } catch (err: any) {
       console.error('Anki parse error:', err);
@@ -730,6 +735,15 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2">
                     <Package className="h-4 w-4 text-primary" />
                     <span className="text-xs text-foreground">{ankiResult.mediaCount} arquivos de mídia incluídos</span>
+                  </div>
+                )}
+
+                {ankiResult.missingMediaCount > 0 && (
+                  <div className="flex items-center gap-2 rounded-xl bg-destructive/10 border border-destructive/20 px-3 py-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                    <span className="text-xs text-foreground">
+                      {ankiResult.missingMediaCount} imagens não encontradas no arquivo. Re-exporte do Anki com "Incluir mídia" ativado.
+                    </span>
                   </div>
                 )}
 
