@@ -48,6 +48,21 @@ async function paginatedFetch<T>(
   return rows;
 }
 
+/** Batch `.in()` queries to avoid URL length limits */
+const IN_BATCH = 300;
+async function batchedInFetch<T>(
+  ids: string[],
+  buildQuery: (batchIds: string[], from: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_BATCH) {
+    const batch = ids.slice(i, i + IN_BATCH);
+    const rows = await paginatedFetch<T>((from) => buildQuery(batch, from));
+    results.push(...rows);
+  }
+  return results;
+}
+
 /** Fetch all cards for a deck. */
 export async function fetchCards(deckId: string) {
   return paginatedFetch((from) =>
@@ -202,11 +217,11 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   }
 
   const cardIds = allCards.map(c => c.id);
-  const todayLogs = await paginatedFetch<{ card_id: string }>((from) =>
+  const todayLogs = await batchedInFetch<{ card_id: string }>(cardIds, (batch, from) =>
     supabase
       .from('review_logs')
       .select('card_id')
-      .in('card_id', cardIds)
+      .in('card_id', batch)
       .gte('reviewed_at', todayStart.toISOString())
       .range(from, from + PAGE_SIZE - 1)
   );
@@ -216,11 +231,11 @@ export async function fetchAggregatedStats(deckIds: string[]) {
   const reviewedCardIds = new Set(todayLogs.map(l => l.card_id));
   const reviewedIds = [...reviewedCardIds];
 
-  const priorLogs = await paginatedFetch<{ card_id: string }>((from) =>
+  const priorLogs = await batchedInFetch<{ card_id: string }>(reviewedIds, (batch, from) =>
     supabase
       .from('review_logs')
       .select('card_id')
-      .in('card_id', reviewedIds)
+      .in('card_id', batch)
       .lt('reviewed_at', todayStart.toISOString())
       .range(from, from + PAGE_SIZE - 1)
   );
