@@ -1,7 +1,7 @@
 /**
  * Card review step: edit, delete, toggle type, and save generated cards.
  * Includes mandatory tag selection with AI suggestions before saving.
- * Card editing layout matches ManageDeck.tsx for consistency.
+ * Card list and edit dialog match ManageDeck.tsx for consistency.
  */
 
 import { useState, useEffect } from 'react';
@@ -10,10 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import type { Tag } from '@/types/tag';
 import type { TagTreeNode } from '@/services/tagService';
 import type { GeneratedCard } from './types';
@@ -97,6 +99,12 @@ const ClozePreview = ({ text }: { text: string }) => {
   );
 };
 
+const getTypeBadge = (type: string) => {
+  if (type === 'cloze') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-primary/40 bg-primary/10 text-primary">Cloze</span>;
+  if (type === 'multiple_choice') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-warning/40 bg-warning/10 text-warning">Múltipla</span>;
+  return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-border">Básico</span>;
+};
+
 const CardReviewStep = ({
   cards, editingIdx, editFront, editBack,
   onEditFrontChange, onEditBackChange, onStartEdit, onSaveEdit, onCancelEdit,
@@ -115,6 +123,9 @@ const CardReviewStep = ({
   // MC editing state for inline editing
   const [editMcOptions, setEditMcOptions] = useState<string[]>(['', '', '', '']);
   const [editMcCorrectIndex, setEditMcCorrectIndex] = useState(0);
+
+  // Dialog open state
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data: searchResults = [] } = useTagSearch(tagQuery);
   const aiSuggest = useTagSuggestions();
@@ -149,6 +160,13 @@ const CardReviewStep = ({
       setEditMcCorrectIndex(card.correctIndex ?? 0);
     }
   }, [editingIdx, cards]);
+
+  // Open dialog when editing starts
+  useEffect(() => {
+    if (editingIdx !== null) {
+      setDialogOpen(true);
+    }
+  }, [editingIdx]);
 
   const getTagName = (t: Tag | string) => typeof t === 'string' ? t : t.name;
   const getTagId = (t: Tag | string) => typeof t === 'string' ? t : t.id;
@@ -205,12 +223,29 @@ const CardReviewStep = ({
     } else {
       onSaveEdit();
     }
+    setDialogOpen(false);
+  };
+
+  const handleCancelEdit = () => {
+    onCancelEdit();
+    setDialogOpen(false);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      handleCancelEdit();
+    }
+    setDialogOpen(open);
   };
 
   /**
-   * Renders the card editor form — mirrors ManageDeck.tsx exactly
+   * Renders the card editor form inside dialog — mirrors ManageDeck.tsx exactly
    */
-  const renderCardEditor = (card: GeneratedCard) => {
+  const renderCardEditor = () => {
+    if (editingIdx === null) return null;
+    const card = cards[editingIdx];
+    if (!card) return null;
+
     if (card.type === 'multiple_choice') {
       return (
         <div className="space-y-4">
@@ -265,6 +300,10 @@ const CardReviewStep = ({
             )}
             <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
           </div>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
+            <Button onClick={handleSaveEditClick}>Salvar</Button>
+          </div>
         </div>
       );
     }
@@ -290,6 +329,10 @@ const CardReviewStep = ({
               Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
             </p>
           </div>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
+            <Button onClick={handleSaveEditClick}>Salvar</Button>
+          </div>
         </div>
       );
     }
@@ -298,7 +341,7 @@ const CardReviewStep = ({
     return (
       <div className="space-y-4">
         <div>
-          <Label className="mb-1.5 block">Frente (Pergunta)</Label>
+          <Label className="mb-1.5 block">Frente</Label>
           <LazyRichEditor
             content={editFront}
             onChange={onEditFrontChange}
@@ -307,7 +350,7 @@ const CardReviewStep = ({
           />
         </div>
         <div>
-          <Label className="mb-1.5 block">Verso (Resposta)</Label>
+          <Label className="mb-1.5 block">Verso</Label>
           <LazyRichEditor
             content={editBack}
             onChange={onEditBackChange}
@@ -315,20 +358,12 @@ const CardReviewStep = ({
             hideCloze
           />
         </div>
+        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
+          <Button onClick={handleSaveEditClick}>Salvar</Button>
+        </div>
       </div>
     );
-  };
-
-  const getTypeIcon = (type: string) => {
-    if (type === 'cloze') return <PenLine className="h-3 w-3" />;
-    if (type === 'multiple_choice') return <CheckSquare className="h-3 w-3" />;
-    return <MessageSquareText className="h-3 w-3" />;
-  };
-
-  const getTypeBadge = (type: string) => {
-    if (type === 'cloze') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-primary/40 bg-primary/10 text-primary">Cloze</span>;
-    if (type === 'multiple_choice') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-warning/40 bg-warning/10 text-warning">Múltipla</span>;
-    return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-border">Básico</span>;
   };
 
   return (
@@ -339,59 +374,63 @@ const CardReviewStep = ({
         </p>
       </div>
 
+      {/* ── Card list — compact like ManageDeck ── */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide max-h-[45dvh] sm:max-h-[50vh]">
-        <div className="space-y-2">
+        <div className="space-y-3">
           {cards.map((card, idx) => (
-            <div key={idx} className="rounded-xl border border-border bg-card p-3 space-y-2">
-              {editingIdx === idx ? (
-                <>
-                  {renderCardEditor(card)}
-                  <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={onCancelEdit}>Cancelar</Button>
-                    <Button onClick={handleSaveEditClick} className="gap-1"><Check className="h-3 w-3" /> Salvar</Button>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    {/* Type badge */}
-                    <div className="mb-1">{getTypeBadge(card.type)}</div>
-                    <div
-                      className="text-xs font-bold text-foreground leading-snug [&_img]:max-h-20 [&_img]:rounded"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front) }}
-                    />
-                    {card.type === 'multiple_choice' && card.options ? (
-                      <div className="mt-1.5 rounded-lg border border-border overflow-hidden divide-y divide-border">
-                        {card.options.map((opt, oi) => (
-                          <div key={oi} className={`flex items-center gap-2 px-2.5 py-1.5 text-[11px] ${oi === card.correctIndex ? 'bg-success/10 text-success font-semibold' : 'text-muted-foreground'}`}>
-                            <div className={`flex-shrink-0 h-3.5 w-3.5 rounded border flex items-center justify-center ${oi === card.correctIndex ? 'border-success bg-success text-white' : 'border-muted-foreground/30'}`}>
-                              {oi === card.correctIndex && <span className="text-[7px] font-bold">✓</span>}
-                            </div>
-                            <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(opt) }} />
-                          </div>
-                        ))}
-                      </div>
-                    ) : card.type === 'cloze' ? (
-                      <div className="mt-1.5">
-                        <ClozePreview text={card.front} />
-                      </div>
-                    ) : card.back ? (
-                      <div
-                        className="text-xs text-muted-foreground mt-1 leading-snug [&_img]:max-h-20 [&_img]:rounded"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}
-                      />
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onStartEdit(idx)}><Pencil className="h-3 w-3" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDeleteCard(idx)}><Trash2 className="h-3 w-3" /></Button>
-                  </div>
+            <div key={idx} className="group flex items-center gap-4 rounded-xl border border-border/50 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  {getTypeBadge(card.type)}
                 </div>
-              )}
+                <div
+                  className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none [&_img]:max-h-20 [&_img]:rounded"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front) }}
+                />
+                {card.type === 'multiple_choice' && card.options ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {card.options.length} opções · Resposta: {card.options[card.correctIndex ?? 0]}
+                  </p>
+                ) : card.type === 'cloze' ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {(() => {
+                      const plain = card.front.replace(/<[^>]*>/g, '');
+                      const nums = new Set<number>();
+                      let m;
+                      const re = /\{\{c(\d+)::/g;
+                      while ((m = re.exec(plain)) !== null) nums.add(parseInt(m[1]));
+                      return `${nums.size} lacuna${nums.size !== 1 ? 's' : ''}`;
+                    })()}
+                  </p>
+                ) : card.back ? (
+                  <div
+                    className="mt-1 text-xs text-muted-foreground line-clamp-1 prose prose-xs max-w-none [&_img]:max-h-20 [&_img]:rounded"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back) }}
+                  />
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onStartEdit(idx)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeleteCard(idx)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* ── Edit Dialog — matches ManageDeck ── */}
+      <Dialog open={dialogOpen && editingIdx !== null} onOpenChange={handleDialogOpenChange}>
+        <DialogContent className="max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">Editar Card</DialogTitle>
+          </DialogHeader>
+          {renderCardEditor()}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Tag Selection (mandatory) ── */}
       <div className={`space-y-2.5 border-t pt-3 ${showTagWarning && !hasMinTags ? 'border-destructive' : 'border-border'}`}>
