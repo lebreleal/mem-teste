@@ -2494,6 +2494,13 @@ export type Database = {
         Args: { p_deck_ids: string[] }
         Returns: undefined
       }
+      count_cards_per_deck: {
+        Args: { p_deck_ids: string[] }
+        Returns: {
+          card_count: number
+          deck_id: string
+        }[]
+      }
       deduct_energy: {
         Args: { p_cost: number; p_user_id: string }
         Returns: number
