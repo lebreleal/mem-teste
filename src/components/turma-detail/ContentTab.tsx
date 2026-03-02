@@ -183,7 +183,7 @@ const FolderItem = ({
   </div>
 );
 
-/* ── Top Deck Card (horizontal featured card) ── */
+/* ── Top Deck Card (same layout as PublicDeckCard in Discover tab) ── */
 const TopDeckCard = ({
   td,
   onClick,
@@ -196,19 +196,25 @@ const TopDeckCard = ({
   downloads: number;
 }) => (
   <div
-    className="flex-shrink-0 w-40 cursor-pointer rounded-xl border border-border bg-card p-3 hover:border-primary/40 hover:shadow-md transition-all snap-start"
+    className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
     onClick={onClick}
   >
-    <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 mb-2">
-      <Layers className="h-5 w-5 text-primary" />
+    <div className="space-y-1">
+      <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
+      <p className="text-[11px] text-muted-foreground">{td.card_count ?? 0} cards</p>
+      {downloads > 0 && (
+        <p className="text-[11px] text-muted-foreground">{downloads} inscritos</p>
+      )}
     </div>
-    <h3 className="font-semibold text-xs text-foreground line-clamp-2 leading-snug mb-1">{td.deck_name}</h3>
-    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-      <span>{td.card_count ?? 0} cards</span>
-      {downloads > 0 && <span>· {downloads} inscritos</span>}
-    </div>
-    {inCollection && (
-      <span className="inline-flex items-center mt-2 rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">✓ Inscrito</span>
+
+    {inCollection ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Inscrito
+      </span>
+    ) : (
+      <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+        Ver deck
+      </span>
     )}
   </div>
 );
@@ -430,7 +436,7 @@ const ContentTab = () => {
               <h2 className="font-display text-sm font-bold text-foreground mb-2">
                 Mais Inscritos
               </h2>
-              <div className="flex gap-2.5 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {topDecks.map((td: any) => {
                   const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
                   const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
