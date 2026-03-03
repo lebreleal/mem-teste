@@ -3,7 +3,7 @@
  * full management view for members.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -345,14 +345,33 @@ const MemberCommunityView = () => {
   );
 };
 
-// ─── Router: decide public or member view ───
+// ─── Router: auto-join public communities, skip preview ───
 const TurmaDetailInner = () => {
-  const { turma, isMember, isLoading } = useTurmaDetail();
+  const { turma, isMember, isLoading, turmaId, toast, navigate } = useTurmaDetail();
+  const { user } = useAuth();
+  const { joinTurmaById } = useTurmas();
+  const [autoJoining, setAutoJoining] = useState(false);
 
-  if (isLoading || !turma) {
+  // Auto-join public communities (no preview screen)
+  useEffect(() => {
+    if (isLoading || !turma || isMember || autoJoining) return;
+    if (!user) { navigate('/auth'); return; }
+    // Only auto-join public communities
+    if (turma.is_private) return;
+    setAutoJoining(true);
+    joinTurmaById.mutateAsync(turmaId)
+      .catch((e: any) => {
+        // If already a member, just continue
+        if (!e.message?.includes('already')) {
+          toast({ title: e.message || 'Erro ao entrar', variant: 'destructive' });
+        }
+      })
+      .finally(() => setAutoJoining(false));
+  }, [isLoading, turma, isMember, autoJoining, user, turmaId]);
+
+  if (isLoading || !turma || autoJoining || (!isMember && !turma?.is_private)) {
     return (
       <div className="min-h-screen bg-background">
-        {/* Header skeleton */}
         <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
         <div className="container mx-auto px-4 max-w-2xl py-6 space-y-4">
           <Skeleton className="h-8 w-48" />
@@ -368,8 +387,9 @@ const TurmaDetailInner = () => {
     );
   }
 
-  if (isMember) return <MemberCommunityView />;
-  return <PublicCommunityView />;
+  // Private communities that user isn't a member of: show preview
+  if (!isMember && turma?.is_private) return <PublicCommunityView />;
+  return <MemberCommunityView />;
 };
 
 const TurmaDetail = () => (

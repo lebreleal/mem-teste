@@ -1127,8 +1127,35 @@ const PublicDeckPreview = () => {
         }
       }
 
-      const { error } = await supabase.from('decks').insert(insertData);
+      const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
       if (error) throw error;
+
+      // Copy cards from source deck to the new linked deck
+      if (newDeck) {
+        const sourceDeckId = deckId!;
+        const BATCH = 500;
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data: cards } = await supabase
+            .from('cards')
+            .select('front_content, back_content, card_type')
+            .eq('deck_id', sourceDeckId)
+            .range(offset, offset + BATCH - 1)
+            .order('created_at', { ascending: true });
+          if (!cards || cards.length === 0) { hasMore = false; break; }
+          const newCards = cards.map((c: any) => ({
+            deck_id: newDeck.id,
+            front_content: c.front_content,
+            back_content: c.back_content,
+            card_type: c.card_type ?? 'basic',
+          }));
+          await supabase.from('cards').insert(newCards as any);
+          if (cards.length < BATCH) hasMore = false;
+          else offset += BATCH;
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: '✅ Deck adicionado aos seus baralhos!' });

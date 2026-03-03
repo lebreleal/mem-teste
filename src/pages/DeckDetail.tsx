@@ -71,13 +71,31 @@ const DeckDetailContent = () => {
 };
 
 const DeckTagsSection = ({ deckId }: { deckId: string }) => {
-  const { deck } = useDeckDetail();
+  const { deck, decks } = useDeckDetail();
   const { data: tags = [] } = useDeckTags(deckId);
   const { addTag, removeTag } = useDeckTagMutations(deckId);
 
+  // Check if this is a community-linked deck (imported from turma)
+  const isLinkedDeck = (() => {
+    if ((deck as any)?.source_turma_deck_id) return true;
+    let parentId = (deck as any)?.parent_deck_id;
+    while (parentId) {
+      const parent = decks.find((d: any) => d.id === parentId);
+      if (!parent) break;
+      if ((parent as any).source_turma_deck_id) return true;
+      parentId = (parent as any).parent_deck_id;
+    }
+    return false;
+  })();
+
+  // Find the source deck_id from turma_decks for suggestion context
+  const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
+
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">Tags</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        Tags {isLinkedDeck && <span className="text-[10px] text-muted-foreground/60">(sugestões via comunidade)</span>}
+      </p>
       <TagInput
         tags={tags}
         onAdd={(tag) => addTag.mutate(tag)}
