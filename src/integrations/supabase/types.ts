@@ -2521,6 +2521,10 @@ export type Database = {
           deck_id: string
         }[]
       }
+      count_descendant_cards_by_state: {
+        Args: { p_deck_id: string }
+        Returns: Json
+      }
       deduct_energy: {
         Args: { p_cost: number; p_user_id: string }
         Returns: number
@@ -2588,6 +2592,30 @@ export type Database = {
           review_count: number
           reviewed_today: number
         }[]
+      }
+      get_descendant_cards_page: {
+        Args: { p_deck_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          back_content: string
+          card_type: string
+          created_at: string
+          deck_id: string
+          difficulty: number
+          front_content: string
+          id: string
+          last_reviewed_at: string | null
+          learning_step: number
+          scheduled_date: string
+          stability: number
+          state: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cards"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_forecast_params: {
         Args: { p_deck_ids: string[]; p_user_id: string }
