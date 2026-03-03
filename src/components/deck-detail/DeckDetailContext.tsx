@@ -3,7 +3,7 @@
  * can consume via useDeckDetail() instead of receiving long prop lists.
  */
 
-import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -290,6 +290,56 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const allCardsLoading = cardCountsLoading || displayCardsLoading;
   // allCards = displayCards (paginated full content for rendering)
   const allCards = displayCards;
+
+  // ─── Auto-sync: if linked deck has 0 cards, copy from source ───
+  const syncAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (syncAttemptedRef.current) return;
+    if (!deck || !user || !cardCounts) return;
+    const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
+    if (!sourceTurmaDeckId || cardCounts.total > 0) return;
+    syncAttemptedRef.current = true;
+    (async () => {
+      try {
+        // Find the source deck_id from turma_decks
+        const { data: td } = await supabase
+          .from('turma_decks')
+          .select('deck_id')
+          .eq('id', sourceTurmaDeckId)
+          .maybeSingle();
+        if (!td?.deck_id) return;
+        // Copy cards in batches
+        const BATCH = 500;
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data: cards } = await supabase
+            .from('cards')
+            .select('front_content, back_content, card_type')
+            .eq('deck_id', td.deck_id)
+            .range(offset, offset + BATCH - 1)
+            .order('created_at', { ascending: true });
+          if (!cards || cards.length === 0) { hasMore = false; break; }
+          await supabase.from('cards').insert(
+            cards.map((c: any) => ({
+              deck_id: deckId,
+              front_content: c.front_content,
+              back_content: c.back_content,
+              card_type: c.card_type ?? 'basic',
+              state: 0, stability: 0, difficulty: 0,
+            })) as any
+          );
+          if (cards.length < BATCH) hasMore = false;
+          else offset += BATCH;
+        }
+        // Refresh card data
+        queryClient.invalidateQueries({ queryKey: ['card-counts', deckId] });
+        queryClient.invalidateQueries({ queryKey: ['cards-display', deckId] });
+      } catch (e) {
+        console.error('Auto-sync cards failed:', e);
+      }
+    })();
+  }, [deck, user, cardCounts, deckId, queryClient]);
 
   const loadMoreCards = useCallback(() => {
     setDisplayLimit(prev => prev + CARDS_PAGE);

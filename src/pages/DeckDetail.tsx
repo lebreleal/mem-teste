@@ -88,14 +88,26 @@ const DeckTagsSection = ({ deckId }: { deckId: string }) => {
     return false;
   })();
 
-  // Find the source deck_id from turma_decks for suggestion context
-  const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
+  // Linked decks: show tags read-only, no editing
+  if (isLinkedDeck) {
+    if (tags.length === 0) return null;
+    return (
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">Tags</p>
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag: any) => (
+            <span key={tag.id} className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              {tag.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">
-        Tags {isLinkedDeck && <span className="text-[10px] text-muted-foreground/60">(sugestões via comunidade)</span>}
-      </p>
+      <p className="text-xs font-medium text-muted-foreground">Tags</p>
       <TagInput
         tags={tags}
         onAdd={(tag) => addTag.mutate(tag)}
