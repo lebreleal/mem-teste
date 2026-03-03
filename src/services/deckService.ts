@@ -294,6 +294,41 @@ async function insertRevlogBatch(
   }
 }
 
+/** Retry helper with exponential backoff for import batches. */
+async function importRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = err?.message || '';
+      const isRetryable = msg.includes('Failed to fetch') || msg.includes('ERR_') ||
+        msg.includes('NetworkError') || msg.includes('PGRST000') ||
+        msg.includes('timeout') || msg.includes('AbortError') ||
+        (err?.code && String(err.code).startsWith('5'));
+      if (attempt < maxRetries - 1 && isRetryable) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+/** Estimate avg card size to determine adaptive batch size. */
+function getAdaptiveBatchSize(cards: CardImportInput[], defaultSize = 500): number {
+  if (cards.length === 0) return defaultSize;
+  const sample = cards.slice(0, Math.min(50, cards.length));
+  const avgSize = sample.reduce((sum, c) => sum + (c.frontContent?.length || 0) + (c.backContent?.length || 0), 0) / sample.length;
+  if (avgSize > 10000) return 50;   // Very heavy (base64 images)
+  if (avgSize > 5000) return 100;
+  if (avgSize > 2000) return 200;
+  return defaultSize;
+}
+
+/** Progress callback type for import operations. */
+export type ImportProgressCallback = (current: number, total: number) => void;
+
 /** Import a deck with cards and optional progress/revlog. Returns the new deck. */
 export async function importDeck(
   userId: string,
@@ -302,6 +337,7 @@ export async function importDeck(
   cards: CardImportInput[],
   algorithmMode?: string,
   revlog?: RevlogImportEntry[],
+  onProgress?: ImportProgressCallback,
 ) {
   const { data: newDeck, error: deckErr } = await supabase
     .from('decks')
@@ -323,29 +359,66 @@ export async function importDeck(
     ...(c.progress?.lastReviewedAt ? { last_reviewed_at: c.progress.lastReviewedAt } : {}),
   }));
 
-  // Batch insert and collect IDs for revlog mapping
-  const BATCH_SIZE = 500;
+  const BATCH_SIZE = getAdaptiveBatchSize(cards);
   const cardIdMap = new Map<number, string>();
-  let globalIdx = 0;
+  let insertedCount = 0;
+  const totalCards = cards.length;
+  const failedBatches: { batch: typeof rows; startIdx: number }[] = [];
 
-  const CONCURRENT = 5;
+  const CONCURRENT = 3;
   const cardBatches: { batch: typeof rows; startIdx: number }[] = [];
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     cardBatches.push({ batch: rows.slice(i, i + BATCH_SIZE), startIdx: i });
   }
+
   for (let i = 0; i < cardBatches.length; i += CONCURRENT) {
     const group = cardBatches.slice(i, i + CONCURRENT);
-    const results = await Promise.all(
-      group.map(g => supabase.from('cards').insert(g.batch as any).select('id'))
+    const results = await Promise.allSettled(
+      group.map(g => importRetry(async () => await supabase.from('cards').insert(g.batch as any).select('id')))
     );
     for (let g = 0; g < results.length; g++) {
-      const { data: inserted, error: cardsErr } = results[g];
-      if (cardsErr) throw cardsErr;
-      if (inserted) {
-        const startIdx = group[g].startIdx;
-        for (let j = 0; j < inserted.length; j++) {
-          cardIdMap.set(startIdx + j, inserted[j].id);
-          globalIdx++;
+      const result = results[g];
+      if (result.status === 'fulfilled') {
+        const { data: inserted, error: cardsErr } = result.value;
+        if (cardsErr) {
+          console.warn('Card batch insert error (continuing):', cardsErr.message);
+          failedBatches.push(group[g]);
+        } else if (inserted) {
+          const startIdx = group[g].startIdx;
+          for (let j = 0; j < inserted.length; j++) {
+            cardIdMap.set(startIdx + j, inserted[j].id);
+          }
+          insertedCount += inserted.length;
+        }
+      } else {
+        console.warn('Card batch failed after retries (continuing):', result.reason?.message);
+        failedBatches.push(group[g]);
+      }
+    }
+    onProgress?.(insertedCount, totalCards);
+  }
+
+  // Retry failed batches once more with smaller batch size
+  if (failedBatches.length > 0) {
+    console.log(`Retrying ${failedBatches.length} failed batches with smaller size...`);
+    for (const fb of failedBatches) {
+      const smallBatch = 50;
+      for (let i = 0; i < fb.batch.length; i += smallBatch) {
+        const chunk = fb.batch.slice(i, i + smallBatch);
+        const chunkStartIdx = fb.startIdx + i;
+        try {
+          const { data: inserted, error } = await importRetry(async () =>
+            await supabase.from('cards').insert(chunk as any).select('id')
+          );
+          if (!error && inserted) {
+            for (let j = 0; j < inserted.length; j++) {
+              cardIdMap.set(chunkStartIdx + j, inserted[j].id);
+            }
+            insertedCount += inserted.length;
+            onProgress?.(insertedCount, totalCards);
+          }
+        } catch (retryErr: any) {
+          console.warn('Retry also failed for chunk:', retryErr?.message);
         }
       }
     }
@@ -356,7 +429,7 @@ export async function importDeck(
     await insertRevlogBatch(userId, revlog, cardIdMap);
   }
   
-  return newDeck;
+  return { deck: newDeck, insertedCount, totalCards };
 }
 
 /** Recursive subdeck type for N-level hierarchy */
@@ -376,6 +449,7 @@ export async function importDeckWithSubdecks(
   subdecks: SubdeckNode[],
   algorithmMode?: string,
   revlog?: RevlogImportEntry[],
+  onProgress?: ImportProgressCallback,
 ) {
   const globalCardIdMap = new Map<number, string>();
 
@@ -438,9 +512,12 @@ export async function importDeckWithSubdecks(
     queue = nextQueue;
   }
 
-  // 3. Bulk-insert all cards (parallel batches for speed)
-  const CARD_BATCH = 500;
-  const CONCURRENT = 5;
+  // 3. Bulk-insert all cards (parallel batches for speed) with retry & progress
+  const CARD_BATCH = getAdaptiveBatchSize(cards);
+  const CONCURRENT = 3;
+  let insertedCount = 0;
+  const totalCards = cards.length;
+  const failedJobs: { rows: any[]; originalIndices: number[] }[] = [];
 
   // Flatten all card rows with their original indices for mapping
   const allCardJobs: { deckId: string; rows: any[]; originalIndices: number[] }[] = [];
@@ -470,19 +547,55 @@ export async function importDeckWithSubdecks(
     }
   }
 
-  // Execute card inserts in parallel groups
+  // Execute card inserts in parallel groups with retry and error tolerance
   for (let i = 0; i < allCardJobs.length; i += CONCURRENT) {
     const group = allCardJobs.slice(i, i + CONCURRENT);
-    const results = await Promise.all(
-      group.map(job => supabase.from('cards').insert(job.rows as any).select('id'))
+    const results = await Promise.allSettled(
+      group.map(job => importRetry(async () => await supabase.from('cards').insert(job.rows as any).select('id')))
     );
     for (let g = 0; g < results.length; g++) {
-      const { data: inserted, error } = results[g];
-      if (error) throw error;
-      if (inserted) {
-        const job = group[g];
-        for (let j = 0; j < inserted.length; j++) {
-          globalCardIdMap.set(job.originalIndices[j], (inserted[j] as any).id);
+      const result = results[g];
+      if (result.status === 'fulfilled') {
+        const { data: inserted, error } = result.value;
+        if (error) {
+          console.warn('Card batch error (continuing):', error.message);
+          failedJobs.push(group[g]);
+        } else if (inserted) {
+          const job = group[g];
+          for (let j = 0; j < inserted.length; j++) {
+            globalCardIdMap.set(job.originalIndices[j], (inserted[j] as any).id);
+          }
+          insertedCount += inserted.length;
+        }
+      } else {
+        console.warn('Card batch failed after retries (continuing):', result.reason?.message);
+        failedJobs.push(group[g]);
+      }
+    }
+    onProgress?.(insertedCount, totalCards);
+  }
+
+  // Retry failed jobs with smaller batches
+  if (failedJobs.length > 0) {
+    console.log(`Retrying ${failedJobs.length} failed card jobs...`);
+    for (const fj of failedJobs) {
+      const smallBatch = 50;
+      for (let i = 0; i < fj.rows.length; i += smallBatch) {
+        const chunk = fj.rows.slice(i, i + smallBatch);
+        const chunkIndices = fj.originalIndices.slice(i, i + smallBatch);
+        try {
+          const { data: inserted, error } = await importRetry(async () =>
+            await supabase.from('cards').insert(chunk as any).select('id')
+          );
+          if (!error && inserted) {
+            for (let j = 0; j < inserted.length; j++) {
+              globalCardIdMap.set(chunkIndices[j], (inserted[j] as any).id);
+            }
+            insertedCount += inserted.length;
+            onProgress?.(insertedCount, totalCards);
+          }
+        } catch (retryErr: any) {
+          console.warn('Retry also failed:', retryErr?.message);
         }
       }
     }
@@ -493,7 +606,7 @@ export async function importDeckWithSubdecks(
     await insertRevlogBatch(userId, revlog, globalCardIdMap);
   }
 
-  return parentDeck;
+  return { deck: parentDeck, insertedCount, totalCards };
 }
 
 /** Get turma navigation info for a turma deck. */
