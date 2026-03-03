@@ -1,91 +1,69 @@
 
 
-## Plano: Refatorar generate-deck para usar Tool Calling com Structured Outputs
+## Plano: Substituir o Prompt por Versão Especializada em Medicina + Engenharia de Prompt Otimizada
 
-### Problema atual
+### Análise do Estado Atual
 
-O prompt está correto e completo, mas o GPT não respeita bem o formato JSON quando instruído via texto livre. O resultado: cards malformados, parsing frágil (4 níveis de fallback), distribuição ignorada, e clozes sem a sintaxe `{{c1::}}`.
+O prompt atual (linhas 5-47) é **genérico** — fala de "SuperMemo" e "método ativo" mas não tem foco médico. A distribuição é 50/30/20 (cloze/basic/MCQ). O prompt do usuário é bom e mais adequado para medicina, mas tem problemas de engenharia:
 
-### Solução: `response_format` com `json_schema` + `strict: true`
+1. **Distribuição 60/30/10** — MCQ a 10% é pouco; com Structured Outputs e `strict: true`, podemos ser mais agressivos
+2. **Falta de exemplos concretos** no system prompt — o GPT precisa de few-shot para calibrar qualidade
+3. **Instruções duplicadas** entre system e user prompt — confunde o modelo sobre prioridade
 
-A OpenAI oferece **Structured Outputs** — quando você passa um JSON Schema com `strict: true` no `response_format`, o modelo é **forçado** a gerar output que corresponde exatamente ao schema. Isso elimina:
-- Todo o parsing manual (linhas 306-381 de fallbacks)
-- Cards com tipo errado
-- JSON malformado/truncado
-- Clozes sem sintaxe correta
+### Proposta: Fusão Inteligente
+
+Mesclar o melhor do prompt atual (estrutura técnica, anti-padrões, regras de cloze) com o prompt médico do usuário (precisão terminológica, cobertura exaustiva, distratores plausíveis). O resultado é um prompt **unificado** que funciona para medicina E para qualquer área.
 
 ### Alterações em `supabase/functions/generate-deck/index.ts`
 
-**1. Usar `response_format` com JSON Schema em vez de pedir JSON no prompt**
+**1. Novo `DEFAULT_SYSTEM_PROMPT` — fusão otimizada**
 
-```typescript
-response_format: {
-  type: "json_schema",
-  json_schema: {
-    name: "flashcards",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        cards: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              front: { type: "string" },
-              back: { type: "string" },
-              type: { type: "string", enum: ["basic", "cloze", "multiple_choice"] },
-              options: { type: "array", items: { type: "string" } },
-              correctIndex: { type: "number" }
-            },
-            required: ["front", "back", "type", "options", "correctIndex"],
-            additionalProperties: false
-          }
-        }
-      },
-      required: ["cards"],
-      additionalProperties: false
-    }
-  }
-}
+Substituir linhas 5-47 por um prompt que:
+- Mantém as 11 regras pedagógicas existentes (já validadas)
+- Adiciona as 6 Diretrizes de Ouro do usuário como princípios de topo
+- Remove redundâncias (anti-padrões listados 2x atualmente)
+- Adiciona **few-shot examples** dentro do system prompt (3 exemplos concretos de cada tipo) — isso é o que mais impacta qualidade no GPT
+- Reforça: "MEMORIZAÇÃO DE PRECISÃO" — termos técnicos, valores, classificações devem virar cloze
+- Reforça: "COBERTURA EXAUSTIVA" — varredura linha por linha, cada detalhe vira card
+
+**2. Ajuste de distribuição em `getFormatInstructions`**
+
+Quando os 3 formatos estão ativos (linha 136-140):
+- Cloze: ~60% (subiu de 50%) — "Rei" para memorização técnica
+- Basic: ~30% (mantém) — mecanismos, causa-efeito
+- MCQ: ~10% (desceu de 20%) — apenas nível residência, distratores plausíveis
+
+**3. User prompt mais enxuto**
+
+O user prompt (linhas 257-283) tem muita repetição do system prompt. Reduzir para:
+- Contagem de cards + nível de detalhe
+- Instruções customizadas do usuário
+- Formatos permitidos + regras de campos
+- Conteúdo-base
+- Remover regras pedagógicas que já estão no system (o GPT prioriza system prompt)
+
+**4. Few-shot examples no system prompt**
+
+Adicionar 2-3 exemplos concretos de cada tipo de card direto no system prompt. Isso é a técnica de prompt engineering que mais impacta qualidade em modelos GPT:
+
 ```
+EXEMPLO CLOZE IDEAL:
+"A enzima responsável pela conversão de angiotensinogênio em angiotensina I é a {{c1::renina}}, secretada pelas células {{c2::justaglomerulares}} do rim."
 
-> Nota: com `strict: true`, todos os campos precisam estar em `required` (OpenAI exige). `options` e `correctIndex` serão `[]` e `0` para cards que não são MCQ — isso é esperado e tratado no pós-processamento.
+EXEMPLO BASIC IDEAL:
+Front: "Por que a aldosterona causa hipocalemia?"
+Back: "Reabsorve Na+ e secreta K+ no túbulo coletor."
 
-**2. Limpar o prompt — remover instruções de formato JSON**
-
-- Remover `getOutputExamples()` completamente
-- Remover "Responda APENAS com o JSON" do system prompt
-- Remover a linha "FORMATO DE SAÍDA" do user prompt
-- O prompt fica 100% focado em **qualidade pedagógica** — o schema cuida do formato
-
-**3. Eliminar todo o bloco de parsing frágil (linhas 306-381)**
-
-Substituir por simplesmente:
-```typescript
-const aiData = await aiResponse.json();
-const parsed = JSON.parse(aiData.choices[0].message.content);
-let cards = parsed.cards;
+EXEMPLO MCQ IDEAL:
+Front: "Qual caspase inicia a via extrínseca da apoptose?"
+Options: ["Caspase-9", "Caspase-8", "Caspase-3", "Caspase-10"]
+correctIndex: 1
 ```
-
-Com structured outputs, o JSON é **garantido** válido. Zero fallbacks necessários.
-
-**4. Aumentar `max_tokens` para 16384 → 32768**
-
-GPT-4o suporta até 16k de output, mas GPT-4o-mini suporta até 16k também. Manter 16384 mas usar `max_completion_tokens` (o campo correto para a API da OpenAI) em vez de `max_tokens`.
-
-**5. Prompt refinado — foco em qualidade, não em formato**
-
-O system prompt permanece praticamente igual (já está excelente), com estas mudanças:
-- Remover "Responda APENAS com o JSON solicitado" (desnecessário com structured outputs)
-- Remover exemplos de JSON do user prompt (o schema já define a estrutura)
-- Manter 100% das regras pedagógicas (SuperMemo, anti-padrões, método ativo, etc.)
 
 ### Resumo de impacto
 
 - **1 arquivo editado**: `supabase/functions/generate-deck/index.ts`
-- **~80 linhas removidas** (parsing frágil + exemplos de output)
-- **~10 linhas adicionadas** (schema no request body)
-- **Zero breaking changes** no frontend — o response continua com `{ cards: [...], usage: {...} }`
-- Qualidade dos cards melhora drasticamente porque o modelo não precisa mais "decidir" o formato
+- **~60 linhas alteradas** (system prompt + user prompt + distribuição)
+- **Zero breaking changes** — schema e response format inalterados
+- **Qualidade esperada**: cards muito mais precisos tecnicamente, com cobertura exaustiva e distribuição correta
 
