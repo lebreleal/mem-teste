@@ -75,14 +75,16 @@ const DeckTagsSection = ({ deckId }: { deckId: string }) => {
   const { data: tags = [] } = useDeckTags(deckId);
   const { addTag, removeTag } = useDeckTagMutations(deckId);
 
-  // Check if this is a community-linked deck (imported from turma)
+  // Check if this is a community-linked deck (imported from turma or public follow)
   const isLinkedDeck = (() => {
     if ((deck as any)?.source_turma_deck_id) return true;
+    if ((deck as any)?.source_listing_id) return true;
+    if ((deck as any)?.is_live_deck) return true;
     let parentId = (deck as any)?.parent_deck_id;
     while (parentId) {
       const parent = decks.find((d: any) => d.id === parentId);
       if (!parent) break;
-      if ((parent as any).source_turma_deck_id) return true;
+      if ((parent as any).source_turma_deck_id || (parent as any).source_listing_id || (parent as any).is_live_deck) return true;
       parentId = (parent as any).parent_deck_id;
     }
     return false;
