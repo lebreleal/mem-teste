@@ -44,9 +44,7 @@ MÉTODO ATIVO (obrigatório):
 - INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
 - CONEXÕES: Crie cards que conectam conceitos entre si ("Como X se relaciona com Y?").
 - APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos em vez de definições abstratas.
-- CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").
-
-Responda APENAS com o JSON solicitado, sem texto adicional.`;
+- CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -67,7 +65,6 @@ function getFormatInstructions(formats: string[]): string {
     ? `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
 
   REGRA ABSOLUTA: TODOS os cartões gerados DEVEM ser do tipo "cloze" com a sintaxe {{c1::resposta}}.
-  Se o campo "front" NÃO contiver {{c1::, o cartão será DESCARTADO automaticamente.
 
   COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
    A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta.
@@ -130,8 +127,6 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    // Build pedagogical distribution based on SuperMemo principles
-    // Cloze dominates (50%), Basic for reasoning (30%), MCQ for differentiation (20%)
     const hasAll3 = formatNames.length === 3;
     const hasCloze = formats.includes("cloze");
     const hasBasic = formats.includes("qa") || formats.includes("definition");
@@ -171,34 +166,47 @@ function getFormatInstructions(formats: string[]): string {
   return parts.join("\n");
 }
 
-function getOutputExamples(formats: string[]): string {
-  const examples: string[] = [];
-  if (formats.includes("definition") || formats.includes("qa")) {
-    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica, impedindo o colapso pulmonar.","type":"basic"}');
-  }
-  if (formats.includes("cloze")) {
-    examples.push('{"front":"A {{c1::proteína p53}} atua como supressor tumoral ao induzir {{c2::apoptose}} em células com DNA danificado.","back":"","type":"cloze"}');
-  }
-  if (formats.includes("multiple_choice")) {
-    examples.push('{"front":"Paciente com dispneia, murmúrio vesicular abolido à esquerda e desvio de traqueia para a direita. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Pneumotórax hipertensivo","Derrame pleural","Atelectasia","Pneumonia lobar"],"correctIndex":0}');
-  }
-  if (examples.length === 0) {
-    examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica.","type":"basic"}');
-  }
-  return `[\n  ${examples.join(',\n  ')}\n]`;
-}
-
 function mapCardType(type: string, allowedFormats: string[]): string {
   if (type === "cloze" && allowedFormats.includes("cloze")) return "cloze";
   if (type === "multiple_choice" && allowedFormats.includes("multiple_choice")) return "multiple_choice";
   if ((type === "basic" || type === "qa" || type === "definition") && (allowedFormats.includes("qa") || allowedFormats.includes("definition"))) return "basic";
 
-  // Type not allowed — map to first allowed format
   if (allowedFormats.includes("qa") || allowedFormats.includes("definition")) return "basic";
   if (allowedFormats.includes("cloze")) return "cloze";
   if (allowedFormats.includes("multiple_choice")) return "multiple_choice";
   return "basic";
 }
+
+/** OpenAI Structured Outputs JSON Schema — forces exact card structure */
+const FLASHCARDS_SCHEMA = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "flashcards",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        cards: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              front: { type: "string" },
+              back: { type: "string" },
+              type: { type: "string", enum: ["basic", "cloze", "multiple_choice"] },
+              options: { type: "array", items: { type: "string" } },
+              correctIndex: { type: "number" },
+            },
+            required: ["front", "back", "type", "options", "correctIndex"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["cards"],
+      additionalProperties: false,
+    },
+  },
+};
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -232,7 +240,6 @@ Deno.serve(async (req) => {
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
-    // Bloco 5: increased max from 50 to 80 for comprehensive batches
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
@@ -240,10 +247,9 @@ Deno.serve(async (req) => {
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
     if (customInstructions && /prova|exame|questões/i.test(customInstructions)) {
-      systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
+      systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade.";
     }
 
-    // Bloco 5: when cardCount=0 (auto), don't impose a numeric limit — let detailLevel drive quantity
     const countInstruction = requestedCount > 0
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
@@ -266,20 +272,31 @@ ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigator
 FORMATOS PERMITIDOS (use SOMENTE estes):
 ${getFormatInstructions(formats)}
 
+REGRAS DE ESTRUTURA DOS CAMPOS:
+- Para "basic": "front" = pergunta, "back" = resposta, "options" = [], "correctIndex" = 0
+- Para "cloze": "front" = afirmação com {{c1::...}}, "back" = "", "options" = [], "correctIndex" = 0
+- Para "multiple_choice": "front" = pergunta, "back" = "", "options" = [4-5 alternativas], "correctIndex" = índice correto (0-based)
+
 CONTEÚDO-BASE (use APENAS isto para gerar os cartões):
 ---
 ${trimmedContent}
----
-
-FORMATO DE SAÍDA (apenas JSON array, sem texto extra, sem markdown):
-${getOutputExamples(formats)}`;
+---`;
 
     console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 16384 }),
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        temperature,
+        max_completion_tokens: 16384,
+        response_format: FLASHCARDS_SCHEMA,
+      }),
     });
 
     if (!aiResponse.ok) {
@@ -292,9 +309,10 @@ ${getOutputExamples(formats)}`;
     }
 
     const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content ?? "";
     const finishReason = aiData.choices?.[0]?.finish_reason ?? "unknown";
-    console.log("AI response length:", rawContent.length, "finish_reason:", finishReason, "first 200 chars:", rawContent.substring(0, 200));
+    const rawContent = aiData.choices?.[0]?.message?.content ?? "";
+
+    console.log("AI finish_reason:", finishReason, "content length:", rawContent.length);
 
     const usage = {
       prompt_tokens: aiData.usage?.prompt_tokens || 0,
@@ -302,83 +320,24 @@ ${getOutputExamples(formats)}`;
       total_tokens: aiData.usage?.total_tokens || 0,
     };
 
-    // Clean AI response: strip markdown fences, BOM, zero-width chars, control chars
-    let jsonStr = rawContent
-      .replace(/^\uFEFF/, '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-      .trim();
-
-    // Fix unescaped newlines inside JSON string values (common AI output issue)
-    // This runs BEFORE any JSON.parse attempt
-    jsonStr = jsonStr.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
-      return match.replace(/(?<!\\)\n/g, '\\n').replace(/(?<!\\)\r/g, '\\r');
-    });
-
-    const m = jsonStr.match(/\[[\s\S]*\]/);
-    if (m) {
-      jsonStr = m[0];
-    } else {
-      // Try to repair truncated JSON array (no closing bracket)
-      const arrStart = rawContent.indexOf('[');
-      if (arrStart !== -1) {
-        const raw = rawContent.slice(arrStart);
-        const lastBrace = raw.lastIndexOf('}');
-        if (lastBrace !== -1) {
-          jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
-        } else {
-          jsonStr = '[]';
-        }
-      }
+    // With Structured Outputs, the JSON is guaranteed valid by the API
+    // The only failure case is finish_reason === "length" (truncated output)
+    if (finishReason === "length") {
+      console.error("Output truncated (finish_reason=length)");
+      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      return jsonResponse({ error: "O conteúdo é muito extenso e a resposta foi truncada. Tente com menos páginas ou reduza a quantidade de cartões.", usage }, 500);
     }
 
-    // Fix common JSON issues: trailing commas before ] or }
-    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-
-    let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
-    try { cards = JSON.parse(jsonStr); } catch {
-      // Second attempt: strip the last incomplete object and try again
-      try {
-        const lastComplete = jsonStr.lastIndexOf('},');
-        if (lastComplete !== -1) {
-          cards = JSON.parse(jsonStr.slice(0, lastComplete + 1) + ']');
-        } else {
-          const lastObj = jsonStr.lastIndexOf('}');
-          if (lastObj !== -1) {
-            cards = JSON.parse(jsonStr.slice(0, lastObj + 1) + ']');
-          } else {
-            throw new Error("no recoverable JSON");
-          }
-        }
-      } catch {
-        // Third attempt: aggressive newline/tab fix + trailing comma cleanup
-        try {
-          let fixed = jsonStr;
-          // Replace all literal newlines/tabs inside strings
-          fixed = fixed.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
-            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-          });
-          fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-          cards = JSON.parse(fixed);
-        } catch {
-          // Fourth attempt: extract individual JSON objects with regex
-          try {
-            const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
-            if (objMatches.length > 0) {
-              cards = JSON.parse('[' + objMatches.map(m => m[0]).join(',') + ']');
-            } else {
-              throw new Error("no objects found");
-            }
-          } catch {
-            console.error("Parse failed, raw:", rawContent.substring(0, 500));
-            if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-            return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
-          }
-        }
-      }
+    let parsed: { cards: { front: string; back: string; type: string; options: string[]; correctIndex: number }[] };
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      console.error("Structured output parse failed (unexpected):", rawContent.substring(0, 300));
+      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente.", usage }, 500);
     }
+
+    let cards = parsed.cards;
 
     if (!Array.isArray(cards) || cards.length === 0) {
       if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
@@ -406,11 +365,10 @@ ${getOutputExamples(formats)}`;
         front: c.front || "",
         back: mappedType === "cloze" ? "" : (c.back || ""),
         type: mappedType,
-        ...(mappedType === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
+        ...(mappedType === "multiple_choice" && c.options?.length ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
       };
     });
 
-    // Only log if not skipped (client will aggregate and log once)
     if (!skipLog) {
       await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
     }
