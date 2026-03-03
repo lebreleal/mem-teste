@@ -7,13 +7,13 @@ const MODEL_CONFIG = {
     label: 'Flash',
     description: 'Rápido e eficiente',
     costMultiplier: 1,
-    backendModel: 'gemini-2.5-flash',
+    backendModel: 'gpt-4o-mini',
   },
   pro: {
     label: 'Pro',
     description: 'Raciocínio avançado',
     costMultiplier: 5,
-    backendModel: 'gemini-2.5-pro',
+    backendModel: 'gpt-4o',
   },
 } as const;
 

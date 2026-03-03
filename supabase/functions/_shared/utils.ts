@@ -25,14 +25,14 @@ export function handleCors(req: Request): Response | null {
 
 /** Centralized AI config */
 export function getAIConfig() {
-  const apiKey = Deno.env.get("GOOGLE_AI_KEY");
-  const url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const url = "https://api.openai.com/v1/chat/completions";
   return { apiKey, url };
 }
 
 /** Fetch model mapping from ai_settings table. */
 export async function getModelMap(supabase: any): Promise<Record<string, string>> {
-  const map: Record<string, string> = { pro: "gemini-2.5-pro", flash: "gemini-2.5-flash" };
+  const map: Record<string, string> = { pro: "gpt-4o", flash: "gpt-4o-mini" };
   try {
     const { data } = await supabase
       .from("ai_settings")

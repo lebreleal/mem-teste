@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAIPrompts, type AIPrompt } from '@/hooks/useAIPrompts';
@@ -11,8 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const PLACEHOLDER_MAP: Record<string, string[]> = {
@@ -23,24 +22,6 @@ const PLACEHOLDER_MAP: Record<string, string[]> = {
   ai_tutor: ['{{front}}', '{{backHint}}'],
   generate_onboarding: ['{{course}}', '{{semester}}'],
 };
-
-const PT_VOICES = [
-  { value: 'pt-BR-Neural2-A', label: 'Neural2-A (Feminina)' },
-  { value: 'pt-BR-Neural2-B', label: 'Neural2-B (Masculina)' },
-  { value: 'pt-BR-Neural2-C', label: 'Neural2-C (Feminina)' },
-];
-
-const EN_VOICES = [
-  { value: 'en-US-Neural2-A', label: 'Neural2-A (Masculina)' },
-  { value: 'en-US-Neural2-C', label: 'Neural2-C (Feminina)' },
-  { value: 'en-US-Neural2-D', label: 'Neural2-D (Masculina)' },
-  { value: 'en-US-Neural2-E', label: 'Neural2-E (Feminina)' },
-  { value: 'en-US-Neural2-F', label: 'Neural2-F (Feminina)' },
-  { value: 'en-US-Neural2-G', label: 'Neural2-G (Feminina)' },
-  { value: 'en-US-Neural2-H', label: 'Neural2-H (Feminina)' },
-  { value: 'en-US-Neural2-I', label: 'Neural2-I (Masculina)' },
-  { value: 'en-US-Neural2-J', label: 'Neural2-J (Masculina)' },
-];
 
 const AdminIA = () => {
   const navigate = useNavigate();
@@ -54,13 +35,7 @@ const AdminIA = () => {
   const [flashModel, setFlashModel] = useState('');
   const [proModel, setProModel] = useState('');
   const [showModelConfig, setShowModelConfig] = useState(false);
-  const [showVoiceConfig, setShowVoiceConfig] = useState(false);
   const [savingModels, setSavingModels] = useState(false);
-  const [ptVoice, setPtVoice] = useState('');
-  const [enVoice, setEnVoice] = useState('');
-  const [savingVoices, setSavingVoices] = useState(false);
-  const [testingVoice, setTestingVoice] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   if (adminLoading || loading || settingsLoading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -90,19 +65,10 @@ const AdminIA = () => {
   };
 
   const openModelConfig = () => {
-    setFlashModel(getSetting('flash_model') || 'gemini-2.5-flash');
-    setProModel(getSetting('pro_model') || 'gemini-2.5-pro');
+    setFlashModel(getSetting('flash_model') || 'gpt-4o-mini');
+    setProModel(getSetting('pro_model') || 'gpt-4o');
     setShowModelConfig(true);
     setSelectedKey(null);
-    setShowVoiceConfig(false);
-  };
-
-  const openVoiceConfig = () => {
-    setPtVoice(getSetting('tts_voice_pt') || 'pt-BR-Neural2-A');
-    setEnVoice(getSetting('tts_voice_en') || 'en-US-Neural2-J');
-    setShowVoiceConfig(true);
-    setSelectedKey(null);
-    setShowModelConfig(false);
   };
 
   const handleSaveModels = async () => {
@@ -112,64 +78,9 @@ const AdminIA = () => {
     setShowModelConfig(false);
   };
 
-  const handleSaveVoices = async () => {
-    setSavingVoices(true);
-    await Promise.all([updateSetting('tts_voice_pt', ptVoice), updateSetting('tts_voice_en', enVoice)]);
-    setSavingVoices(false);
-    setShowVoiceConfig(false);
-  };
-
-  const testVoice = async (voiceName: string, lang: 'pt' | 'en') => {
-    setTestingVoice(voiceName);
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-
-      // Create Audio element immediately in user gesture context
-      const audio = new Audio();
-      audioRef.current = audio;
-
-      const sampleText = lang === 'pt'
-        ? 'Olá! Esta é uma prévia da voz selecionada para o português brasileiro.'
-        : 'Hello! This is a preview of the selected voice for American English.';
-
-      // Use fetch directly for binary audio response (supabase.functions.invoke doesn't handle binary well)
-      const { data: { session } } = await supabase.auth.getSession();
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ text: sampleText, voice: voiceName }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      audio.src = url;
-      audio.onended = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
-      audio.onerror = () => { URL.revokeObjectURL(url); setTestingVoice(null); };
-      await audio.play();
-    } catch (e) {
-      console.error('TTS test error:', e);
-      toast({ title: 'Erro ao testar voz', description: String(e), variant: 'destructive' });
-      setTestingVoice(null);
-    }
-  };
-
   const goBack = () => {
     if (selectedKey) setSelectedKey(null);
     else if (showModelConfig) setShowModelConfig(false);
-    else if (showVoiceConfig) setShowVoiceConfig(false);
     else navigate('/profile');
   };
 
@@ -177,11 +88,9 @@ const AdminIA = () => {
     ? (selected?.label || 'Editor')
     : showModelConfig
       ? 'Configurar Modelos'
-      : showVoiceConfig
-        ? 'Configurar Voz'
-        : 'Admin IA';
+      : 'Admin IA';
 
-  const showMainMenu = !selectedKey && !showModelConfig && !showVoiceConfig;
+  const showMainMenu = !selectedKey && !showModelConfig;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -217,20 +126,7 @@ const AdminIA = () => {
                   <Settings className="w-5 h-5 text-primary" />
                   <div>
                     <p className="font-medium">Configurar Modelos</p>
-                    <p className="text-xs text-muted-foreground">Qual modelo do Gemini é Flash e qual é Pro</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-
-            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={openVoiceConfig}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">Configurar Voz</p>
-                    <p className="text-xs text-muted-foreground">Escolha e teste as vozes do Text-to-Speech</p>
+                    <p className="text-xs text-muted-foreground">Qual modelo da OpenAI é Flash e qual é Pro</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -250,73 +146,20 @@ const AdminIA = () => {
               </Card>
             ))}
           </>
-        ) : showVoiceConfig ? (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">Escolha as vozes Neural2 do Google Cloud TTS. Todas têm o mesmo custo.</p>
-
-            <div className="space-y-3">
-              <Label>Voz Português (PT-BR)</Label>
-              <div className="flex gap-2">
-                <Select value={ptVoice} onValueChange={setPtVoice}>
-                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PT_VOICES.map(v => (
-                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => testVoice(ptVoice, 'pt')}
-                  disabled={testingVoice === ptVoice}
-                >
-                  {testingVoice === ptVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Voz Inglês (EN-US)</Label>
-              <div className="flex gap-2">
-                <Select value={enVoice} onValueChange={setEnVoice}>
-                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EN_VOICES.map(v => (
-                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => testVoice(enVoice, 'en')}
-                  disabled={testingVoice === enVoice}
-                >
-                  {testingVoice === enVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <Button onClick={handleSaveVoices} disabled={savingVoices} className="w-full">
-              {savingVoices ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-              Salvar Vozes
-            </Button>
-          </div>
         ) : showModelConfig ? (
           <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">Configure qual modelo do Gemini é usado para cada tier. Você pode colocar qualquer model ID válido do Google AI.</p>
+            <p className="text-sm text-muted-foreground">Configure qual modelo da OpenAI é usado para cada tier. Você pode colocar qualquer model ID válido da OpenAI.</p>
 
             <div className="space-y-2">
               <Label>Modelo Flash (rápido e barato)</Label>
-              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gemini-2.5-flash" className="font-mono" />
-              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-flash, gemini-2.5-flash-lite</p>
+              <Input value={flashModel} onChange={e => setFlashModel(e.target.value)} placeholder="gpt-4o-mini" className="font-mono" />
+              <p className="text-xs text-muted-foreground">Ex: gpt-4o-mini, gpt-3.5-turbo</p>
             </div>
 
             <div className="space-y-2">
               <Label>Modelo Pro (avançado)</Label>
-              <Input value={proModel} onChange={e => setProModel(e.target.value)} placeholder="gemini-2.5-pro" className="font-mono" />
-              <p className="text-xs text-muted-foreground">Ex: gemini-2.5-pro, gemini-2.5-flash</p>
+              <Input value={proModel} onChange={e => setProModel(e.target.value)} placeholder="gpt-4o" className="font-mono" />
+              <p className="text-xs text-muted-foreground">Ex: gpt-4o, gpt-4-turbo</p>
             </div>
 
             <Button onClick={handleSaveModels} disabled={savingModels} className="w-full">
@@ -347,8 +190,8 @@ const AdminIA = () => {
               <Select value={editState.default_model || 'flash'} onValueChange={v => setEditState(s => ({ ...s, default_model: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gemini-2.5-flash'})</SelectItem>
-                  <SelectItem value="pro">Pro ({getSetting('pro_model') || 'gemini-2.5-pro'})</SelectItem>
+                  <SelectItem value="flash">Flash ({getSetting('flash_model') || 'gpt-4o-mini'})</SelectItem>
+                  <SelectItem value="pro">Pro ({getSetting('pro_model') || 'gpt-4o'})</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">O usuário escolhe Flash ou Pro ao solicitar. Este é apenas o fallback caso não especifique.</p>
