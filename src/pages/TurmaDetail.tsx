@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
@@ -350,26 +350,37 @@ const TurmaDetailInner = () => {
   const { turma, isMember, isLoading, turmaId, toast, navigate } = useTurmaDetail();
   const { user } = useAuth();
   const { joinTurmaById } = useTurmas();
+  const queryClient = useQueryClient();
   const [autoJoining, setAutoJoining] = useState(false);
+  const [joinCompleted, setJoinCompleted] = useState(false);
 
   // Auto-join public communities (no preview screen)
   useEffect(() => {
-    if (isLoading || !turma || isMember || autoJoining) return;
+    if (isLoading || !turma || isMember || autoJoining || joinCompleted) return;
     if (!user) { navigate('/auth'); return; }
     // Only auto-join public communities
     if (turma.is_private) return;
     setAutoJoining(true);
     joinTurmaById.mutateAsync(turmaId)
+      .then(() => {
+        // Invalidate role query so isMember updates
+        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+        queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
+        setJoinCompleted(true);
+      })
       .catch((e: any) => {
-        // If already a member, just continue
-        if (!e.message?.includes('already')) {
+        // If already a member, treat as success
+        if (e.message?.includes('already') || e.message?.includes('já')) {
+          queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+          setJoinCompleted(true);
+        } else {
           toast({ title: e.message || 'Erro ao entrar', variant: 'destructive' });
         }
       })
       .finally(() => setAutoJoining(false));
-  }, [isLoading, turma, isMember, autoJoining, user, turmaId]);
+  }, [isLoading, turma, isMember, autoJoining, joinCompleted, user, turmaId]);
 
-  if (isLoading || !turma || autoJoining || (!isMember && !turma?.is_private)) {
+  if (isLoading || !turma || autoJoining) {
     return (
       <div className="min-h-screen bg-background">
         <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
