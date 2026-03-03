@@ -4,7 +4,7 @@
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, forwardRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -255,9 +255,15 @@ interface Props {
   onClose: () => void;
 }
 
+const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
 const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
-  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard } = useDeckDetail();
+  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck } = useDeckDetail();
   const isMobile = useIsMobile();
+
+  // Check if this is a community-linked deck
+  const isLinkedDeck = !!(deck?.source_turma_deck_id || deck?.source_listing_id || deck?.is_live_deck);
+  const [suggestCard, setSuggestCard] = useState<any>(null);
 
   const virtualCards = useMemo(() => {
     if (!cards || cards.length === 0) return [];
@@ -374,9 +380,15 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => { onClose(); openEdit(card); }}>
-            <PenLine className="h-4 w-4" />
-          </Button>
+          {isLinkedDeck ? (
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => setSuggestCard(card)}>
+              <PenLine className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => { onClose(); openEdit(card); }}>
+              <PenLine className="h-4 w-4" />
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm">
@@ -438,6 +450,17 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
           <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
         </Button>
       </div>
+      {/* Suggest correction modal for linked decks */}
+      {suggestCard && (
+        <Suspense fallback={null}>
+          <SuggestCorrectionModal
+            open={!!suggestCard}
+            onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
+            card={suggestCard}
+            deckId={deck?.id}
+          />
+        </Suspense>
+      )}
     </div>
   );
 });
