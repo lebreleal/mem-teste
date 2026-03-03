@@ -510,31 +510,6 @@ const ContentTab = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* ── Top Decks (only at root level) ── */}
-          {isRoot && topDecks.length > 0 && !searchQuery && (
-            <section>
-              <h2 className="font-display text-sm font-bold text-foreground mb-2">
-                Mais Inscritos
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {topDecks.map((td: any) => {
-                  const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
-                  const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
-                  return (
-                    <TopDeckCard
-                      key={td.id}
-                      td={td}
-                      onClick={() => handleDeckClick(td)}
-                      inCollection={alreadyOwns || alreadyLinked}
-                      downloads={downloadCounts[td.id] || 0}
-                      fileCount={getDeckFilesCount(td)}
-                      examCount={getDeckExamsCount(td)}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          )}
 
           {/* ── Folders ── */}
           {currentFolders.length > 0 && (
