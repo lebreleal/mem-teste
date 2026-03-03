@@ -72,6 +72,8 @@ export function TagInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Stop propagation for all keys to prevent parent dialogs/sheets from intercepting
+    e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
       if (filtered.length > 0) {
