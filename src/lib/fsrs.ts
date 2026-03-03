@@ -51,6 +51,7 @@ export interface FSRSParams {
   maximumInterval: number;
   learningSteps: number[]; // minutes
   relearningSteps: number[]; // minutes
+  easyGraduatingInterval: number; // days — max interval when Easy graduates a new/learning card
 }
 
 export const DEFAULT_FSRS_PARAMS: FSRSParams = {
@@ -59,6 +60,7 @@ export const DEFAULT_FSRS_PARAMS: FSRSParams = {
   maximumInterval: 36500,
   learningSteps: [1, 10],
   relearningSteps: [10],
+  easyGraduatingInterval: 15,
 };
 
 // ── Core math helpers ──
@@ -155,8 +157,9 @@ function graduateToReview(w: number[], s: number, d: number, requestedRetention:
 
 export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams = DEFAULT_FSRS_PARAMS): FSRSOutput {
   const now = new Date();
-  const { w, requestedRetention, maximumInterval, learningSteps, relearningSteps } = params;
+  const { w, requestedRetention, maximumInterval, learningSteps, relearningSteps, easyGraduatingInterval } = params;
   const currentStep = card.learning_step ?? 0;
+  const easyGradMax = easyGraduatingInterval ?? 15;
 
   // ═══ STATE 0: New card ═══
   if (card.state === 0) {
@@ -183,9 +186,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Only 1 step → graduate
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate with easy bonus applied to stability
+    // Easy → graduate with easy bonus, capped by easyGraduatingInterval
     const easyS = s * w[16];
-    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+    return graduateToReview(w, easyS, d, requestedRetention, Math.min(maximumInterval, easyGradMax), 4);
   }
 
   // ═══ STATE 1 or 3: Learning / Relearning ═══
@@ -215,9 +218,9 @@ export function fsrsSchedule(card: FSRSCard, rating: Rating, params: FSRSParams 
       // Last step → graduate to review
       return graduateToReview(w, s, d, requestedRetention, maximumInterval);
     }
-    // Easy → graduate with easy bonus applied to stability
+    // Easy → graduate with easy bonus, capped by easyGraduatingInterval
     const easyS = s * w[16];
-    return graduateToReview(w, easyS, d, requestedRetention, maximumInterval, 4);
+    return graduateToReview(w, easyS, d, requestedRetention, Math.min(maximumInterval, easyGradMax), 4);
   }
 
   // ═══ STATE 2: Review ═══

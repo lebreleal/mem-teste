@@ -87,6 +87,7 @@ const DeckSettings = () => {
   const [easyBonus, setEasyBonus] = useState(130);
   const [intervalModifier, setIntervalModifier] = useState(100);
   const [maxInterval, setMaxInterval] = useState(1000);
+  const [easyGraduatingInterval, setEasyGraduatingInterval] = useState(15);
   const [buryNewSiblings, setBuryNewSiblings] = useState(true);
   const [buryReviewSiblings, setBuryReviewSiblings] = useState(true);
   const [buryLearningSiblings, setBuryLearningSiblings] = useState(true);
@@ -174,6 +175,7 @@ const DeckSettings = () => {
       setEasyBonus(data.easy_bonus ?? 130);
       setIntervalModifier(data.interval_modifier ?? 100);
       setMaxInterval(data.max_interval ?? 1000);
+      setEasyGraduatingInterval((data as any).easy_graduating_interval ?? 15);
       setParentDeckId(data.parent_deck_id ?? null);
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
@@ -222,6 +224,7 @@ const DeckSettings = () => {
       easy_bonus: easyBonus,
       interval_modifier: intervalModifier,
       max_interval: maxInterval,
+      easy_graduating_interval: easyGraduatingInterval,
       requested_retention: requestedRetention,
       bury_new_siblings: buryNewSiblings,
       bury_review_siblings: buryReviewSiblings,
@@ -793,7 +796,21 @@ const DeckSettings = () => {
 
                 <Separator />
 
-                {/* Learning steps */}
+                {/* FSRS: Easy graduating interval */}
+                <div className="space-y-2">
+                  <div>
+                    <Label>Intervalo do Fácil (graduação)</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Intervalo máximo ao apertar "Fácil" em um card novo ou em aprendizado.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <Input type="number" min={1} max={365} value={easyGraduatingInterval} onChange={(e) => setEasyGraduatingInterval(Math.max(1, parseInt(e.target.value) || 15))} className="pr-12" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">dias</span>
+                  </div>
+                </div>
+
+                <Separator />
                 <div className="space-y-3">
                   <div>
                     <h4 className="font-semibold text-foreground">Etapas de aprendizado</h4>
