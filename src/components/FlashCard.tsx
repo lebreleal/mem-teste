@@ -20,6 +20,7 @@ function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2
 
   if (algorithmMode === 'fsrs') {
     const requestedRetention = deckConfig.requested_retention ?? 0.85;
+    const easyGraduatingInterval = deckConfig.easy_graduating_interval ?? 15;
     return {
       fsrs: {
         ...DEFAULT_FSRS_PARAMS,
@@ -27,6 +28,7 @@ function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2
         maximumInterval: maxIntervalDays,
         learningSteps: learningStepsMinutes,
         relearningSteps: [learningStepsMinutes[0] ?? 10],
+        easyGraduatingInterval,
       },
     };
   }

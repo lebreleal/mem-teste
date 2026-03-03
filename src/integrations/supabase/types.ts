@@ -507,6 +507,7 @@ export type Database = {
           daily_new_limit: number
           daily_review_limit: number
           easy_bonus: number
+          easy_graduating_interval: number
           folder_id: string | null
           id: string
           interval_modifier: number
@@ -539,6 +540,7 @@ export type Database = {
           daily_new_limit?: number
           daily_review_limit?: number
           easy_bonus?: number
+          easy_graduating_interval?: number
           folder_id?: string | null
           id?: string
           interval_modifier?: number
@@ -571,6 +573,7 @@ export type Database = {
           daily_new_limit?: number
           daily_review_limit?: number
           easy_bonus?: number
+          easy_graduating_interval?: number
           folder_id?: string | null
           id?: string
           interval_modifier?: number
