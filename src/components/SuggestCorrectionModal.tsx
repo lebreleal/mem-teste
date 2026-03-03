@@ -43,7 +43,33 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
   const [showEditor, setShowEditor] = useState(false);
   const [previewRevealed, setPreviewRevealed] = useState(false);
 
-  const { data: currentDeckTags = [] } = useDeckTags(deckId);
+  // Resolve the community source deck ID so suggestions target the original deck
+  const [resolvedDeckId, setResolvedDeckId] = useState<string>(deckId);
+  useEffect(() => {
+    if (!deckId || !open) return;
+    (async () => {
+      const { data } = await supabase
+        .from('decks')
+        .select('source_turma_deck_id, community_id')
+        .eq('id', deckId)
+        .single();
+      if (data?.source_turma_deck_id) {
+        // Find the original community deck via turma_decks
+        const { data: td } = await supabase
+          .from('turma_decks')
+          .select('deck_id')
+          .eq('id', data.source_turma_deck_id)
+          .single();
+        if (td?.deck_id) {
+          setResolvedDeckId(td.deck_id);
+          return;
+        }
+      }
+      setResolvedDeckId(deckId);
+    })();
+  }, [deckId, open]);
+
+  const { data: currentDeckTags = [] } = useDeckTags(resolvedDeckId);
 
   const isDeckLevel = !card;
 
@@ -155,7 +181,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
 
       const { error } = await supabase.from('deck_suggestions').insert({
         suggester_user_id: user.id,
-        deck_id: deckId,
+        deck_id: resolvedDeckId,
         card_id: card?.id ?? null,
         suggested_content: Object.keys(suggestedContent).length > 0 ? suggestedContent : {},
         suggested_tags: suggestedTagsPayload,
