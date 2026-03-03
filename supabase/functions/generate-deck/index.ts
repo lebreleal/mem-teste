@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
     const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost, skipLog } = await req.json();
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
     if (!textContent?.trim()) return jsonResponse({ error: "textContent é obrigatório" }, 400);
 
     const cost = energyCost || 0;
@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
@@ -279,14 +279,14 @@ ${getOutputExamples(formats)}`;
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 65000 }),
+      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 16384 }),
     });
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI error:", aiResponse.status, errText);
       if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
-      if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
+      if (aiResponse.status === 403) return jsonResponse({ error: "API Key inválida ou sem permissão." }, 502);
       if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
