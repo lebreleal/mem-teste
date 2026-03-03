@@ -348,20 +348,10 @@ const Dashboard = () => {
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
           {/* Comunidade */}
-          {isAdmin ? (
-            <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
-              <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
-            </button>
-          ) : (
-            <div className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm opacity-50 cursor-not-allowed">
-              <Users className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
-              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-muted-foreground">Comunidade</span>
-              <span className="absolute -top-1.5 -right-1 text-[7px] sm:text-[8px] font-bold bg-muted text-muted-foreground rounded-full px-1 sm:px-1.5 py-0.5 whitespace-nowrap leading-none">
-                em breve
-              </span>
-            </div>
-          )}
+          <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
+            <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
+          </button>
           {[
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
@@ -435,32 +425,19 @@ const Dashboard = () => {
             >
               Meus Decks
             </button>
-            {isAdmin ? (
-              <button
-                onClick={() => setDashboardTab('community')}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                  dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <RefreshCw className="h-3 w-3" />
-                Comunidade
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60 cursor-not-allowed"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Comunidade
-                <span className="ml-0.5 text-[7px] sm:text-[8px] font-semibold bg-muted-foreground/15 text-muted-foreground rounded-full px-1 sm:px-1.5 py-0.5 normal-case tracking-normal whitespace-nowrap leading-none">
-                  em breve
-                </span>
-              </button>
-            )}
+            <button
+              onClick={() => setDashboardTab('community')}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
+                dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <RefreshCw className="h-3 w-3" />
+              Comunidade
+            </button>
           </div>
         )}
 
-        {/* Personal decks tab (always shown since community is "em breve") */}
+        {/* Personal decks tab */}
         {(dashboardTab === 'personal' || !!state.currentFolderId) && (
           <DeckList
             isLoading={state.isLoading}
