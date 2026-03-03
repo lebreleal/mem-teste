@@ -3,7 +3,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useAllTags, useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
+import { useDeckOnlyTags, useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -149,7 +149,7 @@ const Turmas = () => {
 
   const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
   const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
-  const { data: allTags = [] } = useAllTags();
+  const { data: allTags = [] } = useDeckOnlyTags();
 
   // Fetch tags for public decks to enable tag filtering
   const publicDeckIds = useMemo(() => (publicDecks ?? []).map((d: any) => d.id), [publicDecks]);
@@ -273,8 +273,8 @@ const Turmas = () => {
                       : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
                   }`}
                 >
-                  {tag.is_official && <BadgeCheck className="h-3 w-3 inline mr-0.5 text-blue-500" />}
                   {tag.name}
+                  {tag.is_official && <BadgeCheck className="h-3 w-3 inline ml-0.5 text-blue-500 shrink-0" />}
                 </button>
               ))}
             </div>

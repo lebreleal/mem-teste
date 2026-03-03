@@ -239,6 +239,30 @@ export async function getAllTags(limit = 100): Promise<Tag[]> {
   return data ?? [];
 }
 
+/** Get only tags that are linked to at least one deck (for marketplace filters). */
+export async function getDeckOnlyTags(limit = 50): Promise<Tag[]> {
+  const { data, error } = await supabase
+    .from('deck_tags')
+    .select('tag_id, tags(*)');
+  if (error) throw error;
+  
+  // Deduplicate and extract unique tags
+  const tagMap = new Map<string, Tag>();
+  (data ?? []).forEach((dt: any) => {
+    if (dt.tags && !dt.tags.merged_into_id && !tagMap.has(dt.tags.id)) {
+      tagMap.set(dt.tags.id, dt.tags as Tag);
+    }
+  });
+  
+  // Sort: official first, then by usage_count desc
+  return Array.from(tagMap.values())
+    .sort((a, b) => {
+      if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
+      return b.usage_count - a.usage_count;
+    })
+    .slice(0, limit);
+}
+
 /** Get tags for multiple decks at once (batch). */
 export async function getDeckTagsBatch(deckIds: string[]): Promise<Record<string, Tag[]>> {
   if (deckIds.length === 0) return {};
