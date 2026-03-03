@@ -314,7 +314,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
           key={sortedDecks.map(d => d.id).join(',')}
           className="flex overflow-x-auto snap-x snap-mandatory gap-2.5 pb-1 -mx-4 px-4 scrollbar-hide cursor-grab select-none"
         >
-          {sortedDecks.slice(0, 4).map(deck => (
+          {sortedDecks.map(deck => (
             <DeckStudyCard
               key={deck.id}
               deck={deck}
