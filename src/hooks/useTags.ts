@@ -92,6 +92,14 @@ export const useAllTags = () =>
     staleTime: 30_000,
   });
 
+/** Tags that are linked to at least one deck (for marketplace filters). */
+export const useDeckOnlyTags = () =>
+  useQuery({
+    queryKey: ['tags', 'deck-only'] as const,
+    queryFn: () => tagService.getDeckOnlyTags(50),
+    staleTime: 60_000,
+  });
+
 /** AI tag suggestions. */
 export const useTagSuggestions = () => {
   return useMutation({
