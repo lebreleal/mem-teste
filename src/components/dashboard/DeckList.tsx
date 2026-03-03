@@ -138,7 +138,12 @@ const DeckList = ({
 
   const getPendingStatusLabel = (pending: PendingDeck) => {
     if (pending.status === 'review_ready') return 'Pronto para revisão';
-    if (pending.status === 'saving') return 'Salvando...';
+    if (pending.status === 'saving') {
+      if (pending.progress.current > 0 && pending.progress.total > 0) {
+        return `Salvando... ${pending.progress.current.toLocaleString()} / ${pending.progress.total.toLocaleString()} cartões`;
+      }
+      return 'Salvando...';
+    }
     if (pending.status === 'done') return 'Criando tags...';
     if (pending.status === 'error') return 'Erro — toque para remover';
     return `Gerando lote ${pending.progress.current}/${pending.progress.total}`;

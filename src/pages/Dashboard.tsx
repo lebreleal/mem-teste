@@ -645,8 +645,12 @@ const Dashboard = () => {
 
               try {
                 const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+                const progressCb = (current: number, total: number) => {
+                  pendingStore.updatePending(pendingId, { progress: { current, total } });
+                };
+                let result: { insertedCount: number; totalCards: number };
                 if (subdecks && subdecks.length > 0) {
-                  await importDeckWithSubdecks(
+                  const r = await importDeckWithSubdecks(
                     user!.id,
                     deckName,
                     state.currentFolderId,
@@ -654,22 +658,29 @@ const Dashboard = () => {
                     subdecks,
                     defaultAlgorithm,
                     revlog as any,
+                    progressCb,
                   );
-                  const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
-                  toast({ title: `${totalCards} cartões importados em "${deckName}"!${revlogMsg}` });
+                  result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 } else {
-                  await importDeck(
+                  const r = await importDeck(
                     user!.id,
                     deckName,
                     state.currentFolderId,
                     cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
                     defaultAlgorithm,
                     revlog as any,
+                    progressCb,
                   );
-                  const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
-                  toast({ title: `${cards.length} cartões importados!${revlogMsg}` });
+                  result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 }
-                pendingStore.updatePending(pendingId, { status: 'done', progress: { current: totalCards, total: totalCards } });
+                const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
+                const failedCount = result.totalCards - result.insertedCount;
+                if (failedCount > 0) {
+                  toast({ title: `${result.insertedCount.toLocaleString()} cartões importados (${failedCount} falharam)`, description: `Importado em "${deckName}"${revlogMsg}`, variant: 'destructive' });
+                } else {
+                  toast({ title: `${result.insertedCount.toLocaleString()} cartões importados!`, description: `${deckName}${revlogMsg}` });
+                }
+                pendingStore.updatePending(pendingId, { status: 'done', progress: { current: result.insertedCount, total: result.totalCards } });
                 await queryClient.invalidateQueries({ queryKey: ['decks'] });
                 await queryClient.invalidateQueries({ queryKey: ['folders'] });
                 await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
