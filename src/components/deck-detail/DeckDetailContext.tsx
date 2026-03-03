@@ -296,18 +296,39 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (syncAttemptedRef.current) return;
     if (!deck || !user || !cardCounts) return;
+    if (cardCounts.total > 0) return;
     const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
-    if (!sourceTurmaDeckId || cardCounts.total > 0) return;
+    const isLiveDeck = (deck as any)?.is_live_deck;
+    if (!sourceTurmaDeckId && !isLiveDeck) return;
     syncAttemptedRef.current = true;
     (async () => {
       try {
-        // Find the source deck_id from turma_decks
-        const { data: td } = await supabase
-          .from('turma_decks')
-          .select('deck_id')
-          .eq('id', sourceTurmaDeckId)
-          .maybeSingle();
-        if (!td?.deck_id) return;
+        let sourceDeckId: string | null = null;
+
+        if (sourceTurmaDeckId) {
+          // Find the source deck_id from turma_decks
+          const { data: td } = await supabase
+            .from('turma_decks')
+            .select('deck_id')
+            .eq('id', sourceTurmaDeckId)
+            .maybeSingle();
+          sourceDeckId = td?.deck_id ?? null;
+        }
+
+        // Fallback: find source by name match (for public decks without turma link)
+        if (!sourceDeckId && isLiveDeck) {
+          const { data: candidates } = await supabase
+            .from('decks')
+            .select('id')
+            .eq('name', (deck as any).name)
+            .eq('is_public', true)
+            .neq('user_id', user.id)
+            .limit(1);
+          sourceDeckId = candidates?.[0]?.id ?? null;
+        }
+
+        if (!sourceDeckId) return;
+
         // Copy cards in batches
         const BATCH = 500;
         let offset = 0;
@@ -316,7 +337,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
           const { data: cards } = await supabase
             .from('cards')
             .select('front_content, back_content, card_type')
-            .eq('deck_id', td.deck_id)
+            .eq('deck_id', sourceDeckId)
             .range(offset, offset + BATCH - 1)
             .order('created_at', { ascending: true });
           if (!cards || cards.length === 0) { hasMore = false; break; }
@@ -335,6 +356,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         // Refresh card data
         queryClient.invalidateQueries({ queryKey: ['card-counts', deckId] });
         queryClient.invalidateQueries({ queryKey: ['cards-display', deckId] });
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
       } catch (e) {
         console.error('Auto-sync cards failed:', e);
       }
