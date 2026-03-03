@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
-    const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
+    const requestedCount = cardCount > 0 ? Math.max(cardCount, 3) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
@@ -292,6 +292,14 @@ Deno.serve(async (req) => {
 
     const prompt = `${countInstruction}
 ${getDetailInstruction(detail)}
+
+REGRA DE PROFUNDIDADE (OBRIGATÓRIA — NÃO SEJA CONCISO):
+- Cada card Cloze DEVE ter uma frase COMPLETA com contexto rico (mínimo 15 palavras antes/depois da lacuna). NUNCA gere frases curtas e genéricas.
+- Cada card Basic DEVE ter resposta que EXPLIQUE o mecanismo/causa-efeito, não apenas nomeie o conceito.
+- NUNCA simplifique terminologia: se o texto diz "desnaturação proteica inativa as enzimas digestivas impedindo a destruição imediata da estrutura", o card DEVE usar ESSES termos exatos.
+- Inclua TODOS os exemplos clínicos, fisiológicos ou práticos mencionados no texto — cada um merece seu próprio card.
+- Conecte causa → efeito → consequência clínica em cards separados mas sequenciais.
+- Use linguagem de livro didático: explicações densas, ricas em contexto, que permitam ao aluno ENTENDER sem voltar ao material.
 
 TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
@@ -321,7 +329,7 @@ ${trimmedContent}
           { role: "user", content: prompt },
         ],
         temperature,
-        max_completion_tokens: 16384,
+        max_tokens: 16384,
         response_format: FLASHCARDS_SCHEMA,
       }),
     });
