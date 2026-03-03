@@ -24,8 +24,11 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived')
     .eq('user_id', userId);
+
+  // Filter out archived decks from consideration
+  const activeDecks = (allDecks ?? []).filter(d => !d.is_archived);
 
   let deckIds: string[];
   let deckConfig: any;
@@ -37,22 +40,22 @@ export async function fetchStudyQueue(
       .select('id, parent_id')
       .eq('user_id', userId);
 
-    const rootDeckIds = collectFolderDeckIds(allDecks ?? [], allFolders ?? [], folderId);
-    const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(allDecks ?? [], id));
+    const rootDeckIds = collectFolderDeckIds(activeDecks, allFolders ?? [], folderId);
+    const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
     deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
-    const firstDeck = (allDecks ?? []).find(d => deckIds.includes(d.id));
+    const firstDeck = activeDecks.find(d => deckIds.includes(d.id));
     deckConfig = firstDeck ?? {};
     limitScopeIds = deckIds;
   } else {
-    const descendantIds = collectDescendantIds(allDecks ?? [], deckId);
+    const descendantIds = collectDescendantIds(activeDecks, deckId);
     deckIds = [deckId, ...descendantIds];
 
     // Root ancestor's config governs ALL descendants
-    const rootId = findRootAncestorId(allDecks ?? [], deckId);
-    deckConfig = (allDecks ?? []).find(d => d.id === rootId) ?? {};
+    const rootId = findRootAncestorId(activeDecks, deckId);
+    deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
 
     // Count limits across the ENTIRE root hierarchy
-    const rootDescendants = collectDescendantIds(allDecks ?? [], rootId);
+    const rootDescendants = collectDescendantIds(activeDecks, rootId);
     limitScopeIds = [rootId, ...rootDescendants];
   }
 
@@ -69,17 +72,22 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+    const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
   // Fetch cards + scope card IDs in parallel (global scope will be computed after plan check)
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  const endOfTodayISO = endOfToday.toISOString();
+  const nowISO = new Date().toISOString();
+
   const [cardsResult, scopeResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
       .in('deck_id', deckIds)
-      .or(`state.eq.0,state.eq.1,state.eq.3,and(state.eq.2,scheduled_date.lte.${new Date().toISOString()})`)
+      .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
     supabase
       .from('cards')
@@ -118,7 +126,7 @@ export async function fetchStudyQueue(
     // Expand to include all descendants
     const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
     for (const pid of planDeckIdSet) {
-      const descendants = collectDescendantIds(allDecks ?? [], pid);
+      const descendants = collectDescendantIds(activeDecks, pid);
       for (const d of descendants) expandedPlanDeckIds.add(d);
     }
     const { data: planCards } = await supabase
@@ -134,7 +142,7 @@ export async function fetchStudyQueue(
     const { data: allCards } = await supabase
       .from('cards')
       .select('id')
-      .in('deck_id', (allDecks ?? []).map(d => d.id));
+      .in('deck_id', activeDecks.map(d => d.id));
     const allCardIds = (allCards ?? []).map((c: any) => c.id);
     if (allCardIds.length > 0) {
       globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: allCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
@@ -214,7 +222,7 @@ export async function fetchStudyQueue(
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   let queue = [...allLearning, ...orderedNonLearning];
 
-  const isLiveDeck = deckIds.some(id => (allDecks ?? []).find(d => d.id === id)?.is_live_deck);
+  const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
@@ -248,7 +256,7 @@ export async function submitCardReview(
       scheduled_date: new Date().toISOString(),
       elapsed_ms: cappedMs,
     } as any);
-    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 0 };
+    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 1 };
   }
 
   const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];
@@ -364,43 +372,34 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const streak = calculateStreak(logs.map(l => l.reviewed_at));
   const mascotState = getMascotState(lastStudyDate);
 
-  // --- Hybrid minute calculation: elapsed_ms when available, gap-based fallback ---
+  // --- Hybrid minute calculation: aligned with ActivityView logic ---
   const MIN_REVIEW_MS = 1500;
   const MAX_REVIEW_MS = 120000;
 
   const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string; elapsed_ms?: number | null }[]): number => {
     if (reviewLogs.length === 0) return 0;
     let totalMs = 0;
-    let sessions = 1;
-    // First card: use elapsed_ms if available, otherwise 15s estimate
-    if (reviewLogs[0].elapsed_ms) {
-      totalMs += reviewLogs[0].elapsed_ms;
-    } else {
-      totalMs += 15000;
-    }
-    for (let i = 1; i < reviewLogs.length; i++) {
+
+    for (let i = 0; i < reviewLogs.length; i++) {
       const log = reviewLogs[i];
-      if (log.elapsed_ms) {
-        // Real timer data available
-        totalMs += log.elapsed_ms;
-      } else {
-        // Fallback: gap-based for old logs without elapsed_ms
+      let ms = 0;
+
+      if (log.elapsed_ms && log.elapsed_ms >= MIN_REVIEW_MS && log.elapsed_ms <= MAX_REVIEW_MS) {
+        ms = log.elapsed_ms;
+      } else if (i > 0) {
         const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
         if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
-          totalMs += gap;
+          ms = gap;
         } else if (gap > MAX_REVIEW_MS) {
-          totalMs += MAX_REVIEW_MS;
+          ms = 15000; // session break bonus
         }
+      } else {
+        ms = 15000; // first card estimate
       }
-      // Detect new session (gap > 5 min)
-      const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
-      if (gap > 300000) sessions++;
+
+      totalMs += ms;
     }
-    // For old logs without elapsed_ms, add session bonuses (minus the first card already counted)
-    const hasElapsed = reviewLogs.some(l => l.elapsed_ms);
-    if (!hasElapsed) {
-      totalMs += (sessions - 1) * 15000;
-    }
+
     return Math.round(totalMs / 60000);
   };
 

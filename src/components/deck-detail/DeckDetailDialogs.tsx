@@ -11,6 +11,8 @@ import ImageOcclusion from '@/components/ImageOcclusion';
 import AICreateDeckDialog from '@/components/AICreateDeckDialog';
 import ImportCardsDialog from '@/components/ImportCardsDialog';
 import AIModelSelector from '@/components/AIModelSelector';
+import { TagInput } from '@/components/TagInput';
+import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -24,7 +26,27 @@ import {
 import {
   ArrowLeft, ArrowRight, Plus, Trash2, Sparkles, Loader2,
   RotateCcw, Copy, Brain, MessageSquareText, CheckSquare, PenLine, Image as ImageIcon, Crown,
+  Tag as TagIcon,
 } from 'lucide-react';
+
+/** Tag editor for card edit dialog */
+const CardTagEditor = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  const { addTag, removeTag } = useCardTagMutations(cardId);
+  return (
+    <div className="space-y-1.5 border-t border-border/50 pt-3">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <TagIcon className="h-3 w-3" /> Tags do card
+      </p>
+      <TagInput
+        tags={tags}
+        onAdd={(tag) => addTag.mutate(tag)}
+        onRemove={(tagId) => removeTag.mutate(tagId)}
+        placeholder="Adicionar tag ao card..."
+      />
+    </div>
+  );
+};
 
 const DeckDetailDialogs = () => {
   const ctx = useDeckDetail();
@@ -43,10 +65,10 @@ const DeckDetailDialogs = () => {
               <p className="text-sm text-muted-foreground">Selecione o tipo do flashcard</p>
               <div className="grid grid-cols-1 gap-2">
                 {[
-                  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-5 w-5 text-primary" />, desc: 'Pergunta na frente, resposta no verso' },
-                  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-warning" />, desc: 'Pergunta com alternativas' },
-                  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
-                  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <ImageIcon className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
+                  { value: 'basic', label: 'Frente e Verso', icon: <MessageSquareText className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta na frente, resposta no verso' },
+                  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta com alternativas' },
+                  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-muted-foreground" />, desc: 'Texto com lacunas para preencher' },
+                  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <ImageIcon className="h-5 w-5 text-muted-foreground" />, desc: 'Oculte partes de uma imagem' },
                 ].map(type => (
                   <button key={type.value} onClick={() => ctx.setCardType(type.value)} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md active:scale-[0.98]">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">{type.icon}</div>
@@ -68,7 +90,7 @@ const DeckDetailDialogs = () => {
 
               <div>
                 <Label className="mb-1.5 block">
-                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'cloze' ? 'Texto com lacunas' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
+                  {ctx.cardType === 'multiple_choice' ? 'Pergunta' : ctx.cardType === 'image_occlusion' ? 'Frente (Pergunta)' : 'Frente'}
                 </Label>
                 <LazyRichEditor
                   content={ctx.front}
@@ -179,9 +201,9 @@ const DeckDetailDialogs = () => {
                 </div>
               )}
 
-              {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion') && (
+              {(ctx.cardType === 'basic' || ctx.cardType === 'image_occlusion' || ctx.cardType === 'cloze') && (
                 <div>
-                  <Label className="mb-1.5 block">{ctx.cardType === 'image_occlusion' ? 'Verso (Resposta)' : 'Verso'}</Label>
+                  <Label className="mb-1.5 block">Verso (Resposta)</Label>
                   <LazyRichEditor content={ctx.back} onChange={ctx.setBack} placeholder="Resposta..." hideCloze />
                 </div>
               )}
@@ -192,6 +214,11 @@ const DeckDetailDialogs = () => {
                   {ctx.isImproving ? 'Melhorando...' : 'Melhorar com IA'}
                   <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
                 </Button>
+              )}
+
+              {/* Card Tags (only when editing existing card) */}
+              {ctx.editingId && (
+                <CardTagEditor cardId={ctx.editingId} />
               )}
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">

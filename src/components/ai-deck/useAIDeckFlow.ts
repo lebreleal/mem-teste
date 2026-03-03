@@ -17,6 +17,9 @@ import { usePendingDecks } from '@/stores/usePendingDecks';
 import * as aiService from '@/services/aiService';
 import * as deckService from '@/services/deckService';
 import * as cardService from '@/services/cardService';
+import * as tagService from '@/services/tagService';
+import { supabase } from '@/integrations/supabase/client';
+import type { Tag } from '@/types/tag';
 import type { Step, GenProgress, LoadProgress, GeneratedCard, DetailLevel, CardFormat, PageItem } from './types';
 
 interface UseAIDeckFlowParams {
@@ -24,9 +27,17 @@ interface UseAIDeckFlowParams {
   folderId?: string | null;
   existingDeckId?: string | null;
   existingDeckName?: string | null;
+  /** Pre-loaded cards from a pending background deck (opens review directly) */
+  pendingReviewData?: {
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null;
 }
 
-export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName }: UseAIDeckFlowParams) {
+export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existingDeckName, pendingReviewData }: UseAIDeckFlowParams) {
   const { user } = useAuth();
   const { energy } = useEnergy();
   const { isPremium } = usePremium();
@@ -36,11 +47,13 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const navigate = useNavigate();
   const { addPending, updatePending, removePending } = usePendingDecks();
 
-  // Step
-  const [step, setStep] = useState<Step>('upload');
+  const [step, setStep] = useState<Step>(pendingReviewData ? 'review' : 'upload');
+
+  // Text sample for AI tag suggestions
+  const textSampleRef = useRef<string>(pendingReviewData?.textSample || '');
 
   // Upload
-  const [deckName, setDeckName] = useState(existingDeckName || '');
+  const [deckName, setDeckName] = useState(pendingReviewData?.deckName || existingDeckName || '');
   const [inputMode, setInputMode] = useState<'text' | 'file' | null>(null);
   const [fileName, setFileName] = useState('');
   const [rawText, setRawText] = useState('');
@@ -59,7 +72,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const [genProgress, setGenProgress] = useState<GenProgress>({ current: 0, total: 0, creditsUsed: 0, startedAt: 0, lastBatchMs: 0, avgBatchMs: 0 });
 
   // Review
-  const [cards, setCards] = useState<GeneratedCard[]>([]);
+  const [cards, setCards] = useState<GeneratedCard[]>(pendingReviewData?.cards || []);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editFront, setEditFront] = useState('');
   const [editBack, setEditBack] = useState('');
@@ -72,6 +85,16 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const pendingIdRef = useRef<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state when pendingReviewData changes (e.g. clicking a review_ready pending deck while dialog is already mounted)
+  useEffect(() => {
+    if (pendingReviewData) {
+      setStep('review');
+      setCards(pendingReviewData.cards);
+      setDeckName(pendingReviewData.deckName);
+      textSampleRef.current = pendingReviewData.textSample || '';
+    }
+  }, [pendingReviewData]);
 
   const selectedPages = pages.filter(p => p.selected);
   const totalCredits = selectedPages.length * getCost(CREDITS_PER_PAGE, isPremium);
@@ -281,6 +304,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     setStep('generating'); setIsLoading(true);
 
+    // Store text sample for AI tag suggestions
+    const sampleText = selected.slice(0, 3).map(p => p.textContent).join('\n').substring(0, 2000);
+    textSampleRef.current = sampleText;
     // Page-based batching: group selected pages into batches of 10
     const PAGES_PER_BATCH = 10;
     const CONCURRENT_BATCHES = 3;
@@ -288,7 +314,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const textBatches: { text: string; pageCount: number }[] = [];
     for (let i = 0; i < selected.length; i += PAGES_PER_BATCH) {
       const batchPages = selected.slice(i, i + PAGES_PER_BATCH);
-      const text = batchPages.map(p => p.textContent).join('\n\n');
+      const text = batchPages.map(p => `--- PÁGINA ${p.pageNumber} ---\n${p.textContent}`).join('\n\n');
       textBatches.push({ text, pageCount: batchPages.length });
     }
 
@@ -302,6 +328,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const aggregatedUsage: aiService.TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     let totalEnergyCost = 0;
     let usedModel = '';
+    let failedCount = 0;
+    let lastErrorMsg = '';
 
     // Bloco 5: Refined density factor (chars per card)
     const densityFactor = detailLevel === 'comprehensive' ? 120 : detailLevel === 'essential' ? 600 : 250;
@@ -348,6 +376,9 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           const modelConfig = MODEL_CONFIG[model as keyof typeof MODEL_CONFIG];
           if (modelConfig) usedModel = modelConfig.backendModel as string;
         } else {
+          failedCount++;
+          const msg = result.reason?.message || '';
+          if (msg) lastErrorMsg = msg;
           console.error(`Batch call failed:`, result.reason);
         }
       }
@@ -376,23 +407,37 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     if (isBackgroundRef.current && pendingIdRef.current) {
       if (dedupedCards.length > 0) {
-        updatePending(pendingIdRef.current, { status: 'saving' });
-        try {
-          await saveCardsToDeck(dedupedCards, deckName);
-          toast({ title: '🧠 Baralho criado!', description: `${dedupedCards.length} cartões salvos em "${deckName}"` });
-        } catch (err: any) {
-          toast({ title: 'Erro ao salvar baralho', description: err?.message, variant: 'destructive' });
-        }
+        // Store cards for review instead of auto-saving
+        updatePending(pendingIdRef.current, {
+          status: 'review_ready',
+          cards: dedupedCards,
+          textSample: textSampleRef.current,
+        });
+        toast({ title: '✅ Cartões prontos para revisão', description: `${dedupedCards.length} cartões aguardando revisão.` });
       } else {
-        toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
+        const allFailed = failedCount === totalBatches;
+        toast({
+          title: allFailed ? 'Erro ao gerar cartões' : 'Nenhum cartão gerado',
+          description: allFailed
+            ? (lastErrorMsg || 'Serviço de IA indisponível. Tente novamente em alguns segundos.')
+            : 'O conteúdo pode ser insuficiente.',
+          variant: 'destructive',
+        });
+        removePending(pendingIdRef.current);
       }
-      removePending(pendingIdRef.current);
       resetState();
       return;
     }
 
     if (dedupedCards.length === 0) {
-      toast({ title: 'Nenhum cartão gerado', description: 'O conteúdo pode ser insuficiente.', variant: 'destructive' });
+      const allFailed = failedCount === totalBatches;
+      toast({
+        title: allFailed ? 'Erro ao gerar cartões' : 'Nenhum cartão gerado',
+        description: allFailed
+          ? (lastErrorMsg || 'Serviço de IA indisponível. Tente novamente em alguns segundos.')
+          : 'O conteúdo pode ser insuficiente.',
+        variant: 'destructive',
+      });
       setStep('config');
     } else {
       setCards(dedupedCards); setStep('review');
@@ -417,22 +462,63 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     toast({ title: '⏳ Gerando em segundo plano', description: 'O baralho aparecerá no dashboard quando estiver pronto.' });
   }, [deckName, folderId, genProgress, addPending, onOpenChange, toast]);
 
-  // === Save (foreground) ===
-  const handleSave = useCallback(async () => {
+  // === Save (foreground) — now accepts tags ===
+  const handleSave = useCallback(async (selectedTags?: (Tag | string)[]) => {
     if (!user || cards.length === 0) return;
     setIsSaving(true);
     try {
       const targetDeckId = await saveCardsToDeck(cards, deckName);
+      
+      // Apply deck-level tags
+      if (selectedTags && selectedTags.length > 0 && targetDeckId) {
+        for (const tag of selectedTags) {
+          try {
+            if (typeof tag === 'string') {
+              const created = await tagService.createTag(tag, user.id);
+              await tagService.addDeckTag(targetDeckId, created.id, user.id);
+            } else {
+              await tagService.addDeckTag(targetDeckId, tag.id, user.id);
+            }
+          } catch (e) { console.error('Failed to add deck tag:', e); }
+        }
+        queryClient.invalidateQueries({ queryKey: ['tags'] });
+      }
+
+      // Trigger auto-tag-cards in background (fire and forget)
+      if (targetDeckId) {
+        supabase.functions.invoke('auto-tag-cards', { body: { deckId: targetDeckId } })
+          .then(() => { queryClient.invalidateQueries({ queryKey: ['tags'] }); })
+          .catch(e => console.error('Auto-tag failed:', e));
+      }
+
+      // If opened from pending review, remove the pending item
+      if (pendingReviewData?.pendingId) {
+        removePending(pendingReviewData.pendingId);
+      }
+
       toast({ title: existingDeckId ? '🧠 Cartões adicionados!' : '🧠 Baralho criado!', description: `${cards.length} cartões salvos` });
       resetState(); onOpenChange(false);
       if (!existingDeckId && targetDeckId) navigate(`/decks/${targetDeckId}`);
     } catch (err: any) { toast({ title: 'Erro ao salvar', description: err?.message, variant: 'destructive' }); }
     finally { setIsSaving(false); }
-  }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck]);
+  }, [user, cards, existingDeckId, deckName, toast, resetState, onOpenChange, navigate, saveCardsToDeck, queryClient, pendingReviewData, removePending]);
 
   // === Edit helpers ===
   const startEdit = useCallback((i: number) => { setEditingIdx(i); setEditFront(cards[i].front); setEditBack(cards[i].back); }, [cards]);
-  const saveEdit = useCallback(() => { if (editingIdx === null) return; setCards(p => p.map((c, i) => i === editingIdx ? { ...c, front: editFront, back: editBack } : c)); setEditingIdx(null); }, [editingIdx, editFront, editBack]);
+  const saveEdit = useCallback((extraData?: { mcOptions?: string[]; mcCorrectIndex?: number }) => {
+    if (editingIdx === null) return;
+    setCards(p => p.map((c, i) => {
+      if (i !== editingIdx) return c;
+      const updated = { ...c, front: editFront, back: editBack };
+      if (extraData?.mcOptions) {
+        updated.options = extraData.mcOptions;
+        updated.correctIndex = extraData.mcCorrectIndex ?? 0;
+      }
+      return updated;
+    }));
+    setEditingIdx(null);
+  }, [editingIdx, editFront, editBack]);
+  const cancelEdit = useCallback(() => { setEditingIdx(null); }, []);
   const deleteCard = useCallback((i: number) => { setCards(p => p.filter((_, j) => j !== i)); if (editingIdx === i) setEditingIdx(null); }, [editingIdx]);
   const toggleType = useCallback((i: number) => {
     setCards(p => p.map((c, j) => {
@@ -452,10 +538,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     isSaving, isLoading, busy, fileInputRef,
     selectedPages, totalCredits, energy, model, setModel, isPremium,
     pendingPro, confirmPro, cancelPro,
+    textSample: textSampleRef.current,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
     handleGenerate, handleSave, handleDismissToBackground,
-    startEdit, saveEdit, deleteCard, toggleType,
+    startEdit, saveEdit, cancelEdit, deleteCard, toggleType,
     getCost,
   };
 }

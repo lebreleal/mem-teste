@@ -96,20 +96,45 @@ export async function updateTurma(turmaId: string, updates: { name?: string; des
 
 export async function fetchDiscoverTurmas(userId: string, searchQuery: string): Promise<(Turma & { member_count: number; owner_name: string })[]> {
   let query = supabase.from('turmas').select('*').eq('is_private', false);
-  if (searchQuery.trim()) query = query.or(`name.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+  const q = searchQuery.trim();
+  if (q) query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
   const { data: turmas } = await query.order('created_at', { ascending: false }).limit(50);
-  if (!turmas || turmas.length === 0) return [];
+  
+  // Also find turmas via deck tags if searching
+  let tagMatchedTurmaIds = new Set<string>();
+  if (q) {
+    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
+    if (matchingTags && matchingTags.length > 0) {
+      const tagIds = matchingTags.map((t: any) => t.id);
+      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
+      if (deckTagRows && deckTagRows.length > 0) {
+        const deckIds = deckTagRows.map((r: any) => r.deck_id);
+        const { data: decksWithCommunity } = await supabase.from('decks').select('community_id').in('id', deckIds).not('community_id', 'is', null);
+        (decksWithCommunity ?? []).forEach((d: any) => { if (d.community_id) tagMatchedTurmaIds.add(d.community_id); });
+      }
+    }
+  }
 
-  const ownerIds = [...new Set(turmas.map((t: any) => t.owner_id))];
+  const nameMatchedIds = new Set((turmas ?? []).map((t: any) => t.id));
+  const extraIds = [...tagMatchedTurmaIds].filter(id => !nameMatchedIds.has(id));
+  let allTurmas = [...(turmas ?? [])];
+  if (extraIds.length > 0) {
+    const { data: extraTurmas } = await supabase.from('turmas').select('*').eq('is_private', false).in('id', extraIds.slice(0, 50));
+    if (extraTurmas) allTurmas.push(...extraTurmas);
+  }
+
+  if (allTurmas.length === 0) return [];
+
+  const ownerIds = [...new Set(allTurmas.map((t: any) => t.owner_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const turmaIds = turmas.map((t: any) => t.id);
+  const turmaIds = allTurmas.map((t: any) => t.id);
   const { data: members } = await supabase.from('turma_members').select('turma_id').in('turma_id', turmaIds);
   const countMap = new Map<string, number>();
   (members ?? []).forEach((m: any) => countMap.set(m.turma_id, (countMap.get(m.turma_id) ?? 0) + 1));
 
-  return turmas.map((t: any) => ({
+  return allTurmas.map((t: any) => ({
     ...t, member_count: countMap.get(t.id) ?? 0, owner_name: profileMap.get(t.owner_id) ?? 'Anônimo',
     avg_rating: t.avg_rating ?? 0, rating_count: t.rating_count ?? 0,
   }));
@@ -152,10 +177,17 @@ export async function fetchTurmaRole(userId: string, turmaId: string): Promise<T
 export async function fetchTurmaMembers(turmaId: string): Promise<TurmaMember[]> {
   const { data: members } = await supabase.from('turma_members').select('user_id, role, is_subscriber').eq('turma_id', turmaId);
   if (!members) return [];
-  const userIds = members.map(m => (m as any).user_id);
+  // Deduplicate by user_id (keep first occurrence)
+  const seen = new Set<string>();
+  const unique = (members as any[]).filter(m => {
+    if (seen.has(m.user_id)) return false;
+    seen.add(m.user_id);
+    return true;
+  });
+  const userIds = unique.map(m => m.user_id);
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-  return members.map((m: any) => {
+  return unique.map((m: any) => {
     const p = profileMap.get(m.user_id) as any;
     return { user_id: m.user_id, role: m.role, user_name: p?.name || 'Anônimo', user_email: '', is_subscriber: m.is_subscriber ?? false };
   });
@@ -179,13 +211,97 @@ export async function fetchTurmaLessons(turmaId: string): Promise<TurmaLesson[]>
 export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   const { data } = await supabase.from('turma_decks').select('*').eq('turma_id', turmaId);
   if (!data || data.length === 0) return [];
+
   const deckIds = data.map((d: any) => d.deck_id);
-  const { data: decks } = await supabase.from('decks').select('id, name').in('id', deckIds);
-  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', deckIds);
-  const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
-  const countMap = new Map<string, number>();
-  (cards ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
-  return data.map((d: any) => ({ ...d, deck_name: deckMap.get(d.deck_id) || 'Sem nome', card_count: countMap.get(d.deck_id) ?? 0 }));
+  const tdByDeckId = new Map<string, any>(data.map((d: any) => [d.deck_id, d]));
+
+  // Fetch shared decks
+  const { data: sharedDecks } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('id', deckIds);
+
+  // Recursively fetch ALL children from decks table (even if not in turma_decks)
+  let allDecks = [...(sharedDecks ?? [])];
+  const seenIds = new Set(deckIds);
+  let parentIdsToCheck = [...deckIds];
+
+  while (parentIdsToCheck.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('parent_deck_id', parentIdsToCheck);
+    const newChildren = (children ?? []).filter((c: any) => !seenIds.has(c.id));
+    if (newChildren.length === 0) break;
+    newChildren.forEach((c: any) => seenIds.add(c.id));
+    allDecks.push(...newChildren);
+    parentIdsToCheck = newChildren.map((c: any) => c.id);
+  }
+
+  // Auto-create missing turma_deck entries for discovered children
+  const missingChildren = allDecks.filter((d: any) => !tdByDeckId.has(d.id));
+  if (missingChildren.length > 0) {
+    const rows = missingChildren.map((child: any) => {
+      // Find closest ancestor with a turma_deck entry for inheriting settings
+      let parentTd: any = null;
+      let cur: any = child;
+      while (cur?.parent_deck_id) {
+        parentTd = tdByDeckId.get(cur.parent_deck_id);
+        if (parentTd) break;
+        cur = allDecks.find((d: any) => d.id === cur.parent_deck_id);
+      }
+      return {
+        turma_id: turmaId,
+        deck_id: child.id,
+        subject_id: parentTd?.subject_id ?? null,
+        lesson_id: parentTd?.lesson_id ?? null,
+        shared_by: parentTd?.shared_by ?? child.user_id,
+        price: 0,
+        price_type: 'free',
+        allow_download: parentTd?.allow_download ?? false,
+      };
+    });
+    try {
+      const { data: inserted } = await supabase.from('turma_decks').insert(rows as any).select();
+      if (inserted) {
+        inserted.forEach((td: any) => {
+          data.push(td);
+          tdByDeckId.set(td.deck_id, td);
+        });
+      }
+    } catch {
+      // Permission denied for non-admin – ignore, counting still works
+    }
+  }
+
+  // Fetch card counts for all discovered decks
+  const allDeckIdsExpanded = allDecks.map((d: any) => d.id);
+  // Use RPC to count cards efficiently (avoids 1000-row limit)
+  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIdsExpanded });
+  const directCountMap = new Map<string, number>();
+  (countRows ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
+
+  const deckMap = new Map(allDecks.map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
+
+  // Collect published subtree using FULL hierarchy (not just turma_decks)
+  const collectPublishedSubtree = (rootDeckId: string): string[] => {
+    const result: string[] = [rootDeckId];
+    const children = allDecks.filter((d: any) => d.parent_deck_id === rootDeckId);
+    for (const child of children) {
+      const td = tdByDeckId.get(child.id);
+      // If no turma_deck entry exists yet, include it; if entry exists, check is_published
+      if (!td || td.is_published !== false) {
+        result.push(...collectPublishedSubtree(child.id));
+      }
+    }
+    return result;
+  };
+
+  return data.map((d: any) => {
+    const deckInfo = deckMap.get(d.deck_id);
+    const subtreeIds = collectPublishedSubtree(d.deck_id);
+    const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
+    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: aggregatedCount, parent_deck_id: deckInfo?.parent_deck_id ?? null, is_published: d.is_published ?? true };
+  });
+}
+
+export async function toggleDeckPublished(id: string, isPublished: boolean) {
+  const { error } = await supabase.from('turma_decks').update({ is_published: isPublished } as any).eq('id', id);
+  if (error) throw error;
 }
 
 // ── Hierarchy Mutations ──
@@ -226,7 +342,46 @@ export async function updateLessonContent(id: string, params: { summary?: string
   const { error } = await supabase.from('turma_lessons').update(updateData).eq('id', id); if (error) throw error;
 }
 export async function shareDeck(turmaId: string, userId: string, params: { deckId: string; subjectId?: string | null; lessonId?: string | null; price?: number; priceType?: string; allowDownload?: boolean }) {
-  const { error } = await supabase.from('turma_decks').insert({ turma_id: turmaId, deck_id: params.deckId, subject_id: params.subjectId ?? null, lesson_id: params.lessonId ?? null, shared_by: userId, price: params.price ?? 0, price_type: params.priceType ?? 'free', allow_download: params.allowDownload ?? false } as any);
+  // Fetch all user decks to find hierarchy
+  const { data: allDecks } = await supabase.from('decks').select('id, parent_deck_id, name').eq('user_id', userId);
+  const decks = allDecks ?? [];
+
+  // Collect this deck + all descendants
+  const collectDescendants = (parentId: string): string[] => {
+    const children = decks.filter(d => d.parent_deck_id === parentId);
+    const result: string[] = [];
+    for (const child of children) {
+      result.push(child.id);
+      result.push(...collectDescendants(child.id));
+    }
+    return result;
+  };
+
+  const allDeckIds = [params.deckId, ...collectDescendants(params.deckId)];
+
+  // Check which are already shared in this turma
+  const { data: existingShares } = await supabase.from('turma_decks').select('id, deck_id').eq('turma_id', turmaId).in('deck_id', allDeckIds);
+  const alreadyShared = new Set((existingShares ?? []).map(s => s.deck_id));
+
+  // Insert only the ones not yet shared
+  const toInsert = allDeckIds.filter(id => !alreadyShared.has(id));
+  if (toInsert.length === 0) return;
+
+  const rows = toInsert.map(deckId => ({
+    turma_id: turmaId,
+    deck_id: deckId,
+    subject_id: params.subjectId ?? null,
+    lesson_id: params.lessonId ?? null,
+    shared_by: userId,
+    price: params.price ?? 0,
+    price_type: params.priceType ?? 'free',
+    allow_download: params.allowDownload ?? false,
+  }));
+
+  // Mark all decks in hierarchy as public so they're visible via RLS
+  await supabase.from('decks').update({ is_public: true } as any).in('id', toInsert);
+
+  const { error } = await supabase.from('turma_decks').insert(rows as any);
   if (error) throw error;
 }
 export async function updateDeckPricing(id: string, params: { price: number; priceType: string; allowDownload?: boolean }) {
@@ -481,42 +636,105 @@ export interface PublicDeckItem {
 }
 
 export async function fetchPublicDecks(searchQuery: string): Promise<PublicDeckItem[]> {
-  let query = supabase.from('decks').select('id, name, user_id, created_at, updated_at').eq('is_public', true).is('parent_deck_id', null);
-  if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
-  const { data: decks } = await query.order('created_at', { ascending: false }).limit(60);
-  if (!decks || decks.length === 0) return [];
+  // Fetch ALL public decks (not just roots) — each level appears independently
+  let query = supabase.from('decks').select('id, name, user_id, parent_deck_id, created_at, updated_at').eq('is_public', true);
+  const q = searchQuery.trim();
+  if (q) query = query.ilike('name', `%${q}%`);
+  const { data: decks } = await query.order('created_at', { ascending: false }).limit(200);
 
-  const ownerIds = [...new Set(decks.map((d: any) => d.user_id))];
+  // If searching, also find decks via tag names (deck_tags + card_tags)
+  let tagMatchedDeckIds = new Set<string>();
+  if (q) {
+    // Find tags matching the search query
+    const { data: matchingTags } = await supabase.from('tags').select('id').ilike('name', `%${q}%`);
+    if (matchingTags && matchingTags.length > 0) {
+      const tagIds = matchingTags.map((t: any) => t.id);
+      // Find decks directly tagged
+      const { data: deckTagRows } = await supabase.from('deck_tags').select('deck_id').in('tag_id', tagIds);
+      (deckTagRows ?? []).forEach((r: any) => tagMatchedDeckIds.add(r.deck_id));
+      // Find decks via card tags
+      const { data: cardTagRows } = await supabase.from('card_tags').select('card_id').in('tag_id', tagIds);
+      if (cardTagRows && cardTagRows.length > 0) {
+        const cardIds = cardTagRows.map((r: any) => r.card_id);
+        const { data: cards } = await supabase.from('cards').select('deck_id').in('id', cardIds.slice(0, 500));
+        (cards ?? []).forEach((c: any) => tagMatchedDeckIds.add(c.deck_id));
+      }
+    }
+  }
+
+  // Merge: name-matched + tag-matched decks
+  const nameMatchedIds = new Set((decks ?? []).map((d: any) => d.id));
+  const extraIds = [...tagMatchedDeckIds].filter(id => !nameMatchedIds.has(id));
+
+  let allDecks = [...(decks ?? [])];
+  if (extraIds.length > 0) {
+    const { data: extraDecks } = await supabase.from('decks')
+      .select('id, name, user_id, parent_deck_id, created_at, updated_at')
+      .eq('is_public', true)
+      .in('id', extraIds.slice(0, 100));
+    if (extraDecks) allDecks.push(...extraDecks);
+  }
+
+  if (allDecks.length === 0) return [];
+
+  const ownerIds = [...new Set(allDecks.map((d: any) => d.user_id))];
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
 
-  const deckIds = decks.map((d: any) => d.id);
-  const [cardsResult, cardUpdatesResult] = await Promise.all([
-    supabase.from('cards').select('deck_id').in('deck_id', deckIds),
-    supabase.from('cards').select('deck_id, updated_at').in('deck_id', deckIds).order('updated_at', { ascending: false }),
-  ]);
-  const countMap = new Map<string, number>();
-  (cardsResult.data ?? []).forEach((c: any) => countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1));
-
-  // Build max card updated_at per deck (sorted desc, first occurrence = max)
-  const cardMaxMap = new Map<string, string>();
-  (cardUpdatesResult.data ?? []).forEach((c: any) => {
-    if (!cardMaxMap.has(c.deck_id)) cardMaxMap.set(c.deck_id, c.updated_at);
+  // Build parent→children map from the fetched decks themselves
+  const childrenMap = new Map<string, string[]>();
+  const deckMap = new Map(allDecks.map((d: any) => [d.id, d]));
+  allDecks.forEach((d: any) => {
+    if (d.parent_deck_id && deckMap.has(d.parent_deck_id)) {
+      const list = childrenMap.get(d.parent_deck_id) ?? [];
+      list.push(d.id);
+      childrenMap.set(d.parent_deck_id, list);
+    }
   });
 
-  return decks.map((d: any) => {
-    const cardUpdated = cardMaxMap.get(d.id);
-    const effectiveUpdatedAt = cardUpdated && new Date(cardUpdated) > new Date(d.updated_at)
-      ? cardUpdated
-      : d.updated_at;
+  // Also fetch children that might not be public themselves but belong to hierarchy
+  // (for card counting purposes)
+  const allFetchedIds = new Set(allDecks.map((d: any) => d.id));
+  let parentIds = [...allFetchedIds];
+  while (parentIds.length > 0) {
+    const { data: children } = await supabase.from('decks').select('id, parent_deck_id, updated_at').in('parent_deck_id', parentIds);
+    const newChildren = (children ?? []).filter((c: any) => !allFetchedIds.has(c.id));
+    if (newChildren.length === 0) break;
+    newChildren.forEach((c: any) => {
+      allFetchedIds.add(c.id);
+      const list = childrenMap.get(c.parent_deck_id) ?? [];
+      list.push(c.id);
+      childrenMap.set(c.parent_deck_id, list);
+    });
+    parentIds = newChildren.map((c: any) => c.id);
+  }
+
+  const collectSubtree = (rootId: string): string[] => {
+    const result = [rootId];
+    for (const childId of (childrenMap.get(rootId) ?? [])) {
+      result.push(...collectSubtree(childId));
+    }
+    return result;
+  };
+
+  // Count cards per deck using server-side RPC (avoids 1000-row limit)
+  const allDeckIds = [...allFetchedIds];
+  const directCountMap = new Map<string, number>();
+  const { data: counts } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
+  (counts ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
+
+  return allDecks.map((d: any) => {
+    const subtreeIds = collectSubtree(d.id);
+    const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
+
     return {
       id: d.id,
       name: d.name,
-      card_count: countMap.get(d.id) ?? 0,
+      card_count: aggregatedCount,
       owner_name: profileMap.get(d.user_id) ?? 'Anônimo',
       owner_id: d.user_id,
       created_at: d.created_at,
-      updated_at: effectiveUpdatedAt,
+      updated_at: d.updated_at,
     };
   });
 }

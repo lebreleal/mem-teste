@@ -4,7 +4,7 @@
  * Cloze cards: each cloze number (c1, c2...) is shown as a separate virtual card.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { X, ChevronLeft, ChevronRight, PenLine, MoreVertical, Trash2, ArrowUpRight, Flame } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -37,19 +37,28 @@ export function buildVirtualCards(cards: CardRow[]): VirtualCard[] {
   const result: VirtualCard[] = [];
   const processedClozeGroups = new Set<string>();
 
+  const hasClozeContent = (c: CardRow) => c.card_type === 'cloze' || /\{\{c\d+::.+?\}\}/.test(c.front_content);
+
   cards.forEach(card => {
-    if (card.card_type === 'cloze') {
+    if (hasClozeContent(card)) {
       const groupKey = card.front_content;
       if (processedClozeGroups.has(groupKey)) return;
       processedClozeGroups.add(groupKey);
 
-      const siblings = cards.filter(c => c.card_type === 'cloze' && c.front_content === groupKey);
+      const siblings = cards.filter(c => hasClozeContent(c) && c.front_content === groupKey);
       siblings.forEach(sibling => {
         let clozeTarget = 1;
         try {
           const parsed = JSON.parse(sibling.back_content);
           if (typeof parsed.clozeTarget === 'number') clozeTarget = parsed.clozeTarget;
-        } catch {}
+        } catch {
+          // If back_content isn't JSON, extract cloze numbers from front
+          const nums = [...sibling.front_content.matchAll(/\{\{c(\d+)::/g)].map(m => parseInt(m[1]));
+          const uniqueNums = [...new Set(nums)].sort((a, b) => a - b);
+          // Find this card's index in siblings to assign the right cloze target
+          const sibIdx = siblings.indexOf(sibling);
+          clozeTarget = uniqueNums[sibIdx] || uniqueNums[0] || 1;
+        }
         result.push({ card: sibling, clozeTarget });
       });
     } else {
@@ -67,7 +76,7 @@ export function CardContent({
 }: { vc: VirtualCard; revealed: boolean; onClick?: () => void; className?: string }) {
   const card = vc.card;
 
-  const isCloze = card?.card_type === 'cloze';
+  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
   const isMultiple = card?.card_type === 'multiple_choice';
   const isOcclusion = card?.card_type === 'image_occlusion';
   const clozeTarget = vc.clozeTarget;
@@ -168,7 +177,25 @@ export function CardContent({
       }
       if (isCloze) {
         const html = renderClozePreview(card.front_content, revealed, clozeTarget);
-        return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
+        // Parse extra back content for cloze
+        let extraBack = '';
+        try {
+          const parsed = JSON.parse(card.back_content);
+          extraBack = parsed.extra || '';
+        } catch {
+          // If not JSON, use back_content directly as extra (for imported cards)
+          if (card.back_content && !/^\{/.test(card.back_content.trim())) {
+            extraBack = card.back_content;
+          }
+        }
+        return (
+          <div>
+            <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+            {revealed && extraBack && extraBack.replace(/<[^>]*>/g, '').trim() && (
+              <div className="mt-4 pt-4 border-t border-border/30 text-base leading-relaxed text-muted-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(extraBack) }} />
+            )}
+          </div>
+        );
       }
       if (/<[a-z][\s\S]*>/i.test(card.front_content))
         return <div className="text-lg sm:text-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />;
@@ -228,9 +255,15 @@ interface Props {
   onClose: () => void;
 }
 
-const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
-  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard } = useDeckDetail();
+const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+
+const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
+  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck } = useDeckDetail();
   const isMobile = useIsMobile();
+
+  // Check if this is a community-linked deck
+  const isLinkedDeck = !!(deck?.source_turma_deck_id || deck?.source_listing_id || deck?.is_live_deck);
+  const [suggestCard, setSuggestCard] = useState<any>(null);
 
   const virtualCards = useMemo(() => {
     if (!cards || cards.length === 0) return [];
@@ -320,7 +353,7 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
 
   if (!open || !card) return null;
 
-  const isCloze = card?.card_type === 'cloze';
+  const isCloze = card?.card_type === 'cloze' || (card && /\{\{c\d+::.+?\}\}/.test(card.front_content));
   const clozeTarget = vc?.clozeTarget;
 
 
@@ -347,9 +380,15 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => { onClose(); openEdit(card); }}>
-            <PenLine className="h-4 w-4" />
-          </Button>
+          {isLinkedDeck ? (
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => setSuggestCard(card)}>
+              <PenLine className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm" onClick={() => { onClose(); openEdit(card); }}>
+              <PenLine className="h-4 w-4" />
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full bg-card/80 shadow-sm">
@@ -411,8 +450,21 @@ const CardPreviewSheet = ({ cards, initialIndex, open, onClose }: Props) => {
           <ChevronRight className={isMobile ? 'h-4 w-4' : 'h-5 w-5'} />
         </Button>
       </div>
+      {/* Suggest correction modal for linked decks */}
+      {suggestCard && (
+        <Suspense fallback={null}>
+          <SuggestCorrectionModal
+            open={!!suggestCard}
+            onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
+            card={suggestCard}
+            deckId={deck?.id}
+          />
+        </Suspense>
+      )}
     </div>
   );
-};
+});
+
+CardPreviewSheet.displayName = 'CardPreviewSheet';
 
 export default CardPreviewSheet;

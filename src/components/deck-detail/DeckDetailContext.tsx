@@ -3,7 +3,8 @@
  * can consume via useDeckDetail() instead of receiving long prop lists.
  */
 
-import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
@@ -30,6 +31,9 @@ interface DeckDetailContextValue {
   allCards: CardRow[];
   allCardsLoading: boolean;
   filteredCards: CardRow[];
+  cardCounts: DescendantCardCounts | undefined;
+  loadMoreCards: () => void;
+  hasMoreCards: boolean;
   stats: { new_count: number; learning_count: number; review_count: number; reviewed_today: number } | undefined;
   decks: ReturnType<typeof useDecks>['decks'];
 
@@ -201,7 +205,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId);
+  const { cards, isLoading: cardsLoading, createCard, updateCard, deleteCard } = useCards(deckId, { enableQuery: false });
   const { decks } = useDecks();
   const { toast } = useToast();
   const { createExam } = useExams();
@@ -266,17 +270,113 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
-  const { data: allCards = [], isLoading: allCardsLoading } = useQuery({
-    queryKey: ['cards-aggregated', deckId, descendantIds],
-    queryFn: () => cardService.fetchAggregatedCards(allDeckIds),
+  const CARDS_PAGE = 200;
+  const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
+
+  // Lightweight counts by state/type via single RPC (replaces cardsMeta + fetchAggregatedStats)
+  const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
+    queryKey: ['card-counts', deckId],
+    queryFn: () => cardService.fetchDescendantCardCounts(deckId),
     enabled: !!user && !!deckId,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ['deck-stats', deckId, descendantIds],
-    queryFn: () => cardService.fetchAggregatedStats(allDeckIds),
-    enabled: !!deckId,
+  // Full card content – only first N cards for display via single RPC
+  const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
+    queryKey: ['cards-display', deckId, displayLimit],
+    queryFn: () => cardService.fetchDescendantCardsPage(deckId, displayLimit, 0),
+    enabled: !!user && !!deckId,
   });
+
+  const allCardsLoading = cardCountsLoading || displayCardsLoading;
+  // allCards = displayCards (paginated full content for rendering)
+  const allCards = displayCards;
+
+  // ─── Auto-sync: if linked deck has 0 cards, copy from source ───
+  const syncAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (syncAttemptedRef.current) return;
+    if (!deck || !user || !cardCounts) return;
+    if (cardCounts.total > 0) return;
+    const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
+    const isLiveDeck = (deck as any)?.is_live_deck;
+    if (!sourceTurmaDeckId && !isLiveDeck) return;
+    syncAttemptedRef.current = true;
+    (async () => {
+      try {
+        let sourceDeckId: string | null = null;
+
+        if (sourceTurmaDeckId) {
+          // Find the source deck_id from turma_decks
+          const { data: td } = await supabase
+            .from('turma_decks')
+            .select('deck_id')
+            .eq('id', sourceTurmaDeckId)
+            .maybeSingle();
+          sourceDeckId = td?.deck_id ?? null;
+        }
+
+        // Fallback: find source by name match (for public decks without turma link)
+        if (!sourceDeckId && isLiveDeck) {
+          const { data: candidates } = await supabase
+            .from('decks')
+            .select('id')
+            .eq('name', (deck as any).name)
+            .eq('is_public', true)
+            .neq('user_id', user.id)
+            .limit(1);
+          sourceDeckId = candidates?.[0]?.id ?? null;
+        }
+
+        if (!sourceDeckId) return;
+
+        // Copy cards in batches
+        const BATCH = 500;
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data: cards } = await supabase
+            .from('cards')
+            .select('front_content, back_content, card_type')
+            .eq('deck_id', sourceDeckId)
+            .range(offset, offset + BATCH - 1)
+            .order('created_at', { ascending: true });
+          if (!cards || cards.length === 0) { hasMore = false; break; }
+          await supabase.from('cards').insert(
+            cards.map((c: any) => ({
+              deck_id: deckId,
+              front_content: c.front_content,
+              back_content: c.back_content,
+              card_type: c.card_type ?? 'basic',
+              state: 0, stability: 0, difficulty: 0,
+            })) as any
+          );
+          if (cards.length < BATCH) hasMore = false;
+          else offset += BATCH;
+        }
+        // Refresh card data
+        queryClient.invalidateQueries({ queryKey: ['card-counts', deckId] });
+        queryClient.invalidateQueries({ queryKey: ['cards-display', deckId] });
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+      } catch (e) {
+        console.error('Auto-sync cards failed:', e);
+      }
+    })();
+  }, [deck, user, cardCounts, deckId, queryClient]);
+
+  const loadMoreCards = useCallback(() => {
+    setDisplayLimit(prev => prev + CARDS_PAGE);
+  }, []);
+
+  // Derive stats from cardCounts (no extra query needed) + rootTotals for today's reviewed
+  const stats = useMemo(() => {
+    if (!cardCounts) return undefined;
+    return {
+      new_count: cardCounts.new_count,
+      learning_count: cardCounts.learning_count,
+      review_count: cardCounts.review_count,
+      reviewed_today: 0, // computed from rootTotals below
+    };
+  }, [cardCounts]);
 
   // ─── Root ancestor governance ─────────
   // Find the root ancestor — its config (limits, shuffle, algorithm) governs all descendants
@@ -375,7 +475,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
-  const totalCards = allCards.length;
+  const totalCards = cardCounts?.total ?? 0;
   const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
 
@@ -621,12 +721,17 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const uniqueNums = [...new Set(clozeNumMatches.map(m => parseInt(m[1])))].sort((a, b) => a - b);
 
       if (editingId) {
-        // Find all sibling cloze cards (same front_content as the card being edited)
+        // Find all sibling cloze cards from server (same front_content as the card being edited)
         const editingCard = allCards.find(c => c.id === editingId);
-        const siblings = editingCard
-          ? allCards.filter(c => c.card_type === 'cloze' && c.front_content === editingCard.front_content && c.id !== editingId)
+        let frontContentForCloze = editingCard?.front_content;
+        if (!frontContentForCloze && editingId) {
+          // Card not in display page, fetch from server
+          const { data } = await supabase.from('cards').select('front_content').eq('id', editingId).single();
+          frontContentForCloze = data?.front_content;
+        }
+        const allSiblingCards = frontContentForCloze
+          ? await cardService.fetchClozeSiblings(allDeckIds, frontContentForCloze)
           : [];
-        const allSiblingCards = editingCard ? [editingCard, ...siblings] : [];
 
         // Map existing cloze targets to card IDs
         const existingTargets = new Map<number, string>();
@@ -693,14 +798,20 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
       else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
     }
-  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, deckId, queryClient]);
+  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, allDeckIds, deckId, queryClient]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     // For cloze cards, delete all siblings with same front_content
     const card = allCards.find(c => c.id === deleteId);
-    if (card?.card_type === 'cloze') {
-      const siblings = allCards.filter(c => c.card_type === 'cloze' && c.front_content === card.front_content);
+    const isCloze = card?.card_type === 'cloze';
+    if (isCloze) {
+      let frontContent = card?.front_content;
+      if (!frontContent) {
+        const { data } = await supabase.from('cards').select('front_content').eq('id', deleteId).single();
+        frontContent = data?.front_content;
+      }
+      const siblings = frontContent ? await cardService.fetchClozeSiblings(allDeckIds, frontContent) : [];
       const ids = siblings.map(c => c.id);
       try {
         await cardService.bulkDeleteCards(ids);
@@ -713,7 +824,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     } else {
       deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
-  }, [deleteId, deleteCard, toast, allCards, deckId, queryClient]);
+  }, [deleteId, deleteCard, toast, allCards, allDeckIds, deckId, queryClient]);
 
   const handleMoveCard = useCallback(async () => {
     if (!moveCardId || !moveTargetDeck) return;
@@ -933,8 +1044,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast]);
 
+  const hasMoreCards = displayLimit < totalCards;
+
   const value: DeckDetailContextValue = {
-    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, stats, decks,
+    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardCounts, loadMoreCards, hasMoreCards, stats, decks,
     dailyNewLimit, dailyReviewLimit, isPlanControlled, newCountToday, learningCount, masteredToday,
     isQuickReview, totalDue, studyPending, totalCards, actualNewCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,

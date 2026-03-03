@@ -9,17 +9,34 @@ import type { DeckWithStats } from '@/types/deck';
 /** Fetch all user decks with computed stats using batch RPC (single query). */
 export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
   // Parallel fetch: decks + stats run concurrently
-  const [decksResult, statsResult] = await Promise.all([
-    supabase
-      .from('decks')
-      .select('*')
-      .eq('user_id', userId)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false }),
+  // Supabase defaults to 1000 rows — users with many sub-decks can exceed this.
+  // Fetch in pages of 1000 to get ALL decks.
+  const fetchAllDecks = async () => {
+    const PAGE = 1000;
+    let allDecks: any[] = [];
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('decks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      if (data) allDecks = allDecks.concat(data);
+      hasMore = (data?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+    return allDecks;
+  };
+
+  const [decks, statsResult] = await Promise.all([
+    fetchAllDecks(),
     supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: -new Date().getTimezoneOffset() }),
   ]);
-  if (decksResult.error) throw decksResult.error;
-  const decks = decksResult.data;
+  // decks already resolved from fetchAllDecks()
   const allStats = statsResult.data;
   const statsMap = new Map<string, { new_count: number; learning_count: number; review_count: number; reviewed_today: number; new_reviewed_today: number; new_graduated_today: number }>();
   if (allStats) {
@@ -214,8 +231,114 @@ export async function createAlgorithmCopy(userId: string, deckId: string, algori
   return newDeck;
 }
 
-/** Import a deck with cards. Returns the new deck. */
-export async function importDeck(userId: string, name: string, folderId: string | null, cards: { frontContent: string; backContent: string; cardType: string }[], algorithmMode?: string) {
+/** Card with optional progress data for import. */
+export interface CardImportInput {
+  frontContent: string;
+  backContent: string;
+  cardType: string;
+  progress?: {
+    state: number;
+    stability: number;
+    difficulty: number;
+    scheduledDate: string;
+    learningStep: number;
+    lastReviewedAt?: string;
+  };
+}
+
+/** Revlog entry referencing card by index. */
+export interface RevlogImportEntry {
+  cardIndex: number;
+  rating: number;
+  reviewedAt: string;
+  stability: number;
+  difficulty: number;
+  scheduledDate: string;
+  state: number | null;
+  elapsedMs: number | null;
+}
+
+/** Helper to batch-insert revlog entries using a card ID mapping. Uses parallel inserts. */
+async function insertRevlogBatch(
+  userId: string,
+  revlog: RevlogImportEntry[],
+  cardIdMap: Map<number, string>,
+) {
+  const BATCH = 500;
+  const CONCURRENT = 5;
+  const rows = revlog
+    .filter(r => cardIdMap.has(r.cardIndex))
+    .map(r => ({
+      card_id: cardIdMap.get(r.cardIndex)!,
+      user_id: userId,
+      rating: r.rating,
+      reviewed_at: r.reviewedAt,
+      stability: r.stability,
+      difficulty: r.difficulty,
+      scheduled_date: r.scheduledDate,
+      state: r.state,
+      elapsed_ms: r.elapsedMs,
+    }));
+  const batches: typeof rows[] = [];
+  for (let i = 0; i < rows.length; i += BATCH) {
+    batches.push(rows.slice(i, i + BATCH));
+  }
+  for (let i = 0; i < batches.length; i += CONCURRENT) {
+    const group = batches.slice(i, i + CONCURRENT);
+    const results = await Promise.all(
+      group.map(batch => supabase.from('review_logs').insert(batch as any))
+    );
+    for (const { error } of results) {
+      if (error) console.warn('Revlog insert error (continuing):', error.message);
+    }
+  }
+}
+
+/** Retry helper with exponential backoff for import batches. */
+async function importRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = err?.message || '';
+      const isRetryable = msg.includes('Failed to fetch') || msg.includes('ERR_') ||
+        msg.includes('NetworkError') || msg.includes('PGRST000') ||
+        msg.includes('timeout') || msg.includes('AbortError') ||
+        (err?.code && String(err.code).startsWith('5'));
+      if (attempt < maxRetries - 1 && isRetryable) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+/** Estimate avg card size to determine adaptive batch size. */
+function getAdaptiveBatchSize(cards: CardImportInput[], defaultSize = 500): number {
+  if (cards.length === 0) return defaultSize;
+  const sample = cards.slice(0, Math.min(50, cards.length));
+  const avgSize = sample.reduce((sum, c) => sum + (c.frontContent?.length || 0) + (c.backContent?.length || 0), 0) / sample.length;
+  if (avgSize > 10000) return 50;   // Very heavy (base64 images)
+  if (avgSize > 5000) return 100;
+  if (avgSize > 2000) return 200;
+  return defaultSize;
+}
+
+/** Progress callback type for import operations. */
+export type ImportProgressCallback = (current: number, total: number) => void;
+
+/** Import a deck with cards and optional progress/revlog. Returns the new deck. */
+export async function importDeck(
+  userId: string,
+  name: string,
+  folderId: string | null,
+  cards: CardImportInput[],
+  algorithmMode?: string,
+  revlog?: RevlogImportEntry[],
+  onProgress?: ImportProgressCallback,
+) {
   const { data: newDeck, error: deckErr } = await supabase
     .from('decks')
     .insert({ name, user_id: userId, folder_id: folderId, ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}) } as any)
@@ -228,19 +351,85 @@ export async function importDeck(userId: string, name: string, folderId: string 
     front_content: c.frontContent,
     back_content: c.backContent,
     card_type: c.cardType,
-    state: 0,
-    stability: 0,
-    difficulty: 0,
+    state: c.progress?.state ?? 0,
+    stability: c.progress?.stability ?? 0,
+    difficulty: c.progress?.difficulty ?? 0,
+    scheduled_date: c.progress?.scheduledDate ?? new Date().toISOString(),
+    learning_step: c.progress?.learningStep ?? 0,
+    ...(c.progress?.lastReviewedAt ? { last_reviewed_at: c.progress.lastReviewedAt } : {}),
   }));
-  // Batch insert to avoid payload limits
-  const BATCH_SIZE = 200;
+
+  const BATCH_SIZE = getAdaptiveBatchSize(cards);
+  const cardIdMap = new Map<number, string>();
+  let insertedCount = 0;
+  const totalCards = cards.length;
+  const failedBatches: { batch: typeof rows; startIdx: number }[] = [];
+
+  const CONCURRENT = 3;
+  const cardBatches: { batch: typeof rows; startIdx: number }[] = [];
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const { error: cardsErr } = await supabase.from('cards').insert(batch as any);
-    if (cardsErr) throw cardsErr;
+    cardBatches.push({ batch: rows.slice(i, i + BATCH_SIZE), startIdx: i });
+  }
+
+  for (let i = 0; i < cardBatches.length; i += CONCURRENT) {
+    const group = cardBatches.slice(i, i + CONCURRENT);
+    const results = await Promise.allSettled(
+      group.map(g => importRetry(async () => await supabase.from('cards').insert(g.batch as any).select('id')))
+    );
+    for (let g = 0; g < results.length; g++) {
+      const result = results[g];
+      if (result.status === 'fulfilled') {
+        const { data: inserted, error: cardsErr } = result.value;
+        if (cardsErr) {
+          console.warn('Card batch insert error (continuing):', cardsErr.message);
+          failedBatches.push(group[g]);
+        } else if (inserted) {
+          const startIdx = group[g].startIdx;
+          for (let j = 0; j < inserted.length; j++) {
+            cardIdMap.set(startIdx + j, inserted[j].id);
+          }
+          insertedCount += inserted.length;
+        }
+      } else {
+        console.warn('Card batch failed after retries (continuing):', result.reason?.message);
+        failedBatches.push(group[g]);
+      }
+    }
+    onProgress?.(insertedCount, totalCards);
+  }
+
+  // Retry failed batches once more with smaller batch size
+  if (failedBatches.length > 0) {
+    console.log(`Retrying ${failedBatches.length} failed batches with smaller size...`);
+    for (const fb of failedBatches) {
+      const smallBatch = 50;
+      for (let i = 0; i < fb.batch.length; i += smallBatch) {
+        const chunk = fb.batch.slice(i, i + smallBatch);
+        const chunkStartIdx = fb.startIdx + i;
+        try {
+          const { data: inserted, error } = await importRetry(async () =>
+            await supabase.from('cards').insert(chunk as any).select('id')
+          );
+          if (!error && inserted) {
+            for (let j = 0; j < inserted.length; j++) {
+              cardIdMap.set(chunkStartIdx + j, inserted[j].id);
+            }
+            insertedCount += inserted.length;
+            onProgress?.(insertedCount, totalCards);
+          }
+        } catch (retryErr: any) {
+          console.warn('Retry also failed for chunk:', retryErr?.message);
+        }
+      }
+    }
+  }
+
+  // Insert revlog if provided
+  if (revlog && revlog.length > 0 && cardIdMap.size > 0) {
+    await insertRevlogBatch(userId, revlog, cardIdMap);
   }
   
-  return newDeck;
+  return { deck: newDeck, insertedCount, totalCards };
 }
 
 /** Recursive subdeck type for N-level hierarchy */
@@ -250,97 +439,174 @@ interface SubdeckNode {
   children?: SubdeckNode[];
 }
 
-/** Import a deck organized into subdecks. Supports recursive hierarchy (up to N levels). */
+/** Import a deck organized into subdecks. Supports recursive hierarchy (up to N levels).
+ *  Optimised: creates decks level-by-level in bulk batches instead of one-by-one. */
 export async function importDeckWithSubdecks(
   userId: string,
   parentName: string,
   folderId: string | null,
-  cards: { frontContent: string; backContent: string; cardType: string }[],
+  cards: CardImportInput[],
   subdecks: SubdeckNode[],
   algorithmMode?: string,
+  revlog?: RevlogImportEntry[],
+  onProgress?: ImportProgressCallback,
 ) {
-  // Helper to insert cards for a deck
+  const globalCardIdMap = new Map<number, string>();
 
-  // Helper to insert cards for a deck (batched)
-  const insertCards = async (deckId: string, indices: number[]) => {
-    const validCards = indices
-      .filter(idx => idx >= 0 && idx < cards.length)
-      .map(idx => ({
-        deck_id: deckId,
-        front_content: cards[idx].frontContent,
-        back_content: cards[idx].backContent,
-        card_type: cards[idx].cardType,
-        state: 0,
-        stability: 0,
-        difficulty: 0,
-      }));
-    const BATCH_SIZE = 200;
-    for (let i = 0; i < validCards.length; i += BATCH_SIZE) {
-      const batch = validCards.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase.from('cards').insert(batch as any);
-      if (error) throw error;
-    }
-  };
-
-  // Recursive helper to create a deck tree
-  const createDeckTree = async (
-    node: SubdeckNode,
-    parentDeckId: string | null,
-    nodeFolderId: string | null,
-  ) => {
-    const { data: deck, error } = await supabase
-      .from('decks')
-      .insert({
-        name: node.name,
-        user_id: userId,
-        folder_id: nodeFolderId,
-        parent_deck_id: parentDeckId,
-        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-      } as any)
-      .select()
-      .single();
-    if (error || !deck) throw error;
-
-    const deckId = (deck as any).id;
-
-    if (node.card_indices.length > 0) {
-      await insertCards(deckId, node.card_indices);
-    }
-
-    if (node.children && node.children.length > 0) {
-      for (const child of node.children) {
-        await createDeckTree(child, deckId, nodeFolderId);
-      }
-    }
-
-    return deck;
-  };
-
-  // Always create a parent deck and nest subdecks under it
+  // 1. Create the root parent deck
   const { data: parentDeck, error: parentErr } = await supabase
     .from('decks')
     .insert({
-      name: parentName,
-      user_id: userId,
-      folder_id: folderId,
+      name: parentName, user_id: userId, folder_id: folderId,
       ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
-    } as any)
-    .select()
-    .single();
+    } as any).select().single();
   if (parentErr || !parentDeck) throw parentErr;
-
   const parentId = (parentDeck as any).id;
 
-  for (const sd of subdecks) {
-    // If AI marked a subdeck as unrelated (standalone), create it at root level (no parent)
-    if ((sd as any).standalone) {
-      await createDeckTree(sd, null, folderId);
-    } else {
-      await createDeckTree(sd, parentId, folderId);
+  // 2. BFS: process the tree level-by-level, bulk-inserting decks
+  type QueueItem = { node: SubdeckNode; resolvedParentId: string | null };
+  let queue: QueueItem[] = subdecks.map(sd => ({
+    node: sd,
+    resolvedParentId: (sd as any).standalone ? null : parentId,
+  }));
+
+  // Collect all card assignments: { deckId, indices }
+  const deckCards: { deckId: string; indices: number[] }[] = [];
+  const DECK_BATCH = 200;
+
+  while (queue.length > 0) {
+    const nextQueue: QueueItem[] = [];
+
+    for (let i = 0; i < queue.length; i += DECK_BATCH) {
+      const batch = queue.slice(i, i + DECK_BATCH);
+      const rows = batch.map(item => ({
+        name: item.node.name,
+        user_id: userId,
+        folder_id: folderId,
+        parent_deck_id: item.resolvedParentId,
+        ...(algorithmMode ? { algorithm_mode: algorithmMode } : {}),
+      }));
+
+      const { data: inserted, error } = await supabase
+        .from('decks').insert(rows as any).select('id');
+      if (error) throw error;
+
+      if (inserted) {
+        for (let j = 0; j < inserted.length; j++) {
+          const deckId = (inserted[j] as any).id;
+          const node = batch[j].node;
+
+          if (node.card_indices.length > 0) {
+            deckCards.push({ deckId, indices: node.card_indices });
+          }
+
+          if (node.children?.length) {
+            for (const child of node.children) {
+              nextQueue.push({ node: child, resolvedParentId: deckId });
+            }
+          }
+        }
+      }
+    }
+
+    queue = nextQueue;
+  }
+
+  // 3. Bulk-insert all cards (parallel batches for speed) with retry & progress
+  const CARD_BATCH = getAdaptiveBatchSize(cards);
+  const CONCURRENT = 3;
+  let insertedCount = 0;
+  const totalCards = cards.length;
+  const failedJobs: { rows: any[]; originalIndices: number[] }[] = [];
+
+  // Flatten all card rows with their original indices for mapping
+  const allCardJobs: { deckId: string; rows: any[]; originalIndices: number[] }[] = [];
+  for (const { deckId, indices } of deckCards) {
+    const validIndices = indices.filter(idx => idx >= 0 && idx < cards.length);
+    if (validIndices.length === 0) continue;
+
+    const rows = validIndices.map(idx => ({
+      deck_id: deckId,
+      front_content: cards[idx].frontContent,
+      back_content: cards[idx].backContent,
+      card_type: cards[idx].cardType,
+      state: cards[idx].progress?.state ?? 0,
+      stability: cards[idx].progress?.stability ?? 0,
+      difficulty: cards[idx].progress?.difficulty ?? 0,
+      scheduled_date: cards[idx].progress?.scheduledDate ?? new Date().toISOString(),
+      learning_step: cards[idx].progress?.learningStep ?? 0,
+      ...(cards[idx].progress?.lastReviewedAt ? { last_reviewed_at: cards[idx].progress.lastReviewedAt } : {}),
+    }));
+
+    for (let i = 0; i < rows.length; i += CARD_BATCH) {
+      allCardJobs.push({
+        deckId,
+        rows: rows.slice(i, i + CARD_BATCH),
+        originalIndices: validIndices.slice(i, i + CARD_BATCH),
+      });
     }
   }
 
-  return parentDeck;
+  // Execute card inserts in parallel groups with retry and error tolerance
+  for (let i = 0; i < allCardJobs.length; i += CONCURRENT) {
+    const group = allCardJobs.slice(i, i + CONCURRENT);
+    const results = await Promise.allSettled(
+      group.map(job => importRetry(async () => await supabase.from('cards').insert(job.rows as any).select('id')))
+    );
+    for (let g = 0; g < results.length; g++) {
+      const result = results[g];
+      if (result.status === 'fulfilled') {
+        const { data: inserted, error } = result.value;
+        if (error) {
+          console.warn('Card batch error (continuing):', error.message);
+          failedJobs.push(group[g]);
+        } else if (inserted) {
+          const job = group[g];
+          for (let j = 0; j < inserted.length; j++) {
+            globalCardIdMap.set(job.originalIndices[j], (inserted[j] as any).id);
+          }
+          insertedCount += inserted.length;
+        }
+      } else {
+        console.warn('Card batch failed after retries (continuing):', result.reason?.message);
+        failedJobs.push(group[g]);
+      }
+    }
+    onProgress?.(insertedCount, totalCards);
+  }
+
+  // Retry failed jobs with smaller batches
+  if (failedJobs.length > 0) {
+    console.log(`Retrying ${failedJobs.length} failed card jobs...`);
+    for (const fj of failedJobs) {
+      const smallBatch = 50;
+      for (let i = 0; i < fj.rows.length; i += smallBatch) {
+        const chunk = fj.rows.slice(i, i + smallBatch);
+        const chunkIndices = fj.originalIndices.slice(i, i + smallBatch);
+        try {
+          const { data: inserted, error } = await importRetry(async () =>
+            await supabase.from('cards').insert(chunk as any).select('id')
+          );
+          if (!error && inserted) {
+            for (let j = 0; j < inserted.length; j++) {
+              globalCardIdMap.set(chunkIndices[j], (inserted[j] as any).id);
+            }
+            insertedCount += inserted.length;
+            onProgress?.(insertedCount, totalCards);
+          }
+        } catch (retryErr: any) {
+          console.warn('Retry also failed:', retryErr?.message);
+        }
+      }
+    }
+  }
+
+  // 4. Insert revlog
+  if (revlog && revlog.length > 0 && globalCardIdMap.size > 0) {
+    await insertRevlogBatch(userId, revlog, globalCardIdMap);
+  }
+
+  return { deck: parentDeck, insertedCount, totalCards };
 }
 
 /** Get turma navigation info for a turma deck. */

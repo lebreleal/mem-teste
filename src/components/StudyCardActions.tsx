@@ -1,7 +1,7 @@
 import { useState, useRef, lazy, Suspense } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQueryClient } from '@tanstack/react-query';
-import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Send, ImageIcon, Shovel, StickyNote } from 'lucide-react';
+import { Snowflake, Pencil, Sparkles, Loader2, ArrowLeft, Plus, Trash2, MessageSquareText, CheckSquare, PenLine, MessageCircle, MoreVertical, Flag, ImageIcon, Shovel, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -496,35 +496,47 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           <TooltipContent><p>Enterrar (pular hoje)</p></TooltipContent>
         </Tooltip>
 
-        <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setFreezeConfirmOpen(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Congelar card"
+            >
+              <Snowflake className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent><p>Congelar card</p></TooltipContent>
+        </Tooltip>
+
+        {isLiveDeck ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                  aria-label="Mais opções"
-                  disabled={editLoading}
-                >
-                  {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
-                </button>
-              </DropdownMenuTrigger>
+              <button
+                onClick={() => setSuggestOpen(true)}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                aria-label="Sugerir correção"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </TooltipTrigger>
-            <TooltipContent><p>Mais opções</p></TooltipContent>
+            <TooltipContent><p>Sugerir correção</p></TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="end" className="min-w-[160px]">
-            <DropdownMenuItem onClick={openEdit} className="gap-2">
-              <Pencil className="h-3.5 w-3.5" /> Editar card
-            </DropdownMenuItem>
-            {isLiveDeck && (
-              <DropdownMenuItem onClick={() => setSuggestOpen(true)} className="gap-2">
-                <Send className="h-3.5 w-3.5" /> Sugerir correção
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => setFreezeConfirmOpen(true)} className="gap-2">
-              <Snowflake className="h-3.5 w-3.5" /> Congelar card
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={openEdit}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                aria-label="Editar card"
+                disabled={editLoading}
+              >
+                {editLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent><p>Editar card</p></TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Freeze confirm */}
@@ -574,7 +586,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
                 {editorType === 'multiple_choice'
                   ? 'Pergunta'
                   : editorType === 'cloze'
-                    ? 'Texto com lacunas'
+                    ? 'Frente'
                     : editorType === 'image_occlusion'
                       ? 'Frente (Pergunta)'
                       : 'Frente (Pergunta)'}
@@ -778,6 +790,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
             open={suggestOpen}
             onOpenChange={setSuggestOpen}
             card={card}
+            deckId={card.deck_id}
           />
         </Suspense>
       )}

@@ -38,27 +38,36 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return () => window.removeEventListener('open-pomodoro', handler);
   }, []);
 
-  const startPomodoro = () => {
-    const totalSecs = (pomodoroIsBreak ? pomodoroBreak : pomodoroMinutes) * 60;
+  const startPomodoro = (forceIsBreak?: boolean) => {
+    // Always clear any existing interval first to prevent stacking
+    if (pomodoroTimerRef.current) {
+      clearInterval(pomodoroTimerRef.current);
+      pomodoroTimerRef.current = null;
+    }
+
+    const isBreak = forceIsBreak ?? pomodoroIsBreak;
+    const totalSecs = (isBreak ? pomodoroBreak : pomodoroMinutes) * 60;
+    const endTime = Date.now() + totalSecs * 1000;
     setPomodoroSeconds(totalSecs);
     totalPomodoroSeconds.current = totalSecs;
     setPomodoroActive(true);
     setShowPomodoro(false);
 
     const interval = setInterval(() => {
-      setPomodoroSeconds(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setPomodoroActive(false);
-          toast({
-            title: pomodoroIsBreak ? '☕ Pausa encerrada!' : '🍅 Pomodoro concluído!',
-            description: pomodoroIsBreak ? 'Hora de voltar a estudar!' : 'Hora de descansar!',
-          });
-          setPomodoroIsBreak(prev => !prev);
-          return 0;
-        }
-        return prev - 1;
-      });
+      const remaining = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+      setPomodoroSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        pomodoroTimerRef.current = null;
+        toast({
+          title: isBreak ? '☕ Pausa encerrada!' : '🍅 Pomodoro concluído!',
+          description: isBreak ? 'Hora de voltar a estudar!' : 'Hora de descansar!',
+        });
+        const nextIsBreak = !isBreak;
+        setPomodoroIsBreak(nextIsBreak);
+        setTimeout(() => startPomodoro(nextIsBreak), 500);
+      }
     }, 1000);
     pomodoroTimerRef.current = interval;
   };
@@ -134,7 +143,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
                 </Select>
               </div>
             </div>
-            <Button className="w-full gap-2" onClick={startPomodoro}>
+            <Button className="w-full gap-2" onClick={() => startPomodoro()}>
               <Play className="h-4 w-4" /> Iniciar
             </Button>
           </div>

@@ -102,14 +102,16 @@ const Study = () => {
     [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
 
-  // Lock the displayed card — only update when cardKey changes (user rated) or during init
+  // Lock the displayed card — only update when cardKey changes (user rated) or during init.
+  // Using queueInitialized ensures displayedCard is set on first load so the
+  // volatile `nextCard` fallback is never used during an active review.
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
     if (!isTransitioning) {
       setDisplayedCard(nextCard);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardKey, isTransitioning]);
+  }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
   // Force re-render when the soonest learning card's timer expires
@@ -149,11 +151,11 @@ const Study = () => {
     return () => clearInterval(interval);
   }, [allWaiting, localQueue]);
 
-  // totalCards uses the initial queue size (stable denominator).
-  // uniqueReviewedCount = distinct cards reviewed (not counting re-reviews of learning cards).
-  const totalCards = initialQueueSize;
-  const uniqueReviewedCount = reviewedCardIdsRef.current.size;
-  const progressPercent = totalCards > 0 ? Math.min(100, (uniqueReviewedCount / totalCards) * 100) : 0;
+  // Progress based on cards that LEFT the queue (graduated or removed)
+  const cardsCompleted = initialQueueSize - localQueue.length;
+  const progressPercent = initialQueueSize > 0
+    ? Math.min(100, (cardsCompleted / initialQueueSize) * 100)
+    : 0;
 
   const tutorAbortRef = useRef<AbortController | null>(null);
 
@@ -405,6 +407,7 @@ const Study = () => {
             }
 
             setCardKey(prev => prev + 1);
+            cardShownAt.current = Date.now();
             setIsTransitioning(false);
             submittingRef.current = null;
           }, 150);
@@ -477,7 +480,7 @@ const Study = () => {
           </div>
           <h1 className="font-display text-3xl font-bold text-foreground">Sessão Completa!</h1>
           <p className="mt-2 text-lg text-muted-foreground">
-            Você revisou <span className="font-bold text-primary">{uniqueReviewedCount}</span> {uniqueReviewedCount === 1 ? 'card' : 'cards'} hoje.
+            Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
           </p>
            <Button onClick={goBack} className="mt-8 gap-2">
              <ArrowLeft className="h-4 w-4" /> Voltar
@@ -553,7 +556,7 @@ const Study = () => {
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
-          <span className="text-xs font-bold text-muted-foreground tabular-nums">{Math.min(uniqueReviewedCount + 1, totalCards)}/{totalCards}</span>
+          <span className="text-xs font-bold text-muted-foreground tabular-nums">{cardsCompleted}/{initialQueueSize}</span>
         </div>
       </header>
 
@@ -611,9 +614,11 @@ const Study = () => {
               <StudyCardActions
                 card={currentCard}
                 isLiveDeck={isLiveDeck}
-                onCardUpdated={(updatedFields) => {
+              onCardUpdated={(updatedFields) => {
                   setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
-                  setCardKey(prev => prev + 1);
+                  // Update displayedCard directly so the edit is visible
+                  // WITHOUT bumping cardKey (which would swap to a queued learning card)
+                  setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
                 }}
                 onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
                 onCardBuried={() => {

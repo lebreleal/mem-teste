@@ -13,11 +13,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, Send } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check } from 'lucide-react';
+
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { charDiff, type DiffSegment } from '@/lib/charDiff';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CardContent, buildVirtualCards } from '@/components/deck-detail/CardPreviewSheet';
+import { Share2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -28,6 +31,16 @@ const stripHtml = (html: string) => {
   const div = document.createElement('div');
   div.innerHTML = html;
   return div.textContent || div.innerText || '';
+};
+
+const extractImages = (html: string): string[] => {
+  const regex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  const images: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    images.push(match[1]);
+  }
+  return images;
 };
 
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
@@ -146,8 +159,8 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             className="rounded-full bg-card/80 shadow-sm gap-1.5 text-xs px-3"
             onClick={() => setSuggestCard(vc.card)}
           >
-            <Send className="h-3.5 w-3.5" />
-            Sugerir correção
+            <Pencil className="h-3.5 w-3.5" />
+            Sugestão
           </Button>
         ) : (
           <div className="w-9" />
@@ -192,6 +205,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             deck_id: deckId,
             card_type: suggestCard.card_type,
           }}
+          deckId={deckId}
         />
       )}
     </div>
@@ -313,84 +327,305 @@ const CardListItem = ({ card, onClick }: { card: any; onClick: () => void }) => 
   );
 };
 
-/* ─── Suggestion Card (AnkiHub-style) ─── */
+/* ─── Suggestion Card with Voting & Comments ─── */
 interface Suggestion {
   id: string;
   status: string;
   rationale: string;
   created_at: string;
   suggester_name: string;
+  suggester_user_id: string;
   card_id: string | null;
+  suggestion_type: string;
   suggested_content: Json;
+  suggested_tags: Json;
+  content_status: string;
+  tags_status: string;
   original_front: string | null;
   original_back: string | null;
+  vote_score: number;
+  user_vote: number;
+  comment_count: number;
 }
 
-const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
-  const content = suggestion.suggested_content as { front_content?: string; back_content?: string } | null;
+const SuggestionVoteBar = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (vote: number) => void }) => {
+  const { user } = useAuth();
+  return (
+    <div className="flex flex-col items-center gap-0 shrink-0">
+      <button
+        onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === 1 ? 0 : 1); }}
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
+          suggestion.user_vote === 1
+            ? 'text-primary font-bold'
+            : 'text-muted-foreground/50 hover:text-primary'
+        }`}
+        disabled={!user}
+      >
+        ▲
+      </button>
+      <span className={`text-[11px] font-bold leading-none ${
+        suggestion.vote_score > 0 ? 'text-primary' : suggestion.vote_score < 0 ? 'text-destructive' : 'text-muted-foreground'
+      }`}>
+        {suggestion.vote_score}
+      </span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onVote(suggestion.user_vote === -1 ? 0 : -1); }}
+        className={`h-6 w-6 rounded flex items-center justify-center text-[11px] transition-colors ${
+          suggestion.user_vote === -1
+            ? 'text-destructive font-bold'
+            : 'text-muted-foreground/50 hover:text-destructive'
+        }`}
+        disabled={!user}
+      >
+        ▼
+      </button>
+    </div>
+  );
+};
+
+const SuggestionComments = ({ suggestionId, commentCount }: { suggestionId: string; commentCount: number }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: comments = [] } = useQuery({
+    queryKey: ['suggestion-comments', suggestionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('suggestion_comments')
+        .select('id, content, created_at, user_id')
+        .eq('suggestion_id', suggestionId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) return [];
+      const userIds = [...new Set(data.map(c => c.user_id))];
+      const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
+      const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+      return data.map(c => ({ ...c, user_name: nameMap.get(c.user_id) ?? 'Usuário' }));
+    },
+    enabled: expanded,
+  });
+
+  const handleSubmit = async () => {
+    if (!newComment.trim() || !user) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('suggestion_comments').insert({
+        suggestion_id: suggestionId,
+        user_id: user.id,
+        content: newComment.trim(),
+      } as any);
+      if (error) throw error;
+      setNewComment('');
+      queryClient.invalidateQueries({ queryKey: ['suggestion-comments', suggestionId] });
+    } catch {
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 px-1 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted/50"
+      >
+        <MessageSquare className="h-3 w-3" />
+        {commentCount > 0 ? `${commentCount} comentário${commentCount > 1 ? 's' : ''}` : 'Comentar'}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2.5 pl-1">
+          {comments.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">Nenhum comentário ainda.</p>
+          )}
+          {comments.map(c => (
+            <div key={c.id} className="border-l-2 border-border/50 pl-3">
+              <p className="text-[11px]">
+                <span className="font-semibold text-primary">{c.user_name}</span>
+                <span className="text-muted-foreground/60 mx-1">·</span>
+                <span className="text-muted-foreground/60">
+                  {formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </p>
+              <p className="text-xs text-foreground mt-0.5">{c.content}</p>
+            </div>
+          ))}
+          {user && (
+            <div className="flex gap-2 mt-1">
+              <input
+                className="flex-1 rounded border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Escrever comentário..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              />
+              <Button size="sm" className="h-7 text-xs" onClick={handleSubmit} disabled={submitting || !newComment.trim()}>
+                Enviar
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DiffLine = ({ segments, mode }: { segments: DiffSegment[]; mode: 'old' | 'new' }) => (
+  <div className={`flex items-start gap-1.5 text-[11px] leading-relaxed rounded px-2 py-1 font-mono ${
+    mode === 'old' 
+      ? 'bg-destructive/8 border-l-2 border-destructive/40' 
+      : 'bg-emerald-500/8 border-l-2 border-emerald-500/40'
+  }`}>
+    <span className={`select-none font-bold shrink-0 ${mode === 'old' ? 'text-destructive/70' : 'text-emerald-600/70'}`}>
+      {mode === 'old' ? '−' : '+'}
+    </span>
+    <p className={`flex-1 ${mode === 'old' ? 'text-muted-foreground' : 'text-foreground'}`}>
+      {segments.map((seg, i) => {
+        if (seg.type === 'removed') {
+          return <span key={i} className="bg-destructive/20 text-destructive rounded-sm px-0.5">{seg.text}</span>;
+        }
+        if (seg.type === 'added') {
+          return <span key={i} className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm px-0.5">{seg.text}</span>;
+        }
+        return <span key={i}>{seg.text}</span>;
+      })}
+    </p>
+  </div>
+);
+
+const SuggestionCard = ({ suggestion, onVote }: { suggestion: Suggestion; onVote: (suggestionId: string, vote: number) => void }) => {
+  const content = suggestion.suggested_content as { front_content?: string; back_content?: string; new_card?: { front_content: string; back_content: string } } | null;
   const suggestedFront = content?.front_content ?? '';
   const suggestedBack = content?.back_content ?? '';
+  const newCard = content?.new_card;
   const originalFront = suggestion.original_front ?? '';
   const originalBack = suggestion.original_back ?? '';
+  const tagChanges = suggestion.suggested_tags as { added?: { id: string; name: string }[]; removed?: { id: string; name: string }[] } | null;
 
   const statusConfig: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning border-warning/20' },
-    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    pending: { label: 'Pendente', className: 'bg-warning/10 text-warning' },
+    accepted: { label: 'Aceita', className: 'bg-emerald-500/10 text-emerald-600' },
+    rejected: { label: 'Rejeitada', className: 'bg-destructive/10 text-destructive' },
   };
 
   const status = statusConfig[suggestion.status] ?? statusConfig.pending;
+  const isDeckLevel = suggestion.suggestion_type === 'deck';
+  const hasContentChanges = (suggestedFront && originalFront !== suggestedFront) || (suggestedBack && originalBack !== suggestedBack);
+  const hasTagChanges = tagChanges && (tagChanges.added?.length || tagChanges.removed?.length);
 
   return (
-    <div className="border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-            {suggestion.suggester_name.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{suggestion.suggester_name}</p>
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Clock className="h-2.5 w-2.5" />
-              {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
-            </p>
-          </div>
-        </div>
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${status.className}`}>
-          {status.label}
-        </span>
-      </div>
+    <div className="flex gap-2">
+      {/* Reddit-style vertical vote bar */}
+      <SuggestionVoteBar suggestion={suggestion} onVote={(vote) => onVote(suggestion.id, vote)} />
 
-      {suggestion.rationale && (
-        <div className="px-4 py-2 bg-muted/20 border-b border-border/30">
-          <p className="text-xs text-muted-foreground italic">"{suggestion.rationale}"</p>
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Header line */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-semibold text-primary">{suggestion.suggester_name}</span>
+          <span className="text-muted-foreground/40 text-[10px]">·</span>
+          <span className="text-[10px] text-muted-foreground/60">
+            {formatDistanceToNow(new Date(suggestion.created_at), { addSuffix: true, locale: ptBR })}
+          </span>
+          {isDeckLevel && (
+            <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-bold text-muted-foreground uppercase">deck</span>
+          )}
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${status.className}`}>
+            {status.label}
+          </span>
         </div>
-      )}
 
-      <div className="divide-y divide-border/30">
-        {suggestedFront && originalFront !== suggestedFront && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Frente</p>
-            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
-              <p className="text-xs text-destructive line-through">{stripHtml(originalFront)}</p>
-            </div>
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedFront)}</p>
-            </div>
+        {/* Rationale as the main "post body" */}
+        {suggestion.rationale && (
+          <p className="text-sm text-foreground leading-relaxed">{suggestion.rationale}</p>
+        )}
+
+        {/* Diff sections - collapsible/compact */}
+        {(hasContentChanges || hasTagChanges || newCard) && (
+          <div className="rounded-lg border border-border/40 bg-muted/20 divide-y divide-border/30 text-xs overflow-hidden">
+            {suggestedFront && originalFront !== suggestedFront && (() => {
+              const { oldSegments, newSegments } = charDiff(stripHtml(originalFront), stripHtml(suggestedFront));
+              const oldImages = extractImages(originalFront);
+              const newImages = extractImages(suggestedFront);
+              return (
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Frente</p>
+                  <DiffLine segments={oldSegments} mode="old" />
+                  <DiffLine segments={newSegments} mode="new" />
+                  {newImages.filter(img => !oldImages.includes(img)).map((src, i) => (
+                    <div key={`added-img-front-${i}`} className="border-l-2 border-emerald-500/40 bg-emerald-500/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-emerald-600/70 font-bold font-mono text-[11px]">+</span>
+                      <img src={src} alt="Imagem adicionada" className="max-h-24 rounded object-contain" />
+                    </div>
+                  ))}
+                  {oldImages.filter(img => !newImages.includes(img)).map((src, i) => (
+                    <div key={`removed-img-front-${i}`} className="border-l-2 border-destructive/40 bg-destructive/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-destructive/70 font-bold font-mono text-[11px]">−</span>
+                      <img src={src} alt="Imagem removida" className="max-h-24 rounded object-contain opacity-50" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            {suggestedBack && originalBack !== suggestedBack && (() => {
+              const { oldSegments, newSegments } = charDiff(stripHtml(originalBack), stripHtml(suggestedBack));
+              const oldImages = extractImages(originalBack);
+              const newImages = extractImages(suggestedBack);
+              return (
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Verso</p>
+                  <DiffLine segments={oldSegments} mode="old" />
+                  <DiffLine segments={newSegments} mode="new" />
+                  {newImages.filter(img => !oldImages.includes(img)).map((src, i) => (
+                    <div key={`added-img-back-${i}`} className="border-l-2 border-emerald-500/40 bg-emerald-500/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-emerald-600/70 font-bold font-mono text-[11px]">+</span>
+                      <img src={src} alt="Imagem adicionada" className="max-h-24 rounded object-contain" />
+                    </div>
+                  ))}
+                  {oldImages.filter(img => !newImages.includes(img)).map((src, i) => (
+                    <div key={`removed-img-back-${i}`} className="border-l-2 border-destructive/40 bg-destructive/8 rounded px-2 py-1 flex items-center gap-2">
+                      <span className="text-destructive/70 font-bold font-mono text-[11px]">−</span>
+                      <img src={src} alt="Imagem removida" className="max-h-24 rounded object-contain opacity-50" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            {hasTagChanges && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tags</p>
+                <div className="flex flex-wrap gap-1">
+                  {tagChanges!.removed?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/10 text-destructive line-through">
+                      {t.name}
+                    </span>
+                  ))}
+                  {tagChanges!.added?.map(t => (
+                    <span key={t.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      + {t.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {newCard && (
+              <div className="px-3 py-2 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <Plus className="h-2.5 w-2.5" /> Novo card
+                </p>
+                <p className="text-emerald-600 dark:text-emerald-400 text-[11px]">{stripHtml(newCard.front_content)}</p>
+                {newCard.back_content && (
+                  <p className="text-emerald-600/70 dark:text-emerald-400/70 text-[11px]">{stripHtml(newCard.back_content)}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {suggestedBack && originalBack !== suggestedBack && (
-          <div className="px-4 py-3 space-y-2">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">Verso</p>
-            <div className="rounded-lg bg-destructive/5 border border-destructive/10 px-3 py-2">
-              <p className="text-xs text-destructive line-through">{stripHtml(originalBack)}</p>
-            </div>
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/10 px-3 py-2">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400">{stripHtml(suggestedBack)}</p>
-            </div>
-          </div>
-        )}
+        {/* Action bar (comments) */}
+        <SuggestionComments suggestionId={suggestion.id} commentCount={suggestion.comment_count} />
       </div>
     </div>
   );
@@ -398,6 +633,8 @@ const SuggestionCard = ({ suggestion }: { suggestion: Suggestion }) => {
 
 /* ─── Community Suggestions Section ─── */
 const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
 
   const { data: suggestions = [], isLoading } = useQuery({
@@ -405,7 +642,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deck_suggestions')
-        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content')
+        .select('id, status, rationale, created_at, suggester_user_id, card_id, suggested_content, suggestion_type, suggested_tags, content_status, tags_status')
         .eq('deck_id', deckId)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -422,17 +659,63 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         : { data: [] };
       const cardMap = new Map((cards ?? []).map(c => [c.id, c]));
 
+      // Fetch votes
+      const suggestionIds = data.map(s => s.id);
+      const { data: votes } = await supabase
+        .from('suggestion_votes')
+        .select('suggestion_id, vote, user_id')
+        .in('suggestion_id', suggestionIds);
+      
+      const voteMap = new Map<string, { score: number; userVote: number }>();
+      (votes ?? []).forEach((v: any) => {
+        const existing = voteMap.get(v.suggestion_id) ?? { score: 0, userVote: 0 };
+        existing.score += v.vote;
+        if (v.user_id === user?.id) existing.userVote = v.vote;
+        voteMap.set(v.suggestion_id, existing);
+      });
+
+      // Fetch comment counts
+      const { data: commentCounts } = await supabase
+        .from('suggestion_comments')
+        .select('suggestion_id')
+        .in('suggestion_id', suggestionIds);
+      const commentCountMap = new Map<string, number>();
+      (commentCounts ?? []).forEach((c: any) => {
+        commentCountMap.set(c.suggestion_id, (commentCountMap.get(c.suggestion_id) ?? 0) + 1);
+      });
+
       return data.map(s => ({
         ...s,
         suggester_name: nameMap.get(s.suggester_user_id) ?? 'Usuário',
         original_front: s.card_id ? cardMap.get(s.card_id)?.front_content ?? null : null,
         original_back: s.card_id ? cardMap.get(s.card_id)?.back_content ?? null : null,
+        vote_score: voteMap.get(s.id)?.score ?? 0,
+        user_vote: voteMap.get(s.id)?.userVote ?? 0,
+        comment_count: commentCountMap.get(s.id) ?? 0,
       })) as Suggestion[];
     },
     enabled: !!deckId,
   });
 
+  const handleVote = async (suggestionId: string, vote: number) => {
+    if (!user) return;
+    try {
+      if (vote === 0) {
+        await supabase.from('suggestion_votes').delete().eq('suggestion_id', suggestionId).eq('user_id', user.id);
+      } else {
+        await supabase.from('suggestion_votes').upsert({
+          suggestion_id: suggestionId,
+          user_id: user.id,
+          vote,
+        } as any, { onConflict: 'suggestion_id,user_id' });
+      }
+      queryClient.invalidateQueries({ queryKey: ['deck-suggestions-public', deckId] });
+    } catch {}
+  };
+
   const filtered = filter === 'all' ? suggestions : suggestions.filter(s => s.status === filter);
+  // Sort by vote score descending
+  const sorted = [...filtered].sort((a, b) => b.vote_score - a.vote_score);
   const counts = {
     all: suggestions.length,
     pending: suggestions.filter(s => s.status === 'pending').length,
@@ -469,7 +752,7 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         <div className="flex items-center justify-center py-12">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <MessageSquare className="h-10 w-10 text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground">Nenhuma sugestão {filter !== 'all' ? `${filters.find(f => f.value === filter)?.label.toLowerCase()}` : 'da comunidade'}.</p>
@@ -477,8 +760,8 @@ const CommunitySuggestions = ({ deckId }: { deckId: string }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(suggestion => (
-            <SuggestionCard key={suggestion.id} suggestion={suggestion} />
+          {sorted.map(suggestion => (
+            <SuggestionCard key={suggestion.id} suggestion={suggestion} onVote={handleVote} />
           ))}
         </div>
       )}
@@ -601,6 +884,9 @@ const PublicDeckPreview = () => {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showDeckReport, setShowDeckReport] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [following, setFollowing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch deck info
@@ -625,16 +911,33 @@ const PublicDeckPreview = () => {
     enabled: !!deckId,
   });
 
-  // Fetch cards (with all fields needed by CardContent)
+  // Fetch cards from published subtree (aggregated hierarchy)
   const { data: allCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['public-deck-cards', deckId],
     queryFn: async () => {
+      // 1. Discover full subtree of children (regardless of turma)
+      const allSubtreeIds = new Set<string>([deckId!]);
+      let parentIds = [deckId!];
+      while (parentIds.length > 0) {
+        const { data: children } = await supabase
+          .from('decks')
+          .select('id, parent_deck_id')
+          .in('parent_deck_id', parentIds);
+        const newChildren = (children ?? []).filter((c: any) => !allSubtreeIds.has(c.id));
+        if (newChildren.length === 0) break;
+        newChildren.forEach((c: any) => allSubtreeIds.add(c.id));
+        parentIds = newChildren.map((c: any) => c.id);
+      }
+
+      const subtreeIds = [...allSubtreeIds];
+
+      // 2. Fetch cards from all subtree decks
       const { data, error } = await supabase
         .from('cards')
         .select('*')
-        .eq('deck_id', deckId!)
+        .in('deck_id', subtreeIds)
         .order('created_at', { ascending: true })
-        .limit(500);
+        .limit(2000);
       if (error) throw error;
       return data ?? [];
     },
@@ -702,7 +1005,166 @@ const PublicDeckPreview = () => {
     enabled: !!turmaDeck?.turma_id && !!turmaDeck?.lesson_id,
   });
 
+  // Check if user is already a member of the turma
+  const { data: isTurmaMember = false } = useQuery({
+    queryKey: ['turma-membership-check', turmaDeck?.turma_id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('turma_members')
+        .select('id')
+        .eq('turma_id', turmaDeck!.turma_id)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    },
+    enabled: !!turmaDeck?.turma_id && !!user,
+  });
+
+  const handleJoinTurma = async () => {
+    if (!turmaDeck?.turma_id || !user || joining) return;
+    setJoining(true);
+    try {
+      const { error } = await supabase.from('turma_members').insert({
+        turma_id: turmaDeck.turma_id,
+        user_id: user.id,
+        role: 'member',
+      } as any);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
+      queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      toast({ title: '✅ Inscrito na comunidade!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao se inscrever', description: err.message, variant: 'destructive' });
+    } finally {
+      setJoining(false);
+    }
+  };
+
   const isOwner = !!(user && deck && deck.user_id === user.id);
+
+  // Check if user already follows this deck (has a linked copy)
+  const { data: isFollowing = false } = useQuery({
+    queryKey: ['deck-following', deckId, user?.id],
+    queryFn: async () => {
+      if (turmaDeck?.id) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('source_turma_deck_id', turmaDeck.id)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      }
+      // For non-turma public decks, check via marketplace listing or is_live_deck + name
+      const { data: listing } = await supabase
+        .from('marketplace_listings')
+        .select('id')
+        .eq('deck_id', deckId!)
+        .eq('is_published', true)
+        .maybeSingle();
+      if (listing) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('user_id', user!.id)
+          .eq('source_listing_id', listing.id)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      }
+      // Fallback: check by name match + is_live_deck
+      const { data } = await supabase
+        .from('decks')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('is_live_deck', true)
+        .eq('name', deck?.name ?? '')
+        .limit(1)
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user && !!deckId && !isOwner,
+  });
+
+  const handleFollowDeck = async () => {
+    if (!user || !deck || following || isFollowing) return;
+    setFollowing(true);
+    try {
+      // Join turma if not already a member
+      if (turmaDeck && !isTurmaMember && turmaDeck.turma_id) {
+        await supabase.from('turma_members').insert({
+          turma_id: turmaDeck.turma_id,
+          user_id: user.id,
+          role: 'member',
+        } as any).throwOnError();
+        queryClient.invalidateQueries({ queryKey: ['turma-membership-check'] });
+        queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      }
+
+      // Create a linked deck in user's personal decks
+      const insertData: any = {
+        name: deck.name,
+        user_id: user.id,
+        is_public: false,
+        is_live_deck: true,
+      };
+      if (turmaDeck?.id) {
+        insertData.source_turma_deck_id = turmaDeck.id;
+        insertData.community_id = turmaDeck.turma_id;
+      }
+      // For non-turma public decks, check if there's a marketplace listing
+      if (!turmaDeck) {
+        const { data: listing } = await supabase
+          .from('marketplace_listings')
+          .select('id')
+          .eq('deck_id', deckId!)
+          .eq('is_published', true)
+          .maybeSingle();
+        if (listing) {
+          insertData.source_listing_id = listing.id;
+        }
+      }
+
+      const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+      if (error) throw error;
+
+      // Copy cards from source deck to the new linked deck
+      if (newDeck) {
+        const sourceDeckId = deckId!;
+        const BATCH = 500;
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data: cards } = await supabase
+            .from('cards')
+            .select('front_content, back_content, card_type')
+            .eq('deck_id', sourceDeckId)
+            .range(offset, offset + BATCH - 1)
+            .order('created_at', { ascending: true });
+          if (!cards || cards.length === 0) { hasMore = false; break; }
+          const newCards = cards.map((c: any) => ({
+            deck_id: newDeck.id,
+            front_content: c.front_content,
+            back_content: c.back_content,
+            card_type: c.card_type ?? 'basic',
+          }));
+          await supabase.from('cards').insert(newCards as any);
+          if (cards.length < BATCH) hasMore = false;
+          else offset += BATCH;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: '✅ Deck adicionado aos seus baralhos!' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao seguir deck', description: err.message, variant: 'destructive' });
+    } finally {
+      setFollowing(false);
+    }
+  };
 
   // ── File upload for owner ──
   const getOrCreateLesson = async (): Promise<string> => {
@@ -825,33 +1287,67 @@ const PublicDeckPreview = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center gap-3 px-4 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <div className="container mx-auto flex items-center gap-3 px-4 py-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-base sm:text-xl font-bold text-foreground truncate">
+            <h1 className="font-display text-base font-bold text-foreground truncate">
               {deck.name}
             </h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               por <span className="font-semibold text-foreground">{deck.owner_name}</span>
+              <span className="mx-1.5 text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                {allCards.length} cards
+              </span>
+              <span className="mx-1.5 text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <RefreshCw className="h-2.5 w-2.5" />
+                {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+              </span>
             </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isOwner && (
+              <Button
+                variant={isFollowing ? 'outline' : 'default'}
+                size="sm"
+                className="gap-1.5 text-xs h-8"
+                onClick={handleFollowDeck}
+                disabled={following || isFollowing}
+              >
+                {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {isFollowing ? 'Inscrito ✓' : 'Inscrever-se'}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast({ title: 'Link copiado!' });
+              }}
+            >
+              <Share2 className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            {!isOwner && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowDeckReport(true)}
+              >
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {/* Stats bar */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Layers className="h-3.5 w-3.5 text-foreground" />
-            <span className="font-bold text-foreground">{allCards.length}</span> cards
-          </span>
-          <span className="flex items-center gap-1">
-            <RefreshCw className="h-3 w-3" />
-            {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-          </span>
-        </div>
 
         {/* Hidden file input for owner uploads */}
         <input
@@ -1121,6 +1617,16 @@ const PublicDeckPreview = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Deck-level report modal */}
+      {!isOwner && deckId && (
+        <SuggestCorrectionModal
+          open={showDeckReport}
+          onOpenChange={setShowDeckReport}
+          deckId={deckId}
+          deckName={deck?.name}
+        />
+      )}
     </div>
   );
 };

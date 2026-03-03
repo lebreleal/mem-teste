@@ -153,5 +153,11 @@ export const useTurmaHierarchyMutations = (turmaId: string) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['turma-lessons', turmaId] }),
   });
 
-  return { createSemester, deleteSemester, createSubject, updateSubject, deleteSubject, createLesson, deleteLesson, updateLesson, updateLessonContent, shareDeck, updateDeckPricing, unshareDeck, changeMemberRole, removeMember, toggleSubscriber };
+  const toggleDeckPublished = useMutation({
+    mutationFn: ({ id, isPublished }: { id: string; isPublished: boolean }) =>
+      turmaService.toggleDeckPublished(id, isPublished),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['turma-decks', turmaId] }),
+  });
+
+  return { createSemester, deleteSemester, createSubject, updateSubject, deleteSubject, createLesson, deleteLesson, updateLesson, updateLessonContent, shareDeck, updateDeckPricing, unshareDeck, changeMemberRole, removeMember, toggleSubscriber, toggleDeckPublished };
 };

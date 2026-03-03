@@ -37,10 +37,11 @@ const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDele
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
 import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
-import { usePendingDecks } from '@/stores/usePendingDecks';
+import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { supabase } from '@/integrations/supabase/client';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
+import type { GeneratedCard } from '@/types/ai';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -113,6 +114,27 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
   const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
+  const [pendingReviewData, setPendingReviewData] = useState<{
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null>(null);
+
+  const handlePendingClick = useCallback((pending: PendingDeck) => {
+    if (pending.status === 'review_ready' && pending.cards) {
+      setPendingReviewData({
+        pendingId: pending.id,
+        cards: pending.cards as GeneratedCard[],
+        deckName: pending.name,
+        folderId: pending.folderId,
+        textSample: pending.textSample,
+      });
+      state.setAiDeckOpen(true);
+    }
+    // generating status: do nothing — generation is running in background, clicking shouldn't open empty dialog
+  }, [state]);
 
   // Handlers that perform side effects or complex logic
   const doCreate = (name: string) => {
@@ -180,11 +202,23 @@ const Dashboard = () => {
     }
   };
 
-  /** Check if deck is shared in a community before allowing deletion. */
+  /** Check if deck (or any sub-deck) is shared in a community before allowing deletion. */
   const handleDeleteDeckRequest = async (deck: { id: string; name: string }) => {
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('id').eq('deck_id', deck.id).limit(1);
+    // Collect this deck + all descendant sub-decks
+    const allIds = [deck.id];
+    const collectChildren = (parentIds: string[]) => {
+      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
+      children.forEach(c => allIds.push(c.id));
+      if (children.length > 0) collectChildren(children.map(c => c.id));
+    };
+    collectChildren([deck.id]);
+
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
     if (turmaRefs && turmaRefs.length > 0) {
-      setCommunityBlockTarget({ id: deck.id, name: deck.name, type: 'deck' });
+      const blockedId = turmaRefs[0].deck_id;
+      const blockedDeck = state.decks.find(d => d.id === blockedId);
+      const blockedName = blockedDeck ? blockedDeck.name : deck.name;
+      setCommunityBlockTarget({ id: deck.id, name: blockedName, type: 'deck' });
       return;
     }
     state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
@@ -314,20 +348,10 @@ const Dashboard = () => {
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
           {/* Comunidade */}
-          {isAdmin ? (
-            <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
-              <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
-            </button>
-          ) : (
-            <div className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm opacity-50 cursor-not-allowed">
-              <Users className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
-              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-muted-foreground">Comunidade</span>
-              <span className="absolute -top-1.5 -right-1 text-[7px] sm:text-[8px] font-bold bg-muted text-muted-foreground rounded-full px-1 sm:px-1.5 py-0.5 whitespace-nowrap leading-none">
-                em breve
-              </span>
-            </div>
-          )}
+          <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
+            <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
+          </button>
           {[
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
@@ -401,32 +425,19 @@ const Dashboard = () => {
             >
               Meus Decks
             </button>
-            {isAdmin ? (
-              <button
-                onClick={() => setDashboardTab('community')}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                  dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <RefreshCw className="h-3 w-3" />
-                Comunidade
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/60 cursor-not-allowed"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Comunidade
-                <span className="ml-0.5 text-[7px] sm:text-[8px] font-semibold bg-muted-foreground/15 text-muted-foreground rounded-full px-1 sm:px-1.5 py-0.5 normal-case tracking-normal whitespace-nowrap leading-none">
-                  em breve
-                </span>
-              </button>
-            )}
+            <button
+              onClick={() => setDashboardTab('community')}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
+                dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <RefreshCw className="h-3 w-3" />
+              Comunidade
+            </button>
           </div>
         )}
 
-        {/* Personal decks tab (always shown since community is "em breve") */}
+        {/* Personal decks tab */}
         {(dashboardTab === 'personal' || !!state.currentFolderId) && (
           <DeckList
             isLoading={state.isLoading}
@@ -461,6 +472,7 @@ const Dashboard = () => {
             onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
             onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
             onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+            onPendingClick={handlePendingClick}
           />
         )}
 
@@ -591,7 +603,7 @@ const Dashboard = () => {
         {state.importOpen && (
           <ImportCardsDialog
             open={state.importOpen} onOpenChange={state.setImportOpen}
-            onImport={async (deckName, cards, subdecks) => {
+            onImport={async (deckName, cards, subdecks, revlog) => {
               const pendingStore = usePendingDecks.getState();
               const pendingId = `import-${Date.now()}`;
               const totalCards = subdecks && subdecks.length > 0
@@ -610,35 +622,50 @@ const Dashboard = () => {
 
               try {
                 const { data: { user } } = await (await import('@/integrations/supabase/client')).supabase.auth.getUser();
+                const progressCb = (current: number, total: number) => {
+                  pendingStore.updatePending(pendingId, { progress: { current, total } });
+                };
+                let result: { insertedCount: number; totalCards: number };
                 if (subdecks && subdecks.length > 0) {
-                  await importDeckWithSubdecks(
+                  const r = await importDeckWithSubdecks(
                     user!.id,
                     deckName,
                     state.currentFolderId,
-                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
                     subdecks,
-                    defaultAlgorithm
+                    defaultAlgorithm,
+                    revlog as any,
+                    progressCb,
                   );
-                  toast({ title: `${totalCards} cartões importados em "${deckName}"!` });
+                  result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 } else {
-                  await importDeck(
+                  const r = await importDeck(
                     user!.id,
                     deckName,
                     state.currentFolderId,
-                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType })),
-                    defaultAlgorithm
+                    cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
+                    defaultAlgorithm,
+                    revlog as any,
+                    progressCb,
                   );
-                  toast({ title: `${cards.length} cartões importados!` });
+                  result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 }
-                pendingStore.updatePending(pendingId, { status: 'done', progress: { current: totalCards, total: totalCards } });
+                const revlogMsg = revlog ? ` + ${revlog.length.toLocaleString()} revisões` : '';
+                const failedCount = result.totalCards - result.insertedCount;
+                if (failedCount > 0) {
+                  toast({ title: `${result.insertedCount.toLocaleString()} cartões importados (${failedCount} falharam)`, description: `Importado em "${deckName}"${revlogMsg}`, variant: 'destructive' });
+                } else {
+                  toast({ title: `${result.insertedCount.toLocaleString()} cartões importados!`, description: `${deckName}${revlogMsg}` });
+                }
+                pendingStore.updatePending(pendingId, { status: 'done', progress: { current: result.insertedCount, total: result.totalCards } });
                 await queryClient.invalidateQueries({ queryKey: ['decks'] });
                 await queryClient.invalidateQueries({ queryKey: ['folders'] });
                 await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
                 setTimeout(() => pendingStore.removePending(pendingId), 2000);
               } catch (err) {
+                console.error('Import error:', err);
                 pendingStore.updatePending(pendingId, { status: 'error' });
-                toast({ title: 'Erro ao importar', variant: 'destructive' });
-                setTimeout(() => pendingStore.removePending(pendingId), 4000);
+                toast({ title: 'Erro ao importar', description: 'Toque no item para remover.', variant: 'destructive' });
               }
             }}
           />
@@ -646,7 +673,17 @@ const Dashboard = () => {
       </Suspense>
 
       <Suspense fallback={<SuspenseLoading />}>
-        {state.aiDeckOpen && <AICreateDeckDialog open={state.aiDeckOpen} onOpenChange={state.setAiDeckOpen} folderId={state.currentFolderId} />}
+        {state.aiDeckOpen && (
+          <AICreateDeckDialog
+            open={state.aiDeckOpen}
+            onOpenChange={(open) => {
+              state.setAiDeckOpen(open);
+              if (!open) setPendingReviewData(null);
+            }}
+            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            pendingReviewData={pendingReviewData}
+          />
+        )}
       </Suspense>
       <Suspense fallback={<SuspenseLoading />}>
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}

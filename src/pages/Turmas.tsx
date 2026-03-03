@@ -3,37 +3,30 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useDeckOnlyTags, useDeckTagsBatch, useTagDescendants } from '@/hooks/useTags';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hooks/useTurmas';
+import { useDecks } from '@/hooks/useDecks';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown,
-  Globe, Lock, Filter, Sparkles, BookOpen, Layers, RefreshCw,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  ArrowLeft, Plus, Users, LogIn, Search, Star, Crown, BadgeCheck,
+  Globe, Lock, Sparkles, BookOpen, Layers, RefreshCw, Tag as TagIcon, MessageCircle, LogOut,
 } from 'lucide-react';
 import LeaveConfirmDialog from '@/components/community/LeaveConfirmDialog';
 
-const DESC_MAX = 2000;
 
-const CATEGORIES = [
-  { value: '', label: 'Todas' },
-  { value: 'medicina', label: 'Medicina' },
-  { value: 'direito', label: 'Direito' },
-  { value: 'engenharia', label: 'Engenharia' },
-  { value: 'concursos', label: 'Concursos' },
-  { value: 'idiomas', label: 'Idiomas' },
-  { value: 'tecnologia', label: 'Tecnologia' },
-  { value: 'vestibular', label: 'Vestibular' },
-  { value: 'outros', label: 'Outros' },
-];
 
 const formatCount = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(0)} mil`;
@@ -68,22 +61,21 @@ const CommunityCard = ({
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
         <h3 className="font-display font-bold text-sm text-foreground line-clamp-2 leading-snug flex-1">{turma.name}</h3>
-        {(turma.subscription_price ?? 0) > 0 && (
-          <Crown className="h-4 w-4 shrink-0 text-purple-500 fill-purple-500/20" />
-        )}
       </div>
       <p className="text-xs text-muted-foreground">
         por <span className="font-semibold text-foreground">{turma.owner_name ?? 'Criador'}</span>
       </p>
     </div>
 
-    <div className="flex items-center gap-4">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Layers className="h-3.5 w-3.5 text-foreground" />
-        <span className="font-bold text-foreground">{formatCount(turma.member_count ?? 0)}</span>
-        decks
+    <div className="flex items-center gap-3">
+      <span className="flex items-center gap-1 text-[11px] text-foreground">
+        <Layers className="h-3 w-3 shrink-0" />
+        <span className="font-bold">{formatCount(turma.member_count ?? 0)}</span>
       </span>
       <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
+      {(turma.subscription_price ?? 0) > 0 && (
+        <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />
+      )}
     </div>
 
     {isMine ? (
@@ -103,10 +95,12 @@ const PublicDeckCard = ({
   deck,
   onClick,
   isOwner,
+  isFollowed,
 }: {
   deck: { id: string; name: string; owner_name: string; card_count: number; updated_at: string; owner_id: string };
   onClick: () => void;
   isOwner?: boolean;
+  isFollowed?: boolean;
 }) => (
   <div
     className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
@@ -117,23 +111,24 @@ const PublicDeckCard = ({
       <p className="text-xs text-muted-foreground">
         por <span className="font-semibold text-foreground">{deck.owner_name}</span>
       </p>
+      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+        <RefreshCw className="h-3 w-3 shrink-0" />
+        <span className="truncate">{formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}</span>
+      </p>
     </div>
 
-    <div className="flex items-center gap-4">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Layers className="h-3.5 w-3.5 text-foreground" />
-        <span className="font-bold text-foreground">{formatCount(deck.card_count)}</span>
-        cards
-      </span>
-      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-        <RefreshCw className="h-3 w-3" />
-        {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-      </span>
-    </div>
+    <p className="text-[11px] text-foreground flex items-center gap-1">
+      <Layers className="h-3 w-3 shrink-0" />
+      <span className="font-bold">{formatCount(deck.card_count)}</span>
+    </p>
 
     {isOwner ? (
       <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
         ✓ Seu deck
+      </span>
+    ) : isFollowed ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Inscrito
       </span>
     ) : (
       <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
@@ -148,46 +143,63 @@ const Turmas = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { turmas, isLoading, createTurma, joinTurma, leaveTurma } = useTurmas();
+  const { turmas, isLoading, joinTurma, leaveTurma } = useTurmas();
+  const { decks: userDecks } = useDecks();
+
+  // Track followed deck names for matching against public decks
+  const followedDeckNames = useMemo(() => {
+    const names = new Set<string>();
+    userDecks.forEach((d: any) => {
+      if (d.is_live_deck || d.source_listing_id || d.source_turma_deck_id) {
+        if (d.name) names.add(d.name.toLowerCase());
+      }
+    });
+    return names;
+  }, [userDecks]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [viewMode, setViewMode] = useState<'discover' | 'mine'>('discover');
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
 
   const { data: discoverTurmas, isLoading: discoverLoading } = useDiscoverTurmas(searchQuery);
   const { data: publicDecks, isLoading: publicDecksLoading } = usePublicDecks(searchQuery);
+  const { data: allTags = [] } = useDeckOnlyTags();
+
+  // Fetch tags for public decks to enable tag filtering
+  const publicDeckIds = useMemo(() => (publicDecks ?? []).map((d: any) => d.id), [publicDecks]);
+  const { data: deckTagsMap = {} } = useDeckTagsBatch(publicDeckIds);
+
+  // Get descendant IDs for inclusive hierarchy filtering
+  const { data: descendantIds } = useTagDescendants(selectedTag);
 
   const myTurmaIds = new Set(turmas.map(t => t.id));
 
   const communities = useMemo(() => {
     if (viewMode === 'mine') {
       return turmas
-        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        .filter(t => !selectedCategory || (t as any).category === selectedCategory);
+        .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
-    return (discoverTurmas ?? [])
-      .filter(t => !selectedCategory || (t as any).category === selectedCategory);
-  }, [viewMode, turmas, discoverTurmas, searchQuery, selectedCategory]);
+    return discoverTurmas ?? [];
+  }, [viewMode, turmas, discoverTurmas, searchQuery]);
 
   const filteredDecks = useMemo(() => {
     if (viewMode === 'mine') return [];
-    return publicDecks ?? [];
-  }, [viewMode, publicDecks]);
-
-  const handleCreate = () => {
-    if (!name.trim()) return;
-    createTurma.mutate({ name: name.trim(), description: description.trim() }, {
-      onSuccess: () => { setShowCreate(false); setName(''); setDescription(''); toast({ title: 'Comunidade criada!' }); },
-      onError: () => toast({ title: 'Erro ao criar', variant: 'destructive' }),
-    });
-  };
+    let decks = publicDecks ?? [];
+    // Apply tag filter (with hierarchy: includes descendants)
+    if (selectedTag && descendantIds) {
+      const tagSet = new Set(descendantIds);
+      decks = decks.filter((d: any) => {
+        const tags = deckTagsMap[d.id] ?? [];
+        return tags.some(t => tagSet.has(t.id));
+      });
+    }
+    return decks;
+  }, [viewMode, publicDecks, selectedTag, descendantIds, deckTagsMap]);
 
   const handleJoin = () => {
     if (!inviteCode.trim()) return;
@@ -217,7 +229,7 @@ const Turmas = () => {
             <Button variant="outline" size="sm" onClick={() => setShowJoin(true)} className="gap-1.5">
               <LogIn className="h-4 w-4" /> <span className="hidden sm:inline">Código</span>
             </Button>
-            <Button size="sm" onClick={() => { setShowCreate(true); setName(''); setDescription(''); }} className="gap-1.5">
+            <Button size="sm" onClick={() => setShowCreate(true)} className="gap-1.5">
               <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Criar</span>
             </Button>
           </div>
@@ -256,21 +268,36 @@ const Turmas = () => {
               className="pl-9"
             />
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {CATEGORIES.map(cat => (
+          {/* Tag filter chips */}
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <TagIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                  selectedCategory === cat.value
+                onClick={() => setSelectedTag(null)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  !selectedTag
                     ? 'bg-primary/15 text-primary border border-primary/30'
                     : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
                 }`}
               >
-                {cat.label}
+                Todas tags
               </button>
-            ))}
-          </div>
+              {allTags.slice(0, 12).map(tag => (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+                  className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                    selectedTag === tag.id
+                      ? 'bg-primary/15 text-primary border border-primary/30'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                  }`}
+                >
+                  {tag.name}
+                  {tag.is_official && <BadgeCheck className="h-3 w-3 inline ml-0.5 text-blue-500 shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -289,12 +316,22 @@ const Turmas = () => {
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {communities.map(turma => (
-                    <CommunityCard
-                      key={turma.id}
-                      turma={turma}
-                      onClick={() => navigate(`/turmas/${turma.id}`)}
-                      isMine={myTurmaIds.has(turma.id)}
-                    />
+                    <div key={turma.id} className="relative">
+                      <CommunityCard
+                        turma={turma}
+                        onClick={() => navigate(`/turmas/${turma.id}`)}
+                        isMine={myTurmaIds.has(turma.id)}
+                      />
+                      {viewMode === 'mine' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmLeave(turma.id); }}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-card/90 border border-border/50 text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-colors shadow-sm"
+                          title="Desinscrever-se"
+                        >
+                          <LogOut className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </section>
@@ -311,6 +348,7 @@ const Turmas = () => {
                       deck={deck}
                       onClick={() => navigate(`/decks/${deck.id}/preview`)}
                       isOwner={deck.owner_id === user?.id}
+                      isFollowed={followedDeckNames.has(deck.name?.toLowerCase())}
                     />
                   ))}
                 </div>
@@ -340,27 +378,30 @@ const Turmas = () => {
         )}
       </main>
 
-      {/* Create Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Criar Comunidade</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <Input placeholder="Nome da comunidade" value={name} onChange={e => setName(e.target.value)} maxLength={60} />
-            <div className="space-y-1">
-              <Textarea
-                placeholder="Descrição (opcional)"
-                value={description}
-                onChange={e => { if (e.target.value.length <= DESC_MAX) setDescription(e.target.value); }}
-                maxLength={DESC_MAX}
-              />
-              <p className="text-[11px] text-muted-foreground text-right">{description.length}/{DESC_MAX}</p>
-            </div>
-            <Button onClick={handleCreate} disabled={!name.trim() || createTurma.isPending} className="w-full">
-              {createTurma.isPending ? 'Criando...' : 'Criar Comunidade'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Create Dialog - WhatsApp contact */}
+      <AlertDialog open={showCreate} onOpenChange={setShowCreate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Criar Comunidade</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Para criar uma comunidade personalizada, entre em contato conosco pelo WhatsApp. Nossa equipe vai te ajudar a configurar tudo!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Fechar</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <a
+                href="https://wa.me/5514998958122?text=Ol%C3%A1!%20Gostaria%20de%20criar%20uma%20comunidade%20no%20MemoCards."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2"
+              >
+                <MessageCircle className="h-4 w-4" /> Falar no WhatsApp
+              </a>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Join by Code Dialog */}
       <Dialog open={showJoin} onOpenChange={setShowJoin}>

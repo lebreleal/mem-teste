@@ -8,9 +8,11 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send, Upload, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, MessageSquareText, CheckSquare, PenLine, Image, Sparkles, Loader2, ArrowRight, Send, Upload, ZoomIn, ZoomOut, RotateCcw, Tag as TagIcon } from 'lucide-react';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { TagInput } from '@/components/TagInput';
+import { useCardTags, useCardTagMutations } from '@/hooks/useTags';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -297,11 +299,48 @@ const OcclusionEditor = ({ initialFront, onSave, onCancel, isSaving }: Occlusion
 type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
 
 const CARD_TYPES: { value: EditorCardType; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'basic', label: 'Texto', icon: <MessageSquareText className="h-5 w-5 text-primary" />, desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-warning" />, desc: 'Pergunta com alternativas' },
-  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-accent-foreground" />, desc: 'Texto com lacunas para preencher' },
-  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-info" />, desc: 'Oculte partes de uma imagem' },
+  { value: 'basic', label: 'Texto', icon: <MessageSquareText className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta na frente, resposta no verso' },
+  { value: 'multiple_choice', label: 'Múltipla escolha', icon: <CheckSquare className="h-5 w-5 text-muted-foreground" />, desc: 'Pergunta com alternativas' },
+  { value: 'cloze', label: 'Cloze', icon: <PenLine className="h-5 w-5 text-muted-foreground" />, desc: 'Texto com lacunas para preencher' },
+  { value: 'image_occlusion', label: 'Oclusão de imagem', icon: <Image className="h-5 w-5 text-muted-foreground" />, desc: 'Oculte partes de uma imagem' },
 ];
+
+/** Inline tag display for card list items */
+const CardTagsInline = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  if (tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {tags.slice(0, 3).map(tag => (
+        <span key={tag.id} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {tag.name}
+        </span>
+      ))}
+      {tags.length > 3 && (
+        <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+      )}
+    </div>
+  );
+};
+
+/** Tag editor for card edit dialog */
+const CardTagEditor = ({ cardId }: { cardId: string }) => {
+  const { data: tags = [] } = useCardTags(cardId);
+  const { addTag, removeTag } = useCardTagMutations(cardId);
+  return (
+    <div className="space-y-1.5 border-t border-border/50 pt-3">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+        <TagIcon className="h-3 w-3" /> Tags do card
+      </p>
+      <TagInput
+        tags={tags}
+        onAdd={(tag) => addTag.mutate(tag)}
+        onRemove={(tagId) => removeTag.mutate(tagId)}
+        placeholder="Adicionar tag ao card..."
+      />
+    </div>
+  );
+};
 
 const ManageDeck = () => {
   const { deckId } = useParams<{ deckId: string }>();
@@ -695,7 +734,7 @@ const ManageDeck = () => {
         <>
           <div>
             <Label className="mb-1.5 block">
-              {editorType === 'multiple_choice' ? 'Pergunta' : editorType === 'cloze' ? 'Texto com lacunas' : 'Frente (Pergunta)'}
+              {editorType === 'multiple_choice' ? 'Pergunta' : 'Frente'}
             </Label>
             <LazyRichEditor
               content={front}
@@ -703,10 +742,9 @@ const ManageDeck = () => {
               placeholder={
                 editorType === 'multiple_choice'
                   ? 'Qual organela é responsável pela produção de energia?'
-                  : editorType === 'cloze'
-                  ? 'A {{c1::mitocôndria}} é responsável pela respiração celular.'
                   : 'Qual é a capital da França?'
               }
+              hideCloze={editorType !== 'cloze'}
             />
           </div>
 
@@ -755,8 +793,8 @@ const ManageDeck = () => {
               <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
             </div>
           ) : editorType === 'cloze' ? (
-            <div className="space-y-3">
-              {/* Visual cloze preview */}
+            <>
+              {/* Visual cloze preview / hint */}
               {(() => {
                 const plainText = front.replace(/<[^>]*>/g, '');
                 const clozeRegex = /\{\{c(\d+)::([^}]*)\}\}/g;
@@ -777,7 +815,6 @@ const ManageDeck = () => {
                   ];
                   const DOT_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
 
-                  // Build highlighted preview
                   const renderHighlighted = () => {
                     const parts: React.ReactNode[] = [];
                     let lastIndex = 0;
@@ -823,19 +860,28 @@ const ManageDeck = () => {
                     </div>
                   );
                 }
-                return null;
+
+                return (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1">
+                    <p className="text-[10px] font-bold uppercase text-primary tracking-wider flex items-center gap-1.5">
+                      <PenLine className="h-3 w-3" /> Como usar Cloze
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione o texto e clique para criar um <span className="font-semibold text-foreground">cloze</span>. Clozes com mesmo número viram o <span className="font-semibold text-foreground">mesmo card</span>.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Cria um cloze com <span className="font-semibold text-primary">número novo</span>, gerando um <span className="font-semibold text-foreground">card separado</span>.
+                    </p>
+                  </div>
+                );
               })()}
 
-              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Como usar</p>
-                <p className="text-xs text-muted-foreground">
-                  Selecione o texto e clique em <code className="text-primary font-mono bg-primary/10 px-1 rounded">{'{ }'}</code> na barra de ferramentas
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Mesmo número (c1, c1) = mesma lacuna. Números diferentes (c1, c2) = cards separados vinculados.
-                </p>
+              {/* Verso field - same as basic */}
+              <div>
+                <Label className="mb-1.5 block">Verso (Resposta)</Label>
+                <LazyRichEditor content={back} onChange={setBack} placeholder="Resposta ou informação adicional" hideCloze />
               </div>
-            </div>
+            </>
           ) : (
             <div>
               <Label className="mb-1.5 block">Verso (Resposta)</Label>
@@ -859,6 +905,11 @@ const ManageDeck = () => {
               {isImproving ? 'Melhorando...' : 'Melhorar com IA'}
               <span className="text-[10px] text-muted-foreground ml-auto">1 crédito</span>
             </Button>
+          )}
+
+          {/* Card Tags (only when editing existing card) */}
+          {editingId && (
+            <CardTagEditor cardId={editingId} />
           )}
 
           <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
@@ -998,6 +1049,7 @@ const ManageDeck = () => {
                       return <p className="mt-1 text-xs text-muted-foreground">{mc.options?.length || 0} opções · Resposta: {mc.options?.[mc.correctIndex]}</p>;
                     } catch { return null; }
                   })()}
+                  <CardTagsInline cardId={card.id} />
                 </div>
                 <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   {isCommunityDeck ? (
@@ -1107,6 +1159,7 @@ const ManageDeck = () => {
           open={!!suggestCard}
           onOpenChange={(open) => { if (!open) setSuggestCard(null); }}
           card={suggestCard}
+          deckId={suggestCard.deck_id}
         />
       )}
     </div>

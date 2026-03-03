@@ -329,6 +329,7 @@ const ActivityView = () => {
           </div>
         </div>
 
+
         {/* Selected day detail */}
         {selectedDate && (
           <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm space-y-2">

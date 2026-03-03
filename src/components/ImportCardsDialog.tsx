@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, Fragment } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X, Check } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronRight, Sparkles, AlertTriangle, Package, Loader2, FolderTree, X } from 'lucide-react';
 import ankiLogo from '@/assets/anki-logo.svg';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -35,10 +35,35 @@ interface DetectedDeckNode {
   children: DetectedDeckNode[];
 }
 
+interface CardImportData {
+  frontContent: string;
+  backContent: string;
+  cardType: string;
+  progress?: {
+    state: number;
+    stability: number;
+    difficulty: number;
+    scheduledDate: string;
+    learningStep: number;
+    lastReviewedAt?: string;
+  };
+}
+
+interface RevlogImportData {
+  cardIndex: number;
+  rating: number;
+  reviewedAt: string;
+  stability: number;
+  difficulty: number;
+  scheduledDate: string;
+  state: number | null;
+  elapsedMs: number | null;
+}
+
 interface ImportCardsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (deckName: string, cards: { frontContent: string; backContent: string; cardType: string }[], subdecks?: SubdeckOrganization[]) => void;
+  onImport: (deckName: string, cards: CardImportData[], subdecks?: SubdeckOrganization[], revlog?: RevlogImportData[]) => void;
   loading?: boolean;
 }
 
@@ -176,18 +201,25 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const [autoDetecting, setAutoDetecting] = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
 
-  // AI organize subdecks state
-  const [organizing, setOrganizing] = useState(false);
+  // Subdecks from Anki hierarchy (no longer AI-organized)
   const [subdecks, setSubdecks] = useState<SubdeckOrganization[] | null>(null);
 
   // Anki state
   const [ankiLoading, setAnkiLoading] = useState(false);
+  const [ankiProgress, setAnkiProgress] = useState('');
   const [ankiResult, setAnkiResult] = useState<AnkiParseResult | null>(null);
+  const ankiCleanupRef = useRef<(() => void) | null>(null);
+  const [importProgress, setImportProgress] = useState(true);
 
   const csvFileRef = useRef<HTMLInputElement>(null);
   const ankiFileRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
+    // Revoke Blob URLs to free memory
+    if (ankiCleanupRef.current) {
+      ankiCleanupRef.current();
+      ankiCleanupRef.current = null;
+    }
     setSource(null);
     setRawText('');
     setDeckName('');
@@ -196,8 +228,8 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     setUseRFC(true);
     setAutoDetected(false);
     setAnkiResult(null);
+    setAnkiProgress('');
     setSubdecks(null);
-    setOrganizing(false);
   };
 
   const handleClose = (v: boolean) => {
@@ -264,35 +296,6 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     }
   }, []);
 
-  // AI organize into subdecks
-  const organizeWithAI = useCallback(async (cards: ParsedCard[]) => {
-    if (cards.length < 5) {
-      toast({ title: 'Poucos cartões para organizar', description: 'São necessários pelo menos 5 cartões.', variant: 'destructive' });
-      return;
-    }
-    setOrganizing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('organize-import', {
-        body: {
-          cards: cards.map(c => ({ front: c.front, back: c.back })),
-          deckName: deckName || undefined,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.subdecks && data.subdecks.length > 0) {
-        setSubdecks(normalizeSubdeckHierarchy(data.subdecks as SubdeckOrganization[]));
-        toast({ title: `${data.subdecks.length} subdecks identificados pela IA!` });
-      } else {
-        toast({ title: 'Não foi possível identificar temas distintos', variant: 'destructive' });
-      }
-    } catch (err: any) {
-      console.error('Organize failed:', err);
-      toast({ title: 'Erro ao organizar', description: err.message, variant: 'destructive' });
-    } finally {
-      setOrganizing(false);
-    }
-  }, [toast, deckName]);
 
   // CSV file upload
   const handleCsvFormatClick = () => {
@@ -331,22 +334,41 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     if (!file) return;
     e.target.value = '';
     setAnkiLoading(true);
+    setAnkiProgress('Abrindo arquivo...');
     try {
       const { parseApkgFile } = await import('@/lib/ankiParser');
-      const result = await parseApkgFile(file);
+      const result = await parseApkgFile(file, (msg) => {
+        setAnkiProgress(msg);
+      });
+      // Store cleanup for Blob URL revocation
+      if (result.cleanup) {
+        ankiCleanupRef.current = result.cleanup;
+      }
       setAnkiResult(result);
       setSubdecks(result.subdecks ? normalizeSubdeckHierarchy(result.subdecks as SubdeckOrganization[]) : null);
       if (!deckName) setDeckName(result.deckName);
       toast({
         title: `${result.cards.length} cartões encontrados`,
-        description: result.mediaCount > 0 ? `${result.mediaCount} arquivos de mídia extraídos` : undefined,
+        description: result.mediaCount > 0 
+          ? `${result.mediaCount} arquivos de mídia extraídos` 
+          : result.missingMediaCount > 0
+            ? `⚠️ ${result.missingMediaCount} imagens referenciadas não foram encontradas no arquivo. Exporte novamente do Anki com "Incluir mídia" ativado.`
+            : undefined,
+        duration: result.missingMediaCount > 0 ? 10000 : 5000,
       });
     } catch (err: any) {
       console.error('Anki parse error:', err);
-      toast({ title: 'Erro ao ler arquivo Anki', description: err.message, variant: 'destructive' });
+      const msg = err?.message || 'Erro desconhecido';
+      toast({ 
+        title: 'Erro ao ler arquivo Anki', 
+        description: msg.length > 200 ? msg.slice(0, 200) + '...' : msg, 
+        variant: 'destructive',
+        duration: 8000,
+      });
       setSource(null);
     } finally {
       setAnkiLoading(false);
+      setAnkiProgress('');
     }
   };
 
@@ -354,17 +376,23 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
   const handleImport = () => {
     if (source === 'anki' && ankiResult) {
       if (!deckName.trim()) return;
-      const cards = ankiResult.cards.map(c => ({
+      const cards: CardImportData[] = ankiResult.cards.map((c, i) => ({
         frontContent: c.front,
         backContent: c.back,
         cardType: c.cardType,
+        ...(importProgress && ankiResult.progress?.[i] ? { progress: ankiResult.progress[i] } : {}),
       }));
-      onImport(deckName.trim(), cards, subdecks ?? undefined);
+      onImport(
+        deckName.trim(),
+        cards,
+        subdecks ?? undefined,
+        importProgress && ankiResult.revlog ? ankiResult.revlog : undefined,
+      );
       reset();
       return;
     }
     if (parsedCards.length === 0 || !deckName.trim()) return;
-    const cards = parsedCards.map(c => ({
+    const cards: CardImportData[] = parsedCards.map(c => ({
       frontContent: c.front,
       backContent: c.back,
       cardType: c.cardType || 'basic',
@@ -493,11 +521,11 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
     };
   }, [ankiResult, deckName, source]);
 
-  const DetectedAnkiNode = ({ node, depth = 0 }: { node: DetectedDeckNode; depth?: number }) => {
+  const renderDetectedAnkiNode = (node: DetectedDeckNode, depth = 0): React.ReactNode => {
     const hasChildren = node.children.length > 0;
 
     return (
-      <div style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
+      <div key={`${node.name}-${depth}`} style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
         <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
           <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
             {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
@@ -508,102 +536,13 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
 
         {hasChildren && (
           <div className="mt-0.5 space-y-0.5">
-            {node.children.map((child, index) => (
-              <DetectedAnkiNode key={`${child.name}-${index}`} node={child} depth={depth + 1} />
-            ))}
+            {node.children.map((child, index) => renderDetectedAnkiNode(child, depth + 1))}
           </div>
         )}
       </div>
     );
   };
 
-
-  // Recursive node renderer for subdeck preview
-  const SubdeckNode = ({ node, depth = 0 }: { node: SubdeckOrganization; depth?: number }) => {
-    const hasChildren = node.children && node.children.length > 0;
-    const totalInBranch = countTreeCards(node);
-    return (
-      <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : undefined }}>
-        <div className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5">
-          <span className={`text-xs ${depth === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'} flex items-center gap-1.5`}>
-            {hasChildren && <FolderTree className="h-3 w-3 text-primary/70" />}
-            {getDeckNodeTitle(node.name)}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            {hasChildren ? `${totalInBranch} cartões` : `${node.card_indices.length} cartões`}
-          </span>
-        </div>
-        {hasChildren && (
-          <div className="mt-0.5 space-y-0.5">
-            {node.children!.map((child, j) => (
-              <SubdeckNode key={j} node={child} depth={depth + 1} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Subdeck organization preview component
-  const SubdeckPreview = () => {
-    if (!subdecks || subdecks.length === 0 || !subdeckStats) return null;
-
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold flex items-center gap-1.5">
-            <FolderTree className="h-4 w-4 text-primary" />
-            Organização sugerida ({subdeckStats.decks} decks)
-          </Label>
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setSubdecks(null)}>
-            <X className="h-3 w-3 mr-1" />
-            Remover
-          </Button>
-        </div>
-        <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2">
-          {subdecks.map((sd, i) => (
-            <SubdeckNode key={i} node={sd} />
-          ))}
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {hasHierarchy
-            ? `Serão criados ${subdeckStats.decks} deck(s), ${subdeckStats.cards} cartões e profundidade máxima ${subdeckStats.maxDepth}.`
-            : `Serão criados ${subdeckStats.decks} subdeck(s) com ${subdeckStats.cards} cartões, incluindo subníveis.`}
-        </p>
-      </div>
-    );
-  };
-
-  // AI organize button
-  const OrganizeButton = ({ cards }: { cards: ParsedCard[] | { front: string; back: string }[] }) => {
-    if (cards.length < 5) return null;
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
-        onClick={() => organizeWithAI(cards.map(c => ({ front: c.front, back: c.back })))}
-        disabled={organizing}
-      >
-        {organizing ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Organizando...
-          </>
-        ) : subdecks ? (
-          <>
-            <Check className="h-3.5 w-3.5" />
-            Reorganizar com IA
-          </>
-        ) : (
-          <>
-            <FolderTree className="h-3.5 w-3.5" />
-            Organizar em subdecks com IA
-          </>
-        )}
-      </Button>
-    );
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -663,7 +602,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
             {ankiLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Analisando arquivo Anki...</p>
+                <p className="text-sm text-muted-foreground">{ankiProgress || 'Analisando arquivo Anki...'}</p>
               </div>
             ) : ankiResult ? (
               <div className="space-y-4">
@@ -679,11 +618,33 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   </div>
                 )}
 
-                {/* AI organize button */}
-                <OrganizeButton cards={ankiResult.cards} />
+                {ankiResult.missingMediaCount > 0 && (
+                  <div className="flex items-center gap-2 rounded-xl bg-destructive/10 border border-destructive/20 px-3 py-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                    <span className="text-xs text-foreground">
+                      {ankiResult.missingMediaCount} imagens não encontradas no arquivo. Re-exporte do Anki com "Incluir mídia" ativado.
+                    </span>
+                  </div>
+                )}
 
-                {/* Subdeck preview */}
-                <SubdeckPreview />
+                {/* Progress import toggle */}
+                {ankiResult.hasProgress && (
+                  <label className="flex items-center justify-between gap-3 rounded-xl bg-accent/30 border border-accent px-3 py-2.5 cursor-pointer">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground">Importar progresso</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Traz estados, intervalos{ankiResult.revlog && ankiResult.revlog.length > 0 ? ` e ${ankiResult.revlog.length.toLocaleString()} revisões` : ''} do Anki
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={importProgress}
+                      onChange={e => setImportProgress(e.target.checked)}
+                      className="accent-primary h-4 w-4"
+                    />
+                  </label>
+                )}
+
 
                 {/* Hierarquia detectada no arquivo Anki */}
                 {detectedAnkiHierarchy.nodes.length > 0 && (
@@ -693,9 +654,12 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                       Estrutura original do arquivo ({detectedAnkiHierarchy.deckCount} decks)
                     </Label>
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/20 p-2">
-                      {detectedAnkiHierarchy.nodes.map((node, index) => (
-                        <DetectedAnkiNode key={`${node.name}-${index}`} node={node} />
+                      {detectedAnkiHierarchy.nodes.slice(0, 50).map((node, index) => (
+                        <Fragment key={`${node.name}-${index}`}>{renderDetectedAnkiNode(node)}</Fragment>
                       ))}
+                      {detectedAnkiHierarchy.nodes.length > 50 && (
+                        <p className="text-center text-xs text-muted-foreground py-1">...e mais {detectedAnkiHierarchy.nodes.length - 50} decks</p>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       Profundidade máxima detectada: {detectedAnkiHierarchy.maxDepth} nível(is).
@@ -703,40 +667,90 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                   </div>
                 )}
 
-                {/* Preview */}
+                {/* Preview - same layout as deck detail CardList */}
                 <div>
                   <Label className="mb-2 block text-sm font-semibold">
                     Prévia ({ankiResult.cards.length} cartões)
                   </Label>
-                  <div className="max-h-48 overflow-y-auto space-y-2">
-                    {ankiResult.cards.slice(0, 20).map((card, i) => (
-                      <div key={i} className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            card.cardType === 'cloze' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                          }`}>
-                            {card.cardType === 'cloze' ? 'Cloze' : 'Básico'}
-                          </span>
-                          {card.deckName && (
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
-                              title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
-                            >
-                              {getDeckNodeTitle(card.deckName)}
+                  <div className="max-h-64 overflow-y-auto space-y-2.5">
+                    {ankiResult.cards.slice(0, 20).map((card, i) => {
+                      const isCloze = card.cardType === 'cloze';
+                      const typeLabel = isCloze ? 'CLOZE' : 'BÁSICO';
+                      const typeBadgeClass = isCloze
+                        ? 'bg-primary/15 text-primary border-primary/30'
+                        : 'bg-muted text-muted-foreground border-border';
+
+                      return (
+                        <div key={i} className="rounded-xl border border-border/60 bg-card p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                {card.deckName && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground"
+                                    title={splitDeckPathLabel(card.deckName).map(normalizeDeckTitle).join(' › ')}
+                                  >
+                                    {getDeckNodeTitle(card.deckName)}
+                                  </span>
+                                )}
+                              </div>
+                              {isCloze ? (
+                                <p className="text-sm font-semibold text-foreground leading-snug">
+                                  {(() => {
+                                    // Replace <img> with placeholder BEFORE stripping other HTML
+                                    const withImgPlaceholder = card.front.replace(/<img[^>]*>/gi, ' [imagem] ');
+                                    // Strip remaining HTML but preserve cloze markers
+                                    const plain = withImgPlaceholder.replace(/<[^>]*>/g, '').trim();
+                                    const parts: React.ReactNode[] = [];
+                                    // Use non-greedy match to handle SVG/HTML inside cloze markers (Image Occlusion)
+                                    const regex = /\{\{c(\d+)::([\s\S]*?)\}\}/g;
+                                    let lastIdx = 0;
+                                    let m;
+                                    let k = 0;
+                                    while ((m = regex.exec(plain)) !== null) {
+                                      if (m.index > lastIdx) parts.push(<span key={k++}>{plain.slice(lastIdx, m.index)}</span>);
+                                      const n = parseInt(m[1]);
+                                      // For Image Occlusion, the cloze content may be SVG data — show a placeholder
+                                      const clozeText = m[2].replace(/<[^>]*>/g, '').trim();
+                                      const displayText = clozeText || '[oclusão]';
+                                      parts.push(
+                                        <span key={k++} className="inline-flex items-baseline gap-px px-1 py-0 text-xs font-semibold bg-primary/15 text-primary border-b-2 border-primary/50 rounded">
+                                          <span className="text-[7px] font-bold opacity-50 leading-none" style={{ verticalAlign: 'super' }}>{n}</span>
+                                          {displayText}
+                                        </span>
+                                      );
+                                      lastIdx = m.index + m[0].length;
+                                    }
+                                    if (lastIdx < plain.length) parts.push(<span key={k++}>{plain.slice(lastIdx)}</span>);
+                                    // If no cloze markers found but it's an image-heavy card, show image indicator
+                                    if (parts.length === 0) {
+                                      const hasImage = card.front.includes('<img');
+                                      return hasImage ? '🖼️ Oclusão de imagem' : (plain || '[cloze]');
+                                    }
+                                    return parts;
+                                  })()}
+                                </p>
+                              ) : (
+                                <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2"
+                                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front.replace(/<img[^>]*>/g, '[imagem]')) }} />
+                              )}
+                              {!isCloze && card.back && (
+                                <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2"
+                                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back.replace(/<img[^>]*>/g, '[imagem]')) }} />
+                              )}
+                            </div>
+                            <span className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0 ${typeBadgeClass}`}>
+                              {isCloze && (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                                  <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {typeLabel}
                             </span>
-                          )}
-                          {card.tags.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground">{card.tags.slice(0, 3).join(', ')}</span>
-                          )}
+                          </div>
                         </div>
-                        <p className="font-medium text-card-foreground text-xs line-clamp-2"
-                           dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front.replace(/<img[^>]*>/g, '[imagem]')) }} />
-                        {card.cardType !== 'cloze' && card.back && (
-                          <p className="mt-1 text-muted-foreground text-xs line-clamp-2"
-                             dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back.replace(/<img[^>]*>/g, '[imagem]')) }} />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                     {ankiResult.cards.length > 20 && (
                       <p className="text-center text-xs text-muted-foreground">...e mais {ankiResult.cards.length - 20} cartões</p>
                     )}
@@ -874,29 +888,29 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
                 </div>
               )}
 
-              {/* AI Organize button */}
-              {parsedCards.length >= 5 && (
-                <OrganizeButton cards={parsedCards} />
-              )}
 
-              {/* Subdeck preview */}
-              <SubdeckPreview />
-
-              {/* Preview */}
+              {/* Preview - same layout as deck detail */}
               <div>
                 <Label className="mb-2 block text-sm font-semibold">Prévia dos cartões ({parsedCards.length})</Label>
                 {parsedCards.length > 0 ? (
-                  <div className="max-h-48 overflow-y-auto space-y-2">
+                  <div className="max-h-64 overflow-y-auto space-y-2.5">
                     {parsedCards.slice(0, 20).map((card, i) => (
-                      <div key={i} className={`rounded-lg border p-3 text-sm ${
-                        !card.back?.trim() ? 'border-warning/50 bg-warning/5' : 'border-border bg-muted/30'
+                      <div key={i} className={`rounded-xl border p-4 ${
+                        !card.back?.trim() ? 'border-warning/50 bg-warning/5' : 'border-border/60 bg-card'
                       }`}>
-                        <p className="font-medium text-card-foreground text-xs">{card.front}</p>
-                        {card.back ? (
-                          <p className="mt-1 text-muted-foreground text-xs line-clamp-3">{card.back}</p>
-                        ) : (
-                          <p className="mt-1 text-warning text-[11px] italic">Sem verso</p>
-                        )}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{card.front}</p>
+                            {card.back ? (
+                              <p className="text-xs text-muted-foreground mt-1.5 leading-snug line-clamp-2">{card.back}</p>
+                            ) : (
+                              <p className="mt-1.5 text-warning text-[11px] italic">Sem verso</p>
+                            )}
+                          </div>
+                          <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0 bg-muted text-muted-foreground border-border">
+                            BÁSICO
+                          </span>
+                        </div>
                       </div>
                     ))}
                     {parsedCards.length > 20 && (
@@ -914,10 +928,7 @@ const ImportCardsDialog = ({ open, onOpenChange, onImport, loading }: ImportCard
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
                 <Button onClick={handleImport} disabled={parsedCards.length === 0 || !deckName.trim() || loading}>
-                  {loading ? 'Importando...' : subdecks && subdeckStats
-                    ? `Importar (${subdeckStats.decks} decks / ${subdeckStats.cards} cartões)`
-                    : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`
-                  }
+                  {loading ? 'Importando...' : `Importar ${parsedCards.length > 0 ? `(${parsedCards.length})` : ''}`}
                 </Button>
               </div>
             </div>
