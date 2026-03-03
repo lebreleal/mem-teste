@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useTurmas, useDiscoverTurmas, usePublicDecks, type Turma } from '@/hooks/useTurmas';
+import { useDecks } from '@/hooks/useDecks';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,10 +95,12 @@ const PublicDeckCard = ({
   deck,
   onClick,
   isOwner,
+  isFollowed,
 }: {
   deck: { id: string; name: string; owner_name: string; card_count: number; updated_at: string; owner_id: string };
   onClick: () => void;
   isOwner?: boolean;
+  isFollowed?: boolean;
 }) => (
   <div
     className="group cursor-pointer rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-3"
@@ -123,6 +126,10 @@ const PublicDeckCard = ({
       <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
         ✓ Seu deck
       </span>
+    ) : isFollowed ? (
+      <span className="inline-flex items-center justify-center w-full rounded-lg border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+        ✓ Inscrito
+      </span>
     ) : (
       <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
         Ver deck
@@ -137,6 +144,18 @@ const Turmas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { turmas, isLoading, joinTurma, leaveTurma } = useTurmas();
+  const { decks: userDecks } = useDecks();
+
+  // Track followed deck names for matching against public decks
+  const followedDeckNames = useMemo(() => {
+    const names = new Set<string>();
+    userDecks.forEach((d: any) => {
+      if (d.is_live_deck || d.source_listing_id || d.source_turma_deck_id) {
+        if (d.name) names.add(d.name.toLowerCase());
+      }
+    });
+    return names;
+  }, [userDecks]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -329,6 +348,7 @@ const Turmas = () => {
                       deck={deck}
                       onClick={() => navigate(`/decks/${deck.id}/preview`)}
                       isOwner={deck.owner_id === user?.id}
+                      isFollowed={followedDeckNames.has(deck.name?.toLowerCase())}
                     />
                   ))}
                 </div>
