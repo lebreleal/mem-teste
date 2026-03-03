@@ -177,10 +177,17 @@ export async function fetchTurmaRole(userId: string, turmaId: string): Promise<T
 export async function fetchTurmaMembers(turmaId: string): Promise<TurmaMember[]> {
   const { data: members } = await supabase.from('turma_members').select('user_id, role, is_subscriber').eq('turma_id', turmaId);
   if (!members) return [];
-  const userIds = members.map(m => (m as any).user_id);
+  // Deduplicate by user_id (keep first occurrence)
+  const seen = new Set<string>();
+  const unique = (members as any[]).filter(m => {
+    if (seen.has(m.user_id)) return false;
+    seen.add(m.user_id);
+    return true;
+  });
+  const userIds = unique.map(m => m.user_id);
   const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: userIds });
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-  return members.map((m: any) => {
+  return unique.map((m: any) => {
     const p = profileMap.get(m.user_id) as any;
     return { user_id: m.user_id, role: m.role, user_name: p?.name || 'Anônimo', user_email: '', is_subscriber: m.is_subscriber ?? false };
   });
