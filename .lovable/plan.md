@@ -1,64 +1,58 @@
 
-# Corrigir carregamento infinito na visualizacao de decks grandes
+
+# Corrigir importacao lenta/infinita de 28k+ cards
 
 ## Problema identificado
 
-Quando voce abre um deck com muitos subdecks (ex: 1000+ subdecks, 10k+ cards), o sistema faz **dezenas de requisicoes HTTP** sequenciais porque:
+Ao importar 28.462 cards do Anki com subdecks, o sistema fica em "Salvando..." infinitamente. Dois problemas principais:
 
-1. **`fetchAggregatedCardsMeta`**: Busca metadados de TODOS os cards enviando os 1000+ deck IDs em lotes de 300 -- isso gera 4+ rounds de requisicoes, cada um paginando 1000 rows por vez
-2. **`fetchAggregatedStats`**: Faz a MESMA coisa -- busca todos os cards de novo so para contar estados (novo/aprendendo/dominado)
-3. **`fetchAggregatedCardsPage`**: Tambem precisa lidar com 1000+ deck IDs para exibir apenas 200 cards
+1. **Sem feedback de progresso**: O `pendingStore` e setado com `progress: { current: 0, total: X }` mas NUNCA e atualizado durante a importacao. O usuario ve "Salvando..." sem saber se esta funcionando ou travou.
 
-No Anki, tudo e instantaneo porque ele usa banco local. Aqui, cada operacao vira multiplas chamadas de rede.
+2. **Payload muito grande por batch**: Cards do Anki frequentemente contem HTML pesado com imagens (base64 ou URLs). Um batch de 500 cards com imagens pode ter 10-50MB por requisicao, causando timeouts no Supabase (limite padrao de ~30s). Um unico timeout quebra toda a importacao porque o `throw error` para tudo.
 
-## Solucao: 3 otimizacoes
+3. **Erro silencioso sem retry**: Se uma requisicao HTTP falha no meio da importacao (timeout, rede), todo o processo falha sem tentar novamente. Diferente do Anki local que nao depende de rede.
 
-### 1. Eliminar `fetchAggregatedStats` -- usar dados que ja existem
+## Solucao: 3 melhorias
 
-O `useDecks()` ja traz stats por deck (`new_count`, `learning_count`, `review_count`) via RPC `get_all_user_deck_stats`. Em vez de buscar todos os cards de novo, vamos **somar os stats dos decks descendentes** que ja estao em memoria.
+### 1. Adicionar progresso em tempo real durante a importacao
 
-- **Antes**: Query separada buscando todos os 10k+ cards para contar estados
-- **Depois**: Soma simples de dados ja carregados (0 requisicoes)
+Modificar `importDeckWithSubdecks` e `importDeck` no `deckService.ts` para aceitar um callback `onProgress(current, total)` que atualiza o pendingStore a cada batch inserido.
 
-### 2. Criar RPC `get_descendant_cards_page` no banco
-
-Uma funcao SQL que usa CTE recursivo para encontrar todos os subdecks e retornar uma pagina de cards em **uma unica query**:
+No `Dashboard.tsx`, passar o callback que atualiza o pendingStore:
 
 ```text
-get_descendant_cards_page(p_deck_id, p_limit, p_offset)
-  -> WITH RECURSIVE descendant_decks AS (...)
-     SELECT * FROM cards WHERE deck_id IN descendant_decks
-     ORDER BY created_at DESC
-     LIMIT p_limit OFFSET p_offset
+await importDeckWithSubdecks(
+  userId, name, folderId, cards, subdecks, algo, revlog,
+  (current, total) => pendingStore.updatePending(pendingId, { 
+    progress: { current, total } 
+  })
+);
 ```
 
-- **Antes**: 4+ requisicoes HTTP com lotes de 300 IDs
-- **Depois**: 1 unica query SQL
+### 2. Reduzir batch size e adicionar retry para cards grandes
 
-### 3. Criar RPC `count_descendant_cards_by_state` para contagem de metadados
+- Estimar o tamanho do payload antes de enviar: se a media de tamanho por card e > 5KB, reduzir o batch de 500 para 200 ou 100
+- Adicionar retry com backoff exponencial (3 tentativas) em cada batch de cards, similar ao `withRetry` que ja existe no `cardService.ts`
+- Isto evita que um timeout quebre toda a importacao
 
-Para os filtros (contagem por tipo e estado), criar uma funcao que retorna contagens agrupadas sem transferir dados de cards:
+### 3. Continuar apos erros parciais em vez de abortar
 
-```text
-count_descendant_cards_by_state(p_deck_id)
-  -> Retorna: total, new_count, learning_count, review_count,
-             basic_count, cloze_count, mc_count, occlusion_count, frozen_count
-```
-
-- **Antes**: Transfere 10k+ rows de metadados para o browser
-- **Depois**: Retorna ~10 numeros em 1 query
+Atualmente, um erro em qualquer batch faz `throw error` e para tudo. Para 28k cards, isto significa que se o batch #45 de 57 falhar, perde-se todo o progresso. Mudar para:
+- Registrar erros parciais mas continuar com os proximos batches
+- No final, informar quantos cards foram importados vs. quantos falharam
+- Tentar re-inserir os falhados uma vez ao final
 
 ## Arquivos que serao alterados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| **Migration SQL** | Criar 2 RPCs: `get_descendant_cards_page` e `count_descendant_cards_by_state` |
-| `src/services/cardService.ts` | Adicionar funcoes que chamam os novos RPCs |
-| `src/components/deck-detail/DeckDetailContext.tsx` | Usar stats dos `decks` em vez de query separada; usar novos RPCs para cards e contagens |
-| `src/components/deck-detail/CardList.tsx` | Usar contagens do novo RPC em vez de iterar `cardsMeta` |
+| `src/services/deckService.ts` | Adicionar parametro `onProgress` callback nas funcoes `importDeck` e `importDeckWithSubdecks`; adicionar retry com backoff; batch size adaptativo; tolerancia a erros parciais |
+| `src/pages/Dashboard.tsx` | Passar callback `onProgress` ao chamar importacao; mostrar progresso real no pendingStore |
 
 ## Resultado esperado
 
-- **Abertura do deck**: De 10-30 segundos para < 1 segundo
-- **Requisicoes HTTP**: De 20-40 para 2-3
-- **Dados transferidos**: De megabytes de metadata para kilobytes de contagens
+- Usuario ve progresso real: "Salvando... 5.200 / 28.462 cartoes"
+- Importacao nao quebra por timeout em 1 batch -- faz retry automatico
+- Se alguns cards falharem, os outros sao salvos normalmente
+- Batch size adapta-se ao tamanho do conteudo (cards com imagens = batches menores)
+
