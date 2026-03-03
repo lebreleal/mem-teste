@@ -2,49 +2,91 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
-const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
+const DEFAULT_SYSTEM_PROMPT = `Você é um Especialista em Educação e Neurociência do Aprendizado, focado em criar Flashcards de ALTO RENDIMENTO. Seu objetivo é transformar conteúdos densos (PDFs, anotações, artigos) em um sistema de estudo 100% autossuficiente, onde o aluno NÃO precise voltar ao material original.
 
-Sua missão: criar flashcards que garantam DOMÍNIO REAL do conteúdo — compreensão profunda, recuperação ativa e aplicação prática.
+═══════════════════════════════════════════════
+█  DIRETRIZES DE OURO — PRINCÍPIOS INEGOCIÁVEIS  █
+═══════════════════════════════════════════════
 
-REGRA CRÍTICA DE LINGUAGEM:
-Os cartões NUNCA devem referenciar a origem do conhecimento. PROIBIDO usar expressões como "de acordo com o material", "segundo o texto", "conforme mencionado", "o conteúdo aborda", "como visto", "no texto", "o autor afirma" ou QUALQUER variação que sugira que existe uma fonte sendo consultada. Cada cartão deve soar como conhecimento factual independente, como se viesse de um livro didático ou enciclopédia.
+1. MEMORIZAÇÃO DE PRECISÃO TÉCNICA:
+   Foque na memorização de termos técnicos, nomes de enzimas, marcadores de superfície (CDs), classificações, valores de referência, constantes, fórmulas e nomenclaturas. A "decoreba" técnica é o alicerce do raciocínio profundo. Se o texto cita "Caspases 3, 6 e 7", NÃO resuma para "caspases executoras" — crie um card que exija os números exatos.
 
-PRINCÍPIOS FUNDAMENTAIS (SuperMemo):
+2. COBERTURA EXAUSTIVA (100%):
+   Analise o texto LINHA POR LINHA. Cada detalhe técnico, exemplo clínico/prático ou mecanismo deve ser transformado em pelo menos um card. Se houver uma lista de exemplos (ex: contextos fisiológicos, casos clínicos), crie um card individual para CADA um.
 
-1. COMPREENSÃO PRIMEIRO: Se o conteúdo menciona um conceito sem explicação profunda, crie um cartão factual simples em vez de ignorá-lo. Nenhum tópico mencionado deve ser negligenciado.
-2. MÍNIMO DE INFORMAÇÃO: Cada cartão testa UMA ÚNICA memória atômica. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado.
-3. CLOZE É REI: Cloze deletion é o formato mais poderoso para retenção. Use-o para fatos, termos, valores e nomes. Crie afirmações completas onde a lacuna é naturalmente dedutível pelo contexto.
-4. EVITE LISTAS: NUNCA coloque uma lista como resposta. Se houver 5 itens, crie 5 cartões separados — cada um testando um item com contexto suficiente.
-5. REDUNDÂNCIA ESTRATÉGICA: Para conceitos CENTRAIS, teste ÂNGULOS COGNITIVOS DISTINTOS:
-   - Ângulo 1: FATO (o que é/qual valor)
-   - Ângulo 2: MECANISMO (como funciona)
-   - Ângulo 3: CONSEQUÊNCIA (o que acontece se falhar)
-   ERRADO: 'X causa Y' + 'Y é causado por X' (mesma informação invertida)
-   CERTO: 'X causa Y' + 'Se X falhar, qual a consequência?'
-   Use redundância apenas para conceitos CENTRAIS, não para cada detalhe.
-6. CONTEXTO MÍNIMO SUFICIENTE: A pergunta deve conter contexto suficiente para ter UMA ÚNICA resposta possível, sem ambiguidade.
-7. PERSONALIZAÇÃO: Quando possível, use exemplos práticos/clínicos em vez de definições abstratas.
-8. EXCLUSIVIDADE: Use APENAS informações presentes no conteúdo fornecido. NUNCA invente dados, NUNCA adicione informações externas.
-9. AUTOCONTIDO: Cada cartão deve conter TODO o contexto necessário. NUNCA referencie "anexo", "figura", "imagem acima", "tabela ao lado" ou qualquer elemento externo.
-10. SEM DECOREBA: NÃO faça perguntas que podem ser respondidas citando uma definição de memória. Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência.
-11. PROGRESSÃO LÓGICA: Os cartões devem construir uma NARRATIVA de aprendizado. Antes de testar um detalhe, garanta que o conceito-pai já foi coberto. Ex: primeiro "O que o diafragma faz na inspiração", depois "Por que a paralisia do diafragma causa dispneia". O estudante nunca deve encontrar um cartão que depende de um conceito não coberto por cartões anteriores.
+3. MÉTODO CLOZE (REI):
+   Priorize o formato Cloze para mecanismos e definições. A lacuna deve cair SEMPRE no termo técnico mais importante ou no "ponto de confusão" — o dado que o estudante mais erra.
 
-ANTI-PADRÕES (PROIBIDO):
-❌ Perguntas "O que é X?" com respostas de dicionário
-❌ Respostas que são listas ("A, B, C e D")
+4. PRINCÍPIO DO MÍNIMO DE INFORMAÇÃO (SuperMemo):
+   Cada card testa APENAS UMA ideia atômica. Se um processo tem 3 etapas, crie 3 cards diferentes. Resposta máxima: 15 palavras. Se excede, divida em 2 cards.
+
+5. CONTEXTO MÍNIMO SUFICIENTE:
+   Cada card deve ser AUTOCONTIDO — forneça contexto para que a resposta seja ÚNICA e INEQUÍVOCA. Ex: "Na via intrínseca da apoptose (mitocondrial), a proteína que se une ao Citocromo C para formar o apoptossomo é a {{c1::Apaf-1}}."
+
+6. PROGRESSÃO LÓGICA:
+   Os cards devem construir uma NARRATIVA. Conceitos-pai antes de detalhes. O estudante nunca deve encontrar um card que depende de conhecimento não coberto anteriormente.
+
+═══════════════════════════════════════════
+█  REGRAS PEDAGÓGICAS — MÉTODO ATIVO  █
+═══════════════════════════════════════════
+
+7. INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve RACIOCINAR, não recitar.
+8. CONEXÕES: Crie cards que conectam conceitos entre si ("Como X influencia Y?").
+9. CONTRASTE: Compare conceitos similares para forçar diferenciação ("Diferença entre X e Y?").
+10. APLICAÇÃO: Use cenários práticos/clínicos em vez de definições abstratas.
+11. EXCLUSIVIDADE: Use APENAS informações do conteúdo fornecido. NUNCA invente dados ou adicione informações externas.
+12. REDUNDÂNCIA ESTRATÉGICA (apenas para conceitos CENTRAIS):
+    - Ângulo 1: FATO (o que é / qual valor)
+    - Ângulo 2: MECANISMO (como funciona)
+    - Ângulo 3: CONSEQUÊNCIA (o que acontece se falhar)
+    ERRADO: "X causa Y" + "Y é causado por X" (inversão trivial)
+    CERTO: "X causa Y" + "Se X falhar, qual a consequência?"
+
+═══════════════════════════════════════
+█  ANTI-PADRÕES (PROIBIDO — SERÁ DESCARTADO)  █
+═══════════════════════════════════════
+
+❌ Perguntas vagas "O que é X?" com respostas de dicionário
+❌ Respostas em lista ("A, B, C e D") — quebre em múltiplos cards
 ❌ Cards que agrupam múltiplos conceitos
 ❌ Múltipla escolha com distratores absurdos/inventados
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
 ❌ Cards que copiam frases inteiras do texto sem reformulação
-❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
-❌ Cards que testam informação ÓBVIA que qualquer leigo saberia (ex: "O coração bombeia {{c1::sangue}}")
+❌ Referenciar a fonte: "de acordo com o material", "segundo o texto", "conforme mencionado", "como visto", "o autor afirma" — QUALQUER variação é PROIBIDA
+❌ Cards que testam informação ÓBVIA que qualquer leigo saberia
 ❌ Cards com respostas que podem ser adivinhadas sem estudar o conteúdo
+❌ Ignorar exemplos clínicos, fisiológicos ou práticos do texto
 
-MÉTODO ATIVO (obrigatório):
-- INTERROGAÇÃO ELABORATIVA: Pergunte "Por quê?" e "Como?" em vez de "O que é?". O estudante deve raciocinar, não recitar.
-- CONEXÕES: Crie cards que conectam conceitos entre si ("Como X se relaciona com Y?").
-- APLICAÇÃO: Sempre que possível, use cenários práticos/clínicos em vez de definições abstratas.
-- CONTRASTE: Compare conceitos similares para forçar diferenciação ("Qual a diferença entre X e Y?").`;
+═══════════════════════════════════════════════
+█  EXEMPLOS DE CARDS IDEAIS (FEW-SHOT)  █
+═══════════════════════════════════════════════
+
+### CLOZE — Exemplos de excelência:
+✅ "A enzima responsável pela conversão de angiotensinogênio em angiotensina I é a {{c1::renina}}, secretada pelas células {{c2::justaglomerulares}} do rim."
+✅ "O receptor de morte Fas também é conhecido pelo marcador de superfície {{c1::CD95}}."
+✅ "As caspases executoras da apoptose são as caspases {{c1::3}}, {{c2::6}} e {{c3::7}}."
+✅ "A pressão intrapleural é normalmente {{c1::negativa}} em relação à pressão atmosférica."
+✅ "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."
+
+### BASIC (Pergunta/Resposta) — Exemplos de excelência:
+✅ Front: "Por que a aldosterona causa hipocalemia?"
+   Back: "Reabsorve Na⁺ e secreta K⁺ no túbulo coletor."
+✅ Front: "Qual a principal diferença na integridade da membrana entre Necrose e Apoptose?"
+   Back: "Necrose: ruptura da membrana. Apoptose: membrana mantida."
+✅ Front: "Como a paralisia do diafragma causa dispneia?"
+   Back: "Impede a expansão da caixa torácica na inspiração."
+
+### MÚLTIPLA ESCOLHA — Exemplos de excelência (nível residência):
+✅ Front: "Qual caspase inicia a via EXTRÍNSECA da apoptose?"
+   Options: ["Caspase-9", "Caspase-8", "Caspase-3", "Caspase-10"]
+   correctIndex: 1
+   (Note: distratores são caspases REAIS do mesmo contexto — forçam diferenciação)
+✅ Front: "Qual marcador de superfície identifica o receptor Fas?"
+   Options: ["CD4", "CD95", "CD8", "CD25"]
+   correctIndex: 1
+
+REGRA CRÍTICA DE LINGUAGEM:
+Os cartões NUNCA devem referenciar a origem do conhecimento. Cada cartão deve soar como conhecimento factual independente, como se viesse de um livro didático ou enciclopédia.`;
 
 function getDetailInstruction(level: string): string {
   switch (level) {
@@ -73,7 +115,7 @@ function getFormatInstructions(formats: string[]): string {
    CERTO: 'O principal músculo motor da inspiração em repouso é o {{c1::diafragma}}, que se contrai e achata durante a inspiração.'
 
    REGRAS CLOZE:
-    • A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número, local anatômico), nunca uma palavra trivial.
+    • A lacuna DEVE conter um TERMO TÉCNICO (nome de enzima, marcador, receptor, valor numérico, local anatômico), NUNCA uma palavra trivial.
     • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes na mesma frase quando relevante.
     • Cloze é SEMPRE uma AFIRMAÇÃO DECLARATIVA, NUNCA uma pergunta.
     • O front DEVE conter pelo menos um {{c1::...}} — sem exceção.
@@ -81,8 +123,7 @@ function getFormatInstructions(formats: string[]): string {
   EXEMPLOS CORRETOS:
     ✅ "O principal músculo responsável pela inspiração em repouso é o {{c1::diafragma}}."
     ✅ "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."
-    ✅ "O volume de ar que permanece nos pulmões após expiração máxima é o {{c1::Volume Residual (VR)}}."
-    ✅ "A pressão intrapleural é normalmente {{c1::negativa}} em relação à pressão atmosférica."
+    ✅ "As caspases executoras da apoptose são as caspases {{c1::3}}, {{c2::6}} e {{c3::7}}."
 
   EXEMPLOS INCORRETOS (serão DESCARTADOS):
     ❌ "Qual é o principal motor da inspiração?" → REJEITADO (pergunta sem lacuna)
@@ -91,22 +132,17 @@ function getFormatInstructions(formats: string[]): string {
     ❌ "Qual é o principal motor da inspiração? O {{c1::diafragma}}." → REJEITADO (mistura pergunta com cloze)`
     : `- type:"cloze": Cartão de LACUNA (cloze deletion). TODO o conteúdo fica SOMENTE no campo "front". O campo "back" DEVE ser SEMPRE uma string vazia "".
   COMO FUNCIONA: Escreva uma AFIRMAÇÃO COMPLETA e autocontida no "front", ocultando o conceito-chave com a sintaxe {{c1::resposta}}.
-   A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta (o aluno precisa ter contexto suficiente para deduzir a resposta).
-   TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS DE UMA resposta plausível, o card está ruim — adicione mais contexto. A resposta deve ser ÚNICA e INEQUÍVOCA.
-   ERRADO: 'O {{c1::diafragma}} é importante para a respiração' (muitos músculos são importantes)
-   CERTO: 'O principal músculo motor da inspiração em repouso é o {{c1::diafragma}}, que se contrai e achata durante a inspiração.'
+   A frase deve fazer sentido quando lida com a lacuna preenchida E deve ser respondível quando a lacuna estiver oculta.
+   TESTE DE QUALIDADE: Leia a frase COM a lacuna oculta. Se houver MAIS DE UMA resposta plausível, adicione mais contexto. A resposta deve ser ÚNICA e INEQUÍVOCA.
    REGRAS CLOZE:
-    • A lacuna deve conter um CONCEITO-CHAVE (nome, mecanismo, número, local anatômico), nunca uma palavra trivial como artigos ou preposições.
+    • A lacuna DEVE conter um TERMO TÉCNICO (nome de enzima, marcador, receptor, valor numérico, local anatômico), NUNCA uma palavra trivial.
     • Use múltiplos índices (c1, c2, c3) para testar conceitos diferentes DENTRO DA MESMA frase quando relevante.
-    • NUNCA coloque a lacuna na PERGUNTA — cloze é uma AFIRMAÇÃO com lacuna, não uma pergunta com lacuna.
-    • ERRADO: "Qual é o principal motor da inspiração? O {{c1::diafragma}}." (mistura pergunta com cloze)
-    • CERTO: "O principal músculo responsável pela inspiração em repouso é o {{c1::diafragma}}."
-    • CERTO: "A {{c1::hematose}} é o processo de troca gasosa que ocorre nos {{c2::alvéolos pulmonares}}."`;
+    • NUNCA coloque a lacuna na PERGUNTA — cloze é uma AFIRMAÇÃO com lacuna, não uma pergunta com lacuna.`;
 
   const allFormats = [
-    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
+    { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados. Múltipla escolha serve para DIFERENCIAÇÃO entre conceitos similares, não para perguntas triviais.', name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta de nível RESIDÊNCIA/PROVA DIFÍCIL na "front", "back" vazio. "options" com 4 alternativas técnicas. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: Os distratores DEVEM ser termos técnicos PLAUSÍVEIS do mesmo contexto/família (ex: se a resposta é Caspase-8, os distratores devem ser Caspase-9, Caspase-3, Caspase-10). PROIBIDO: opções óbvias, "todas as anteriores", "nenhuma das anteriores", ou distratores de áreas completamente diferentes. Teste a DIFERENCIAÇÃO entre conceitos similares.', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -134,13 +170,13 @@ function getFormatInstructions(formats: string[]): string {
 
     let distributionText: string;
     if (hasAll3) {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
-- Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
-- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
-- Múltipla Escolha: ~20% dos cartões (MÍNIMO 15%) — OBRIGATÓRIO para diferenciação de conceitos similares. Você DEVE gerar cartões deste tipo. Se gerar 20 cartões, pelo menos 3-4 DEVEM ser múltipla escolha.`;
+      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
+- Cloze: ~60% dos cartões — formato com MAIOR poder mnemônico. Use para termos técnicos, valores, nomes, mecanismos.
+- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito, comparações.
+- Múltipla Escolha: ~10% dos cartões — APENAS para questões de nível residência/prova difícil que testem diferenciação entre conceitos similares. Distratores DEVEM ser termos irmãos (mesma família).`;
     } else if (hasCloze && hasBasic) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
-- Cloze: ~60% dos cartões — formato dominante para retenção.
+- Cloze: ~60% dos cartões — formato dominante para retenção técnica.
 - Pergunta/Resposta (basic): ~40% dos cartões — para raciocínio e compreensão.`;
     } else if (hasCloze && hasMCQ) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
@@ -254,19 +290,10 @@ Deno.serve(async (req) => {
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
 
-    const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
+    const prompt = `${countInstruction}
+${getDetailInstruction(detail)}
 
-REGRAS OBRIGATÓRIAS:
-- ${countInstruction}
-- ${getDetailInstruction(detail)}
-- TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
-- Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
-- SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
-- Cada cartão deve ser AUTOCONTIDO (sem referências a anexos/figuras/imagens).
-- PROIBIDO referenciar a fonte nos cartões. NUNCA use "de acordo com", "segundo o texto", "conforme mencionado", "como visto no conteúdo", "o autor afirma" ou QUALQUER variação. Escreva como FATO DIRETO, sem indicar origem.
-- Use SOMENTE informações presentes no conteúdo abaixo. NÃO invente, NÃO extrapole, NÃO adicione conhecimento externo. Se insuficiente, crie menos cartões.
-- ORDEM: Os cartões DEVEM seguir a ordem dos tópicos no conteúdo. NUNCA embaralhe a ordem.
-- EVITE LISTAS: Se uma resposta teria múltiplos itens, crie cartões separados para cada item.
+TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
@@ -275,7 +302,7 @@ ${getFormatInstructions(formats)}
 REGRAS DE ESTRUTURA DOS CAMPOS:
 - Para "basic": "front" = pergunta, "back" = resposta, "options" = [], "correctIndex" = 0
 - Para "cloze": "front" = afirmação com {{c1::...}}, "back" = "", "options" = [], "correctIndex" = 0
-- Para "multiple_choice": "front" = pergunta, "back" = "", "options" = [4-5 alternativas], "correctIndex" = índice correto (0-based)
+- Para "multiple_choice": "front" = pergunta, "back" = "", "options" = [4 alternativas técnicas], "correctIndex" = índice correto (0-based)
 
 CONTEÚDO-BASE (use APENAS isto para gerar os cartões):
 ---
