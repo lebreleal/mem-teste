@@ -19,6 +19,7 @@ import {
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 
 const PAGE_SIZE_UI = 50;
 
@@ -364,6 +365,8 @@ const CardList = () => {
           hasMoreCards={hasMoreCards}
           loadMoreCards={loadMoreCards}
           totalCards={totalCards}
+          isLinkedDeck={isLinkedDeck}
+          deckId={deck?.id}
         />
       )}
     </div>
@@ -385,7 +388,9 @@ const CardListContent = ({
   setPreviewIndex, getStateInfo, stripHtml,
   isFrozenCard, unfreezeCard, openEdit, setDeleteId,
   hasMoreCards, loadMoreCards, totalCards,
+  isLinkedDeck, deckId,
 }: any) => {
+  const [suggestCard, setSuggestCard] = useState<any>(null);
   // Only show first N cards from already-loaded set
   const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
   const hasMoreVisible = visibleCount < filteredCards.length;
@@ -423,6 +428,7 @@ const CardListContent = ({
   };
 
   return (
+    <>
     <div className="space-y-2.5">
       {groups.map((group: any, gi: number) => {
         const card = group.cards[0];
@@ -587,9 +593,15 @@ const CardListContent = ({
                         }}>
                           <Eye className="mr-2 h-4 w-4" /> Ver
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); openEdit(card); }}>
-                          <PenLine className="mr-2 h-4 w-4" /> Editar
-                        </DropdownMenuItem>
+                        {isLinkedDeck ? (
+                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); setSuggestCard(card); }}>
+                            <PenLine className="mr-2 h-4 w-4" /> Sugerir Edição
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); openEdit(card); }}>
+                            <PenLine className="mr-2 h-4 w-4" /> Editar
+                          </DropdownMenuItem>
+                        )}
                         {frozen && (
                           <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); unfreezeCard(card.id); }}>
                             <Flame className="mr-2 h-4 w-4" /> Descongelar
@@ -631,6 +643,22 @@ const CardListContent = ({
         </Button>
       )}
     </div>
+
+    {suggestCard && deckId && (
+      <SuggestCorrectionModal
+        open={!!suggestCard}
+        onOpenChange={(v) => { if (!v) setSuggestCard(null); }}
+        card={{
+          id: suggestCard.id,
+          front_content: suggestCard.front_content,
+          back_content: suggestCard.back_content,
+          deck_id: deckId,
+          card_type: suggestCard.card_type ?? 'basic',
+        }}
+        deckId={deckId}
+      />
+    )}
+    </>
   );
 };
 
