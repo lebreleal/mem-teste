@@ -24,7 +24,7 @@ export async function fetchStudyQueue(
 ): Promise<StudyQueueResult> {
   const { data: allDecks } = await supabase
     .from('decks')
-    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived')
+    .select('id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived')
     .eq('user_id', userId);
 
   // Filter out archived decks from consideration
@@ -267,12 +267,14 @@ export async function submitCardReview(
 
   if (algorithmMode === 'fsrs') {
     const requestedRetention = deckConfig?.requested_retention ?? 0.85;
+    const easyGraduatingInterval = deckConfig?.easy_graduating_interval ?? 15;
     const params: FSRSParams = {
       ...DEFAULT_FSRS_PARAMS,
       requestedRetention,
       maximumInterval: maxIntervalDays,
       learningSteps: learningStepsMinutes,
       relearningSteps: [learningStepsMinutes[0] ?? 10],
+      easyGraduatingInterval,
     };
 
     const fsrsCard: FSRSCard = {

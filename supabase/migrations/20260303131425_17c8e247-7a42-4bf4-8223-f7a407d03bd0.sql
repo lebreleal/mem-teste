@@ -1,0 +1,1 @@
+ALTER TABLE public.decks ADD COLUMN easy_graduating_interval integer NOT NULL DEFAULT 15;
