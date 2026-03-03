@@ -16,7 +16,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -78,7 +78,7 @@ const CardList = () => {
     newPct, learningPct, masteredPct,
     isQuickReview, deck, decks,
     getStateInfo, stripHtml, otherDecks, isFrozenCard, unfreezeCard,
-    cardsMeta, loadMoreCards, hasMoreCards,
+    cardCounts, loadMoreCards, hasMoreCards,
   } = useDeckDetail();
 
   // Check if this deck, any ancestor, or any descendant is linked to a community
@@ -104,14 +104,13 @@ const CardList = () => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE_UI);
   const hasActiveFilter = typeFilter !== 'all' || stateFilter !== 'all';
 
-  // Use cardsMeta (lightweight) for counts instead of allCards
-  const isFrozenMeta = useCallback((c: { scheduled_date: string }) => {
+  const frozenCount = cardCounts?.frozen_count ?? 0;
+  // relearning count is included in learning_count from RPC (state IN (1,3))
+  // We don't have a separate relearning count from the RPC, so we derive from allCards if needed
+  const relearningCount = useMemo(() => {
     const fiftyYears = Date.now() + 50 * 365.25 * 24 * 60 * 60 * 1000;
-    return new Date(c.scheduled_date).getTime() > fiftyYears;
-  }, []);
-
-  const frozenCount = useMemo(() => cardsMeta.filter(c => isFrozenMeta(c)).length, [cardsMeta, isFrozenMeta]);
-  const relearningCount = useMemo(() => cardsMeta.filter(c => c.state === 3 && !isFrozenMeta(c)).length, [cardsMeta, isFrozenMeta]);
+    return allCards.filter(c => c.state === 3 && new Date(c.scheduled_date).getTime() <= fiftyYears).length;
+  }, [allCards]);
 
   const stateOptions = isQuickReview
     ? [
@@ -138,21 +137,31 @@ const CardList = () => {
     { value: 'image_occlusion', label: 'Oclusão' },
   ].filter(f => {
     if (f.value === 'all') return true;
-    return cardsMeta.some(c => f.value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === f.value);
+    if (f.value === 'basic') return (cardCounts?.basic_count ?? 0) > 0;
+    if (f.value === 'cloze') return (cardCounts?.cloze_count ?? 0) > 0;
+    if (f.value === 'multiple_choice') return (cardCounts?.mc_count ?? 0) > 0;
+    if (f.value === 'image_occlusion') return (cardCounts?.occlusion_count ?? 0) > 0;
+    return false;
   });
 
   const getTypeCount = (value: string) => {
-    if (value === 'all') return cardsMeta.length;
-    return cardsMeta.filter(c => value === 'basic' ? (c.card_type === 'basic' || !c.card_type) : c.card_type === value).length;
+    if (!cardCounts) return 0;
+    if (value === 'all') return cardCounts.total;
+    if (value === 'basic') return cardCounts.basic_count;
+    if (value === 'cloze') return cardCounts.cloze_count;
+    if (value === 'multiple_choice') return cardCounts.mc_count;
+    if (value === 'image_occlusion') return cardCounts.occlusion_count;
+    return 0;
   };
 
   const getStateCount = (value: string) => {
-    if (value === 'all') return cardsMeta.length;
-    if (value === 'frozen') return frozenCount;
-    if (value === 'new') return cardsMeta.filter(c => (c.state === 0 || c.state == null) && !isFrozenMeta(c)).length;
-    if (value === 'learning') return cardsMeta.filter(c => c.state === 1 && !isFrozenMeta(c)).length;
-    if (value === 'relearning') return cardsMeta.filter(c => c.state === 3 && !isFrozenMeta(c)).length;
-    return cardsMeta.filter(c => c.state === 2 && !isFrozenMeta(c)).length;
+    if (!cardCounts) return 0;
+    if (value === 'all') return cardCounts.total;
+    if (value === 'frozen') return cardCounts.frozen_count;
+    if (value === 'new') return cardCounts.new_count;
+    if (value === 'learning') return cardCounts.learning_count;
+    if (value === 'relearning') return relearningCount;
+    return Math.max(0, cardCounts.total - cardCounts.new_count - cardCounts.learning_count - cardCounts.frozen_count);
   };
 
   return (

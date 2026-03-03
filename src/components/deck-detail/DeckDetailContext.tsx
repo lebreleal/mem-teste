@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
-import type { CardMeta } from '@/services/cardService';
+import type { CardMeta, DescendantCardCounts } from '@/services/cardService';
 import { supabase } from '@/integrations/supabase/client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCards } from '@/hooks/useCards';
@@ -31,7 +31,7 @@ interface DeckDetailContextValue {
   allCards: CardRow[];
   allCardsLoading: boolean;
   filteredCards: CardRow[];
-  cardsMeta: CardMeta[];
+  cardCounts: DescendantCardCounts | undefined;
   loadMoreCards: () => void;
   hasMoreCards: boolean;
   stats: { new_count: number; learning_count: number; review_count: number; reviewed_today: number } | undefined;
@@ -273,21 +273,21 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const CARDS_PAGE = 200;
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
 
-  // Lightweight metadata for counts/filters (fetches all cards but only id, state, card_type, scheduled_date, front_content)
-  const { data: cardsMeta = [], isLoading: cardsMetaLoading } = useQuery({
-    queryKey: ['cards-meta', deckId, descendantIds],
-    queryFn: () => cardService.fetchAggregatedCardsMeta(allDeckIds),
+  // Lightweight counts by state/type via single RPC (replaces cardsMeta + fetchAggregatedStats)
+  const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
+    queryKey: ['card-counts', deckId],
+    queryFn: () => cardService.fetchDescendantCardCounts(deckId),
     enabled: !!user && !!deckId,
   });
 
-  // Full card content – only first N cards for display
+  // Full card content – only first N cards for display via single RPC
   const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
-    queryKey: ['cards-display', deckId, descendantIds, displayLimit],
-    queryFn: () => cardService.fetchAggregatedCardsPage(allDeckIds, displayLimit, 0),
+    queryKey: ['cards-display', deckId, displayLimit],
+    queryFn: () => cardService.fetchDescendantCardsPage(deckId, displayLimit, 0),
     enabled: !!user && !!deckId,
   });
 
-  const allCardsLoading = cardsMetaLoading || displayCardsLoading;
+  const allCardsLoading = cardCountsLoading || displayCardsLoading;
   // allCards = displayCards (paginated full content for rendering)
   const allCards = displayCards;
 
@@ -295,11 +295,16 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     setDisplayLimit(prev => prev + CARDS_PAGE);
   }, []);
 
-  const { data: stats } = useQuery({
-    queryKey: ['deck-stats', deckId, descendantIds],
-    queryFn: () => cardService.fetchAggregatedStats(allDeckIds),
-    enabled: !!deckId,
-  });
+  // Derive stats from cardCounts (no extra query needed) + rootTotals for today's reviewed
+  const stats = useMemo(() => {
+    if (!cardCounts) return undefined;
+    return {
+      new_count: cardCounts.new_count,
+      learning_count: cardCounts.learning_count,
+      review_count: cardCounts.review_count,
+      reviewed_today: 0, // computed from rootTotals below
+    };
+  }, [cardCounts]);
 
   // ─── Root ancestor governance ─────────
   // Find the root ancestor — its config (limits, shuffle, algorithm) governs all descendants
@@ -398,7 +403,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   // ─── Computed ──────────────────────────
   const isQuickReview = (deck as any)?.algorithm_mode === 'quick_review';
-  const totalCards = cardsMeta.length;
+  const totalCards = cardCounts?.total ?? 0;
   const dailyNewLimit = rootDeck?.daily_new_limit ?? (deck as any)?.daily_new_limit ?? 20;
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
 
@@ -721,14 +726,13 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       if (editingId) { updateCard.mutate({ id: editingId, frontContent: front, backContent: back }, { onSuccess }); }
       else { createCard.mutate({ frontContent: front, backContent: back, cardType: detectedType }, { onSuccess }); }
     }
-  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, cardsMeta, allDeckIds, deckId, queryClient]);
+  }, [front, back, occlusionImageUrl, occlusionRects, cardType, mcOptions, mcCorrectIndex, editingId, toast, createCard, updateCard, resetForm, allCards, allDeckIds, deckId, queryClient]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteId) return;
     // For cloze cards, delete all siblings with same front_content
     const card = allCards.find(c => c.id === deleteId);
-    const metaCard = !card ? cardsMeta.find(c => c.id === deleteId) : null;
-    const isCloze = card?.card_type === 'cloze' || metaCard?.card_type === 'cloze';
+    const isCloze = card?.card_type === 'cloze';
     if (isCloze) {
       let frontContent = card?.front_content;
       if (!frontContent) {
@@ -748,7 +752,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     } else {
       deleteCard.mutate(deleteId, { onSuccess: () => { setDeleteId(null); toast({ title: 'Card excluído' }); } });
     }
-  }, [deleteId, deleteCard, toast, allCards, cardsMeta, allDeckIds, deckId, queryClient]);
+  }, [deleteId, deleteCard, toast, allCards, allDeckIds, deckId, queryClient]);
 
   const handleMoveCard = useCallback(async () => {
     if (!moveCardId || !moveTargetDeck) return;
@@ -968,10 +972,10 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [deckId, deck, examTotalQuestions, examWrittenCount, examTitle, examOptionsCount, examTimeLimit, model, addNotification, updateNotification, createExam, queryClient, toast]);
 
-  const hasMoreCards = displayLimit < cardsMeta.length;
+  const hasMoreCards = displayLimit < totalCards;
 
   const value: DeckDetailContextValue = {
-    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardsMeta, loadMoreCards, hasMoreCards, stats, decks,
+    deckId, deck, deckLoading, allCards, allCardsLoading, filteredCards, cardCounts, loadMoreCards, hasMoreCards, stats, decks,
     dailyNewLimit, dailyReviewLimit, isPlanControlled, newCountToday, learningCount, masteredToday,
     isQuickReview, totalDue, studyPending, totalCards, actualNewCount, totalReviewStateCards,
     newPct, learningPct, masteredPct,

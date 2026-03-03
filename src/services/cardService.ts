@@ -207,6 +207,45 @@ export async function fetchAggregatedCardsMeta(deckIds: string[]): Promise<CardM
   return results;
 }
 
+// ─── New optimized RPCs for large hierarchies ───────────
+
+export interface DescendantCardCounts {
+  total: number;
+  new_count: number;
+  learning_count: number;
+  review_count: number;
+  basic_count: number;
+  cloze_count: number;
+  mc_count: number;
+  occlusion_count: number;
+  frozen_count: number;
+}
+
+/** Count cards by state/type for a deck + all descendants (single SQL query). */
+export async function fetchDescendantCardCounts(deckId: string): Promise<DescendantCardCounts> {
+  const { data, error } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
+  if (error) throw error;
+  const row: any = Array.isArray(data) ? data[0] : data;
+  return {
+    total: Number(row?.total ?? 0),
+    new_count: Number(row?.new_count ?? 0),
+    learning_count: Number(row?.learning_count ?? 0),
+    review_count: Number(row?.review_count ?? 0),
+    basic_count: Number(row?.basic_count ?? 0),
+    cloze_count: Number(row?.cloze_count ?? 0),
+    mc_count: Number(row?.mc_count ?? 0),
+    occlusion_count: Number(row?.occlusion_count ?? 0),
+    frozen_count: Number(row?.frozen_count ?? 0),
+  };
+}
+
+/** Fetch a page of cards from a deck + all descendants (single SQL query). */
+export async function fetchDescendantCardsPage(deckId: string, limit: number, offset: number): Promise<CardRow[]> {
+  const { data, error } = await supabase.rpc('get_descendant_cards_page', { p_deck_id: deckId, p_limit: limit, p_offset: offset });
+  if (error) throw error;
+  return (data ?? []) as CardRow[];
+}
+
 /** Fetch paginated full cards for display. Uses server-side pagination. */
 export async function fetchAggregatedCardsPage(deckIds: string[], limit: number, offset: number) {
   if (deckIds.length === 0) return [];
