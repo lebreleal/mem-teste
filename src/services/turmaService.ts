@@ -263,9 +263,10 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
 
   // Fetch card counts for all discovered decks
   const allDeckIdsExpanded = allDecks.map((d: any) => d.id);
-  const { data: cards } = await supabase.from('cards').select('deck_id').in('deck_id', allDeckIdsExpanded);
+  // Use RPC to count cards efficiently (avoids 1000-row limit)
+  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIdsExpanded });
   const directCountMap = new Map<string, number>();
-  (cards ?? []).forEach((c: any) => directCountMap.set(c.deck_id, (directCountMap.get(c.deck_id) ?? 0) + 1));
+  (countRows ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
 
   const deckMap = new Map(allDecks.map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
 
