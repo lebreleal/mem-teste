@@ -301,6 +301,19 @@ REGRA DE PROFUNDIDADE (OBRIGATÓRIA — NÃO SEJA CONCISO):
 - Conecte causa → efeito → consequência clínica em cards separados mas sequenciais.
 - Use linguagem de livro didático: explicações densas, ricas em contexto, que permitam ao aluno ENTENDER sem voltar ao material.
 
+REGRA CRÍTICA DE CLOZE — MÚLTIPLOS ÍNDICES (OBRIGATÓRIA):
+- Quando uma frase contém 2 ou mais termos técnicos importantes, OBRIGATORIAMENTE use índices diferentes: {{c1::termo1}}, {{c2::termo2}}, {{c3::termo3}}.
+- NUNCA use apenas {{c1::...}} para todos os termos na mesma frase. Cada termo testável DEVE ter seu próprio índice (c1, c2, c3, etc).
+- Isso gera cards separados por lacuna — o aluno vê uma lacuna por vez. É o comportamento CORRETO e DESEJADO.
+- Exemplo CORRETO: "A {{c1::hematose}} ocorre nos {{c2::alvéolos pulmonares}} através da membrana {{c3::alvéolo-capilar}}."
+- Exemplo ERRADO: "A {{c1::hematose}} ocorre nos {{c1::alvéolos pulmonares}}" — PROIBIDO reusar o mesmo índice para termos diferentes.
+- Mínimo de 2 lacunas por card cloze quando houver 2+ termos técnicos na frase. Cards com apenas 1 lacuna são aceitáveis SOMENTE se a frase tem apenas 1 termo técnico.
+
+REGRA CRÍTICA DE MÚLTIPLA ESCOLHA (OBRIGATÓRIA):
+- Quando os formatos incluem "multiple_choice", você DEVE gerar cards desse tipo. NÃO substitua por cloze ou basic.
+- Cada card multiple_choice DEVE ter exatamente 4 opções no campo "options" e o "correctIndex" correto (0-based).
+- Se a distribuição pede 10% MC, e você gera 30 cards, pelo menos 3 DEVEM ser multiple_choice. VERIFIQUE antes de finalizar.
+
 TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
