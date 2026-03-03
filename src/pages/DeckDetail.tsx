@@ -40,9 +40,11 @@ const DeckDetailContent = () => {
   const { data: sourceInfo } = useQuery({
     queryKey: ['linked-deck-source-info', deckId],
     queryFn: async () => {
-      const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
       let sourceDeckId: string | null = null;
+      const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
+      const sourceListingId = (deck as any)?.source_listing_id;
 
+      // 1) Via turma_decks
       if (sourceTurmaDeckId) {
         const { data: td } = await supabase
           .from('turma_decks')
@@ -50,6 +52,29 @@ const DeckDetailContent = () => {
           .eq('id', sourceTurmaDeckId)
           .maybeSingle();
         sourceDeckId = td?.deck_id ?? null;
+      }
+
+      // 2) Via marketplace listing
+      if (!sourceDeckId && sourceListingId) {
+        const { data: listing } = await supabase
+          .from('marketplace_listings')
+          .select('deck_id')
+          .eq('id', sourceListingId)
+          .maybeSingle();
+        sourceDeckId = listing?.deck_id ?? null;
+      }
+
+      // 3) Fallback: is_live_deck by name match
+      if (!sourceDeckId && (deck as any)?.is_live_deck) {
+        const { data: original } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('name', (deck as any).name)
+          .eq('is_public', true)
+          .neq('user_id', (deck as any).user_id)
+          .limit(1)
+          .maybeSingle();
+        sourceDeckId = original?.id ?? null;
       }
 
       if (!sourceDeckId) return null;

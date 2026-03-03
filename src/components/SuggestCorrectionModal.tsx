@@ -50,21 +50,44 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
     (async () => {
       const { data } = await supabase
         .from('decks')
-        .select('source_turma_deck_id, community_id')
+        .select('source_turma_deck_id, community_id, is_live_deck, name, user_id, source_listing_id')
         .eq('id', deckId)
         .single();
-      if (data?.source_turma_deck_id) {
-        // Find the original community deck via turma_decks
+      if (!data) { setResolvedDeckId(deckId); return; }
+
+      // 1) Resolve via source_turma_deck_id
+      if (data.source_turma_deck_id) {
         const { data: td } = await supabase
           .from('turma_decks')
           .select('deck_id')
           .eq('id', data.source_turma_deck_id)
           .single();
-        if (td?.deck_id) {
-          setResolvedDeckId(td.deck_id);
-          return;
-        }
+        if (td?.deck_id) { setResolvedDeckId(td.deck_id); return; }
       }
+
+      // 2) Resolve via source_listing_id
+      if (data.source_listing_id) {
+        const { data: listing } = await supabase
+          .from('marketplace_listings')
+          .select('deck_id')
+          .eq('id', data.source_listing_id)
+          .single();
+        if (listing?.deck_id) { setResolvedDeckId(listing.deck_id); return; }
+      }
+
+      // 3) Fallback for is_live_deck without direct reference: find original public deck by name
+      if (data.is_live_deck && !data.source_turma_deck_id && !data.source_listing_id) {
+        const { data: original } = await supabase
+          .from('decks')
+          .select('id')
+          .eq('name', data.name)
+          .eq('is_public', true)
+          .neq('user_id', data.user_id)
+          .limit(1)
+          .maybeSingle();
+        if (original?.id) { setResolvedDeckId(original.id); return; }
+      }
+
       setResolvedDeckId(deckId);
     })();
   }, [deckId, open]);
