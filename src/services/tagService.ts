@@ -239,11 +239,22 @@ export async function getAllTags(limit = 100): Promise<Tag[]> {
   return data ?? [];
 }
 
-/** Get only tags that are linked to at least one deck (for marketplace filters). */
+/** Get only tags that are linked to at least one PUBLIC deck (for marketplace filters). */
 export async function getDeckOnlyTags(limit = 50): Promise<Tag[]> {
+  // Only fetch tags from public decks so the marketplace filter chips are relevant
+  const { data: publicDeckIds } = await supabase
+    .from('decks')
+    .select('id')
+    .eq('is_public', true)
+    .limit(500);
+  
+  if (!publicDeckIds || publicDeckIds.length === 0) return [];
+  
+  const ids = publicDeckIds.map(d => d.id);
   const { data, error } = await supabase
     .from('deck_tags')
-    .select('tag_id, tags(*)');
+    .select('tag_id, tags(*)')
+    .in('deck_id', ids);
   if (error) throw error;
   
   // Deduplicate and extract unique tags
