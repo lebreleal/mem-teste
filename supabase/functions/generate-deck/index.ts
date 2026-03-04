@@ -290,7 +290,33 @@ Deno.serve(async (req) => {
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
 
-    const prompt = `${countInstruction}
+    // Build distribution enforcement based on formats
+    const hasAllFormats = formats.includes("cloze") && (formats.includes("qa") || formats.includes("definition")) && formats.includes("multiple_choice");
+    const hasMC = formats.includes("multiple_choice");
+    const hasCloze = formats.includes("cloze");
+    
+    let distributionEnforcement = "";
+    if (hasAllFormats) {
+      distributionEnforcement = `
+═══════════════════════════════════════════════════
+█  DISTRIBUIÇÃO OBRIGATÓRIA — VERIFICAR ANTES DE ENVIAR  █
+═══════════════════════════════════════════════════════
+ANTES de finalizar sua resposta, CONTE os cards por tipo e VERIFIQUE:
+- Cloze: DEVE ser ~60% do total (ex: 30 cards → 18 cloze)
+- Basic (pergunta/resposta): DEVE ser ~30% do total (ex: 30 cards → 9 basic)
+- Multiple_choice: DEVE ser ~10% do total, MÍNIMO 2 cards (ex: 30 cards → 3 MC)
+
+Se a contagem não bater, CORRIJA antes de enviar. 
+ERRO COMUM: gerar muitos "basic" e poucos "cloze". O CLOZE é o formato DOMINANTE.
+`;
+    } else if (hasMC) {
+      distributionEnforcement = `
+DISTRIBUIÇÃO OBRIGATÓRIA: Multiple_choice DEVE ser no mínimo 10% do total, MÍNIMO 2 cards.
+`;
+    }
+
+    const prompt = `${distributionEnforcement}
+${countInstruction}
 ${getDetailInstruction(detail)}
 
 REGRA DE PROFUNDIDADE (OBRIGATÓRIA — NÃO SEJA CONCISO):
@@ -304,15 +330,14 @@ REGRA DE PROFUNDIDADE (OBRIGATÓRIA — NÃO SEJA CONCISO):
 REGRA CRÍTICA DE CLOZE — MÚLTIPLOS ÍNDICES (OBRIGATÓRIA):
 - Quando uma frase contém 2 ou mais termos técnicos importantes, OBRIGATORIAMENTE use índices diferentes: {{c1::termo1}}, {{c2::termo2}}, {{c3::termo3}}.
 - NUNCA use apenas {{c1::...}} para todos os termos na mesma frase. Cada termo testável DEVE ter seu próprio índice (c1, c2, c3, etc).
-- Isso gera cards separados por lacuna — o aluno vê uma lacuna por vez. É o comportamento CORRETO e DESEJADO.
 - Exemplo CORRETO: "A {{c1::hematose}} ocorre nos {{c2::alvéolos pulmonares}} através da membrana {{c3::alvéolo-capilar}}."
 - Exemplo ERRADO: "A {{c1::hematose}} ocorre nos {{c1::alvéolos pulmonares}}" — PROIBIDO reusar o mesmo índice para termos diferentes.
-- Mínimo de 2 lacunas por card cloze quando houver 2+ termos técnicos na frase. Cards com apenas 1 lacuna são aceitáveis SOMENTE se a frase tem apenas 1 termo técnico.
 
 REGRA CRÍTICA DE MÚLTIPLA ESCOLHA (OBRIGATÓRIA):
 - Quando os formatos incluem "multiple_choice", você DEVE gerar cards desse tipo. NÃO substitua por cloze ou basic.
 - Cada card multiple_choice DEVE ter exatamente 4 opções no campo "options" e o "correctIndex" correto (0-based).
-- Se a distribuição pede 10% MC, e você gera 30 cards, pelo menos 3 DEVEM ser multiple_choice. VERIFIQUE antes de finalizar.
+
+PREFERÊNCIA DE FORMATO: Para CADA conceito do texto, pergunte-se: "Posso fazer um cloze com termo técnico?" → SIM → faça cloze. NÃO → faça basic. Múltipla escolha SOMENTE para questões de diferenciação entre conceitos similares.
 
 TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
@@ -416,6 +441,11 @@ ${trimmedContent}
         ...(mappedType === "multiple_choice" && c.options?.length ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
       };
     });
+
+    // Log distribution for debugging
+    const dist = { basic: 0, cloze: 0, multiple_choice: 0, reclassified: 0 };
+    cards.forEach((c: any) => { dist[c.type as keyof typeof dist] = (dist[c.type as keyof typeof dist] || 0) + 1; });
+    console.log(`Card distribution: total=${cards.length}, cloze=${dist.cloze} (${Math.round(dist.cloze/cards.length*100)}%), basic=${dist.basic} (${Math.round(dist.basic/cards.length*100)}%), MC=${dist.multiple_choice} (${Math.round(dist.multiple_choice/cards.length*100)}%)`);
 
     if (!skipLog) {
       await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
