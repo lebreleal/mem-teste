@@ -15,7 +15,22 @@ import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, C
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
-// OpenAI pricing per 1M tokens (USD) — TTS uses per-character pricing
+// Feature key → friendly name
+const FEATURE_NAMES: Record<string, string> = {
+  generate_deck: 'Gerar Deck',
+  ai_tutor: 'Tutor IA',
+  grade_exam: 'Corrigir Prova',
+  enhance_card: 'Aprimorar Card',
+  enhance_import: 'Aprimorar Importação',
+  ai_chat: 'Chat IA',
+  generate_onboarding: 'Onboarding IA',
+  auto_tag: 'Auto-Tag',
+  suggest_tags: 'Sugerir Tags',
+  detect_import_format: 'Detectar Formato',
+  organize_import: 'Organizar Importação',
+  tts: 'Text-to-Speech',
+};
+
 // Pricing per 1M tokens (USD) — Google Gemini + OpenAI + TTS
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // Google Gemini models
@@ -269,7 +284,7 @@ const AdminUsers = () => {
               {loadingDetail ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
                 <>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Consumo dos últimos 30 dias</p>
+                    <p className="text-sm text-muted-foreground">Consumo de tokens (últimos 30 dias)</p>
                     <Button
                       variant="outline"
                       size="sm"
@@ -341,7 +356,7 @@ const AdminUsers = () => {
                         <CardContent className="py-3 px-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-sm">{entry.feature_key}</p>
+                              <p className="font-medium text-sm">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
                               </p>
