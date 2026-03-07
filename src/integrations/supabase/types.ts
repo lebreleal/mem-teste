@@ -2444,6 +2444,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_get_global_token_usage: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_limit?: number
+          p_user_id?: string
+        }
+        Returns: {
+          completion_tokens: number
+          created_at: string
+          energy_cost: number
+          feature_key: string
+          id: string
+          model: string
+          prompt_tokens: number
+          total_tokens: number
+          user_email: string
+          user_id: string
+          user_name: string
+        }[]
+      }
       admin_get_profiles: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {
