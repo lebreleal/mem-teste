@@ -148,7 +148,7 @@ const AdminUsageReport = () => {
   const totalCalls = filtered.length;
   const totalTokens = filtered.reduce((s, e) => s + Number(e.total_tokens), 0);
   const totalEnergy = filtered.reduce((s, e) => s + Number(e.energy_cost), 0);
-  const totalCostUSD = filtered.reduce((s, e) => s + calcCostUSD(e.model, Number(e.prompt_tokens), Number(e.completion_tokens)), 0);
+  const totalCostUSD = filtered.reduce((s, e) => s + calcCostUSD(e.model, Number(e.prompt_tokens), Number(e.completion_tokens), Number(e.total_tokens)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
