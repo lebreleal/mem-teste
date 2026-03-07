@@ -31,26 +31,24 @@ const FEATURE_NAMES: Record<string, string> = {
   tts: 'Text-to-Speech',
 };
 
-// Pricing per 1M tokens (USD)
-// completion_tokens includes thinking tokens. Use thinking rate for output.
+// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.15, output: 3.50 },        // thinking=$3.50/1M
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
-  'gpt-4': { input: 30.00, output: 60.00 },
-  'gpt-4-turbo': { input: 10.00, output: 30.00 },
   'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
   'tts-1': { input: 15.00, output: 0 },
-  'tts-1-hd': { input: 30.00, output: 0 },
   'google-neural2': { input: 4.00, output: 0 },
 };
 
-const calcCostUSD = (model: string, promptTokens: number, completionTokens: number): number => {
+// total_tokens includes thinking tokens; real output = total - prompt
+const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
   const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-4o-mini'];
-  return (promptTokens / 1_000_000) * pricing.input + (completionTokens / 1_000_000) * pricing.output;
+  const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
+  return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
 const AdminUsers = () => {

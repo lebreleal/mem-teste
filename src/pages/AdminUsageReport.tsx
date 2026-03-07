@@ -29,15 +29,12 @@ const FEATURE_NAMES: Record<string, string> = {
   tts: 'Text-to-Speech',
 };
 
-// Pricing per 1M tokens (USD)
-// IMPORTANT: completion_tokens from Gemini 2.5 includes thinking tokens.
-// Thinking tokens cost MORE: Flash thinking=$3.50/1M, Pro thinking=$10/1M.
-// Since we can't split thinking vs regular output, we use the THINKING rate
-// as the output price (worst case / most accurate for 2.5 models).
+// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
+// Output price is a blended rate (thinking + regular output tokens).
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },         // thinking=$10/1M, regular=$10/1M (same)
-  'gemini-2.5-flash': { input: 0.15, output: 3.50 },        // thinking=$3.50/1M (dominates completion)
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },  // no thinking
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
@@ -46,9 +43,11 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'google-neural2': { input: 4.00, output: 0 },
 };
 
-const calcCostUSD = (model: string, promptTokens: number, completionTokens: number): number => {
+// total_tokens includes thinking tokens; real output = total - prompt
+const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
   const pricing = MODEL_PRICING[model] ?? { input: 0.15, output: 0.60 };
-  return (promptTokens / 1_000_000) * pricing.input + (completionTokens / 1_000_000) * pricing.output;
+  const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
+  return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
 interface UsageEntry {
