@@ -396,9 +396,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       }
     }
 
-    try {
-      await aiService.logAggregatedTokenUsage(usedModel, aggregatedUsage, totalEnergyCost);
-    } catch (e) { console.error('Failed to log aggregated usage:', e); }
+    // Server already logs token usage per batch (skipLog: false by default for the edge function's internal logging).
+    // No client-side aggregated log needed — it was creating phantom entries with 0 tokens.
 
     queryClient.invalidateQueries({ queryKey: ['energy'] });
 

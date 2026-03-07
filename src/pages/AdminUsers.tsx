@@ -374,6 +374,7 @@ const AdminUsers = () => {
                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                             <span>Prompt: {Number(entry.prompt_tokens).toLocaleString()}</span>
                             <span>Completion: {Number(entry.completion_tokens).toLocaleString()}</span>
+                            {(() => { const thinking = Number(entry.total_tokens) - Number(entry.prompt_tokens) - Number(entry.completion_tokens); return thinking > 0 ? <span className="text-orange-500">Thinking: {thinking.toLocaleString()}</span> : null; })()}
                             <span>Total: {Number(entry.total_tokens).toLocaleString()}</span>
                             <span className="text-primary font-medium">⚡ {Number(entry.energy_cost)}</span>
                           </div>
