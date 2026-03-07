@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
