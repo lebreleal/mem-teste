@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, deductEnergy, fetchPromptConfig, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -63,14 +63,8 @@ Deno.serve(async (req) => {
 4. NÃO faça preâmbulos. NÃO cumprimente. NÃO elogie. NÃO comente sobre a pergunta. VÁ DIRETO ao conteúdo.
 5. Use Markdown para formatação. Seja didático e completo.
 6. Você é um tutor educacional. Responda SOMENTE o conteúdo acadêmico solicitado.`;
-    // ALWAYS prepend anti-preamble rules, then append DB prompt if any
     const dbPrompt = promptConfig?.system_prompt ? `\n\nInstruções adicionais:\n${promptConfig.system_prompt}` : '';
     const systemPrompt = antiPreamblePrompt + dbPrompt;
-
-    // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
-    const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
-    const estimatedCompletionTokens = Math.ceil(maxTokens * 0.5);
-    const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
 
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
@@ -84,6 +78,7 @@ Deno.serve(async (req) => {
         max_tokens: maxTokens,
         temperature,
         stream: true,
+        stream_options: { include_usage: true },
       }),
     });
 
@@ -95,22 +90,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
-    // Log estimated token usage (streaming prevents exact count)
-    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, {
-      prompt_tokens: estimatedPromptTokens,
-      completion_tokens: estimatedCompletionTokens,
-      total_tokens: estimatedTotal,
-    }, cost);
-
-    // Stream the OpenAI SSE response directly to the client
-    return new Response(response.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    // Stream to client while capturing actual token usage from final SSE chunk
+    return streamWithUsageCapture(response, supabase, userId, "ai_tutor", selectedModel, cost);
   } catch (err) {
     console.error("Error:", err);
     return jsonResponse({ error: "Internal error" }, 500);
