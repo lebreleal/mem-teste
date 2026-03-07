@@ -120,6 +120,7 @@ const App = () => (
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
                 <Route path="/admin/tags" element={<ProtectedRoute><AdminTags /></ProtectedRoute>} />
+                <Route path="/admin/usage" element={<ProtectedRoute><AdminUsageReport /></ProtectedRoute>} />
                 
                 <Route path="/install" element={<Install />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />

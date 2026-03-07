@@ -15,7 +15,22 @@ import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, C
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
-// OpenAI pricing per 1M tokens (USD) — TTS uses per-character pricing
+// Feature key → friendly name
+const FEATURE_NAMES: Record<string, string> = {
+  generate_deck: 'Gerar Deck',
+  ai_tutor: 'Tutor IA',
+  grade_exam: 'Corrigir Prova',
+  enhance_card: 'Aprimorar Card',
+  enhance_import: 'Aprimorar Importação',
+  ai_chat: 'Chat IA',
+  generate_onboarding: 'Onboarding IA',
+  auto_tag: 'Auto-Tag',
+  suggest_tags: 'Sugerir Tags',
+  detect_import_format: 'Detectar Formato',
+  organize_import: 'Organizar Importação',
+  tts: 'Text-to-Speech',
+};
+
 // Pricing per 1M tokens (USD) — Google Gemini + OpenAI + TTS
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // Google Gemini models

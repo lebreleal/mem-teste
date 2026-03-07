@@ -211,6 +211,19 @@ const AdminIA = () => {
               </CardContent>
             </Card>
 
+            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/admin/usage')}>
+              <CardContent className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="font-medium">Relatório de Uso IA</p>
+                    <p className="text-xs text-muted-foreground">Consumo global, filtros por data e usuário</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
             <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={openModelConfig}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
