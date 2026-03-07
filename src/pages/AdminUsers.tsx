@@ -148,7 +148,7 @@ const AdminUsers = () => {
   };
 
   // Calculate total costs for all token usage entries
-  const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens)), 0);
+  const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens), Number(t.total_tokens_sum)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
