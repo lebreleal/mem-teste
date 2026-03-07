@@ -264,7 +264,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       const words = getWords(cards[i].front);
       let isDup = false;
       for (const s of seen) {
-        if (similarity(words, s.words) > 0.8) {
+        if (similarity(words, s.words) > 0.9) {
           // Keep the one with longer back (more complete answer)
           const existingLen = normalize(cards[s.idx].back).length;
           const currentLen = normalize(cards[i].back).length;
@@ -308,7 +308,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const sampleText = selected.slice(0, 3).map(p => p.textContent).join('\n').substring(0, 2000);
     textSampleRef.current = sampleText;
     // Page-based batching: group selected pages into batches of 10
-    const PAGES_PER_BATCH = 10;
+    const PAGES_PER_BATCH = 3;
     const CONCURRENT_BATCHES = 3;
 
     const textBatches: { text: string; pageCount: number }[] = [];
@@ -332,7 +332,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     let lastErrorMsg = '';
 
     // Bloco 5: Refined density factor (chars per card)
-    const densityFactor = detailLevel === 'comprehensive' ? 120 : detailLevel === 'essential' ? 600 : 250;
+    const densityFactor = detailLevel === 'comprehensive' ? 80 : detailLevel === 'essential' ? 400 : 150;
 
     for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
       const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
