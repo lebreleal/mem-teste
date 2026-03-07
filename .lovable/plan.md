@@ -1,58 +1,74 @@
 
 
-# Corrigir importacao lenta/infinita de 28k+ cards
+## Diagnóstico: Por que a cobertura não chega a 100%
 
-## Problema identificado
+Analisei o fluxo completo (useAIDeckFlow → generate-deck edge function) e identifiquei **4 causas raiz**:
 
-Ao importar 28.462 cards do Anki com subdecks, o sistema fica em "Salvando..." infinitamente. Dois problemas principais:
+### Causa 1: PAGES_PER_BATCH = 10 (muito alto)
+O código atual envia **10 páginas por lote** ao modelo. Com PDFs densos (ex: slides médicos), isso resulta em ~15-40K caracteres por chamada. O modelo "escaneia" superficialmente em vez de fazer varredura exaustiva. A memória do projeto recomenda **3 páginas por lote**, mas o código atual usa 10.
 
-1. **Sem feedback de progresso**: O `pendingStore` e setado com `progress: { current: 0, total: X }` mas NUNCA e atualizado durante a importacao. O usuario ve "Salvando..." sem saber se esta funcionando ou travou.
+### Causa 2: densityFactor subestima a quantidade necessária
+O cálculo automático de cards por batch usa `chars / densityFactor`:
+- Standard: 250 chars/card → PDF de 10K chars = apenas 40 cards
+- Comprehensive: 120 chars/card → PDF de 10K chars = 83 cards
 
-2. **Payload muito grande por batch**: Cards do Anki frequentemente contem HTML pesado com imagens (base64 ou URLs). Um batch de 500 cards com imagens pode ter 10-50MB por requisicao, causando timeouts no Supabase (limite padrao de ~30s). Um unico timeout quebra toda a importacao porque o `throw error` para tudo.
+Para conteúdo denso (medicina), 250 chars/card é muito alto — um único parágrafo de 250 chars pode conter 3-5 conceitos distintos.
 
-3. **Erro silencioso sem retry**: Se uma requisicao HTTP falha no meio da importacao (timeout, rede), todo o processo falha sem tentar novamente. Diferente do Anki local que nao depende de rede.
+### Causa 3: Resposta JSON pode ser truncada
+O modelo usa `max_tokens: 65000`, mas com thinking tokens consumindo parte do budget, a resposta efetiva pode ser menor. Se `finish_reason: "length"`, cards são perdidos. O código tenta recuperar JSON truncado, mas cards incompletos são descartados.
 
-## Solucao: 3 melhorias
+### Causa 4: Deduplicação remove cards legítimos
+O threshold de similaridade é 0.8 (80% de palavras em comum). Para conteúdo médico onde termos se repetem (ex: "pressão", "artéria", "ventrículo"), cards sobre subtópicos diferentes podem ser classificados como duplicatas.
 
-### 1. Adicionar progresso em tempo real durante a importacao
+---
 
-Modificar `importDeckWithSubdecks` e `importDeck` no `deckService.ts` para aceitar um callback `onProgress(current, total)` que atualiza o pendingStore a cada batch inserido.
+## Plano de Correção
 
-No `Dashboard.tsx`, passar o callback que atualiza o pendingStore:
+### 1. Reduzir PAGES_PER_BATCH de 10 → 3
+**Arquivo**: `src/components/ai-deck/useAIDeckFlow.ts` (linha 311)
 
-```text
-await importDeckWithSubdecks(
-  userId, name, folderId, cards, subdecks, algo, revlog,
-  (current, total) => pendingStore.updatePending(pendingId, { 
-    progress: { current, total } 
-  })
-);
-```
+Menos texto por chamada = análise mais profunda. Trade-off: mais chamadas API (mais créditos), mas cobertura significativamente melhor. Isso alinha com a configuração original documentada no projeto.
 
-### 2. Reduzir batch size e adicionar retry para cards grandes
+### 2. Reduzir densityFactor para gerar mais cards
+**Arquivo**: `src/components/ai-deck/useAIDeckFlow.ts` (linha 335)
 
-- Estimar o tamanho do payload antes de enviar: se a media de tamanho por card e > 5KB, reduzir o batch de 500 para 200 ou 100
-- Adicionar retry com backoff exponencial (3 tentativas) em cada batch de cards, similar ao `withRetry` que ja existe no `cardService.ts`
-- Isto evita que um timeout quebre toda a importacao
+Valores atuais → novos:
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
 
-### 3. Continuar apos erros parciais em vez de abortar
+Isso aumenta a quantidade de cards solicitados por batch, forçando o modelo a cobrir mais conteúdo.
 
-Atualmente, um erro em qualquer batch faz `throw error` e para tudo. Para 28k cards, isto significa que se o batch #45 de 57 falhar, perde-se todo o progresso. Mudar para:
-- Registrar erros parciais mas continuar com os proximos batches
-- No final, informar quantos cards foram importados vs. quantos falharam
-- Tentar re-inserir os falhados uma vez ao final
+### 3. Usar Structured Output (tool calling) no generate-deck
+**Arquivo**: `supabase/functions/generate-deck/index.ts`
 
-## Arquivos que serao alterados
+Trocar JSON livre por tool calling (como já usado no enhance-card e enhance-import). Benefícios:
+- Elimina problemas de parsing JSON truncado
+- Garante schema correto (front/back/type/options)
+- O modelo não "gasta" tokens com markdown/formatação
+- Reduz finish_reason=length porque a resposta é mais eficiente
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/services/deckService.ts` | Adicionar parametro `onProgress` callback nas funcoes `importDeck` e `importDeckWithSubdecks`; adicionar retry com backoff; batch size adaptativo; tolerancia a erros parciais |
-| `src/pages/Dashboard.tsx` | Passar callback `onProgress` ao chamar importacao; mostrar progresso real no pendingStore |
+### 4. Reduzir threshold de deduplicação de 0.8 → 0.9
+**Arquivo**: `src/components/ai-deck/useAIDeckFlow.ts` (linha 267)
 
-## Resultado esperado
+Apenas cards com 90%+ de palavras idênticas serão removidos, preservando cards sobre subtópicos similares.
 
-- Usuario ve progresso real: "Salvando... 5.200 / 28.462 cartoes"
-- Importacao nao quebra por timeout em 1 batch -- faz retry automatico
-- Se alguns cards falharem, os outros sao salvos normalmente
-- Batch size adapta-se ao tamanho do conteudo (cards com imagens = batches menores)
+### 5. Adicionar instrução de "checklist de cobertura" no prompt
+**Arquivo**: `supabase/functions/generate-deck/index.ts`
+
+Adicionar ao final do user prompt: uma instrução para o modelo verificar se cada seção/parágrafo do conteúdo tem pelo menos um card correspondente antes de finalizar.
+
+### Resumo de impacto
+
+| Mudança | Impacto na cobertura | Impacto no custo |
+|---|---|---|
+| PAGES_PER_BATCH 10→3 | Alto (principal) | +3x mais chamadas |
+| densityFactor reduzido | Médio | Neutro (mesmo nº chamadas) |
+| Tool calling | Médio (menos truncamento) | Neutro |
+| Threshold dedup 0.8→0.9 | Baixo | Neutro |
+| Checklist no prompt | Baixo-médio | +tokens thinking |
+
+### Arquivos a editar:
+- `src/components/ai-deck/useAIDeckFlow.ts` — PAGES_PER_BATCH, densityFactor, threshold dedup
+- `supabase/functions/generate-deck/index.ts` — tool calling, checklist prompt
 
