@@ -332,7 +332,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     let lastErrorMsg = '';
 
     // Bloco 5: Refined density factor (chars per card)
-    const densityFactor = detailLevel === 'comprehensive' ? 120 : detailLevel === 'essential' ? 600 : 250;
+    const densityFactor = detailLevel === 'comprehensive' ? 80 : detailLevel === 'essential' ? 400 : 150;
 
     for (let i = 0; i < totalBatches; i += CONCURRENT_BATCHES) {
       const group = textBatches.slice(i, i + CONCURRENT_BATCHES);
