@@ -344,7 +344,7 @@ const AdminUsers = () => {
                   {/* Detailed chronological log */}
                   <h3 className="font-semibold text-sm text-muted-foreground pt-2">Histórico Detalhado</h3>
                   {tokenUsageDetailed.map((entry) => {
-                    const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens));
+                    const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
                     const costBRL = usdToBrl ? costUSD * usdToBrl : null;
                     return (
                       <Card key={entry.id}>

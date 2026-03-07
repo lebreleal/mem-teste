@@ -257,7 +257,7 @@ const AdminUsageReport = () => {
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">{filtered.length} registro(s)</p>
             {filtered.map(entry => {
-              const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens));
+              const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
               const costBRL = usdToBrl ? costUSD * usdToBrl : null;
               return (
                 <Card key={entry.id}>
