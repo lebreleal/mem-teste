@@ -341,7 +341,7 @@ const AdminUsers = () => {
                         <CardContent className="py-3 px-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-sm">{entry.feature_key}</p>
+                              <p className="font-medium text-sm">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
                               </p>
