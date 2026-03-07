@@ -132,7 +132,6 @@ async function organizeBatch(
   batchCount: number,
   totalCards: number,
   deckName: string | null,
-  selectedModel: string,
 ): Promise<{ decks: DeckNode[]; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } }> {
   const userPrompt = deckName
     ? `Organize estes ${batchCount} flashcards (de um total de ${totalCards}) como subdecks de "${deckName}".\nOs índices são GLOBAIS, mantenha-os exatamente como estão:\n\n${cardLines}`
@@ -143,7 +142,7 @@ async function organizeBatch(
     method: "POST",
     headers: { Authorization: `Bearer ${AI_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: selectedModel,
+      model: "gemini-2.5-pro",
       messages: [
         { role: "system", content: buildSystemPrompt(deckName) },
         { role: "user", content: userPrompt },
@@ -230,7 +229,7 @@ Deno.serve(async (req) => {
 
     const { cards, deckName } = await req.json();
     const { apiKey: AI_KEY } = getAIConfig();
-    if (!AI_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) {
       return jsonResponse({ error: "No cards provided" }, 400);
     }
@@ -238,13 +237,10 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const MODEL_MAP = await getModelMap(anonClient);
-    const selectedModel = MODEL_MAP["pro"] || "gpt-4o";
-
     const totalCards = cards.length;
     const parentDeckName = deckName || null;
 
-    console.log(`Organizing ${totalCards} cards for deck "${parentDeckName || '(unnamed)'}" with model ${selectedModel}`);
+    console.log(`Organizing ${totalCards} cards for deck "${parentDeckName || '(unnamed)'}"`);
 
     const cardSummaries = cards.map((c: { front: string; back: string }, i: number) =>
       `[${i}] ${(c.front || "").slice(0, 80)}`
@@ -268,7 +264,7 @@ Deno.serve(async (req) => {
       const batch = batches[b];
       console.log(`Batch ${b + 1}/${batches.length}: ${batch.count} cards`);
 
-      const { decks, usage } = await organizeBatch(batch.lines, batch.count, totalCards, parentDeckName, selectedModel);
+      const { decks, usage } = await organizeBatch(batch.lines, batch.count, totalCards, parentDeckName);
       allBatchDecks.push(decks);
 
       totalPromptTokens += usage.prompt_tokens;
@@ -313,7 +309,7 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      await logTokenUsage(supabase, userId, "organize_import", selectedModel,
+      await logTokenUsage(supabase, userId, "organize_import", "gemini-2.5-pro",
         { prompt_tokens: totalPromptTokens, completion_tokens: totalCompletionTokens, total_tokens: totalTokens }, 0);
     }
 

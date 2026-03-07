@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
     const { messages, aiModel, energyCost, conversationId } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
 
     const cost = energyCost || 0;
     if (userId && cost > 0) {
@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
       const errText = await response.text();
       console.error("AI error:", response.status, errText);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
-      if (response.status === 403) return jsonResponse({ error: "API Key inválida ou sem permissão." }, 502);
-      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente novamente." }, 503);
+      if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
+      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 

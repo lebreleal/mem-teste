@@ -21,12 +21,12 @@ Deno.serve(async (req) => {
 
     const { questionId, userAnswer, correctAnswer, questionText, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
     if (!questionId || !userAnswer || !correctAnswer) return jsonResponse({ error: "Campos obrigatórios faltando" }, 400);
 
     const promptConfig = await fetchPromptConfig(supabase, "grade_exam");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.2;
 
     const { data: profile } = await supabase.from("profiles").select("daily_free_gradings, last_grading_reset_date, energy").eq("id", userId).single();

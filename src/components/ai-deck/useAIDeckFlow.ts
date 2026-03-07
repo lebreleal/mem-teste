@@ -307,8 +307,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     // Store text sample for AI tag suggestions
     const sampleText = selected.slice(0, 3).map(p => p.textContent).join('\n').substring(0, 2000);
     textSampleRef.current = sampleText;
-    // Page-based batching: smaller batches for higher quality per page
-    const PAGES_PER_BATCH = 3;
+    // Page-based batching: group selected pages into batches of 10
+    const PAGES_PER_BATCH = 10;
     const CONCURRENT_BATCHES = 3;
 
     const textBatches: { text: string; pageCount: number }[] = [];

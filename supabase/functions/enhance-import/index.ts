@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   try {
     const { cards, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    if (!AI_KEY) throw new Error("GOOGLE_AI_KEY is not configured");
     if (!cards || !Array.isArray(cards) || cards.length === 0) throw new Error("No cards provided");
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_import");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     const cardsText = cards.map((c: { front: string; back: string }, i: number) => `[${i}] Frente: ${c.front}\nVerso: ${c.back}`).join("\n---\n");
 

@@ -83,7 +83,7 @@ serve(async (req) => {
       return `[${idx}](${type}) ${front} | ${back}`;
     }).join("\n");
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const apiKey = Deno.env.get("GOOGLE_AI_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,12 +91,12 @@ serve(async (req) => {
     }
 
     const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gemini-2.5-flash",
           messages: [
             { role: "system", content: "Você extrai palavras-chave específicas de cartões de estudo. Responda APENAS JSON válido, sem markdown." },
             { role: "user", content: `Para CADA cartão abaixo, extraia 1-3 palavras-chave ESPECÍFICAS do conteúdo daquele cartão individual. As tags devem ser termos técnicos, conceitos ou entidades mencionados diretamente no texto do cartão — NÃO categorias genéricas ou nomes de disciplinas.

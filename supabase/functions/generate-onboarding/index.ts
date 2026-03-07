@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   try {
     const { course, semester, aiModel } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
     if (!course || !semester) return jsonResponse({ error: "Curso e semestre são obrigatórios" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "generate_onboarding");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.3;
 
     let userPrompt: string;

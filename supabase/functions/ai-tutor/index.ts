@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   try {
     const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
-    if (!AI_KEY) return jsonResponse({ error: "OPENAI_API_KEY não configurada" }, 500);
+    if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
     if (!frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
-    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gpt-4o-mini";
+    const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.5;
     const cleanFront = frontContent.replace(/<[^>]*>/g, "").trim();
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const dbPrompt = promptConfig?.system_prompt ? `\n\nInstruções adicionais:\n${promptConfig.system_prompt}` : '';
     const systemPrompt = antiPreamblePrompt + dbPrompt;
 
-    // Estimate token usage from input text (1 token ≈ 4 chars)
+    // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
     const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
     const estimatedCompletionTokens = Math.ceil(maxTokens * 0.5);
     const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text(); console.error("AI error:", response.status, errText);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
-      if (response.status === 403) return jsonResponse({ error: "API Key inválida ou sem permissão." }, 502);
-      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente novamente." }, 503);
+      if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
+      if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 

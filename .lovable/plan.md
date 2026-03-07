@@ -1,69 +1,58 @@
 
 
-## Plano: Substituir o Prompt por Versão Especializada em Medicina + Engenharia de Prompt Otimizada
+# Corrigir importacao lenta/infinita de 28k+ cards
 
-### Análise do Estado Atual
+## Problema identificado
 
-O prompt atual (linhas 5-47) é **genérico** — fala de "SuperMemo" e "método ativo" mas não tem foco médico. A distribuição é 50/30/20 (cloze/basic/MCQ). O prompt do usuário é bom e mais adequado para medicina, mas tem problemas de engenharia:
+Ao importar 28.462 cards do Anki com subdecks, o sistema fica em "Salvando..." infinitamente. Dois problemas principais:
 
-1. **Distribuição 60/30/10** — MCQ a 10% é pouco; com Structured Outputs e `strict: true`, podemos ser mais agressivos
-2. **Falta de exemplos concretos** no system prompt — o GPT precisa de few-shot para calibrar qualidade
-3. **Instruções duplicadas** entre system e user prompt — confunde o modelo sobre prioridade
+1. **Sem feedback de progresso**: O `pendingStore` e setado com `progress: { current: 0, total: X }` mas NUNCA e atualizado durante a importacao. O usuario ve "Salvando..." sem saber se esta funcionando ou travou.
 
-### Proposta: Fusão Inteligente
+2. **Payload muito grande por batch**: Cards do Anki frequentemente contem HTML pesado com imagens (base64 ou URLs). Um batch de 500 cards com imagens pode ter 10-50MB por requisicao, causando timeouts no Supabase (limite padrao de ~30s). Um unico timeout quebra toda a importacao porque o `throw error` para tudo.
 
-Mesclar o melhor do prompt atual (estrutura técnica, anti-padrões, regras de cloze) com o prompt médico do usuário (precisão terminológica, cobertura exaustiva, distratores plausíveis). O resultado é um prompt **unificado** que funciona para medicina E para qualquer área.
+3. **Erro silencioso sem retry**: Se uma requisicao HTTP falha no meio da importacao (timeout, rede), todo o processo falha sem tentar novamente. Diferente do Anki local que nao depende de rede.
 
-### Alterações em `supabase/functions/generate-deck/index.ts`
+## Solucao: 3 melhorias
 
-**1. Novo `DEFAULT_SYSTEM_PROMPT` — fusão otimizada**
+### 1. Adicionar progresso em tempo real durante a importacao
 
-Substituir linhas 5-47 por um prompt que:
-- Mantém as 11 regras pedagógicas existentes (já validadas)
-- Adiciona as 6 Diretrizes de Ouro do usuário como princípios de topo
-- Remove redundâncias (anti-padrões listados 2x atualmente)
-- Adiciona **few-shot examples** dentro do system prompt (3 exemplos concretos de cada tipo) — isso é o que mais impacta qualidade no GPT
-- Reforça: "MEMORIZAÇÃO DE PRECISÃO" — termos técnicos, valores, classificações devem virar cloze
-- Reforça: "COBERTURA EXAUSTIVA" — varredura linha por linha, cada detalhe vira card
+Modificar `importDeckWithSubdecks` e `importDeck` no `deckService.ts` para aceitar um callback `onProgress(current, total)` que atualiza o pendingStore a cada batch inserido.
 
-**2. Ajuste de distribuição em `getFormatInstructions`**
+No `Dashboard.tsx`, passar o callback que atualiza o pendingStore:
 
-Quando os 3 formatos estão ativos (linha 136-140):
-- Cloze: ~60% (subiu de 50%) — "Rei" para memorização técnica
-- Basic: ~30% (mantém) — mecanismos, causa-efeito
-- MCQ: ~10% (desceu de 20%) — apenas nível residência, distratores plausíveis
-
-**3. User prompt mais enxuto**
-
-O user prompt (linhas 257-283) tem muita repetição do system prompt. Reduzir para:
-- Contagem de cards + nível de detalhe
-- Instruções customizadas do usuário
-- Formatos permitidos + regras de campos
-- Conteúdo-base
-- Remover regras pedagógicas que já estão no system (o GPT prioriza system prompt)
-
-**4. Few-shot examples no system prompt**
-
-Adicionar 2-3 exemplos concretos de cada tipo de card direto no system prompt. Isso é a técnica de prompt engineering que mais impacta qualidade em modelos GPT:
-
-```
-EXEMPLO CLOZE IDEAL:
-"A enzima responsável pela conversão de angiotensinogênio em angiotensina I é a {{c1::renina}}, secretada pelas células {{c2::justaglomerulares}} do rim."
-
-EXEMPLO BASIC IDEAL:
-Front: "Por que a aldosterona causa hipocalemia?"
-Back: "Reabsorve Na+ e secreta K+ no túbulo coletor."
-
-EXEMPLO MCQ IDEAL:
-Front: "Qual caspase inicia a via extrínseca da apoptose?"
-Options: ["Caspase-9", "Caspase-8", "Caspase-3", "Caspase-10"]
-correctIndex: 1
+```text
+await importDeckWithSubdecks(
+  userId, name, folderId, cards, subdecks, algo, revlog,
+  (current, total) => pendingStore.updatePending(pendingId, { 
+    progress: { current, total } 
+  })
+);
 ```
 
-### Resumo de impacto
+### 2. Reduzir batch size e adicionar retry para cards grandes
 
-- **1 arquivo editado**: `supabase/functions/generate-deck/index.ts`
-- **~60 linhas alteradas** (system prompt + user prompt + distribuição)
-- **Zero breaking changes** — schema e response format inalterados
-- **Qualidade esperada**: cards muito mais precisos tecnicamente, com cobertura exaustiva e distribuição correta
+- Estimar o tamanho do payload antes de enviar: se a media de tamanho por card e > 5KB, reduzir o batch de 500 para 200 ou 100
+- Adicionar retry com backoff exponencial (3 tentativas) em cada batch de cards, similar ao `withRetry` que ja existe no `cardService.ts`
+- Isto evita que um timeout quebre toda a importacao
+
+### 3. Continuar apos erros parciais em vez de abortar
+
+Atualmente, um erro em qualquer batch faz `throw error` e para tudo. Para 28k cards, isto significa que se o batch #45 de 57 falhar, perde-se todo o progresso. Mudar para:
+- Registrar erros parciais mas continuar com os proximos batches
+- No final, informar quantos cards foram importados vs. quantos falharam
+- Tentar re-inserir os falhados uma vez ao final
+
+## Arquivos que serao alterados
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/services/deckService.ts` | Adicionar parametro `onProgress` callback nas funcoes `importDeck` e `importDeckWithSubdecks`; adicionar retry com backoff; batch size adaptativo; tolerancia a erros parciais |
+| `src/pages/Dashboard.tsx` | Passar callback `onProgress` ao chamar importacao; mostrar progresso real no pendingStore |
+
+## Resultado esperado
+
+- Usuario ve progresso real: "Salvando... 5.200 / 28.462 cartoes"
+- Importacao nao quebra por timeout em 1 batch -- faz retry automatico
+- Se alguns cards falharem, os outros sao salvos normalmente
+- Batch size adapta-se ao tamanho do conteudo (cards com imagens = batches menores)
 

@@ -69,7 +69,7 @@ serve(async (req) => {
 
     const alreadyApplied = (existingTagNames ?? []).join(", ");
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const apiKey = Deno.env.get("GOOGLE_AI_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500,
@@ -101,7 +101,7 @@ ${(textContent || "").substring(0, 2000)}
 Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fisiopatologia", "Hipertensão"]`;
 
     const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       {
         method: "POST",
         headers: {
@@ -109,7 +109,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gemini-2.5-flash",
           messages: [
             { role: "system", content: "Você é um classificador de conteúdo educacional. Responda apenas com JSON." },
             { role: "user", content: prompt },
