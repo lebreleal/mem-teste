@@ -276,10 +276,62 @@ ${getOutputExamples(formats)}`;
 
     console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
+    // Build tool schema for structured output
+    const cardProperties: Record<string, any> = {
+      front: { type: "string", description: "Card front content" },
+      back: { type: "string", description: "Card back content (empty string for cloze)" },
+      type: { type: "string", enum: ["basic", "cloze", "multiple_choice"], description: "Card type" },
+    };
+    const toolSchema: any = {
+      type: "object",
+      properties: {
+        cards: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              ...cardProperties,
+              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (4-5 items)" },
+              correctIndex: { type: "integer", description: "0-based index of correct option" },
+            },
+            required: ["front", "back", "type"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["cards"],
+      additionalProperties: false,
+    };
+
+    // Coverage checklist instruction appended to the user prompt
+    const coverageChecklist = `\n\nCHECKLIST DE COBERTURA (execute mentalmente antes de finalizar):
+1. Releia cada parágrafo/seção do conteúdo acima.
+2. Para cada parágrafo, verifique se existe pelo menos 1 cartão correspondente.
+3. Se algum parágrafo/conceito ficou sem cartão, ADICIONE os cartões faltantes.
+4. Só finalize quando 100% do conteúdo estiver coberto.`;
+
+    const fullPrompt = prompt + coverageChecklist;
+
+    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
+
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }], temperature, max_tokens: 65000 }),
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: fullPrompt }],
+        temperature,
+        max_tokens: 65000,
+        tools: [{
+          type: "function",
+          function: {
+            name: "return_flashcards",
+            description: "Return the generated flashcards",
+            parameters: toolSchema,
+          },
+        }],
+        tool_choice: { type: "function", function: { name: "return_flashcards" } },
+      }),
     });
 
     if (!aiResponse.ok) {
@@ -292,98 +344,82 @@ ${getOutputExamples(formats)}`;
     }
 
     const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content ?? "";
-    const finishReason = aiData.choices?.[0]?.finish_reason ?? "unknown";
     
     // Log full usage details including thinking/reasoning tokens
     const rawUsage = aiData.usage || {};
     const reasoningTokens = rawUsage.completion_tokens_details?.reasoning_tokens || 0;
     const cachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
-    console.log("AI response length:", rawContent.length, "finish_reason:", finishReason, 
-      "usage:", JSON.stringify(rawUsage),
-      "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
 
-    // Include ALL tokens (completion_tokens from Google API should already include thinking tokens)
     const usage = {
       prompt_tokens: rawUsage.prompt_tokens || 0,
       completion_tokens: rawUsage.completion_tokens || 0,
       total_tokens: rawUsage.total_tokens || 0,
     };
 
-    // Clean AI response: strip markdown fences, BOM, zero-width chars, control chars
-    let jsonStr = rawContent
-      .replace(/^\uFEFF/, '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-      .trim();
+    // Extract cards from tool call response
+    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
 
-    // Fix unescaped newlines inside JSON string values (common AI output issue)
-    // This runs BEFORE any JSON.parse attempt
-    jsonStr = jsonStr.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
-      return match.replace(/(?<!\\)\n/g, '\\n').replace(/(?<!\\)\r/g, '\\r');
-    });
-
-    const m = jsonStr.match(/\[[\s\S]*\]/);
-    if (m) {
-      jsonStr = m[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        cards = parsed.cards || [];
+        console.log("Tool call parsed successfully, cards:", cards.length,
+          "usage:", JSON.stringify(rawUsage),
+          "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
+      } catch (parseErr) {
+        console.error("Tool call parse error:", parseErr, "raw:", toolCall.function.arguments.substring(0, 500));
+        if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+      }
     } else {
-      // Try to repair truncated JSON array (no closing bracket)
-      const arrStart = rawContent.indexOf('[');
-      if (arrStart !== -1) {
-        const raw = rawContent.slice(arrStart);
-        const lastBrace = raw.lastIndexOf('}');
-        if (lastBrace !== -1) {
-          jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
-        } else {
-          jsonStr = '[]';
+      // Fallback: try parsing from content (in case tool calling wasn't respected)
+      const rawContent = aiData.choices?.[0]?.message?.content ?? "";
+      console.warn("No tool call in response, falling back to content parsing. Length:", rawContent.length);
+
+      let jsonStr = rawContent
+        .replace(/^\uFEFF/, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+        .trim();
+
+      jsonStr = jsonStr.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
+        return match.replace(/(?<!\\)\n/g, '\\n').replace(/(?<!\\)\r/g, '\\r');
+      });
+
+      const m = jsonStr.match(/\[[\s\S]*\]/);
+      if (m) {
+        jsonStr = m[0];
+      } else {
+        const arrStart = rawContent.indexOf('[');
+        if (arrStart !== -1) {
+          const raw = rawContent.slice(arrStart);
+          const lastBrace = raw.lastIndexOf('}');
+          if (lastBrace !== -1) {
+            jsonStr = raw.slice(0, lastBrace + 1).replace(/,\s*$/, '') + ']';
+          } else {
+            jsonStr = '[]';
+          }
         }
       }
-    }
+      jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
 
-    // Fix common JSON issues: trailing commas before ] or }
-    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-
-    let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
-    try { cards = JSON.parse(jsonStr); } catch {
-      // Second attempt: strip the last incomplete object and try again
       try {
-        const lastComplete = jsonStr.lastIndexOf('},');
-        if (lastComplete !== -1) {
-          cards = JSON.parse(jsonStr.slice(0, lastComplete + 1) + ']');
-        } else {
-          const lastObj = jsonStr.lastIndexOf('}');
-          if (lastObj !== -1) {
-            cards = JSON.parse(jsonStr.slice(0, lastObj + 1) + ']');
-          } else {
-            throw new Error("no recoverable JSON");
-          }
-        }
+        cards = JSON.parse(jsonStr);
       } catch {
-        // Third attempt: aggressive newline/tab fix + trailing comma cleanup
         try {
-          let fixed = jsonStr;
-          // Replace all literal newlines/tabs inside strings
-          fixed = fixed.replace(/"((?:[^"\\]|\\.)*)"/g, (match) => {
-            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-          });
-          fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-          cards = JSON.parse(fixed);
-        } catch {
-          // Fourth attempt: extract individual JSON objects with regex
-          try {
-            const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
-            if (objMatches.length > 0) {
-              cards = JSON.parse('[' + objMatches.map(m => m[0]).join(',') + ']');
-            } else {
-              throw new Error("no objects found");
-            }
-          } catch {
-            console.error("Parse failed, raw:", rawContent.substring(0, 500));
-            if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-            return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+          const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
+          if (objMatches.length > 0) {
+            cards = JSON.parse('[' + objMatches.map(m => m[0]).join(',') + ']');
+          } else {
+            throw new Error("no objects found");
           }
+        } catch {
+          console.error("Parse failed, raw:", rawContent.substring(0, 500));
+          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
         }
       }
     }

@@ -264,7 +264,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       const words = getWords(cards[i].front);
       let isDup = false;
       for (const s of seen) {
-        if (similarity(words, s.words) > 0.8) {
+        if (similarity(words, s.words) > 0.9) {
           // Keep the one with longer back (more complete answer)
           const existingLen = normalize(cards[s.idx].back).length;
           const currentLen = normalize(cards[i].back).length;
