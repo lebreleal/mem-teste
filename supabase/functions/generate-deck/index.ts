@@ -294,12 +294,20 @@ ${getOutputExamples(formats)}`;
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content ?? "";
     const finishReason = aiData.choices?.[0]?.finish_reason ?? "unknown";
-    console.log("AI response length:", rawContent.length, "finish_reason:", finishReason, "first 200 chars:", rawContent.substring(0, 200));
+    
+    // Log full usage details including thinking/reasoning tokens
+    const rawUsage = aiData.usage || {};
+    const reasoningTokens = rawUsage.completion_tokens_details?.reasoning_tokens || 0;
+    const cachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
+    console.log("AI response length:", rawContent.length, "finish_reason:", finishReason, 
+      "usage:", JSON.stringify(rawUsage),
+      "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
 
+    // Include ALL tokens (completion_tokens from Google API should already include thinking tokens)
     const usage = {
-      prompt_tokens: aiData.usage?.prompt_tokens || 0,
-      completion_tokens: aiData.usage?.completion_tokens || 0,
-      total_tokens: aiData.usage?.total_tokens || 0,
+      prompt_tokens: rawUsage.prompt_tokens || 0,
+      completion_tokens: rawUsage.completion_tokens || 0,
+      total_tokens: rawUsage.total_tokens || 0,
     };
 
     // Clean AI response: strip markdown fences, BOM, zero-width chars, control chars

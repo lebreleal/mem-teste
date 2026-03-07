@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -43,7 +43,14 @@ Deno.serve(async (req) => {
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: chatMessages, max_tokens: 4096, temperature: 0.7, stream: true }),
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: chatMessages,
+        max_tokens: 4096,
+        temperature: 0.7,
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
     });
 
     if (!response.ok) {
@@ -55,9 +62,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
-    if (userId) await logTokenUsage(supabase, userId, "ai_chat", selectedModel, undefined, cost);
-
-    return new Response(response.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+    // Stream to client while capturing actual token usage
+    return streamWithUsageCapture(response, supabase, userId, "ai_chat", selectedModel, cost);
   } catch (err) {
     console.error("Error:", err);
     return jsonResponse({ error: "Erro interno" }, 500);
