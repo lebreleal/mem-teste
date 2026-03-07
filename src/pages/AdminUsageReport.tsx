@@ -29,15 +29,12 @@ const FEATURE_NAMES: Record<string, string> = {
   tts: 'Text-to-Speech',
 };
 
-// Pricing per 1M tokens (USD)
-// IMPORTANT: completion_tokens from Gemini 2.5 includes thinking tokens.
-// Thinking tokens cost MORE: Flash thinking=$3.50/1M, Pro thinking=$10/1M.
-// Since we can't split thinking vs regular output, we use the THINKING rate
-// as the output price (worst case / most accurate for 2.5 models).
+// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
+// Output price is a blended rate (thinking + regular output tokens).
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },         // thinking=$10/1M, regular=$10/1M (same)
-  'gemini-2.5-flash': { input: 0.15, output: 3.50 },        // thinking=$3.50/1M (dominates completion)
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 },  // no thinking
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
@@ -46,9 +43,11 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'google-neural2': { input: 4.00, output: 0 },
 };
 
-const calcCostUSD = (model: string, promptTokens: number, completionTokens: number): number => {
+// total_tokens includes thinking tokens; real output = total - prompt
+const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
   const pricing = MODEL_PRICING[model] ?? { input: 0.15, output: 0.60 };
-  return (promptTokens / 1_000_000) * pricing.input + (completionTokens / 1_000_000) * pricing.output;
+  const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
+  return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
 interface UsageEntry {
@@ -149,7 +148,7 @@ const AdminUsageReport = () => {
   const totalCalls = filtered.length;
   const totalTokens = filtered.reduce((s, e) => s + Number(e.total_tokens), 0);
   const totalEnergy = filtered.reduce((s, e) => s + Number(e.energy_cost), 0);
-  const totalCostUSD = filtered.reduce((s, e) => s + calcCostUSD(e.model, Number(e.prompt_tokens), Number(e.completion_tokens)), 0);
+  const totalCostUSD = filtered.reduce((s, e) => s + calcCostUSD(e.model, Number(e.prompt_tokens), Number(e.completion_tokens), Number(e.total_tokens)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -258,7 +257,7 @@ const AdminUsageReport = () => {
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">{filtered.length} registro(s)</p>
             {filtered.map(entry => {
-              const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens));
+              const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
               const costBRL = usdToBrl ? costUSD * usdToBrl : null;
               return (
                 <Card key={entry.id}>
@@ -285,6 +284,7 @@ const AdminUsageReport = () => {
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                       <span>Prompt: {Number(entry.prompt_tokens).toLocaleString()}</span>
                       <span>Completion: {Number(entry.completion_tokens).toLocaleString()}</span>
+                      {(() => { const thinking = Number(entry.total_tokens) - Number(entry.prompt_tokens) - Number(entry.completion_tokens); return thinking > 0 ? <span className="text-orange-500">Thinking: {thinking.toLocaleString()}</span> : null; })()}
                       <span>Total: {Number(entry.total_tokens).toLocaleString()}</span>
                       <span className="text-primary font-medium">⚡ {Number(entry.energy_cost)}</span>
                     </div>
