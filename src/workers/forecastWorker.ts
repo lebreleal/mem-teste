@@ -351,10 +351,8 @@ function runSimulation(input: SimulatorInput): SimulatorResult {
     const learnMinRaw = (learningCount * learningSecsPerCard * scaleFactor) / 60;
     const relearnMinRaw = (relearningCount * relearningSecsPerCard * scaleFactor) / 60;
     const usedMin = revMinRaw + learnMinRaw + relearnMinRaw;
-    const availableForNewMin = Math.max(0, capacityMin - usedMin);
-    const maxNewByCapacity = Math.floor((availableForNewMin * 60) / (newSecsPerCard * scaleFactor));
     const dayNewCardsLimit = getNewCardsLimitForDay(day, startDate, newCardsPerDay, weeklyNewCards);
-    const effectiveNewLimit = Math.min(dayNewCardsLimit, Math.max(0, maxNewByCapacity));
+    const effectiveNewLimit = dayNewCardsLimit;
 
     // ── Step 3: Introduce new cards — EXISTING first, CREATED only after all existing are exhausted ──
     let newCardsToday = 0;
