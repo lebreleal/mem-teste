@@ -12,37 +12,8 @@ import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 
-/** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
-function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
-  if (!deckConfig) return {};
-  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '10m'];
-  const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
-  const maxIntervalDays = deckConfig.max_interval ?? 36500;
-
-  if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig.requested_retention ?? 0.85;
-    const easyGraduatingInterval = deckConfig.easy_graduating_interval ?? 15;
-    return {
-      fsrs: {
-        ...DEFAULT_FSRS_PARAMS,
-        requestedRetention,
-        maximumInterval: maxIntervalDays,
-        learningSteps: learningStepsMinutes,
-        relearningSteps: [learningStepsMinutes[0] ?? 10],
-        easyGraduatingInterval,
-      },
-    };
-  }
-
-  return {
-    sm2: {
-      learningSteps: learningStepsMinutes,
-      easyBonus: (deckConfig.easy_bonus ?? 130) / 100,
-      intervalModifier: (deckConfig.interval_modifier ?? 100) / 100,
-      maxInterval: maxIntervalDays,
-    },
-  };
-}
+/** Build SM2/FSRS params from deck config — re-exported from flashCardUtils for backward compat */
+// buildPreviewParams is now imported from '@/lib/flashCardUtils'
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
 function formatMarkdown(text: string): string {
