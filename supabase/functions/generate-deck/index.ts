@@ -140,9 +140,9 @@ function getFormatInstructions(formats: string[]): string {
     let distributionText: string;
     if (hasAll3) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
-- Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
-- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
-- Múltipla Escolha: ~20% dos cartões (MÍNIMO 15%) — OBRIGATÓRIO para diferenciação de conceitos similares. Você DEVE gerar cartões deste tipo. Se gerar 20 cartões, pelo menos 3-4 DEVEM ser múltipla escolha.`;
+- Cloze: ~55% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores, nomes.
+- Pergunta/Resposta (basic): ~35% dos cartões — para raciocínio, mecanismos, causa-efeito.
+- Múltipla Escolha: ~10% dos cartões — APENAS para diferenciação de conceitos similares. Se gerar 20 cartões, 2 devem ser MC. Se não houver conceitos confundíveis no material, substitua MC por cloze/basic.`;
     } else if (hasCloze && hasBasic) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
 - Cloze: ~60% dos cartões — formato dominante para retenção.
