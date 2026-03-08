@@ -422,32 +422,6 @@ const CardReviewStep = ({
           </div>
         )}
 
-        {/* AI Suggestions chips */}
-        {(aiSuggestions.length > 0 || aiLoading) && (
-          <div className="flex flex-wrap gap-1.5 items-center">
-            <span className="text-[10px] text-muted-foreground flex items-center gap-1 mr-1">
-              <Sparkles className="h-3 w-3 text-primary" /> Sugestões:
-            </span>
-            {aiLoading ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                <span className="animate-pulse">Gerando tags...</span>
-              </span>
-            ) : (
-              aiSuggestions.map(s => (
-                <button
-                  key={s.name}
-                  type="button"
-                  onClick={() => addTag(s.name)}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                  {s.name}
-                </button>
-              ))
-            )}
-          </div>
-        )}
 
         {/* Free-form tag input */}
         <div className="relative">
