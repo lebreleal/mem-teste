@@ -190,13 +190,7 @@ const CardReviewStep = ({
     s => !selectedTags.some(t => getTagName(t).toLowerCase() === s.name.toLowerCase())
   );
 
-  const hasMinTags = selectedTags.length >= 1;
-
   const handleSaveClick = () => {
-    if (!hasMinTags) {
-      setShowTagWarning(true);
-      return;
-    }
     onSave(selectedTags);
   };
 
