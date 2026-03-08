@@ -173,12 +173,21 @@ export function useStudyPlan(options?: { full?: boolean }) {
     return deckHierarchy.filter(d => !d.parent_deck_id).map(d => d.id);
   }, [plans, deckHierarchy]);
 
-  const avgQuery = useQuery({
-    queryKey: ['avg-seconds-per-card', userId],
+  const realMetricsQuery = useQuery({
+    queryKey: ['real-study-metrics', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_avg_seconds_per_card' as any, { p_user_id: userId });
+      const { data, error } = await supabase.rpc('get_user_real_study_metrics' as any, { p_user_id: userId });
       if (error) throw error;
-      return Number(data) || 30;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return DEFAULT_STUDY_METRICS;
+      return {
+        avgNewSeconds: Number(row.avg_new_seconds) || DEFAULT_STUDY_METRICS.avgNewSeconds,
+        avgLearningSeconds: Number(row.avg_learning_seconds) || DEFAULT_STUDY_METRICS.avgLearningSeconds,
+        avgReviewSeconds: Number(row.avg_review_seconds) || DEFAULT_STUDY_METRICS.avgReviewSeconds,
+        avgRelearningSeconds: Number(row.avg_relearning_seconds) || DEFAULT_STUDY_METRICS.avgRelearningSeconds,
+        actualDailyMinutes: Number(row.actual_daily_minutes) || DEFAULT_STUDY_METRICS.actualDailyMinutes,
+        totalReviews90d: Number(row.total_reviews_90d) || 0,
+      } as RealStudyMetrics;
     },
     enabled: !!userId,
     staleTime: 5 * 60_000,
