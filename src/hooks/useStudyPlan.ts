@@ -271,7 +271,6 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryKey: ['plan-health', userId, plans.length],
     queryFn: async () => {
       if (plans.length === 0) return null;
-      // Only check last 14 days for consistency - much lighter than fetching all logs
       const since = new Date();
       since.setDate(since.getDate() - 14);
       const { count, error } = await supabase
@@ -280,12 +279,10 @@ export function useStudyPlan(options?: { full?: boolean }) {
         .eq('user_id', userId!)
         .gte('reviewed_at', since.toISOString());
       if (error) throw error;
-      // Rough consistency: did they study at least 10 of last 14 days?
-      // Approximate by checking if they have enough reviews (avg ~5 cards/day minimum)
       const activeDays = Math.min(14, Math.ceil((count ?? 0) / 5));
       return Math.min(100, Math.round((activeDays / 14) * 100));
     },
-    enabled: !!userId && plans.length > 0,
+    enabled: full && !!userId && plans.length > 0,
     staleTime: 10 * 60_000,
   });
 
