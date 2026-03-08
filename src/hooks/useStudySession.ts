@@ -30,12 +30,27 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         elapsedMs,
       );
     },
+    onSuccess: (_result, { card }) => {
+      // Optimistic: update study-stats cache incrementally instead of refetching
+      queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          todayCards: (old.todayCards ?? 0) + 1,
+        };
+      });
+    },
     onSettled: () => {
+      // Defer heavy invalidations — batch with a slight delay so they don't block the UI
+      // during rapid card flipping
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      // study-stats and activity are deferred since we already optimistically updated todayCards
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      }, 5000); // 5s delay — no need to refetch during active study
     },
   });
 
