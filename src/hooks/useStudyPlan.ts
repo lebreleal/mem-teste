@@ -499,7 +499,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       const dayKey = DAY_KEYS[dayOfWeek];
       const reviewCount = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
       const dailyNew = Math.min(Math.floor((newMinutes * 60) / avg), Number(raw.total_new) || 0);
-      const totalMin = Math.round(estimateStudySeconds(dailyNew, 0, reviewCount, avg) / 60);
+      const totalMin = Math.round(calculateRealStudyTime(dailyNew, 0, reviewCount, rm) / 60);
       if (totalMin > newMinutes && totalMin > peakMin) {
         peakMin = totalMin;
         peakDay = DAY_LABELS[dayKey];
