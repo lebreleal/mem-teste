@@ -14,21 +14,41 @@ function formatMinutes(m: number) {
   return r > 0 ? `${h}h${r}min` : `${h}h`;
 }
 
-/** Aggregate stats across a deck and all its descendants */
-function getAggregateRaw(deck: DeckWithStats, allDecks: DeckWithStats[]): { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number } {
-  const subs = allDecks.filter(d => d.parent_deck_id === deck.id && !d.is_archived);
-  let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
-  let newReviewed = deck.new_reviewed_today ?? 0;
-  let newGraduated = deck.new_graduated_today ?? 0;
-  let reviewed = deck.reviewed_today ?? 0;
-  for (const sub of subs) {
-    const s = getAggregateRaw(sub, allDecks);
-    n += s.new_count; l += s.learning_count; r += s.review_count;
-    newReviewed += s.newReviewed;
-    newGraduated += s.newGraduated;
-    reviewed += s.reviewed;
+/** Pre-compute aggregate stats for ALL decks into a Map for O(1) lookup.
+ *  Avoids O(n²) recursive .filter() calls per deck. */
+function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }> {
+  // Build children map once
+  const childrenMap = new Map<string, DeckWithStats[]>();
+  for (const d of allDecks) {
+    if (d.parent_deck_id && !d.is_archived) {
+      const list = childrenMap.get(d.parent_deck_id) ?? [];
+      list.push(d);
+      childrenMap.set(d.parent_deck_id, list);
+    }
   }
-  return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+
+  const cache = new Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }>();
+
+  function compute(deck: DeckWithStats) {
+    if (cache.has(deck.id)) return cache.get(deck.id)!;
+    let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+    let newReviewed = deck.new_reviewed_today ?? 0;
+    let newGraduated = deck.new_graduated_today ?? 0;
+    let reviewed = deck.reviewed_today ?? 0;
+    for (const sub of childrenMap.get(deck.id) ?? []) {
+      const s = compute(sub);
+      n += s.new_count; l += s.learning_count; r += s.review_count;
+      newReviewed += s.newReviewed;
+      newGraduated += s.newGraduated;
+      reviewed += s.reviewed;
+    }
+    const result = { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+    cache.set(deck.id, result);
+    return result;
+  }
+
+  for (const d of allDecks) compute(d);
+  return cache;
 }
 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits.
