@@ -26,11 +26,26 @@ Instrução adicionada ao final do prompt para o modelo verificar que cada pará
 - Opções limitadas a exatamente 4, max 8 palavras cada
 - Economia estimada: ~25% tokens de output
 
-## Trade-offs
-- +3x mais chamadas API (mais créditos gastos por geração)
-- Mais cards gerados por batch
-- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
-- MC mais focado e pedagógico (diferenciação, não trivial)
+---
+
+# Refatoração de Monolitos (Fase 1)
+
+## Implementado
+
+### StudyPlan.tsx: 1.580 → ~500 linhas
+Extraídos 3 módulos:
+- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
+- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
+- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+
+### ManageDeck.tsx: 1.169 → ~900 linhas
+Extraído:
+- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+
+### Pendente (Fase 2)
+- DeckDetailContext.tsx (1.064 linhas) → dividir queries/mutations/dialogs
+- DeckSettings.tsx (1.002 linhas) → extrair seções em componentes
+- FlashCard.tsx (956 linhas) → separar edição inline do rendering
 
 ---
 
