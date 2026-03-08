@@ -65,12 +65,12 @@ const ActivityView = () => {
         dayMap[key].cards += 1;
 
         // Count by state
-        const state = log.state ?? null;
+        const state = log.state;
         if (state === 0) dayMap[key].newCards += 1;
         else if (state === 1) dayMap[key].learning += 1;
         else if (state === 2) dayMap[key].review += 1;
         else if (state === 3) dayMap[key].relearning += 1;
-        else dayMap[key].review += 1; // fallback
+        // state === null: counted in total cards but not in any specific category
 
         // Accumulate real time per card
         let ms = 0;
