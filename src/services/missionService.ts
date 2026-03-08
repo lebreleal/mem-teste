@@ -48,18 +48,18 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
     }
   });
 
-  // Phase 2: fetch profile + deckCount + weeklyCards + suggestion counts in parallel
+  // Phase 2: fetch data in parallel, skipping queries when cached values are provided
   const weekStartDate = weekStart + 'T00:00:00.000Z';
-  const [{ data: profile }, { count: deckCount }, { count: weeklyCards }, { count: totalSuggestions }, { count: acceptedSuggestions }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('daily_cards_studied, successful_cards_counter')
-      .eq('id', userId)
-      .single(),
-    supabase
-      .from('decks')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId),
+  const needsProfile = stats.cachedDailyCards == null || stats.cachedTotalCards == null;
+  const needsDeckCount = stats.cachedDeckCount == null;
+
+  const [profileResult, deckCountResult, { count: weeklyCards }, { count: totalSuggestions }, { count: acceptedSuggestions }] = await Promise.all([
+    needsProfile
+      ? supabase.from('profiles').select('daily_cards_studied, successful_cards_counter').eq('id', userId).single()
+      : Promise.resolve({ data: null }),
+    needsDeckCount
+      ? supabase.from('decks').select('id', { count: 'exact', head: true }).eq('user_id', userId)
+      : Promise.resolve({ count: stats.cachedDeckCount }),
     supabase
       .from('review_logs')
       .select('id', { count: 'exact', head: true })
@@ -75,6 +75,9 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
       .eq('suggester_user_id', userId)
       .eq('status', 'accepted'),
   ]);
+
+  const profile = needsProfile ? profileResult.data : null;
+  const deckCount = needsDeckCount ? (deckCountResult as any).count : stats.cachedDeckCount;
 
   const dailyCards = profile?.daily_cards_studied ?? 0;
   const totalCards = profile?.successful_cards_counter ?? 0;
