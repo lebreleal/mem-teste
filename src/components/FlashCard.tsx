@@ -221,15 +221,7 @@ const MultipleChoiceCard = ({
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
-  const intervals = (() => {
-    if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0, last_reviewed_at: lastReviewedAt };
-      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
-    }
-    const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
-  })();
+  const intervals = getPreviewIntervals(algorithmMode || 'fsrs', deckConfig, { stability, difficulty, state, scheduledDate, learningStep: learningStep ?? 0, lastReviewedAt });
 
   useEffect(() => {
     if (feedbackType) {
