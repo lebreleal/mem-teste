@@ -118,3 +118,42 @@ Se o stream já começou, os créditos são considerados consumidos legitimament
 | Community update queries | 3 sequenciais | 1 RPC |
 | staleTime useDecks | 0 (default) | 2min |
 | DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
+
+---
+
+# Otimização de Requisições do Dashboard
+
+## Implementado
+
+### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
+- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
+- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
+
+### Fase B: deck-hierarchy via cache (economia: -1 query)
+- Removida query separada `['deck-hierarchy']`
+- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
+
+### Fase C: Missões com cache (economia: -2 queries)
+- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
+- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
+
+### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
+- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
+
+### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
+- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
+
+### Fase F: Aggregate stats memoizado (economia: CPU)
+- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
+- Build O(n) uma vez, lookup O(1) por deck
+
+## Resumo de impacto
+| Otimização | Economia |
+|------------|----------|
+| useStudyPlan split (A) | -3 queries |
+| deck-hierarchy cache (B) | -1 query |
+| Missões com cache (C) | -2 queries |
+| useIsAdmin useQuery (D) | cache 10min |
+| Subscription polling (E) | -80% calls |
+| AggregateStats memo (F) | O(n²) → O(1) |
+| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
