@@ -311,7 +311,7 @@ export function useDeckDetailHandlers(deps: HandlerDeps) {
   }, [moveCardId, moveTargetDeck, deckId, queryClient, toast, setMoveCardId, setMoveTargetDeck]);
 
   const toggleCardSelection = useCallback((cardId: string) => {
-    setSelectedCards((prev: Set<string>) => { const next = new Set(prev); next.has(cardId) ? next.delete(cardId) : next.add(cardId); return next; });
+    setSelectedCards(prev => { const next = new Set(prev); next.has(cardId) ? next.delete(cardId) : next.add(cardId); return next; });
   }, [setSelectedCards]);
 
   const selectAllCards = useCallback(() => {
