@@ -454,10 +454,8 @@ ${getOutputExamples(formats)}`;
       };
     });
 
-    // Only log if not skipped (client will aggregate and log once)
-    if (!skipLog) {
-      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-    }
+    // Always log token usage for every batch call
+    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
 
     return jsonResponse({ cards, usage });
   } catch (err) {

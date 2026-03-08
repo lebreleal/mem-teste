@@ -130,6 +130,13 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
     }
 
     const aiData = await response.json();
+    const rawUsage = aiData.usage;
+    const usage = rawUsage ? {
+      prompt_tokens: rawUsage.prompt_tokens || 0,
+      completion_tokens: rawUsage.completion_tokens || 0,
+      total_tokens: rawUsage.total_tokens || 0,
+    } : undefined;
+    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.5-flash", usage, 0);
     const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
     let suggestedTags: string[] = [];

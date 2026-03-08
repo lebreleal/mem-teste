@@ -360,7 +360,6 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           customInstructions: customInstructions.trim() || undefined,
           aiModel: model,
           energyCost: batchCost,
-          skipLog: true,
         });
       });
 
