@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
-import { calculateStreak, getMascotState } from '@/lib/streakUtils';
+import { calculateStreakWithFreezes, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
   cards: any[];
@@ -356,22 +356,26 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const dailyEnergyEarned = p?.last_study_reset_date === today ? (p?.daily_energy_earned ?? 0) : 0;
   const todayCards = p?.last_study_reset_date === today ? (p?.daily_cards_studied ?? 0) : 0;
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Use 365 days window so streaks > 30 days are calculated correctly
+  const oneYearAgo = new Date();
+  oneYearAgo.setDate(oneYearAgo.getDate() - 365);
 
   const { data: logs } = await supabase
     .from('review_logs')
     .select('reviewed_at, elapsed_ms')
     .eq('user_id', userId)
-    .gte('reviewed_at', thirtyDaysAgo.toISOString())
-    .order('reviewed_at', { ascending: true });
+    .gte('reviewed_at', oneYearAgo.toISOString())
+    .order('reviewed_at', { ascending: true })
+    .limit(50000);
 
   if (!logs || logs.length === 0) {
-    return { lastStudyDate: null, streak: 0, energy, dailyEnergyEarned, mascotState: 'sleeping', todayCards, avgMinutesPerDay7d: 0, todayMinutes: 0 };
+    return { lastStudyDate: null, streak: 0, energy, dailyEnergyEarned, mascotState: 'sleeping', todayCards, avgMinutesPerDay7d: 0, todayMinutes: 0, freezesAvailable: 0 };
   }
 
   const lastStudyDate = new Date(logs[logs.length - 1].reviewed_at);
-  const streak = calculateStreak(logs.map(l => l.reviewed_at));
+  const streakResult = calculateStreakWithFreezes(logs.map(l => l.reviewed_at));
+  const streak = streakResult.streak;
+  const freezesAvailable = streakResult.freezesAvailable;
   const mascotState = getMascotState(lastStudyDate);
 
   // --- Hybrid minute calculation: aligned with ActivityView logic ---
@@ -402,14 +406,14 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
       totalMs += ms;
     }
 
-    return Math.round(totalMs / 60000);
+    // Ensure at least 1 minute if any study happened
+    return totalMs > 0 ? Math.max(1, Math.round(totalMs / 60000)) : 0;
   };
 
-  // Use local midnight for today filter
+  // Use local midnight for today filter — compare Date objects, NOT ISO strings
   const now = new Date();
   const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayStart = localMidnight.toISOString();
-  const todayLogs = (logs as any[]).filter(l => l.reviewed_at >= todayStart);
+  const todayLogs = logs.filter(l => new Date(l.reviewed_at) >= localMidnight);
   const todayMinutes = calcMinutesFromLogs(todayLogs);
 
   const accountCreated = p?.created_at ? new Date(p.created_at) : new Date();
@@ -417,9 +421,9 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const activeDays = Math.min(daysSinceCreation, 7);
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const last7dLogs = (logs as any[]).filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
+  const last7dLogs = logs.filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
   const total7dMinutes = calcMinutesFromLogs(last7dLogs);
-  const avgMinutesPerDay7d = Math.round(total7dMinutes / activeDays);
+  const avgMinutesPerDay7d = Math.max(1, Math.round(total7dMinutes / activeDays));
 
-  return { lastStudyDate, streak, energy, dailyEnergyEarned, mascotState, todayCards, avgMinutesPerDay7d, todayMinutes };
+  return { lastStudyDate, streak, energy, dailyEnergyEarned, mascotState, todayCards, avgMinutesPerDay7d, todayMinutes, freezesAvailable };
 }
