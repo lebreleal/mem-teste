@@ -41,10 +41,14 @@ const ActivityView = () => {
     queryFn: async () => {
       if (!user) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
       const { data: logs } = await supabase
         .from('review_logs')
         .select('reviewed_at, elapsed_ms, state')
         .eq('user_id', user.id)
+        .gte('reviewed_at', oneYearAgo.toISOString())
         .order('reviewed_at', { ascending: true })
         .limit(50000);
 
