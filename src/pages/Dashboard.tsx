@@ -51,6 +51,8 @@ const Dashboard = () => {
   const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
   
   // Compute plan root IDs for scoping global new-card counting
+  // allDecks sourced from useDashboardState (which calls useDecks internally)
+  const allDecks = state.decks;
   const planRootIds = useMemo(() => {
     if (plans.length === 0 || !allDecks) return undefined;
     const getRootIdLocal = (deckId: string): string | null => {
