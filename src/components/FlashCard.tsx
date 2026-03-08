@@ -3,6 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card, type SM2Params, DEFAULT_SM2_PARAMS } from '@/lib/sm2';
 import { parseStepToMinutes } from '@/lib/studyUtils';
+import { buildPreviewParams, getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
 import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
