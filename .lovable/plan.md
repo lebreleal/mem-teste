@@ -42,10 +42,17 @@ Extraídos 3 módulos:
 Extraído:
 - `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
 
-### Pendente (Fase 2)
-- DeckDetailContext.tsx (1.064 linhas) → dividir queries/mutations/dialogs
-- DeckSettings.tsx (1.002 linhas) → extrair seções em componentes
-- FlashCard.tsx (956 linhas) → separar edição inline do rendering
+### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
+Extraído:
+- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+
+### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
+Extraído:
+- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+
+### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
+Extraído:
+- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
 
 ---
 
