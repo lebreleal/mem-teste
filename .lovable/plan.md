@@ -1,28 +1,87 @@
 
 
-## Diagnóstico: ActivityView (Golfinho) com dados zerados
+# Melhorar cobertura de conteúdo na geração de decks por IA
 
-### Investigação
+## Implementado
 
-Verifiquei o banco de dados: hoje tem **106 reviews com state e elapsed_ms corretos**. A query da ActivityView (`.select('reviewed_at, elapsed_ms, state')`) e a lógica de contagem por state estão corretas no código.
+### 1. PAGES_PER_BATCH reduzido de 10 → 3
+Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
 
-### Causas identificadas
+### 2. densityFactor reduzido
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
+Mais cards solicitados por batch, forçando cobertura mais completa.
 
-**Bug 1 — Query sem filtro de data (preventivo)**
-A query busca até 50.000 registros sem filtro de data. Embora hoje o volume seja baixo (4.454 total), com o crescimento do app isso vai causar perda de dados recentes. É a mesma correção proposta anteriormente.
+### 3. Structured Output (tool calling) no generate-deck
+Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
 
-**Bug 2 — Cache stale ao navegar**
-O `staleTime: 60_000` (60 segundos) pode fazer com que, ao abrir a tela de atividade logo após estudar, os dados ainda sejam da consulta anterior (quando não havia reviews hoje). Se o usuário abriu a ActivityView nos últimos 60 segundos e depois estudou, ao voltar veria dados antigos.
+### 4. Threshold de deduplicação: 0.8 → 0.9
+Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
 
-**Bug 3 — 672 logs antigos sem `state` (15% do total)**
-Dias antigos que não tinham a coluna `state` preenchida caem no fallback como "review" — zerando novos, aprendendo e reaprendendo para esses dias. Isso não afeta hoje mas afeta o histórico.
+### 5. Checklist de cobertura no prompt
+Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
-### Correções
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
 
-1. **`src/pages/ActivityView.tsx`** — Adicionar filtro `.gte('reviewed_at', oneYearAgo.toISOString())` na query (3 linhas)
-2. **`src/pages/ActivityView.tsx`** — Reduzir `staleTime` para `5_000` (5 segundos) para garantir dados frescos ao navegar
-3. **`src/pages/ActivityView.tsx`** — Tratar logs com `state === null` separadamente: contar como "Novos" se for a primeira review daquele card, ou manter fallback como "review" para não perder contagem total. Na prática, a melhor solução simples: quando `state` é null, **não contar em nenhuma categoria específica** mas somar no total.
+## Trade-offs
+- +3x mais chamadas API (mais créditos gastos por geração)
+- Mais cards gerados por batch
+- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
 
-### Arquivos alterados
-- `src/pages/ActivityView.tsx` (3 mudanças pontuais)
+---
 
+# Rebalanceamento da Economia de Créditos IA
+
+## Implementado
+
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
+
+Total mensal free: ~1.500 → ~270 créditos.
+
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
+
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
+
+---
+
+# Transação com Rollback de Créditos em Edge Functions
+
+## Implementado
+
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.
