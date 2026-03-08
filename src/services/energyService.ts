@@ -6,8 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import type { EnergyData } from '@/types/energy';
 
 const MAX_ENERGY = 9999;
-const MILESTONE_50_BONUS = 5;
-const MILESTONE_100_BONUS = 10;
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
