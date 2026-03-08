@@ -144,21 +144,14 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   const plans = plansQuery.data ?? [];
 
-  // ─── Deck hierarchy for child→root resolution ───
-  const deckHierarchyQuery = useQuery({
-    queryKey: ['deck-hierarchy', userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('id, parent_deck_id')
-        .eq('user_id', userId!)
-        .eq('is_archived', false);
-      return data ?? [];
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60_000,
-  });
-  const deckHierarchy = deckHierarchyQuery.data ?? [];
+  // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
+  const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+  const deckHierarchy = useMemo(() => {
+    if (!cachedDecks) return [];
+    return cachedDecks
+      .filter((d: any) => !d.is_archived)
+      .map((d: any) => ({ id: d.id as string, parent_deck_id: d.parent_deck_id as string | null }));
+  }, [cachedDecks]);
 
   const findRoot = useCallback((id: string): string => {
     const deck = deckHierarchy.find(d => d.id === id);
