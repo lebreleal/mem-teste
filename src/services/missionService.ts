@@ -9,6 +9,10 @@ import type { MissionDefinition, UserMission, MissionWithProgress } from '@/type
 interface MissionStats {
   todayMinutes: number;
   streak: number;
+  /** Pre-cached values to avoid redundant queries */
+  cachedDailyCards?: number;
+  cachedTotalCards?: number;
+  cachedDeckCount?: number;
 }
 
 /** Fetch all missions with progress for the current user. */
