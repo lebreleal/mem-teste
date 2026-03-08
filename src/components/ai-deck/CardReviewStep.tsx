@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import LazyRichEditor from '@/components/LazyRichEditor';
-import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
+import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { useTagSearch } from '@/hooks/useTags';
+import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -116,6 +116,8 @@ const CardReviewStep = ({
   const [selectedTags, setSelectedTags] = useState<(Tag | string)[]>([]);
   const [tagQuery, setTagQuery] = useState('');
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
   const [showTagWarning, setShowTagWarning] = useState(false);
 
   // MC editing state for inline editing
@@ -126,6 +128,30 @@ const CardReviewStep = ({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data: searchResults = [] } = useTagSearch(tagQuery);
+  const aiSuggest = useTagSuggestions();
+
+  // Auto-trigger AI suggestions on mount — skip if suggestions already cached
+  useEffect(() => {
+    if (aiSuggestions.length > 0) return;
+    const fetchSuggestions = async () => {
+      if (!deckName && !textSample) return;
+      setAiLoading(true);
+      try {
+        const result = await aiSuggest.mutateAsync({
+          textContent: textSample,
+          deckName: deckName,
+          existingTagNames: [],
+        });
+        setAiSuggestions(result);
+      } catch {
+        // silently fail
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    fetchSuggestions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Parse MC data when starting edit on MC card
   useEffect(() => {
@@ -150,6 +176,10 @@ const CardReviewStep = ({
     const name = getTagName(tag).toLowerCase();
     if (selectedTags.some(t => getTagName(t).toLowerCase() === name)) return;
     setSelectedTags(prev => [...prev, tag]);
+    setTagQuery('');
+    setTagDropdownOpen(false);
+    setShowTagWarning(false);
+    setAiSuggestions(prev => prev.filter(s => s.name.toLowerCase() !== name));
   };
 
   const removeTag = (idx: number) => {
@@ -422,8 +452,33 @@ const CardReviewStep = ({
           </div>
         )}
 
+        {/* AI Suggestions chips */}
+        {(aiSuggestions.length > 0 || aiLoading) && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1 mr-1">
+              <Sparkles className="h-3 w-3 text-primary" /> Sugestões:
+            </span>
+            {aiLoading ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span className="animate-pulse">Gerando tags...</span>
+              </span>
+            ) : (
+              aiSuggestions.map(s => (
+                <button
+                  key={s.name}
+                  type="button"
+                  onClick={() => addTag(s.name)}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  {s.name}
+                </button>
+              ))
+            )}
+          </div>
+        )}
 
-        {/* Free-form tag input */}
         <div className="relative">
           <Input
             value={tagQuery}

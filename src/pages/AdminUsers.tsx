@@ -24,6 +24,8 @@ const FEATURE_NAMES: Record<string, string> = {
   enhance_import: 'Aprimorar Importação',
   ai_chat: 'Chat IA',
   generate_onboarding: 'Onboarding IA',
+  auto_tag: 'Auto-Tag',
+  suggest_tags: 'Sugerir Tags',
   detect_import_format: 'Detectar Formato',
   organize_import: 'Organizar Importação',
   tts: 'Text-to-Speech',
