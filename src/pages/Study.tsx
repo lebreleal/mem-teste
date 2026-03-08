@@ -234,9 +234,13 @@ const Study = () => {
       }
     }
 
-    setCardKey(prev => prev + 1);
-    cardShownAt.current = Date.now();
-    submittingRef.current = null;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCardKey(prev => prev + 1);
+      cardShownAt.current = Date.now();
+      submittingRef.current = null;
+      setIsTransitioning(false);
+    }, 200);
 
     submitReview.mutate(
       { card: currentCard, rating, elapsedMs: elapsed },
@@ -349,7 +353,7 @@ const Study = () => {
       </div>
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
-        <div key={cardKey} className="w-full animate-fade-in">
+        <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
           <FlashCard
             cardId={currentCard.id}
             frontContent={currentCard.front_content}
