@@ -112,7 +112,7 @@ const ActivityView = () => {
       return { dayMap, streak, bestStreak, totalActiveDays, freezesAvailable, freezesUsed, frozenDays };
     },
     enabled: !!user,
-    staleTime: 60_000,
+    staleTime: 5_000,
   });
 
   const { dayMap = {}, streak = 0, bestStreak = 0, totalActiveDays = 0, freezesAvailable = 0, freezesUsed = 0, frozenDays = new Set<string>() } = studyData ?? {};
