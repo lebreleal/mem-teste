@@ -1,112 +1,120 @@
+# Melhorar cobertura de conteúdo na geração de decks por IA
 
+## Implementado
 
-## Deep Dashboard Analysis: Bugs, Performance & Architecture
+### 1. PAGES_PER_BATCH reduzido de 10 → 3
+Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
 
-### BUG CRITICO ENCONTRADO: `get_study_stats_summary` RPC quebrada
+### 2. densityFactor reduzido
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
+Mais cards solicitados por batch, forçando cobertura mais completa.
 
-**Erro real nos network logs:**
-```
-Status: 404
-"operator does not exist: date = text"
-```
+### 3. Structured Output (tool calling) no generate-deck
+Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
 
-**Causa raiz:** Na linha 43 da migration, o código compara `v_profile.last_study_reset_date` (tipo `text` no banco) com `v_today::text`, mas o PostgreSQL interpreta `v_today` como `date` e `last_study_reset_date` como `text`, causando um conflito de tipo na comparação. Isso faz com que **TODA a RPC falhe**, retornando 404.
+### 4. Threshold de deduplicação: 0.8 → 0.9
+Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
 
-**Consequência direta:**
-- O `useStudyStats` falha silenciosamente → streak mostra **0** no Dashboard (o "foginho" que o usuário reportou)
-- A `ActivityView` usa um RPC diferente (`get_activity_daily_breakdown`) que **funciona** → mostra valores corretos
-- Isso explica exatamente o bug: "foginho conta como 0 mas o relatório de atividade mostra outro valor"
+### 5. Checklist de cobertura no prompt
+Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
-**Correção:** Substituir `v_profile.last_study_reset_date = v_today::text` por cast explícito: `v_profile.last_study_reset_date = v_today::text` não deveria falhar, mas o problema real é que o `last_study_reset_date` pode ser armazenado como tipo `date` no schema e comparado com `text`. A fix é usar cast: `v_profile.last_study_reset_date::text = v_today::text`.
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
 
----
-
-### Análise de Performance do Dashboard
-
-#### Requisições na carga do Dashboard (atualmente ~8-12)
-
-```text
-1. GET profiles (useProfile)
-2. GET decks + RPC get_all_user_deck_stats (useDecks - paralelo)
-3. GET marketplace_listings + profiles (author lookup no fetchDecksWithStats)
-4. RPC get_study_stats_summary (useStudyStats - FALHANDO)
-5. GET study_plans (useStudyPlan)
-6. RPC get_avg_seconds_per_card (useStudyPlan)
-7. RPC get_plan_metrics (useStudyPlan)
-8. RPC get_forecast_params (useStudyPlan)
-9. GET folders (useFolders)
-10. GET turma_decks (pendingUpdatesQuery em useDashboardState)
-11. GET decks + cards (pendingUpdatesQuery - 2nd round)
-12. Realtime subscription (profile channel)
-```
-
-#### Problemas identificados:
-
-**A. useDecks chama `fetchDecksWithStats` sem staleTime**
-- Linha 13-17 de `useDecks.ts`: sem `staleTime` → refetch em cada re-render/focus
-- `fetchDecksWithStats` faz 3 queries sequenciais (decks paginado + RPC stats + marketplace lookup)
-- Cada mutation (create, delete, move, archive) invalida `['decks']` causando refetch completo
-
-**B. `useStudyPlan` faz 3 RPCs separadas**
-- `get_avg_seconds_per_card`, `get_plan_metrics`, `get_forecast_params` — poderiam ser 1 RPC consolidada
-- `get_forecast_params` é a mais pesada (~50 subqueries internas)
-
-**C. `useDashboardState` tem query redundante de community updates**
-- `pendingUpdatesQuery` faz 3 queries sequenciais (turma_decks → decks → cards)
-- Deveria ser uma única RPC
-
-**D. Dashboard.tsx chama `useDecks()` DUAS vezes**
-- Linha 14: `const { decks: allDecks } = useDecks()` no Dashboard
-- Linha 72: `useDashboardState()` internamente chama `useDecks()` novamente
-- Embora React Query dedup, os hooks rodam lógica desnecessária
-
-**E. `DeckCarousel` recalcula `getRootId` em 3 useMemos separados**
-- Linhas 167-178, 206-215: mesma lógica de `getRootId` duplicada
-
-**F. `getAggregateRaw` é O(n²) recursivo**
-- Chamado para CADA deck no carousel e na DeckList
-- Para 100 decks com sub-decks, executa milhares de `.filter()` por render
+## Trade-offs
+- +3x mais chamadas API (mais créditos gastos por geração)
+- Mais cards gerados por batch
+- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
 
 ---
 
-### Plano de Implementação
+# Rebalanceamento da Economia de Créditos IA
 
-#### 1. Fix crítico: Corrigir RPC `get_study_stats_summary`
-- Nova migration com cast explícito: `v_profile.last_study_reset_date::text = v_today::text`
-- Isso resolve imediatamente o streak=0 no Dashboard
+## Implementado
 
-#### 2. Consolidar RPCs do Study Plan
-- Criar `get_study_plan_data(p_user_id)` que retorna avg_seconds, metrics e forecast em um único JSON
-- Reduz 3 RPCs → 1
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
 
-#### 3. Consolidar query de community updates
-- Criar `get_community_deck_updates(p_user_id, p_source_turma_deck_ids uuid[])` que retorna os IDs com updates pendentes
-- Reduz 3 queries sequenciais → 1 RPC
+Total mensal free: ~1.500 → ~270 créditos.
 
-#### 4. Otimizar useDecks
-- Adicionar `staleTime: 2 * 60_000` (2 min)
-- Usar optimistic updates para create/move/archive em vez de invalidação completa
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
 
-#### 5. Pre-computar aggregate stats
-- Calcular `aggregateStats` uma vez no `useDashboardState` em um Map
-- Eliminar recálculos O(n²) no DeckCarousel e DeckList
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
 
-#### 6. Eliminar duplicação de useDecks no Dashboard
-- Passar `allDecks` do `useDashboardState` em vez de chamar `useDecks()` separadamente no Dashboard.tsx
-
-#### 7. Batch community deck detection
-- Mover lógica de `pendingUpdatesQuery` para uma RPC server-side
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
 
 ---
 
-### Resumo de impacto esperado
+# Transação com Rollback de Créditos em Edge Functions
+
+## Implementado
+
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.
+
+---
+
+# Dashboard Performance & Bug Fixes
+
+## Implementado
+
+### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
+- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
+- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
+- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
+
+### 2. Community deck updates consolidada em RPC server-side
+- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
+- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
+- Redução: 3 requests → 1
+
+### 3. useDecks com staleTime de 2 minutos
+- Antes: sem staleTime → refetch em cada re-render/focus
+- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
+- Redução de refetches desnecessários no Dashboard
+
+### 4. DeckCarousel: aggregate stats O(1) via Map
+- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
+- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
+- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
+
+## Resumo de impacto
 
 | Métrica | Antes | Depois |
 |---------|-------|--------|
-| Requisições no load | ~12 | ~6 |
-| Streak display | BUG (sempre 0) | Correto |
-| Re-renders DeckCarousel | O(n²) por deck | O(1) lookup |
-| staleTime useDecks | 0 (default) | 2min |
-| RPCs Study Plan | 3 | 1 |
+| Streak display | BUG (sempre 0) | ✅ Correto |
 | Community update queries | 3 sequenciais | 1 RPC |
-
+| staleTime useDecks | 0 (default) | 2min |
+| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |

@@ -49,9 +49,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks();
-  
-  // Compute plan root IDs for scoping global new-card counting
+  const { decks: allDecks } = useDecks(); // shares query cache with useDashboardState via staleTime
   const planRootIds = useMemo(() => {
     if (plans.length === 0 || !allDecks) return undefined;
     const getRootIdLocal = (deckId: string): string | null => {
