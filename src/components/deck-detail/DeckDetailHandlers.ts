@@ -61,7 +61,7 @@ interface HandlerDeps {
   setDeleteId: (v: string | null) => void;
   setMoveCardId: (v: string | null) => void;
   setMoveTargetDeck: (v: string) => void;
-  setSelectedCards: (v: Set<string>) => void;
+  setSelectedCards: (v: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
   setSelectionMode: (v: boolean) => void;
   setBulkMoveOpen: (v: boolean) => void;
   setEditorOpen: (v: boolean) => void;
