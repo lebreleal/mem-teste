@@ -15,6 +15,8 @@ const PREMIUM_PRODUCT_IDS = [
 
 const LIFETIME_PRODUCT_ID = "prod_U0RzkaivSVAWj8";
 const LIFETIME_BONUS_CREDITS = 50000;
+const MONTHLY_PREMIUM_GRANT = 500;
+const MONTHLY_GRANT_DESCRIPTION = "Bônus Premium Mensal: 500 créditos IA";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
