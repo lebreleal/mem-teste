@@ -53,6 +53,13 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
   const [selectedCredit, setSelectedCredit] = useState<string | null>(STRIPE_CREDIT_PACKS[3].price_id);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
 
+  // Only show "14 dias grátis" notice for accounts younger than 14 days
+  const isNewAccount = useMemo(() => {
+    if (!user?.created_at) return false;
+    const accountAgeDays = (Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    return accountAgeDays < 14;
+  }, [user?.created_at]);
+
   useEffect(() => {
     if (open) {
       setTab(defaultTab);
