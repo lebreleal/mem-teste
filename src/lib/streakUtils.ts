@@ -15,53 +15,84 @@ export function calculateStreakWithFreezes(reviewDates: string[]): {
   const uniqueDays = new Set<string>();
   reviewDates.forEach(dateStr => {
     const d = new Date(dateStr);
-    uniqueDays.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    uniqueDays.add(formatDayKey(d));
   });
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayKey = formatDayKey(today);
 
-  // Walk backwards from today (or yesterday if today not studied yet)
-  const checkDate = new Date(today);
+  // Start from today if studied, otherwise yesterday
+  const startDate = new Date(today);
   if (!uniqueDays.has(todayKey)) {
+    startDate.setDate(startDate.getDate() - 1);
+  }
+
+  // Phase 1: Walk backwards collecting candidate streak entries.
+  // Stop at 2 consecutive gaps (a single freeze can only bridge 1 gap day).
+  const entries: { key: string; studied: boolean }[] = [];
+  const checkDate = new Date(startDate);
+  let consecutiveGaps = 0;
+
+  for (let i = 0; i < 730; i++) {
+    const key = formatDayKey(checkDate);
+    const studied = uniqueDays.has(key);
+
+    if (studied) {
+      consecutiveGaps = 0;
+      entries.push({ key, studied: true });
+    } else {
+      consecutiveGaps++;
+      if (consecutiveGaps >= 2) break; // Can't bridge 2+ consecutive gaps
+      entries.push({ key, studied: false });
+    }
+
     checkDate.setDate(checkDate.getDate() - 1);
   }
 
-  // First pass: count raw consecutive days to determine freeze budget
-  // Every 7 consecutive studied days earns 1 freeze
-  let streak = 0;
-  let freezesUsed = 0;
-  let freezesAvailable = 0;
-  const frozenDays = new Set<string>();
-  let consecutiveStudied = 0;
-
-  while (true) {
-    const key = formatDayKey(checkDate);
-    if (uniqueDays.has(key)) {
-      streak++;
-      consecutiveStudied++;
-      // Every 7 studied days earns a freeze
-      if (consecutiveStudied > 0 && consecutiveStudied % 7 === 0) {
-        freezesAvailable++;
-      }
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      // Can we use a freeze?
-      if (freezesAvailable > freezesUsed) {
-        freezesUsed++;
-        frozenDays.add(key);
-        streak++; // frozen day counts toward streak
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
+  // Remove trailing gap if last entry is a gap (no reason to freeze before the streak began)
+  while (entries.length > 0 && !entries[entries.length - 1].studied) {
+    entries.pop();
   }
 
+  // Phase 2: Count studied days & gaps, check freeze budget
+  let totalStudied = entries.filter(e => e.studied).length;
+  let gapEntries = entries.filter(e => !e.studied);
+  let totalFreezes = Math.floor(totalStudied / 7);
+
+  if (totalFreezes >= gapEntries.length) {
+    // All gaps covered
+    const frozenDays = new Set(gapEntries.map(e => e.key));
+    return {
+      streak: entries.length,
+      freezesAvailable: totalFreezes - gapEntries.length,
+      freezesUsed: gapEntries.length,
+      frozenDays,
+    };
+  }
+
+  // Phase 3: Not enough freezes — trim from the oldest end until balanced
+  while (
+    entries.length > 0 &&
+    Math.floor(entries.filter(e => e.studied).length / 7) <
+      entries.filter(e => !e.studied).length
+  ) {
+    entries.pop();
+  }
+  // Remove trailing gaps after trim
+  while (entries.length > 0 && !entries[entries.length - 1].studied) {
+    entries.pop();
+  }
+
+  totalStudied = entries.filter(e => e.studied).length;
+  gapEntries = entries.filter(e => !e.studied);
+  totalFreezes = Math.floor(totalStudied / 7);
+  const freezesUsed = Math.min(totalFreezes, gapEntries.length);
+  const frozenDays = new Set(gapEntries.slice(0, freezesUsed).map(e => e.key));
+
   return {
-    streak,
-    freezesAvailable: freezesAvailable - freezesUsed,
+    streak: totalStudied + freezesUsed,
+    freezesAvailable: totalFreezes - freezesUsed,
     freezesUsed,
     frozenDays,
   };
