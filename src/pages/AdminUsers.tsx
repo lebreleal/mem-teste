@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useAuth } from '@/hooks/useAuth';
-import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay } from '@/hooks/useAdminUsers';
+import { useAdminUsers, type AdminProfile, type UserDeck, type TokenUsageSummary, type TokenUsageEntry, type StudyDay, type PremiumGiftPlan } from '@/hooks/useAdminUsers';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,30 +11,22 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn, Trash2, RefreshCw } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, ChevronRight, DollarSign, LogIn, Trash2, RefreshCw, Crown, Gift } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
 // Feature key → friendly name
 const FEATURE_NAMES: Record<string, string> = {
-  generate_deck: 'Gerar Deck',
-  ai_tutor: 'Tutor IA',
-  grade_exam: 'Corrigir Prova',
-  enhance_card: 'Aprimorar Card',
-  enhance_import: 'Aprimorar Importação',
-  ai_chat: 'Chat IA',
-  generate_onboarding: 'Onboarding IA',
-  auto_tag: 'Auto-Tag',
-  suggest_tags: 'Sugerir Tags',
-  detect_import_format: 'Detectar Formato',
-  organize_import: 'Organizar Importação',
-  tts: 'Text-to-Speech',
+  generate_deck: 'Gerar Deck', ai_tutor: 'Tutor IA', grade_exam: 'Corrigir Prova',
+  enhance_card: 'Aprimorar Card', enhance_import: 'Aprimorar Importação', ai_chat: 'Chat IA',
+  generate_onboarding: 'Onboarding IA', auto_tag: 'Auto-Tag', suggest_tags: 'Sugerir Tags',
+  detect_import_format: 'Detectar Formato', organize_import: 'Organizar Importação', tts: 'Text-to-Speech',
 };
 
-// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.5-pro': { input: 1.25, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
   'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
@@ -44,18 +36,23 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'google-neural2': { input: 4.00, output: 0 },
 };
 
-// total_tokens includes thinking tokens; real output = total - prompt
 const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
   const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-4o-mini'];
   const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
   return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
+const PLAN_LABELS: Record<PremiumGiftPlan, string> = {
+  monthly: '1 Mês',
+  annual: '1 Ano',
+  lifetime: 'Vitalício',
+};
+
 const AdminUsers = () => {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useIsAdmin();
   const { session } = useAuth();
-  const { users, loading, search, setSearch, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry } = useAdminUsers();
+  const { users, loading, search, setSearch, updateProfile, grantPremium, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry } = useAdminUsers();
   const { toast } = useToast();
   
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
@@ -69,23 +66,21 @@ const AdminUsers = () => {
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null);
   const [impersonating, setImpersonating] = useState(false);
   const [refreshingAI, setRefreshingAI] = useState(false);
+  const [giftPlan, setGiftPlan] = useState<PremiumGiftPlan>('monthly');
+  const [grantingPremium, setGrantingPremium] = useState(false);
 
   const handleImpersonate = async (user: AdminProfile) => {
     if (!session) return;
     setImpersonating(true);
     try {
-      // Save current admin session
       sessionStorage.setItem('admin_session', JSON.stringify({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       }));
       sessionStorage.setItem('impersonated_name', user.name || user.email);
-
-      // Call edge function
       const { data, error } = await supabase.functions.invoke('admin-impersonate', {
         body: { target_user_id: user.id },
       });
-
       if (error || !data?.token) {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
@@ -93,13 +88,7 @@ const AdminUsers = () => {
         setImpersonating(false);
         return;
       }
-
-      // Authenticate as target user
-      const { error: otpError } = await supabase.auth.verifyOtp({
-        token_hash: data.token,
-        type: 'magiclink',
-      });
-
+      const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: data.token, type: 'magiclink' });
       if (otpError) {
         sessionStorage.removeItem('admin_session');
         sessionStorage.removeItem('impersonated_name');
@@ -107,9 +96,8 @@ const AdminUsers = () => {
         setImpersonating(false);
         return;
       }
-
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       sessionStorage.removeItem('admin_session');
       sessionStorage.removeItem('impersonated_name');
       toast({ title: 'Erro', description: 'Erro inesperado.', variant: 'destructive' });
@@ -117,14 +105,11 @@ const AdminUsers = () => {
     }
   };
 
-  // Fetch USD→BRL exchange rate
   useEffect(() => {
     fetch('https://open.er-api.com/v6/latest/USD')
       .then(r => r.json())
-      .then(data => {
-        if (data?.rates?.BRL) setUsdToBrl(data.rates.BRL);
-      })
-      .catch(() => setUsdToBrl(5.50)); // fallback
+      .then(data => { if (data?.rates?.BRL) setUsdToBrl(data.rates.BRL); })
+      .catch(() => setUsdToBrl(5.50));
   }, []);
 
   const openUser = async (user: AdminProfile) => {
@@ -147,9 +132,25 @@ const AdminUsers = () => {
     setSaving(false);
   };
 
-  // Calculate total costs for all token usage entries
+  const handleGrantPremium = async () => {
+    if (!selectedUser) return;
+    setGrantingPremium(true);
+    const ok = await grantPremium(selectedUser.id, giftPlan);
+    if (ok) {
+      // Refresh user data
+      const { data } = await supabase.from('profiles').select('premium_expires_at').eq('id', selectedUser.id).single();
+      setSelectedUser(prev => prev ? { ...prev, premium_expires_at: (data as any)?.premium_expires_at ?? null } : null);
+    }
+    setGrantingPremium(false);
+  };
+
   const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens), Number(t.total_tokens_sum)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
+
+  // Premium status helpers
+  const userPremiumExpires = selectedUser?.premium_expires_at;
+  const isUserPremium = !!userPremiumExpires && new Date(userPremiumExpires) > new Date();
+  const isLifetime = !!userPremiumExpires && new Date(userPremiumExpires).getFullYear() > 2090;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!isAdmin) return <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4"><p className="text-lg text-muted-foreground">Acesso restrito.</p><Button variant="outline" onClick={() => navigate('/dashboard')}>Voltar</Button></div>;
@@ -171,7 +172,6 @@ const AdminUsers = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Buscar por nome ou email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
             </div>
-
             {loading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
               <div className="space-y-2">
                 {users.map(u => (
@@ -242,15 +242,67 @@ const AdminUsers = () => {
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                     Salvar Alterações
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleImpersonate(selectedUser)}
-                    disabled={impersonating}
-                    className="w-full gap-2"
-                  >
+                  <Button variant="outline" onClick={() => handleImpersonate(selectedUser)} disabled={impersonating} className="w-full gap-2">
                     {impersonating ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
                     {impersonating ? 'Entrando...' : 'Entrar como este usuário'}
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Grant Premium Card */}
+              <Card className="border-warning/30">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-warning" />
+                    Presentear Premium
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isUserPremium ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2">
+                      <Crown className="w-4 h-4 text-warning" fill="hsl(var(--warning))" />
+                      <div className="text-sm">
+                        <p className="font-medium text-foreground">
+                          {isLifetime ? 'Premium Vitalício ativo' : 'Premium ativo'}
+                        </p>
+                        {!isLifetime && (
+                          <p className="text-xs text-muted-foreground">
+                            Expira em {format(new Date(userPremiumExpires!), 'dd/MM/yyyy HH:mm')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Este usuário não tem premium ativo.</p>
+                  )}
+
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 space-y-1.5">
+                      <Label className="text-xs">Plano</Label>
+                      <Select value={giftPlan} onValueChange={v => setGiftPlan(v as PremiumGiftPlan)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="monthly">🎁 1 Mês</SelectItem>
+                          <SelectItem value="annual">🎁 1 Ano</SelectItem>
+                          <SelectItem value="lifetime">🎁 Vitalício</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      onClick={handleGrantPremium}
+                      disabled={grantingPremium}
+                      className="gap-2"
+                      variant="default"
+                    >
+                      {grantingPremium ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
+                      Presentear
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    O usuário verá a mensagem "Presenteado pelo administrador" e terá acesso premium imediato.
+                  </p>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -280,23 +332,17 @@ const AdminUsers = () => {
                 <>
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Consumo de tokens (últimos 30 dias)</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={refreshingAI}
-                      onClick={async () => {
-                        if (!selectedUser) return;
-                        setRefreshingAI(true);
-                        const [t, td] = await Promise.all([getUserTokenUsage(selectedUser.id), getUserTokenUsageDetailed(selectedUser.id)]);
-                        setTokenUsage(t); setTokenUsageDetailed(td);
-                        setRefreshingAI(false);
-                      }}
-                    >
+                    <Button variant="outline" size="sm" disabled={refreshingAI} onClick={async () => {
+                      if (!selectedUser) return;
+                      setRefreshingAI(true);
+                      const [t, td] = await Promise.all([getUserTokenUsage(selectedUser.id), getUserTokenUsageDetailed(selectedUser.id)]);
+                      setTokenUsage(t); setTokenUsageDetailed(td);
+                      setRefreshingAI(false);
+                    }}>
                       <RefreshCw className={`w-4 h-4 mr-1 ${refreshingAI ? 'animate-spin' : ''}`} />
                       Atualizar
                     </Button>
                   </div>
-                  {/* Cost summary card */}
                   {tokenUsage.length > 0 && (
                     <Card className="border-primary/30 bg-primary/5">
                       <CardContent className="py-4 px-4">
@@ -307,41 +353,22 @@ const AdminUsers = () => {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <p className="text-xs text-muted-foreground">Dólar (USD)</p>
-                            <p className="font-mono text-lg font-bold text-foreground">
-                              ${totalCostUSD.toFixed(4)}
-                            </p>
+                            <p className="font-mono text-lg font-bold text-foreground">${totalCostUSD.toFixed(4)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Real (BRL)</p>
-                            <p className="font-mono text-lg font-bold text-foreground">
-                              {totalCostBRL !== null ? `R$ ${totalCostBRL.toFixed(4)}` : '...'}
-                            </p>
+                            <p className="font-mono text-lg font-bold text-foreground">{totalCostBRL !== null ? `R$ ${totalCostBRL.toFixed(4)}` : '...'}</p>
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-muted-foreground">
-                          <div>
-                            <p>Total chamadas</p>
-                            <p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_calls), 0)}</p>
-                          </div>
-                          <div>
-                            <p>Total tokens</p>
-                            <p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_tokens_sum), 0).toLocaleString()}</p>
-                          </div>
-                          <div>
-                            <p>Créditos IA</p>
-                            <p className="font-mono font-medium text-foreground">⚡ {tokenUsage.reduce((s, t) => s + Number(t.total_energy_cost), 0)}</p>
-                          </div>
+                          <div><p>Total chamadas</p><p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_calls), 0)}</p></div>
+                          <div><p>Total tokens</p><p className="font-mono font-medium text-foreground">{tokenUsage.reduce((s, t) => s + Number(t.total_tokens_sum), 0).toLocaleString()}</p></div>
+                          <div><p>Créditos IA</p><p className="font-mono font-medium text-foreground">⚡ {tokenUsage.reduce((s, t) => s + Number(t.total_energy_cost), 0)}</p></div>
                         </div>
-                        {usdToBrl && (
-                          <p className="text-[10px] text-muted-foreground mt-2">
-                            Câmbio: 1 USD = {usdToBrl.toFixed(2)} BRL (tempo real)
-                          </p>
-                        )}
+                        {usdToBrl && <p className="text-[10px] text-muted-foreground mt-2">Câmbio: 1 USD = {usdToBrl.toFixed(2)} BRL (tempo real)</p>}
                       </CardContent>
                     </Card>
                   )}
-
-                  {/* Detailed chronological log */}
                   <h3 className="font-semibold text-sm text-muted-foreground pt-2">Histórico Detalhado</h3>
                   {tokenUsageDetailed.map((entry) => {
                     const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
@@ -352,21 +379,14 @@ const AdminUsers = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium text-sm">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary" className="text-xs font-mono">{entry.model}</Badge>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                onClick={async () => {
-                                  const ok = await deleteTokenUsageEntry(entry.id);
-                                  if (ok) setTokenUsageDetailed(prev => prev.filter(e => e.id !== entry.id));
-                                }}
-                              >
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={async () => {
+                                const ok = await deleteTokenUsageEntry(entry.id);
+                                if (ok) setTokenUsageDetailed(prev => prev.filter(e => e.id !== entry.id));
+                              }}>
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
@@ -380,9 +400,7 @@ const AdminUsers = () => {
                           </div>
                           <div className="flex gap-4 mt-1 text-xs">
                             <span className="font-mono text-primary font-medium">${costUSD.toFixed(4)}</span>
-                            {costBRL !== null && (
-                              <span className="font-mono text-primary font-medium">R$ {costBRL.toFixed(4)}</span>
-                            )}
+                            {costBRL !== null && <span className="font-mono text-primary font-medium">R$ {costBRL.toFixed(4)}</span>}
                           </div>
                         </CardContent>
                       </Card>
@@ -403,9 +421,7 @@ const AdminUsers = () => {
                     {studyHistory.map(d => {
                       const intensity = Math.min(d.cards_reviewed / 30, 1);
                       return (
-                        <div
-                          key={d.study_date}
-                          className="aspect-square rounded-sm border"
+                        <div key={d.study_date} className="aspect-square rounded-sm border"
                           style={{ backgroundColor: `hsl(var(--primary) / ${0.1 + intensity * 0.8})` }}
                           title={`${d.study_date}: ${d.cards_reviewed} cards, rating ${d.avg_rating}`}
                         />
