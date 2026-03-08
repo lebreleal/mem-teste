@@ -65,6 +65,14 @@ const Study = () => {
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Reset scroll position when card changes
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [cardKey]);
 
   const [hintResponse, setHintResponse] = useState<string | null>(null);
   const [explainResponse, setExplainResponse] = useState<string | null>(null);
