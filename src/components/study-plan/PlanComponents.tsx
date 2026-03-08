@@ -835,7 +835,7 @@ export const CompactDeckRow = React.forwardRef<HTMLDivElement, {
   const studied = deck.reviewed_today ?? 0;
   const total = pending + studied;
   const pct = total > 0 ? Math.round((studied / total) * 100) : 0;
-  const est = Math.round((pending * avgSecondsPerCard) / 60);
+  const est = Math.round(estimateStudySeconds(newAvail, learningCards, reviewCards, avgSecondsPerCard) / 60);
 
   return (
     <div
