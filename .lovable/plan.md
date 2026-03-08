@@ -62,3 +62,26 @@ Usa reference_id único por período para evitar duplicatas.
 
 ### 4. Copy do PremiumModal atualizado
 "1.500 créditos por mês" → "500 créditos por mês".
+
+---
+
+# Transação com Rollback de Créditos em Edge Functions
+
+## Implementado
+
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.
