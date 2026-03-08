@@ -6,9 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
-import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
@@ -79,7 +78,6 @@ const Dashboard = () => {
   // Carousel helpers
   const hasPlan = plans.length > 0;
   const planDeckIds = allDeckIds;
-  const planDeckOrder = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
   const plansByDeckId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of plans) {
@@ -168,7 +166,7 @@ const Dashboard = () => {
             avgSecondsPerCard={avgSecondsPerCard}
             hasPlan={hasPlan}
             planDeckIds={planDeckIds}
-            planDeckOrder={planDeckOrder}
+            planDeckOrder={planDeckOrderEarly}
             plansByDeckId={plansByDeckId}
             globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
             distributedNewByDeck={state.distributedNewByDeck}

@@ -17,6 +17,8 @@ export const useMissions = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const hasCachedDeps = profile != null && decks != null;
+
   const query = useQuery({
     queryKey: ['missions', user?.id],
     queryFn: () => missionService.fetchMissions(user!.id, {
@@ -26,7 +28,7 @@ export const useMissions = () => {
       cachedTotalCards: profile?.successful_cards_counter,
       cachedDeckCount: decks?.length,
     }),
-    enabled: !!user,
+    enabled: !!user && hasCachedDeps,
     staleTime: 30_000,
   });
 
