@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { useMemo, useCallback } from 'react';
 import { computeNewCardAllocation } from '@/lib/studyUtils';
 
@@ -127,28 +128,20 @@ export function useStudyPlan() {
     enabled: !!userId,
   });
 
-  // ─── Fetch global capacity from profile ───
-  const capacityQuery = useQuery({
-    queryKey: ['global-capacity', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit, weekly_new_cards')
-        .eq('id', userId!)
-        .single();
-      if (error) throw error;
-      return {
-        dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
-        weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
-        dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
-        weeklyNewCards: (data as any)?.weekly_new_cards as WeeklyNewCards | null,
-      };
-    },
-    enabled: !!userId,
-  });
+  // ─── Use centralized profile for global capacity ───
+  const profileQuery = useProfile();
+  const globalCapacity = useMemo(() => {
+    const p = profileQuery.data;
+    if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+    return {
+      dailyMinutes: p.daily_study_minutes ?? 60,
+      weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
+      dailyNewCardsLimit: p.daily_new_cards_limit ?? 30,
+      weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
+    };
+  }, [profileQuery.data]);
 
   const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
 
   // ─── Deck hierarchy for child→root resolution ───
   const deckHierarchyQuery = useQuery({
@@ -525,7 +518,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
-    qc.invalidateQueries({ queryKey: ['global-capacity'] });
+    // global-capacity removed — profile handles it
     qc.invalidateQueries({ queryKey: ['profile'] });
   }, [qc]);
 
@@ -601,24 +594,13 @@ export function useStudyPlan() {
         ? vars.weeklyNewCards
         : (globalCapacity.weeklyNewCards ?? null);
 
-      qc.setQueryData(['daily-new-cards-limit', userId], {
-        daily_new_cards_limit: vars.limit,
-        weekly_new_cards: nextWeekly,
-      });
-
-      qc.setQueryData(['global-capacity', userId], (prev: any) => {
-        if (!prev) {
-          return {
-            dailyMinutes: globalCapacity.dailyMinutes,
-            weeklyMinutes: globalCapacity.weeklyMinutes,
-            dailyNewCardsLimit: vars.limit,
-            weeklyNewCards: nextWeekly,
-          };
-        }
+      // Update profile cache directly (replaces both daily-new-cards-limit and global-capacity)
+      qc.setQueryData(['profile', userId], (prev: any) => {
+        if (!prev) return prev;
         return {
           ...prev,
-          dailyNewCardsLimit: vars.limit,
-          weeklyNewCards: nextWeekly,
+          daily_new_cards_limit: vars.limit,
+          weekly_new_cards: nextWeekly,
         };
       });
 
@@ -642,7 +624,7 @@ export function useStudyPlan() {
     allDeckIds,
     expandedDeckIds,
     globalCapacity,
-    isLoading: plansQuery.isLoading || capacityQuery.isLoading,
+    isLoading: plansQuery.isLoading || profileQuery.isLoading,
     metrics: computed,
     avgSecondsPerCard: avgQuery.data ?? 30,
     calcImpact,

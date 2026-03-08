@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import type { ForecastView, ForecastParams, SimulatorInput, SimulatorResult, WorkerMessage, WorkerResponse } from '@/types/forecast';
 import type { WeeklyMinutes } from '@/hooks/useStudyPlan';
 
@@ -59,23 +60,9 @@ export function useForecastSimulator(options: UseForecastSimulatorOptions) {
     staleTime: 5 * 60_000,
   });
 
-  // Fetch global new-cards capacity (shape kept consistent with other consumers of this query key)
-  const profileLimitQuery = useQuery({
-    queryKey: ['daily-new-cards-limit', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('daily_new_cards_limit, weekly_new_cards')
-        .eq('id', userId!)
-        .single();
-      if (error) throw error;
-      return data as { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null };
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60_000,
-  });
-
-  const defaultNewCardsPerDay = getDailyNewLimitValue(profileLimitQuery.data, 30);
+  // Use centralized profile for new-cards capacity
+  const profileQuery = useProfile();
+  const defaultNewCardsPerDay = profileQuery.data?.daily_new_cards_limit ?? 30;
   const newCardsPerDay = newCardsPerDayOverride ?? defaultNewCardsPerDay;
 
   const defaultCreatedCardsPerDay = 0;
