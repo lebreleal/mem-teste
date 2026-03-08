@@ -2689,6 +2689,10 @@ export type Database = {
         Args: { _turma_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["turma_role"]
       }
+      get_user_performance_summary: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2700,6 +2704,7 @@ export type Database = {
         Args: { _permission: string; _turma_id: string; _user_id: string }
         Returns: boolean
       }
+      insert_review_batch: { Args: { p_reviews: Json }; Returns: undefined }
       is_turma_member: {
         Args: { _turma_id: string; _user_id: string }
         Returns: boolean
