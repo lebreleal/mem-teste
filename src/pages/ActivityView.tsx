@@ -45,7 +45,8 @@ const ActivityView = () => {
         .from('review_logs')
         .select('reviewed_at, elapsed_ms, state')
         .eq('user_id', user.id)
-        .order('reviewed_at', { ascending: true });
+        .order('reviewed_at', { ascending: true })
+        .limit(50000);
 
       if (!logs?.length) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
