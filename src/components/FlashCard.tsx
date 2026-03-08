@@ -586,15 +586,7 @@ const FlashCard = ({
     onRate(rating);
   };
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode);
-  const intervals = (() => {
-    if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep, last_reviewed_at: lastReviewedAt };
-      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
-    }
-    const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
-  })();
+  const intervals = getPreviewIntervals(algorithmMode, deckConfig, { stability, difficulty, state, scheduledDate, learningStep, lastReviewedAt });
 
   let displayFront: string;
   let displayBack: string;
