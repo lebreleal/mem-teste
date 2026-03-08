@@ -44,13 +44,30 @@ const ActivityView = () => {
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-      const { data: logs } = await supabase
-        .from('review_logs')
-        .select('reviewed_at, elapsed_ms, state')
-        .eq('user_id', user.id)
-        .gte('reviewed_at', oneYearAgo.toISOString())
-        .order('reviewed_at', { ascending: true })
-        .limit(50000);
+      const PAGE_SIZE = 1000;
+      let allLogs: any[] = [];
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: page } = await supabase
+          .from('review_logs')
+          .select('reviewed_at, elapsed_ms, state')
+          .eq('user_id', user.id)
+          .gte('reviewed_at', oneYearAgo.toISOString())
+          .order('reviewed_at', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (page && page.length > 0) {
+          allLogs = allLogs.concat(page);
+          offset += PAGE_SIZE;
+          hasMore = page.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const logs = allLogs;
 
       if (!logs?.length) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
