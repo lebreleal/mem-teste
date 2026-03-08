@@ -10,6 +10,7 @@ import { Crown, X, Sparkles, Brain, Zap, Pencil, Infinity, Check, ExternalLink, 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useToast } from '@/hooks/use-toast';
 import { STRIPE_PLANS, STRIPE_CREDIT_PACKS } from '@/lib/stripeConfig';
