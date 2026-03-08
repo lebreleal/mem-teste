@@ -109,7 +109,7 @@ function getFormatInstructions(formats: string[]): string {
   const allFormats = [
     { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Pergunta clínica/aplicada na "front", "back" vazio. "options" com 4-5 alternativas plausíveis. "correctIndex" com o índice correto (0-based). REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. Isso força o estudante a DIFERENCIAR conceitos semelhantes. NUNCA use distratores absurdos ou inventados. Múltipla escolha serve para DIFERENCIAÇÃO entre conceitos similares, não para perguntas triviais.', name: "múltipla escolha", typeName: "multiple_choice" },
+    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Use EXCLUSIVAMENTE quando existirem 3+ conceitos similares no material que precisam ser DIFERENCIADOS. Se não há conceitos confundíveis, NÃO gere MC — use cloze ou basic.\n  "front": pergunta clínica/aplicada. "back": string vazia. "options": EXATAMENTE 4 alternativas (nunca 3, nunca 5). Cada opção com MÁXIMO 8 PALAVRAS — seja conciso. "correctIndex": índice correto (0-based).\n  REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. NUNCA use distratores absurdos ou inventados.\n  OBJETIVO: forçar DIFERENCIAÇÃO entre conceitos similares (ex: enzimas, receptores, síndromes parecidas).', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -140,9 +140,9 @@ function getFormatInstructions(formats: string[]): string {
     let distributionText: string;
     if (hasAll3) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
-- Cloze: ~50% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores.
-- Pergunta/Resposta (basic): ~30% dos cartões — para raciocínio, mecanismos, causa-efeito.
-- Múltipla Escolha: ~20% dos cartões (MÍNIMO 15%) — OBRIGATÓRIO para diferenciação de conceitos similares. Você DEVE gerar cartões deste tipo. Se gerar 20 cartões, pelo menos 3-4 DEVEM ser múltipla escolha.`;
+- Cloze: ~55% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores, nomes.
+- Pergunta/Resposta (basic): ~35% dos cartões — para raciocínio, mecanismos, causa-efeito.
+- Múltipla Escolha: ~10% dos cartões — APENAS para diferenciação de conceitos similares. Se gerar 20 cartões, 2 devem ser MC. Se não houver conceitos confundíveis no material, substitua MC por cloze/basic.`;
     } else if (hasCloze && hasBasic) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
 - Cloze: ~60% dos cartões — formato dominante para retenção.
@@ -291,7 +291,7 @@ ${getOutputExamples(formats)}`;
             type: "object",
             properties: {
               ...cardProperties,
-              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (4-5 items)" },
+              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (exactly 4 items, max 8 words each)" },
               correctIndex: { type: "integer", description: "0-based index of correct option" },
             },
             required: ["front", "back", "type"],
