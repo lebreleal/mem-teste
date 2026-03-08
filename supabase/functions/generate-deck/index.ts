@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     const userId = user.id;
 
-    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost, skipLog } = await req.json();
+    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
@@ -369,9 +369,9 @@ ${getOutputExamples(formats)}`;
           "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
       } catch (parseErr) {
         console.error("Tool call parse error:", parseErr, "raw:", toolCall.function.arguments.substring(0, 500));
-        if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
-      }
+          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+        }
     } else {
       // Fallback: try parsing from content (in case tool calling wasn't respected)
       const rawContent = aiData.choices?.[0]?.message?.content ?? "";
@@ -418,14 +418,14 @@ ${getOutputExamples(formats)}`;
           }
         } catch {
           console.error("Parse failed, raw:", rawContent.substring(0, 500));
-          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
           return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
         }
       }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
-      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
       return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
@@ -454,10 +454,8 @@ ${getOutputExamples(formats)}`;
       };
     });
 
-    // Only log if not skipped (client will aggregate and log once)
-    if (!skipLog) {
-      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-    }
+    // Always log token usage for every batch call
+    await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
 
     return jsonResponse({ cards, usage });
   } catch (err) {
