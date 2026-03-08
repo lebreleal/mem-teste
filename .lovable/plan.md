@@ -22,7 +22,14 @@ Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtóp
 ### 5. Checklist de cobertura no prompt
 Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
+
 ## Trade-offs
 - +3x mais chamadas API (mais créditos gastos por geração)
 - Mais cards gerados por batch
 - Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
