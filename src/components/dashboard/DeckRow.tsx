@@ -36,12 +36,12 @@ interface DeckRowProps {
   hasPendingUpdate?: boolean;
 }
 
-const DeckRow = ({
+const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
   onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers, hasPendingUpdate,
-}: DeckRowProps) => {
+}, ref) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
   const hasChildren = subDecks.length > 0;
