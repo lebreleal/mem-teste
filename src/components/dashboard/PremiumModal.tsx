@@ -285,8 +285,8 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                   </>
                 )}
 
-                {/* Manage subscription */}
-                {isPremium && !isTrial && plan !== 'lifetime' && (
+                {/* Manage subscription — only for Stripe-purchased plans (not gift/trial) */}
+                {isPremium && !isTrial && !isGift && plan !== 'lifetime' && plan !== 'gift' && (
                   <Button variant="outline" className="w-full gap-2 mb-4" onClick={handlePortal}>
                     <ExternalLink className="h-4 w-4" /> Gerenciar Assinatura
                   </Button>
