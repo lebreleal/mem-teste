@@ -292,7 +292,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     queryFn: async () => {
       if (allDeckIds.length === 0) return [];
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() + 1); // skip today (we use live metrics for today)
+      startDate.setDate(startDate.getDate() + 1);
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 6);
@@ -306,7 +306,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       if (error) throw error;
       return (data ?? []) as { scheduled_date: string }[];
     },
-    enabled: !!userId && allDeckIds.length > 0,
+    enabled: full && !!userId && allDeckIds.length > 0,
     staleTime: 3 * 60_000,
   });
 

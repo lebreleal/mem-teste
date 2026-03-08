@@ -79,8 +79,8 @@ export async function fetchMissions(userId: string, stats: MissionStats): Promis
   const profile = needsProfile ? profileResult.data : null;
   const deckCount = needsDeckCount ? (deckCountResult as any).count : stats.cachedDeckCount;
 
-  const dailyCards = profile?.daily_cards_studied ?? 0;
-  const totalCards = profile?.successful_cards_counter ?? 0;
+  const dailyCards = stats.cachedDailyCards ?? profile?.daily_cards_studied ?? 0;
+  const totalCards = stats.cachedTotalCards ?? profile?.successful_cards_counter ?? 0;
 
   return (definitions as MissionDefinition[]).map(def => {
     const um = userMissionMap.get(def.id);

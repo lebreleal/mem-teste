@@ -698,7 +698,7 @@ const StudyPlan = () => {
   const {
     plans, allDeckIds, expandedDeckIds, globalCapacity, isLoading, metrics, avgSecondsPerCard,
     calcImpact, createPlan, updatePlan, deletePlan, updateCapacity, updateNewCardsLimit, reorderObjectives,
-  } = useStudyPlan();
+  } = useStudyPlan({ full: true });
   const { decks, isLoading: decksLoading } = useDecks();
   const { isPremium } = useSubscription();
   const activeDecks = useMemo(() => (decks ?? []).filter(d => !d.is_archived), [decks]);
