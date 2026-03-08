@@ -2478,6 +2478,7 @@ export type Database = {
           memocoins: number
           name: string
           onboarding_completed: boolean
+          premium_expires_at: string
           successful_cards_counter: number
         }[]
       }
