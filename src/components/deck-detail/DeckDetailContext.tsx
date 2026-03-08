@@ -11,6 +11,7 @@ import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useExams } from '@/hooks/useExams';
 import { useEnergy } from '@/hooks/useEnergy';
