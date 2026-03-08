@@ -130,17 +130,13 @@ export async function fetchStudyQueue(
   // Determine which card IDs to use for global limits
   let globalCardIdsPromise: Promise<string[]>;
   if (planDeckIdSet.size > 0) {
-    globalCardIdsPromise = supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', Array.from(expandedPlanDeckIds))
-      .then(r => (r.data ?? []).map((c: any) => c.id));
+    globalCardIdsPromise = Promise.resolve(
+      supabase.from('cards').select('id').in('deck_id', Array.from(expandedPlanDeckIds))
+    ).then(r => (r.data ?? []).map((c: any) => c.id));
   } else {
-    globalCardIdsPromise = supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', activeDecks.map(d => d.id))
-      .then(r => (r.data ?? []).map((c: any) => c.id));
+    globalCardIdsPromise = Promise.resolve(
+      supabase.from('cards').select('id').in('deck_id', activeDecks.map(d => d.id))
+    ).then(r => (r.data ?? []).map((c: any) => c.id));
   }
 
   // Fetch hierarchy limits and global card IDs in parallel
