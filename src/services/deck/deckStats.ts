@@ -1,0 +1,91 @@
+/**
+ * Deck statistics queries (CQRS Read side).
+ * Extracted from deckService.ts for SRP compliance.
+ */
+
+import { supabase } from '@/integrations/supabase/client';
+import type { DeckWithStats } from '@/types/deck';
+
+/** Fetch all user decks with computed stats using batch RPC (single query). */
+export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats[]> {
+  const fetchAllDecks = async () => {
+    const PAGE = 1000;
+    let allDecks: any[] = [];
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('decks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      if (data) allDecks = allDecks.concat(data);
+      hasMore = (data?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+    return allDecks;
+  };
+
+  const [decks, statsResult] = await Promise.all([
+    fetchAllDecks(),
+    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: -new Date().getTimezoneOffset() }),
+  ]);
+
+  const allStats = statsResult.data;
+  const statsMap = new Map<string, { new_count: number; learning_count: number; review_count: number; reviewed_today: number; new_reviewed_today: number; new_graduated_today: number }>();
+  if (allStats) {
+    for (const s of allStats as any[]) {
+      statsMap.set(s.deck_id, {
+        new_count: s.new_count, learning_count: s.learning_count,
+        review_count: s.review_count, reviewed_today: s.reviewed_today ?? 0,
+        new_reviewed_today: s.new_reviewed_today ?? 0, new_graduated_today: s.new_graduated_today ?? 0,
+      });
+    }
+  }
+
+  // Batch source author lookup
+  const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
+  const authorMap = new Map<string, string | null>();
+  if (listingIds.length > 0) {
+    const { data: listings } = await supabase
+      .from('marketplace_listings')
+      .select('id, seller_id')
+      .in('id', listingIds);
+    if (listings && listings.length > 0) {
+      const sellerIds = [...new Set(listings.map((l: any) => l.seller_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', sellerIds);
+      const profileMap = new Map<string, string>();
+      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
+      for (const l of listings as any[]) {
+        authorMap.set(l.id, profileMap.get(l.seller_id) || null);
+      }
+    }
+  }
+
+  return (decks || []).map((deck: any) => {
+    const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
+    return {
+      ...deck,
+      folder_id: deck.folder_id ?? null,
+      parent_deck_id: deck.parent_deck_id ?? null,
+      is_archived: deck.is_archived ?? false,
+      new_count: s.new_count,
+      learning_count: s.learning_count,
+      review_count: s.review_count,
+      reviewed_today: s.reviewed_today,
+      new_reviewed_today: s.new_reviewed_today,
+      new_graduated_today: s.new_graduated_today,
+      daily_new_limit: deck.daily_new_limit ?? 20,
+      daily_review_limit: deck.daily_review_limit ?? 100,
+      source_listing_id: deck.source_listing_id ?? null,
+      source_author: deck.source_listing_id ? (authorMap.get(deck.source_listing_id) ?? null) : null,
+      source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,
+    };
+  });
+}
