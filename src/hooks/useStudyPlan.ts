@@ -262,7 +262,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
-    enabled: allDeckIds.length > 0,
+    enabled: full && allDeckIds.length > 0,
     staleTime: 5 * 60_000,
   });
 
