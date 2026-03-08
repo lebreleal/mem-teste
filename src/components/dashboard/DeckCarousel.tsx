@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
+import { estimateStudySeconds } from '@/lib/studyUtils';
 
 type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
 
@@ -86,7 +87,7 @@ function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, g
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
-  const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
+  const estimatedMinutes = Math.round(estimateStudySeconds(newAvailable, learningAvailable, reviewAvailable, avgSecondsPerCard) / 60);
 
   const isComplete = pendingToday === 0 && totalToday > 0;
 
@@ -282,7 +283,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
-    ? Math.round((activeStats.totalPending * avgSecondsPerCard) / 60)
+    ? Math.round(estimateStudySeconds(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, avgSecondsPerCard) / 60)
     : 0;
 
   return (
