@@ -64,9 +64,14 @@ export function useStudyUndo(
         await supabase.from('review_logs').delete().eq('id', logs[0].id);
       }
 
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+      // Defer heavy invalidations — user is still studying, no need to refetch dashboard
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+        queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+        queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      }, 10_000);
     } catch {
       toast({ title: 'Erro ao desfazer no banco', variant: 'destructive' });
     }

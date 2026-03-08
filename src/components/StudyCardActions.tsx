@@ -337,11 +337,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           canvasHeight: ch,
           ...(frontText ? { frontText } : {}),
         });
-        const { error } = await supabase
-          .from('cards')
-          .update({ front_content: frontContent, back_content: back })
-          .eq('id', editCardIdRef.current);
-        if (error) throw error;
+        await cardService.updateCard(editCardIdRef.current, frontContent, back);
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
@@ -357,11 +353,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
     // Basic save
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ front_content: front, back_content: back })
-        .eq('id', editCardIdRef.current);
-      if (error) throw error;
+      await cardService.updateCard(editCardIdRef.current, front, back);
       toast({ title: 'Card atualizado!' });
       setEditOpen(false);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
