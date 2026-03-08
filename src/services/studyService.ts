@@ -7,7 +7,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
-import { calculateStreakWithFreezes, getMascotState } from '@/lib/streakUtils';
 
 export interface StudyQueueResult {
   cards: any[];
@@ -76,13 +75,15 @@ export async function fetchStudyQueue(
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
-  // Fetch cards + scope card IDs in parallel (global scope will be computed after plan check)
+  // Fetch cards + scope card IDs in parallel
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
   const endOfTodayISO = endOfToday.toISOString();
   const nowISO = new Date().toISOString();
+  const tzOffsetMinutes = -new Date().getTimezoneOffset();
 
-  const [cardsResult, scopeResult] = await Promise.all([
+  // Parallelize: cards, scope IDs, study plans, and profile all at once
+  const [cardsResult, scopeResult, plansResult, profileResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
@@ -93,83 +94,83 @@ export async function fetchStudyQueue(
       .from('cards')
       .select('id')
       .in('deck_id', limitScopeIds),
+    supabase
+      .from('study_plans' as any)
+      .select('deck_ids, priority')
+      .eq('user_id', userId)
+      .order('priority', { ascending: true }),
+    supabase
+      .from('profiles')
+      .select('daily_new_cards_limit, weekly_new_cards')
+      .eq('id', userId)
+      .single(),
   ]);
+
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
-
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
-
   const limitCardIds = (scopeResult.data ?? []).map((c: any) => c.id);
+  const studyPlans = plansResult.data as any[] | null;
+  const profileData = profileResult.data as any;
 
-  let newReviewedInHierarchy = 0;
-  let reviewReviewedToday = 0;
-  let globalNewReviewedToday = 0;
+  // Build plan deck IDs and fetch plan card IDs + hierarchy limits in parallel
+  const planDeckIdSet = new Set<string>();
+  if (studyPlans && studyPlans.length > 0) {
+    for (const plan of studyPlans) {
+      for (const id of (plan.deck_ids ?? [])) planDeckIdSet.add(id);
+    }
+  }
 
-  // Hierarchy limits (deck-level cap)
+  // Expand plan deck IDs to include descendants
+  const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
+  for (const pid of planDeckIdSet) {
+    const descendants = collectDescendantIds(activeDecks, pid);
+    for (const d of descendants) expandedPlanDeckIds.add(d);
+  }
+
+  // Determine which card IDs to use for global limits
+  let globalCardIdsPromise: Promise<string[]>;
+  if (planDeckIdSet.size > 0) {
+    globalCardIdsPromise = supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', Array.from(expandedPlanDeckIds))
+      .then(r => (r.data ?? []).map((c: any) => c.id));
+  } else {
+    globalCardIdsPromise = supabase
+      .from('cards')
+      .select('id')
+      .in('deck_id', activeDecks.map(d => d.id))
+      .then(r => (r.data ?? []).map((c: any) => c.id));
+  }
+
+  // Fetch hierarchy limits and global card IDs in parallel
   const hierarchyLimitsPromise = limitCardIds.length > 0
     ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
     : Promise.resolve({ data: null });
 
-  // For global new-card cap, only count decks within the user's active study plans
-  const { data: studyPlans } = await supabase
-    .from('study_plans' as any)
-    .select('deck_ids, priority')
-    .eq('user_id', userId)
-    .order('priority', { ascending: true });
+  const [hierarchyLimits, globalCardIds] = await Promise.all([hierarchyLimitsPromise, globalCardIdsPromise]);
 
-  let globalLimitsPromise: PromiseLike<any> = Promise.resolve({ data: null });
-  const planDeckIdSet = new Set<string>();
-  if (studyPlans && (studyPlans as any[]).length > 0) {
-    for (const plan of studyPlans as any[]) {
-      for (const id of (plan.deck_ids ?? [])) planDeckIdSet.add(id);
-    }
-    // Expand to include all descendants
-    const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
-    for (const pid of planDeckIdSet) {
-      const descendants = collectDescendantIds(activeDecks, pid);
-      for (const d of descendants) expandedPlanDeckIds.add(d);
-    }
-    const { data: planCards } = await supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', Array.from(expandedPlanDeckIds));
-    const planCardIds = (planCards ?? []).map((c: any) => c.id);
-    if (planCardIds.length > 0) {
-      globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: planCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
-    }
-  } else {
-    // No plan exists: count all user cards globally (fallback)
-    const { data: allCards } = await supabase
-      .from('cards')
-      .select('id')
-      .in('deck_id', activeDecks.map(d => d.id));
-    const allCardIds = (allCards ?? []).map((c: any) => c.id);
-    if (allCardIds.length > 0) {
-      globalLimitsPromise = supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: allCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any).then(r => r);
+  // Now fetch global limits RPC
+  let globalNewReviewedToday = 0;
+  if (globalCardIds.length > 0) {
+    const globalLimits = await supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any);
+    if (globalLimits.data && (globalLimits.data as any[]).length > 0) {
+      globalNewReviewedToday = (globalLimits.data as any[])[0].new_reviewed_today ?? 0;
     }
   }
 
-  const [hierarchyLimits, globalLimits] = await Promise.all([hierarchyLimitsPromise, globalLimitsPromise]);
+  let newReviewedInHierarchy = 0;
+  let reviewReviewedToday = 0;
 
   if (hierarchyLimits.data && (hierarchyLimits.data as any[]).length > 0) {
     const row = (hierarchyLimits.data as any[])[0];
     newReviewedInHierarchy = row.new_reviewed_today ?? 0;
     reviewReviewedToday = row.review_reviewed_today ?? 0;
   }
-  if (globalLimits.data && (globalLimits.data as any[]).length > 0) {
-    const row = (globalLimits.data as any[])[0];
-    globalNewReviewedToday = row.new_reviewed_today ?? 0;
-  }
 
-  // Fetch global daily_new_cards_limit from profile
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('daily_new_cards_limit, weekly_new_cards')
-    .eq('id', userId)
-    .single();
-
-  const rawGlobalLimit = (profileData as any)?.daily_new_cards_limit ?? 9999;
-  const weeklyNewCards = (profileData as any)?.weekly_new_cards as Record<string, number> | null;
+  // Profile limits
+  const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCards = profileData?.weekly_new_cards as Record<string, number> | null;
   const DAY_KEYS_LOCAL = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayKey = DAY_KEYS_LOCAL[new Date().getDay()];
   const globalLimit = (weeklyNewCards && weeklyNewCards[todayKey] != null) ? weeklyNewCards[todayKey] : rawGlobalLimit;
@@ -178,17 +179,10 @@ export async function fetchStudyQueue(
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
 
-  // All plan decks share the same global remaining pool directly (no sequential splitting).
-  // Priority only affects presentation order, not budget allocation.
-  // No plan: only deck limit applies (global limit is a Study Plan feature)
-  const effectiveNewLimit = hasPlanActive
-    ? globalRemaining
-    : deckRemaining;
-
+  const effectiveNewLimit = hasPlanActive ? globalRemaining : deckRemaining;
   const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
-  // This prevents a new card that will be cut by the limit from burying a legitimate review.
   const buryNew = deckConfig?.bury_new_siblings !== false;
   const buryReview = deckConfig?.bury_review_siblings !== false;
   const buryLearning = deckConfig?.bury_learning_siblings !== false;
@@ -210,8 +204,6 @@ export async function fetchStudyQueue(
       seenFronts.add(key);
       return true;
     };
-    // Process in priority order: learning first (they keep their slot),
-    // then review (already earned), then new — so reviews are preserved over new cards.
     allLearning = allLearning.filter(c => buryFilter(c, buryLearning));
     allReview = allReview.filter(c => buryFilter(c, buryReview));
     allNew = allNew.filter(c => buryFilter(c, buryNew));
@@ -240,7 +232,6 @@ export async function submitCardReview(
     ? Math.min(Math.max(elapsedMs, 1500), 120000)
     : null;
   if (algorithmMode === 'quick_review') {
-    // Update card state: rating > 2 = "Entendi" (state 2), otherwise "Não entendi" (state 1)
     const newState = rating > 2 ? 2 : 1;
     await supabase
       .from('cards')
@@ -342,107 +333,41 @@ export async function submitCardReview(
 import type { StudyStats } from '@/types/study';
 export type { StudyStats } from '@/types/study';
 
-/** Fetch study statistics for the current user. Accepts optional cached profile to avoid extra query. */
-export async function fetchStudyStats(userId: string, cachedProfile?: { energy: number; daily_energy_earned: number; last_study_reset_date: string | null; daily_cards_studied: number; created_at: string }): Promise<StudyStats> {
-  let p: any;
-  if (cachedProfile) {
-    p = cachedProfile;
-  } else {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('energy, daily_energy_earned, last_study_reset_date, daily_cards_studied, created_at')
-      .eq('id', userId)
-      .single();
-    p = profile as any;
-  }
-  const energy = p?.energy ?? 0;
-  const today = new Date().toISOString().slice(0, 10);
-  const dailyEnergyEarned = p?.last_study_reset_date === today ? (p?.daily_energy_earned ?? 0) : 0;
-  const todayCards = p?.last_study_reset_date === today ? (p?.daily_cards_studied ?? 0) : 0;
+/** Fetch study statistics using server-side RPC (eliminates 1500+ row transfer). */
+export async function fetchStudyStats(userId: string, _cachedProfile?: any): Promise<StudyStats> {
+  const tzOffsetMinutes = -new Date().getTimezoneOffset();
 
-  // Use 365 days window so streaks > 30 days are calculated correctly
-  const oneYearAgo = new Date();
-  oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+  const { data, error } = await supabase.rpc('get_study_stats_summary', {
+    p_user_id: userId,
+    p_tz_offset_minutes: tzOffsetMinutes,
+  } as any);
 
-  // Paginate to bypass Supabase's 1000-row server limit
-  const PAGE_SIZE = 1000;
-  let allLogs: { reviewed_at: string; elapsed_ms: number | null }[] = [];
-  let offset = 0;
-  let hasMore = true;
-  while (hasMore) {
-    const { data: page } = await supabase
-      .from('review_logs')
-      .select('reviewed_at, elapsed_ms')
-      .eq('user_id', userId)
-      .gte('reviewed_at', oneYearAgo.toISOString())
-      .order('reviewed_at', { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1);
-    if (page && page.length > 0) {
-      allLogs = allLogs.concat(page);
-      offset += PAGE_SIZE;
-      hasMore = page.length === PAGE_SIZE;
-    } else {
-      hasMore = false;
-    }
-  }
-  const logs = allLogs;
+  if (error) throw error;
 
-  if (!logs || logs.length === 0) {
-    return { lastStudyDate: null, streak: 0, energy, dailyEnergyEarned, mascotState: 'sleeping', todayCards, avgMinutesPerDay7d: 0, todayMinutes: 0, freezesAvailable: 0 };
+  const result = data as any;
+  if (!result) {
+    return {
+      lastStudyDate: null,
+      streak: 0,
+      energy: 0,
+      dailyEnergyEarned: 0,
+      mascotState: 'sleeping',
+      todayCards: 0,
+      avgMinutesPerDay7d: 0,
+      todayMinutes: 0,
+      freezesAvailable: 0,
+    };
   }
 
-  const lastStudyDate = new Date(logs[logs.length - 1].reviewed_at);
-  const streakResult = calculateStreakWithFreezes(logs.map(l => l.reviewed_at));
-  const streak = streakResult.streak;
-  const freezesAvailable = streakResult.freezesAvailable;
-  const mascotState = getMascotState(lastStudyDate);
-
-  // --- Hybrid minute calculation: aligned with ActivityView logic ---
-  const MIN_REVIEW_MS = 1500;
-  const MAX_REVIEW_MS = 120000;
-
-  const calcMinutesFromLogs = (reviewLogs: { reviewed_at: string; elapsed_ms?: number | null }[]): number => {
-    if (reviewLogs.length === 0) return 0;
-    let totalMs = 0;
-
-    for (let i = 0; i < reviewLogs.length; i++) {
-      const log = reviewLogs[i];
-      let ms = 0;
-
-      if (log.elapsed_ms && log.elapsed_ms >= MIN_REVIEW_MS && log.elapsed_ms <= MAX_REVIEW_MS) {
-        ms = log.elapsed_ms;
-      } else if (i > 0) {
-        const gap = new Date(log.reviewed_at).getTime() - new Date(reviewLogs[i - 1].reviewed_at).getTime();
-        if (gap >= MIN_REVIEW_MS && gap <= MAX_REVIEW_MS) {
-          ms = gap;
-        } else if (gap > MAX_REVIEW_MS) {
-          ms = 15000; // session break bonus
-        }
-      } else {
-        ms = 15000; // first card estimate
-      }
-
-      totalMs += ms;
-    }
-
-    // Ensure at least 1 minute if any study happened
-    return totalMs > 0 ? Math.max(1, Math.round(totalMs / 60000)) : 0;
+  return {
+    lastStudyDate: result.last_study_date ? new Date(result.last_study_date) : null,
+    streak: result.streak ?? 0,
+    energy: result.energy ?? 0,
+    dailyEnergyEarned: result.daily_energy_earned ?? 0,
+    mascotState: result.mascot_state ?? 'sleeping',
+    todayCards: result.today_cards ?? 0,
+    avgMinutesPerDay7d: result.avg_minutes_7d ?? 0,
+    todayMinutes: result.today_minutes ?? 0,
+    freezesAvailable: result.freezes_available ?? 0,
   };
-
-  // Use local midnight for today filter — compare Date objects, NOT ISO strings
-  const now = new Date();
-  const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayLogs = logs.filter(l => new Date(l.reviewed_at) >= localMidnight);
-  const todayMinutes = calcMinutesFromLogs(todayLogs);
-
-  const accountCreated = p?.created_at ? new Date(p.created_at) : new Date();
-  const daysSinceCreation = Math.max(1, Math.ceil((Date.now() - accountCreated.getTime()) / (1000 * 60 * 60 * 24)));
-  const activeDays = Math.min(daysSinceCreation, 7);
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const last7dLogs = logs.filter(l => new Date(l.reviewed_at) >= sevenDaysAgo);
-  const total7dMinutes = calcMinutesFromLogs(last7dLogs);
-  const avgMinutesPerDay7d = Math.max(1, Math.round(total7dMinutes / activeDays));
-
-  return { lastStudyDate, streak, energy, dailyEnergyEarned, mascotState, todayCards, avgMinutesPerDay7d, todayMinutes, freezesAvailable };
 }
