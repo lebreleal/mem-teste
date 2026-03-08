@@ -166,7 +166,7 @@ const Dashboard = () => {
             avgSecondsPerCard={avgSecondsPerCard}
             hasPlan={hasPlan}
             planDeckIds={planDeckIds}
-            planDeckOrder={planDeckOrder}
+            planDeckOrder={planDeckOrderEarly}
             plansByDeckId={plansByDeckId}
             globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
             distributedNewByDeck={state.distributedNewByDeck}
