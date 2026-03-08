@@ -93,6 +93,18 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
+  // Bug fix: clear stale study-queue cache on unmount so re-entering
+  // the study page always fetches fresh data from the server.
+  const studyQueueKey = useMemo(
+    () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    [deckId, folderId],
+  );
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: studyQueueKey });
+    };
+  }, [queryClient, studyQueueKey]);
+
   // getNextReadyIndex imported from studyUtils
 
   const [isTransitioning, setIsTransitioning] = useState(false);
