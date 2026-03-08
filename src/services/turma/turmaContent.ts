@@ -198,7 +198,7 @@ export async function unshareDeck(id: string) { const { error } = await supabase
 /** Batch-update sort_order for turma subjects — uses single RPC when available. */
 export async function reorderSubjects(orderedIds: string[]) {
   try {
-    const { error } = await supabase.rpc('batch_reorder_turma_subjects', { p_ids: orderedIds } as any);
+    const { error } = await supabase.rpc('batch_reorder_turma_subjects' as any, { p_ids: orderedIds } as any);
     if (error) throw error;
   } catch {
     for (let i = 0; i < orderedIds.length; i++) {
