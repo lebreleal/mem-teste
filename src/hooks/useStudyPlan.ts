@@ -330,7 +330,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     const estimatedReviewsToday = totalReview > 0
       ? Math.min(totalReview, capacityCardsToday)
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-    const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
+    const reviewSeconds = estimateStudySeconds(0, totalLearning, estimatedReviewsToday, avg);
+    const reviewMinutes = Math.round(reviewSeconds / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
     // ─── Smart new card allocation (shared pure function) ───
@@ -352,8 +353,9 @@ export function useStudyPlan(options?: { full?: boolean }) {
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
+    const newSeconds = estimateStudySeconds(dailyNewCards, 0, 0, avg);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
-    const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
+    const newMinutes = Math.min(Math.round(newSeconds / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
     const totalPending = totalNew + totalReview + totalLearning;
