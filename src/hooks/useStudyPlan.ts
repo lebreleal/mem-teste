@@ -594,24 +594,13 @@ export function useStudyPlan() {
         ? vars.weeklyNewCards
         : (globalCapacity.weeklyNewCards ?? null);
 
-      qc.setQueryData(['daily-new-cards-limit', userId], {
-        daily_new_cards_limit: vars.limit,
-        weekly_new_cards: nextWeekly,
-      });
-
-      qc.setQueryData(['global-capacity', userId], (prev: any) => {
-        if (!prev) {
-          return {
-            dailyMinutes: globalCapacity.dailyMinutes,
-            weeklyMinutes: globalCapacity.weeklyMinutes,
-            dailyNewCardsLimit: vars.limit,
-            weeklyNewCards: nextWeekly,
-          };
-        }
+      // Update profile cache directly (replaces both daily-new-cards-limit and global-capacity)
+      qc.setQueryData(['profile', userId], (prev: any) => {
+        if (!prev) return prev;
         return {
           ...prev,
-          dailyNewCardsLimit: vars.limit,
-          weeklyNewCards: nextWeekly,
+          daily_new_cards_limit: vars.limit,
+          weekly_new_cards: nextWeekly,
         };
       });
 
