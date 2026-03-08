@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
