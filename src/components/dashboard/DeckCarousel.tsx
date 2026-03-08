@@ -77,9 +77,9 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
+function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
-  const stats = getDeckTodayStats(deck, allDecks, allocatedNew != null ? allocatedNew : globalNewRemaining);
+  const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
   // If allocatedNew is provided, override newAvailable with it (already distributed)
   const newAvailable = allocatedNew != null ? Math.min(rawNewAvailable, allocatedNew) : rawNewAvailable;
