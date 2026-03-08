@@ -1,58 +1,87 @@
 
 
-## Bug Real: Limite de 1000 Linhas do Supabase
+# Melhorar cobertura de conteúdo na geração de decks por IA
 
-### O Problema
+## Implementado
 
-O Supabase tem um limite padrão de **1000 linhas por request** (configuração `PGRST_MAX_ROWS`). Mesmo colocando `.limit(50000)` no código, o servidor retorna no máximo 1000 registros.
+### 1. PAGES_PER_BATCH reduzido de 10 → 3
+Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
 
-Seu usuário tem **1.571 review_logs**. A query ordena por `reviewed_at ASC`, então retorna os 1000 primeiros (de 22/fev até **3/mar 19:26 UTC**). Tudo depois disso — **dias 4, 6, 7, 8 de março** — simplesmente não chega no frontend.
+### 2. densityFactor reduzido
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
+Mais cards solicitados por batch, forçando cobertura mais completa.
 
-Confirmação direta do banco:
-- Registros antes de 4/mar: **1.213** (mais que 1000)
-- Registro nº 1000: **2026-03-03 19:26:04** ← aqui o Supabase corta
+### 3. Structured Output (tool calling) no generate-deck
+Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
 
-Por isso os dias 1, 2, 3 aparecem verdes e os demais ficam zerados.
+### 4. Threshold de deduplicação: 0.8 → 0.9
+Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
 
-### Fix
+### 5. Checklist de cobertura no prompt
+Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
-**Arquivo:** `src/pages/ActivityView.tsx`
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
 
-Implementar **paginação** na query para buscar TODOS os registros em lotes de 1000:
+## Trade-offs
+- +3x mais chamadas API (mais créditos gastos por geração)
+- Mais cards gerados por batch
+- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
 
-```typescript
-// Substituir a query simples por um loop de paginação
-const PAGE_SIZE = 1000;
-let allLogs: any[] = [];
-let offset = 0;
-let hasMore = true;
+---
 
-while (hasMore) {
-  const { data: page } = await supabase
-    .from('review_logs')
-    .select('reviewed_at, elapsed_ms, state')
-    .eq('user_id', user.id)
-    .gte('reviewed_at', oneYearAgo.toISOString())
-    .order('reviewed_at', { ascending: true })
-    .range(offset, offset + PAGE_SIZE - 1);
+# Rebalanceamento da Economia de Créditos IA
 
-  if (page && page.length > 0) {
-    allLogs = allLogs.concat(page);
-    offset += PAGE_SIZE;
-    hasMore = page.length === PAGE_SIZE;
-  } else {
-    hasMore = false;
-  }
-}
+## Implementado
 
-const logs = allLogs;
-```
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
 
-Usar `.range(offset, offset + 999)` em vez de `.limit()` para paginação correta. O loop para quando uma página retorna menos de 1000 registros.
+Total mensal free: ~1.500 → ~270 créditos.
 
-O restante do código (processamento do `dayMap`, streak, etc.) permanece idêntico — só muda a forma de buscar os dados.
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
 
-### Resultado Esperado
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
 
-Todos os 1.571 registros serão buscados (2 requests de ~1000 e ~571), e todos os dias com estudo aparecerão corretamente no calendário, incluindo o dia de hoje.
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
 
+---
+
+# Transação com Rollback de Créditos em Edge Functions
+
+## Implementado
+
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.
