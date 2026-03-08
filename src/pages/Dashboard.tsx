@@ -49,7 +49,6 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks();
   
   // Compute plan root IDs for scoping global new-card counting
   const planRootIds = useMemo(() => {
