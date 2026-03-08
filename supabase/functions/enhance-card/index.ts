@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
@@ -77,6 +77,11 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  let energyDeducted = false;
+  let deductedCost = 0;
+  let supabase: any;
+  let userId = "";
+
   try {
     const { front, back, cardType, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
@@ -84,9 +89,8 @@ Deno.serve(async (req) => {
     if (!front || !front.trim()) return jsonResponse({ error: "Escreva algo no card antes de melhorar." }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
-    let userId = "";
     if (authHeader.startsWith("Bearer ")) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) userId = user.id;
@@ -96,6 +100,8 @@ Deno.serve(async (req) => {
     if (userId && cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
       if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
+      energyDeducted = true;
+      deductedCost = cost;
     }
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_card");
@@ -103,7 +109,6 @@ Deno.serve(async (req) => {
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
-    // Add type-specific instructions
     if (cardType === "multiple_choice") systemPrompt += MC_ADDON;
     else if (cardType === "cloze") systemPrompt += CLOZE_ADDON;
     else systemPrompt += BASIC_ADDON;
@@ -126,6 +131,7 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       if (response.status === 429) return jsonResponse({ error: "Rate limit excedido." }, 429);
       const t = await response.text(); console.error("AI error:", response.status, t); throw new Error("AI error");
     }
@@ -134,11 +140,15 @@ Deno.serve(async (req) => {
     if (userId) await logTokenUsage(supabase, userId, "enhance_card", selectedModel, data.usage, cost);
 
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No tool call in response");
+    if (!toolCall) {
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      throw new Error("No tool call in response");
+    }
     const result = JSON.parse(toolCall.function.arguments);
     return jsonResponse(result);
   } catch (e) {
     console.error("enhance-card error:", e);
+    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });
