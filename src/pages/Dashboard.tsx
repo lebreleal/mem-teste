@@ -28,6 +28,7 @@ const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'))
 
 
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
+import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DashboardActions from '@/components/dashboard/DashboardActions';
 import DeckList from '@/components/dashboard/DeckList';
@@ -36,9 +37,8 @@ const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
-import { renameDeck, deleteDeckCascade, deleteFolderCascade, bulkMoveDecks, bulkArchiveDecks, bulkDeleteDecks, importDeck, importDeckWithSubdecks, getTurmaDeckNavInfo } from '@/services/deckService';
+import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
-import { supabase } from '@/integrations/supabase/client';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import type { GeneratedCard } from '@/types/ai';
@@ -49,7 +49,7 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks(); // shares query cache with useDashboardState via staleTime
+  const { decks: allDecks } = useDecks();
   const planRootIds = useMemo(() => {
     if (plans.length === 0 || !allDecks) return undefined;
     const getRootIdLocal = (deckId: string): string | null => {
@@ -71,13 +71,15 @@ const Dashboard = () => {
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
+  const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
+
+  // Extracted actions hook
+  const actions = useDashboardActions(state, defaultAlgorithm);
 
   // Carousel helpers
   const hasPlan = plans.length > 0;
   const planDeckIds = allDeckIds;
-  const planDeckOrder = useMemo(() => {
-    return plans.flatMap(p => p.deck_ids ?? []);
-  }, [plans]);
+  const planDeckOrder = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
   const plansByDeckId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of plans) {
@@ -87,12 +89,7 @@ const Dashboard = () => {
     }
     return map;
   }, [plans]);
-  const getRootId = useCallback((deckId: string): string | null => {
-    const d = (allDecks ?? []).find(x => x.id === deckId);
-    if (!d) return null;
-    if (!d.parent_deck_id) return d.id;
-    return getRootId(d.parent_deck_id);
-  }, [allDecks]);
+
   // Handle payment return
   useEffect(() => {
     const payment = searchParams.get('payment');
@@ -107,11 +104,9 @@ const Dashboard = () => {
     }
   }, [searchParams]);
 
-  const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
-  const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -131,209 +126,7 @@ const Dashboard = () => {
       });
       state.setAiDeckOpen(true);
     }
-    // generating status: do nothing — generation is running in background, clicking shouldn't open empty dialog
   }, [state]);
-
-  // Handlers that perform side effects or complex logic
-  const doCreate = (name: string) => {
-    if (state.createType === 'deck') {
-      state.createDeck.mutate(
-        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
-        {
-          onSuccess: () => {
-            state.setCreateType(null); state.setCreateName('');
-            toast({ title: 'Baralho criado!' });
-            if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
-            state.setCreateParentDeckId(null);
-          },
-          onError: () => toast({ title: 'Erro ao criar baralho', variant: 'destructive' }),
-        }
-      );
-    } else {
-      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
-      });
-    }
-  };
-
-  const handleCreateSubmit = () => {
-    if (!state.createName.trim()) return;
-    const trimmed = state.createName.trim();
-    let hasDuplicate = false;
-    if (state.createType === 'deck') {
-      const siblings = state.createParentDeckId
-        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
-        : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
-      hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
-    } else {
-      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
-      hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
-    }
-
-    if (hasDuplicate) {
-      state.setDuplicateWarning({
-        name: trimmed,
-        type: state.createType!,
-        action: () => { doCreate(trimmed); state.setDuplicateWarning(null); },
-      });
-      return;
-    }
-    doCreate(trimmed);
-  };
-
-  const handleRenameSubmit = async () => {
-    if (!state.renameTarget || !state.renameName.trim()) return;
-    if (state.renameTarget.type === 'folder') {
-      state.updateFolder.mutate({ id: state.renameTarget.id, name: state.renameName.trim() }, {
-        onSuccess: () => { state.setRenameTarget(null); toast({ title: 'Renomeado!' }); },
-      });
-    } else {
-      try {
-        await renameDeck(state.renameTarget.id, state.renameName.trim());
-        state.setRenameTarget(null);
-        toast({ title: 'Renomeado!' });
-        queryClient.invalidateQueries({ queryKey: ['decks'] });
-      } catch {
-        toast({ title: 'Erro ao renomear', variant: 'destructive' });
-      }
-    }
-  };
-
-  /** Check if deck (or any sub-deck) is shared in a community before allowing deletion. */
-  const handleDeleteDeckRequest = async (deck: { id: string; name: string }) => {
-    // Collect this deck + all descendant sub-decks
-    const allIds = [deck.id];
-    const collectChildren = (parentIds: string[]) => {
-      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
-      children.forEach(c => allIds.push(c.id));
-      if (children.length > 0) collectChildren(children.map(c => c.id));
-    };
-    collectChildren([deck.id]);
-
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
-    if (turmaRefs && turmaRefs.length > 0) {
-      const blockedId = turmaRefs[0].deck_id;
-      const blockedDeck = state.decks.find(d => d.id === blockedId);
-      const blockedName = blockedDeck ? blockedDeck.name : deck.name;
-      setCommunityBlockTarget({ id: deck.id, name: blockedName, type: 'deck' });
-      return;
-    }
-    state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
-  };
-
-  const handleDeleteSubmit = async () => {
-    if (!state.deleteTarget) return;
-    try {
-      if (state.deleteTarget.type === 'folder') {
-        const { error: folderErr } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
-        if (folderErr) throw folderErr;
-        toast({ title: 'Pasta excluída' });
-      } else {
-        await deleteDeckCascade(state.deleteTarget.id);
-        toast({ title: 'Baralho excluído' });
-      }
-      state.setDeleteTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-    } catch {
-      toast({ title: 'Erro ao excluir', variant: 'destructive' });
-    }
-  };
-
-  const handleMoveSubmit = () => {
-    if (!state.moveTarget) return;
-    if (state.moveTarget.type === 'deck') {
-      const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
-      // If moving into a parent deck, find that deck's folder_id
-      let folderId = targetFolderId;
-      if (state.moveParentDeckId) {
-        const parentDeck = state.decks.find(d => d.id === state.moveParentDeckId);
-        folderId = parentDeck?.folder_id ?? null;
-      }
-      state.moveDeck.mutate(
-        { id: state.moveTarget.id, folderId: folderId, parentDeckId: state.moveParentDeckId ?? null },
-        {
-          onSuccess: () => { state.setMoveTarget(null); state.setMoveParentDeckId(null); toast({ title: 'Baralho movido!' }); },
-          onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
-        }
-      );
-    } else {
-      state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Pasta movida!' }); },
-        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
-      });
-    }
-  };
-
-  const handleBulkMoveSubmit = async () => {
-    const ids = Array.from(state.selectedDeckIds);
-    try {
-      await bulkMoveDecks(ids, state.moveBrowseFolderId);
-      toast({ title: `${ids.length} baralho(s) movido(s)!` });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-    } catch {
-      toast({ title: 'Erro ao mover', variant: 'destructive' });
-    }
-    state.setSelectedDeckIds(new Set());
-    state.setDeckSelectionMode(false);
-    state.setBulkMoveDeckOpen(false);
-    state.setMoveBrowseFolderId(null);
-    state.setMoveParentDeckId(null);
-  };
-
-  const handleBulkArchive = async () => {
-    const ids = Array.from(state.selectedDeckIds);
-    try {
-      await bulkArchiveDecks(ids);
-      toast({ title: `${ids.length} baralho(s) arquivado(s)!` });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-    } catch {
-      toast({ title: 'Erro ao arquivar', variant: 'destructive' });
-    }
-    state.setSelectedDeckIds(new Set());
-    state.setDeckSelectionMode(false);
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = Array.from(state.selectedDeckIds);
-    // Collect selected IDs + all their sub-deck IDs recursively
-    const allRelatedIds = new Set(ids);
-    const collectChildren = (parentIds: string[]) => {
-      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
-      children.forEach(c => { allRelatedIds.add(c.id); });
-      if (children.length > 0) collectChildren(children.map(c => c.id));
-    };
-    collectChildren(ids);
-
-    // Check if any selected or child deck is shared in a community
-    const allIds = Array.from(allRelatedIds);
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds);
-    const communityLinkedIds = new Set((turmaRefs ?? []).map((r: any) => r.deck_id));
-    const blocked = allIds.filter(id => communityLinkedIds.has(id));
-    if (blocked.length > 0) {
-      const blockedNames = blocked.map(id => state.decks.find(d => d.id === id)?.name ?? id).join(', ');
-      setCommunityBlockTarget({ id: blocked[0], name: blockedNames, type: 'deck' });
-      return;
-    }
-    try {
-      await bulkDeleteDecks(ids);
-      toast({ title: `${ids.length} baralho(s) excluído(s)!` });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-    } catch {
-      toast({ title: 'Erro ao excluir', variant: 'destructive' });
-    }
-    state.setSelectedDeckIds(new Set());
-    state.setDeckSelectionMode(false);
-  };
-
-  const handleNavigateCommunity = async (sourceTurmaDeckId: string) => {
-    const info = await getTurmaDeckNavInfo(sourceTurmaDeckId);
-    if (info) {
-      if (info.lesson_id) navigate(`/turmas/${info.turma_id}/lessons/${info.lesson_id}`);
-      else navigate(`/turmas/${info.turma_id}`);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -345,7 +138,6 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
-          {/* Comunidade */}
           <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
             <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
             <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
@@ -383,7 +175,6 @@ const Dashboard = () => {
           />
         )}
 
-
         <DashboardActions
           currentFolderId={state.currentFolderId}
           breadcrumb={state.breadcrumb}
@@ -406,13 +197,13 @@ const Dashboard = () => {
           onCreateAI={() => state.setAiDeckOpen(true)}
           onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
           onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-          onBulkArchive={handleBulkArchive}
-          onBulkDelete={handleBulkDelete}
+          onBulkArchive={actions.handleBulkArchive}
+          onBulkDelete={actions.handleBulkDelete}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
 
-        {/* Tab switcher: Meus Decks / Comunidade */}
+        {/* Tab switcher */}
         {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
@@ -443,7 +234,6 @@ const Dashboard = () => {
             currentDecks={state.currentDecks}
             currentFolderId={state.currentFolderId}
             searchQuery={searchQuery}
-            
             deckSelectionMode={state.deckSelectionMode}
             selectedDeckIds={state.selectedDeckIds}
             expandedDecks={state.expandedDecks}
@@ -455,19 +245,17 @@ const Dashboard = () => {
             folderHasCommunityLink={state.folderHasCommunityLink}
             getFolderDueCount={state.getFolderDueCount}
             getFolderCommunityLinkId={state.getFolderCommunityLinkId}
-            navigateToCommunity={handleNavigateCommunity}
-            
+            navigateToCommunity={actions.handleNavigateCommunity}
             onFolderClick={state.setCurrentFolderId}
             onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
             onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
             onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
             onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
-            
             onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
             onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
             onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
+            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
             onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
@@ -482,7 +270,6 @@ const Dashboard = () => {
             currentDecks={state.communityDecks}
             currentFolderId={null}
             searchQuery={searchQuery}
-            
             deckSelectionMode={false}
             selectedDeckIds={new Set()}
             expandedDecks={state.expandedDecks}
@@ -494,19 +281,17 @@ const Dashboard = () => {
             folderHasCommunityLink={() => false}
             getFolderDueCount={() => 0}
             getFolderCommunityLinkId={() => null}
-            navigateToCommunity={handleNavigateCommunity}
-            
+            navigateToCommunity={actions.handleNavigateCommunity}
             onFolderClick={() => {}}
             onRenameFolder={() => {}}
             onMoveFolder={() => {}}
             onArchiveFolder={() => {}}
             onDeleteFolder={() => {}}
-            
             onCreateSubDeck={() => {}}
             onRenameDeck={() => {}}
             onMoveDeck={() => {}}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => handleDeleteDeckRequest(d)}
+            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
@@ -543,7 +328,6 @@ const Dashboard = () => {
                 ))}
                 {state.archivedDecks.map(deck => (
                   <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
-                    
                     <div className="flex-1 min-w-0">
                       <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
                       <p className="text-xs text-muted-foreground">Baralho arquivado</p>
@@ -552,7 +336,7 @@ const Dashboard = () => {
                       <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
                         <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
                       </Button>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => handleDeleteDeckRequest(deck)}>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => actions.handleDeleteDeckRequest(deck)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -568,13 +352,11 @@ const Dashboard = () => {
         createType={state.createType} setCreateType={state.setCreateType}
         createName={state.createName} setCreateName={state.setCreateName}
         createParentDeckId={state.createParentDeckId} setCreateParentDeckId={state.setCreateParentDeckId}
-        onCreateSubmit={handleCreateSubmit}
+        onCreateSubmit={actions.handleCreateSubmit}
         isCreating={state.createDeck.isPending || state.createFolder.isPending}
-
         renameTarget={state.renameTarget} setRenameTarget={state.setRenameTarget}
         renameName={state.renameName} setRenameName={state.setRenameName}
-        onRenameSubmit={handleRenameSubmit}
-
+        onRenameSubmit={actions.handleRenameSubmit}
         moveTarget={state.moveTarget} setMoveTarget={state.setMoveTarget}
         moveBrowseFolderId={state.moveBrowseFolderId} setMoveBrowseFolderId={state.setMoveBrowseFolderId}
         moveParentDeckId={state.moveParentDeckId} setMoveParentDeckId={state.setMoveParentDeckId}
@@ -582,19 +364,16 @@ const Dashboard = () => {
         movableDecks={state.movableDecks}
         folders={state.folders}
         decks={state.decks}
-        onMoveSubmit={handleMoveSubmit}
+        onMoveSubmit={actions.handleMoveSubmit}
         onCreateFolderInMove={() => { state.setCreateType('folder'); state.setCreateName(''); }}
-
         deleteTarget={state.deleteTarget} setDeleteTarget={state.setDeleteTarget}
-        onDeleteSubmit={handleDeleteSubmit}
-
+        onDeleteSubmit={actions.handleDeleteSubmit}
         duplicateWarning={state.duplicateWarning} setDuplicateWarning={state.setDuplicateWarning}
         setCreateNameFromDuplicate={state.setCreateName}
-
         bulkMoveDeckOpen={state.bulkMoveDeckOpen} setBulkMoveDeckOpen={state.setBulkMoveDeckOpen}
         bulkMoveTargetFolder={state.bulkMoveTargetFolder} setBulkMoveTargetFolder={state.setBulkMoveTargetFolder}
         selectedDeckCount={state.selectedDeckIds.size}
-        onBulkMoveSubmit={handleBulkMoveSubmit}
+        onBulkMoveSubmit={actions.handleBulkMoveSubmit}
       />
 
       <Suspense fallback={null}>
@@ -626,25 +405,16 @@ const Dashboard = () => {
                 let result: { insertedCount: number; totalCards: number };
                 if (subdecks && subdecks.length > 0) {
                   const r = await importDeckWithSubdecks(
-                    user!.id,
-                    deckName,
-                    state.currentFolderId,
+                    user!.id, deckName, state.currentFolderId,
                     cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
-                    subdecks,
-                    defaultAlgorithm,
-                    revlog as any,
-                    progressCb,
+                    subdecks, defaultAlgorithm, revlog as any, progressCb,
                   );
                   result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 } else {
                   const r = await importDeck(
-                    user!.id,
-                    deckName,
-                    state.currentFolderId,
+                    user!.id, deckName, state.currentFolderId,
                     cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
-                    defaultAlgorithm,
-                    revlog as any,
-                    progressCb,
+                    defaultAlgorithm, revlog as any, progressCb,
                   );
                   result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 }
@@ -688,15 +458,15 @@ const Dashboard = () => {
       </Suspense>
 
       <Suspense fallback={null}>
-        {!!communityBlockTarget && (
+        {!!actions.communityBlockTarget && (
           <CommunityDeleteBlockDialog
-            open={!!communityBlockTarget}
-            onOpenChange={(open) => !open && setCommunityBlockTarget(null)}
-            itemName={communityBlockTarget?.name ?? ''}
+            open={!!actions.communityBlockTarget}
+            onOpenChange={(open) => !open && actions.setCommunityBlockTarget(null)}
+            itemName={actions.communityBlockTarget?.name ?? ''}
             itemType="deck"
             onArchive={() => {
-              state.archiveDeck.mutate(communityBlockTarget.id);
-              setCommunityBlockTarget(null);
+              state.archiveDeck.mutate(actions.communityBlockTarget!.id);
+              actions.setCommunityBlockTarget(null);
               toast({ title: 'Baralho arquivado!' });
             }}
           />
