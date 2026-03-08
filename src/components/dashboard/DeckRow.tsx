@@ -2,6 +2,7 @@
  * DeckRow — a single deck item in the dashboard list with context menu and drag handle.
  */
 
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
