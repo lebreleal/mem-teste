@@ -108,7 +108,8 @@ export interface PlanMetrics {
   deckNewAllocation: Record<string, number>;
 }
 
-export function useStudyPlan() {
+export function useStudyPlan(options?: { full?: boolean }) {
+  const full = options?.full ?? false;
   const { user } = useAuth();
   const qc = useQueryClient();
   const userId = user?.id;
@@ -143,21 +144,14 @@ export function useStudyPlan() {
 
   const plans = plansQuery.data ?? [];
 
-  // ─── Deck hierarchy for child→root resolution ───
-  const deckHierarchyQuery = useQuery({
-    queryKey: ['deck-hierarchy', userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('id, parent_deck_id')
-        .eq('user_id', userId!)
-        .eq('is_archived', false);
-      return data ?? [];
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60_000,
-  });
-  const deckHierarchy = deckHierarchyQuery.data ?? [];
+  // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
+  const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+  const deckHierarchy = useMemo(() => {
+    if (!cachedDecks) return [];
+    return cachedDecks
+      .filter((d: any) => !d.is_archived)
+      .map((d: any) => ({ id: d.id as string, parent_deck_id: d.parent_deck_id as string | null }));
+  }, [cachedDecks]);
 
   const findRoot = useCallback((id: string): string => {
     const deck = deckHierarchy.find(d => d.id === id);
@@ -268,7 +262,7 @@ export function useStudyPlan() {
       const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
-    enabled: allDeckIds.length > 0,
+    enabled: full && allDeckIds.length > 0,
     staleTime: 5 * 60_000,
   });
 
@@ -277,7 +271,6 @@ export function useStudyPlan() {
     queryKey: ['plan-health', userId, plans.length],
     queryFn: async () => {
       if (plans.length === 0) return null;
-      // Only check last 14 days for consistency - much lighter than fetching all logs
       const since = new Date();
       since.setDate(since.getDate() - 14);
       const { count, error } = await supabase
@@ -286,12 +279,10 @@ export function useStudyPlan() {
         .eq('user_id', userId!)
         .gte('reviewed_at', since.toISOString());
       if (error) throw error;
-      // Rough consistency: did they study at least 10 of last 14 days?
-      // Approximate by checking if they have enough reviews (avg ~5 cards/day minimum)
       const activeDays = Math.min(14, Math.ceil((count ?? 0) / 5));
       return Math.min(100, Math.round((activeDays / 14) * 100));
     },
-    enabled: !!userId && plans.length > 0,
+    enabled: full && !!userId && plans.length > 0,
     staleTime: 10 * 60_000,
   });
 
@@ -301,7 +292,7 @@ export function useStudyPlan() {
     queryFn: async () => {
       if (allDeckIds.length === 0) return [];
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() + 1); // skip today (we use live metrics for today)
+      startDate.setDate(startDate.getDate() + 1);
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 6);
@@ -315,7 +306,7 @@ export function useStudyPlan() {
       if (error) throw error;
       return (data ?? []) as { scheduled_date: string }[];
     },
-    enabled: !!userId && allDeckIds.length > 0,
+    enabled: full && !!userId && allDeckIds.length > 0,
     staleTime: 3 * 60_000,
   });
 
