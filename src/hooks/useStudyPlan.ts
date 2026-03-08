@@ -473,7 +473,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       projectedCompletionDate, weeklyCardData,
       forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
-  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
+  }, [plans, globalCapacity, realMetricsQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {
