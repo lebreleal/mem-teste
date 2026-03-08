@@ -41,92 +41,45 @@ const ActivityView = () => {
     queryFn: async () => {
       if (!user) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
 
-      const PAGE_SIZE = 1000;
-      let allLogs: any[] = [];
-      let offset = 0;
-      let hasMore = true;
+      const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
+        p_user_id: user.id,
+        p_tz_offset_minutes: tzOffsetMinutes,
+        p_days: 365,
+      } as any);
 
-      while (hasMore) {
-        const { data: page } = await supabase
-          .from('review_logs')
-          .select('reviewed_at, elapsed_ms, state')
-          .eq('user_id', user.id)
-          .gte('reviewed_at', oneYearAgo.toISOString())
-          .order('reviewed_at', { ascending: true })
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (page && page.length > 0) {
-          allLogs = allLogs.concat(page);
-          offset += PAGE_SIZE;
-          hasMore = page.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
+      if (error) throw error;
+      const result = data as any;
+      if (!result || !result.dayMap || Object.keys(result.dayMap).length === 0) {
+        return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
       }
 
-      const logs = allLogs;
-
-      if (!logs?.length) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
-
+      // Convert dayMap values — ensure numeric types
       const dayMap: Record<string, DayData> = {};
-      const MIN_MS = 1500;
-      const MAX_MS = 120000;
-
-      logs.forEach((log, i) => {
-        const d = new Date(log.reviewed_at);
-        const key = format(startOfDay(d), 'yyyy-MM-dd');
-        if (!dayMap[key]) dayMap[key] = { date: key, cards: 0, minutes: 0, newCards: 0, learning: 0, review: 0, relearning: 0 };
-        dayMap[key].cards += 1;
-
-        // Count by state
-        const state = log.state;
-        if (state === 0) dayMap[key].newCards += 1;
-        else if (state === 1) dayMap[key].learning += 1;
-        else if (state === 2) dayMap[key].review += 1;
-        else if (state === 3) dayMap[key].relearning += 1;
-        // state === null: counted in total cards but not in any specific category
-
-        // Accumulate real time per card
-        let ms = 0;
-        if (log.elapsed_ms && log.elapsed_ms >= MIN_MS && log.elapsed_ms <= MAX_MS) {
-          ms = log.elapsed_ms;
-        } else if (i > 0) {
-          const gap = d.getTime() - new Date(logs[i - 1].reviewed_at).getTime();
-          if (gap >= MIN_MS && gap <= MAX_MS) {
-            ms = gap;
-          } else if (gap > MAX_MS) {
-            ms = 15000; // session break bonus
-          }
-        } else {
-          ms = 15000; // first card estimate
-        }
-        dayMap[key].minutes += ms;
-      });
-
-      // Convert accumulated ms to minutes
-      for (const key of Object.keys(dayMap)) {
-        dayMap[key].minutes = dayMap[key].minutes > 0 ? Math.max(1, Math.round(dayMap[key].minutes / 60000)) : 0;
+      for (const [key, val] of Object.entries(result.dayMap as Record<string, any>)) {
+        dayMap[key] = {
+          date: val.date,
+          cards: Number(val.cards) || 0,
+          minutes: Number(val.minutes) || 0,
+          newCards: Number(val.newCards) || 0,
+          learning: Number(val.learning) || 0,
+          review: Number(val.review) || 0,
+          relearning: Number(val.relearning) || 0,
+        };
       }
 
-      const totalActiveDays = Object.keys(dayMap).length;
+      const frozenDays = new Set<string>((result.frozenDays as string[]) ?? []);
 
-      // Streak with freezes
-      const { streak, freezesAvailable, freezesUsed, frozenDays } = calculateStreakWithFreezes(logs.map(l => l.reviewed_at));
-
-      // Best streak (simple, no freezes)
-      const allSorted = Object.keys(dayMap).sort();
-      let bestStreak = allSorted.length > 0 ? 1 : 0;
-      let currentRun = 1;
-      for (let i = 1; i < allSorted.length; i++) {
-        const diff = (new Date(allSorted[i]).getTime() - new Date(allSorted[i - 1]).getTime()) / 86400000;
-        if (diff === 1) { currentRun++; } else { bestStreak = Math.max(bestStreak, currentRun); currentRun = 1; }
-      }
-      bestStreak = Math.max(bestStreak, currentRun);
-
-      return { dayMap, streak, bestStreak, totalActiveDays, freezesAvailable, freezesUsed, frozenDays };
+      return {
+        dayMap,
+        streak: result.streak ?? 0,
+        bestStreak: result.bestStreak ?? 0,
+        totalActiveDays: result.totalActiveDays ?? 0,
+        freezesAvailable: result.freezesAvailable ?? 0,
+        freezesUsed: result.freezesUsed ?? 0,
+        frozenDays,
+      };
     },
     enabled: !!user,
     staleTime: 5_000,
