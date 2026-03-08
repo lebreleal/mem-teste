@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, fetchPromptConfig, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -11,6 +11,11 @@ Deno.serve(async (req) => {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
 
+  let energyDeducted = false;
+  let deductedCost = 0;
+  let supabase: any;
+  let userId = "";
+
   try {
     const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
@@ -20,16 +25,18 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
-    const userId = user.id;
+    userId = user.id;
 
     const cost = energyCost || 0;
     if (cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
       if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
+      energyDeducted = true;
+      deductedCost = cost;
     }
 
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
@@ -63,14 +70,8 @@ Deno.serve(async (req) => {
 4. NÃO faça preâmbulos. NÃO cumprimente. NÃO elogie. NÃO comente sobre a pergunta. VÁ DIRETO ao conteúdo.
 5. Use Markdown para formatação. Seja didático e completo.
 6. Você é um tutor educacional. Responda SOMENTE o conteúdo acadêmico solicitado.`;
-    // ALWAYS prepend anti-preamble rules, then append DB prompt if any
     const dbPrompt = promptConfig?.system_prompt ? `\n\nInstruções adicionais:\n${promptConfig.system_prompt}` : '';
     const systemPrompt = antiPreamblePrompt + dbPrompt;
-
-    // Estimate token usage from input text (1 token ≈ 4 chars for Gemini)
-    const estimatedPromptTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
-    const estimatedCompletionTokens = Math.ceil(maxTokens * 0.5);
-    const estimatedTotal = estimatedPromptTokens + estimatedCompletionTokens;
 
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
@@ -84,35 +85,24 @@ Deno.serve(async (req) => {
         max_tokens: maxTokens,
         temperature,
         stream: true,
+        stream_options: { include_usage: true },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text(); console.error("AI error:", response.status, errText);
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
       if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
       if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
-    // Log estimated token usage (streaming prevents exact count)
-    await logTokenUsage(supabase, userId, "ai_tutor", selectedModel, {
-      prompt_tokens: estimatedPromptTokens,
-      completion_tokens: estimatedCompletionTokens,
-      total_tokens: estimatedTotal,
-    }, cost);
-
-    // Stream the OpenAI SSE response directly to the client
-    return new Response(response.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    // Stream started successfully — credits are consumed legitimately
+    return streamWithUsageCapture(response, supabase, userId, "ai_tutor", selectedModel, cost);
   } catch (err) {
     console.error("Error:", err);
+    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
     return jsonResponse({ error: "Internal error" }, 500);
   }
 });

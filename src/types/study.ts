@@ -11,6 +11,7 @@ export interface StudyStats {
   todayCards: number;
   avgMinutesPerDay7d: number;
   todayMinutes: number;
+  freezesAvailable: number;
 }
 
 export interface StudyQueueResult {

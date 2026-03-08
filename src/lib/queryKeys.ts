@@ -19,7 +19,7 @@ export function invalidateDeckRelatedQueries(queryClient: QueryClient, deckId?: 
   }
 }
 
-/** Invalidate study-related queries after a review. */
+/** Invalidate study-related queries after a review session ends. */
 export function invalidateStudyQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['decks'] });
   queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
@@ -27,4 +27,6 @@ export function invalidateStudyQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['cards-meta'] });
   queryClient.invalidateQueries({ queryKey: ['cards-display'] });
   queryClient.invalidateQueries({ queryKey: ['study-queue'] });
+  queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+  queryClient.invalidateQueries({ queryKey: ['activity-full'] });
 }

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useEnergy } from '@/hooks/useEnergy';
-import { getNextReadyIndex } from '@/lib/studyUtils';
+import { getNextReadyIndex, parseStepToMinutes } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
 import AIModelSelector from '@/components/AIModelSelector';
@@ -65,6 +65,14 @@ const Study = () => {
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Reset scroll position when card changes
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [cardKey]);
 
   const [hintResponse, setHintResponse] = useState<string | null>(null);
   const [explainResponse, setExplainResponse] = useState<string | null>(null);
@@ -92,6 +100,20 @@ const Study = () => {
       setQueueInitialized(true);
     }
   }, [queue, queueInitialized]);
+
+  // Bug fix: clear stale study-queue cache on unmount so re-entering
+  // the study page always fetches fresh data from the server.
+  const studyQueueKey = useMemo(
+    () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    [deckId, folderId],
+  );
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: studyQueueKey });
+      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+    };
+  }, [queryClient, studyQueueKey]);
 
   // getNextReadyIndex imported from studyUtils
 
@@ -329,96 +351,100 @@ const Study = () => {
     }
 
     if (rating > 2) {
-      addSuccessfulCard.mutate(
-        { flowMultiplier: 1.0 },
-        {
-          onSuccess: (result) => {
-            if (result.milestone === 50) toast({ title: '🎉 Bônus de 50 cards!', description: '+5 Créditos IA extra!' });
-            else if (result.milestone === 100) toast({ title: '🏆 Bônus de 100 cards!', description: '+10 Créditos IA extra!' });
-          },
-        }
-      );
+      addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
     }
 
-    setIsTransitioning(true);
+    // ── OPTIMISTIC UPDATE: update local queue IMMEDIATELY ──
+    // Heuristic: Again(1) always stays in session; Hard(2) on learning stays;
+    // everything else graduates/removes. This matches FSRS & SM-2 behavior 100%.
+    const shouldKeep = rating === 1 || (rating === 2 && currentCard.state !== 2);
 
+    reviewedCardIdsRef.current.add(currentCard.id);
+    setReviewCount(prev => prev + 1);
+
+    if (shouldKeep) {
+      // Estimate scheduled_date from deck learning steps
+      const steps = deckConfig?.learning_steps ?? ['1', '10'];
+      const currentStep = currentCard.learning_step ?? 0;
+      const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
+      const stepStr = steps[stepIdx] ?? '1';
+      const stepMinutes = parseStepToMinutes(stepStr);
+      const estimatedDate = new Date(Date.now() + stepMinutes * 60 * 1000).toISOString();
+      const estimatedState = rating === 1 && currentCard.state === 2 ? 3 : (currentCard.state === 0 ? 1 : currentCard.state);
+
+      setLocalQueue(prev => {
+        const idx = prev.findIndex(c => c.id === currentCard.id);
+        if (idx < 0) return prev;
+        const updatedCard = {
+          ...prev[idx],
+          state: estimatedState,
+          scheduled_date: estimatedDate,
+          learning_step: stepIdx,
+        };
+        const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        return [...without, updatedCard];
+      });
+    } else {
+      // Remove from session + bury cloze siblings
+      const buriedSiblingIds: string[] = [];
+      setLocalQueue(prev => {
+        let filtered = prev.filter(c => c.id !== currentCard.id);
+        if (currentCard.card_type === 'cloze') {
+          const buryNew = deckConfig?.bury_new_siblings !== false;
+          const buryReview = deckConfig?.bury_review_siblings !== false;
+          const buryLearning = deckConfig?.bury_learning_siblings !== false;
+          if (buryNew || buryReview || buryLearning) {
+            const siblingIds = getSiblingIds(currentCard, filtered);
+            if (siblingIds.length > 0) {
+              filtered = filtered.filter(c => {
+                if (!siblingIds.includes(c.id)) return true;
+                if (c.state === 0 && buryNew) { buriedSiblingIds.push(c.id); return false; }
+                if (c.state === 2 && buryReview) { buriedSiblingIds.push(c.id); return false; }
+                if ((c.state === 1 || c.state === 3) && buryLearning) { buriedSiblingIds.push(c.id); return false; }
+                return true;
+              });
+            }
+          }
+        }
+        return filtered;
+      });
+      if (buriedSiblingIds.length > 0) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
+      }
+    }
+
+    // Advance card immediately — no waiting for DB
+    setCardKey(prev => prev + 1);
+    cardShownAt.current = Date.now();
+    submittingRef.current = null;
+
+    // ── ASYNC DB PERSIST ──
     submitReview.mutate(
       { card: currentCard, rating, elapsedMs: elapsed },
       {
         onSuccess: (result) => {
-          setTimeout(() => {
-            reviewedCardIdsRef.current.add(currentCard.id);
-            setReviewCount(prev => prev + 1);
-
-            // Decision: keep in session ONLY if interval_days === 0
-            // (learning/relearning short-term step). Otherwise remove.
-            const shouldKeep = result.interval_days === 0;
-
-            if (shouldKeep) {
-              // Short-term step: update card and move to end of queue
-              setLocalQueue(prev => {
-                const idx = prev.findIndex(c => c.id === currentCard.id);
-                if (idx < 0) return prev;
-                const updatedCard = {
-                  ...prev[idx],
-                  state: result.state,
-                  stability: result.stability,
-                  difficulty: result.difficulty,
-                  scheduled_date: result.scheduled_date,
-                  learning_step: result.learning_step ?? 0,
-                };
-                const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-                return [...without, updatedCard];
-              });
-            } else {
-              // Future review (interval_days > 0): remove from session
-              // Also bury cloze siblings if enabled (state-aware)
-              const buriedSiblingIds: string[] = [];
-              setLocalQueue(prev => {
-                let filtered = prev.filter(c => c.id !== currentCard.id);
-                // Sibling burying: remove cloze siblings based on their state
-                if (currentCard.card_type === 'cloze') {
-                  const buryNew = deckConfig?.bury_new_siblings !== false;
-                  const buryReview = deckConfig?.bury_review_siblings !== false;
-                  const buryLearning = deckConfig?.bury_learning_siblings !== false;
-                  if (buryNew || buryReview || buryLearning) {
-                    const siblingIds = getSiblingIds(currentCard, filtered);
-                    if (siblingIds.length > 0) {
-                      filtered = filtered.filter(c => {
-                        if (!siblingIds.includes(c.id)) return true;
-                        // Only bury if the sibling's state matches a bury flag
-                        if (c.state === 0 && buryNew) { buriedSiblingIds.push(c.id); return false; }
-                        if (c.state === 2 && buryReview) { buriedSiblingIds.push(c.id); return false; }
-                        if ((c.state === 1 || c.state === 3) && buryLearning) { buriedSiblingIds.push(c.id); return false; }
-                        return true;
-                      });
-                    }
+          // Patch learning card with real algorithm values (stability, difficulty, scheduled_date)
+          if (shouldKeep && result.interval_days === 0) {
+            setLocalQueue(prev => prev.map(c =>
+              c.id === currentCard.id
+                ? {
+                    ...c,
+                    state: result.state,
+                    stability: result.stability,
+                    difficulty: result.difficulty,
+                    scheduled_date: result.scheduled_date,
+                    learning_step: result.learning_step ?? 0,
                   }
-                }
-                return filtered;
-              });
-              // Push buried siblings to tomorrow in DB so they don't show as pending today
-              if (buriedSiblingIds.length > 0) {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                tomorrow.setHours(0, 0, 0, 0);
-                supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() } as any).in('id', buriedSiblingIds);
-              }
-            }
-
-            setCardKey(prev => prev + 1);
-            cardShownAt.current = Date.now();
-            setIsTransitioning(false);
-            submittingRef.current = null;
-          }, 150);
-        },
-        onError: () => {
-          setIsTransitioning(false);
-          submittingRef.current = null;
+                : c
+            ));
+          }
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, toast, localQueue, reviewCount, cardKey]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig]);
 
   const handleUndo = useCallback(async () => {
     if (!undoSnapshot) return;
@@ -572,7 +598,7 @@ const Study = () => {
         />
       </div>
 
-      <main className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
+      <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className="w-full animate-fade-in">
           <FlashCard
             cardId={currentCard.id}

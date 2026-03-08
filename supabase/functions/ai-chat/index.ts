@@ -1,10 +1,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, getAIConfig, fetchWithRetry, streamWithUsageCapture } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
+
+  let energyDeducted = false;
+  let deductedCost = 0;
+  let supabase: any;
+  let userId = "";
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
@@ -12,13 +17,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
-    const userId = user.id;
+    userId = user.id;
 
     const { messages, aiModel, energyCost, conversationId } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
@@ -28,6 +33,8 @@ Deno.serve(async (req) => {
     if (userId && cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
       if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
+      energyDeducted = true;
+      deductedCost = cost;
     }
 
     const modelMap = await getModelMap(supabase);
@@ -43,23 +50,31 @@ Deno.serve(async (req) => {
     const response = await fetchWithRetry(AI_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
-      body: JSON.stringify({ model: selectedModel, messages: chatMessages, max_tokens: 4096, temperature: 0.7, stream: true }),
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: chatMessages,
+        max_tokens: 4096,
+        temperature: 0.7,
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
       console.error("AI error:", response.status, errText);
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       if (response.status === 429) return jsonResponse({ error: "Limite de requisições excedido." }, 429);
       if (response.status === 403) return jsonResponse({ error: "API do Google AI não ativada." }, 502);
       if (response.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente Flash." }, 503);
       return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
     }
 
-    if (userId) await logTokenUsage(supabase, userId, "ai_chat", selectedModel, undefined, cost);
-
-    return new Response(response.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+    // Stream started successfully — credits are consumed legitimately
+    return streamWithUsageCapture(response, supabase, userId, "ai_chat", selectedModel, cost);
   } catch (err) {
     console.error("Error:", err);
+    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
     return jsonResponse({ error: "Erro interno" }, 500);
   }
 });

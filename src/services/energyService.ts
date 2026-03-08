@@ -6,8 +6,6 @@ import { supabase } from '@/integrations/supabase/client';
 import type { EnergyData } from '@/types/energy';
 
 const MAX_ENERGY = 9999;
-const MILESTONE_50_BONUS = 5;
-const MILESTONE_100_BONUS = 10;
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -62,19 +60,8 @@ export async function addSuccessfulCard(
 ) {
   const newCounter = current.successfulCardsCounter + 1;
   const newDailyCards = current.dailyCardsStudied + 1;
-  let newEnergy = current.energy;
-  let newDailyEarned = current.dailyEnergyEarned;
-  let milestone: 50 | 100 | null = null;
-
-  if (newDailyCards === 50) {
-    newEnergy = Math.min(MAX_ENERGY, newEnergy + MILESTONE_50_BONUS);
-    newDailyEarned += MILESTONE_50_BONUS;
-    milestone = 50;
-  } else if (newDailyCards === 100) {
-    newEnergy = Math.min(MAX_ENERGY, newEnergy + MILESTONE_100_BONUS);
-    newDailyEarned += MILESTONE_100_BONUS;
-    milestone = 100;
-  }
+  const newEnergy = current.energy;
+  const newDailyEarned = current.dailyEnergyEarned;
 
   const updateData: Record<string, any> = {
     energy: newEnergy,
@@ -85,7 +72,7 @@ export async function addSuccessfulCard(
 
   await supabase.from('profiles').update(updateData).eq('id', userId);
 
-  return { energy: newEnergy, counter: newCounter >= 10 ? 0 : newCounter, earned: false, milestone, dailyEnergyEarned: newDailyEarned };
+  return { energy: newEnergy, counter: newCounter >= 10 ? 0 : newCounter, earned: false, milestone: null, dailyEnergyEarned: newDailyEarned };
 }
 
 /** Spend energy/credits. */

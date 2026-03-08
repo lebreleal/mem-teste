@@ -61,6 +61,17 @@ export async function deductEnergy(supabase: any, userId: string, cost: number):
   return data >= 0; // -1 means insufficient
 }
 
+/** Refund energy credits back to user (rollback on error). */
+export async function refundEnergy(supabase: any, userId: string, cost: number): Promise<void> {
+  if (cost <= 0 || !userId) return;
+  try {
+    await supabase.rpc("refund_energy", { p_user_id: userId, p_cost: cost });
+    console.log(`Refunded ${cost} energy to user ${userId}`);
+  } catch (e) {
+    console.error("refundEnergy error:", e);
+  }
+}
+
 /** Log token usage to ai_token_usage table. */
 export async function logTokenUsage(
   supabase: any,
@@ -110,4 +121,82 @@ export async function fetchPromptConfig(supabase: any, featureKey: string) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Wrap a streaming AI response to:
+ * 1. Pass SSE data through to the client unchanged
+ * 2. Capture token usage from the final SSE chunk
+ * 3. Log actual usage after the stream completes
+ *
+ * Returns a Response that can be returned directly to the client.
+ */
+export function streamWithUsageCapture(
+  response: Response,
+  supabase: any,
+  userId: string,
+  featureKey: string,
+  model: string,
+  energyCost: number,
+): Response {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let capturedUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null;
+
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          // Log captured usage after stream ends
+          if (capturedUsage) {
+            console.log(`[${featureKey}] Stream usage captured: prompt=${capturedUsage.prompt_tokens}, completion=${capturedUsage.completion_tokens}, total=${capturedUsage.total_tokens}`);
+            await logTokenUsage(supabase, userId, featureKey, model, capturedUsage, energyCost);
+          } else {
+            console.warn(`[${featureKey}] No usage captured from stream, logging zero`);
+            await logTokenUsage(supabase, userId, featureKey, model, undefined, energyCost);
+          }
+          return;
+        }
+
+        // Pass through to client
+        controller.enqueue(value);
+
+        // Parse SSE lines looking for usage data
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            if (parsed.usage) {
+              capturedUsage = {
+                prompt_tokens: parsed.usage.prompt_tokens || 0,
+                completion_tokens: parsed.usage.completion_tokens || 0,
+                total_tokens: parsed.usage.total_tokens || 0,
+              };
+            }
+          } catch {
+            // partial JSON, ignore
+          }
+        }
+      } catch (err) {
+        console.error(`[${featureKey}] Stream error:`, err);
+        controller.error(err);
+      }
+    },
+    cancel() {
+      reader.cancel();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
 }

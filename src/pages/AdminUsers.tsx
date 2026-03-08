@@ -15,30 +15,40 @@ import { ArrowLeft, Loader2, Search, User, BookOpen, Zap, Calendar, Ban, Save, C
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
-// OpenAI pricing per 1M tokens (USD) — TTS uses per-character pricing
-// Pricing per 1M tokens (USD) — Google Gemini + OpenAI + TTS
+// Feature key → friendly name
+const FEATURE_NAMES: Record<string, string> = {
+  generate_deck: 'Gerar Deck',
+  ai_tutor: 'Tutor IA',
+  grade_exam: 'Corrigir Prova',
+  enhance_card: 'Aprimorar Card',
+  enhance_import: 'Aprimorar Importação',
+  ai_chat: 'Chat IA',
+  generate_onboarding: 'Onboarding IA',
+  auto_tag: 'Auto-Tag',
+  suggest_tags: 'Sugerir Tags',
+  detect_import_format: 'Detectar Formato',
+  organize_import: 'Organizar Importação',
+  tts: 'Text-to-Speech',
+};
+
+// Pricing per 1M tokens (USD) — calibrated against Google Cloud Billing (Feb 2026)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // Google Gemini models
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 },        // $1.25/1M input, $10/1M output (>200k: $2.50/$15)
-  'gemini-2.5-flash': { input: 0.15, output: 0.60 },       // $0.15/1M input, $0.60/1M output
-  'gemini-2.5-flash-lite': { input: 0.075, output: 0.30 }, // $0.075/1M input, $0.30/1M output
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },        // blended thinking+regular from billing
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
-  // OpenAI models
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 2.50, output: 10.00 },
-  'gpt-4': { input: 30.00, output: 60.00 },
-  'gpt-4-turbo': { input: 10.00, output: 30.00 },
   'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
-  // TTS (per 1M characters, logged as prompt_tokens)
   'tts-1': { input: 15.00, output: 0 },
-  'tts-1-hd': { input: 30.00, output: 0 },
-  // Google Cloud TTS Neural2 ($4/1M chars)
   'google-neural2': { input: 4.00, output: 0 },
 };
 
-const calcCostUSD = (model: string, promptTokens: number, completionTokens: number): number => {
+// total_tokens includes thinking tokens; real output = total - prompt
+const calcCostUSD = (model: string, promptTokens: number, completionTokens: number, totalTokens: number): number => {
   const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['gpt-4o-mini'];
-  return (promptTokens / 1_000_000) * pricing.input + (completionTokens / 1_000_000) * pricing.output;
+  const realOutputTokens = Math.max(totalTokens - promptTokens, completionTokens);
+  return (promptTokens / 1_000_000) * pricing.input + (realOutputTokens / 1_000_000) * pricing.output;
 };
 
 const AdminUsers = () => {
@@ -138,7 +148,7 @@ const AdminUsers = () => {
   };
 
   // Calculate total costs for all token usage entries
-  const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens)), 0);
+  const totalCostUSD = tokenUsage.reduce((sum, t) => sum + calcCostUSD(t.model, Number(t.total_prompt_tokens), Number(t.total_completion_tokens), Number(t.total_tokens_sum)), 0);
   const totalCostBRL = usdToBrl ? totalCostUSD * usdToBrl : null;
 
   if (adminLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -269,7 +279,7 @@ const AdminUsers = () => {
               {loadingDetail ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div> : (
                 <>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Consumo dos últimos 30 dias</p>
+                    <p className="text-sm text-muted-foreground">Consumo de tokens (últimos 30 dias)</p>
                     <Button
                       variant="outline"
                       size="sm"
@@ -334,14 +344,14 @@ const AdminUsers = () => {
                   {/* Detailed chronological log */}
                   <h3 className="font-semibold text-sm text-muted-foreground pt-2">Histórico Detalhado</h3>
                   {tokenUsageDetailed.map((entry) => {
-                    const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens));
+                    const costUSD = calcCostUSD(entry.model, Number(entry.prompt_tokens), Number(entry.completion_tokens), Number(entry.total_tokens));
                     const costBRL = usdToBrl ? costUSD * usdToBrl : null;
                     return (
                       <Card key={entry.id}>
                         <CardContent className="py-3 px-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-sm">{entry.feature_key}</p>
+                              <p className="font-medium text-sm">{FEATURE_NAMES[entry.feature_key] || entry.feature_key}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(entry.created_at), 'dd/MM/yyyy HH:mm:ss')}
                               </p>
@@ -364,6 +374,7 @@ const AdminUsers = () => {
                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                             <span>Prompt: {Number(entry.prompt_tokens).toLocaleString()}</span>
                             <span>Completion: {Number(entry.completion_tokens).toLocaleString()}</span>
+                            {(() => { const thinking = Number(entry.total_tokens) - Number(entry.prompt_tokens) - Number(entry.completion_tokens); return thinking > 0 ? <span className="text-orange-500">Thinking: {thinking.toLocaleString()}</span> : null; })()}
                             <span>Total: {Number(entry.total_tokens).toLocaleString()}</span>
                             <span className="text-primary font-medium">⚡ {Number(entry.energy_cost)}</span>
                           </div>

@@ -31,10 +31,11 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       );
     },
     onSettled: () => {
-      // Only invalidate stats, NOT the study-queue itself during the session
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
     },
   });
 

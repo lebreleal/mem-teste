@@ -90,24 +90,26 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
   }, [messages.length, onHasMessagesChange]);
 
   useEffect(() => {
-    if (!open) return; // Don't reset absorbedRef on close - preserve tracking
+    if (!open) return;
     if (streamingResponse && !isStreamingResponse && absorbedRef.current !== streamingResponse) {
-      // Streaming finished — append as a new assistant message (don't replace old ones)
       absorbedRef.current = streamingResponse;
       setMessages(prev => [...prev, { role: 'assistant', content: streamingResponse }]);
       onClearStreaming?.();
+      // Auto-scroll to show the new absorbed message
+      requestAnimationFrame(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      });
     }
   }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
 
-  // Auto-scroll: only when user sends a new message (not on streaming updates)
-  const lastUserMsgCount = useRef(0);
+  // Auto-scroll when user sends a message OR when a new assistant message appears
+  const prevMsgCount = useRef(0);
   useEffect(() => {
-    const userMsgCount = messages.filter(m => m.role === 'user').length;
-    if (scrollRef.current && userMsgCount > lastUserMsgCount.current) {
+    if (scrollRef.current && messages.length > prevMsgCount.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-    lastUserMsgCount.current = userMsgCount;
-  }, [messages]);
+    prevMsgCount.current = messages.length;
+  }, [messages.length]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

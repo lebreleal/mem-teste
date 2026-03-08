@@ -21,7 +21,6 @@ export interface GenerateDeckParams {
   customInstructions?: string;
   aiModel: string;
   energyCost: number;
-  skipLog?: boolean;
 }
 
 export interface GenerateDeckResult {
@@ -70,7 +69,6 @@ export async function generateDeckCards(params: GenerateDeckParams): Promise<Gen
       customInstructions: params.customInstructions,
       aiModel: params.aiModel,
       energyCost: params.energyCost,
-      skipLog: params.skipLog ?? false,
     },
   });
   if (error) throw error;
