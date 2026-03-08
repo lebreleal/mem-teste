@@ -1,64 +1,86 @@
 
 
-# Melhorar cobertura de conteúdo na geração de decks por IA
+## Plano: Transação com Rollback de Créditos em Edge Functions
 
-## Implementado
+### Problema
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+Todas as edge functions (generate-deck, enhance-card, enhance-import, ai-tutor, ai-chat) seguem o mesmo padrão quebrado:
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+1. Deduz créditos (energy) via `deductEnergy` RPC
+2. Chama a API do Google AI
+3. Se a API falha (429, 503, parse error, etc.) → créditos JA foram descontados e NUNCA são devolvidos
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+Não existe nenhuma função `refundEnergy` no sistema.
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+### Solução
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+**1. Criar RPC `refund_energy` no banco (migration SQL)**
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+```sql
+CREATE OR REPLACE FUNCTION public.refund_energy(p_user_id uuid, p_cost integer)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF p_cost <= 0 THEN RETURN; END IF;
+  UPDATE profiles SET energy = energy + p_cost WHERE id = p_user_id;
+END;
+$$;
+```
 
-## Trade-offs
-- +3x mais chamadas API (mais créditos gastos por geração)
-- Mais cards gerados por batch
-- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
-- MC mais focado e pedagógico (diferenciação, não trivial)
+**2. Adicionar `refundEnergy` em `supabase/functions/_shared/utils.ts`**
 
----
+```typescript
+export async function refundEnergy(supabase: any, userId: string, cost: number): Promise<void> {
+  if (cost <= 0) return;
+  await supabase.rpc("refund_energy", { p_user_id: userId, p_cost: cost });
+}
+```
 
-# Rebalanceamento da Economia de Créditos IA
+**3. Atualizar cada edge function para refundar em caso de erro**
 
-## Implementado
+Padrão a aplicar em todos os 5 arquivos (`generate-deck`, `enhance-card`, `enhance-import`, `ai-tutor`, `ai-chat`):
 
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
+- Guardar flag `let energyDeducted = false` + `let deductedCost = 0` após dedução bem-sucedida
+- Em cada ponto de erro APÓS a dedução, chamar `await refundEnergy(supabase, userId, deductedCost)` antes de retornar o erro
+- No `catch` global, também refundar se `energyDeducted`
 
-Total mensal free: ~1.500 → ~270 créditos.
+Exemplo para `generate-deck`:
+```
+// Após deductEnergy:
+let energyDeducted = false;
+if (cost > 0) {
+  const ok = await deductEnergy(supabase, userId, cost);
+  if (!ok) return jsonResponse({...}, 402);
+  energyDeducted = true;
+}
 
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+// Em cada return de erro (429, 502, 503, parse error, 0 cards):
+if (energyDeducted) await refundEnergy(supabase, userId, cost);
+return jsonResponse({ error: "..." }, status);
 
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
+// No catch global:
+catch (err) {
+  if (energyDeducted) await refundEnergy(supabase, userId, cost);
+  return jsonResponse({ error: "..." }, 500);
+}
+```
 
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
+### Arquivos a editar
+
+| Arquivo | Mudança |
+|---------|---------|
+| Migration SQL | Criar RPC `refund_energy` |
+| `supabase/functions/_shared/utils.ts` | Adicionar `refundEnergy()` |
+| `supabase/functions/generate-deck/index.ts` | Refund em 5 pontos de erro |
+| `supabase/functions/enhance-card/index.ts` | Refund no catch |
+| `supabase/functions/enhance-import/index.ts` | Refund no catch |
+| `supabase/functions/ai-tutor/index.ts` | Refund no catch (streaming — refund se stream nem iniciou) |
+| `supabase/functions/ai-chat/index.ts` | Refund no catch (streaming — refund se stream nem iniciou) |
+
+### Nota sobre streaming (ai-tutor, ai-chat)
+
+Para funções de streaming, o refund só faz sentido se a chamada AI falhar ANTES de iniciar o stream. Se o stream já começou a enviar dados ao client, os créditos foram "gastos" legitimamente. O refund será aplicado apenas nos erros pré-stream (401, 429, connection error).
+
