@@ -223,19 +223,28 @@ export function useStudyPlan() {
   });
 
   // ─── Per-deck new card counts for proportional allocation ───
+  // Reuse the deck stats from the shared ['decks'] cache instead of calling
+  // get_all_user_deck_stats a second time. The useDecks hook already fetches
+  // this data and shares it via staleTime, so we just read from the cache.
   const perDeckStatsQuery = useQuery({
     queryKey: ['per-deck-new-counts', userId, expandedDeckIds],
     queryFn: async () => {
       if (allDeckIds.length === 0) return {} as Record<string, number>;
-      const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
-      if (error) throw error;
+      // Try to read from decks cache first (populated by useDecks → fetchDecksWithStats)
+      const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+      let rows: { deck_id: string; new_count: number }[];
+      if (cachedDecks && cachedDecks.length > 0) {
+        rows = cachedDecks.map((d: any) => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
+      } else {
+        // Fallback: fetch directly (only on cold start before useDecks populates)
+        const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+        if (error) throw error;
+        rows = (data as any[]) ?? [];
+      }
       const map: Record<string, number> = {};
-      const rows = (data as any[]) ?? [];
-      // Include decks that belong to objectives OR are descendants of objective decks
       const expandedSet = new Set(expandedDeckIds);
       for (const row of rows) {
         if (expandedSet.has(row.deck_id)) {
-          // Aggregate under root ancestor
           const rootId = findRoot(row.deck_id);
           map[rootId] = (map[rootId] ?? 0) + (Number(row.new_count) || 0);
         }
