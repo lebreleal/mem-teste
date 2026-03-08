@@ -4,7 +4,7 @@
  * Opens with defaultTab from parent (crown → plans, brain → credits).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, X, Sparkles, Brain, Zap, Pencil, Infinity, Check, ExternalLink, Timer, Rocket, Eye } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
