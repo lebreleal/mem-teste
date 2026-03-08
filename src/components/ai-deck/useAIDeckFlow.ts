@@ -395,8 +395,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
       }
     }
 
-    // Server already logs token usage per batch (skipLog: false by default for the edge function's internal logging).
-    // No client-side aggregated log needed — it was creating phantom entries with 0 tokens.
+    // Server logs token usage per batch automatically.
 
     queryClient.invalidateQueries({ queryKey: ['energy'] });
 
