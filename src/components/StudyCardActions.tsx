@@ -311,7 +311,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           onSiblingsUpdated(updatedSiblings, deletedIds);
         }
 
-        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
