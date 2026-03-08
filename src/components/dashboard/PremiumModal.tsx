@@ -128,9 +128,21 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                   {isPremium && !isTrial ? (
                     <>
                       <h3 className="font-display text-2xl font-bold text-foreground italic">Premium Ativo</h3>
+                      {isGift && giftDescription && (
+                        <p className="text-xs text-muted-foreground mt-1">🎁 {giftDescription}</p>
+                      )}
                       {expiresAt && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {plan === 'lifetime' ? '♾️ Acesso vitalício' : <>Expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span></>}
+                        </p>
+                      )}
+                    </>
+                  ) : isPremium && isTrial ? (
+                    <>
+                      <h3 className="font-display text-2xl font-bold text-foreground italic">Premium Ativo</h3>
+                      {expiresAt && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Período de teste — expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span>
                         </p>
                       )}
                     </>
