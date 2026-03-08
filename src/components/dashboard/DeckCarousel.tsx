@@ -54,8 +54,8 @@ function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, { new_count: 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits.
  *  When globalNewRemaining is provided (plan mode), it represents the remaining global new-card
  *  budget across ALL objective decks (already reduced by cards studied in any objective deck today). */
-function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globalNewRemaining?: number) {
-  const raw = getAggregateRaw(deck, allDecks);
+function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, ReturnType<typeof buildAggregateMap extends (...args: any[]) => Map<string, infer V> ? V : never>>, globalNewRemaining?: number) {
+  const raw = aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
   const dailyReviewLimit = deck.daily_review_limit ?? 100;
 
   let newAvailable: number;
