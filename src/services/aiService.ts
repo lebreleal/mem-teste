@@ -21,7 +21,6 @@ export interface GenerateDeckParams {
   customInstructions?: string;
   aiModel: string;
   energyCost: number;
-  skipLog?: boolean;
 }
 
 export interface GenerateDeckResult {
