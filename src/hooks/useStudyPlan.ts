@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useMemo, useCallback } from 'react';
-import { computeNewCardAllocation } from '@/lib/studyUtils';
+import { computeNewCardAllocation, estimateStudySeconds } from '@/lib/studyUtils';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
