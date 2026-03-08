@@ -477,7 +477,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {
-    const avg = avgQuery.data ?? 30;
+    const rm = realMetricsQuery.data ?? DEFAULT_STUDY_METRICS;
+    const avg = deriveAvgSecondsPerCard(rm);
     const raw = metricsQuery.data;
     if (plans.length === 0 || !raw) return null;
 
