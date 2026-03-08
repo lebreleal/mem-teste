@@ -78,7 +78,6 @@ const Dashboard = () => {
   // Carousel helpers
   const hasPlan = plans.length > 0;
   const planDeckIds = allDeckIds;
-  const planDeckOrder = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
   const plansByDeckId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of plans) {
