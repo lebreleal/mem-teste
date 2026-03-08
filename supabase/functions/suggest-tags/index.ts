@@ -110,7 +110,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.0-flash",
           messages: [
             { role: "system", content: "Você é um classificador de conteúdo educacional. Responda apenas com JSON." },
             { role: "user", content: prompt },
@@ -136,7 +136,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
       completion_tokens: rawUsage.completion_tokens || 0,
       total_tokens: rawUsage.total_tokens || 0,
     } : undefined;
-    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.5-flash", usage, 0);
+    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.0-flash", usage, 0);
     const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
     let suggestedTags: string[] = [];

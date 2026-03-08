@@ -132,7 +132,7 @@ const CardReviewStep = ({
 
   // Auto-trigger AI suggestions on mount — skip if suggestions already cached
   useEffect(() => {
-    if (aiSuggestions.length > 0) return; // already have suggestions, don't re-fetch
+    if (aiSuggestions.length > 0) return;
     const fetchSuggestions = async () => {
       if (!deckName && !textSample) return;
       setAiLoading(true);
@@ -479,7 +479,6 @@ const CardReviewStep = ({
           </div>
         )}
 
-        {/* Free-form tag input */}
         <div className="relative">
           <Input
             value={tagQuery}

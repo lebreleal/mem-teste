@@ -395,6 +395,7 @@ const DeckTagsSection = ({ deckId }: { deckId: string }) => {
         onRemove={(tagId) => removeTag.mutate(tagId)}
         placeholder="Buscar ou criar tag..."
         aiContext={{ deckName: (deck as any)?.name }}
+        
       />
     </div>
   );

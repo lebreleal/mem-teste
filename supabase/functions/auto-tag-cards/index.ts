@@ -97,7 +97,7 @@ serve(async (req) => {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.0-flash",
           messages: [
             { role: "system", content: "Você extrai palavras-chave específicas de cartões de estudo. Responda APENAS JSON válido, sem markdown." },
             { role: "user", content: `Para CADA cartão abaixo, extraia 1-3 palavras-chave ESPECÍFICAS do conteúdo daquele cartão individual. As tags devem ser termos técnicos, conceitos ou entidades mencionados diretamente no texto do cartão — NÃO categorias genéricas ou nomes de disciplinas.
@@ -134,7 +134,7 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
       completion_tokens: rawUsage.completion_tokens || 0,
       total_tokens: rawUsage.total_tokens || 0,
     } : undefined;
-    await logTokenUsage(supabase, user.id, "auto_tag_cards", "gemini-2.5-flash", usage, 0);
+    await logTokenUsage(supabase, user.id, "auto_tag_cards", "gemini-2.0-flash", usage, 0);
     const rawContent = aiData.choices?.[0]?.message?.content || "{}";
 
     let tagsByCard: Record<string, string[]> = {};

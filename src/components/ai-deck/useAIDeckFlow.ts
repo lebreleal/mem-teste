@@ -488,6 +488,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
           .catch(e => console.error('Auto-tag failed:', e));
       }
 
+
       // If opened from pending review, remove the pending item
       if (pendingReviewData?.pendingId) {
         removePending(pendingReviewData.pendingId);
