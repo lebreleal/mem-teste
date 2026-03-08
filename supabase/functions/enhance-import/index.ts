@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logTokenUsage, fetchPromptConfig, getAIConfig } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um assistente que corrige e melhora flashcards importados de CSVs malformados.
 
@@ -18,6 +18,11 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  let energyDeducted = false;
+  let deductedCost = 0;
+  let supabase: any;
+  let userId = "";
+
   try {
     const { cards, aiModel, energyCost } = await req.json();
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
@@ -25,9 +30,8 @@ Deno.serve(async (req) => {
     if (!cards || !Array.isArray(cards) || cards.length === 0) throw new Error("No cards provided");
 
     const authHeader = req.headers.get("Authorization") || "";
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
-    let userId = "";
     if (authHeader.startsWith("Bearer ")) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) userId = user.id;
@@ -37,6 +41,8 @@ Deno.serve(async (req) => {
     if (userId && cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
       if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
+      energyDeducted = true;
+      deductedCost = cost;
     }
 
     const promptConfig = await fetchPromptConfig(supabase, "enhance_import");
@@ -57,6 +63,7 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       if (response.status === 429) return jsonResponse({ error: "Rate limit excedido." }, 429);
       const t = await response.text(); console.error("OpenAI error:", response.status, t); throw new Error("OpenAI error");
     }
@@ -65,11 +72,15 @@ Deno.serve(async (req) => {
     if (userId) await logTokenUsage(supabase, userId, "enhance_import", selectedModel, data.usage, cost);
 
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No tool call in response");
+    if (!toolCall) {
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+      throw new Error("No tool call in response");
+    }
     const result = JSON.parse(toolCall.function.arguments);
     return jsonResponse({ cards: result.cards });
   } catch (e) {
     console.error("enhance-import error:", e);
+    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
     return jsonResponse({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });

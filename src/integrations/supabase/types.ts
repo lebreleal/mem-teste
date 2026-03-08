@@ -2701,6 +2701,10 @@ export type Database = {
         Args: { p_turma_id: string }
         Returns: Json
       }
+      refund_energy: {
+        Args: { p_cost: number; p_user_id: string }
+        Returns: undefined
+      }
       restore_subscription_status: {
         Args: { p_turma_id: string }
         Returns: boolean

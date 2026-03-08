@@ -61,6 +61,17 @@ export async function deductEnergy(supabase: any, userId: string, cost: number):
   return data >= 0; // -1 means insufficient
 }
 
+/** Refund energy credits back to user (rollback on error). */
+export async function refundEnergy(supabase: any, userId: string, cost: number): Promise<void> {
+  if (cost <= 0 || !userId) return;
+  try {
+    await supabase.rpc("refund_energy", { p_user_id: userId, p_cost: cost });
+    console.log(`Refunded ${cost} energy to user ${userId}`);
+  } catch (e) {
+    console.error("refundEnergy error:", e);
+  }
+}
+
 /** Log token usage to ai_token_usage table. */
 export async function logTokenUsage(
   supabase: any,

@@ -1,86 +1,87 @@
 
 
-## Plano: Transação com Rollback de Créditos em Edge Functions
+# Melhorar cobertura de conteúdo na geração de decks por IA
 
-### Problema
+## Implementado
 
-Todas as edge functions (generate-deck, enhance-card, enhance-import, ai-tutor, ai-chat) seguem o mesmo padrão quebrado:
+### 1. PAGES_PER_BATCH reduzido de 10 → 3
+Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
 
-1. Deduz créditos (energy) via `deductEnergy` RPC
-2. Chama a API do Google AI
-3. Se a API falha (429, 503, parse error, etc.) → créditos JA foram descontados e NUNCA são devolvidos
+### 2. densityFactor reduzido
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
+Mais cards solicitados por batch, forçando cobertura mais completa.
 
-Não existe nenhuma função `refundEnergy` no sistema.
+### 3. Structured Output (tool calling) no generate-deck
+Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
 
-### Solução
+### 4. Threshold de deduplicação: 0.8 → 0.9
+Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
 
-**1. Criar RPC `refund_energy` no banco (migration SQL)**
+### 5. Checklist de cobertura no prompt
+Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
-```sql
-CREATE OR REPLACE FUNCTION public.refund_energy(p_user_id uuid, p_cost integer)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-BEGIN
-  IF p_cost <= 0 THEN RETURN; END IF;
-  UPDATE profiles SET energy = energy + p_cost WHERE id = p_user_id;
-END;
-$$;
-```
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
 
-**2. Adicionar `refundEnergy` em `supabase/functions/_shared/utils.ts`**
+## Trade-offs
+- +3x mais chamadas API (mais créditos gastos por geração)
+- Mais cards gerados por batch
+- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
 
-```typescript
-export async function refundEnergy(supabase: any, userId: string, cost: number): Promise<void> {
-  if (cost <= 0) return;
-  await supabase.rpc("refund_energy", { p_user_id: userId, p_cost: cost });
-}
-```
+---
 
-**3. Atualizar cada edge function para refundar em caso de erro**
+# Rebalanceamento da Economia de Créditos IA
 
-Padrão a aplicar em todos os 5 arquivos (`generate-deck`, `enhance-card`, `enhance-import`, `ai-tutor`, `ai-chat`):
+## Implementado
 
-- Guardar flag `let energyDeducted = false` + `let deductedCost = 0` após dedução bem-sucedida
-- Em cada ponto de erro APÓS a dedução, chamar `await refundEnergy(supabase, userId, deductedCost)` antes de retornar o erro
-- No `catch` global, também refundar se `energyDeducted`
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
 
-Exemplo para `generate-deck`:
-```
-// Após deductEnergy:
-let energyDeducted = false;
-if (cost > 0) {
-  const ok = await deductEnergy(supabase, userId, cost);
-  if (!ok) return jsonResponse({...}, 402);
-  energyDeducted = true;
-}
+Total mensal free: ~1.500 → ~270 créditos.
 
-// Em cada return de erro (429, 502, 503, parse error, 0 cards):
-if (energyDeducted) await refundEnergy(supabase, userId, cost);
-return jsonResponse({ error: "..." }, status);
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
 
-// No catch global:
-catch (err) {
-  if (energyDeducted) await refundEnergy(supabase, userId, cost);
-  return jsonResponse({ error: "..." }, 500);
-}
-```
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
 
-### Arquivos a editar
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
 
-| Arquivo | Mudança |
-|---------|---------|
-| Migration SQL | Criar RPC `refund_energy` |
-| `supabase/functions/_shared/utils.ts` | Adicionar `refundEnergy()` |
-| `supabase/functions/generate-deck/index.ts` | Refund em 5 pontos de erro |
-| `supabase/functions/enhance-card/index.ts` | Refund no catch |
-| `supabase/functions/enhance-import/index.ts` | Refund no catch |
-| `supabase/functions/ai-tutor/index.ts` | Refund no catch (streaming — refund se stream nem iniciou) |
-| `supabase/functions/ai-chat/index.ts` | Refund no catch (streaming — refund se stream nem iniciou) |
+---
 
-### Nota sobre streaming (ai-tutor, ai-chat)
+# Transação com Rollback de Créditos em Edge Functions
 
-Para funções de streaming, o refund só faz sentido se a chamada AI falhar ANTES de iniciar o stream. Se o stream já começou a enviar dados ao client, os créditos foram "gastos" legitimamente. O refund será aplicado apenas nos erros pré-stream (401, 429, connection error).
+## Implementado
 
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.

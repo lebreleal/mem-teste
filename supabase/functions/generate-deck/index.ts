@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
+import { corsHeaders, handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logTokenUsage, fetchPromptConfig, getAIConfig, fetchWithRetry } from "../_shared/utils.ts";
 
 const DEFAULT_SYSTEM_PROMPT = `Você é um especialista em educação e criação de flashcards, aplicando rigorosamente as 20 Regras de Formulação do Conhecimento do Dr. Piotr Wozniak (SuperMemo).
 
@@ -130,8 +130,6 @@ function getFormatInstructions(formats: string[]): string {
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    // Build pedagogical distribution based on SuperMemo principles
-    // Cloze dominates (50%), Basic for reasoning (30%), MCQ for differentiation (20%)
     const hasAll3 = formatNames.length === 3;
     const hasCloze = formats.includes("cloze");
     const hasBasic = formats.includes("qa") || formats.includes("definition");
@@ -192,8 +190,6 @@ function mapCardType(type: string, allowedFormats: string[]): string {
   if (type === "cloze" && allowedFormats.includes("cloze")) return "cloze";
   if (type === "multiple_choice" && allowedFormats.includes("multiple_choice")) return "multiple_choice";
   if ((type === "basic" || type === "qa" || type === "definition") && (allowedFormats.includes("qa") || allowedFormats.includes("definition"))) return "basic";
-
-  // Type not allowed — map to first allowed format
   if (allowedFormats.includes("qa") || allowedFormats.includes("definition")) return "basic";
   if (allowedFormats.includes("cloze")) return "cloze";
   if (allowedFormats.includes("multiple_choice")) return "multiple_choice";
@@ -204,15 +200,20 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  let energyDeducted = false;
+  let deductedCost = 0;
+  let supabase: any;
+  let userId = "";
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
-    const userId = user.id;
+    userId = user.id;
 
     const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
 
@@ -224,6 +225,8 @@ Deno.serve(async (req) => {
     if (cost > 0) {
       const ok = await deductEnergy(supabase, userId, cost);
       if (!ok) return jsonResponse({ error: "Créditos IA insuficientes", requiresCredits: true }, 402);
+      energyDeducted = true;
+      deductedCost = cost;
     }
 
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
@@ -232,7 +235,6 @@ Deno.serve(async (req) => {
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
-    // Bloco 5: increased max from 50 to 80 for comprehensive batches
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
@@ -243,7 +245,6 @@ Deno.serve(async (req) => {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
     }
 
-    // Bloco 5: when cardCount=0 (auto), don't impose a numeric limit — let detailLevel drive quantity
     const countInstruction = requestedCount > 0
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
@@ -276,7 +277,6 @@ ${getOutputExamples(formats)}`;
 
     console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
-    // Build tool schema for structured output
     const cardProperties: Record<string, any> = {
       front: { type: "string", description: "Card front content" },
       back: { type: "string", description: "Card back content (empty string for cloze)" },
@@ -303,7 +303,6 @@ ${getOutputExamples(formats)}`;
       additionalProperties: false,
     };
 
-    // Coverage checklist instruction appended to the user prompt
     const coverageChecklist = `\n\nCHECKLIST DE COBERTURA (execute mentalmente antes de finalizar):
 1. Releia cada parágrafo/seção do conteúdo acima.
 2. Para cada parágrafo, verifique se existe pelo menos 1 cartão correspondente.
@@ -337,6 +336,7 @@ ${getOutputExamples(formats)}`;
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI error:", aiResponse.status, errText);
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       if (aiResponse.status === 429) return jsonResponse({ error: "Limite de requisições excedido. Tente em alguns segundos." }, 429);
       if (aiResponse.status === 403) return jsonResponse({ error: "API do Google AI não ativada. Verifique o console." }, 502);
       if (aiResponse.status === 503) return jsonResponse({ error: "Modelo sobrecarregado. Tente o modelo Flash." }, 503);
@@ -345,7 +345,6 @@ ${getOutputExamples(formats)}`;
 
     const aiData = await aiResponse.json();
     
-    // Log full usage details including thinking/reasoning tokens
     const rawUsage = aiData.usage || {};
     const reasoningTokens = rawUsage.completion_tokens_details?.reasoning_tokens || 0;
     const cachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
@@ -356,7 +355,6 @@ ${getOutputExamples(formats)}`;
       total_tokens: rawUsage.total_tokens || 0,
     };
 
-    // Extract cards from tool call response
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let cards: { front: string; back: string; type: string; options?: string[]; correctIndex?: number }[];
 
@@ -369,11 +367,11 @@ ${getOutputExamples(formats)}`;
           "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
       } catch (parseErr) {
         console.error("Tool call parse error:", parseErr, "raw:", toolCall.function.arguments.substring(0, 500));
-          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
-        }
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+      }
     } else {
-      // Fallback: try parsing from content (in case tool calling wasn't respected)
       const rawContent = aiData.choices?.[0]?.message?.content ?? "";
       console.warn("No tool call in response, falling back to content parsing. Length:", rawContent.length);
 
@@ -418,6 +416,7 @@ ${getOutputExamples(formats)}`;
           }
         } catch {
           console.error("Parse failed, raw:", rawContent.substring(0, 500));
+          if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
           await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
           return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
         }
@@ -425,16 +424,15 @@ ${getOutputExamples(formats)}`;
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
+      if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
       await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
       return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
-    // Map card types respecting user-selected formats + cloze safety validation
     const CLOZE_REGEX = /\{\{c\d+::/;
     cards = cards.map(c => {
       const mappedType = mapCardType(c.type, formats);
 
-      // Safety net: if card should be cloze but lacks {{c1::...}} syntax, reclassify to basic
       if (mappedType === "cloze" && !CLOZE_REGEX.test(c.front || "")) {
         console.warn("Cloze card missing syntax, reclassifying to basic:", (c.front || "").substring(0, 80));
         const front = (c.front || "").trim();
@@ -454,12 +452,12 @@ ${getOutputExamples(formats)}`;
       };
     });
 
-    // Always log token usage for every batch call
     await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
 
     return jsonResponse({ cards, usage });
   } catch (err) {
     console.error("Error:", err);
+    if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
     return jsonResponse({ error: "Erro interno do servidor" }, 500);
   }
 });
