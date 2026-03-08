@@ -321,9 +321,10 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
+    if (!realMetricsQuery.data || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
-    const avg = avgQuery.data;
+    const rm = realMetricsQuery.data;
+    const avg = deriveAvgSecondsPerCard(rm);
 
     const totalNew = Number(raw.total_new) || 0;
     const totalReview = Number(raw.total_review) || 0;
