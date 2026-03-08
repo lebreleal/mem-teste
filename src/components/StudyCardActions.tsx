@@ -206,11 +206,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       const backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
       setIsSaving(true);
       try {
-        const { error } = await supabase
-          .from('cards')
-          .update({ front_content: front, back_content: backContent })
-          .eq('id', editCardIdRef.current);
-        if (error) throw error;
+        await cardService.updateCard(editCardIdRef.current, front, backContent);
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
         queryClient.invalidateQueries({ queryKey: ['cards'] });
