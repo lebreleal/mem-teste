@@ -153,6 +153,8 @@ interface DeckCarouselProps {
 export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
 
+  // Pre-compute aggregate stats once — O(n) instead of O(n²) per render
+  const aggregateMap = useMemo(() => buildAggregateMap(decks), [decks]);
   // Desktop drag-to-scroll
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
