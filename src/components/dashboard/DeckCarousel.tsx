@@ -143,6 +143,7 @@ function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, global
 interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
+  studyMetrics?: RealStudyMetrics;
   hasPlan: boolean;
   planDeckIds?: string[];
   planDeckOrder?: string[];
@@ -151,8 +152,9 @@ interface DeckCarouselProps {
   distributedNewByDeck?: Map<string, number> | null;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetrics, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
+  const metrics = studyMetrics ?? DEFAULT_STUDY_METRICS;
 
   // Pre-compute aggregate stats once — O(n) instead of O(n²) per render
   const aggregateMap = useMemo(() => buildAggregateMap(decks), [decks]);
