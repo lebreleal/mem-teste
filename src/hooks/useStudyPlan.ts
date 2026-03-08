@@ -128,28 +128,18 @@ export function useStudyPlan() {
     enabled: !!userId,
   });
 
-  // ─── Fetch global capacity from profile ───
-  const capacityQuery = useQuery({
-    queryKey: ['global-capacity', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit, weekly_new_cards')
-        .eq('id', userId!)
-        .single();
-      if (error) throw error;
-      return {
-        dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
-        weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
-        dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
-        weeklyNewCards: (data as any)?.weekly_new_cards as WeeklyNewCards | null,
-      };
-    },
-    enabled: !!userId,
-  });
-
-  const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+  // ─── Use centralized profile for global capacity ───
+  const profileQuery = useProfile();
+  const globalCapacity = useMemo(() => {
+    const p = profileQuery.data;
+    if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+    return {
+      dailyMinutes: p.daily_study_minutes ?? 60,
+      weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
+      dailyNewCardsLimit: p.daily_new_cards_limit ?? 30,
+      weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
+    };
+  }, [profileQuery.data]);
 
   // ─── Deck hierarchy for child→root resolution ───
   const deckHierarchyQuery = useQuery({
