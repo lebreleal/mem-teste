@@ -14,7 +14,7 @@ import type { TurmaMember, TurmaMemberWithStats, TurmaRole } from '@/types/turma
 export async function fetchTurmaMembersWithStats(turmaId: string): Promise<TurmaMemberWithStats[]> {
   // Try optimized RPC first
   try {
-    const { data, error } = await supabase.rpc('get_turma_members_ranking', { p_turma_id: turmaId } as any);
+    const { data, error } = await supabase.rpc('get_turma_members_ranking' as any, { p_turma_id: turmaId } as any);
     if (!error && data) {
       return (data as any[]).map(row => ({
         user_id: row.user_id,

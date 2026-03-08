@@ -80,7 +80,7 @@ export async function bulkArchiveDecks(ids: string[]) {
 export async function bulkDeleteDecks(ids: string[]) {
   // Use bulk RPC if available, fallback to sequential
   try {
-    const { error } = await supabase.rpc('bulk_delete_decks_cascade', { p_deck_ids: ids } as any);
+    const { error } = await supabase.rpc('bulk_delete_decks_cascade' as any, { p_deck_ids: ids } as any);
     if (error) throw error;
   } catch {
     // Fallback: sequential delete

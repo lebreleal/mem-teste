@@ -211,7 +211,7 @@ export async function reorderSubjects(orderedIds: string[]) {
 /** Batch-update sort_order for turma decks — uses single RPC when available. */
 export async function reorderTurmaDecks(orderedIds: string[]) {
   try {
-    const { error } = await supabase.rpc('batch_reorder_turma_decks', { p_ids: orderedIds } as any);
+    const { error } = await supabase.rpc('batch_reorder_turma_decks' as any, { p_ids: orderedIds } as any);
     if (error) throw error;
   } catch {
     for (let i = 0; i < orderedIds.length; i++) {
