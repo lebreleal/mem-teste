@@ -11,7 +11,7 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useEffect } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { useDecks } from '@/hooks/useDecks';
+// useDecks removed — allDecks now sourced from useDashboardState to avoid duplicate hook call
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
