@@ -269,7 +269,7 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
         energyCost: fileTotalCost,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       const generatedCards = data.cards as Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>;
       const questions = generatedCards.map((card, idx) => {

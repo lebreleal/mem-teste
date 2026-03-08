@@ -1014,7 +1014,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         },
       });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       const generatedCards = aiData.cards as Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>;
       const questions = generatedCards.map((card, idx) => {
