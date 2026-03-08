@@ -234,9 +234,13 @@ const Study = () => {
       }
     }
 
-    setCardKey(prev => prev + 1);
-    cardShownAt.current = Date.now();
-    submittingRef.current = null;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCardKey(prev => prev + 1);
+      cardShownAt.current = Date.now();
+      submittingRef.current = null;
+      setIsTransitioning(false);
+    }, 200);
 
     submitReview.mutate(
       { card: currentCard, rating, elapsedMs: elapsed },
