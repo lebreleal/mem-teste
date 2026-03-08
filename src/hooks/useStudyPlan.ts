@@ -518,7 +518,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
-    qc.invalidateQueries({ queryKey: ['global-capacity'] });
+    // global-capacity removed — profile handles it
     qc.invalidateQueries({ queryKey: ['profile'] });
   }, [qc]);
 
