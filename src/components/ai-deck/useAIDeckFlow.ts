@@ -481,12 +481,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         queryClient.invalidateQueries({ queryKey: ['tags'] });
       }
 
-      // Trigger auto-tag-cards in background (fire and forget)
-      if (targetDeckId) {
-        supabase.functions.invoke('auto-tag-cards', { body: { deckId: targetDeckId } })
-          .then(() => { queryClient.invalidateQueries({ queryKey: ['tags'] }); })
-          .catch(e => console.error('Auto-tag failed:', e));
-      }
+      // Auto-tagging removed — tags are only applied when user explicitly selects them
 
 
       // If opened from pending review, remove the pending item
