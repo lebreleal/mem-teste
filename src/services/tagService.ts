@@ -292,6 +292,25 @@ export async function getDeckTagsBatch(deckIds: string[]): Promise<Record<string
   return result;
 }
 
+export interface TagSuggestion {
+  name: string;
+  isExisting: boolean;
+  usageCount: number;
+}
+
+/** Ask AI to suggest tags for content. */
+export async function suggestTags(params: {
+  textContent?: string;
+  deckName?: string;
+  existingTagNames?: string[];
+}): Promise<TagSuggestion[]> {
+  const { data, error } = await supabase.functions.invoke('suggest-tags', {
+    body: params,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data?.suggestions ?? [];
+}
 
 /** Merge tags (admin only). Reassigns all associations from source to target. */
 export async function mergeTags(sourceId: string, targetId: string): Promise<void> {

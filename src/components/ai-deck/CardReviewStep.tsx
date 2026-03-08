@@ -116,6 +116,8 @@ const CardReviewStep = ({
   const [selectedTags, setSelectedTags] = useState<(Tag | string)[]>([]);
   const [tagQuery, setTagQuery] = useState('');
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
   const [showTagWarning, setShowTagWarning] = useState(false);
 
   // MC editing state for inline editing
@@ -126,6 +128,30 @@ const CardReviewStep = ({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { data: searchResults = [] } = useTagSearch(tagQuery);
+  const aiSuggest = useTagSuggestions();
+
+  // Auto-trigger AI suggestions on mount — skip if suggestions already cached
+  useEffect(() => {
+    if (aiSuggestions.length > 0) return;
+    const fetchSuggestions = async () => {
+      if (!deckName && !textSample) return;
+      setAiLoading(true);
+      try {
+        const result = await aiSuggest.mutateAsync({
+          textContent: textSample,
+          deckName: deckName,
+          existingTagNames: [],
+        });
+        setAiSuggestions(result);
+      } catch {
+        // silently fail
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    fetchSuggestions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Parse MC data when starting edit on MC card
   useEffect(() => {
