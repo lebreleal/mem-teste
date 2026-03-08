@@ -14,6 +14,7 @@ export interface AdminProfile {
   daily_cards_studied: number;
   successful_cards_counter: number;
   onboarding_completed: boolean;
+  premium_expires_at: string | null;
 }
 
 export interface UserDeck {
@@ -50,6 +51,8 @@ export interface StudyDay {
   cards_reviewed: number;
   avg_rating: number;
 }
+
+export type PremiumGiftPlan = 'monthly' | 'annual' | 'lifetime';
 
 export const useAdminUsers = () => {
   const [users, setUsers] = useState<AdminProfile[]>([]);
@@ -94,6 +97,50 @@ export const useAdminUsers = () => {
     return true;
   };
 
+  /** Grant premium to a user (admin action). Sets premium_expires_at directly. */
+  const grantPremium = async (userId: string, plan: PremiumGiftPlan): Promise<boolean> => {
+    let expiresAt: string;
+    let description: string;
+
+    if (plan === 'lifetime') {
+      expiresAt = '2099-12-31T23:59:59.000Z';
+      description = '🎁 Premium Vitalício presenteado pelo administrador';
+    } else if (plan === 'annual') {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() + 1);
+      expiresAt = d.toISOString();
+      description = '🎁 Premium Anual (12 meses) presenteado pelo administrador';
+    } else {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 1);
+      expiresAt = d.toISOString();
+      description = '🎁 Premium Mensal (1 mês) presenteado pelo administrador';
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ premium_expires_at: expiresAt } as any)
+      .eq('id', userId);
+
+    if (error) {
+      toast({ title: 'Erro', description: 'Falha ao conceder premium.', variant: 'destructive' });
+      return false;
+    }
+
+    // Log the gift as a memocoin transaction for audit trail
+    await supabase.from('memocoin_transactions').insert({
+      user_id: userId,
+      amount: 0,
+      type: 'credit',
+      description,
+      reference_id: `admin_gift_${plan}_${new Date().toISOString().slice(0, 10)}`,
+    } as any);
+
+    toast({ title: '🎁 Premium concedido!', description });
+    await fetchUsers(search);
+    return true;
+  };
+
   const getUserDecks = async (userId: string): Promise<UserDeck[]> => {
     const { data, error } = await supabase.rpc('admin_get_user_decks', { p_user_id: userId });
     if (error) { toast({ title: 'Erro', description: 'Falha ao carregar decks.', variant: 'destructive' }); return []; }
@@ -128,5 +175,5 @@ export const useAdminUsers = () => {
     return true;
   };
 
-  return { users, loading, search, setSearch, fetchUsers, updateProfile, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry };
+  return { users, loading, search, setSearch, fetchUsers, updateProfile, grantPremium, getUserDecks, getUserTokenUsage, getUserTokenUsageDetailed, getUserStudyHistory, deleteTokenUsageEntry };
 };

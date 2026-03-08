@@ -54,7 +54,7 @@ serve(async (req) => {
     // Check for lifetime purchase first
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("premium_expires_at")
+      .select("premium_expires_at, created_at")
       .eq("id", user.id)
       .single();
 
@@ -74,15 +74,32 @@ serve(async (req) => {
     // Check Stripe customer
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     if (customers.data.length === 0) {
-      // No Stripe customer — check for 14-day trial from profile
+      // No Stripe customer — check for profile-based premium (trial or admin gift)
       if (currentExpiry && new Date(currentExpiry) > new Date()) {
-        const createdAt = profile ? (await supabaseAdmin.from("profiles").select("created_at").eq("id", user.id).single()).data?.created_at : null;
-        const isTrial = createdAt ? (new Date(currentExpiry).getTime() - new Date(createdAt).getTime()) < 15 * 24 * 60 * 60 * 1000 : false;
+        const createdAt = profile?.created_at ?? null;
+        const isTrial = createdAt
+          ? (new Date(currentExpiry).getTime() - new Date(createdAt).getTime()) < 15 * 24 * 60 * 60 * 1000
+          : false;
+
+        // Check if this was an admin gift
+        const { data: giftLog } = await supabaseAdmin
+          .from("memocoin_transactions")
+          .select("description")
+          .eq("user_id", user.id)
+          .like("reference_id", "admin_gift_%")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const isGift = giftLog && giftLog.length > 0;
+        const plan = isGift ? "gift" : isTrial ? "trial" : "gift";
+
         return new Response(JSON.stringify({
           subscribed: true,
-          plan: "trial",
+          plan,
           subscription_end: currentExpiry,
-          is_trial: isTrial,
+          is_trial: isTrial && !isGift,
+          is_gift: isGift,
+          gift_description: isGift ? giftLog[0].description : undefined,
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -112,7 +129,6 @@ serve(async (req) => {
       const endDate = new Date(activeSub.current_period_end * 1000).toISOString();
       const startDate = new Date(activeSub.current_period_start * 1000).toISOString();
 
-      // Sync premium_expires_at to profiles
       await supabaseAdmin
         .from("profiles")
         .update({ premium_expires_at: endDate })
@@ -165,7 +181,6 @@ serve(async (req) => {
     });
 
     if (lifetimeSession) {
-      // Verify it was a lifetime purchase by checking line items
       const lineItems = await stripe.checkout.sessions.listLineItems(lifetimeSession.id);
       const isLifetime = lineItems.data.some((li) => {
         const priceObj = li.price;
@@ -179,7 +194,6 @@ serve(async (req) => {
           .update({ premium_expires_at: farFuture })
           .eq("id", user.id);
 
-        // Grant bonus credits (only once - check if already granted)
         const { data: existing } = await supabaseAdmin
           .from("memocoin_transactions")
           .select("id")
@@ -210,7 +224,7 @@ serve(async (req) => {
       }
     }
 
-    // Check for credit pack purchases (to add energy)
+    // Check for credit pack purchases
     const creditSessions = sessions.data.filter(
       (s) => s.mode === "payment" && s.metadata?.user_id === user.id && s.payment_status === "paid"
     );
@@ -222,7 +236,6 @@ serve(async (req) => {
         if (!priceObj || typeof priceObj.product !== "string") continue;
         if (priceObj.product === LIFETIME_PRODUCT_ID) continue;
 
-        // Check if already processed
         const { data: processed } = await supabaseAdmin
           .from("memocoin_transactions")
           .select("id")
@@ -231,7 +244,6 @@ serve(async (req) => {
           .limit(1);
 
         if (!processed || processed.length === 0) {
-          // Map product to credits
           const creditMap: Record<string, number> = {
             "prod_U0S0ho3u6BArA4": 100,
             "prod_U0S03WQFbKCXIA": 200,
@@ -240,7 +252,6 @@ serve(async (req) => {
           };
           const credits = creditMap[priceObj.product];
           if (credits) {
-            // Add credits atomically
             const { data: currentProfile } = await supabaseAdmin
               .from("profiles")
               .select("energy")
@@ -263,15 +274,44 @@ serve(async (req) => {
       }
     }
 
-    // No active subscription, update profile
-    if (!isCurrentlyLifetime) {
-      // Only clear if the premium has expired
-      if (currentExpiry && new Date(currentExpiry) < new Date()) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ premium_expires_at: null })
-          .eq("id", user.id);
-      }
+    // ─── Fallback: check profile-based premium (admin gift) even with Stripe customer ───
+    // This handles the case where user has a Stripe customer (from credit purchases)
+    // but was also gifted premium by admin.
+    if (currentExpiry && new Date(currentExpiry) > new Date()) {
+      const createdAt = profile?.created_at ?? null;
+      const isTrial = createdAt
+        ? (new Date(currentExpiry).getTime() - new Date(createdAt).getTime()) < 15 * 24 * 60 * 60 * 1000
+        : false;
+
+      const { data: giftLog } = await supabaseAdmin
+        .from("memocoin_transactions")
+        .select("description")
+        .eq("user_id", user.id)
+        .like("reference_id", "admin_gift_%")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const isGift = giftLog && giftLog.length > 0;
+      const plan = isGift ? "gift" : isTrial ? "trial" : "gift";
+
+      return new Response(JSON.stringify({
+        subscribed: true,
+        plan,
+        subscription_end: currentExpiry,
+        is_trial: isTrial && !isGift,
+        is_gift: isGift,
+        gift_description: isGift ? giftLog[0].description : undefined,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // No active subscription, clear expired premium
+    if (!isCurrentlyLifetime && currentExpiry && new Date(currentExpiry) < new Date()) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ premium_expires_at: null })
+        .eq("id", user.id);
     }
 
     return new Response(JSON.stringify({ subscribed: false }), {
