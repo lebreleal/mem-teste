@@ -341,7 +341,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
             <DeckStudyCard
               key={deck.id}
               deck={deck}
-              allDecks={decks}
+              aggregateMap={aggregateMap}
               avgSecondsPerCard={avgSecondsPerCard}
               objectiveName={plansByDeckId?.[deck.id]}
               globalNewRemaining={globalNewRemaining}
