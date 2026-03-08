@@ -360,13 +360,28 @@ export async function fetchStudyStats(userId: string): Promise<StudyStats> {
   const oneYearAgo = new Date();
   oneYearAgo.setDate(oneYearAgo.getDate() - 365);
 
-  const { data: logs } = await supabase
-    .from('review_logs')
-    .select('reviewed_at, elapsed_ms')
-    .eq('user_id', userId)
-    .gte('reviewed_at', oneYearAgo.toISOString())
-    .order('reviewed_at', { ascending: true })
-    .limit(50000);
+  // Paginate to bypass Supabase's 1000-row server limit
+  const PAGE_SIZE = 1000;
+  let allLogs: { reviewed_at: string; elapsed_ms: number | null }[] = [];
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const { data: page } = await supabase
+      .from('review_logs')
+      .select('reviewed_at, elapsed_ms')
+      .eq('user_id', userId)
+      .gte('reviewed_at', oneYearAgo.toISOString())
+      .order('reviewed_at', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (page && page.length > 0) {
+      allLogs = allLogs.concat(page);
+      offset += PAGE_SIZE;
+      hasMore = page.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+  const logs = allLogs;
 
   if (!logs || logs.length === 0) {
     return { lastStudyDate: null, streak: 0, energy, dailyEnergyEarned, mascotState: 'sleeping', todayCards, avgMinutesPerDay7d: 0, todayMinutes: 0, freezesAvailable: 0 };
