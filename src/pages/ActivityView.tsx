@@ -87,7 +87,7 @@ const ActivityView = () => {
 
       // Convert accumulated ms to minutes
       for (const key of Object.keys(dayMap)) {
-        dayMap[key].minutes = Math.round(dayMap[key].minutes / 60000);
+        dayMap[key].minutes = dayMap[key].minutes > 0 ? Math.max(1, Math.round(dayMap[key].minutes / 60000)) : 0;
       }
 
       const totalActiveDays = Object.keys(dayMap).length;
