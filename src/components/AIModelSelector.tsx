@@ -9,17 +9,15 @@ interface AIModelSelectorProps {
   isPremium?: boolean;
 }
 
-const MODEL_STATS: Record<AIModel, { speed: number; intelligence: number; tokenUsage: number; tagline: string }> = {
+const MODEL_STATS: Record<AIModel, { speed: number; intelligence: number; tagline: string }> = {
   flash: {
     speed: 5,
-    intelligence: 3,
-    tokenUsage: 2,
+    intelligence: 2,
     tagline: 'Modelo rápido e econômico para tarefas simples.',
   },
   pro: {
     speed: 3,
     intelligence: 5,
-    tokenUsage: 5,
     tagline: 'Raciocínio avançado que gera cartões superiores.',
   },
 };
@@ -117,10 +115,6 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Inteligência</span>
                 <StatBar value={stats.intelligence} color={accentColor} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Uso de tokens</span>
-                <StatBar value={stats.tokenUsage} color={accentColor} />
               </div>
             </div>
 
