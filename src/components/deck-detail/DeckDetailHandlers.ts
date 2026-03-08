@@ -9,7 +9,7 @@ import * as cardService from '@/services/cardService';
 import * as deckService from '@/services/deckService';
 import { invalidateDeckRelatedQueries } from '@/lib/queryKeys';
 import type { CardRow } from '@/types/deck';
-import type { UseToastReturn } from '@/hooks/use-toast';
+import type { useToast } from '@/hooks/use-toast';
 import type { QueryClient } from '@tanstack/react-query';
 
 interface HandlerDeps {
