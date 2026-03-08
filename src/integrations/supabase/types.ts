@@ -2585,6 +2585,14 @@ export type Database = {
         }[]
       }
       generate_tag_slug: { Args: { p_name: string }; Returns: string }
+      get_activity_daily_breakdown: {
+        Args: {
+          p_days?: number
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_all_user_deck_stats: {
         Args: { p_tz_offset_minutes?: number; p_user_id: string }
         Returns: {
