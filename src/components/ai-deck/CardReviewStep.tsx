@@ -150,10 +150,6 @@ const CardReviewStep = ({
     const name = getTagName(tag).toLowerCase();
     if (selectedTags.some(t => getTagName(t).toLowerCase() === name)) return;
     setSelectedTags(prev => [...prev, tag]);
-    setTagQuery('');
-    setTagDropdownOpen(false);
-    setShowTagWarning(false);
-    setAiSuggestions(prev => prev.filter(s => s.name.toLowerCase() !== name));
   };
 
   const removeTag = (idx: number) => {
