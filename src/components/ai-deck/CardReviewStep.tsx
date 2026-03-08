@@ -116,8 +116,6 @@ const CardReviewStep = ({
   const [selectedTags, setSelectedTags] = useState<(Tag | string)[]>([]);
   const [tagQuery, setTagQuery] = useState('');
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<{ name: string; isExisting: boolean }[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
   const [showTagWarning, setShowTagWarning] = useState(false);
 
   // MC editing state for inline editing
