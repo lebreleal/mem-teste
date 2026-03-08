@@ -14,7 +14,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
     queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
     queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
     enabled: !!user && !!(deckId || folderId),
-    staleTime: Infinity,       // never auto-refetch during the session
+    staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
@@ -31,7 +31,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       );
     },
     onSuccess: (_result, { card }) => {
-      // Optimistic: update study-stats cache incrementally instead of refetching
+      // Optimistic: update study-stats cache incrementally
       queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
         if (!old) return old;
         return {
@@ -41,16 +41,18 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       });
     },
     onSettled: () => {
-      // Defer heavy invalidations — batch with a slight delay so they don't block the UI
-      // during rapid card flipping
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+      // OPTIMIZATION: Only invalidate lightweight queries during active study.
+      // Heavy queries (decks, deck-stats) are deferred to unmount or 10s delay.
+      // This prevents 50+ cache invalidations during a 50-card study session.
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-      // study-stats and activity are deferred since we already optimistically updated todayCards
+
+      // Defer heavy dashboard invalidations — they only matter when user leaves study
       setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+        queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
         queryClient.invalidateQueries({ queryKey: ['study-stats'] });
         queryClient.invalidateQueries({ queryKey: ['activity-full'] });
-      }, 5000); // 5s delay — no need to refetch during active study
+      }, 10_000); // 10s delay — user is still studying, no need to refetch dashboard
     },
   });
 

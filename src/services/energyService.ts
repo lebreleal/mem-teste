@@ -36,8 +36,12 @@ export async function performDailyReset(userId: string): Promise<void> {
   } as any).eq('id', userId);
 }
 
-/** Fetch current energy data (legacy — kept for backward compat). */
+/**
+ * @deprecated Use profileToEnergyData() with useProfile() cache instead.
+ * Kept temporarily for backward compatibility — will be removed in next cleanup.
+ */
 export async function fetchEnergy(userId: string): Promise<EnergyData> {
+  console.warn('[DEPRECATED] fetchEnergy() called — migrate to profileToEnergyData()');
   const { data, error } = await supabase
     .from('profiles')
     .select('energy, successful_cards_counter, daily_cards_studied, daily_energy_earned, last_energy_recharge, last_study_reset_date')
