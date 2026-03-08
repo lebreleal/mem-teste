@@ -641,13 +641,8 @@ const FlashCard = ({
     displayBack = looksLikeHtml(backContent) ? backContent : formatMarkdown(backContent);
   }
 
-  const recallColor = recallData
-    ? recallData.percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' : recallData.percent >= 60 ? 'text-primary' : recallData.percent >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-orange-600 dark:text-orange-400'
-    : 'text-muted-foreground';
-
-  const recallBgColor = recallData
-    ? recallData.state === 'new' ? 'bg-muted/80' : recallData.state === 'learning' ? 'bg-emerald-500/10' : 'bg-primary/10'
-    : '';
+  const recallColor = getRecallColor(recallData);
+  const recallBgColor = getRecallBgColor(recallData);
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
