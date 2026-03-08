@@ -291,7 +291,7 @@ ${getOutputExamples(formats)}`;
             type: "object",
             properties: {
               ...cardProperties,
-              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (4-5 items)" },
+              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (exactly 4 items, max 8 words each)" },
               correctIndex: { type: "integer", description: "0-based index of correct option" },
             },
             required: ["front", "back", "type"],
