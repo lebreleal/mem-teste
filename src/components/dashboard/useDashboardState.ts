@@ -175,21 +175,37 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const getAllSubDecks = (parentId: string) =>
     decks.filter(d => d.parent_deck_id === parentId);
 
-  /** Returns raw (uncapped) aggregated counts across all descendants */
-  const getRawAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number } => {
-    const subs = getSubDecks(deck.id);
-    let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
-    let newReviewed = deck.new_reviewed_today ?? 0;
-    let newGraduated = deck.new_graduated_today ?? 0;
-    let reviewed = deck.reviewed_today ?? 0;
-    for (const sub of subs) {
-      const s = getRawAggregateStats(sub);
-      n += s.new_count; l += s.learning_count; r += s.review_count;
-      newReviewed += s.newReviewed;
-      newGraduated += s.newGraduated;
-      reviewed += s.reviewed;
-    }
-    return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+  /** Memoized aggregate stats map — O(n) build, O(1) lookups */
+  const aggregateMap = useMemo(() => {
+    const map = new Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }>();
+    const compute = (deckId: string) => {
+      if (map.has(deckId)) return map.get(deckId)!;
+      const deck = decks.find(d => d.id === deckId);
+      if (!deck) {
+        const empty = { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
+        map.set(deckId, empty);
+        return empty;
+      }
+      const subs = decks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+      let newReviewed = deck.new_reviewed_today ?? 0;
+      let newGraduated = deck.new_graduated_today ?? 0;
+      let reviewed = deck.reviewed_today ?? 0;
+      for (const sub of subs) {
+        const s = compute(sub.id);
+        n += s.new_count; l += s.learning_count; r += s.review_count;
+        newReviewed += s.newReviewed; newGraduated += s.newGraduated; reviewed += s.reviewed;
+      }
+      const result = { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+      map.set(deckId, result);
+      return result;
+    };
+    for (const d of decks) compute(d.id);
+    return map;
+  }, [decks]);
+
+  const getRawAggregateStats = (deck: DeckWithStats) => {
+    return aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
   };
 
   // No sequential distribution — all plan decks share the same globalNewRemaining pool
