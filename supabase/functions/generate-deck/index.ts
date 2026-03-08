@@ -418,14 +418,14 @@ ${getOutputExamples(formats)}`;
           }
         } catch {
           console.error("Parse failed, raw:", rawContent.substring(0, 500));
-          if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
           return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
         }
       }
     }
 
     if (!Array.isArray(cards) || cards.length === 0) {
-      if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+      await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
       return jsonResponse({ error: "Nenhum cartão gerado.", usage }, 400);
     }
 
