@@ -141,6 +141,8 @@ export function useStudyPlan() {
     };
   }, [profileQuery.data]);
 
+  const plans = plansQuery.data ?? [];
+
   // ─── Deck hierarchy for child→root resolution ───
   const deckHierarchyQuery = useQuery({
     queryKey: ['deck-hierarchy', userId],
