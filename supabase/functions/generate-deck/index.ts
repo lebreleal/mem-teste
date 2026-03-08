@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return jsonResponse({ error: "Token inválido" }, 401);
     const userId = user.id;
 
-    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost, skipLog } = await req.json();
+    const { textContent, cardCount, detailLevel, cardFormats, customInstructions, aiModel, energyCost } = await req.json();
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
