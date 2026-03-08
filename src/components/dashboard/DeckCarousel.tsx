@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
 
-function formatMinutes(m: number) {
+type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
   if (m <= 0) return '0min';
   if (m < 60) return `${m}min`;
   const h = Math.floor(m / 60);
