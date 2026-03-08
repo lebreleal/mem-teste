@@ -369,9 +369,9 @@ ${getOutputExamples(formats)}`;
           "reasoning_tokens:", reasoningTokens, "cached_tokens:", cachedTokens);
       } catch (parseErr) {
         console.error("Tool call parse error:", parseErr, "raw:", toolCall.function.arguments.substring(0, 500));
-        if (!skipLog) await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
-        return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
-      }
+          await logTokenUsage(supabase, userId, "generate_deck", selectedModel, usage, cost);
+          return jsonResponse({ error: "A IA não conseguiu gerar cards. Tente novamente ou use menos conteúdo.", usage }, 500);
+        }
     } else {
       // Fallback: try parsing from content (in case tool calling wasn't respected)
       const rawContent = aiData.choices?.[0]?.message?.content ?? "";
