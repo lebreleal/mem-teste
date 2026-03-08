@@ -78,7 +78,7 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
+function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
   const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
