@@ -68,8 +68,9 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Store original front_content to find siblings
-  const originalFrontRef = useRef<string>('');
+  // Capture card ID at edit-open time to prevent stale references
+  // if a learning card cuts the queue while the edit dialog is open
+  const editCardIdRef = useRef<string>(card.id);
 
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
