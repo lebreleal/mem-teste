@@ -1,159 +1,119 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
 
-## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+# Levantamento de Linhas por Arquivo
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+## Arquivos GIGANTES (700+ linhas) -- PROBLEMATICOS
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+```text
+Arquivo                                    | Linhas | Veredicto
+-------------------------------------------|--------|-------------------
+src/integrations/supabase/types.ts         | 2.871  | Auto-gerado, OK
+src/pages/StudyPlan.tsx                    | 1.580  | CRITICO - page+UI+logic
+src/pages/ManageDeck.tsx                   | 1.169  | CRITICO - monolito
+src/components/deck-detail/DeckDetailCtx   | 1.064  | ALTO - context gigante
+src/pages/DeckSettings.tsx                 | 1.002  | CRITICO - monolito
+src/components/FlashCard.tsx               |   956  | ALTO - card+preview+edit
+src/components/ImportCardsDialog.tsx        |   942  | ALTO - dialog monolito
+src/components/StudyCardActions.tsx         |   791  | ALTO - muitas responsab.
+src/components/deck-detail/CardList.tsx     |   666  | MEDIO-ALTO
+src/hooks/useStudyPlan.ts                  |   638  | ALTO - 7 queries num hook
+src/pages/ExamSetup.tsx                    |   644  | ALTO - setup monolito
+src/components/lesson-detail/LessonContent |   625  | MEDIO-ALTO
+```
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+## Arquivos GRANDES (400-700 linhas) -- MERECEM ATENÇÃO
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+```text
+Arquivo                                    | Linhas | Veredicto
+-------------------------------------------|--------|-------------------
+src/pages/LessonDetail.tsx                 |   575  | MEDIO - orquestrador
+src/components/ImageOcclusion.tsx           |   570  | MEDIO - canvas complexo
+src/pages/Index.tsx                        |   541  | MEDIO - landing page
+src/pages/Dashboard.tsx                    |   477  | OK apos refatoracao
+src/components/OnboardingDialog.tsx         |   460  | MEDIO - wizard
+src/pages/Study.tsx                        |   447  | MEDIO
+src/index.css                              |   442  | OK - CSS
+src/pages/Turmas.tsx                       |   433  | MEDIO
+src/pages/ActivityView.tsx                 |   420  | MEDIO
+src/pages/TurmaDetail.tsx                  |   412  | OK - delegou bem
+src/components/RichEditor.tsx              |   406  | MEDIO - tiptap wrapper
+src/components/dashboard/useDashboardState |   403  | MEDIO
+```
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+## Arquivos SAUDAVEIS (< 400 linhas)
 
-## Trade-offs
-- +3x mais chamadas API (mais créditos gastos por geração)
-- Mais cards gerados por batch
-- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
-- MC mais focado e pedagógico (diferenciação, não trivial)
-
----
-
-# Rebalanceamento da Economia de Créditos IA
-
-## Implementado
-
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
-
-Total mensal free: ~1.500 → ~270 créditos.
-
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
-
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
-
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
-
----
-
-# Transação com Rollback de Créditos em Edge Functions
-
-## Implementado
-
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
-
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
-
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
-
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
-
----
-
-# Dashboard Performance & Bug Fixes
-
-## Implementado
-
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
-
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
-
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
-
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
-
-## Resumo de impacto
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
+```text
+Arquivo                                    | Linhas
+-------------------------------------------|-------
+src/components/SuggestCorrectionModal.tsx   |   377
+src/components/StudyChatModal.tsx           |   366
+src/services/studyService.ts               |   365
+src/pages/DeckDetail.tsx                   |   362
+src/pages/ExamTake.tsx                     |   360
+src/components/dashboard/DeckCarousel.tsx   |   355
+src/lib/fsrs.ts                            |   300
+src/services/turma/turmaContent.ts         |   271
+src/pages/Feedback.tsx                     |   257
+src/lib/studyUtils.ts                      |   253
+src/pages/ExamResults.tsx                  |   247
+src/hooks/useExams.ts                      |   242
+src/services/turma/turmaCrud.ts            |   242
+src/components/PomodoroFloater.tsx          |   229
+src/pages/Profile.tsx                      |   227
+src/pages/MemoGrana.tsx                    |   208
+src/pages/Missions.tsx                     |   202
+src/pages/Performance.tsx                  |   196
+src/services/missionService.ts             |   188
+src/hooks/useForecastSimulator.ts          |   187
+src/pages/Auth.tsx                         |   167
+src/components/AICreateDeckDialog.tsx       |   163
+src/services/aiService.ts                  |   145
+src/services/examService.ts               |   143
+src/services/turma/turmaExams.ts           |   136
+src/hooks/useAuth.tsx                      |   129
+src/components/PersonalNotes.tsx           |   122
+src/pages/ExamCreate.tsx                   |   114
+src/components/DeckCard.tsx                |   113
+src/lib/pdfUtils.ts                        |    97
+src/hooks/useTurmas.ts                     |    95
+src/services/walletService.ts              |    94
+src/hooks/useDecks.ts                      |    89
+src/hooks/useStudySession.ts              |    68
+src/hooks/usePerformance.ts               |    50
+src/components/BottomNav.tsx               |    44
+src/hooks/useCards.ts                      |    41
+src/hooks/useWallet.ts                     |    24
+src/components/EnergyFloater.tsx           |    23
+```
 
 ---
 
-# Otimização de Requisições do Dashboard
+## Analise: Esta Certo ou Nao?
 
-## Implementado
+**Voce esta CERTO** -- o `types.ts` do Supabase tem 2.871 linhas, mas isso e auto-gerado e nao se mexe. O problema real esta nos **12 arquivos acima de 600 linhas** que sao codigo manual:
 
-### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
-- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
-- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
+### Os 5 piores ofensores:
 
-### Fase B: deck-hierarchy via cache (economia: -1 query)
-- Removida query separada `['deck-hierarchy']`
-- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
+1. **StudyPlan.tsx (1.580 linhas)** -- Uma pagina com UI, logica de drag-and-drop, modais, formatadores, tudo junto. Deveria ser 4-5 arquivos.
 
-### Fase C: Missões com cache (economia: -2 queries)
-- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
-- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
+2. **ManageDeck.tsx (1.169 linhas)** -- Editor de cards com formularios, preview, estados de edicao, validacao. Monolito classico.
 
-### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
-- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
+3. **DeckDetailContext.tsx (1.064 linhas)** -- Um Context com queries, mutations, handlers, dialogos. Faz tudo: CRUD de cards, reordenacao, bulk actions, tags, import, export.
 
-### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
-- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
+4. **DeckSettings.tsx (1.002 linhas)** -- Formulario de configuracoes com muitas secoes inline ao inves de componentes separados.
 
-### Fase F: Aggregate stats memoizado (economia: CPU)
-- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
-- Build O(n) uma vez, lookup O(1) por deck
+5. **FlashCard.tsx (956 linhas)** -- Depois da extracao de `flashCardUtils`, ainda tem 956 linhas. Mistura renderizacao, edicao inline, preview de intervalos, animacoes.
 
-## Resumo de impacto
-| Otimização | Economia |
-|------------|----------|
-| useStudyPlan split (A) | -3 queries |
-| deck-hierarchy cache (B) | -1 query |
-| Missões com cache (C) | -2 queries |
-| useIsAdmin useQuery (D) | cache 10min |
-| Subscription polling (E) | -80% calls |
-| AggregateStats memo (F) | O(n²) → O(1) |
-| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
+### Veredicto geral:
+
+- **14 arquivos acima de 500 linhas** = quantidade ALTA para um projeto React. A regra pratica e manter componentes abaixo de 300 linhas e hooks abaixo de 200.
+- Os servicos e hooks menores estao **bem estruturados** (turma/, card/, deck/ ja foram modularizados).
+- O problema se concentra nas **pages e componentes complexos** que nao foram decompostos.
+
+### Quer que eu faca um plano de refatoracao para os piores? Os candidatos sao:
+- StudyPlan.tsx (1.580 → ~4 arquivos)
+- ManageDeck.tsx (1.169 → ~3 arquivos)
+- DeckDetailContext.tsx (1.064 → ~3 arquivos)
+- DeckSettings.tsx (1.002 → ~3 arquivos)
+- FlashCard.tsx (956 → ~2 arquivos)
+
