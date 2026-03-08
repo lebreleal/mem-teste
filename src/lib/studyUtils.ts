@@ -3,12 +3,56 @@
  * No React or Supabase dependencies.
  */
 
+/** Real study metrics per card state (from user's historical data). */
+export interface RealStudyMetrics {
+  avgNewSeconds: number;
+  avgLearningSeconds: number;
+  avgReviewSeconds: number;
+  avgRelearningSeconds: number;
+  actualDailyMinutes: number;
+  totalReviews90d: number;
+}
+
+/** Default fallbacks based on research (used only when no user data exists). */
+export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
+  avgNewSeconds: 45,
+  avgLearningSeconds: 25,
+  avgReviewSeconds: 15,
+  avgRelearningSeconds: 25,
+  actualDailyMinutes: 15,
+  totalReviews90d: 0,
+};
+
 /**
- * Estimate total study time in seconds, accounting for per-state multipliers:
- * - New cards: seen ~(learningSteps + 1) times (initial view + each step).
- *   Default learningSteps=2 → 3 views per new card.
- * - Learning cards: will return ~1.5 more times on average.
- * - Review cards: single pass.
+ * Calculate study time using REAL per-state seconds from user history.
+ * No theoretical multipliers — each state has its own measured average.
+ */
+export function calculateRealStudyTime(
+  newCards: number,
+  learningCards: number,
+  reviewCards: number,
+  metrics: RealStudyMetrics,
+): number {
+  return Math.round(
+    (newCards * metrics.avgNewSeconds) +
+    (learningCards * metrics.avgLearningSeconds) +
+    (reviewCards * metrics.avgReviewSeconds)
+  );
+}
+
+/**
+ * Derive a single weighted average seconds-per-card from real metrics.
+ * Useful for backward-compatible code that expects a single number.
+ */
+export function deriveAvgSecondsPerCard(metrics: RealStudyMetrics): number {
+  // Weighted average assuming typical session mix: 20% new, 30% learning, 50% review
+  const weighted = (metrics.avgNewSeconds * 0.2) + (metrics.avgLearningSeconds * 0.3) + (metrics.avgReviewSeconds * 0.5);
+  return Math.round(weighted);
+}
+
+/**
+ * @deprecated Use calculateRealStudyTime with per-state metrics instead.
+ * Estimate total study time in seconds, accounting for per-state multipliers.
  */
 export function estimateStudySeconds(
   newCards: number,
