@@ -215,8 +215,8 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return [...sorted].sort((a, b) => {
       const allocA = distributedNewByDeck?.get(a.id);
       const allocB = distributedNewByDeck?.get(b.id);
-      const pendA = getDeckTodayStats(a, decks, allocA != null ? allocA : globalNewRemaining).pendingToday;
-      const pendB = getDeckTodayStats(b, decks, allocB != null ? allocB : globalNewRemaining).pendingToday;
+      const pendA = getDeckTodayStats(a, aggregateMap, allocA != null ? allocA : globalNewRemaining).pendingToday;
+      const pendB = getDeckTodayStats(b, aggregateMap, allocB != null ? allocB : globalNewRemaining).pendingToday;
       if (pendA > 0 && pendB === 0) return -1;
       if (pendA === 0 && pendB > 0) return 1;
       return 0;
