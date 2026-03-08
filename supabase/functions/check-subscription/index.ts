@@ -110,12 +110,36 @@ serve(async (req) => {
 
     if (activeSub) {
       const endDate = new Date(activeSub.current_period_end * 1000).toISOString();
+      const startDate = new Date(activeSub.current_period_start * 1000).toISOString();
 
       // Sync premium_expires_at to profiles
       await supabaseAdmin
         .from("profiles")
         .update({ premium_expires_at: endDate })
         .eq("id", user.id);
+
+      // Grant monthly premium credits (once per billing period)
+      const grantRef = `premium_grant_${activeSub.id}_${startDate.slice(0, 10)}`;
+      const { data: existingGrant } = await supabaseAdmin
+        .from("memocoin_transactions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("reference_id", grantRef)
+        .limit(1);
+
+      if (!existingGrant || existingGrant.length === 0) {
+        await supabaseAdmin.rpc("deduct_energy", {
+          p_user_id: user.id,
+          p_cost: -MONTHLY_PREMIUM_GRANT,
+        });
+        await supabaseAdmin.from("memocoin_transactions").insert({
+          user_id: user.id,
+          amount: MONTHLY_PREMIUM_GRANT,
+          type: "credit",
+          description: MONTHLY_GRANT_DESCRIPTION,
+          reference_id: grantRef,
+        });
+      }
 
       const productId = activeSub.items.data[0].price.product;
       const plan = productId === "prod_U0RyXil8BOtEyS" ? "annual" : "monthly";
