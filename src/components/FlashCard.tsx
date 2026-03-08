@@ -3,6 +3,7 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { fsrsPreviewIntervals, type FSRSCard, type Rating, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2PreviewIntervals, type SM2Card, type SM2Params, DEFAULT_SM2_PARAMS } from '@/lib/sm2';
 import { parseStepToMinutes } from '@/lib/studyUtils';
+import { buildPreviewParams, getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
 import { calculateCardRecall } from '@/components/RetentionGauge';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,37 +12,8 @@ import TtsButton, { extractExplanationSection } from '@/components/TtsButton';
 import PersonalNotes from '@/components/PersonalNotes';
 import ReactMarkdown from 'react-markdown';
 
-/** Build SM2/FSRS params from deck config so preview intervals match actual scheduling */
-function buildPreviewParams(deckConfig: any, algorithmMode: string): { sm2?: SM2Params; fsrs?: FSRSParams } {
-  if (!deckConfig) return {};
-  const learningStepsRaw: string[] = deckConfig.learning_steps || ['1m', '10m'];
-  const learningStepsMinutes = learningStepsRaw.map(parseStepToMinutes);
-  const maxIntervalDays = deckConfig.max_interval ?? 36500;
-
-  if (algorithmMode === 'fsrs') {
-    const requestedRetention = deckConfig.requested_retention ?? 0.85;
-    const easyGraduatingInterval = deckConfig.easy_graduating_interval ?? 15;
-    return {
-      fsrs: {
-        ...DEFAULT_FSRS_PARAMS,
-        requestedRetention,
-        maximumInterval: maxIntervalDays,
-        learningSteps: learningStepsMinutes,
-        relearningSteps: [learningStepsMinutes[0] ?? 10],
-        easyGraduatingInterval,
-      },
-    };
-  }
-
-  return {
-    sm2: {
-      learningSteps: learningStepsMinutes,
-      easyBonus: (deckConfig.easy_bonus ?? 130) / 100,
-      intervalModifier: (deckConfig.interval_modifier ?? 100) / 100,
-      maxInterval: maxIntervalDays,
-    },
-  };
-}
+/** Build SM2/FSRS params from deck config — re-exported from flashCardUtils for backward compat */
+// buildPreviewParams is now imported from '@/lib/flashCardUtils'
 
 /** Convert basic markdown (**bold**, *italic*, \n) to HTML */
 function formatMarkdown(text: string): string {
@@ -249,15 +221,7 @@ const MultipleChoiceCard = ({
   const mcData = parseMultipleChoice(backContent);
   const canUseTutor = energy >= (2);
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode || 'fsrs');
-  const intervals = (() => {
-    if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep ?? 0, last_reviewed_at: lastReviewedAt };
-      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
-    }
-    const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
-  })();
+  const intervals = getPreviewIntervals(algorithmMode || 'fsrs', deckConfig, { stability, difficulty, state, scheduledDate, learningStep: learningStep ?? 0, lastReviewedAt });
 
   useEffect(() => {
     if (feedbackType) {
@@ -292,13 +256,8 @@ const MultipleChoiceCard = ({
     }, 700);
   };
 
-  const recallColor = recallData
-    ? recallData.percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' : recallData.percent >= 60 ? 'text-primary' : recallData.percent >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-orange-600 dark:text-orange-400'
-    : 'text-muted-foreground';
-
-  const recallBgColor = recallData
-    ? recallData.state === 'new' ? 'bg-muted/80' : recallData.state === 'learning' ? 'bg-emerald-500/10' : 'bg-primary/10'
-    : '';
+  const recallColor = getRecallColor(recallData);
+  const recallBgColor = getRecallBgColor(recallData);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-7rem)] w-full max-w-lg mx-auto px-1 relative">
@@ -627,15 +586,7 @@ const FlashCard = ({
     onRate(rating);
   };
 
-  const previewParams = buildPreviewParams(deckConfig, algorithmMode);
-  const intervals = (() => {
-    if (algorithmMode === 'fsrs') {
-      const fsrsCard: FSRSCard = { stability, difficulty, state, scheduled_date: scheduledDate, learning_step: learningStep, last_reviewed_at: lastReviewedAt };
-      return fsrsPreviewIntervals(fsrsCard, previewParams.fsrs);
-    }
-    const sm2Card: SM2Card = { stability, difficulty, state, scheduled_date: scheduledDate };
-    return sm2PreviewIntervals(sm2Card, previewParams.sm2);
-  })();
+  const intervals = getPreviewIntervals(algorithmMode, deckConfig, { stability, difficulty, state, scheduledDate, learningStep, lastReviewedAt });
 
   let displayFront: string;
   let displayBack: string;
@@ -690,13 +641,8 @@ const FlashCard = ({
     displayBack = looksLikeHtml(backContent) ? backContent : formatMarkdown(backContent);
   }
 
-  const recallColor = recallData
-    ? recallData.percent >= 80 ? 'text-emerald-600 dark:text-emerald-400' : recallData.percent >= 60 ? 'text-primary' : recallData.percent >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-orange-600 dark:text-orange-400'
-    : 'text-muted-foreground';
-
-  const recallBgColor = recallData
-    ? recallData.state === 'new' ? 'bg-muted/80' : recallData.state === 'learning' ? 'bg-emerald-500/10' : 'bg-primary/10'
-    : '';
+  const recallColor = getRecallColor(recallData);
+  const recallBgColor = getRecallBgColor(recallData);
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">

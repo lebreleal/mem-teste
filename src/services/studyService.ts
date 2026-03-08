@@ -112,7 +112,7 @@ export async function fetchStudyQueue(
   const studyPlans = plansResult.data as any[] | null;
   const profileData = profileResult.data as any;
 
-  // Build plan deck IDs and fetch plan card IDs + hierarchy limits in parallel
+  // Build plan deck IDs and expand to include descendants
   const planDeckIdSet = new Set<string>();
   if (studyPlans && studyPlans.length > 0) {
     for (const plan of studyPlans) {
@@ -120,33 +120,29 @@ export async function fetchStudyQueue(
     }
   }
 
-  // Expand plan deck IDs to include descendants
   const expandedPlanDeckIds = new Set<string>(planDeckIdSet);
   for (const pid of planDeckIdSet) {
     const descendants = collectDescendantIds(activeDecks, pid);
     for (const d of descendants) expandedPlanDeckIds.add(d);
   }
 
-  // Determine which card IDs to use for global limits
-  let globalCardIdsPromise: Promise<string[]>;
-  if (planDeckIdSet.size > 0) {
-    globalCardIdsPromise = Promise.resolve(
-      supabase.from('cards').select('id').in('deck_id', Array.from(expandedPlanDeckIds))
-    ).then(r => (r.data ?? []).map((c: any) => c.id));
-  } else {
-    globalCardIdsPromise = Promise.resolve(
-      supabase.from('cards').select('id').in('deck_id', activeDecks.map(d => d.id))
-    ).then(r => (r.data ?? []).map((c: any) => c.id));
-  }
+  // Determine global scope deck IDs
+  const globalScopeDeckIds = planDeckIdSet.size > 0
+    ? Array.from(expandedPlanDeckIds)
+    : activeDecks.map(d => d.id);
 
-  // Fetch hierarchy limits and global card IDs in parallel
+  // Fetch hierarchy limits, global card IDs ALL in parallel
   const hierarchyLimitsPromise = limitCardIds.length > 0
     ? supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: limitCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any)
     : Promise.resolve({ data: null });
 
+  const globalCardIdsPromise = supabase
+    .from('cards').select('id').in('deck_id', globalScopeDeckIds)
+    .then(r => (r.data ?? []).map((c: any) => c.id));
+
   const [hierarchyLimits, globalCardIds] = await Promise.all([hierarchyLimitsPromise, globalCardIdsPromise]);
 
-  // Now fetch global limits RPC
+  // Fetch global limits RPC (only if we have card IDs)
   let globalNewReviewedToday = 0;
   if (globalCardIds.length > 0) {
     const globalLimits = await supabase.rpc('get_study_queue_limits', { p_user_id: userId, p_card_ids: globalCardIds, p_tz_offset_minutes: tzOffsetMinutes } as any);
