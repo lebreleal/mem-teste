@@ -2606,6 +2606,13 @@ export type Database = {
         }[]
       }
       get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
+      get_community_deck_updates: {
+        Args: { p_user_id: string }
+        Returns: {
+          has_update: boolean
+          local_deck_id: string
+        }[]
+      }
       get_community_full_preview: {
         Args: { p_turma_id: string }
         Returns: Json
