@@ -635,7 +635,7 @@ export function useStudyPlan() {
     allDeckIds,
     expandedDeckIds,
     globalCapacity,
-    isLoading: plansQuery.isLoading || capacityQuery.isLoading,
+    isLoading: plansQuery.isLoading || profileQuery.isLoading,
     metrics: computed,
     avgSecondsPerCard: avgQuery.data ?? 30,
     calcImpact,
