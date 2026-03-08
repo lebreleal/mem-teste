@@ -68,8 +68,9 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [occlusionModalOpen, setOcclusionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Store original front_content to find siblings
-  const originalFrontRef = useRef<string>('');
+  // Capture card ID at edit-open time to prevent stale references
+  // if a learning card cuts the queue while the edit dialog is open
+  const editCardIdRef = useRef<string>(card.id);
 
   // AI improve state
   const [isImproving, setIsImproving] = useState(false);
@@ -77,8 +78,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
+  // Store original front_content to find siblings
+  const originalFrontRef = useRef<string>('');
+
   const openEdit = async () => {
     setEditLoading(true);
+    // Capture card identity at open time (immune to queue changes during edit)
+    editCardIdRef.current = card.id;
     // Preload the RichEditor chunk before opening the dialog
     try {
       await import('@/components/RichEditor');
@@ -203,11 +209,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const { error } = await supabase
           .from('cards')
           .update({ front_content: front, back_content: backContent })
-          .eq('id', card.id);
+          .eq('id', editCardIdRef.current);
         if (error) throw error;
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: front, back_content: backContent });
       } catch {
@@ -306,7 +311,6 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
           onSiblingsUpdated(updatedSiblings, deletedIds);
         }
 
-        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
@@ -340,11 +344,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const { error } = await supabase
           .from('cards')
           .update({ front_content: frontContent, back_content: back })
-          .eq('id', card.id);
+          .eq('id', editCardIdRef.current);
         if (error) throw error;
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: frontContent, back_content: back });
       } catch {
@@ -361,11 +364,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
       const { error } = await supabase
         .from('cards')
         .update({ front_content: front, back_content: back })
-        .eq('id', card.id);
+        .eq('id', editCardIdRef.current);
       if (error) throw error;
       toast({ title: 'Card atualizado!' });
       setEditOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['study-queue'] });
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       onCardUpdated({ front_content: front, back_content: back });
     } catch {

@@ -65,6 +65,14 @@ const Study = () => {
 
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Reset scroll position when card changes
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [cardKey]);
 
   const [hintResponse, setHintResponse] = useState<string | null>(null);
   const [explainResponse, setExplainResponse] = useState<string | null>(null);
@@ -588,7 +596,7 @@ const Study = () => {
         />
       </div>
 
-      <main className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
+      <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className="w-full animate-fade-in">
           <FlashCard
             cardId={currentCard.id}
