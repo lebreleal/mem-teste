@@ -23,7 +23,7 @@ interface PremiumModalProps {
 const BENEFITS = [
   { icon: Sparkles, title: 'Raciocínio Pro liberado', desc: 'Acesse o modelo de IA avançado para gerar conteúdo', color: 'hsl(var(--primary))' },
   { icon: Zap, title: '50% menos créditos no Flash', desc: 'Modelo Flash consome metade dos créditos de IA', color: 'hsl(var(--warning))' },
-  { icon: Infinity, title: '1.500 créditos por mês', desc: 'Receba créditos de IA mensalmente no seu plano', color: 'hsl(var(--destructive))' },
+  { icon: Infinity, title: '500 créditos por mês', desc: 'Receba créditos de IA mensalmente no seu plano', color: 'hsl(var(--destructive))' },
   { icon: Pencil, title: 'Edite cartões ao estudar', desc: 'Corrija e melhore seus cartões durante a revisão', color: 'hsl(var(--primary))' },
 ];
 
