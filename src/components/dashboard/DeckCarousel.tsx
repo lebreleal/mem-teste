@@ -242,7 +242,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       const root = decks.find(d => d.id === rootId);
       if (root) {
         const allocated = distributedNewByDeck?.get(rootId);
-        const stats = getDeckTodayStats(root, decks, allocated != null ? allocated : globalNewRemaining);
+        const stats = getDeckTodayStats(root, aggregateMap, allocated != null ? allocated : globalNewRemaining);
         totalLearning += stats.learningAvailable;
         totalReview += stats.reviewAvailable;
         totalStudied += stats.studiedToday;
