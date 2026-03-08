@@ -3,6 +3,26 @@
  * No React or Supabase dependencies.
  */
 
+/**
+ * Estimate total study time in seconds, accounting for per-state multipliers:
+ * - New cards: seen ~(learningSteps + 1) times (initial view + each step).
+ *   Default learningSteps=2 → 3 views per new card.
+ * - Learning cards: will return ~1.5 more times on average.
+ * - Review cards: single pass.
+ */
+export function estimateStudySeconds(
+  newCards: number,
+  learningCards: number,
+  reviewCards: number,
+  avgSecondsPerCard: number,
+  learningStepCount = 2,
+): number {
+  const newViews = newCards * (learningStepCount + 1);
+  const learningViews = learningCards * 1.5;
+  const reviewViews = reviewCards;
+  return Math.round((newViews + learningViews + reviewViews) * avgSecondsPerCard);
+}
+
 /** Parse a learning step string (e.g. '15m', '1h', '2d') to minutes. */
 export function parseStepToMinutes(step: string): number {
   const num = parseFloat(step);
