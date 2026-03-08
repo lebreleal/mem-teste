@@ -2701,6 +2701,17 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Json
       }
+      get_user_real_study_metrics: {
+        Args: { p_user_id: string }
+        Returns: {
+          actual_daily_minutes: number
+          avg_learning_seconds: number
+          avg_new_seconds: number
+          avg_relearning_seconds: number
+          avg_review_seconds: number
+          total_reviews_90d: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
