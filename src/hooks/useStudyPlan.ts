@@ -108,7 +108,8 @@ export interface PlanMetrics {
   deckNewAllocation: Record<string, number>;
 }
 
-export function useStudyPlan() {
+export function useStudyPlan(options?: { full?: boolean }) {
+  const full = options?.full ?? false;
   const { user } = useAuth();
   const qc = useQueryClient();
   const userId = user?.id;
