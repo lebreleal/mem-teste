@@ -262,7 +262,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     let totalNew = 0, totalLearning = 0, totalReview = 0, totalStudied = 0, totalPending = 0;
     for (const root of roots) {
-      const stats = getDeckTodayStats(root, decks); // no plan = use deck limits
+      const stats = getDeckTodayStats(root, aggregateMap); // no plan = use deck limits
       totalNew += stats.newAvailable;
       totalLearning += stats.learningAvailable;
       totalReview += stats.reviewAvailable;
