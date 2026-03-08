@@ -33,3 +33,32 @@ Instrução adicionada ao final do prompt para o modelo verificar que cada pará
 - Mais cards gerados por batch
 - Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
 - MC mais focado e pedagógico (diferenciação, não trivial)
+
+---
+
+# Rebalanceamento da Economia de Créditos IA
+
+## Implementado
+
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
+
+Total mensal free: ~1.500 → ~270 créditos.
+
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
+
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
