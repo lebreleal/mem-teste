@@ -68,7 +68,7 @@ export function useSubscription() {
 
   const refreshStatus = useCallback(() => {
     refetch();
-    queryClient.invalidateQueries({ queryKey: ['energy', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
   }, [refetch, queryClient, user?.id]);
 
   return {

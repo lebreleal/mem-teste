@@ -411,7 +411,7 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         return;
       }
 
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
     } catch (e: any) {

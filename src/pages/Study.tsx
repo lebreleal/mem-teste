@@ -303,7 +303,7 @@ const Study = () => {
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     } catch (err: any) {
       if (controller.signal.aborted) return;
       toast({ title: 'Erro ao consultar o Tutor', description: err.message, variant: 'destructive' });
