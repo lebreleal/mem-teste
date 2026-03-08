@@ -78,8 +78,13 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
   const [improveModalOpen, setImproveModalOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
+  // Store original front_content to find siblings
+  const originalFrontRef = useRef<string>('');
+
   const openEdit = async () => {
     setEditLoading(true);
+    // Capture card identity at open time (immune to queue changes during edit)
+    editCardIdRef.current = card.id;
     // Preload the RichEditor chunk before opening the dialog
     try {
       await import('@/components/RichEditor');
