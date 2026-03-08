@@ -28,6 +28,7 @@ import {
 import { DeckStatsTab } from '@/components/deck-detail/DeckStatsTab';
 import ankiLogo from '@/assets/anki-logo.svg';
 import { exportAsApkg } from '@/lib/ankiExport';
+import DeckSettingsModals from '@/pages/DeckSettingsModals';
 
 // ── Settings row component ──────────────────────────────────────
 interface SettingsRowProps {
