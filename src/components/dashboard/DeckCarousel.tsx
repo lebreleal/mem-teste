@@ -7,6 +7,8 @@ import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
 
 type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
+
+function formatMinutes(m: number) {
   if (m <= 0) return '0min';
   if (m < 60) return `${m}min`;
   const h = Math.floor(m / 60);
@@ -14,9 +16,8 @@ type AggregateStats = { new_count: number; learning_count: number; review_count:
   return r > 0 ? `${h}h${r}min` : `${h}h`;
 }
 
-/** Pre-compute aggregate stats for ALL decks into a Map for O(1) lookup.
- *  Avoids O(n²) recursive .filter() calls per deck. */
-function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }> {
+/** Pre-compute aggregate stats for ALL decks into a Map for O(1) lookup. */
+function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, AggregateStats> {
   // Build children map once
   const childrenMap = new Map<string, DeckWithStats[]>();
   for (const d of allDecks) {
