@@ -344,11 +344,10 @@ const StudyCardActions = ({ card, isLiveDeck, onCardUpdated, onCardFrozen, onCar
         const { error } = await supabase
           .from('cards')
           .update({ front_content: frontContent, back_content: back })
-          .eq('id', card.id);
+          .eq('id', editCardIdRef.current);
         if (error) throw error;
         toast({ title: 'Card atualizado!' });
         setEditOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['study-queue'] });
         queryClient.invalidateQueries({ queryKey: ['cards'] });
         onCardUpdated({ front_content: frontContent, back_content: back });
       } catch {
