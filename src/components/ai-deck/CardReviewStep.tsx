@@ -486,8 +486,8 @@ const CardReviewStep = ({
               }
               if (e.key === 'Escape') setTagDropdownOpen(false);
             }}
-            placeholder={showTagWarning && !hasMinTags ? "Selecione ou crie pelo menos 1 tag..." : "Buscar ou criar tag..."}
-            className={`h-9 text-sm transition-colors ${showTagWarning && !hasMinTags ? 'border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/60' : ''}`}
+            placeholder="Buscar ou criar tag..."
+            className="h-9 text-sm"
           />
           {tagDropdownOpen && (tagQuery || filteredSearch.length > 0) && (
             <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-36 overflow-y-auto">
