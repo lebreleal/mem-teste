@@ -1,120 +1,128 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
 
-## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+# Analise do Dashboard: Requisições e Oportunidades de Otimização
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+## Mapa de Requisições Atual
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+Ao carregar o Dashboard, o seguinte conjunto de queries e RPCs é disparado:
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+```text
+Hook/Service                 | Query Key                    | Tipo           | Custo
+-----------------------------|------------------------------|----------------|--------
+useDecks                     | ['decks', userId]            | SELECT decks   | 1 query
+  └─ fetchDecksWithStats     |                              | RPC stats      | 1 RPC
+  └─ (marketplace_listings)  |                              | SELECT         | 0-2 queries
+useFolders                   | ['folders', userId]          | SELECT folders | 1 query
+useProfile                   | ['profile', userId]          | SELECT profile | 1 query
+useSubscription              | ['subscription-status']      | Edge Function  | 1 HTTP
+useStudyStats                | ['study-stats', userId]      | RPC stats      | 1 RPC
+useMissions                  | ['missions', userId]         | 2 queries      | 2 queries
+  └─ missionService          |                              | +5 queries     | 5 queries (profile duplicado!)
+useIsAdmin                   | (useState/useEffect)         | SELECT roles   | 1 query
+useStudyPlan                 |                              |                |
+  ├─ ['study-plans']         |                              | SELECT         | 1 query
+  ├─ ['deck-hierarchy']      |                              | SELECT decks   | 1 query (DUPLICADO!)
+  ├─ ['avg-seconds-per-card']|                              | RPC            | 1 RPC
+  ├─ ['plan-metrics']        |                              | RPC            | 1 RPC
+  ├─ ['per-deck-new-counts'] |                              | cache/fallback | 0-1 RPC
+  ├─ ['plan-retention']      |                              | SELECT decks   | 1 query
+  ├─ ['plan-health']         |                              | SELECT logs    | 1 query
+  └─ ['plan-forecast']       |                              | SELECT cards   | 1 query
+pendingUpdatesQuery          | ['community-deck-updates']   | RPC            | 0-1 RPC
+─────────────────────────────────────────────────────────────────────────────────
+TOTAL ESTIMADO:              |                              |                | ~20-24 requisições
+```
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+## Problemas Identificados
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+### 1. `useStudyPlan` dispara 7 queries independentes no Dashboard -- mas o Dashboard usa apenas 4 campos
 
-## Trade-offs
-- +3x mais chamadas API (mais créditos gastos por geração)
-- Mais cards gerados por batch
-- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
-- MC mais focado e pedagógico (diferenciação, não trivial)
+O Dashboard importa `useStudyPlan()` e consome **apenas**: `plans`, `allDeckIds`, `avgSecondsPerCard`, `metrics`, `globalCapacity`. Mas o hook dispara `planHealthQuery`, `forecastQuery`, `retentionQuery` que **nunca são usados no Dashboard** -- eles servem somente para a page `/plano`.
 
----
+**Impacto**: 3 queries desperdicadas no Dashboard (plan-health, plan-forecast, plan-retention).
 
-# Rebalanceamento da Economia de Créditos IA
+### 2. `['deck-hierarchy']` duplica dados de `['decks']`
 
-## Implementado
+`useStudyPlan` faz `SELECT id, parent_deck_id FROM decks` separadamente. Esses mesmos dados já existem no cache `['decks', userId]` populado por `useDecks`. Busca redundante.
 
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
+**Impacto**: 1 query desnecessaria.
 
-Total mensal free: ~1.500 → ~270 créditos.
+### 3. `missionService.fetchMissions()` faz 5 queries paralelas incluindo profile duplicado
 
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+Linha 49-54: busca `profiles.daily_cards_studied` diretamente, ignorando o cache `useProfile`. Tambem busca `decks count`, `review_logs count`, `deck_suggestions count` x2.
 
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
+**Impacto**: 5 queries, das quais 1 (profile) e 1 (deck count) poderiam vir do cache.
 
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
+### 4. `useIsAdmin` usa useState+useEffect em vez de useQuery
 
----
+Não compartilha cache, não tem staleTime, re-executa em cada mount do Dashboard.
 
-# Transação com Rollback de Créditos em Edge Functions
+**Impacto**: 1 query sem cache.
 
-## Implementado
+### 5. `useSubscription` chama Edge Function a cada 60s
 
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+`refetchInterval: 60_000` faz polling contínuo. Para a maioria dos usuarios não-premium, isso é desperdício.
 
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
+**Impacto**: 1 Edge Function call por minuto enquanto o Dashboard está aberto.
 
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+### 6. `getRawAggregateStats` em useDashboardState é O(n²)
 
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
+A versão no `useDashboardState` (linha 179-193) usa recursão sem cache, ao contrário do `DeckCarousel` que tem `buildAggregateMap` com memoização. Cada chamada a `getAggregateStats` re-percorre toda a árvore.
+
+### 7. Supabase Realtime channel para profile
+
+O `useProfile` abre um canal Realtime permanente. Isso é bom para sincronização, mas adiciona 1 WebSocket subscription constante.
 
 ---
 
-# Dashboard Performance & Bug Fixes
+## Plano de Otimização
 
-## Implementado
+### Fase A: Eliminar queries do Dashboard que pertencem a /plano (economia: -3 queries)
 
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
+Dividir `useStudyPlan` em dois hooks:
+- **`useStudyPlanCore`**: retorna apenas `plans`, `allDeckIds`, `avgSecondsPerCard`, `metrics`, `globalCapacity` -- sem `forecastQuery`, `planHealthQuery`, `retentionQuery`.
+- **`useStudyPlanFull`**: usado apenas em `/plano`, chama `useStudyPlanCore` + as 3 queries extras.
 
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
+O Dashboard passa a chamar `useStudyPlanCore`.
 
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
+### Fase B: Eliminar deck-hierarchy duplicado (economia: -1 query)
 
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
+No `useStudyPlanCore`, em vez de fazer `SELECT id, parent_deck_id FROM decks`, ler do cache `['decks', userId]` (já populado por `useDecks`):
+```typescript
+const cachedDecks = qc.getQueryData<DeckWithStats[]>(['decks', userId]);
+const hierarchy = cachedDecks?.map(d => ({ id: d.id, parent_deck_id: d.parent_deck_id })) ?? [];
+```
 
-## Resumo de impacto
+### Fase C: Missões com cache (economia: -2 queries)
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
+Refatorar `missionService.fetchMissions` para aceitar `dailyCardsStudied` e `deckCount` como parâmetros opcionais (vindos do cache de `useProfile` e `useDecks`), evitando re-buscar profile e deck count.
+
+### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
+
+Converter para `useQuery` com `staleTime: 10 * 60_000` para não re-buscar a cada mount.
+
+### Fase E: Subscription polling inteligente (economia: -N edge function calls)
+
+Mudar `refetchInterval` para `5 * 60_000` (5min) em vez de 60s. Manter `refetchOnWindowFocus: true` para garantir atualização quando o usuario volta.
+
+### Fase F: Memoizar getRawAggregateStats no useDashboardState
+
+Reutilizar o padrão `buildAggregateMap` do `DeckCarousel` no `useDashboardState`, criando o map uma vez via `useMemo` e fazendo lookup O(1).
+
+---
+
+## Resumo de Impacto
+
+```text
+Otimização                          | Queries Antes | Depois | Economia
+------------------------------------|---------------|--------|----------
+useStudyPlan split (A)              | 7             | 4      | -3
+deck-hierarchy cache (B)            | 1             | 0      | -1
+Missões com cache (C)               | 7             | 5      | -2
+useIsAdmin com useQuery (D)         | 1 (sem cache) | 1 (cached) | cache
+Subscription polling 5min (E)       | 1/min         | 1/5min | -80%
+AggregateStats memoizado (F)        | O(n²)         | O(n)   | CPU
+─────────────────────────────────────────────────────────────────────
+TOTAL Dashboard load                | ~20-24        | ~14-16 | -6 a -8 req
+```
+
