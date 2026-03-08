@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
@@ -50,29 +51,12 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; type: 'deck' | 'folder'; action: () => void } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
-  // Fetch global daily_new_cards_limit from profile
-  const globalNewLimitQuery = useQuery({
-    queryKey: ['daily-new-cards-limit', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('daily_new_cards_limit, weekly_new_cards')
-        .eq('id', user!.id)
-        .single();
-      return data as any;
-    },
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-    refetchOnMount: 'always',
-  });
+  // Use centralized profile cache instead of separate query
+  const profileQuery = useProfile();
+  const profileData = profileQuery.data;
 
-  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
-  const rawGlobalNewLimit = typeof profileLimitData === 'number'
-    ? profileLimitData
-    : profileLimitData?.daily_new_cards_limit ?? 9999;
-  const weeklyNewCardsProfile = (profileLimitData && typeof profileLimitData === 'object')
-    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
-    : null;
+  const rawGlobalNewLimit = profileData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCardsProfile = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)
     ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]

@@ -31,7 +31,7 @@ export const useMissions = () => {
     onSuccess: (mission) => {
       toast({ title: `🎉 +${mission.reward_credits} créditos IA!`, description: mission.title });
       queryClient.invalidateQueries({ queryKey: ['missions'] });
-      queryClient.invalidateQueries({ queryKey: ['user-energy'] });
+      
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
     onError: () => {

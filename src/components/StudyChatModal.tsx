@@ -231,7 +231,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
     } finally {
       setIsStreaming(false);
       // Refresh energy in header after spending credits
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     }
   }, [input, isStreaming, energy, cost, messages, model, cardContext, toast, queryClient]);
 

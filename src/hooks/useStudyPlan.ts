@@ -526,7 +526,7 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
     qc.invalidateQueries({ queryKey: ['global-capacity'] });
-    qc.invalidateQueries({ queryKey: ['daily-new-cards-limit'] });
+    qc.invalidateQueries({ queryKey: ['profile'] });
   }, [qc]);
 
   const createPlan = useMutation({

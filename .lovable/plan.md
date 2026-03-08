@@ -1,76 +1,87 @@
 
 
-## Estrategias para Reduzir Requisicoes ao Banco de Dados
+# Melhorar cobertura de conteúdo na geração de decks por IA
 
-### Diagnostico Atual
+## Implementado
 
-Analisei o codebase inteiro. Aqui esta o que encontrei:
+### 1. PAGES_PER_BATCH reduzido de 10 → 3
+Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
 
-**Pontos positivos ja implementados:**
-- `staleTime` global de 30s no QueryClient
-- `refetchOnWindowFocus: false` global
-- `Promise.all` para queries paralelas em varios lugares
-- RPC batch (`get_all_user_deck_stats`) para evitar N+1 queries no dashboard
+### 2. densityFactor reduzido
+- Essential: 600 → 400
+- Standard: 250 → 150
+- Comprehensive: 120 → 80
+Mais cards solicitados por batch, forçando cobertura mais completa.
 
-**Problemas identificados:**
+### 3. Structured Output (tool calling) no generate-deck
+Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
 
-#### 1. `fetchStudyQueue` faz 6-8 queries sequenciais ao banco
-Cada vez que o usuario abre uma sessao de estudo, essa funcao faz:
-- 1 query: todos os decks do usuario
-- 1 query: folders (se folderId)
-- 2 queries paralelas: cards + scope card IDs
-- 1 query: study_plans
-- 1 query: plan cards IDs (ou all cards IDs)
-- 2 RPCs: hierarchy limits + global limits
-- 1 query: profile (daily_new_cards_limit)
+### 4. Threshold de deduplicação: 0.8 → 0.9
+Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
 
-Total: **7-9 requests** por abertura de sessao de estudo.
+### 5. Checklist de cobertura no prompt
+Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
 
-#### 2. `fetchStudyStats` busca ate 365 dias de logs paginados
-Cada vez que o StatusBar renderiza (toda pagina), faz:
-- 1 query: profile
-- N queries paginadas: review_logs (2+ requests para 1500+ logs)
+### 6. Otimização de Múltipla Escolha (MC)
+- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
+- MC só para diferenciação de 3+ conceitos similares
+- Opções limitadas a exatamente 4, max 8 palavras cada
+- Economia estimada: ~25% tokens de output
 
-#### 3. Dashboard carrega dados redundantes
-- `useDecks` busca todos os decks com stats
-- `useDashboardState` faz query separada para `daily_new_cards_limit`
-- `useStudyStats` busca profile separadamente
-- `useEnergy` busca energy separadamente
-
-O profile e consultado **3x separadamente** em paginas como o Dashboard.
-
-#### 4. ActivityView busca todos os review_logs do ano
-Pagina inteira com 1500+ logs buscados no cliente para calcular streak, minutos, etc.
+## Trade-offs
+- +3x mais chamadas API (mais créditos gastos por geração)
+- Mais cards gerados por batch
+- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
+- MC mais focado e pedagógico (diferenciação, não trivial)
 
 ---
 
-### Solucoes Propostas (por prioridade)
+# Rebalanceamento da Economia de Créditos IA
 
-#### A. Criar RPC `get_study_queue_v2` no banco (maior impacto)
-Mover toda a logica de `fetchStudyQueue` para uma unica funcao SQL que retorna os cards ja filtrados e limitados. Reduz **7-9 requests para 1**.
+## Implementado
 
-#### B. Criar RPC `get_user_dashboard_summary` 
-Uma unica query que retorna: energy, streak, daily_new_cards_limit, daily_cards_studied, today_minutes. Substitui 3 queries separadas (profile + energy + study stats basicos).
+### 1. Redução de recompensas de missões (~75%)
+| Missão | Antes | Depois |
+|--------|-------|--------|
+| daily_study_5 | 3 | 1 |
+| daily_study_20 | 5 | 2 |
+| daily_study_50 | 10 | 3 |
+| daily_minutes_10 | 3 | 1 |
+| daily_minutes_30 | 8 | 2 |
+| weekly_100 | 15 | 5 |
+| weekly_300 | 30 | 8 |
 
-#### C. Cache do profile com `staleTime: 5min`
-Criar um hook `useProfile` centralizado que busca o profile uma vez e compartilha entre `useEnergy`, `useStudyStats`, `useDashboardState`.
+Total mensal free: ~1.500 → ~270 créditos.
 
-#### D. Mover calculo de streak/minutos para o servidor
-Criar RPC `get_activity_summary` que calcula streak, minutos por dia e contadores diretamente no banco, evitando transferir 1500+ rows para o cliente.
+### 2. Milestones de estudo removidos
+Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
 
-#### E. Invalidacao seletiva apos reviews
-Atualmente `invalidateStudyQueries` invalida 7 query keys de uma vez. Usar `setQueryData` para atualizar o cache otimisticamente apos cada review, evitando refetch completo.
+### 3. Bônus mensal premium implementado
+500 créditos/mês concedidos automaticamente via check-subscription.
+Usa reference_id único por período para evitar duplicatas.
+
+### 4. Copy do PremiumModal atualizado
+"1.500 créditos por mês" → "500 créditos por mês".
 
 ---
 
-### Recomendacao
+# Transação com Rollback de Créditos em Edge Functions
 
-Sugiro implementar na seguinte ordem:
-1. **C** (rapido, sem migracao) - Hook `useProfile` centralizado
-2. **B** (migracao simples) - RPC de resumo do dashboard
-3. **D** (migracao media) - Calculo server-side de atividade
-4. **A** (migracao complexa) - Study queue unificado
-5. **E** (refactor medio) - Cache otimistico pos-review
+## Implementado
 
-A opcao C sozinha ja elimina ~30% das queries redundantes no Dashboard sem nenhuma migracao SQL.
+### 1. RPC `refund_energy` criada no banco
+Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
 
+### 2. `refundEnergy()` em `_shared/utils.ts`
+Helper que chama a RPC com tratamento de erro silencioso (log only).
+
+### 3. Rollback em todas as 5 edge functions
+- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
+- `enhance-card`: refund em erros AI e parse errors
+- `enhance-import`: refund em erros AI e parse errors
+- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
+- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+
+### Nota sobre streaming
+Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
+Se o stream já começou, os créditos são considerados consumidos legitimamente.

@@ -4,12 +4,39 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { EnergyData } from '@/types/energy';
-
-const MAX_ENERGY = 9999;
+import type { ProfileData } from '@/hooks/useProfile';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-/** Fetch current energy data, resetting daily counters if needed. */
+/** Convert cached profile data to EnergyData, handling daily reset logic. */
+export function profileToEnergyData(profile: ProfileData): { data: EnergyData; needsReset: boolean } {
+  const today = todayStr();
+  const needsReset = profile.last_study_reset_date !== today;
+
+  return {
+    data: {
+      energy: profile.energy ?? 0,
+      successfulCardsCounter: profile.successful_cards_counter ?? 0,
+      dailyCardsStudied: needsReset ? 0 : (profile.daily_cards_studied ?? 0),
+      dailyEnergyEarned: needsReset ? 0 : (profile.daily_energy_earned ?? 0),
+      lastEnergyRecharge: profile.last_energy_recharge,
+      lastStudyResetDate: needsReset ? today : profile.last_study_reset_date,
+    },
+    needsReset,
+  };
+}
+
+/** Perform daily reset on server if needed. */
+export async function performDailyReset(userId: string): Promise<void> {
+  const today = todayStr();
+  await supabase.from('profiles').update({
+    daily_cards_studied: 0,
+    daily_energy_earned: 0,
+    last_study_reset_date: today,
+  } as any).eq('id', userId);
+}
+
+/** Fetch current energy data (legacy — kept for backward compat). */
 export async function fetchEnergy(userId: string): Promise<EnergyData> {
   const { data, error } = await supabase
     .from('profiles')
@@ -19,35 +46,28 @@ export async function fetchEnergy(userId: string): Promise<EnergyData> {
   if (error) throw error;
 
   const d = data as any;
-  let energy = d?.energy ?? 0;
   let dailyCardsStudied = d?.daily_cards_studied ?? 0;
   let dailyEnergyEarned = d?.daily_energy_earned ?? 0;
-  let lastRecharge = d?.last_energy_recharge;
   let lastStudyReset = d?.last_study_reset_date;
   const today = todayStr();
-  let needsUpdate = false;
-  const updates: Record<string, any> = {};
 
   if (lastStudyReset !== today) {
     dailyCardsStudied = 0;
     dailyEnergyEarned = 0;
-    updates.daily_cards_studied = 0;
-    updates.daily_energy_earned = 0;
-    updates.last_study_reset_date = today;
+    await supabase.from('profiles').update({
+      daily_cards_studied: 0,
+      daily_energy_earned: 0,
+      last_study_reset_date: today,
+    } as any).eq('id', userId);
     lastStudyReset = today;
-    needsUpdate = true;
-  }
-
-  if (needsUpdate) {
-    await supabase.from('profiles').update(updates).eq('id', userId);
   }
 
   return {
-    energy,
+    energy: d?.energy ?? 0,
     successfulCardsCounter: d?.successful_cards_counter ?? 0,
     dailyCardsStudied,
     dailyEnergyEarned,
-    lastEnergyRecharge: lastRecharge,
+    lastEnergyRecharge: d?.last_energy_recharge,
     lastStudyResetDate: lastStudyReset,
   };
 }

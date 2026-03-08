@@ -227,7 +227,7 @@ export const useExamDetail = (examId: string) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam', examId] });
       queryClient.invalidateQueries({ queryKey: ['exam-questions', examId] });
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
   });
 

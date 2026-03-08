@@ -566,7 +566,7 @@ const ManageDeck = () => {
         return;
       }
 
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);

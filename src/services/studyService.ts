@@ -342,15 +342,19 @@ export async function submitCardReview(
 import type { StudyStats } from '@/types/study';
 export type { StudyStats } from '@/types/study';
 
-/** Fetch study statistics for the current user. */
-export async function fetchStudyStats(userId: string): Promise<StudyStats> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('energy, daily_energy_earned, last_study_reset_date, daily_cards_studied, created_at')
-    .eq('id', userId)
-    .single();
-
-  const p = profile as any;
+/** Fetch study statistics for the current user. Accepts optional cached profile to avoid extra query. */
+export async function fetchStudyStats(userId: string, cachedProfile?: { energy: number; daily_energy_earned: number; last_study_reset_date: string | null; daily_cards_studied: number; created_at: string }): Promise<StudyStats> {
+  let p: any;
+  if (cachedProfile) {
+    p = cachedProfile;
+  } else {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('energy, daily_energy_earned, last_study_reset_date, daily_cards_studied, created_at')
+      .eq('id', userId)
+      .single();
+    p = profile as any;
+  }
   const energy = p?.energy ?? 0;
   const today = new Date().toISOString().slice(0, 10);
   const dailyEnergyEarned = p?.last_study_reset_date === today ? (p?.daily_energy_earned ?? 0) : 0;

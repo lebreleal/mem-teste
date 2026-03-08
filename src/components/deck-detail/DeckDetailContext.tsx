@@ -11,6 +11,7 @@ import { useCards } from '@/hooks/useCards';
 import { useDecks } from '@/hooks/useDecks';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useExams } from '@/hooks/useExams';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -456,20 +457,9 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
     }, 0);
   }, [decks, hasPlanActive, planRootIds]);
 
-  // Fetch global daily_new_cards_limit from profile
-  const globalNewLimitQuery = useQuery({
-    queryKey: ['daily-new-cards-limit', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('daily_new_cards_limit, weekly_new_cards')
-        .eq('id', user!.id)
-        .single();
-      return data as any;
-    },
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-  });
+  // Use centralized profile cache
+  const profileQuery = useProfile();
+  const profileData = profileQuery.data;
 
   const isPlanControlled = hasPlanActive && planRootIds.has(rootId);
 
@@ -480,11 +470,8 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const dailyReviewLimit = rootDeck?.daily_review_limit ?? (deck as any)?.daily_review_limit ?? 100;
 
   // Global new cards limit (from profile, with weekly override)
-  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
-  const rawGlobalLimit = typeof profileLimitData === 'number' ? profileLimitData : profileLimitData?.daily_new_cards_limit ?? 9999;
-  const weeklyNewCards = (profileLimitData && typeof profileLimitData === 'object')
-    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
-    : null;
+  const rawGlobalLimit = profileData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCards = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayGlobalLimit = (weeklyNewCards && weeklyNewCards[DAY_KEYS[new Date().getDay()]] != null)
     ? weeklyNewCards[DAY_KEYS[new Date().getDay()]]
@@ -912,7 +899,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       const data = await cardService.enhanceCard({ front, back: backToSend, cardType: cardType || 'basic', aiModel: model, energyCost: 1 });
       if (data.error) { toast({ title: data.error, variant: 'destructive' }); return; }
       if (data.unchanged) { toast({ title: '✨ Este card já está ótimo!', description: 'Não há melhorias a fazer.' }); return; }
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
       setImprovePreview({ front: data.front, back: data.back });
       setImproveModalOpen(true);
     } catch (e: any) { toast({ title: 'Erro ao melhorar card', description: e.message, variant: 'destructive' }); }
@@ -1027,7 +1014,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
         },
       });
       if (fnError || aiData?.error) throw new Error(aiData?.error || 'Erro na geração');
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       const generatedCards = aiData.cards as Array<{ front: string; back: string; type: string; options?: string[]; correctIndex?: number }>;
       const questions = generatedCards.map((card, idx) => {

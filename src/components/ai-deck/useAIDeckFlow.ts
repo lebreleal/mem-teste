@@ -397,7 +397,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     // Server logs token usage per batch automatically.
 
-    queryClient.invalidateQueries({ queryKey: ['energy'] });
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
 
     // Bloco 4: Deduplicate cards across all batches
     const dedupedCards = deduplicateCards(allCards);
