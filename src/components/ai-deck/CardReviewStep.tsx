@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import LazyRichEditor from '@/components/LazyRichEditor';
 import { ChevronLeft, Check, Pencil, Trash2, Loader2, Tag as TagIcon, Sparkles, Plus, X, MessageSquareText, CheckSquare, PenLine } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
+import { useTagSearch } from '@/hooks/useTags';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,

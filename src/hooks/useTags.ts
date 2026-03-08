@@ -100,12 +100,6 @@ export const useDeckOnlyTags = () =>
     staleTime: 60_000,
   });
 
-/** AI tag suggestions. */
-export const useTagSuggestions = () => {
-  return useMutation({
-    mutationFn: tagService.suggestTags,
-  });
-};
 
 /** Mutations for managing deck tags. */
 export const useDeckTagMutations = (deckId: string) => {
