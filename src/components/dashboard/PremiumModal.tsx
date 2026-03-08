@@ -280,8 +280,8 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                   </Button>
                 )}
 
-                {/* Trial info for non-premium */}
-                {!isPremium && !isTrial && (
+                {/* Trial info — only show for brand new accounts (< 14 days) */}
+                {!isPremium && !isTrial && isNewAccount && (
                   <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center mt-4">
                     <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-1.5">
                       <Crown className="h-4 w-4 shrink-0 text-warning" fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
