@@ -116,10 +116,6 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
                 <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Inteligência</span>
                 <StatBar value={stats.intelligence} color={accentColor} />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Uso de tokens</span>
-                <StatBar value={stats.tokenUsage} color={accentColor} />
-              </div>
             </div>
 
             {isPro && !isSelected && (
