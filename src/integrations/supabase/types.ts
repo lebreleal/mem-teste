@@ -2673,6 +2673,10 @@ export type Database = {
           review_reviewed_today: number
         }[]
       }
+      get_study_stats_summary: {
+        Args: { p_tz_offset_minutes?: number; p_user_id: string }
+        Returns: Json
+      }
       get_turma_role: {
         Args: { _turma_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["turma_role"]
