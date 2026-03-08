@@ -285,7 +285,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetri
   if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
-    ? Math.round(estimateStudySeconds(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, avgSecondsPerCard) / 60)
+    ? Math.round(calculateRealStudyTime(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, metrics) / 60)
     : 0;
 
   return (
