@@ -94,13 +94,6 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
 
   const trialDaysLeft = isTrial && expiresAt ? getDaysRemaining(expiresAt) : 0;
 
-  // Only show "14 dias grátis" notice for accounts younger than 14 days that never had premium
-  const isNewAccount = useMemo(() => {
-    if (!user?.created_at) return false;
-    const accountAgeDays = (Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24);
-    return accountAgeDays < 14;
-  }, [user?.created_at]);
-
   const handlePlanContinue = () => {
     const planConfig = {
       monthly: { priceId: STRIPE_PLANS.monthly.price_id, mode: 'subscription' as const, label: 'Mensal' },
