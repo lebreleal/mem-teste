@@ -38,8 +38,8 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
   const [notifOpen, setNotifOpen] = useState(false);
   const { notifications, hasUnread, markRead } = useExamNotifications();
 
-  // Crown: gold when premium (non-trial), gray when not
-  const showCrownActive = isPremium && !isTrial;
+  // Crown: gold when any premium is active (including trial)
+  const showCrownActive = isPremium;
 
   return (
     <header className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">

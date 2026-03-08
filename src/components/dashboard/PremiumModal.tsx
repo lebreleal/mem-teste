@@ -4,12 +4,13 @@
  * Opens with defaultTab from parent (crown → plans, brain → credits).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, X, Sparkles, Brain, Zap, Pencil, Infinity, Check, ExternalLink, Timer, Rocket, Eye } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { useToast } from '@/hooks/use-toast';
 import { STRIPE_PLANS, STRIPE_CREDIT_PACKS } from '@/lib/stripeConfig';
@@ -41,15 +42,23 @@ const getDaysRemaining = (dateStr: string) => {
 type Tab = 'plans' | 'credits';
 
 const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps) => {
-  const { isPremium, plan, expiresAt, isTrial, startCheckout, openPortal, refreshStatus } = useSubscription();
+  const { isPremium, plan, expiresAt, isTrial, isGift, giftDescription, startCheckout, openPortal, refreshStatus } = useSubscription();
   const { energy } = useEnergy();
   const { toast } = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(defaultTab);
   const [visible, setVisible] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<string | null>(STRIPE_CREDIT_PACKS[3].price_id);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
+
+  // Only show "14 dias grátis" notice for accounts younger than 14 days
+  const isNewAccount = useMemo(() => {
+    if (!user?.created_at) return false;
+    const accountAgeDays = (Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    return accountAgeDays < 14;
+  }, [user?.created_at]);
 
   useEffect(() => {
     if (open) {
@@ -119,9 +128,21 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                   {isPremium && !isTrial ? (
                     <>
                       <h3 className="font-display text-2xl font-bold text-foreground italic">Premium Ativo</h3>
+                      {isGift && giftDescription && (
+                        <p className="text-xs text-muted-foreground mt-1">🎁 {giftDescription}</p>
+                      )}
                       {expiresAt && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {plan === 'lifetime' ? '♾️ Acesso vitalício' : <>Expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span></>}
+                        </p>
+                      )}
+                    </>
+                  ) : isPremium && isTrial ? (
+                    <>
+                      <h3 className="font-display text-2xl font-bold text-foreground italic">Premium Ativo</h3>
+                      {expiresAt && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Período de teste — expira em <span className="font-semibold text-foreground">{formatDate(expiresAt)}</span>
                         </p>
                       )}
                     </>
@@ -271,8 +292,8 @@ const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps
                   </Button>
                 )}
 
-                {/* Trial info for non-premium */}
-                {!isPremium && !isTrial && (
+                {/* Trial info — only show for brand new accounts (< 14 days) */}
+                {!isPremium && !isTrial && isNewAccount && (
                   <div className="rounded-xl border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/5 px-4 py-3 text-center mt-4">
                     <p className="text-sm font-semibold text-foreground flex items-center justify-center gap-1.5">
                       <Crown className="h-4 w-4 shrink-0 text-warning" fill="hsl(var(--warning))" /> 14 dias grátis para novas contas
