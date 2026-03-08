@@ -41,9 +41,10 @@ const getDaysRemaining = (dateStr: string) => {
 type Tab = 'plans' | 'credits';
 
 const PremiumModal = ({ open, onClose, defaultTab = 'plans' }: PremiumModalProps) => {
-  const { isPremium, plan, expiresAt, isTrial, startCheckout, openPortal, refreshStatus } = useSubscription();
+  const { isPremium, plan, expiresAt, isTrial, isGift, giftDescription, startCheckout, openPortal, refreshStatus } = useSubscription();
   const { energy } = useEnergy();
   const { toast } = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(defaultTab);
