@@ -18,7 +18,7 @@ interface HandlerDeps {
   allCards: CardRow[];
   allDeckIds: string[];
   user: any;
-  toast: UseToastReturn['toast'];
+  toast: ReturnType<typeof useToast>['toast'];
   queryClient: QueryClient;
   navigate: (path: string) => void;
   // State setters
