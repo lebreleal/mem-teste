@@ -13,9 +13,9 @@ import {
 } from 'lucide-react';
 
 const retentionColor = (pct: number) => {
-  if (pct >= 80) return { text: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', progress: '[&>div]:bg-emerald-500' };
-  if (pct >= 50) return { text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', progress: '[&>div]:bg-amber-500' };
-  return { text: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20', progress: '[&>div]:bg-red-500' };
+  if (pct >= 80) return { text: 'text-success', bg: 'bg-success/10', border: 'border-success/20', progress: '[&>div]:bg-success' };
+  if (pct >= 50) return { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/20', progress: '[&>div]:bg-warning' };
+  return { text: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20', progress: '[&>div]:bg-destructive' };
 };
 
 const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
