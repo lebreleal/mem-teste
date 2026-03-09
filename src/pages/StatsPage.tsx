@@ -167,7 +167,22 @@ const StatsPage = () => {
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
+          <h1 className="text-lg font-bold font-display flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            Desempenho
+          </h1>
+        </div>
+        <div className="p-4 text-center text-muted-foreground mt-10">
+          <p className="text-sm">Nenhum dado disponível ainda.</p>
+          <p className="text-xs mt-1">Comece a estudar para ver suas estatísticas!</p>
+        </div>
+      </div>
+    );
+  }
 
   const cc = stats.cardCounts;
   const totalActive = cc.new + cc.learning + cc.review + cc.relearning;
