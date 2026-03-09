@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
+import DraggableFab from '@/components/DraggableFab';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
+import { Brain } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Timer, Play } from 'lucide-react';
