@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
