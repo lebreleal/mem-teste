@@ -75,7 +75,10 @@ const StatsPage = () => {
   const { data: stats, isLoading } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
-  
+  const { data: ranking, isLoading: rankingLoading } = useRanking();
+  const togglePublic = useTogglePublicProfile();
+  const { data: studyStats } = useStudyStats();
+  const isPublic = (profile.data as any)?.is_profile_public ?? false;
 
   // Activity data
   const { data: activityData } = useQuery({
