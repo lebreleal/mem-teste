@@ -131,8 +131,9 @@ const MultipleChoiceCard = ({
     }, 700);
   };
 
-  const recallColor = getRecallColor(recallData);
-  const recallBgColor = getRecallBgColor(recallData);
+  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty });
+  const diffColor = getDifficultyColor(difficultyData);
+  const diffBgColor = getDifficultyBgColor(difficultyData);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-7rem)] w-full max-w-lg mx-auto px-1 relative">
