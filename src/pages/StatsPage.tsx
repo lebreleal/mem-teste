@@ -6,12 +6,15 @@ import { useCardStatistics } from '@/hooks/useCardStatistics';
 import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
+import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';
+import { useStudyStats } from '@/hooks/useStudyStats';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
-import { HelpCircle } from 'lucide-react';
+import { cn, formatMinutes } from '@/lib/utils';
+import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
@@ -72,7 +75,10 @@ const StatsPage = () => {
   const { data: stats, isLoading } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
-  
+  const { data: ranking, isLoading: rankingLoading } = useRanking();
+  const togglePublic = useTogglePublicProfile();
+  const { data: studyStats } = useStudyStats();
+  const isPublic = (profile.data as any)?.is_profile_public ?? false;
 
   // Activity data
   const { data: activityData } = useQuery({
@@ -258,6 +264,85 @@ const StatsPage = () => {
       </div>
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
+
+        {/* ─── Perfil Público + Métricas Rápidas ── */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Perfil Público" info="Ao ativar, seu nome e estatísticas aparecem no ranking global. Outros usuários podem ver seu streak, cards revisados e tempo de estudo dos últimos 30 dias." />
+            <div className="flex items-center gap-2">
+              {isPublic ? <Eye className="h-3.5 w-3.5 text-primary" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+              <Switch
+                checked={isPublic}
+                onCheckedChange={(checked) => togglePublic.mutate(checked)}
+                disabled={togglePublic.isPending}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
+              <Flame className="h-4 w-4 text-orange-500" />
+              <span className="text-lg font-bold tabular-nums">{(profile.data as any)?.current_streak ?? 0}</span>
+              <span className="text-[10px] text-muted-foreground">Streak</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
+              <Trophy className="h-4 w-4 text-primary" />
+              <span className="text-lg font-bold tabular-nums">{studyStats?.todayCards ?? 0}</span>
+              <span className="text-[10px] text-muted-foreground">Hoje</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
+              <Clock className="h-4 w-4 text-chart-2" />
+              <span className="text-lg font-bold tabular-nums">{formatMinutes(studyStats?.todayMinutes ?? 0)}</span>
+              <span className="text-[10px] text-muted-foreground">Tempo hoje</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* ─── Ranking Global ────────────────────── */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="🏆 Ranking Global" info="Top 50 usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
+          {rankingLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : !ranking || ranking.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhum usuário público ainda. Ative seu perfil público para aparecer aqui!</p>
+          ) : (
+            <div className="space-y-1">
+              {ranking.map((entry, i) => {
+                const isMe = entry.user_id === user?.id;
+                return (
+                  <div
+                    key={entry.user_id}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                      isMe ? 'bg-primary/10 border border-primary/20' : 'hover:bg-muted/50',
+                    )}
+                  >
+                    <span className={cn(
+                      'w-6 text-center font-bold tabular-nums text-xs',
+                      i === 0 && 'text-yellow-500',
+                      i === 1 && 'text-muted-foreground',
+                      i === 2 && 'text-orange-400',
+                    )}>
+                      {i < 3 ? ['🥇', '🥈', '🥉'][i] : `${i + 1}º`}
+                    </span>
+                    <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold')}>
+                      {entry.user_name || 'Usuário'}
+                    </span>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
+                      <span title="Cards revisados (30d)">{entry.cards_30d.toLocaleString()} cards</span>
+                      <span title="Horas estudadas (30d)">{formatMinutes(entry.minutes_30d)}</span>
+                      <span title="Streak atual" className="flex items-center gap-0.5">
+                        <Flame className="h-3 w-3 text-orange-500" />
+                        {entry.current_streak}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
 
         {/* ─── Heatmap ──────────────────────────── */}
         <Card className="p-4 space-y-2">
