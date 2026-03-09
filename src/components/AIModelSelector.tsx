@@ -104,7 +104,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
               {isPro && <Crown className="h-3.5 w-3.5 text-warning" />}
             </div>
 
-            <p className="text-[10px] text-muted-foreground mb-2.5 leading-tight">{stats.tagline}</p>
+            <p className="text-[10px] text-muted-foreground mb-2.5 leading-tight line-clamp-2">{stats.tagline}</p>
 
             {/* Stats */}
             <div className="space-y-1.5">
