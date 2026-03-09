@@ -116,10 +116,14 @@ const StatsPage = () => {
     enabled: allDeckIds.length > 0,
   });
 
-  // ─── Heatmap (last 6 months) ─────────────
+  // ─── Heatmap (from account creation or last 6 months, whichever is shorter) ─────────────
   const heatmapData = useMemo(() => {
     const today = new Date();
-    const start = startOfWeek(subDays(today, 182), { weekStartsOn: 0 });
+    const sixMonthsAgo = subDays(today, 182);
+    // If user account is newer than 6 months, start from account creation
+    const accountCreated = profile.data?.created_at ? new Date(profile.data.created_at) : sixMonthsAgo;
+    const effectiveStart = accountCreated > sixMonthsAgo ? accountCreated : sixMonthsAgo;
+    const start = startOfWeek(effectiveStart, { weekStartsOn: 0 });
     const allDays = eachDayOfInterval({ start, end: today });
 
     const weeks: { date: Date; key: string; cards: number; dow: number }[][] = [];
@@ -148,7 +152,7 @@ const StatsPage = () => {
     });
 
     return { weeks, months };
-  }, [dayMap]);
+  }, [dayMap, profile.data?.created_at]);
 
   // ─── Distributions ──────────────────────────
   const intervalBuckets = useMemo(() => {
