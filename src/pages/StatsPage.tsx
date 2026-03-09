@@ -16,7 +16,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
 import {
-  format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths,
+  format, eachDayOfInterval, getDay, subDays, startOfWeek,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
