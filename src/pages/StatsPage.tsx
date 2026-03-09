@@ -435,7 +435,7 @@ const StatsPage = () => {
               <div className="flex flex-col gap-[2px] mr-1 justify-start">
                 {WEEKDAYS.map((d, i) => (
                   <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>
-                    {i % 2 === 1 ? d : ''}
+                    {d}
                   </span>
                 ))}
               </div>
