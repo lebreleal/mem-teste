@@ -164,6 +164,7 @@ const Dashboard = () => {
           <DeckCarousel
             decks={allDecks}
             avgSecondsPerCard={avgSecondsPerCard}
+            studyMetrics={realStudyMetrics}
             hasPlan={hasPlan}
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrderEarly}
