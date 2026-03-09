@@ -105,11 +105,39 @@ const StatsPage = () => {
     enabled: allDeckIds.length > 0,
   });
 
-  // ─── Calendar ───────────────────────────────
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const startDayOfWeek = getDay(monthStart);
+  // ─── Heatmap (last 6 months) ─────────────
+  const heatmapData = useMemo(() => {
+    const today = new Date();
+    const start = startOfWeek(subDays(today, 182), { weekStartsOn: 0 });
+    const allDays = eachDayOfInterval({ start, end: today });
+
+    const weeks: { date: Date; key: string; cards: number; dow: number }[][] = [];
+    let currentWeek: typeof weeks[0] = [];
+
+    allDays.forEach(day => {
+      const dow = getDay(day);
+      if (dow === 0 && currentWeek.length > 0) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+      const key = format(day, 'yyyy-MM-dd');
+      currentWeek.push({ date: day, key, cards: dayMap[key]?.cards ?? 0, dow });
+    });
+    if (currentWeek.length > 0) weeks.push(currentWeek);
+
+    const months: { label: string; colStart: number }[] = [];
+    let lastMonth = -1;
+    const SHORT_MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    weeks.forEach((week, i) => {
+      const m = week[0].date.getMonth();
+      if (m !== lastMonth) {
+        months.push({ label: SHORT_MONTHS[m], colStart: i });
+        lastMonth = m;
+      }
+    });
+
+    return { weeks, months };
+  }, [dayMap]);
 
   // ─── Distributions ──────────────────────────
   const intervalBuckets = useMemo(() => {
