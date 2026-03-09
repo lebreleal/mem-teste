@@ -78,6 +78,7 @@ const MultipleChoiceCard = ({
   explainResponse,
   mcExplainResponse,
   recallData,
+  difficultyData: difficultyDataProp,
   algorithmMode,
   deckConfig,
   actions,
