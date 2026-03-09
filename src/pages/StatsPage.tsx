@@ -356,7 +356,7 @@ const StatsPage = () => {
         {/* ─── Stability + Difficulty side by side */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Estabilidade" info="Tempo (em dias) que um cartão pode esperar mantendo ~90% de chance de recall." />
+            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo cerca de 90% de chance de você lembrar.\n\nPor exemplo, estabilidade de 30 dias significa que, se você esperar 30 dias para revisar, ainda tem ~90% de chance de acertar.\n\nQuanto maior a estabilidade, melhor — significa que a memória está mais consolidada."} />
             <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
           </Card>
           <Card className="p-4 space-y-2">
