@@ -7,21 +7,19 @@ import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
 import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';
-import { useStudyStats } from '@/hooks/useStudyStats';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn, formatMinutes } from '@/lib/utils';
-import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
+import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff, TrendingUp, Users } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek,
 } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -42,11 +40,12 @@ function percentile(sorted: number[], p: number): number {
 
 // ─── Section header with optional info tooltip ────────
 
-function SectionTitle({ title, info }: { title: string; info?: string }) {
+function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
+        {icon}
         <h2 className="text-sm font-semibold">{title}</h2>
         {info && (
           <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -77,10 +76,10 @@ const StatsPage = () => {
   const profile = useProfile();
   const { data: ranking, isLoading: rankingLoading } = useRanking();
   const togglePublic = useTogglePublicProfile();
-  const { data: studyStats } = useStudyStats();
-  const isPublic = (profile.data as any)?.is_profile_public ?? false;
+  const isPublic = profile.data?.is_profile_public ?? false;
+  const currentStreak = profile.data?.current_streak ?? 0;
 
-  // Activity data
+  // Activity data from RPC - this has the accurate daily data
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
@@ -97,6 +96,11 @@ const StatsPage = () => {
     staleTime: 60_000,
   });
 
+  // Today's stats from activity data
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayStats = (activityData?.dayMap ?? {})[todayKey];
+  const todayCards = todayStats?.cards ?? 0;
+  const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
 
   // Forecast
@@ -256,6 +260,10 @@ const StatsPage = () => {
     { label: 'Fácil', count: bc.easy, color: 'hsl(var(--chart-1))' },
   ];
 
+  // Find my rank
+  const myRank = ranking?.findIndex(r => r.user_id === user?.id);
+  const myRankEntry = myRank !== undefined && myRank >= 0 ? ranking![myRank] : null;
+
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
@@ -263,87 +271,144 @@ const StatsPage = () => {
         <h1 className="text-lg font-bold font-display">Desempenho</h1>
       </div>
 
-      <div className="p-4 space-y-4 max-w-lg mx-auto">
+      <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Perfil Público + Métricas Rápidas ── */}
-        <Card className="p-4 space-y-3">
+        {/* ─── Quick Stats Row ────────────────────── */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="p-3 text-center space-y-1 border-orange-500/20 bg-gradient-to-b from-orange-500/5 to-transparent">
+            <Flame className="h-5 w-5 mx-auto text-orange-500" />
+            <p className="text-2xl font-bold tabular-nums">{currentStreak}</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Streak</p>
+          </Card>
+          <Card className="p-3 text-center space-y-1 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+            <Trophy className="h-5 w-5 mx-auto text-primary" />
+            <p className="text-2xl font-bold tabular-nums">{todayCards}</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Cards hoje</p>
+          </Card>
+          <Card className="p-3 text-center space-y-1 border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent">
+            <Clock className="h-5 w-5 mx-auto text-emerald-500" />
+            <p className="text-2xl font-bold tabular-nums">{formatMinutes(todayMinutes)}</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Tempo hoje</p>
+          </Card>
+        </div>
+
+        {/* ─── Perfil Público Toggle ─────────────── */}
+        <Card className="p-3">
           <div className="flex items-center justify-between">
-            <SectionTitle title="Perfil Público" info="Ao ativar, seu nome e estatísticas aparecem no ranking global. Outros usuários podem ver seu streak, cards revisados e tempo de estudo dos últimos 30 dias." />
-            <div className="flex items-center gap-2">
-              {isPublic ? <Eye className="h-3.5 w-3.5 text-primary" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
-              <Switch
-                checked={isPublic}
-                onCheckedChange={(checked) => togglePublic.mutate(checked)}
-                disabled={togglePublic.isPending}
-              />
+            <div className="flex items-center gap-2.5">
+              {isPublic ? (
+                <div className="p-1.5 rounded-full bg-primary/10">
+                  <Eye className="h-4 w-4 text-primary" />
+                </div>
+              ) : (
+                <div className="p-1.5 rounded-full bg-muted">
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium">Perfil público</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {isPublic ? 'Visível no ranking global' : 'Ative para aparecer no ranking'}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
-              <Flame className="h-4 w-4 text-orange-500" />
-              <span className="text-lg font-bold tabular-nums">{(profile.data as any)?.current_streak ?? 0}</span>
-              <span className="text-[10px] text-muted-foreground">Streak</span>
-            </div>
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
-              <Trophy className="h-4 w-4 text-primary" />
-              <span className="text-lg font-bold tabular-nums">{studyStats?.todayCards ?? 0}</span>
-              <span className="text-[10px] text-muted-foreground">Hoje</span>
-            </div>
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/50">
-              <Clock className="h-4 w-4 text-chart-2" />
-              <span className="text-lg font-bold tabular-nums">{formatMinutes(studyStats?.todayMinutes ?? 0)}</span>
-              <span className="text-[10px] text-muted-foreground">Tempo hoje</span>
-            </div>
+            <Switch
+              checked={isPublic}
+              onCheckedChange={(checked) => togglePublic.mutate(checked)}
+              disabled={togglePublic.isPending}
+            />
           </div>
         </Card>
 
         {/* ─── Ranking Global ────────────────────── */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle title="🏆 Ranking Global" info="Top 50 usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
+        <Card className="overflow-hidden">
+          <div className="p-4 pb-3">
+            <SectionTitle title="Ranking Global" icon={<Users className="h-4 w-4 text-primary" />} info="Top 50 usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
+          </div>
           {rankingLoading ? (
-            <div className="space-y-2">
+            <div className="px-4 pb-4 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : !ranking || ranking.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhum usuário público ainda. Ative seu perfil público para aparecer aqui!</p>
-          ) : (
-            <div className="space-y-1">
-              {ranking.map((entry, i) => {
-                const isMe = entry.user_id === user?.id;
-                return (
-                  <div
-                    key={entry.user_id}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                      isMe ? 'bg-primary/10 border border-primary/20' : 'hover:bg-muted/50',
-                    )}
-                  >
-                    <span className={cn(
-                      'w-6 text-center font-bold tabular-nums text-xs',
-                      i === 0 && 'text-yellow-500',
-                      i === 1 && 'text-muted-foreground',
-                      i === 2 && 'text-orange-400',
-                    )}>
-                      {i < 3 ? ['🥇', '🥈', '🥉'][i] : `${i + 1}º`}
-                    </span>
-                    <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold')}>
-                      {entry.user_name || 'Usuário'}
-                    </span>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
-                      <span title="Cards revisados (30d)">{entry.cards_30d.toLocaleString()} cards</span>
-                      <span title="Horas estudadas (30d)">{formatMinutes(entry.minutes_30d)}</span>
-                      <span title="Streak atual" className="flex items-center gap-0.5">
-                        <Flame className="h-3 w-3 text-orange-500" />
-                        {entry.current_streak}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="px-4 pb-4 text-center py-6">
+              <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+              <p className="text-xs text-muted-foreground">Nenhum usuário público ainda</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">Ative seu perfil público para aparecer aqui!</p>
             </div>
+          ) : (
+            <>
+              {/* Top 3 podium */}
+              {ranking.length >= 3 && (
+                <div className="flex items-end justify-center gap-2 px-4 pb-3">
+                  {[1, 0, 2].map(idx => {
+                    const entry = ranking[idx];
+                    if (!entry) return null;
+                    const isMe = entry.user_id === user?.id;
+                    const medals = ['🥇', '🥈', '🥉'];
+                    const heights = ['h-20', 'h-24', 'h-16'];
+                    const actualIdx = idx;
+                    return (
+                      <div key={entry.user_id} className="flex flex-col items-center flex-1 max-w-[100px]">
+                        <span className="text-lg mb-1">{medals[actualIdx]}</span>
+                        <div className={cn(
+                          'w-full rounded-t-lg flex flex-col items-center justify-end pb-2',
+                          heights[actualIdx],
+                          actualIdx === 0 ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                          actualIdx === 1 ? 'bg-muted/80 border border-border' :
+                          'bg-orange-500/10 border border-orange-500/20',
+                          isMe && 'ring-2 ring-primary/40'
+                        )}>
+                          <p className={cn('text-[10px] font-medium truncate px-1 w-full text-center', isMe && 'text-primary font-semibold')}>
+                            {entry.user_name?.split(' ')[0] || 'Anon'}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground tabular-nums">{entry.cards_30d.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Rest of ranking */}
+              <div className="border-t border-border/40 divide-y divide-border/30">
+                {ranking.slice(3).map((entry, i) => {
+                  const isMe = entry.user_id === user?.id;
+                  const pos = i + 4;
+                  return (
+                    <div
+                      key={entry.user_id}
+                      className={cn(
+                        'flex items-center gap-3 px-4 py-2.5 text-sm',
+                        isMe && 'bg-primary/5',
+                      )}
+                    >
+                      <span className="w-6 text-center font-bold tabular-nums text-xs text-muted-foreground">{pos}º</span>
+                      <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold text-primary')}>
+                        {entry.user_name || 'Usuário'}
+                      </span>
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
+                        <span>{entry.cards_30d.toLocaleString()}</span>
+                        <span>{formatMinutes(entry.minutes_30d)}</span>
+                        <span className="flex items-center gap-0.5">
+                          <Flame className="h-3 w-3 text-orange-500" />
+                          {entry.current_streak}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* My position indicator if not in top 3 */}
+              {myRankEntry && myRank! >= 3 && (
+                <div className="border-t border-primary/20 bg-primary/5 px-4 py-2 flex items-center gap-2">
+                  <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-medium text-primary">Sua posição: {myRank! + 1}º</span>
+                </div>
+              )}
+            </>
           )}
         </Card>
-
         {/* ─── Heatmap ──────────────────────────── */}
         <Card className="p-4 space-y-2">
           <SectionTitle title="Atividade" info="Mapa de calor dos últimos 6 meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou naquele dia." />
