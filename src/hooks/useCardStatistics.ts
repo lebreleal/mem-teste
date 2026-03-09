@@ -41,6 +41,8 @@ export interface CardStatistics {
   difficultyDistribution: number[];
   retrievabilityDistribution: number[];
   trueRetention: TrueRetention;
+  youngRetention: TrueRetention;
+  matureRetention: TrueRetention;
   buttonCounts: ButtonCounts;
   monthSummary: MonthSummary;
 }
@@ -52,9 +54,19 @@ const defaults: CardStatistics = {
   difficultyDistribution: [],
   retrievabilityDistribution: [],
   trueRetention: { correct: 0, total: 0, rate: 0 },
+  youngRetention: { correct: 0, total: 0, rate: 0 },
+  matureRetention: { correct: 0, total: 0, rate: 0 },
   buttonCounts: { again: 0, hard: 0, good: 0, easy: 0, total: 0 },
   monthSummary: { days_studied: 0, days_in_month: 30, total_reviews: 0, avg_reviews_per_day: 0 },
 };
+
+function parseRetention(obj: any): TrueRetention {
+  return {
+    correct: Number(obj?.correct ?? 0),
+    total: Number(obj?.total ?? 0),
+    rate: Number(obj?.rate ?? 0),
+  };
+}
 
 export function useCardStatistics() {
   const { user } = useAuth();
@@ -86,11 +98,9 @@ export function useCardStatistics() {
         stabilityDistribution: (r.stability_distribution ?? []).map(Number),
         difficultyDistribution: (r.difficulty_distribution ?? []).map(Number),
         retrievabilityDistribution: (r.retrievability_distribution ?? []).map(Number),
-        trueRetention: {
-          correct: Number(r.true_retention?.correct ?? 0),
-          total: Number(r.true_retention?.total ?? 0),
-          rate: Number(r.true_retention?.rate ?? 0),
-        },
+        trueRetention: parseRetention(r.true_retention),
+        youngRetention: parseRetention(r.young_retention),
+        matureRetention: parseRetention(r.mature_retention),
         buttonCounts: {
           again: Number(r.button_counts?.again ?? 0),
           hard: Number(r.button_counts?.hard ?? 0),

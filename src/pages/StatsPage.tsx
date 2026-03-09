@@ -18,10 +18,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer, SlidersHorizontal,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer, Brain,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
+  ComposedChart, Line,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, isAfter, isBefore, startOfDay,
@@ -37,7 +38,7 @@ const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: '1m', label: '1M' },
   { key: '3m', label: '3M' },
   { key: '1y', label: '1A' },
-  { key: 'custom', label: 'Custom' },
+  { key: 'custom', label: 'Personalizado' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────
@@ -109,7 +110,7 @@ function PeriodFilterIcon({ filter }: { filter: ReturnType<typeof usePeriodFilte
     <Popover>
       <PopoverTrigger asChild>
         <button className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0 relative">
-          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <Settings2 className="h-3.5 w-3.5" />
           {period !== 'all' && (
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
           )}
@@ -246,6 +247,7 @@ const StatsPage = () => {
   const hoursFilter = usePeriodFilter();
   const heatmapFilter = usePeriodFilter();
   const summaryFilter = usePeriodFilter();
+  const reviewsPerDayFilter = usePeriodFilter();
 
   // Activity data from RPC
   const { data: activityData } = useQuery({
@@ -259,6 +261,19 @@ const StatsPage = () => {
         p_days: 365,
       } as any);
       return data as any;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  // Hourly breakdown RPC
+  const { data: hourlyData } = useQuery({
+    queryKey: ['hourly-breakdown', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_days: 30 });
+      if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
+      return (data as any[]) ?? [];
     },
     enabled: !!user,
     staleTime: 60_000,
@@ -289,6 +304,46 @@ const StatsPage = () => {
     }
     return entries.map(e => ({ label: format(new Date(e.date), 'dd/MM'), minutes: e.minutes }));
   }, [hoursFiltered]);
+
+  // Reviews per day chart data
+  const reviewsPerDayFiltered = useMemo(() => filterDayMap(dayMap, reviewsPerDayFilter.range), [dayMap, reviewsPerDayFilter.range]);
+  const reviewsPerDayChartData = useMemo(() => {
+    const entries = Object.entries(reviewsPerDayFiltered)
+      .map(([key, val]: [string, any]) => ({
+        date: key,
+        label: format(new Date(key), 'dd/MM'),
+        cards: Number(val.cards) || 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (entries.length > 60) {
+      const weeks: Record<string, number> = {};
+      entries.forEach(e => {
+        const weekStart = format(startOfWeek(new Date(e.date), { weekStartsOn: 0 }), 'dd/MM');
+        weeks[weekStart] = (weeks[weekStart] || 0) + e.cards;
+      });
+      return Object.entries(weeks).map(([label, cards]) => ({ label, cards }));
+    }
+    return entries;
+  }, [reviewsPerDayFiltered]);
+
+  // Hourly chart data (0-23h)
+  const hourlyChartData = useMemo(() => {
+    const hourMap: Record<number, { total: number; correct: number }> = {};
+    for (let h = 0; h < 24; h++) hourMap[h] = { total: 0, correct: 0 };
+    if (hourlyData && Array.isArray(hourlyData)) {
+      hourlyData.forEach((row: any) => {
+        const h = Number(row.hour);
+        if (h >= 0 && h < 24) {
+          hourMap[h] = { total: Number(row.total) || 0, correct: Number(row.correct) || 0 };
+        }
+      });
+    }
+    return Array.from({ length: 24 }, (_, h) => ({
+      label: `${h}h`,
+      total: hourMap[h].total,
+      successRate: hourMap[h].total > 0 ? Math.round((hourMap[h].correct / hourMap[h].total) * 100) : 0,
+    }));
+  }, [hourlyData]);
 
   const todayStats = dayMap[todayKey];
   const todayCards = todayStats?.cards ?? 0;
@@ -386,6 +441,15 @@ const StatsPage = () => {
     return { p50: percentile(sorted, 50), p95: percentile(sorted, 95), max: sorted[sorted.length - 1] };
   }, [stats]);
 
+  // Estimated total knowledge
+  const estimatedKnowledge = useMemo(() => {
+    if (!stats) return { count: 0, avgRetrievability: 0 };
+    const dist = stats.retrievabilityDistribution;
+    const reviewedCards = stats.cardCounts.total - stats.cardCounts.new;
+    const avgRetrievability = dist.length > 0 ? Math.round(dist.reduce((a, b) => a + b, 0) / dist.length) : 0;
+    return { count: Math.round((avgRetrievability / 100) * reviewedCards), avgRetrievability };
+  }, [stats]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-4 space-y-4 pb-24">
@@ -453,7 +517,7 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats (always visible, no filter) ────────────────────── */}
+        {/* 1. Quick Stats */}
         <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
             <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
@@ -478,7 +542,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Resumo do Período ────────────────── */}
+        {/* 2. Resumo do Período */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Resumo" icon={<Calendar className="h-4 w-4 text-primary" />} info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
@@ -498,7 +562,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Horas Estudadas ────────────────────── */}
+        {/* 3. Horas Estudadas */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle
@@ -535,7 +599,67 @@ const StatsPage = () => {
           )}
         </Card>
 
-        {/* ─── Atividade (Heatmap) ──────────────────────────── */}
+        {/* 4. Revisões por Dia [NOVO] */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              title="Revisões por Dia"
+              icon={<Zap className="h-4 w-4 text-primary" />}
+              info="Total de cards revisados por dia no período selecionado."
+            />
+            <PeriodFilterIcon filter={reviewsPerDayFilter} />
+          </div>
+          {reviewsPerDayChartData.length > 1 ? (
+            <div style={{ height: 130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={reviewsPerDayChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    formatter={(val: number) => [`${val} cards`, 'Revisões']}
+                  />
+                  <Bar dataKey="cards" name="Cards" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 5. Horário de Estudo [NOVO] */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Horário de Estudo"
+            icon={<Clock className="h-4 w-4 text-primary" />}
+            info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora."
+          />
+          {hourlyChartData.some(h => h.total > 0) ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Acerto' ? `${val}%` : `${val} revisões`,
+                      name
+                    ]}
+                  />
+                  <Bar yAxisId="left" dataKey="total" name="Revisões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.7} />
+                  <Line yAxisId="right" dataKey="successRate" name="Acerto" type="monotone" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhum dado de horário disponível.</p>
+          )}
+        </Card>
+
+        {/* 6. Atividade (Heatmap) */}
         <Card className="p-4 space-y-2">
           <div className="flex items-center justify-between">
             <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou." />
@@ -595,7 +719,136 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Ranking Global ────────────────────── */}
+        {/* 7. Retenção (expandida com jovens/maduros) */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%.\n\n• Jovens — Cards com estabilidade < 21 dias\n• Maduros — Cards com estabilidade ≥ 21 dias"} />
+          <div className="flex items-center gap-4">
+            <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
+            <div className="flex-1 space-y-1">
+              <Progress value={stats.trueRetention.rate} className="h-2.5" />
+              <p className="text-[11px] text-muted-foreground">{stats.trueRetention.correct} acertos de {stats.trueRetention.total} revisões</p>
+            </div>
+          </div>
+          {/* Young vs Mature breakdown table */}
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="grid grid-cols-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/30 px-3 py-1.5">
+              <span>Tipo</span>
+              <span className="text-center">Acerto</span>
+              <span className="text-right">Revisões</span>
+            </div>
+            {[
+              { label: 'Jovens (< 21d)', data: stats.youngRetention },
+              { label: 'Maduros (≥ 21d)', data: stats.matureRetention },
+            ].map(row => (
+              <div key={row.label} className="grid grid-cols-3 px-3 py-2 border-t border-border/30 text-xs">
+                <span className="font-medium">{row.label}</span>
+                <span className={cn("text-center font-bold tabular-nums", row.data.rate >= 80 ? 'text-success' : row.data.rate >= 50 ? 'text-warning' : 'text-destructive')}>
+                  {row.data.rate}%
+                </span>
+                <span className="text-right text-muted-foreground tabular-nums">{row.data.correct}/{row.data.total}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* 8. Respostas */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
+          <div className="space-y-3">
+            {buttonData.map(btn => {
+              const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
+              const maxCount = Math.max(...buttonData.map(b => b.count), 1);
+              const barWidth = (btn.count / maxCount) * 100;
+              return (
+                <div key={btn.label} className="flex items-center gap-3">
+                  <span className="text-xs font-medium w-12 shrink-0">{btn.label}</span>
+                  <div className="flex-1 h-5 rounded-md bg-muted/40 overflow-hidden relative">
+                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.75 }} />
+                  </div>
+                  <span className="text-xs tabular-nums font-bold w-10 text-right shrink-0">{btn.count.toLocaleString()}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right shrink-0">{pct.toFixed(0)}%</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
+        </Card>
+
+        {/* 9. Contagem de Cartões */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
+            <span className="text-sm font-bold tabular-nums text-foreground">{cc.total} total</span>
+          </div>
+          <div className="h-4 rounded-full overflow-hidden flex bg-muted">
+            {cardCategories.filter(c => c.count > 0).map(cat => (
+              <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} title={`${cat.label}: ${cat.count}`} />
+            ))}
+          </div>
+          <div className="space-y-2">
+            {cardCategories.map(cat => {
+              const pct = cc.total > 0 ? (cat.count / cc.total * 100) : 0;
+              return (
+                <div key={cat.label} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: cat.color }} />
+                  <span className="text-xs w-24 shrink-0">{cat.label}</span>
+                  <div className="flex-1 h-2 rounded-full bg-muted/60 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 1)}%`, background: cat.color }} />
+                  </div>
+                  <span className="text-xs font-bold tabular-nums w-10 text-right">{cat.count}</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">{pct.toFixed(0)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* 10. Conhecimento Total Estimado [NOVO] */}
+        <Card className="p-4 space-y-2">
+          <SectionTitle
+            title="Conhecimento Total Estimado"
+            icon={<Brain className="h-4 w-4 text-primary" />}
+            info={"Estimativa de quantos cartões você provavelmente lembra agora.\n\nFórmula: recuperabilidade média × cartões revisados.\n\nExemplo: se você tem 1000 cartões revisados e a recuperabilidade média é 85%, seu conhecimento estimado é ~850 cartões."}
+          />
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold tabular-nums text-primary">{estimatedKnowledge.count.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">cartões</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Recuperabilidade média: {estimatedKnowledge.avgRetrievability}% · {stats.cardCounts.total - stats.cardCounts.new} cartões revisados
+          </p>
+        </Card>
+
+        {/* 11. Intervalos */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
+          <div className="flex gap-1.5 flex-wrap">
+            <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
+            <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
+            <StatBadge label="Máx" value={`${intervalPercentiles.max}d`} />
+          </div>
+          <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
+        </Card>
+
+        {/* Stability + Difficulty */}
+        <div className="grid grid-cols-2 gap-2">
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo ~90% de chance de acerto."} />
+            <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
+          </Card>
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (fácil) a 10 (difícil). Ajustada automaticamente pelo algoritmo."} />
+            <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
+          </Card>
+        </div>
+
+        {/* Recuperabilidade */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Recuperabilidade" info={"Probabilidade estimada de você lembrar cada cartão agora.\n\n• 95%+ — Provavelmente lembra.\n• 70-85% — Hora de revisar.\n• Abaixo de 50% — Provavelmente esqueceu."} />
+          <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
+        </Card>
+
+        {/* 12. Ranking Global */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
           <div className="p-4 pb-2 flex items-center justify-between">
             <SectionTitle title="Ranking Global" icon={<Trophy className="h-4 w-4 text-warning" />} info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
@@ -715,100 +968,7 @@ const StatsPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* ─── Retenção ────── */}
-        <Card className="p-4 space-y-2">
-          <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
-          <div className="flex items-center gap-4">
-            <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
-            <div className="flex-1 space-y-1">
-              <Progress value={stats.trueRetention.rate} className="h-2.5" />
-              <p className="text-[11px] text-muted-foreground">{stats.trueRetention.correct} acertos de {stats.trueRetention.total} revisões</p>
-            </div>
-          </div>
-        </Card>
-
-        {/* ─── Respostas ────── */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
-          <div className="space-y-3">
-            {buttonData.map(btn => {
-              const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
-              const maxCount = Math.max(...buttonData.map(b => b.count), 1);
-              const barWidth = (btn.count / maxCount) * 100;
-              return (
-                <div key={btn.label} className="flex items-center gap-3">
-                  <span className="text-xs font-medium w-12 shrink-0">{btn.label}</span>
-                  <div className="flex-1 h-5 rounded-md bg-muted/40 overflow-hidden relative">
-                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.75 }} />
-                  </div>
-                  <span className="text-xs tabular-nums font-bold w-10 text-right shrink-0">{btn.count.toLocaleString()}</span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right shrink-0">{pct.toFixed(0)}%</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
-        </Card>
-
-        {/* ─── Contagem de Cartões ────────────────────── */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
-            <span className="text-sm font-bold tabular-nums text-foreground">{cc.total} total</span>
-          </div>
-          <div className="h-4 rounded-full overflow-hidden flex bg-muted">
-            {cardCategories.filter(c => c.count > 0).map(cat => (
-              <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} title={`${cat.label}: ${cat.count}`} />
-            ))}
-          </div>
-          <div className="space-y-2">
-            {cardCategories.map(cat => {
-              const pct = cc.total > 0 ? (cat.count / cc.total * 100) : 0;
-              return (
-                <div key={cat.label} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: cat.color }} />
-                  <span className="text-xs w-24 shrink-0">{cat.label}</span>
-                  <div className="flex-1 h-2 rounded-full bg-muted/60 overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 1)}%`, background: cat.color }} />
-                  </div>
-                  <span className="text-xs font-bold tabular-nums w-10 text-right">{cat.count}</span>
-                  <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">{pct.toFixed(0)}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* ─── Intervalos ──────────────────────── */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
-          <div className="flex gap-1.5 flex-wrap">
-            <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
-            <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
-            <StatBadge label="Máx" value={`${intervalPercentiles.max}d`} />
-          </div>
-          <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
-        </Card>
-
-        {/* ─── Stability + Difficulty */}
-        <div className="grid grid-cols-2 gap-2">
-          <Card className="p-4 space-y-2">
-            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo ~90% de chance de acerto."} />
-            <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
-          </Card>
-          <Card className="p-4 space-y-2">
-            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (fácil) a 10 (difícil). Ajustada automaticamente pelo algoritmo."} />
-            <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
-          </Card>
-        </div>
-
-        {/* ─── Retrievability ─────────────────── */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle title="Recuperabilidade" info={"Probabilidade estimada de você lembrar cada cartão agora.\n\n• 95%+ — Provavelmente lembra.\n• 70-85% — Hora de revisar.\n• Abaixo de 50% — Provavelmente esqueceu."} />
-          <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
-        </Card>
-
-        {/* ─── Carga Prevista — link to /plano ─── */}
+        {/* 13. Carga Prevista — link to /plano */}
         <Card className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/plano')}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary/10">
