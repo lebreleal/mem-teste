@@ -249,7 +249,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2 min-w-0">
-              <MemoCardsLogo size={18} className="shrink-0" />
+              <Brain className="h-4 w-4 text-primary shrink-0" />
               <div className="flex flex-col min-w-0">
                 <span className="font-display font-semibold text-sm leading-tight">Chat IA</span>
                 {cardContext && (
