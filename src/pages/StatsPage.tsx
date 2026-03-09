@@ -265,7 +265,7 @@ const StatsPage = () => {
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = -180; // Brasília UTC-3
       const { data } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
         p_tz_offset_minutes: tzOffsetMinutes,
