@@ -5,7 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
+import { getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
+import type { DifficultyData } from '@/lib/flashCardUtils';
 import type { Rating } from '@/lib/fsrs';
 import { Lightbulb, Sparkles, Gauge, BookOpen, Loader2, Undo2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -48,7 +49,8 @@ interface MultipleChoiceCardProps {
   hintResponse?: string | null;
   explainResponse?: string | null;
   mcExplainResponse?: string | null;
-  recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
+  recallData?: any;
+  difficultyData?: DifficultyData | null;
   algorithmMode?: string;
   deckConfig?: any;
   actions?: React.ReactNode;
@@ -76,6 +78,7 @@ const MultipleChoiceCard = ({
   explainResponse,
   mcExplainResponse,
   recallData,
+  difficultyData: difficultyDataProp,
   algorithmMode,
   deckConfig,
   actions,
@@ -128,28 +131,29 @@ const MultipleChoiceCard = ({
     }, 700);
   };
 
-  const recallColor = getRecallColor(recallData);
-  const recallBgColor = getRecallBgColor(recallData);
+  const difficultyData = difficultyDataProp ?? getCardDifficulty({ state, difficulty });
+  const diffColor = getDifficultyColor(difficultyData);
+  const diffBgColor = getDifficultyBgColor(difficultyData);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-7rem)] w-full max-w-lg mx-auto px-1 relative">
-      {/* Top bar: recall + actions */}
+      {/* Top bar: difficulty + actions */}
       <div className="flex items-center justify-center gap-2 flex-shrink-0 pb-3">
-        {recallData && (
+        {difficultyData && (
           <button
             onClick={() => setRecallExpanded(prev => !prev)}
-            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+            className={`flex items-center gap-1.5 rounded-xl ${diffBgColor} px-2.5 py-1 transition-all active:scale-95`}
           >
-            <Gauge className={`h-3 w-3 ${recallColor}`} />
-            <span className={`text-[11px] font-bold ${recallColor}`}>
+            <Gauge className={`h-3 w-3 ${diffColor}`} />
+            <span className={`text-[11px] font-bold ${diffColor}`}>
               {recallExpanded
-                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
-                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+                ? (difficultyData.state === 'new' ? 'Card novo' : `Dificuldade: ${difficultyData.value}`)
+                : (difficultyData.state === 'new' ? 'Novo' : `D: ${difficultyData.value}`)}
             </span>
             {!recallExpanded && (
               <>
                 <span className="text-[10px] text-muted-foreground">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{difficultyData.label}</span>
               </>
             )}
           </button>

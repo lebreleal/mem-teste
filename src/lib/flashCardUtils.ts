@@ -83,3 +83,43 @@ export function getRecallBgColor(recallData: { state: string } | null): string {
   if (recallData.state === 'learning') return 'bg-emerald-500/10';
   return 'bg-primary/10';
 }
+
+/** Difficulty data for study indicator */
+export interface DifficultyData {
+  value: number; // 1-10 rounded
+  label: string;
+  state: 'new' | 'learning' | 'review';
+}
+
+/** Get difficulty data for a card */
+export function getCardDifficulty(card: { state: number; difficulty: number }): DifficultyData | null {
+  const stateMap: Record<number, 'new' | 'learning' | 'review'> = { 0: 'new', 1: 'learning', 2: 'review', 3: 'learning' };
+  const state = stateMap[card.state] ?? 'new';
+  if (card.state === 0) return { value: 0, label: 'Novo', state };
+  const d = Math.round(card.difficulty * 10) / 10;
+  let label: string;
+  if (d <= 3) label = 'Fácil';
+  else if (d <= 5) label = 'Médio';
+  else if (d <= 7) label = 'Difícil';
+  else label = 'Muito difícil';
+  return { value: d, label, state };
+}
+
+/** Get difficulty-based color class */
+export function getDifficultyColor(data: DifficultyData | null): string {
+  if (!data || data.state === 'new') return 'text-muted-foreground';
+  if (data.value <= 3) return 'text-emerald-600 dark:text-emerald-400';
+  if (data.value <= 5) return 'text-primary';
+  if (data.value <= 7) return 'text-amber-600 dark:text-amber-400';
+  return 'text-orange-600 dark:text-orange-400';
+}
+
+/** Get difficulty-based background color class */
+export function getDifficultyBgColor(data: DifficultyData | null): string {
+  if (!data) return '';
+  if (data.state === 'new') return 'bg-muted/80';
+  if (data.value <= 3) return 'bg-emerald-500/10';
+  if (data.value <= 5) return 'bg-primary/10';
+  if (data.value <= 7) return 'bg-amber-500/10';
+  return 'bg-orange-500/10';
+}
