@@ -187,6 +187,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
         avgRelearningSeconds: Number(row.avg_relearning_seconds) || DEFAULT_STUDY_METRICS.avgRelearningSeconds,
         actualDailyMinutes: Number(row.actual_daily_minutes) || DEFAULT_STUDY_METRICS.actualDailyMinutes,
         totalReviews90d: Number(row.total_reviews_90d) || 0,
+        avgReviewsPerNewCard: Number(row.avg_reviews_per_new_card) || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard,
+        avgLapseRate: Number(row.avg_lapse_rate) ?? DEFAULT_STUDY_METRICS.avgLapseRate,
       } as RealStudyMetrics;
     },
     enabled: !!userId,

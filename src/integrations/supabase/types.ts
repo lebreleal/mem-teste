@@ -2705,10 +2705,12 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: {
           actual_daily_minutes: number
+          avg_lapse_rate: number
           avg_learning_seconds: number
           avg_new_seconds: number
           avg_relearning_seconds: number
           avg_review_seconds: number
+          avg_reviews_per_new_card: number
           total_reviews_90d: number
         }[]
       }
