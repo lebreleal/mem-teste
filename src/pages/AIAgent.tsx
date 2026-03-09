@@ -136,6 +136,7 @@ const AIAgent = () => {
       let convId = activeConversationId;
       if (!convId) {
         convId = await createConversation(text);
+        justCreatedRef.current = true;
         setActiveConversationId(convId);
       }
 
