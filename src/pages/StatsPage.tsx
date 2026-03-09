@@ -503,7 +503,6 @@ const StatsPage = () => {
 
   // New metrics
   const maturationRate = cc.total > 0 ? Math.round((cc.mature / cc.total) * 100) : 0;
-  const avgTimePerCard = summaryStats.totalCards > 0 ? (summaryStats.totalMinutes / summaryStats.totalCards * 60).toFixed(1) : '0';
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
   const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
