@@ -380,7 +380,7 @@ const AIAgent = () => {
                   <MessageSquare className="h-4 w-4" />
                 </Button>
               )}
-              <MemoCardsLogo size={22} />
+              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
               <h1 className="font-display text-lg font-bold text-foreground">Agente IA</h1>
             </div>
             <AIModelSelector model={model} onChange={setModel} baseCost={BASE_COST} compact />
