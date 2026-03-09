@@ -5,8 +5,7 @@
 
 import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Send, Loader2, X } from 'lucide-react';
-import MemoCardsLogo from '@/components/MemoCardsLogo';
+import { Brain, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
