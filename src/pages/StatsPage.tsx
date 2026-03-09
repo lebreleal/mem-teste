@@ -83,7 +83,7 @@ function SectionTitle({ title, info }: { title: string; info?: string }) {
 // ─── Per-chart period filter ──────────────────────────
 
 function usePeriodFilter() {
-  const [period, setPeriod] = useState<PeriodKey>('all');
+  const [period, setPeriod] = useState<PeriodKey>('1m');
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
