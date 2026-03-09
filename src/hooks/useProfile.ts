@@ -22,6 +22,8 @@ export interface ProfileData {
   created_at: string;
   weekly_new_cards: Record<string, number> | null;
   weekly_study_minutes: Record<string, number> | null;
+  is_profile_public: boolean;
+  current_streak: number;
 }
 
 const PROFILE_COLUMNS = 'id, energy, successful_cards_counter, daily_cards_studied, daily_energy_earned, daily_new_cards_limit, daily_study_minutes, last_energy_recharge, last_study_reset_date, created_at, weekly_new_cards, weekly_study_minutes';
