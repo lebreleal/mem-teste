@@ -5,7 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
-import { getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
+import { getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
+import type { DifficultyData } from '@/lib/flashCardUtils';
 import type { Rating } from '@/lib/fsrs';
 import { Lightbulb, Sparkles, Gauge, BookOpen, Loader2, Undo2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
