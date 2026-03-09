@@ -117,10 +117,10 @@ const Performance = () => {
                       const totalToday = s.newCards + s.reviewCards;
                       const ct = s.todayCardTypes;
                       const typeItems = [
-                        { icon: Type, label: 'Básico', count: ct.basic, color: 'text-blue-500' },
-                        { icon: Braces, label: 'Cloze', count: ct.cloze, color: 'text-violet-500' },
-                        { icon: ListChecks, label: 'Múlt. Escolha', count: ct.multiple_choice, color: 'text-amber-500' },
-                        { icon: EyeOff, label: 'Oclusão', count: ct.image_occlusion, color: 'text-emerald-500' },
+                        { icon: Type, label: 'Básico', count: ct.basic, color: 'text-primary' },
+                        { icon: Braces, label: 'Cloze', count: ct.cloze, color: 'text-accent-foreground' },
+                        { icon: ListChecks, label: 'Múlt. Escolha', count: ct.multiple_choice, color: 'text-warning' },
+                        { icon: EyeOff, label: 'Oclusão', count: ct.image_occlusion, color: 'text-success' },
                       ].filter(t => t.count > 0);
 
                       return (
