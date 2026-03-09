@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { estimateStudySeconds } from '@/lib/studyUtils';
+import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -836,7 +836,7 @@ export const CompactDeckRow = React.forwardRef<HTMLDivElement, {
   const studied = deck.reviewed_today ?? 0;
   const total = pending + studied;
   const pct = total > 0 ? Math.round((studied / total) * 100) : 0;
-  const est = Math.round(estimateStudySeconds(newAvail, learningCards, reviewCards, avgSecondsPerCard) / 60);
+  const est = Math.round(calculateRealStudyTime(newAvail, learningCards, reviewCards, DEFAULT_STUDY_METRICS) / 60);
 
   return (
     <div

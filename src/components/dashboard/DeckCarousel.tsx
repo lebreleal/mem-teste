@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
-import { estimateStudySeconds } from '@/lib/studyUtils';
+import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 
 type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
 
@@ -78,7 +78,7 @@ function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, Aggreg
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
+function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
   const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
@@ -87,7 +87,7 @@ function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, g
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
-  const estimatedMinutes = Math.round(estimateStudySeconds(newAvailable, learningAvailable, reviewAvailable, avgSecondsPerCard) / 60);
+  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics) / 60);
 
   const isComplete = pendingToday === 0 && totalToday > 0;
 
@@ -143,6 +143,7 @@ function DeckStudyCard({ deck, aggregateMap, avgSecondsPerCard, objectiveName, g
 interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
+  studyMetrics?: RealStudyMetrics;
   hasPlan: boolean;
   planDeckIds?: string[];
   planDeckOrder?: string[];
@@ -151,8 +152,9 @@ interface DeckCarouselProps {
   distributedNewByDeck?: Map<string, number> | null;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetrics, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
+  const metrics = studyMetrics ?? DEFAULT_STUDY_METRICS;
 
   // Pre-compute aggregate stats once — O(n) instead of O(n²) per render
   const aggregateMap = useMemo(() => buildAggregateMap(decks), [decks]);
@@ -283,7 +285,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
-    ? Math.round(estimateStudySeconds(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, avgSecondsPerCard) / 60)
+    ? Math.round(calculateRealStudyTime(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, metrics) / 60)
     : 0;
 
   return (
@@ -343,7 +345,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
               key={deck.id}
               deck={deck}
               aggregateMap={aggregateMap}
-              avgSecondsPerCard={avgSecondsPerCard}
+              studyMetrics={metrics}
               objectiveName={plansByDeckId?.[deck.id]}
               globalNewRemaining={globalNewRemaining}
               allocatedNew={distributedNewByDeck?.get(deck.id)}

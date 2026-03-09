@@ -47,7 +47,7 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { plans, allDeckIds, avgSecondsPerCard, metrics, globalCapacity } = useStudyPlan();
+  const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, metrics, globalCapacity } = useStudyPlan();
   const { decks: allDecks } = useDecks();
   const planRootIds = useMemo(() => {
     if (plans.length === 0 || !allDecks) return undefined;
@@ -164,6 +164,7 @@ const Dashboard = () => {
           <DeckCarousel
             decks={allDecks}
             avgSecondsPerCard={avgSecondsPerCard}
+            studyMetrics={realStudyMetrics}
             hasPlan={hasPlan}
             planDeckIds={planDeckIds}
             planDeckOrder={planDeckOrderEarly}

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useMemo, useCallback } from 'react';
-import { computeNewCardAllocation, estimateStudySeconds } from '@/lib/studyUtils';
+import { computeNewCardAllocation, calculateRealStudyTime, deriveAvgSecondsPerCard, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
@@ -173,12 +173,21 @@ export function useStudyPlan(options?: { full?: boolean }) {
     return deckHierarchy.filter(d => !d.parent_deck_id).map(d => d.id);
   }, [plans, deckHierarchy]);
 
-  const avgQuery = useQuery({
-    queryKey: ['avg-seconds-per-card', userId],
+  const realMetricsQuery = useQuery({
+    queryKey: ['real-study-metrics', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_avg_seconds_per_card' as any, { p_user_id: userId });
+      const { data, error } = await supabase.rpc('get_user_real_study_metrics' as any, { p_user_id: userId });
       if (error) throw error;
-      return Number(data) || 30;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return DEFAULT_STUDY_METRICS;
+      return {
+        avgNewSeconds: Number(row.avg_new_seconds) || DEFAULT_STUDY_METRICS.avgNewSeconds,
+        avgLearningSeconds: Number(row.avg_learning_seconds) || DEFAULT_STUDY_METRICS.avgLearningSeconds,
+        avgReviewSeconds: Number(row.avg_review_seconds) || DEFAULT_STUDY_METRICS.avgReviewSeconds,
+        avgRelearningSeconds: Number(row.avg_relearning_seconds) || DEFAULT_STUDY_METRICS.avgRelearningSeconds,
+        actualDailyMinutes: Number(row.actual_daily_minutes) || DEFAULT_STUDY_METRICS.actualDailyMinutes,
+        totalReviews90d: Number(row.total_reviews_90d) || 0,
+      } as RealStudyMetrics;
     },
     enabled: !!userId,
     staleTime: 5 * 60_000,
@@ -312,9 +321,10 @@ export function useStudyPlan(options?: { full?: boolean }) {
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
+    if (!realMetricsQuery.data || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
-    const avg = avgQuery.data;
+    const rm = realMetricsQuery.data;
+    const avg = deriveAvgSecondsPerCard(rm);
 
     const totalNew = Number(raw.total_new) || 0;
     const totalReview = Number(raw.total_review) || 0;
@@ -330,7 +340,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     const estimatedReviewsToday = totalReview > 0
       ? Math.min(totalReview, capacityCardsToday)
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-    const reviewSeconds = estimateStudySeconds(0, totalLearning, estimatedReviewsToday, avg);
+    const reviewSeconds = calculateRealStudyTime(0, totalLearning, estimatedReviewsToday, rm);
     const reviewMinutes = Math.round(reviewSeconds / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
@@ -353,7 +363,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
-    const newSeconds = estimateStudySeconds(dailyNewCards, 0, 0, avg);
+    const newSeconds = calculateRealStudyTime(dailyNewCards, 0, 0, rm);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
     const newMinutes = Math.min(Math.round(newSeconds / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
@@ -463,11 +473,12 @@ export function useStudyPlan(options?: { full?: boolean }) {
       projectedCompletionDate, weeklyCardData,
       forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
-  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
+  }, [plans, globalCapacity, realMetricsQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {
-    const avg = avgQuery.data ?? 30;
+    const rm = realMetricsQuery.data ?? DEFAULT_STUDY_METRICS;
+    const avg = deriveAvgSecondsPerCard(rm);
     const raw = metricsQuery.data;
     if (plans.length === 0 || !raw) return null;
 
@@ -488,7 +499,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       const dayKey = DAY_KEYS[dayOfWeek];
       const reviewCount = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
       const dailyNew = Math.min(Math.floor((newMinutes * 60) / avg), Number(raw.total_new) || 0);
-      const totalMin = Math.round(estimateStudySeconds(dailyNew, 0, reviewCount, avg) / 60);
+      const totalMin = Math.round(calculateRealStudyTime(dailyNew, 0, reviewCount, rm) / 60);
       if (totalMin > newMinutes && totalMin > peakMin) {
         peakMin = totalMin;
         peakDay = DAY_LABELS[dayKey];
@@ -510,7 +521,7 @@ export function useStudyPlan(options?: { full?: boolean }) {
       return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded, peakDay, peakMin };
     }
     return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null, peakDay, peakMin };
-  }, [plans, avgQuery.data, metricsQuery.data, forecastQuery.data]);
+  }, [plans, realMetricsQuery.data, metricsQuery.data, forecastQuery.data]);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
@@ -627,7 +638,8 @@ export function useStudyPlan(options?: { full?: boolean }) {
     globalCapacity,
     isLoading: plansQuery.isLoading || profileQuery.isLoading,
     metrics: computed,
-    avgSecondsPerCard: avgQuery.data ?? 30,
+    avgSecondsPerCard: realMetricsQuery.data ? deriveAvgSecondsPerCard(realMetricsQuery.data) : 30,
+    realStudyMetrics: realMetricsQuery.data ?? DEFAULT_STUDY_METRICS,
     calcImpact,
     createPlan,
     updatePlan,
