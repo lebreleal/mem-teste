@@ -112,8 +112,8 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
                 <span className="text-[10px] text-muted-foreground font-medium shrink-0">Velocidade</span>
                 <StatBar value={stats.speed} color={accentColor} />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Inteligência</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground font-medium shrink-0">Inteligência</span>
                 <StatBar value={stats.intelligence} color={accentColor} />
               </div>
             </div>

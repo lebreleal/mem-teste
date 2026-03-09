@@ -287,29 +287,28 @@ const StatsPage = () => {
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
         {/* ─── Quick Stats (horizontal strip like reference) ────────────────────── */}
-        <Card className="px-4 py-3 flex items-center gap-4 overflow-x-auto">
+        <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
           {/* Streak */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
               style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
-            <span className="text-lg font-bold tabular-nums">{currentStreak}</span>
-            <span className="text-[10px] text-muted-foreground">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</span>
+            <span className="text-base font-bold tabular-nums">{currentStreak}</span>
+            <span className="text-[10px] text-muted-foreground leading-tight">{currentStreak === 1 ? 'dia\nseguido' : 'dias\nseguidos'}</span>
           </div>
-          <div className="h-6 w-px bg-border/50 shrink-0" />
           {/* Today cards */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <Zap className="h-4 w-4 text-primary" />
             <span className="text-sm font-bold tabular-nums">{todayCards}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
           </div>
           {/* Today reviews */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <CheckCircle2 className="h-4 w-4 text-success" />
             <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
           </div>
           {/* Frozen */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <Snowflake className="h-4 w-4 text-info" />
             <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
