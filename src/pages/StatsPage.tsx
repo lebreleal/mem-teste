@@ -77,8 +77,6 @@ const StatsPage = () => {
   const { data: ranking, isLoading: rankingLoading } = useRanking();
   const togglePublic = useTogglePublicProfile();
   const isPublic = profile.data?.is_profile_public ?? false;
-  // Use streak from activity RPC (accurate), not profile column (may be stale/zero)
-  const currentStreak = activityData?.streak ?? 0;
 
   // Activity data from RPC - this has the accurate daily data
   const { data: activityData } = useQuery({
