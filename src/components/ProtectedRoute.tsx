@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
+import DraggableFab from '@/components/DraggableFab';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
+import { Brain } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Timer, Play } from 'lucide-react';
@@ -13,8 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
-  const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas'];
+  const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
@@ -98,6 +101,15 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       </div>
 
       {showNav && <BottomNav />}
+
+      {/* Floating AI FAB */}
+      {showNav && (
+        <DraggableFab
+          actions={[
+            { icon: Brain, label: 'Agente IA', onClick: () => navigate('/ia') },
+          ]}
+        />
+      )}
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (

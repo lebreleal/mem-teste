@@ -67,7 +67,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-2 gap-2">
       {(['flash', 'pro'] as const).map((m) => {
         const stats = MODEL_STATS[m];
         const isSelected = model === m;
@@ -79,7 +79,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
             key={m}
             type="button"
             onClick={() => onChange(m)}
-            className={`flex-1 rounded-xl border-2 p-3 text-left transition-all relative overflow-hidden ${
+            className={`rounded-xl border-2 p-3 text-left transition-all relative overflow-hidden min-w-0 ${
               isSelected
                 ? isPro
                   ? 'border-primary bg-primary/5 shadow-[0_0_20px_-4px_hsl(var(--primary)/0.3)]'
@@ -104,16 +104,16 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
               {isPro && <Crown className="h-3.5 w-3.5 text-warning" />}
             </div>
 
-            <p className="text-[10px] text-muted-foreground mb-2.5 leading-tight">{stats.tagline}</p>
+            <p className="text-[10px] text-muted-foreground mb-2.5 leading-tight line-clamp-2">{stats.tagline}</p>
 
             {/* Stats */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Velocidade</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground font-medium shrink-0">Velocidade</span>
                 <StatBar value={stats.speed} color={accentColor} />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-medium w-[70px]">Inteligência</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground font-medium shrink-0">Inteligência</span>
                 <StatBar value={stats.intelligence} color={accentColor} />
               </div>
             </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import type { Rating } from '@/lib/fsrs';
-import { buildPreviewParams, getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
-import { calculateCardRecall } from '@/components/RetentionGauge';
+import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
+import type { DifficultyData } from '@/lib/flashCardUtils';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
@@ -159,10 +159,10 @@ const FlashCard = ({
   const isMultipleChoice = effectiveCardType === 'multiple_choice';
   const canUseTutor = energy >= tutorCost;
 
-  const recallData = useMemo(() => {
+  const difficultyData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
-    return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate, last_reviewed_at: lastReviewedAt }, algorithmMode);
-  }, [state, stability, difficulty, scheduledDate, lastReviewedAt, algorithmMode]);
+    return getCardDifficulty({ state, difficulty });
+  }, [state, difficulty, algorithmMode]);
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
 
@@ -205,7 +205,8 @@ const FlashCard = ({
         hintResponse={hintResponse}
         explainResponse={explainResponse}
         mcExplainResponse={mcExplainResponse}
-        recallData={recallData}
+        recallData={null}
+        difficultyData={difficultyData}
         algorithmMode={algorithmMode}
         deckConfig={deckConfig}
         actions={actions}
@@ -268,28 +269,28 @@ const FlashCard = ({
     displayBack = looksLikeHtml(backContent) ? backContent : formatMarkdown(backContent);
   }
 
-  const recallColor = getRecallColor(recallData);
-  const recallBgColor = getRecallBgColor(recallData);
+  const diffColor = getDifficultyColor(difficultyData);
+  const diffBgColor = getDifficultyBgColor(difficultyData);
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
-      {/* Top bar: recall + actions */}
+      {/* Top bar: difficulty + actions */}
       <div className="flex items-center justify-center gap-2 flex-shrink-0 pb-3">
-        {recallData && (
+        {difficultyData && (
           <button
             onClick={() => setRecallExpanded(prev => !prev)}
-            className={`flex items-center gap-1.5 rounded-xl ${recallBgColor} px-2.5 py-1 transition-all active:scale-95`}
+            className={`flex items-center gap-1.5 rounded-xl ${diffBgColor} px-2.5 py-1 transition-all active:scale-95`}
           >
-            <Gauge className={`h-3 w-3 ${recallColor}`} />
-            <span className={`text-[11px] font-bold ${recallColor}`}>
+            <Gauge className={`h-3 w-3 ${diffColor}`} />
+            <span className={`text-[11px] font-bold ${diffColor}`}>
               {recallExpanded
-                ? (recallData.state === 'new' ? 'Card novo' : `${recallData.percent}% de chance de acerto`)
-                : (recallData.state === 'new' ? 'Novo' : `${recallData.percent}%`)}
+                ? (difficultyData.state === 'new' ? 'Card novo' : `Dificuldade: ${difficultyData.value}`)
+                : (difficultyData.state === 'new' ? 'Novo' : `D: ${difficultyData.value}`)}
             </span>
             {!recallExpanded && (
               <>
                 <span className="text-[10px] text-muted-foreground">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{recallData.label}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">{difficultyData.label}</span>
               </>
             )}
           </button>

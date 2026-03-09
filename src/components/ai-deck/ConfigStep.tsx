@@ -114,10 +114,10 @@ const ConfigStep = ({
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide max-h-[55dvh] sm:max-h-[60vh]">
         {/* Sub-step 0: Detail level */}
         {subStep === 0 && (
-          <div className="grid grid-cols-1 gap-2.5">
+          <div className="grid grid-cols-1 gap-2">
             {DETAIL_OPTIONS.map(opt => (
               <button key={opt.value} onClick={() => onDetailLevelChange(opt.value)}
-                className={`rounded-xl border-2 p-3.5 text-left transition-all ${
+                className={`rounded-xl border-2 p-3 text-left transition-all ${
                   detailLevel === opt.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-muted-foreground/30'
                 }`}>
                 <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ const ConfigStep = ({
                   )}
                   {detailLevel === opt.value && <Check className="h-4 w-4 text-primary ml-auto" />}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{opt.desc}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
               </button>
             ))}
           </div>
@@ -136,12 +136,12 @@ const ConfigStep = ({
         {/* Sub-step 1: Card format */}
         {subStep === 1 && (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className="grid grid-cols-1 gap-2">
               {FORMAT_OPTIONS.map(opt => {
                 const active = cardFormats.includes(opt.value);
                 return (
                   <button key={opt.value} onClick={() => handleToggleFormat(opt.value)}
-                    className={`flex items-center justify-between gap-2 rounded-xl border-2 px-4 py-3.5 transition-all ${
+                    className={`flex items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 transition-all ${
                       active ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-muted-foreground/30'
                     }`}>
                     <span className="text-sm font-semibold text-foreground leading-tight">{opt.label}</span>
