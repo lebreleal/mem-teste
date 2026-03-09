@@ -530,7 +530,7 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* 1. Quick Stats */}
+        {/* 1. Quick Stats — hide items with value 0 */}
         <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
             <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
@@ -538,21 +538,24 @@ const StatsPage = () => {
             <span className="text-base font-bold tabular-nums">{currentStreak}</span>
             <span className="text-[10px] text-muted-foreground leading-tight">{currentStreak === 1 ? 'dia\nseguido' : 'dias\nseguidos'}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="text-sm font-bold tabular-nums">{todayCards}</span>
-            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
-            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Snowflake className="h-4 w-4 text-info" />
-            <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
-            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
-          </div>
+          {todayCards > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <Zap className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold tabular-nums">{todayCards}</span>
+            </div>
+          )}
+          {stats.monthSummary.total_reviews > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
+            </div>
+          )}
+          {cc.frozen > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <Snowflake className="h-4 w-4 text-info" />
+              <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
+            </div>
+          )}
         </Card>
 
         {/* 2. Resumo do Período */}
