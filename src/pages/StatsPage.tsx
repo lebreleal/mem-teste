@@ -307,7 +307,7 @@ const StatsPage = () => {
         </div>
 
         {/* ─── Ranking Global ────────────────────── */}
-        <Card className="overflow-hidden">
+        <Card className="rounded-xl">
           <div className="p-4 pb-2 flex items-center justify-between">
             <SectionTitle title="Ranking Global" icon={<Trophy className="h-4 w-4 text-warning" />} info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
             <button onClick={() => setRankingConfigOpen(true)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
@@ -348,7 +348,7 @@ const StatsPage = () => {
               <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
-            <div className="border-t border-border/40 max-h-[400px] overflow-y-auto">
+            <div className="border-t border-border/40">
               {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
