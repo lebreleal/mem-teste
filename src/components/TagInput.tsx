@@ -94,8 +94,11 @@ export function TagInput({
     }
   };
 
+  const [confirmAI, setConfirmAI] = useState(false);
+
   const handleAISuggest = async () => {
     if (!aiContext) return;
+    setConfirmAI(false);
     try {
       const result = await aiSuggest.mutateAsync({
         textContent: aiContext.textContent,
