@@ -274,7 +274,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && !streamingResponse && !isStreamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
-                <Brain className="h-10 w-10 mb-3 opacity-30" />
+                <MemoCardsLogo size={40} className="mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
                 <p className="text-xs mt-1 leading-relaxed">O chat está contextualizado com o conteúdo do cartão que você está estudando</p>
                 <p className="text-[11px] mt-2 opacity-60">O histórico é mantido enquanto estiver neste card</p>

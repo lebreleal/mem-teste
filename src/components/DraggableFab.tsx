@@ -186,7 +186,7 @@ const DraggableFab = ({ actions }: { actions: FabMenuAction[] }) => {
           setMenuOpen(prev => !prev);
         }}
       >
-        <Brain className="h-6 w-6 text-primary-foreground" />
+        <MemoCardsLogo size={28} />
       </button>
     </div>
   );

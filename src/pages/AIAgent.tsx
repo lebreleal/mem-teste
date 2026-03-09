@@ -422,9 +422,8 @@ const AIAgent = () => {
               ))}
               {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
                 <div className="flex gap-3 justify-start">
-                  <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: 'hsl(var(--energy-purple, 270 70% 60%) / 0.15)' }}>
-                    <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-primary/10">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   </div>
                   <div className="rounded-2xl rounded-bl-md bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
                     Pensando...
