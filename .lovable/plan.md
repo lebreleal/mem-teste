@@ -179,3 +179,26 @@ Se o stream já começou, os créditos são considerados consumidos legitimament
 | Subscription polling (E) | -80% calls |
 | AggregateStats memo (F) | O(n²) → O(1) |
 | **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
+
+---
+
+# Métricas Reais de Repetições por Sessão
+
+## Implementado
+
+### 1. RPC `get_user_real_study_metrics` atualizada
+Adicionados 2 novos campos:
+- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
+- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
+
+### 2. `calculateRealStudyTime` reescrita
+- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
+- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
+- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
+
+### 3. Interface `RealStudyMetrics` expandida
+- `avgReviewsPerNewCard: number` (mediana do histórico real)
+- `avgLapseRate: number` (taxa de erro em revisões)
+
+### 4. `useStudyPlan` mapeia novos campos da RPC
+- Fallbacks para contas sem histórico suficiente
