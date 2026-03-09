@@ -275,24 +275,24 @@ export function TagInput({
               )}
             </Button>
 
-            {/* Confirmation dialog */}
-            <AlertDialog open={confirmAI} onOpenChange={setConfirmAI}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <Brain className="h-5 w-5 text-primary" />
-                    Sugerir tags com IA
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    A IA irá analisar o conteúdo e sugerir tags relevantes. Isso consome <strong>2 Créditos IA</strong>.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleAISuggest}>Gerar sugestões</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {/* Confirmation dialog */}
+          <AlertDialog open={confirmAI} onOpenChange={setConfirmAI}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-primary" />
+                  Sugerir tags com IA
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  A IA irá analisar o conteúdo e sugerir tags relevantes. Isso consome <span className="font-bold">2 Créditos IA</span>.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleAISuggest}>Gerar sugestões</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           )}
         </div>
       )}
