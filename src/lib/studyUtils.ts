@@ -3,6 +3,85 @@
  * No React or Supabase dependencies.
  */
 
+/** Real study metrics per card state (from user's historical data). */
+export interface RealStudyMetrics {
+  avgNewSeconds: number;
+  avgLearningSeconds: number;
+  avgReviewSeconds: number;
+  avgRelearningSeconds: number;
+  actualDailyMinutes: number;
+  totalReviews90d: number;
+  /** Median number of interactions a new card generates on its first day (learning steps + failures). */
+  avgReviewsPerNewCard: number;
+  /** Fraction of review cards (state=2) that lapse (rating=1), e.g. 0.10 = 10%. */
+  avgLapseRate: number;
+}
+
+/** Default fallbacks based on research (used only when no user data exists). */
+export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
+  avgNewSeconds: 45,
+  avgLearningSeconds: 25,
+  avgReviewSeconds: 15,
+  avgRelearningSeconds: 25,
+  actualDailyMinutes: 15,
+  totalReviews90d: 0,
+  avgReviewsPerNewCard: 3,
+  avgLapseRate: 0.10,
+};
+
+/**
+ * Calculate study time using REAL per-state seconds from user history.
+ * Accounts for:
+ * - New cards generating multiple interactions (learning steps + failures)
+ * - Review cards that lapse and become relearning cards
+ */
+export function calculateRealStudyTime(
+  newCards: number,
+  learningCards: number,
+  reviewCards: number,
+  metrics: RealStudyMetrics,
+): number {
+  // New cards: each generates avgReviewsPerNewCard interactions on first day
+  const newInteractions = newCards * metrics.avgReviewsPerNewCard;
+  // Review cards: some will lapse → become relearning (each lapse ≈ 2 extra interactions)
+  const expectedLapses = reviewCards * metrics.avgLapseRate;
+  const successfulReviews = reviewCards - expectedLapses;
+
+  return Math.round(
+    (newInteractions * metrics.avgNewSeconds) +
+    (learningCards * metrics.avgLearningSeconds) +
+    (successfulReviews * metrics.avgReviewSeconds) +
+    (expectedLapses * metrics.avgRelearningSeconds * 2)
+  );
+}
+
+/**
+ * Derive a single weighted average seconds-per-card from real metrics.
+ * Useful for backward-compatible code that expects a single number.
+ */
+export function deriveAvgSecondsPerCard(metrics: RealStudyMetrics): number {
+  // Weighted average assuming typical session mix: 20% new, 30% learning, 50% review
+  const weighted = (metrics.avgNewSeconds * 0.2) + (metrics.avgLearningSeconds * 0.3) + (metrics.avgReviewSeconds * 0.5);
+  return Math.round(weighted);
+}
+
+/**
+ * @deprecated Use calculateRealStudyTime with per-state metrics instead.
+ * Estimate total study time in seconds, accounting for per-state multipliers.
+ */
+export function estimateStudySeconds(
+  newCards: number,
+  learningCards: number,
+  reviewCards: number,
+  avgSecondsPerCard: number,
+  learningStepCount = 2,
+): number {
+  const newViews = newCards * (learningStepCount + 1);
+  const learningViews = learningCards * 1.5;
+  const reviewViews = reviewCards;
+  return Math.round((newViews + learningViews + reviewViews) * avgSecondsPerCard);
+}
+
 /** Parse a learning step string (e.g. '15m', '1h', '2d') to minutes. */
 export function parseStepToMinutes(step: string): number {
   const num = parseFloat(step);

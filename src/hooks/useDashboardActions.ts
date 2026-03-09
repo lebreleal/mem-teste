@@ -1,0 +1,274 @@
+/**
+ * Extracted from Dashboard.tsx — all mutation handlers for dashboard CRUD operations.
+ * Keeps Dashboard.tsx focused on layout/rendering.
+ */
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  renameDeck, deleteDeckCascade, bulkMoveDecks, bulkArchiveDecks,
+  bulkDeleteDecks, getTurmaDeckNavInfo,
+} from '@/services/deckService';
+
+interface DashboardState {
+  decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null; is_archived: boolean }[];
+  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean }[];
+  currentFolderId: string | null;
+  currentDecks: { id: string }[];
+
+  // Dialog state setters
+  createType: 'deck' | 'folder' | null;
+  setCreateType: (v: 'deck' | 'folder' | null) => void;
+  createName: string;
+  setCreateName: (v: string) => void;
+  createParentDeckId: string | null;
+  setCreateParentDeckId: (v: string | null) => void;
+
+  renameTarget: { type: 'deck' | 'folder'; id: string; name: string } | null;
+  setRenameTarget: (v: any) => void;
+  renameName: string;
+
+  deleteTarget: { type: 'deck' | 'folder'; id: string; name: string } | null;
+  setDeleteTarget: (v: any) => void;
+
+  moveTarget: { type: 'deck' | 'folder'; id: string; name: string } | null;
+  setMoveTarget: (v: any) => void;
+  moveBrowseFolderId: string | null;
+  setMoveBrowseFolderId: (v: string | null) => void;
+  moveParentDeckId: string | null;
+  setMoveParentDeckId: (v: string | null) => void;
+
+  duplicateWarning: any;
+  setDuplicateWarning: (v: any) => void;
+
+  selectedDeckIds: Set<string>;
+  setSelectedDeckIds: (v: Set<string>) => void;
+  setDeckSelectionMode: (v: boolean) => void;
+  setBulkMoveDeckOpen: (v: boolean) => void;
+
+  // Mutations from useDashboardState
+  createDeck: { mutate: (args: any, opts?: any) => void; isPending: boolean };
+  createFolder: { mutate: (args: any, opts?: any) => void; isPending: boolean };
+  updateFolder: { mutate: (args: any, opts?: any) => void };
+  moveDeck: { mutate: (args: any, opts?: any) => void };
+  moveFolder: { mutate: (args: any, opts?: any) => void };
+  archiveDeck: { mutate: (id: string) => void };
+  archiveFolder: { mutate: (id: string) => void };
+  toggleExpand: (id: string) => void;
+}
+
+export function useDashboardActions(state: DashboardState, defaultAlgorithm: string) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
+
+  const doCreate = useCallback((name: string) => {
+    if (state.createType === 'deck') {
+      state.createDeck.mutate(
+        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
+        {
+          onSuccess: () => {
+            state.setCreateType(null); state.setCreateName('');
+            toast({ title: 'Baralho criado!' });
+            if (state.createParentDeckId) state.toggleExpand(state.createParentDeckId);
+            state.setCreateParentDeckId(null);
+          },
+          onError: () => toast({ title: 'Erro ao criar baralho', variant: 'destructive' }),
+        }
+      );
+    } else {
+      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
+      });
+    }
+  }, [state, defaultAlgorithm, toast]);
+
+  const handleCreateSubmit = useCallback(() => {
+    if (!state.createName.trim()) return;
+    const trimmed = state.createName.trim();
+    let hasDuplicate = false;
+    if (state.createType === 'deck') {
+      const siblings = state.createParentDeckId
+        ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
+        : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
+      hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
+    } else {
+      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
+      hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
+    }
+    if (hasDuplicate) {
+      state.setDuplicateWarning({
+        name: trimmed,
+        type: state.createType!,
+        action: () => { doCreate(trimmed); state.setDuplicateWarning(null); },
+      });
+      return;
+    }
+    doCreate(trimmed);
+  }, [state, doCreate]);
+
+  const handleRenameSubmit = useCallback(async () => {
+    if (!state.renameTarget || !state.renameName.trim()) return;
+    if (state.renameTarget.type === 'folder') {
+      state.updateFolder.mutate({ id: state.renameTarget.id, name: state.renameName.trim() }, {
+        onSuccess: () => { state.setRenameTarget(null); toast({ title: 'Renomeado!' }); },
+      });
+    } else {
+      try {
+        await renameDeck(state.renameTarget.id, state.renameName.trim());
+        state.setRenameTarget(null);
+        toast({ title: 'Renomeado!' });
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+      } catch {
+        toast({ title: 'Erro ao renomear', variant: 'destructive' });
+      }
+    }
+  }, [state, queryClient, toast]);
+
+  const handleDeleteDeckRequest = useCallback(async (deck: { id: string; name: string }) => {
+    const allIds = [deck.id];
+    const collectChildren = (parentIds: string[]) => {
+      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
+      children.forEach(c => allIds.push(c.id));
+      if (children.length > 0) collectChildren(children.map(c => c.id));
+    };
+    collectChildren([deck.id]);
+
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
+    if (turmaRefs && turmaRefs.length > 0) {
+      const blockedId = turmaRefs[0].deck_id;
+      const blockedDeck = state.decks.find(d => d.id === blockedId);
+      setCommunityBlockTarget({ id: deck.id, name: blockedDeck ? blockedDeck.name : deck.name, type: 'deck' });
+      return;
+    }
+    state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
+  }, [state]);
+
+  const handleDeleteSubmit = useCallback(async () => {
+    if (!state.deleteTarget) return;
+    try {
+      if (state.deleteTarget.type === 'folder') {
+        const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
+        if (error) throw error;
+        toast({ title: 'Pasta excluída' });
+      } else {
+        await deleteDeckCascade(state.deleteTarget.id);
+        toast({ title: 'Baralho excluído' });
+      }
+      state.setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
+    }
+  }, [state, queryClient, toast]);
+
+  const handleMoveSubmit = useCallback(() => {
+    if (!state.moveTarget) return;
+    if (state.moveTarget.type === 'deck') {
+      const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
+      let folderId = targetFolderId;
+      if (state.moveParentDeckId) {
+        const parentDeck = state.decks.find(d => d.id === state.moveParentDeckId);
+        folderId = parentDeck?.folder_id ?? null;
+      }
+      state.moveDeck.mutate(
+        { id: state.moveTarget.id, folderId, parentDeckId: state.moveParentDeckId ?? null },
+        {
+          onSuccess: () => { state.setMoveTarget(null); state.setMoveParentDeckId(null); toast({ title: 'Baralho movido!' }); },
+          onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+        }
+      );
+    } else {
+      state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Pasta movida!' }); },
+        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+      });
+    }
+  }, [state, toast]);
+
+  const handleBulkMoveSubmit = useCallback(async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    try {
+      await bulkMoveDecks(ids, state.moveBrowseFolderId);
+      toast({ title: `${ids.length} baralho(s) movido(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao mover', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+    state.setBulkMoveDeckOpen(false);
+    state.setMoveBrowseFolderId(null);
+    state.setMoveParentDeckId(null);
+  }, [state, queryClient, toast]);
+
+  const handleBulkArchive = useCallback(async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    try {
+      await bulkArchiveDecks(ids);
+      toast({ title: `${ids.length} baralho(s) arquivado(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao arquivar', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+  }, [state, queryClient, toast]);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(state.selectedDeckIds);
+    const allRelatedIds = new Set(ids);
+    const collectChildren = (parentIds: string[]) => {
+      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
+      children.forEach(c => allRelatedIds.add(c.id));
+      if (children.length > 0) collectChildren(children.map(c => c.id));
+    };
+    collectChildren(ids);
+
+    const allIds = Array.from(allRelatedIds);
+    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds);
+    const communityLinkedIds = new Set((turmaRefs ?? []).map((r: any) => r.deck_id));
+    const blocked = allIds.filter(id => communityLinkedIds.has(id));
+    if (blocked.length > 0) {
+      const blockedNames = blocked.map(id => state.decks.find(d => d.id === id)?.name ?? id).join(', ');
+      setCommunityBlockTarget({ id: blocked[0], name: blockedNames, type: 'deck' });
+      return;
+    }
+    try {
+      await bulkDeleteDecks(ids);
+      toast({ title: `${ids.length} baralho(s) excluído(s)!` });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
+    }
+    state.setSelectedDeckIds(new Set());
+    state.setDeckSelectionMode(false);
+  }, [state, queryClient, toast]);
+
+  const handleNavigateCommunity = useCallback(async (sourceTurmaDeckId: string) => {
+    const info = await getTurmaDeckNavInfo(sourceTurmaDeckId);
+    if (info) {
+      if (info.lesson_id) navigate(`/turmas/${info.turma_id}/lessons/${info.lesson_id}`);
+      else navigate(`/turmas/${info.turma_id}`);
+    }
+  }, [navigate]);
+
+  return {
+    communityBlockTarget,
+    setCommunityBlockTarget,
+    handleCreateSubmit,
+    handleRenameSubmit,
+    handleDeleteDeckRequest,
+    handleDeleteSubmit,
+    handleMoveSubmit,
+    handleBulkMoveSubmit,
+    handleBulkArchive,
+    handleBulkDelete,
+    handleNavigateCommunity,
+  };
+}

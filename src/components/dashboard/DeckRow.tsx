@@ -2,6 +2,7 @@
  * DeckRow — a single deck item in the dashboard list with context menu and drag handle.
  */
 
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,12 +37,12 @@ interface DeckRowProps {
   hasPendingUpdate?: boolean;
 }
 
-const DeckRow = ({
+const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
   onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers, hasPendingUpdate,
-}: DeckRowProps) => {
+}, ref) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
   const hasChildren = subDecks.length > 0;
@@ -158,6 +159,8 @@ const DeckRow = ({
       ))}
     </>
   );
-};
+});
+
+DeckRow.displayName = 'DeckRow';
 
 export default DeckRow;

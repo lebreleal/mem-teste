@@ -5,6 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/types/deck';
+import { calculateRealStudyTime, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+
+type AggregateStats = { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number };
 
 function formatMinutes(m: number) {
   if (m <= 0) return '0min';
@@ -14,28 +17,47 @@ function formatMinutes(m: number) {
   return r > 0 ? `${h}h${r}min` : `${h}h`;
 }
 
-/** Aggregate stats across a deck and all its descendants */
-function getAggregateRaw(deck: DeckWithStats, allDecks: DeckWithStats[]): { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number } {
-  const subs = allDecks.filter(d => d.parent_deck_id === deck.id && !d.is_archived);
-  let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
-  let newReviewed = deck.new_reviewed_today ?? 0;
-  let newGraduated = deck.new_graduated_today ?? 0;
-  let reviewed = deck.reviewed_today ?? 0;
-  for (const sub of subs) {
-    const s = getAggregateRaw(sub, allDecks);
-    n += s.new_count; l += s.learning_count; r += s.review_count;
-    newReviewed += s.newReviewed;
-    newGraduated += s.newGraduated;
-    reviewed += s.reviewed;
+/** Pre-compute aggregate stats for ALL decks into a Map for O(1) lookup. */
+function buildAggregateMap(allDecks: DeckWithStats[]): Map<string, AggregateStats> {
+  // Build children map once
+  const childrenMap = new Map<string, DeckWithStats[]>();
+  for (const d of allDecks) {
+    if (d.parent_deck_id && !d.is_archived) {
+      const list = childrenMap.get(d.parent_deck_id) ?? [];
+      list.push(d);
+      childrenMap.set(d.parent_deck_id, list);
+    }
   }
-  return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+
+  const cache = new Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }>();
+
+  function compute(deck: DeckWithStats) {
+    if (cache.has(deck.id)) return cache.get(deck.id)!;
+    let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+    let newReviewed = deck.new_reviewed_today ?? 0;
+    let newGraduated = deck.new_graduated_today ?? 0;
+    let reviewed = deck.reviewed_today ?? 0;
+    for (const sub of childrenMap.get(deck.id) ?? []) {
+      const s = compute(sub);
+      n += s.new_count; l += s.learning_count; r += s.review_count;
+      newReviewed += s.newReviewed;
+      newGraduated += s.newGraduated;
+      reviewed += s.reviewed;
+    }
+    const result = { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+    cache.set(deck.id, result);
+    return result;
+  }
+
+  for (const d of allDecks) compute(d);
+  return cache;
 }
 
 /** Calculate today's pending cards for a root deck, aggregating sub-decks and respecting daily limits.
  *  When globalNewRemaining is provided (plan mode), it represents the remaining global new-card
  *  budget across ALL objective decks (already reduced by cards studied in any objective deck today). */
-function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globalNewRemaining?: number) {
-  const raw = getAggregateRaw(deck, allDecks);
+function getDeckTodayStats(deck: DeckWithStats, aggregateMap: Map<string, AggregateStats>, globalNewRemaining?: number) {
+  const raw = aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
   const dailyReviewLimit = deck.daily_review_limit ?? 100;
 
   let newAvailable: number;
@@ -56,16 +78,16 @@ function getDeckTodayStats(deck: DeckWithStats, allDecks: DeckWithStats[], globa
   return { newAvailable, reviewAvailable, learningAvailable, pendingToday, studiedToday };
 }
 
-function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; allDecks: DeckWithStats[]; avgSecondsPerCard: number; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
+function DeckStudyCard({ deck, aggregateMap, studyMetrics, objectiveName, globalNewRemaining, allocatedNew }: { deck: DeckWithStats; aggregateMap: Map<string, AggregateStats>; studyMetrics: RealStudyMetrics; objectiveName?: string; globalNewRemaining?: number; allocatedNew?: number }) {
   const navigate = useNavigate();
-  const stats = getDeckTodayStats(deck, allDecks, allocatedNew != null ? allocatedNew : globalNewRemaining);
+  const stats = getDeckTodayStats(deck, aggregateMap, allocatedNew != null ? allocatedNew : globalNewRemaining);
   const { newAvailable: rawNewAvailable, reviewAvailable, learningAvailable, studiedToday } = stats;
   // If allocatedNew is provided, override newAvailable with it (already distributed)
   const newAvailable = allocatedNew != null ? Math.min(rawNewAvailable, allocatedNew) : rawNewAvailable;
   const pendingToday = newAvailable + reviewAvailable + learningAvailable;
   const totalToday = pendingToday + studiedToday;
   const progressPercent = totalToday > 0 ? Math.round((studiedToday / totalToday) * 100) : 0;
-  const estimatedMinutes = Math.round((pendingToday * avgSecondsPerCard) / 60);
+  const estimatedMinutes = Math.round(calculateRealStudyTime(newAvailable, learningAvailable, reviewAvailable, studyMetrics) / 60);
 
   const isComplete = pendingToday === 0 && totalToday > 0;
 
@@ -121,6 +143,7 @@ function DeckStudyCard({ deck, allDecks, avgSecondsPerCard, objectiveName, globa
 interface DeckCarouselProps {
   decks: DeckWithStats[];
   avgSecondsPerCard?: number;
+  studyMetrics?: RealStudyMetrics;
   hasPlan: boolean;
   planDeckIds?: string[];
   planDeckOrder?: string[];
@@ -129,9 +152,12 @@ interface DeckCarouselProps {
   distributedNewByDeck?: Map<string, number> | null;
 }
 
-export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
+export default function DeckCarousel({ decks, avgSecondsPerCard = 30, studyMetrics, hasPlan, planDeckIds, planDeckOrder, plansByDeckId, globalNewRemaining, distributedNewByDeck }: DeckCarouselProps) {
   const navigate = useNavigate();
+  const metrics = studyMetrics ?? DEFAULT_STUDY_METRICS;
 
+  // Pre-compute aggregate stats once — O(n) instead of O(n²) per render
+  const aggregateMap = useMemo(() => buildAggregateMap(decks), [decks]);
   // Desktop drag-to-scroll
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -192,8 +218,8 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     return [...sorted].sort((a, b) => {
       const allocA = distributedNewByDeck?.get(a.id);
       const allocB = distributedNewByDeck?.get(b.id);
-      const pendA = getDeckTodayStats(a, decks, allocA != null ? allocA : globalNewRemaining).pendingToday;
-      const pendB = getDeckTodayStats(b, decks, allocB != null ? allocB : globalNewRemaining).pendingToday;
+      const pendA = getDeckTodayStats(a, aggregateMap, allocA != null ? allocA : globalNewRemaining).pendingToday;
+      const pendB = getDeckTodayStats(b, aggregateMap, allocB != null ? allocB : globalNewRemaining).pendingToday;
       if (pendA > 0 && pendB === 0) return -1;
       if (pendA === 0 && pendB > 0) return 1;
       return 0;
@@ -219,7 +245,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
       const root = decks.find(d => d.id === rootId);
       if (root) {
         const allocated = distributedNewByDeck?.get(rootId);
-        const stats = getDeckTodayStats(root, decks, allocated != null ? allocated : globalNewRemaining);
+        const stats = getDeckTodayStats(root, aggregateMap, allocated != null ? allocated : globalNewRemaining);
         totalLearning += stats.learningAvailable;
         totalReview += stats.reviewAvailable;
         totalStudied += stats.studiedToday;
@@ -239,7 +265,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
     const roots = decks.filter(d => !d.is_archived && !d.parent_deck_id);
     let totalNew = 0, totalLearning = 0, totalReview = 0, totalStudied = 0, totalPending = 0;
     for (const root of roots) {
-      const stats = getDeckTodayStats(root, decks); // no plan = use deck limits
+      const stats = getDeckTodayStats(root, aggregateMap); // no plan = use deck limits
       totalNew += stats.newAvailable;
       totalLearning += stats.learningAvailable;
       totalReview += stats.reviewAvailable;
@@ -259,7 +285,7 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
   if (activeDecks.length === 0 && !hasNoDecksAtAll) return null;
 
   const estimatedTotalMinutes = activeStats
-    ? Math.round((activeStats.totalPending * avgSecondsPerCard) / 60)
+    ? Math.round(calculateRealStudyTime(activeStats.totalNew, activeStats.totalLearning, activeStats.totalReview, metrics) / 60)
     : 0;
 
   return (
@@ -318,8 +344,8 @@ export default function DeckCarousel({ decks, avgSecondsPerCard = 30, hasPlan, p
             <DeckStudyCard
               key={deck.id}
               deck={deck}
-              allDecks={decks}
-              avgSecondsPerCard={avgSecondsPerCard}
+              aggregateMap={aggregateMap}
+              studyMetrics={metrics}
               objectiveName={plansByDeckId?.[deck.id]}
               globalNewRemaining={globalNewRemaining}
               allocatedNew={distributedNewByDeck?.get(deck.id)}

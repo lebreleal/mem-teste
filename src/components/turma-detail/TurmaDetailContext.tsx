@@ -202,7 +202,7 @@ export const TurmaDetailProvider = ({ children }: { children: ReactNode }) => {
       }
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['turma-active-sub', turmaId] });
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast({ title: 'Assinatura ativada! 🎉', description: 'Você agora tem acesso por 7 dias.' });
     } catch (e: any) { toast({ title: 'Erro ao assinar', description: e.message, variant: 'destructive' }); }
     finally { setSubscribing(false); }

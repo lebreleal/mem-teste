@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { useMemo, useCallback } from 'react';
-import { computeNewCardAllocation } from '@/lib/studyUtils';
+import { computeNewCardAllocation, calculateRealStudyTime, deriveAvgSecondsPerCard, type RealStudyMetrics, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type DayKey = typeof DAY_KEYS[number];
@@ -107,7 +108,8 @@ export interface PlanMetrics {
   deckNewAllocation: Record<string, number>;
 }
 
-export function useStudyPlan() {
+export function useStudyPlan(options?: { full?: boolean }) {
+  const full = options?.full ?? false;
   const { user } = useAuth();
   const qc = useQueryClient();
   const userId = user?.id;
@@ -127,44 +129,29 @@ export function useStudyPlan() {
     enabled: !!userId,
   });
 
-  // ─── Fetch global capacity from profile ───
-  const capacityQuery = useQuery({
-    queryKey: ['global-capacity', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('daily_study_minutes, weekly_study_minutes, daily_new_cards_limit, weekly_new_cards')
-        .eq('id', userId!)
-        .single();
-      if (error) throw error;
-      return {
-        dailyMinutes: (data as any)?.daily_study_minutes as number ?? 60,
-        weeklyMinutes: (data as any)?.weekly_study_minutes as WeeklyMinutes | null,
-        dailyNewCardsLimit: (data as any)?.daily_new_cards_limit as number ?? 30,
-        weeklyNewCards: (data as any)?.weekly_new_cards as WeeklyNewCards | null,
-      };
-    },
-    enabled: !!userId,
-  });
+  // ─── Use centralized profile for global capacity ───
+  const profileQuery = useProfile();
+  const globalCapacity = useMemo(() => {
+    const p = profileQuery.data;
+    if (!p) return { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
+    return {
+      dailyMinutes: p.daily_study_minutes ?? 60,
+      weeklyMinutes: p.weekly_study_minutes as WeeklyMinutes | null,
+      dailyNewCardsLimit: p.daily_new_cards_limit ?? 30,
+      weeklyNewCards: p.weekly_new_cards as WeeklyNewCards | null,
+    };
+  }, [profileQuery.data]);
 
   const plans = plansQuery.data ?? [];
-  const globalCapacity = capacityQuery.data ?? { dailyMinutes: 60, weeklyMinutes: null, dailyNewCardsLimit: 30, weeklyNewCards: null };
 
-  // ─── Deck hierarchy for child→root resolution ───
-  const deckHierarchyQuery = useQuery({
-    queryKey: ['deck-hierarchy', userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('id, parent_deck_id')
-        .eq('user_id', userId!)
-        .eq('is_archived', false);
-      return data ?? [];
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60_000,
-  });
-  const deckHierarchy = deckHierarchyQuery.data ?? [];
+  // ─── Deck hierarchy from shared cache (avoids duplicate query) ───
+  const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+  const deckHierarchy = useMemo(() => {
+    if (!cachedDecks) return [];
+    return cachedDecks
+      .filter((d: any) => !d.is_archived)
+      .map((d: any) => ({ id: d.id as string, parent_deck_id: d.parent_deck_id as string | null }));
+  }, [cachedDecks]);
 
   const findRoot = useCallback((id: string): string => {
     const deck = deckHierarchy.find(d => d.id === id);
@@ -186,12 +173,27 @@ export function useStudyPlan() {
     return deckHierarchy.filter(d => !d.parent_deck_id).map(d => d.id);
   }, [plans, deckHierarchy]);
 
-  const avgQuery = useQuery({
-    queryKey: ['avg-seconds-per-card', userId],
+  const realMetricsQuery = useQuery({
+    queryKey: ['real-study-metrics', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_avg_seconds_per_card' as any, { p_user_id: userId });
+      const { data, error } = await supabase.rpc('get_user_real_study_metrics' as any, { p_user_id: userId });
       if (error) throw error;
-      return Number(data) || 30;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return DEFAULT_STUDY_METRICS;
+      const safeNum = (v: unknown, fallback: number): number => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      };
+      return {
+        avgNewSeconds: safeNum(row.avg_new_seconds, DEFAULT_STUDY_METRICS.avgNewSeconds),
+        avgLearningSeconds: safeNum(row.avg_learning_seconds, DEFAULT_STUDY_METRICS.avgLearningSeconds),
+        avgReviewSeconds: safeNum(row.avg_review_seconds, DEFAULT_STUDY_METRICS.avgReviewSeconds),
+        avgRelearningSeconds: safeNum(row.avg_relearning_seconds, DEFAULT_STUDY_METRICS.avgRelearningSeconds),
+        actualDailyMinutes: safeNum(row.actual_daily_minutes, DEFAULT_STUDY_METRICS.actualDailyMinutes),
+        totalReviews90d: safeNum(row.total_reviews_90d, 0),
+        avgReviewsPerNewCard: safeNum(row.avg_reviews_per_new_card, DEFAULT_STUDY_METRICS.avgReviewsPerNewCard),
+        avgLapseRate: safeNum(row.avg_lapse_rate, DEFAULT_STUDY_METRICS.avgLapseRate),
+      } as RealStudyMetrics;
     },
     enabled: !!userId,
     staleTime: 5 * 60_000,
@@ -230,19 +232,28 @@ export function useStudyPlan() {
   });
 
   // ─── Per-deck new card counts for proportional allocation ───
+  // Reuse the deck stats from the shared ['decks'] cache instead of calling
+  // get_all_user_deck_stats a second time. The useDecks hook already fetches
+  // this data and shares it via staleTime, so we just read from the cache.
   const perDeckStatsQuery = useQuery({
     queryKey: ['per-deck-new-counts', userId, expandedDeckIds],
     queryFn: async () => {
       if (allDeckIds.length === 0) return {} as Record<string, number>;
-      const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
-      if (error) throw error;
+      // Try to read from decks cache first (populated by useDecks → fetchDecksWithStats)
+      const cachedDecks = qc.getQueryData<any[]>(['decks', userId]);
+      let rows: { deck_id: string; new_count: number }[];
+      if (cachedDecks && cachedDecks.length > 0) {
+        rows = cachedDecks.map((d: any) => ({ deck_id: d.id, new_count: d.new_count ?? 0 }));
+      } else {
+        // Fallback: fetch directly (only on cold start before useDecks populates)
+        const { data, error } = await supabase.rpc('get_all_user_deck_stats' as any, { p_user_id: userId });
+        if (error) throw error;
+        rows = (data as any[]) ?? [];
+      }
       const map: Record<string, number> = {};
-      const rows = (data as any[]) ?? [];
-      // Include decks that belong to objectives OR are descendants of objective decks
       const expandedSet = new Set(expandedDeckIds);
       for (const row of rows) {
         if (expandedSet.has(row.deck_id)) {
-          // Aggregate under root ancestor
           const rootId = findRoot(row.deck_id);
           map[rootId] = (map[rootId] ?? 0) + (Number(row.new_count) || 0);
         }
@@ -266,7 +277,7 @@ export function useStudyPlan() {
       const sum = data.reduce((acc: number, d: any) => acc + (d.requested_retention ?? 0.9), 0);
       return sum / data.length;
     },
-    enabled: allDeckIds.length > 0,
+    enabled: full && allDeckIds.length > 0,
     staleTime: 5 * 60_000,
   });
 
@@ -275,7 +286,6 @@ export function useStudyPlan() {
     queryKey: ['plan-health', userId, plans.length],
     queryFn: async () => {
       if (plans.length === 0) return null;
-      // Only check last 14 days for consistency - much lighter than fetching all logs
       const since = new Date();
       since.setDate(since.getDate() - 14);
       const { count, error } = await supabase
@@ -284,12 +294,10 @@ export function useStudyPlan() {
         .eq('user_id', userId!)
         .gte('reviewed_at', since.toISOString());
       if (error) throw error;
-      // Rough consistency: did they study at least 10 of last 14 days?
-      // Approximate by checking if they have enough reviews (avg ~5 cards/day minimum)
       const activeDays = Math.min(14, Math.ceil((count ?? 0) / 5));
       return Math.min(100, Math.round((activeDays / 14) * 100));
     },
-    enabled: !!userId && plans.length > 0,
+    enabled: full && !!userId && plans.length > 0,
     staleTime: 10 * 60_000,
   });
 
@@ -299,7 +307,7 @@ export function useStudyPlan() {
     queryFn: async () => {
       if (allDeckIds.length === 0) return [];
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() + 1); // skip today (we use live metrics for today)
+      startDate.setDate(startDate.getDate() + 1);
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 6);
@@ -313,15 +321,16 @@ export function useStudyPlan() {
       if (error) throw error;
       return (data ?? []) as { scheduled_date: string }[];
     },
-    enabled: !!userId && allDeckIds.length > 0,
+    enabled: full && !!userId && allDeckIds.length > 0,
     staleTime: 3 * 60_000,
   });
 
   // ─── Consolidated metrics (global) ───
   const computed = useMemo<PlanMetrics | null>(() => {
-    if (avgQuery.data == null || !metricsQuery.data || !perDeckStatsQuery.data) return null;
+    if (!realMetricsQuery.data || !metricsQuery.data || !perDeckStatsQuery.data) return null;
     const raw = metricsQuery.data;
-    const avg = avgQuery.data;
+    const rm = realMetricsQuery.data;
+    const avg = deriveAvgSecondsPerCard(rm);
 
     const totalNew = Number(raw.total_new) || 0;
     const totalReview = Number(raw.total_review) || 0;
@@ -337,7 +346,8 @@ export function useStudyPlan() {
     const estimatedReviewsToday = totalReview > 0
       ? Math.min(totalReview, capacityCardsToday)
       : Math.min(totalLearning, Math.ceil(capacityCardsToday * 0.3));
-    const reviewMinutes = Math.round((estimatedReviewsToday * avg) / 60);
+    const reviewSeconds = calculateRealStudyTime(0, totalLearning, estimatedReviewsToday, rm);
+    const reviewMinutes = Math.round(reviewSeconds / 60);
     const remainingCapacity = Math.max(0, capacityCardsToday - estimatedReviewsToday);
 
     // ─── Smart new card allocation (shared pure function) ───
@@ -359,8 +369,9 @@ export function useStudyPlan() {
     }
 
     const dailyNewCards = Math.min(globalNewBudget, totalNew);
+    const newSeconds = calculateRealStudyTime(dailyNewCards, 0, 0, rm);
     const maxNewMinutes = Math.max(0, todayCapacityMinutes - reviewMinutes);
-    const newMinutes = Math.min(Math.round((dailyNewCards * avg) / 60), maxNewMinutes);
+    const newMinutes = Math.min(Math.round(newSeconds / 60), maxNewMinutes);
     const estimatedMinutesToday = reviewMinutes + newMinutes;
 
     const totalPending = totalNew + totalReview + totalLearning;
@@ -468,11 +479,12 @@ export function useStudyPlan() {
       projectedCompletionDate, weeklyCardData,
       forecastData, dailyNewCards, newCardsAllocation, deckNewAllocation,
     };
-  }, [plans, globalCapacity, avgQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
+  }, [plans, globalCapacity, realMetricsQuery.data, metricsQuery.data, perDeckStatsQuery.data, planHealthQuery.data, retentionQuery.data, forecastQuery.data]);
 
   // ─── Impact calculator (multi-objective) ───
   const calcImpact = useCallback((newMinutes: number) => {
-    const avg = avgQuery.data ?? 30;
+    const rm = realMetricsQuery.data ?? DEFAULT_STUDY_METRICS;
+    const avg = deriveAvgSecondsPerCard(rm);
     const raw = metricsQuery.data;
     if (plans.length === 0 || !raw) return null;
 
@@ -493,8 +505,7 @@ export function useStudyPlan() {
       const dayKey = DAY_KEYS[dayOfWeek];
       const reviewCount = forecastCards.filter(c => c.scheduled_date.slice(0, 10) === dayStr).length;
       const dailyNew = Math.min(Math.floor((newMinutes * 60) / avg), Number(raw.total_new) || 0);
-      const totalCards = reviewCount + dailyNew;
-      const totalMin = Math.round((totalCards * avg) / 60);
+      const totalMin = Math.round(calculateRealStudyTime(dailyNew, 0, reviewCount, rm) / 60);
       if (totalMin > newMinutes && totalMin > peakMin) {
         peakMin = totalMin;
         peakDay = DAY_LABELS[dayKey];
@@ -516,7 +527,7 @@ export function useStudyPlan() {
       return { cardsPerDay: newCardsPerDay, daysDiff: diff, daysNeeded: newDaysNeeded, peakDay, peakMin };
     }
     return { cardsPerDay: newCardsPerDay, daysDiff: null, daysNeeded: null, peakDay, peakMin };
-  }, [plans, avgQuery.data, metricsQuery.data, forecastQuery.data]);
+  }, [plans, realMetricsQuery.data, metricsQuery.data, forecastQuery.data]);
 
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['study-plans'] });
@@ -525,8 +536,8 @@ export function useStudyPlan() {
     qc.invalidateQueries({ queryKey: ['plan-health'] });
     qc.invalidateQueries({ queryKey: ['plan-retention'] });
     qc.invalidateQueries({ queryKey: ['plan-forecast'] });
-    qc.invalidateQueries({ queryKey: ['global-capacity'] });
-    qc.invalidateQueries({ queryKey: ['daily-new-cards-limit'] });
+    // global-capacity removed — profile handles it
+    qc.invalidateQueries({ queryKey: ['profile'] });
   }, [qc]);
 
   const createPlan = useMutation({
@@ -601,24 +612,13 @@ export function useStudyPlan() {
         ? vars.weeklyNewCards
         : (globalCapacity.weeklyNewCards ?? null);
 
-      qc.setQueryData(['daily-new-cards-limit', userId], {
-        daily_new_cards_limit: vars.limit,
-        weekly_new_cards: nextWeekly,
-      });
-
-      qc.setQueryData(['global-capacity', userId], (prev: any) => {
-        if (!prev) {
-          return {
-            dailyMinutes: globalCapacity.dailyMinutes,
-            weeklyMinutes: globalCapacity.weeklyMinutes,
-            dailyNewCardsLimit: vars.limit,
-            weeklyNewCards: nextWeekly,
-          };
-        }
+      // Update profile cache directly (replaces both daily-new-cards-limit and global-capacity)
+      qc.setQueryData(['profile', userId], (prev: any) => {
+        if (!prev) return prev;
         return {
           ...prev,
-          dailyNewCardsLimit: vars.limit,
-          weeklyNewCards: nextWeekly,
+          daily_new_cards_limit: vars.limit,
+          weekly_new_cards: nextWeekly,
         };
       });
 
@@ -642,9 +642,10 @@ export function useStudyPlan() {
     allDeckIds,
     expandedDeckIds,
     globalCapacity,
-    isLoading: plansQuery.isLoading || capacityQuery.isLoading,
+    isLoading: plansQuery.isLoading || profileQuery.isLoading,
     metrics: computed,
-    avgSecondsPerCard: avgQuery.data ?? 30,
+    avgSecondsPerCard: realMetricsQuery.data ? deriveAvgSecondsPerCard(realMetricsQuery.data) : 30,
+    realStudyMetrics: realMetricsQuery.data ?? DEFAULT_STUDY_METRICS,
     calcImpact,
     createPlan,
     updatePlan,

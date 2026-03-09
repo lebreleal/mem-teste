@@ -1,6 +1,5 @@
 /**
  * Hook to check Stripe subscription status and manage premium state.
- * Replaces the old usePremium that only checked profiles.premium_expires_at.
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,9 +9,11 @@ import { useCallback } from 'react';
 
 export interface SubscriptionStatus {
   subscribed: boolean;
-  plan?: 'monthly' | 'annual' | 'lifetime' | 'trial';
+  plan?: 'monthly' | 'annual' | 'lifetime' | 'trial' | 'gift';
   subscription_end?: string;
   is_trial?: boolean;
+  is_gift?: boolean;
+  gift_description?: string;
 }
 
 export function useSubscription() {
@@ -39,14 +40,17 @@ export function useSubscription() {
       return data as SubscriptionStatus;
     },
     enabled: !!user,
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const isPremium = data?.subscribed ?? false;
   const plan = data?.plan;
   const expiresAt = data?.subscription_end ?? null;
   const isTrial = data?.is_trial ?? false;
+  const isGift = data?.is_gift ?? false;
+  const giftDescription = data?.gift_description;
 
   const startCheckout = useCallback(async (priceId: string, mode: 'subscription' | 'payment') => {
     const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -68,14 +72,16 @@ export function useSubscription() {
 
   const refreshStatus = useCallback(() => {
     refetch();
-    queryClient.invalidateQueries({ queryKey: ['energy', user?.id] });
-  }, [refetch, queryClient, user?.id]);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+  }, [refetch, queryClient]);
 
   return {
     isPremium,
     plan,
     expiresAt,
     isTrial,
+    isGift,
+    giftDescription,
     isLoading,
     startCheckout,
     openPortal,

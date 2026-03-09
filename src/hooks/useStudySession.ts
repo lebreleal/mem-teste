@@ -14,7 +14,7 @@ export const useStudySession = (deckId: string, folderId?: string) => {
     queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
     queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
     enabled: !!user && !!(deckId || folderId),
-    staleTime: Infinity,       // never auto-refetch during the session
+    staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
@@ -30,12 +30,29 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         elapsedMs,
       );
     },
+    onSuccess: (_result, { card }) => {
+      // Optimistic: update study-stats cache incrementally
+      queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          todayCards: (old.todayCards ?? 0) + 1,
+        };
+      });
+    },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+      // OPTIMIZATION: Only invalidate lightweight queries during active study.
+      // Heavy queries (decks, deck-stats) are deferred to unmount or 10s delay.
+      // This prevents 50+ cache invalidations during a 50-card study session.
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-      queryClient.invalidateQueries({ queryKey: ['study-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+
+      // Defer heavy dashboard invalidations — they only matter when user leaves study
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['decks'] });
+        queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['study-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['activity-full'] });
+      }, 10_000); // 10s delay — user is still studying, no need to refetch dashboard
     },
   });
 

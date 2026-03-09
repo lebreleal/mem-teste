@@ -1,5 +1,3 @@
-
-
 # Melhorar cobertura de conteúdo na geração de decks por IA
 
 ## Implementado
@@ -28,11 +26,33 @@ Instrução adicionada ao final do prompt para o modelo verificar que cada pará
 - Opções limitadas a exatamente 4, max 8 palavras cada
 - Economia estimada: ~25% tokens de output
 
-## Trade-offs
-- +3x mais chamadas API (mais créditos gastos por geração)
-- Mais cards gerados por batch
-- Melhor cobertura especialmente para conteúdo denso (medicina, direito, etc.)
-- MC mais focado e pedagógico (diferenciação, não trivial)
+---
+
+# Refatoração de Monolitos (Fase 1)
+
+## Implementado
+
+### StudyPlan.tsx: 1.580 → ~500 linhas
+Extraídos 3 módulos:
+- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
+- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
+- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+
+### ManageDeck.tsx: 1.169 → ~900 linhas
+Extraído:
+- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+
+### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
+Extraído:
+- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+
+### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
+Extraído:
+- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+
+### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
+Extraído:
+- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
 
 ---
 
@@ -85,3 +105,100 @@ Helper que chama a RPC com tratamento de erro silencioso (log only).
 ### Nota sobre streaming
 Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
 Se o stream já começou, os créditos são considerados consumidos legitimamente.
+
+---
+
+# Dashboard Performance & Bug Fixes
+
+## Implementado
+
+### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
+- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
+- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
+- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
+
+### 2. Community deck updates consolidada em RPC server-side
+- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
+- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
+- Redução: 3 requests → 1
+
+### 3. useDecks com staleTime de 2 minutos
+- Antes: sem staleTime → refetch em cada re-render/focus
+- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
+- Redução de refetches desnecessários no Dashboard
+
+### 4. DeckCarousel: aggregate stats O(1) via Map
+- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
+- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
+- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
+
+## Resumo de impacto
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Streak display | BUG (sempre 0) | ✅ Correto |
+| Community update queries | 3 sequenciais | 1 RPC |
+| staleTime useDecks | 0 (default) | 2min |
+| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
+
+---
+
+# Otimização de Requisições do Dashboard
+
+## Implementado
+
+### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
+- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
+- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
+
+### Fase B: deck-hierarchy via cache (economia: -1 query)
+- Removida query separada `['deck-hierarchy']`
+- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
+
+### Fase C: Missões com cache (economia: -2 queries)
+- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
+- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
+
+### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
+- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
+
+### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
+- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
+
+### Fase F: Aggregate stats memoizado (economia: CPU)
+- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
+- Build O(n) uma vez, lookup O(1) por deck
+
+## Resumo de impacto
+| Otimização | Economia |
+|------------|----------|
+| useStudyPlan split (A) | -3 queries |
+| deck-hierarchy cache (B) | -1 query |
+| Missões com cache (C) | -2 queries |
+| useIsAdmin useQuery (D) | cache 10min |
+| Subscription polling (E) | -80% calls |
+| AggregateStats memo (F) | O(n²) → O(1) |
+| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
+
+---
+
+# Métricas Reais de Repetições por Sessão
+
+## Implementado
+
+### 1. RPC `get_user_real_study_metrics` atualizada
+Adicionados 2 novos campos:
+- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
+- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
+
+### 2. `calculateRealStudyTime` reescrita
+- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
+- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
+- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
+
+### 3. Interface `RealStudyMetrics` expandida
+- `avgReviewsPerNewCard: number` (mediana do histórico real)
+- `avgLapseRate: number` (taxa de erro em revisões)
+
+### 4. `useStudyPlan` mapeia novos campos da RPC
+- Fallbacks para contas sem histórico suficiente

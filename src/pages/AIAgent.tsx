@@ -240,7 +240,7 @@ const AIAgent = () => {
       }
 
       // Refresh energy after server-side deduction
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message || 'Erro ao consultar IA', variant: 'destructive' });
       setMessages(prev => {

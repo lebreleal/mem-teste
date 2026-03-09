@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useDecks, type DeckWithStats } from '@/hooks/useDecks';
 import { useFolders } from '@/hooks/useFolders';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface BreadcrumbItem { id: string | null; name: string }
@@ -50,29 +51,12 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; type: 'deck' | 'folder'; action: () => void } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
-  // Fetch global daily_new_cards_limit from profile
-  const globalNewLimitQuery = useQuery({
-    queryKey: ['daily-new-cards-limit', user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('daily_new_cards_limit, weekly_new_cards')
-        .eq('id', user!.id)
-        .single();
-      return data as any;
-    },
-    enabled: !!user,
-    staleTime: 5 * 60_000,
-    refetchOnMount: 'always',
-  });
+  // Use centralized profile cache instead of separate query
+  const profileQuery = useProfile();
+  const profileData = profileQuery.data;
 
-  const profileLimitData = globalNewLimitQuery.data as number | { daily_new_cards_limit?: number; weekly_new_cards?: Record<string, number> | null } | null | undefined;
-  const rawGlobalNewLimit = typeof profileLimitData === 'number'
-    ? profileLimitData
-    : profileLimitData?.daily_new_cards_limit ?? 9999;
-  const weeklyNewCardsProfile = (profileLimitData && typeof profileLimitData === 'object')
-    ? (profileLimitData.weekly_new_cards as Record<string, number> | null)
-    : null;
+  const rawGlobalNewLimit = profileData?.daily_new_cards_limit ?? 9999;
+  const weeklyNewCardsProfile = profileData?.weekly_new_cards ?? null;
   const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
   const todayGlobalNewLimit = (weeklyNewCardsProfile && weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]] != null)
     ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]
@@ -144,73 +128,21 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     [decks]
   );
 
-  /** Check which community decks have pending updates (source updated_at > local synced_at). */
-  const sourceTurmaDeckIds = useMemo(
-    () => communityDecks.map(d => d.source_turma_deck_id!).filter(Boolean),
-    [communityDecks]
-  );
+  /** Check which community decks have pending updates using server-side RPC. */
+  const hasCommunityDecks = communityDecks.length > 0;
   const pendingUpdatesQuery = useQuery({
-    queryKey: ['community-deck-updates', sourceTurmaDeckIds],
+    queryKey: ['community-deck-updates', user?.id],
     queryFn: async () => {
-      if (sourceTurmaDeckIds.length === 0) return new Set<string>();
-      const { data } = await supabase
-        .from('turma_decks')
-        .select('id, deck_id')
-        .in('id', sourceTurmaDeckIds);
-      if (!data || data.length === 0) return new Set<string>();
-
-      // Get source deck IDs and fetch the latest card update for each
-      const sourceDeckIds = data.map((td: any) => td.deck_id);
-
-      // Fetch both deck updated_at AND the latest card updated_at per source deck
-      const [decksResult, cardsResult] = await Promise.all([
-        supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds),
-        supabase.from('cards').select('deck_id, updated_at').in('deck_id', sourceDeckIds).order('updated_at', { ascending: false }),
-      ]);
-
-      // Build map: source_deck_id -> latest modification timestamp
-      // Use the most recent between deck.updated_at and max(cards.updated_at)
-      const latestModMap = new Map<string, string>();
-      for (const sd of (decksResult.data ?? []) as any[]) {
-        latestModMap.set(sd.id, sd.updated_at);
-      }
-      // Group cards by deck_id and take the max updated_at
-      const cardMaxMap = new Map<string, string>();
-      for (const c of (cardsResult.data ?? []) as any[]) {
-        if (!cardMaxMap.has(c.deck_id)) {
-          cardMaxMap.set(c.deck_id, c.updated_at); // already sorted desc, first is max
-        }
-      }
-      // Merge: use whichever is more recent
-      for (const [deckId, cardUpdated] of cardMaxMap) {
-        const deckUpdated = latestModMap.get(deckId);
-        if (!deckUpdated || new Date(cardUpdated) > new Date(deckUpdated)) {
-          latestModMap.set(deckId, cardUpdated);
-        }
-      }
-
-      // Build turma_deck_id -> latest modification timestamp
-      const turmaDeckToLatest = new Map<string, string>();
-      for (const td of data as any[]) {
-        const latest = latestModMap.get(td.deck_id);
-        if (latest) turmaDeckToLatest.set(td.id, latest);
-      }
-
-      // Compare with user's synced_at
+      const { data, error } = await supabase.rpc('get_community_deck_updates' as any, { p_user_id: user!.id });
+      if (error) return new Set<string>();
       const pending = new Set<string>();
-      for (const cd of communityDecks) {
-        const latestMod = turmaDeckToLatest.get(cd.source_turma_deck_id!);
-        if (latestMod && cd.source_turma_deck_id) {
-          const syncedAt = (cd as any).synced_at;
-          if (!syncedAt || new Date(latestMod) > new Date(syncedAt)) {
-            pending.add(cd.id);
-          }
-        }
+      for (const row of (data as any[]) ?? []) {
+        if (row.has_update) pending.add(row.local_deck_id);
       }
       return pending;
     },
-    enabled: !!user && sourceTurmaDeckIds.length > 0,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!user && hasCommunityDecks,
+    staleTime: 5 * 60_000,
   });
   const decksWithPendingUpdates = pendingUpdatesQuery.data ?? new Set<string>();
 
@@ -243,21 +175,37 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const getAllSubDecks = (parentId: string) =>
     decks.filter(d => d.parent_deck_id === parentId);
 
-  /** Returns raw (uncapped) aggregated counts across all descendants */
-  const getRawAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number } => {
-    const subs = getSubDecks(deck.id);
-    let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
-    let newReviewed = deck.new_reviewed_today ?? 0;
-    let newGraduated = deck.new_graduated_today ?? 0;
-    let reviewed = deck.reviewed_today ?? 0;
-    for (const sub of subs) {
-      const s = getRawAggregateStats(sub);
-      n += s.new_count; l += s.learning_count; r += s.review_count;
-      newReviewed += s.newReviewed;
-      newGraduated += s.newGraduated;
-      reviewed += s.reviewed;
-    }
-    return { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+  /** Memoized aggregate stats map — O(n) build, O(1) lookups */
+  const aggregateMap = useMemo(() => {
+    const map = new Map<string, { new_count: number; learning_count: number; review_count: number; newReviewed: number; newGraduated: number; reviewed: number }>();
+    const compute = (deckId: string) => {
+      if (map.has(deckId)) return map.get(deckId)!;
+      const deck = decks.find(d => d.id === deckId);
+      if (!deck) {
+        const empty = { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
+        map.set(deckId, empty);
+        return empty;
+      }
+      const subs = decks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      let n = deck.new_count, l = deck.learning_count, r = deck.review_count;
+      let newReviewed = deck.new_reviewed_today ?? 0;
+      let newGraduated = deck.new_graduated_today ?? 0;
+      let reviewed = deck.reviewed_today ?? 0;
+      for (const sub of subs) {
+        const s = compute(sub.id);
+        n += s.new_count; l += s.learning_count; r += s.review_count;
+        newReviewed += s.newReviewed; newGraduated += s.newGraduated; reviewed += s.reviewed;
+      }
+      const result = { new_count: n, learning_count: l, review_count: r, newReviewed, newGraduated, reviewed };
+      map.set(deckId, result);
+      return result;
+    };
+    for (const d of decks) compute(d.id);
+    return map;
+  }, [decks]);
+
+  const getRawAggregateStats = (deck: DeckWithStats) => {
+    return aggregateMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, newReviewed: 0, newGraduated: 0, reviewed: 0 };
   };
 
   // No sequential distribution — all plan decks share the same globalNewRemaining pool

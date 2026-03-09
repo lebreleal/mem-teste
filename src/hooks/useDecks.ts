@@ -14,6 +14,7 @@ export const useDecks = () => {
     queryKey: ['decks', user?.id],
     queryFn: () => deckService.fetchDecksWithStats(user!.id),
     enabled: !!user,
+    staleTime: 2 * 60_000, // 2 min — avoid refetch on every focus/render
   });
 
   const createDeck = useMutation({

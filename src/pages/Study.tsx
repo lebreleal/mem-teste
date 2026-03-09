@@ -6,6 +6,8 @@ import { useEnergy } from '@/hooks/useEnergy';
 import { getNextReadyIndex, parseStepToMinutes } from '@/lib/studyUtils';
 import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
+import { useTutorStream } from '@/hooks/useTutorStream';
+import { useStudyUndo } from '@/hooks/useStudyUndo';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
@@ -40,57 +42,37 @@ const Study = () => {
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
-    // Invalidate study queue so deck detail reloads fresh stats
     invalidateStudyQueries(queryClient);
-    if (deckId) {
-      navigate(`/decks/${deckId}`, { replace: true });
-    } else if (folderId) {
-      navigate(`/dashboard?folder=${folderId}`, { replace: true });
-    } else {
-      navigate('/dashboard', { replace: true });
-    }
+    if (deckId) navigate(`/decks/${deckId}`, { replace: true });
+    else if (folderId) navigate(`/dashboard?folder=${folderId}`, { replace: true });
+    else navigate('/dashboard', { replace: true });
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  // Local queue: cards that failed go back to end with updated scheduled_date
+  // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
   const [queueInitialized, setQueueInitialized] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [cardKey, setCardKey] = useState(0);
   const [waitingSeconds, setWaitingSeconds] = useState(0);
   const [learningTick, setLearningTick] = useState(0);
-  // Track unique card IDs reviewed to compute accurate progress
   const [initialQueueSize, setInitialQueueSize] = useState(0);
   const reviewedCardIdsRef = useRef(new Set<string>());
-
   const cardShownAt = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
 
-  // Reset scroll position when card changes
-  useEffect(() => {
-    if (mainScrollRef.current) {
-      mainScrollRef.current.scrollTop = 0;
-    }
-  }, [cardKey]);
+  // Reset scroll on card change
+  useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
 
-  const [hintResponse, setHintResponse] = useState<string | null>(null);
-  const [explainResponse, setExplainResponse] = useState<string | null>(null);
-  const [mcExplainResponse, setMcExplainResponse] = useState<string | null>(null);
-  const [isTutorLoading, setIsTutorLoading] = useState(false);
+  // Extracted hooks
+  const tutor = useTutorStream(energy, model, TUTOR_COST, cardKey);
+  const undo = useStudyUndo(setLocalQueue, setReviewCount, setCardKey, reviewedCardIdsRef);
+
   const [chatOpen, setChatOpen] = useState(false);
   const [explainInChat, setExplainInChat] = useState<string | false>(false);
   const [chatHasMessages, setChatHasMessages] = useState(false);
   const chatClearRef = useRef<(() => void) | null>(null);
-
-  // Undo state: store the previous queue snapshot + reviewCount + card DB state
-  const [undoSnapshot, setUndoSnapshot] = useState<{
-    queue: any[];
-    reviewCount: number;
-    cardKey: number;
-    cardId: string;
-    prevCardState: { stability: number; difficulty: number; state: number; scheduled_date: string; last_reviewed_at: string | null };
-  } | null>(null);
 
   // Initialize local queue from fetched data (once)
   useEffect(() => {
@@ -101,8 +83,7 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
-  // Bug fix: clear stale study-queue cache on unmount so re-entering
-  // the study page always fetches fresh data from the server.
+  // Clear stale cache on unmount
   const studyQueueKey = useMemo(
     () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
     [deckId, folderId],
@@ -115,28 +96,20 @@ const Study = () => {
     };
   }, [queryClient, studyQueueKey]);
 
-  // getNextReadyIndex imported from studyUtils
-
   const [isTransitioning, setIsTransitioning] = useState(false);
-  // Determine current card considering learning step timing
   const readyIndex = useMemo(() => getNextReadyIndex(localQueue),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [localQueue, waitingSeconds, learningTick]);
   const nextCard = readyIndex >= 0 ? localQueue[readyIndex] : null;
 
-  // Lock the displayed card — only update when cardKey changes (user rated) or during init.
-  // Using queueInitialized ensures displayedCard is set on first load so the
-  // volatile `nextCard` fallback is never used during an active review.
   const [displayedCard, setDisplayedCard] = useState<any>(null);
   useEffect(() => {
-    if (!isTransitioning) {
-      setDisplayedCard(nextCard);
-    }
+    if (!isTransitioning) setDisplayedCard(nextCard);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
-  // Force re-render when the soonest learning card's timer expires
+  // Force re-render when learning card timer expires
   useEffect(() => {
     const now = Date.now();
     const futureTimes = localQueue
@@ -151,20 +124,14 @@ const Study = () => {
   }, [localQueue]);
   const allWaiting = localQueue.length > 0 && readyIndex < 0;
 
-  // Countdown timer when all remaining cards are in learning steps
+  // Countdown timer
   useEffect(() => {
     if (!allWaiting) { setWaitingSeconds(0); return; }
     const now = Date.now();
     const soonest = Math.min(...localQueue.map(c => new Date(c.scheduled_date).getTime()));
     const remaining = Math.max(0, Math.ceil((soonest - now) / 1000));
     setWaitingSeconds(remaining);
-
-    // If already ready (scheduled_date in the past), force immediate recomputation
-    if (remaining <= 0) {
-      setLearningTick(prev => prev + 1);
-      return;
-    }
-
+    if (remaining <= 0) { setLearningTick(prev => prev + 1); return; }
     const interval = setInterval(() => {
       const r = Math.max(0, Math.ceil((soonest - Date.now()) / 1000));
       setWaitingSeconds(r);
@@ -173,158 +140,27 @@ const Study = () => {
     return () => clearInterval(interval);
   }, [allWaiting, localQueue]);
 
-  // Progress based on cards that LEFT the queue (graduated or removed)
   const cardsCompleted = initialQueueSize - localQueue.length;
-  const progressPercent = initialQueueSize > 0
-    ? Math.min(100, (cardsCompleted / initialQueueSize) * 100)
-    : 0;
+  const progressPercent = initialQueueSize > 0 ? Math.min(100, (cardsCompleted / initialQueueSize) * 100) : 0;
 
-  const tutorAbortRef = useRef<AbortController | null>(null);
-
+  // Open chat when streaming content arrives
+  const activeStreamingResponse = explainInChat === 'explain-mc' ? tutor.mcExplainResponse : explainInChat === 'explain' ? tutor.explainResponse : null;
   useEffect(() => {
-    setHintResponse(null);
-    setExplainResponse(null);
-    setMcExplainResponse(null);
-    // Cancel any pending tutor request when card changes
-    if (tutorAbortRef.current) {
-      tutorAbortRef.current.abort();
-      tutorAbortRef.current = null;
-    }
-    setIsTutorLoading(false);
-  }, [cardKey]);
-
-  useEffect(() => {
-    return () => {
-      if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current);
-    };
-  }, []);
-
-  // Open chat modal when first streaming content arrives for explain-in-chat
-  const activeStreamingResponse = explainInChat === 'explain-mc' ? mcExplainResponse : explainInChat === 'explain' ? explainResponse : null;
-  useEffect(() => {
-    if (explainInChat && activeStreamingResponse && !chatOpen) {
-      setChatOpen(true);
-    }
+    if (explainInChat && activeStreamingResponse && !chatOpen) setChatOpen(true);
   }, [explainInChat, activeStreamingResponse, chatOpen]);
 
-  const handleTutorRequest = useCallback(async (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => {
-    if (!currentCard || energy < TUTOR_COST) return;
-    if (tutorAbortRef.current) tutorAbortRef.current.abort();
-    const controller = new AbortController();
-    tutorAbortRef.current = controller;
+  useEffect(() => {
+    return () => { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); };
+  }, []);
 
-    const isMcExplain = options?.action === 'explain-mc';
-    const isExplain = options?.action === 'explain';
-    const setter = isMcExplain ? setMcExplainResponse : isExplain ? setExplainResponse : setHintResponse;
-
-    setIsTutorLoading(true);
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token || '';
-
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-tutor`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({
-          frontContent: currentCard.front_content,
-          backContent: currentCard.back_content,
-          action: options?.action,
-          mcOptions: options?.mcOptions,
-          correctIndex: options?.correctIndex,
-          selectedIndex: options?.selectedIndex,
-          aiModel: model,
-          energyCost: TUTOR_COST,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || 'Erro ao consultar IA');
-      }
-
-      const reader = resp.body?.getReader();
-      if (!reader) throw new Error('No stream');
-
-      const decoder = new TextDecoder();
-      let content = '';
-      let textBuffer = '';
-
-      let streamDone = false;
-      while (!streamDone) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') { streamDone = true; break; }
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              content += delta;
-              const snapshot = content;
-              setter(snapshot);
-            }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
-      }
-
-      // Flush any remaining buffer
-      if (textBuffer.trim()) {
-        for (let raw of textBuffer.split('\n')) {
-          if (!raw) continue;
-          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
-          if (!raw.startsWith('data: ')) continue;
-          const jsonStr = raw.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              content += delta;
-              setter(content);
-            }
-          } catch { /* ignore partial leftovers */ }
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['energy'] });
-    } catch (err: any) {
-      if (controller.signal.aborted) return;
-      toast({ title: 'Erro ao consultar o Tutor', description: err.message, variant: 'destructive' });
-    } finally {
-      if (!controller.signal.aborted) setIsTutorLoading(false);
-    }
-  }, [currentCard, energy, toast, model, TUTOR_COST, queryClient]);
-
-  // isTransitioning moved earlier (before currentCard computation)
-
-  // Guard against double-submission of the same card
   const submittingRef = useRef<string | null>(null);
 
   const handleRate = useCallback((rating: Rating) => {
     if (!currentCard || isTransitioning) return;
-    // Prevent double-click on the same card
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
 
-    // Save undo snapshot before modifying (including card DB state for revert)
-    setUndoSnapshot({
+    undo.saveSnapshot({
       queue: [...localQueue],
       reviewCount,
       cardKey,
@@ -337,12 +173,7 @@ const Study = () => {
         last_reviewed_at: currentCard.last_reviewed_at ?? null,
       },
     });
-    // Cancel any pending tutor request so it doesn't block
-    if (tutorAbortRef.current) {
-      tutorAbortRef.current.abort();
-      tutorAbortRef.current = null;
-    }
-    setIsTutorLoading(false);
+    tutor.abortTutor();
     const elapsed = Date.now() - cardShownAt.current;
 
     if (elapsed < FAST_THRESHOLD_MS) {
@@ -350,20 +181,13 @@ const Study = () => {
       fastWarningTimer.current = setTimeout(() => {}, 3000);
     }
 
-    if (rating > 2) {
-      addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
-    }
+    if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
 
-    // ── OPTIMISTIC UPDATE: update local queue IMMEDIATELY ──
-    // Heuristic: Again(1) always stays in session; Hard(2) on learning stays;
-    // everything else graduates/removes. This matches FSRS & SM-2 behavior 100%.
     const shouldKeep = rating === 1 || (rating === 2 && currentCard.state !== 2);
-
     reviewedCardIdsRef.current.add(currentCard.id);
     setReviewCount(prev => prev + 1);
 
     if (shouldKeep) {
-      // Estimate scheduled_date from deck learning steps
       const steps = deckConfig?.learning_steps ?? ['1', '10'];
       const currentStep = currentCard.learning_step ?? 0;
       const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
@@ -375,17 +199,11 @@ const Study = () => {
       setLocalQueue(prev => {
         const idx = prev.findIndex(c => c.id === currentCard.id);
         if (idx < 0) return prev;
-        const updatedCard = {
-          ...prev[idx],
-          state: estimatedState,
-          scheduled_date: estimatedDate,
-          learning_step: stepIdx,
-        };
+        const updatedCard = { ...prev[idx], state: estimatedState, scheduled_date: estimatedDate, learning_step: stepIdx };
         const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
         return [...without, updatedCard];
       });
     } else {
-      // Remove from session + bury cloze siblings
       const buriedSiblingIds: string[] = [];
       setLocalQueue(prev => {
         let filtered = prev.filter(c => c.id !== currentCard.id);
@@ -416,78 +234,29 @@ const Study = () => {
       }
     }
 
-    // Advance card immediately — no waiting for DB
-    setCardKey(prev => prev + 1);
-    cardShownAt.current = Date.now();
-    submittingRef.current = null;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCardKey(prev => prev + 1);
+      cardShownAt.current = Date.now();
+      submittingRef.current = null;
+      setIsTransitioning(false);
+    }, 200);
 
-    // ── ASYNC DB PERSIST ──
     submitReview.mutate(
       { card: currentCard, rating, elapsedMs: elapsed },
       {
         onSuccess: (result) => {
-          // Patch learning card with real algorithm values (stability, difficulty, scheduled_date)
           if (shouldKeep && result.interval_days === 0) {
             setLocalQueue(prev => prev.map(c =>
               c.id === currentCard.id
-                ? {
-                    ...c,
-                    state: result.state,
-                    stability: result.stability,
-                    difficulty: result.difficulty,
-                    scheduled_date: result.scheduled_date,
-                    learning_step: result.learning_step ?? 0,
-                  }
+                ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 }
                 : c
             ));
           }
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig]);
-
-  const handleUndo = useCallback(async () => {
-    if (!undoSnapshot) return;
-    // Revert local state
-    setLocalQueue(undoSnapshot.queue);
-    setReviewCount(undoSnapshot.reviewCount);
-    setCardKey(undoSnapshot.cardKey);
-    // Remove the undone card from reviewed set if it wasn't in the snapshot queue as already-reviewed
-    reviewedCardIdsRef.current.delete(undoSnapshot.cardId);
-    setUndoSnapshot(null);
-
-    // Revert card in DB to previous state
-    try {
-      await supabase
-        .from('cards')
-        .update({
-          stability: undoSnapshot.prevCardState.stability,
-          difficulty: undoSnapshot.prevCardState.difficulty,
-          state: undoSnapshot.prevCardState.state,
-          scheduled_date: undoSnapshot.prevCardState.scheduled_date,
-          last_reviewed_at: undoSnapshot.prevCardState.last_reviewed_at,
-        } as any)
-        .eq('id', undoSnapshot.cardId);
-
-      // Delete the most recent review_log for this card
-      const { data: logs } = await supabase
-        .from('review_logs')
-        .select('id')
-        .eq('card_id', undoSnapshot.cardId)
-        .order('reviewed_at', { ascending: false })
-        .limit(1);
-      if (logs && logs.length > 0) {
-        await supabase.from('review_logs').delete().eq('id', logs[0].id);
-      }
-
-      // Revert energy/stats counters
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-    } catch {
-      toast({ title: 'Erro ao desfazer no banco', variant: 'destructive' });
-    }
-  }, [undoSnapshot, queryClient, toast]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor]);
 
   if (isLoading || (!queueInitialized && isFetching)) {
     return (
@@ -508,15 +277,14 @@ const Study = () => {
           <p className="mt-2 text-lg text-muted-foreground">
             Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
           </p>
-           <Button onClick={goBack} className="mt-8 gap-2">
-             <ArrowLeft className="h-4 w-4" /> Voltar
+          <Button onClick={goBack} className="mt-8 gap-2">
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
         </div>
       </div>
     );
   }
 
-  // All remaining cards are learning and waiting for their step timer
   if (allWaiting) {
     const mins = Math.floor(waitingSeconds / 60);
     const secs = waitingSeconds % 60;
@@ -561,20 +329,11 @@ const Study = () => {
         <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 text-muted-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-
         <div className="flex items-center gap-1.5 sm:gap-2.5">
-          <button
-            onClick={toggleTheme}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label="Alternar tema"
-          >
+          <button onClick={toggleTheme} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            aria-label="Pomodoro"
-          >
+          <button onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Pomodoro">
             <Timer className="h-3.5 w-3.5" />
           </button>
           <div className="flex items-center gap-1 rounded-xl px-2 py-1" style={{ background: 'hsl(var(--energy-purple) / 0.1)' }}>
@@ -586,20 +345,15 @@ const Study = () => {
         </div>
       </header>
 
-      {/* Progress bar */}
       <div className="h-1.5 w-full bg-muted/40">
         <div
           className="h-full transition-all duration-500 ease-out"
-          style={{
-            width: `${progressPercent}%`,
-            background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`,
-            borderRadius: '0 4px 4px 0',
-          }}
+          style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }}
         />
       </div>
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
-        <div key={cardKey} className="w-full animate-fade-in">
+        <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
           <FlashCard
             cardId={currentCard.id}
             frontContent={currentCard.front_content}
@@ -618,43 +372,34 @@ const Study = () => {
             deckConfig={deckConfig}
             energy={energy}
             tutorCost={TUTOR_COST}
-            onTutorRequest={handleTutorRequest}
-            isTutorLoading={isTutorLoading}
-            hintResponse={hintResponse}
-            explainResponse={explainResponse}
-            mcExplainResponse={mcExplainResponse}
-            canUndo={!!undoSnapshot}
-            onUndo={handleUndo}
+            onTutorRequest={(options) => tutor.handleTutorRequest(currentCard, options)}
+            isTutorLoading={tutor.isTutorLoading}
+            hintResponse={tutor.hintResponse}
+            explainResponse={tutor.explainResponse}
+            mcExplainResponse={tutor.mcExplainResponse}
+            canUndo={undo.canUndo}
+            onUndo={undo.handleUndo}
             onOpenExplainChat={(options) => {
               const action = options?.action || 'explain';
-              // Reset response states
-              if (action === 'explain') setExplainResponse(null);
-              if (action === 'explain-mc') setMcExplainResponse(null);
               setExplainInChat(action);
-              // Clear old messages for fresh explanation
               chatClearRef.current?.();
-              // Don't open modal yet — it opens when content arrives (via useEffect)
-              handleTutorRequest(options || { action: 'explain' });
+              tutor.handleTutorRequest(currentCard, options || { action: 'explain' });
             }}
             actions={
               <StudyCardActions
                 card={currentCard}
                 isLiveDeck={isLiveDeck}
-              onCardUpdated={(updatedFields) => {
+                onCardUpdated={(updatedFields) => {
                   setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
-                  // Update displayedCard directly so the edit is visible
-                  // WITHOUT bumping cardKey (which would swap to a queued learning card)
                   setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
                 }}
                 onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
                 onCardBuried={() => {
-                  // Remove this card + cloze siblings from the local queue
                   setLocalQueue(prev => {
                     let filtered = prev.filter(c => c.id !== currentCard.id);
                     if (currentCard.card_type === 'cloze') {
                       const sibIds = getSiblingIds(currentCard, filtered);
                       if (sibIds.length > 0) {
-                        // Bury siblings in DB too
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
                         tomorrow.setHours(0, 0, 0, 0);
@@ -674,9 +419,7 @@ const Study = () => {
                       const upd = updates.find(u => u.id === c.id);
                       return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
                     });
-                    if (deletedIds.length > 0) {
-                      q = q.filter(c => !deletedIds.includes(c.id));
-                    }
+                    if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id));
                     return q;
                   });
                 }}
@@ -694,7 +437,7 @@ const Study = () => {
           onOpenChange={setChatOpen}
           cardContext={currentCard ? { front: currentCard.front_content, back: currentCard.back_content } : undefined}
           streamingResponse={explainInChat ? activeStreamingResponse : undefined}
-          isStreamingResponse={explainInChat ? isTutorLoading : false}
+          isStreamingResponse={explainInChat ? tutor.isTutorLoading : false}
           onClearStreaming={() => setExplainInChat(false)}
           resetKey={cardKey}
           onHasMessagesChange={setChatHasMessages}

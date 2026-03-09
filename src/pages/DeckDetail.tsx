@@ -16,6 +16,46 @@ import { supabase } from '@/integrations/supabase/client';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 
+/** Detect if a deck is linked to a community/marketplace source */
+function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
+  if (!deck) return false;
+  if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
+  let parentId = deck.parent_deck_id;
+  while (parentId) {
+    const parent = decks.find((d: any) => d.id === parentId);
+    if (!parent) break;
+    if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
+    parentId = parent.parent_deck_id;
+  }
+  return false;
+}
+
+/** Resolve source deck ID from a linked deck — single unified query */
+async function resolveSourceDeckId(deck: any): Promise<string | null> {
+  const sourceTurmaDeckId = deck?.source_turma_deck_id;
+  const sourceListingId = deck?.source_listing_id;
+
+  if (sourceTurmaDeckId) {
+    const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', sourceTurmaDeckId).maybeSingle();
+    if (td?.deck_id) return td.deck_id;
+  }
+
+  if (sourceListingId) {
+    const { data: listing } = await supabase.from('marketplace_listings').select('deck_id').eq('id', sourceListingId).maybeSingle();
+    if (listing?.deck_id) return listing.deck_id;
+  }
+
+  if (deck?.is_live_deck) {
+    const { data: original } = await supabase
+      .from('decks').select('id')
+      .eq('name', deck.name).eq('is_public', true).neq('user_id', deck.user_id)
+      .limit(1).maybeSingle();
+    if (original?.id) return original.id;
+  }
+
+  return null;
+}
+
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
@@ -23,84 +63,33 @@ const DeckDetailContent = () => {
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  // Detect linked community deck
-  const isLinkedDeck = useMemo(() => {
-    if (!deck) return false;
-    if ((deck as any)?.source_turma_deck_id || (deck as any)?.source_listing_id || (deck as any)?.is_live_deck) return true;
-    let parentId = (deck as any)?.parent_deck_id;
-    while (parentId) {
-      const parent = decks.find((d: any) => d.id === parentId);
-      if (!parent) break;
-      if ((parent as any).source_turma_deck_id || (parent as any).source_listing_id || (parent as any).is_live_deck) return true;
-      parentId = (parent as any).parent_deck_id;
-    }
-    return false;
-  }, [deck, decks]);
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
 
-  // Fetch source deck owner info for linked decks
-  const { data: sourceInfo } = useQuery({
-    queryKey: ['linked-deck-source-info', deckId],
+  // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
+  const { data: sourceData } = useQuery({
+    queryKey: ['linked-deck-source', deckId],
     queryFn: async () => {
-      let sourceDeckId: string | null = null;
-      const sourceTurmaDeckId = (deck as any)?.source_turma_deck_id;
-      const sourceListingId = (deck as any)?.source_listing_id;
-
-      // 1) Via turma_decks
-      if (sourceTurmaDeckId) {
-        const { data: td } = await supabase
-          .from('turma_decks')
-          .select('deck_id')
-          .eq('id', sourceTurmaDeckId)
-          .maybeSingle();
-        sourceDeckId = td?.deck_id ?? null;
-      }
-
-      // 2) Via marketplace listing
-      if (!sourceDeckId && sourceListingId) {
-        const { data: listing } = await supabase
-          .from('marketplace_listings')
-          .select('deck_id')
-          .eq('id', sourceListingId)
-          .maybeSingle();
-        sourceDeckId = listing?.deck_id ?? null;
-      }
-
-      // 3) Fallback: is_live_deck by name match
-      if (!sourceDeckId && (deck as any)?.is_live_deck) {
-        const { data: original } = await supabase
-          .from('decks')
-          .select('id')
-          .eq('name', (deck as any).name)
-          .eq('is_public', true)
-          .neq('user_id', (deck as any).user_id)
-          .limit(1)
-          .maybeSingle();
-        sourceDeckId = original?.id ?? null;
-      }
-
+      const sourceDeckId = await resolveSourceDeckId(deck);
       if (!sourceDeckId) return null;
 
-      const { data: sourceDeck } = await supabase
-        .from('decks')
-        .select('user_id, updated_at')
-        .eq('id', sourceDeckId)
-        .single();
+      const [deckResult, profileResult] = await Promise.all([
+        supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single(),
+        // We'll get the profile after we know the user_id
+        Promise.resolve(null),
+      ]);
 
-      if (!sourceDeck) return null;
+      if (!deckResult.data) return { sourceDeckId, ownerName: 'Criador', updatedAt: null };
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', sourceDeck.user_id)
-        .single();
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', deckResult.data.user_id).single();
 
       return {
+        sourceDeckId,
         ownerName: profile?.name ?? 'Criador',
-        updatedAt: sourceDeck.updated_at,
+        updatedAt: deckResult.data.updated_at,
       };
     },
     enabled: isLinkedDeck && !!deck,
-    staleTime: 60_000,
+    staleTime: 120_000,
   });
 
   if (deckLoading || allCardsLoading) {
@@ -125,19 +114,23 @@ const DeckDetailContent = () => {
               <h1 className="font-display text-base sm:text-xl font-bold text-foreground truncate">
                 {(deck as any)?.name ?? 'Baralho'}
               </h1>
-              {isLinkedDeck && sourceInfo ? (
+              {isLinkedDeck && sourceData ? (
                 <p className="text-[11px] text-muted-foreground">
-                  por <span className="font-semibold text-foreground">{sourceInfo.ownerName}</span>
+                  por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
                   <span className="mx-1.5 text-border">·</span>
                   <span className="inline-flex items-center gap-1">
                     <Layers className="h-3 w-3" />
                     {totalCards} cards
                   </span>
-                  <span className="mx-1.5 text-border">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <RefreshCw className="h-2.5 w-2.5" />
-                    {formatDistanceToNow(new Date(sourceInfo.updatedAt), { addSuffix: true, locale: ptBR })}
-                  </span>
+                  {sourceData.updatedAt && (
+                    <>
+                      <span className="mx-1.5 text-border">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        {formatDistanceToNow(new Date(sourceData.updatedAt), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </>
+                  )}
                 </p>
               ) : (
                 <button
@@ -184,9 +177,9 @@ const DeckDetailContent = () => {
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
         <DeckStatsCard />
-        <DeckTagsSection deckId={deckId!} />
+        <DeckTagsSection deckId={deckId!} isLinkedDeck={isLinkedDeck} />
         {isLinkedDeck ? (
-          <LinkedDeckTabs deckId={deckId!} />
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} />
         ) : (
           <CardList />
         )}
@@ -208,49 +201,21 @@ const DeckDetailContent = () => {
 };
 
 /** Tabs component for linked decks: Cards + Sugestões */
-const LinkedDeckTabs = ({ deckId }: { deckId: string }) => {
-  const { deck, decks, cardCounts } = useDeckDetail();
-
-  // Resolve the original deck ID for fetching suggestions
-  const { data: resolvedDeckId } = useQuery({
-    queryKey: ['resolved-deck-id', deckId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id')
-        .eq('id', deckId)
-        .single();
-      if (!data) return deckId;
-
-      if (data.source_turma_deck_id) {
-        const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', data.source_turma_deck_id).maybeSingle();
-        if (td?.deck_id) return td.deck_id;
-      }
-      if (data.source_listing_id) {
-        const { data: listing } = await supabase.from('marketplace_listings').select('deck_id').eq('id', data.source_listing_id).maybeSingle();
-        if (listing?.deck_id) return listing.deck_id;
-      }
-      if (data.is_live_deck) {
-        const { data: original } = await supabase.from('decks').select('id').eq('name', data.name).eq('is_public', true).neq('user_id', data.user_id).limit(1).maybeSingle();
-        if (original?.id) return original.id;
-      }
-      return deckId;
-    },
-    staleTime: 120_000,
-  });
+const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; resolvedSourceDeckId: string | null }) => {
+  const { cardCounts } = useDeckDetail();
+  const effectiveDeckId = resolvedSourceDeckId ?? deckId;
 
   const { data: suggestionCount = 0 } = useQuery({
-    queryKey: ['suggestion-count', resolvedDeckId],
+    queryKey: ['suggestion-count', effectiveDeckId],
     queryFn: async () => {
-      if (!resolvedDeckId) return 0;
       const { count } = await supabase
         .from('deck_suggestions')
         .select('id', { count: 'exact', head: true })
-        .eq('deck_id', resolvedDeckId)
+        .eq('deck_id', effectiveDeckId)
         .eq('status', 'pending');
       return count ?? 0;
     },
-    enabled: !!resolvedDeckId,
+    enabled: !!effectiveDeckId,
     staleTime: 60_000,
   });
 
@@ -276,7 +241,7 @@ const LinkedDeckTabs = ({ deckId }: { deckId: string }) => {
         <CardList />
       </TabsContent>
       <TabsContent value="suggestions" className="mt-4">
-        <SuggestionsList deckId={resolvedDeckId ?? deckId} />
+        <SuggestionsList deckId={effectiveDeckId} />
       </TabsContent>
     </Tabs>
   );
@@ -351,24 +316,9 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
   );
 };
 
-const DeckTagsSection = ({ deckId }: { deckId: string }) => {
-  const { deck, decks } = useDeckDetail();
+const DeckTagsSection = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
   const { data: tags = [] } = useDeckTags(deckId);
   const { addTag, removeTag } = useDeckTagMutations(deckId);
-
-  const isLinkedDeck = (() => {
-    if ((deck as any)?.source_turma_deck_id) return true;
-    if ((deck as any)?.source_listing_id) return true;
-    if ((deck as any)?.is_live_deck) return true;
-    let parentId = (deck as any)?.parent_deck_id;
-    while (parentId) {
-      const parent = decks.find((d: any) => d.id === parentId);
-      if (!parent) break;
-      if ((parent as any).source_turma_deck_id || (parent as any).source_listing_id || (parent as any).is_live_deck) return true;
-      parentId = (parent as any).parent_deck_id;
-    }
-    return false;
-  })();
 
   if (isLinkedDeck) {
     if (tags.length === 0) return null;
@@ -385,6 +335,8 @@ const DeckTagsSection = ({ deckId }: { deckId: string }) => {
       </div>
     );
   }
+
+  const { deck } = useDeckDetail();
 
   return (
     <div className="space-y-1.5">

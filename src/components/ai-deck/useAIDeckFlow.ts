@@ -397,7 +397,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     // Server logs token usage per batch automatically.
 
-    queryClient.invalidateQueries({ queryKey: ['energy'] });
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
 
     // Bloco 4: Deduplicate cards across all batches
     const dedupedCards = deduplicateCards(allCards);
@@ -481,12 +481,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         queryClient.invalidateQueries({ queryKey: ['tags'] });
       }
 
-      // Trigger auto-tag-cards in background (fire and forget)
-      if (targetDeckId) {
-        supabase.functions.invoke('auto-tag-cards', { body: { deckId: targetDeckId } })
-          .then(() => { queryClient.invalidateQueries({ queryKey: ['tags'] }); })
-          .catch(e => console.error('Auto-tag failed:', e));
-      }
+      // Auto-tagging removed — tags are only applied when user explicitly selects them
 
 
       // If opened from pending review, remove the pending item

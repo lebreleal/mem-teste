@@ -2478,6 +2478,7 @@ export type Database = {
           memocoins: number
           name: string
           onboarding_completed: boolean
+          premium_expires_at: string
           successful_cards_counter: number
         }[]
       }
@@ -2585,6 +2586,14 @@ export type Database = {
         }[]
       }
       generate_tag_slug: { Args: { p_name: string }; Returns: string }
+      get_activity_daily_breakdown: {
+        Args: {
+          p_days?: number
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_all_user_deck_stats: {
         Args: { p_tz_offset_minutes?: number; p_user_id: string }
         Returns: {
@@ -2598,6 +2607,13 @@ export type Database = {
         }[]
       }
       get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
+      get_community_deck_updates: {
+        Args: { p_user_id: string }
+        Returns: {
+          has_update: boolean
+          local_deck_id: string
+        }[]
+      }
       get_community_full_preview: {
         Args: { p_turma_id: string }
         Returns: Json
@@ -2673,9 +2689,30 @@ export type Database = {
           review_reviewed_today: number
         }[]
       }
+      get_study_stats_summary: {
+        Args: { p_tz_offset_minutes?: number; p_user_id: string }
+        Returns: Json
+      }
       get_turma_role: {
         Args: { _turma_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["turma_role"]
+      }
+      get_user_performance_summary: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_user_real_study_metrics: {
+        Args: { p_user_id: string }
+        Returns: {
+          actual_daily_minutes: number
+          avg_lapse_rate: number
+          avg_learning_seconds: number
+          avg_new_seconds: number
+          avg_relearning_seconds: number
+          avg_review_seconds: number
+          avg_reviews_per_new_card: number
+          total_reviews_90d: number
+        }[]
       }
       has_role: {
         Args: {
@@ -2688,6 +2725,7 @@ export type Database = {
         Args: { _permission: string; _turma_id: string; _user_id: string }
         Returns: boolean
       }
+      insert_review_batch: { Args: { p_reviews: Json }; Returns: undefined }
       is_turma_member: {
         Args: { _turma_id: string; _user_id: string }
         Returns: boolean
