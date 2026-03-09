@@ -89,15 +89,20 @@ function usePeriodFilter() {
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const range = useMemo(() => {
-    const today = startOfDay(new Date());
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
     switch (period) {
-      case '7d': return { from: subDays(today, 7), to: today };
-      case '1m': return { from: subMonths(today, 1), to: today };
-      case '3m': return { from: subMonths(today, 3), to: today };
-      case '1y': return { from: subMonths(today, 12), to: today };
-      case 'custom':
-        return { from: customFrom ? startOfDay(customFrom) : subMonths(today, 12), to: customTo ? startOfDay(customTo) : today };
-      default: return { from: null, to: today };
+      case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
+      case '1m': return { from: subDays(today, 29), to: today, expectedDays: 30 };
+      case '3m': return { from: subDays(today, 89), to: today, expectedDays: 90 };
+      case '1y': return { from: subDays(today, 364), to: today, expectedDays: 365 };
+      case 'custom': {
+        const f = customFrom ? startOfDay(customFrom) : subDays(today, 364);
+        const t = customTo ? startOfDay(customTo) : today;
+        const diff = Math.max(1, Math.ceil((t.getTime() - f.getTime()) / 86400000) + 1);
+        return { from: f, to: t, expectedDays: diff };
+      }
+      default: return { from: null, to: today, expectedDays: 0 };
     }
   }, [period, customFrom, customTo]);
 
@@ -199,12 +204,12 @@ function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; t
   return filtered;
 }
 
-function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null }, totalDayMap: Record<string, any>) {
+function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, any>) {
   const entries = Object.values(filteredMap);
   const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
   const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
   const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
-  const totalDays = range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length);
+  const totalDays = range.expectedDays || (range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length));
   const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
   const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
   return { totalCards, totalMinutes, daysStudied, totalDays, avgCards, avgMinutes };
@@ -260,7 +265,7 @@ const StatsPage = () => {
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = -180; // Brasília UTC-3
       const { data } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
         p_tz_offset_minutes: tzOffsetMinutes,
@@ -277,7 +282,7 @@ const StatsPage = () => {
     queryKey: ['hourly-breakdown', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = -180; // Brasília UTC-3
       const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
       if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
       return (data as any[]) ?? [];
@@ -514,7 +519,7 @@ const StatsPage = () => {
   const rankingSortOptions = [
     { key: 'cards' as const, label: 'Cards', icon: Zap },
     { key: 'hours' as const, label: 'Horas', icon: Clock },
-    { key: 'streak' as const, label: 'Streak', icon: Flame },
+    { key: 'streak' as const, label: 'Dias Ativos', icon: Flame },
   ];
 
   const totalHours = Math.floor(hoursStats.totalMinutes / 60);
