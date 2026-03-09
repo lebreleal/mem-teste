@@ -7,21 +7,19 @@ import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
 import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';
-import { useStudyStats } from '@/hooks/useStudyStats';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn, formatMinutes } from '@/lib/utils';
-import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
+import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff, TrendingUp, Users } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek,
 } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -42,11 +40,12 @@ function percentile(sorted: number[], p: number): number {
 
 // ─── Section header with optional info tooltip ────────
 
-function SectionTitle({ title, info }: { title: string; info?: string }) {
+function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
+        {icon}
         <h2 className="text-sm font-semibold">{title}</h2>
         {info && (
           <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -77,10 +76,10 @@ const StatsPage = () => {
   const profile = useProfile();
   const { data: ranking, isLoading: rankingLoading } = useRanking();
   const togglePublic = useTogglePublicProfile();
-  const { data: studyStats } = useStudyStats();
-  const isPublic = (profile.data as any)?.is_profile_public ?? false;
+  const isPublic = profile.data?.is_profile_public ?? false;
+  const currentStreak = profile.data?.current_streak ?? 0;
 
-  // Activity data
+  // Activity data from RPC - this has the accurate daily data
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
@@ -97,6 +96,11 @@ const StatsPage = () => {
     staleTime: 60_000,
   });
 
+  // Today's stats from activity data
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayStats = (activityData?.dayMap ?? {})[todayKey];
+  const todayCards = todayStats?.cards ?? 0;
+  const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
 
   // Forecast
