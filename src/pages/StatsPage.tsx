@@ -247,20 +247,20 @@ const StatsPage = () => {
 
   const cc = stats.cardCounts;
   const cardCategories = [
-    { label: 'Novos', count: cc.new, color: 'hsl(var(--chart-1))' },
-    { label: 'Aprendendo', count: cc.learning, color: 'hsl(var(--chart-2))' },
-    { label: 'Reaprendendo', count: cc.relearning, color: 'hsl(var(--chart-3))' },
-    { label: 'Recentes', count: cc.young, color: 'hsl(var(--chart-4))' },
-    { label: 'Maduros', count: cc.mature, color: 'hsl(var(--chart-5))' },
+    { label: 'Novos', count: cc.new, color: 'hsl(var(--info))' },
+    { label: 'Aprendendo', count: cc.learning, color: 'hsl(var(--warning))' },
+    { label: 'Reaprendendo', count: cc.relearning, color: 'hsl(var(--destructive))' },
+    { label: 'Recentes', count: cc.young, color: 'hsl(var(--success))' },
+    { label: 'Maduros', count: cc.mature, color: 'hsl(var(--primary))' },
     { label: 'Congelados', count: cc.frozen, color: 'hsl(var(--muted-foreground))' },
   ];
 
   const bc = stats.buttonCounts;
   const buttonData = [
     { label: 'Errei', count: bc.again, color: 'hsl(var(--destructive))' },
-    { label: 'Difícil', count: bc.hard, color: 'hsl(var(--chart-3))' },
-    { label: 'Bom', count: bc.good, color: 'hsl(var(--chart-2))' },
-    { label: 'Fácil', count: bc.easy, color: 'hsl(var(--chart-1))' },
+    { label: 'Difícil', count: bc.hard, color: 'hsl(var(--warning))' },
+    { label: 'Bom', count: bc.good, color: 'hsl(var(--success))' },
+    { label: 'Fácil', count: bc.easy, color: 'hsl(var(--info))' },
   ];
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
