@@ -69,10 +69,17 @@ const AIAgent = () => {
     if (data) setConversations(data);
   };
 
+  const justCreatedRef = useRef(false);
+
   // Load messages for active conversation
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
+      return;
+    }
+    // Skip reload when we just created this conversation (messages are already in state)
+    if (justCreatedRef.current) {
+      justCreatedRef.current = false;
       return;
     }
     loadMessages(activeConversationId);
