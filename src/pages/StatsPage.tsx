@@ -77,7 +77,6 @@ const StatsPage = () => {
   const { data: ranking, isLoading: rankingLoading } = useRanking();
   const togglePublic = useTogglePublicProfile();
   const isPublic = profile.data?.is_profile_public ?? false;
-  const currentStreak = profile.data?.current_streak ?? 0;
 
   // Activity data from RPC - this has the accurate daily data
   const { data: activityData } = useQuery({
@@ -102,6 +101,8 @@ const StatsPage = () => {
   const todayCards = todayStats?.cards ?? 0;
   const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
+  // Use streak from activity RPC (accurate), not profile column (may be stale/zero)
+  const currentStreak = activityData?.streak ?? 0;
 
   // Forecast
   const allDeckIds = useMemo(() => (decks ?? []).filter(d => !d.is_archived).map(d => d.id), [decks]);
@@ -434,7 +435,7 @@ const StatsPage = () => {
               <div className="flex flex-col gap-[2px] mr-1 justify-start">
                 {WEEKDAYS.map((d, i) => (
                   <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>
-                    {i % 2 === 1 ? d : ''}
+                    {d}
                   </span>
                 ))}
               </div>
