@@ -101,6 +101,8 @@ const StatsPage = () => {
   const todayCards = todayStats?.cards ?? 0;
   const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
+  // Use streak from activity RPC (accurate), not profile column (may be stale/zero)
+  const currentStreak = activityData?.streak ?? 0;
 
   // Forecast
   const allDeckIds = useMemo(() => (decks ?? []).filter(d => !d.is_archived).map(d => d.id), [decks]);
