@@ -290,7 +290,7 @@ const StatsPage = () => {
         {/* ─── Retenção Verdadeira + Botões ────── */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Retenção" info="Porcentagem de acertos nos cartões de revisão dos últimos 30 dias." />
+            <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nPor exemplo, se você revisou 100 cartões e acertou 85, sua retenção é 85%.\n\nO ideal é ficar entre 80% e 95%. Abaixo de 80% significa que os intervalos estão muito longos. Acima de 95% pode significar que você está revisando demais."} />
             <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
             <Progress value={stats.trueRetention.rate} className="h-2" />
             <p className="text-[10px] text-muted-foreground">
