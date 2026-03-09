@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Brain, Home, BarChart3 } from 'lucide-react';
+import { Brain, Home, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
@@ -12,7 +12,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const items = [
     { icon: Home, label: 'Início', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Brain, label: 'IA', onClick: () => navigate('/ia'), active: isActive('/ia') },
-    { icon: BarChart3, label: 'Desempenho', onClick: () => navigate('/desempenho'), active: isActive('/desempenho') },
+    { icon: Activity, label: 'Desempenho', onClick: () => navigate('/desempenho'), active: isActive('/desempenho') },
   ];
 
   return (

@@ -64,7 +64,10 @@ export function useCardStatistics() {
     queryFn: async (): Promise<CardStatistics> => {
       if (!user) return defaults;
       const { data, error } = await supabase.rpc('get_card_statistics' as any, { p_user_id: user.id });
-      if (error) throw error;
+      if (error) {
+        console.warn('[useCardStatistics] RPC error, using defaults:', error.message);
+        return defaults;
+      }
       const r = data as any;
       if (!r) return defaults;
 

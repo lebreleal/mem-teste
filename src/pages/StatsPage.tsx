@@ -12,8 +12,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
-  BarChart3, Calendar, ChevronLeft, ChevronRight, TrendingUp,
-  Layers, Brain, Target, Zap, RotateCcw,
+  Activity, Calendar, ChevronLeft, ChevronRight, TrendingUp,
+  Layers, Brain, Target, Zap, RotateCcw, BarChart3,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell,
@@ -45,7 +45,7 @@ function percentile(sorted: number[], p: number): number {
 const StatsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: stats, isLoading } = useCardStatistics();
+  const { data: stats, isLoading, isError } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -167,7 +167,22 @@ const StatsPage = () => {
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
+          <h1 className="text-lg font-bold font-display flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            Desempenho
+          </h1>
+        </div>
+        <div className="p-4 text-center text-muted-foreground mt-10">
+          <p className="text-sm">Nenhum dado disponível ainda.</p>
+          <p className="text-xs mt-1">Comece a estudar para ver suas estatísticas!</p>
+        </div>
+      </div>
+    );
+  }
 
   const cc = stats.cardCounts;
   const totalActive = cc.new + cc.learning + cc.review + cc.relearning;
@@ -194,7 +209,7 @@ const StatsPage = () => {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
         <h1 className="text-lg font-bold font-display flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
+          <Activity className="h-5 w-5 text-primary" />
           Desempenho
         </h1>
       </div>
