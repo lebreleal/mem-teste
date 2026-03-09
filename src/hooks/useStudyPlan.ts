@@ -180,15 +180,19 @@ export function useStudyPlan(options?: { full?: boolean }) {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) return DEFAULT_STUDY_METRICS;
+      const safeNum = (v: unknown, fallback: number): number => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      };
       return {
-        avgNewSeconds: Number(row.avg_new_seconds) || DEFAULT_STUDY_METRICS.avgNewSeconds,
-        avgLearningSeconds: Number(row.avg_learning_seconds) || DEFAULT_STUDY_METRICS.avgLearningSeconds,
-        avgReviewSeconds: Number(row.avg_review_seconds) || DEFAULT_STUDY_METRICS.avgReviewSeconds,
-        avgRelearningSeconds: Number(row.avg_relearning_seconds) || DEFAULT_STUDY_METRICS.avgRelearningSeconds,
-        actualDailyMinutes: Number(row.actual_daily_minutes) || DEFAULT_STUDY_METRICS.actualDailyMinutes,
-        totalReviews90d: Number(row.total_reviews_90d) || 0,
-        avgReviewsPerNewCard: Number(row.avg_reviews_per_new_card) || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard,
-        avgLapseRate: Number(row.avg_lapse_rate) ?? DEFAULT_STUDY_METRICS.avgLapseRate,
+        avgNewSeconds: safeNum(row.avg_new_seconds, DEFAULT_STUDY_METRICS.avgNewSeconds),
+        avgLearningSeconds: safeNum(row.avg_learning_seconds, DEFAULT_STUDY_METRICS.avgLearningSeconds),
+        avgReviewSeconds: safeNum(row.avg_review_seconds, DEFAULT_STUDY_METRICS.avgReviewSeconds),
+        avgRelearningSeconds: safeNum(row.avg_relearning_seconds, DEFAULT_STUDY_METRICS.avgRelearningSeconds),
+        actualDailyMinutes: safeNum(row.actual_daily_minutes, DEFAULT_STUDY_METRICS.actualDailyMinutes),
+        totalReviews90d: safeNum(row.total_reviews_90d, 0),
+        avgReviewsPerNewCard: safeNum(row.avg_reviews_per_new_card, DEFAULT_STUDY_METRICS.avgReviewsPerNewCard),
+        avgLapseRate: safeNum(row.avg_lapse_rate, DEFAULT_STUDY_METRICS.avgLapseRate),
       } as RealStudyMetrics;
     },
     enabled: !!userId,
