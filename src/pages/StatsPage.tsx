@@ -1,4 +1,4 @@
-import { useState, useMemo, ReactNode } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer, Brain,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
@@ -56,12 +56,11 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: ReactNode }) {
+function SectionTitle({ title, info }: { title: string; info?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <div className="flex items-center gap-2 min-w-0">
-        {icon}
         <h2 className="text-sm font-semibold truncate">{title}</h2>
         {info && (
           <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
@@ -84,7 +83,7 @@ function SectionTitle({ title, info, icon }: { title: string; info?: string; ico
 // ─── Per-chart period filter ──────────────────────────
 
 function usePeriodFilter() {
-  const [period, setPeriod] = useState<PeriodKey>('all');
+  const [period, setPeriod] = useState<PeriodKey>('1m');
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
@@ -451,15 +450,6 @@ const StatsPage = () => {
     return { count: Math.round((avgRetrievability / 100) * reviewedCards), avgRetrievability };
   }, [stats]);
 
-  const last7Days = useMemo(() => {
-    const today = new Date();
-    let total = 0;
-    for (let i = 0; i < 7; i++) {
-      const key = format(subDays(today, i), 'yyyy-MM-dd');
-      total += dayMap[key]?.cards ?? 0;
-    }
-    return Math.round(total / 7);
-  }, [dayMap]);
 
   if (isLoading) {
     return (
@@ -504,7 +494,6 @@ const StatsPage = () => {
 
   // New metrics
   const maturationRate = cc.total > 0 ? Math.round((cc.mature / cc.total) * 100) : 0;
-  const avgTimePerCard = summaryStats.totalCards > 0 ? (summaryStats.totalMinutes / summaryStats.totalCards * 60).toFixed(1) : '0';
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
   const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
@@ -563,7 +552,7 @@ const StatsPage = () => {
         {/* 2. Resumo do Período */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <SectionTitle title="Resumo" icon={<Calendar className="h-4 w-4 text-primary" />} info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
+            <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
             <PeriodFilterIcon filter={summaryFilter} />
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -585,7 +574,6 @@ const StatsPage = () => {
           <div className="flex items-center justify-between">
             <SectionTitle
               title="Horas Estudadas"
-              icon={<Timer className="h-4 w-4 text-primary" />}
               info="Tempo total de estudo calculado a partir da duração real de cada revisão."
             />
             <PeriodFilterIcon filter={hoursFilter} />
@@ -622,7 +610,6 @@ const StatsPage = () => {
           <div className="flex items-center justify-between">
             <SectionTitle
               title="Revisões por Dia"
-              icon={<Zap className="h-4 w-4 text-primary" />}
               info="Total de cards revisados por dia no período selecionado."
             />
             <PeriodFilterIcon filter={reviewsPerDayFilter} />
@@ -650,7 +637,6 @@ const StatsPage = () => {
         <Card className="p-4 space-y-3">
           <SectionTitle
             title="Horário de Estudo"
-            icon={<Clock className="h-4 w-4 text-primary" />}
             info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora."
           />
           {hourlyChartData.some(h => h.total > 0) ? (
@@ -821,33 +807,19 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 10. Conhecimento Total Estimado + Métricas Extras */}
-        <Card className="p-4 space-y-3">
+        {/* 10. Conhecimento Total Estimado */}
+        <Card className="p-4 space-y-2">
           <SectionTitle
             title="Conhecimento Total Estimado"
-            icon={<Brain className="h-4 w-4 text-primary" />}
             info={"Estimativa de quantos cartões você provavelmente lembra agora.\n\nFórmula: recuperabilidade média × cartões revisados.\n\nExemplo: se você tem 1000 cartões revisados e a recuperabilidade média é 85%, seu conhecimento estimado é ~850 cartões."}
           />
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold tabular-nums text-primary">{estimatedKnowledge.count.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground">cartões</span>
+            <span className="text-sm text-muted-foreground">de {(stats.cardCounts.total - stats.cardCounts.new).toLocaleString()} cartões revisados</span>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            Recuperabilidade média: {estimatedKnowledge.avgRetrievability}% · {stats.cardCounts.total - stats.cardCounts.new} cartões revisados
-          </p>
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{maturationRate}%</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Taxa de Maturação</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{avgTimePerCard}s</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Tempo/Card</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{last7Days}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Carga 7d/dia</p>
-            </div>
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            <span>Recuperabilidade média: <strong className="text-foreground">{estimatedKnowledge.avgRetrievability}%</strong></span>
+            <span>Taxa de maturação: <strong className="text-foreground">{maturationRate}%</strong></span>
           </div>
         </Card>
 
@@ -883,7 +855,7 @@ const StatsPage = () => {
         {/* 12. Ranking Global */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
           <div className="p-4 pb-2 flex items-center justify-between">
-            <SectionTitle title="Ranking Global" icon={<Trophy className="h-4 w-4 text-warning" />} info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
+            <SectionTitle title="Ranking Global" info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
             <button onClick={() => setRankingConfigOpen(true)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
               <Settings2 className="h-4 w-4" />
             </button>
