@@ -67,7 +67,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-2 gap-2">
       {(['flash', 'pro'] as const).map((m) => {
         const stats = MODEL_STATS[m];
         const isSelected = model === m;
