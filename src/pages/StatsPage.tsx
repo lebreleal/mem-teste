@@ -9,7 +9,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import {
@@ -40,22 +40,28 @@ function percentile(sorted: number[], p: number): number {
 // ─── Section header with optional info tooltip ────────
 
 function SectionTitle({ title, info }: { title: string; info?: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center gap-1.5">
-      <h2 className="text-sm font-semibold">{title}</h2>
+    <>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {info && (
+          <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       {info && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
-              <HelpCircle className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[220px] text-xs">
-            {info}
-          </TooltipContent>
-        </Tooltip>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base">{title}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{info}</p>
+          </DialogContent>
+        </Dialog>
       )}
-    </div>
+    </>
   );
 }
 
@@ -284,7 +290,7 @@ const StatsPage = () => {
         {/* ─── Retenção Verdadeira + Botões ────── */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Retenção" info="Porcentagem de acertos nos cartões de revisão dos últimos 30 dias." />
+            <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nPor exemplo, se você revisou 100 cartões e acertou 85, sua retenção é 85%.\n\nO ideal é ficar entre 80% e 95%. Abaixo de 80% significa que os intervalos estão muito longos. Acima de 95% pode significar que você está revisando demais."} />
             <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
             <Progress value={stats.trueRetention.rate} className="h-2" />
             <p className="text-[10px] text-muted-foreground">
@@ -293,7 +299,7 @@ const StatsPage = () => {
           </Card>
 
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Respostas" info="Quantas vezes você usou cada botão nos últimos 30 dias." />
+            <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias:\n\n• Errei — Você não lembrou do cartão. Ele volta pra fila de aprendizado.\n• Difícil — Lembrou com dificuldade. O intervalo aumenta pouco.\n• Bom — Lembrou normalmente. O intervalo aumenta de forma padrão.\n• Fácil — Lembrou instantaneamente. O intervalo aumenta bastante.\n\nUm equilíbrio saudável tem poucos 'Errei' e a maioria em 'Bom'."} />
             <div className="space-y-1.5">
               {buttonData.map(btn => {
                 const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
@@ -315,7 +321,7 @@ const StatsPage = () => {
 
         {/* ─── Card counts ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Contagem de Cartões" info="Distribuição dos seus cartões por estado de aprendizado." />
+          <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos.\n\nO objetivo é ter cada vez mais cartões maduros!"} />
           <div className="h-3 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
               <div
@@ -338,7 +344,7 @@ const StatsPage = () => {
 
         {/* ─── Intervals ──────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Intervalos" info="Tempo entre revisões dos cartões em revisão. Quanto maior, mais espaçada está sua repetição." />
+          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\nQuando você acerta um cartão, o app agenda a próxima revisão mais para frente. Se você acerta de novo, ele agenda ainda mais longe — e assim por diante.\n\nEste gráfico mostra como seus intervalos estão distribuídos. Quanto mais barras à direita (intervalos longos), mais cartões você já domina.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
             <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
             <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
@@ -350,25 +356,25 @@ const StatsPage = () => {
         {/* ─── Stability + Difficulty side by side */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Estabilidade" info="Tempo (em dias) que um cartão pode esperar mantendo ~90% de chance de recall." />
+            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo cerca de 90% de chance de você lembrar.\n\nPor exemplo, estabilidade de 30 dias significa que, se você esperar 30 dias para revisar, ainda tem ~90% de chance de acertar.\n\nQuanto maior a estabilidade, melhor — significa que a memória está mais consolidada."} />
             <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
           </Card>
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Dificuldade" info="Escala de 1 a 10 do FSRS. Cartões com dificuldade alta precisam de mais revisões." />
+            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (muito fácil) a 10 (muito difícil).\n\nO algoritmo ajusta automaticamente esse valor conforme você estuda. Cartões que você erra frequentemente ficam com dificuldade alta. Cartões que você sempre acerta ficam com dificuldade baixa.\n\nSe muitos cartões estão com dificuldade alta (7-10), pode ser útil reformular o conteúdo desses cartões para facilitar a memorização."} />
             <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
           </Card>
         </div>
 
         {/* ─── Retrievability ─────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Recuperabilidade" info="Probabilidade estimada de lembrar cada cartão agora, calculada pelo FSRS." />
+          <SectionTitle title="Recuperabilidade" info={"A recuperabilidade mostra a probabilidade estimada de você lembrar cada cartão AGORA, neste momento.\n\nQuando você acabou de revisar um cartão, a recuperabilidade é ~100%. Com o passar dos dias sem revisar, ela vai caindo.\n\n• 95%+ — Você provavelmente lembra.\n• 70-85% — Está na hora de revisar.\n• Abaixo de 50% — Provavelmente já esqueceu.\n\nO app agenda as revisões para que a recuperabilidade não caia muito antes de você rever."} />
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
         {/* ─── Forecast ───────────────────────── */}
         {forecastData.length > 0 && (
           <Card className="p-4 space-y-3">
-            <SectionTitle title="Carga Prevista (30 dias)" info="Estimativa de quantos cartões você terá para revisar por dia nas próximas semanas." />
+            <SectionTitle title="Carga Prevista (30 dias)" info={"Este gráfico mostra uma estimativa de quantos cartões você terá para estudar por dia nas próximas semanas.\n\n• Revisão (maior parte) — Cartões que vão vencer e precisam ser revisados.\n• Novos — Cartões novos que o app vai introduzir por dia.\n• Aprendendo — Cartões que ainda estão no processo inicial de aprendizado.\n\nSe a carga estiver muito alta, considere reduzir o número de cartões novos por dia nas configurações do deck."} />
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={forecastData}>
