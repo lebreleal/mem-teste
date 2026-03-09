@@ -188,10 +188,11 @@ function PeriodFilterIcon({ filter }: { filter: ReturnType<typeof usePeriodFilte
 
 function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; to: Date | null }) {
   if (!range.from) return dayMap;
+  const fromStr = format(range.from, 'yyyy-MM-dd');
+  const toStr = range.to ? format(range.to, 'yyyy-MM-dd') : '9999-12-31';
   const filtered: Record<string, any> = {};
   for (const [key, val] of Object.entries(dayMap)) {
-    const d = new Date(key);
-    if ((!range.from || !isBefore(d, range.from)) && (!range.to || !isAfter(d, range.to))) {
+    if (key >= fromStr && key <= toStr) {
       filtered[key] = val;
     }
   }
