@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import MemoCardsLogo from '@/components/MemoCardsLogo';
+import { Brain, Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -381,7 +380,7 @@ const AIAgent = () => {
                   <MessageSquare className="h-4 w-4" />
                 </Button>
               )}
-              <MemoCardsLogo size={22} />
+              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
               <h1 className="font-display text-lg font-bold text-foreground">Agente IA</h1>
             </div>
             <AIModelSelector model={model} onChange={setModel} baseCost={BASE_COST} compact />
@@ -392,7 +391,7 @@ const AIAgent = () => {
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-4 text-center">
-              <MemoCardsLogo size={64} className="mb-4 opacity-20" />
+              <Brain className="h-16 w-16 mb-4 opacity-20" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
               <h2 className="text-xl font-bold text-foreground mb-2">Olá! Como posso ajudar?</h2>
               <p className="text-sm text-muted-foreground max-w-md">
                 Tire dúvidas sobre qualquer matéria, peça resumos, explicações ou ajuda com exercícios. Custa {cost} créditos por mensagem.
@@ -403,8 +402,9 @@ const AIAgent = () => {
               {messages.map((msg, i) => (
                 <div key={i} className={cn("flex gap-3", msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                   {msg.role === 'assistant' && (
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-primary/10">
-                      <MemoCardsLogo size={18} />
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ background: 'hsl(var(--energy-purple, 270 70% 60%) / 0.15)' }}>
+                      <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
                     </div>
                   )}
                   {msg.role === 'assistant' ? (
