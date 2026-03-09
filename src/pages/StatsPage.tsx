@@ -56,12 +56,11 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: ReactNode }) {
+function SectionTitle({ title, info }: { title: string; info?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <div className="flex items-center gap-2 min-w-0">
-        {icon}
         <h2 className="text-sm font-semibold truncate">{title}</h2>
         {info && (
           <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
