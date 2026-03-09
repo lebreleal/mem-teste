@@ -107,7 +107,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
         <DraggableFab
           actions={[
             { icon: Brain, label: 'Agente IA', onClick: () => navigate('/ia') },
-            { icon: Brain, label: 'Gerar Tags com IA', onClick: () => navigate('/dashboard') },
           ]}
         />
       )}
