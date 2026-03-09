@@ -532,17 +532,12 @@ const StatsPage = () => {
               const barWidth = (btn.count / maxCount) * 100;
               return (
                 <div key={btn.label} className="flex items-center gap-3">
-                  <div className="w-14 flex items-center gap-1.5 shrink-0">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: btn.color }} />
-                    <span className="text-xs font-medium">{btn.label}</span>
+                  <span className="text-xs font-medium w-12 shrink-0">{btn.label}</span>
+                  <div className="flex-1 h-5 rounded-md bg-muted/40 overflow-hidden relative">
+                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.75 }} />
                   </div>
-                  <div className="flex-1 h-6 rounded-md bg-muted/60 overflow-hidden relative">
-                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.8 }} />
-                    <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-semibold tabular-nums">
-                      {btn.count.toLocaleString()}
-                    </span>
-                  </div>
-                  <span className="text-[11px] tabular-nums text-muted-foreground w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
+                  <span className="text-xs tabular-nums font-bold w-10 text-right shrink-0">{btn.count.toLocaleString()}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right shrink-0">{pct.toFixed(0)}%</span>
                 </div>
               );
             })}
