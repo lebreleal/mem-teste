@@ -116,10 +116,14 @@ const StatsPage = () => {
     enabled: allDeckIds.length > 0,
   });
 
-  // ─── Heatmap (last 6 months) ─────────────
+  // ─── Heatmap (from account creation or last 6 months, whichever is shorter) ─────────────
   const heatmapData = useMemo(() => {
     const today = new Date();
-    const start = startOfWeek(subDays(today, 182), { weekStartsOn: 0 });
+    const sixMonthsAgo = subDays(today, 182);
+    // If user account is newer than 6 months, start from account creation
+    const accountCreated = profile.data?.created_at ? new Date(profile.data.created_at) : sixMonthsAgo;
+    const effectiveStart = accountCreated > sixMonthsAgo ? accountCreated : sixMonthsAgo;
+    const start = startOfWeek(effectiveStart, { weekStartsOn: 0 });
     const allDays = eachDayOfInterval({ start, end: today });
 
     const weeks: { date: Date; key: string; cards: number; dow: number }[][] = [];
@@ -148,7 +152,7 @@ const StatsPage = () => {
     });
 
     return { weeks, months };
-  }, [dayMap]);
+  }, [dayMap, profile.data?.created_at]);
 
   // ─── Distributions ──────────────────────────
   const intervalBuckets = useMemo(() => {
@@ -324,7 +328,7 @@ const StatsPage = () => {
         {/* ─── Ranking Global ────────────────────── */}
         <Card className="overflow-hidden">
           <div className="p-4 pb-3">
-            <SectionTitle title="Ranking Global" icon={<Users className="h-4 w-4 text-primary" />} info="Top 50 usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
+            <SectionTitle title="Ranking Global" icon={<Users className="h-4 w-4 text-primary" />} info="Usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
           </div>
           {rankingLoading ? (
             <div className="px-4 pb-4 space-y-2">
@@ -337,77 +341,37 @@ const StatsPage = () => {
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">Ative seu perfil público para aparecer aqui!</p>
             </div>
           ) : (
-            <>
-              {/* Top 3 podium */}
-              {ranking.length >= 3 && (
-                <div className="flex items-end justify-center gap-2 px-4 pb-3">
-                  {[1, 0, 2].map(idx => {
-                    const entry = ranking[idx];
-                    if (!entry) return null;
-                    const isMe = entry.user_id === user?.id;
-                    const medals = ['🥇', '🥈', '🥉'];
-                    const heights = ['h-20', 'h-24', 'h-16'];
-                    const actualIdx = idx;
-                    return (
-                      <div key={entry.user_id} className="flex flex-col items-center flex-1 max-w-[100px]">
-                        <span className="text-lg mb-1">{medals[actualIdx]}</span>
-                        <div className={cn(
-                          'w-full rounded-t-lg flex flex-col items-center justify-end pb-2',
-                          heights[actualIdx],
-                          actualIdx === 0 ? 'bg-yellow-500/10 border border-yellow-500/20' :
-                          actualIdx === 1 ? 'bg-muted/80 border border-border' :
-                          'bg-orange-500/10 border border-orange-500/20',
-                          isMe && 'ring-2 ring-primary/40'
-                        )}>
-                          <p className={cn('text-[10px] font-medium truncate px-1 w-full text-center', isMe && 'text-primary font-semibold')}>
-                            {entry.user_name?.split(' ')[0] || 'Anon'}
-                          </p>
-                          <p className="text-[9px] text-muted-foreground tabular-nums">{entry.cards_30d.toLocaleString()}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Rest of ranking */}
-              <div className="border-t border-border/40 divide-y divide-border/30">
-                {ranking.slice(3).map((entry, i) => {
-                  const isMe = entry.user_id === user?.id;
-                  const pos = i + 4;
-                  return (
-                    <div
-                      key={entry.user_id}
-                      className={cn(
-                        'flex items-center gap-3 px-4 py-2.5 text-sm',
-                        isMe && 'bg-primary/5',
-                      )}
-                    >
-                      <span className="w-6 text-center font-bold tabular-nums text-xs text-muted-foreground">{pos}º</span>
-                      <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold text-primary')}>
-                        {entry.user_name || 'Usuário'}
+            <div className="border-t border-border/40 divide-y divide-border/30">
+              {ranking.map((entry, i) => {
+                const isMe = entry.user_id === user?.id;
+                const pos = i + 1;
+                const medals = ['🥇', '🥈', '🥉'];
+                return (
+                  <div
+                    key={entry.user_id}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-2.5 text-sm',
+                      isMe && 'bg-primary/5',
+                    )}
+                  >
+                    <span className="w-7 text-center font-bold tabular-nums text-xs text-muted-foreground">
+                      {pos <= 3 ? medals[pos - 1] : `${pos}º`}
+                    </span>
+                    <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold text-primary')}>
+                      {entry.user_name || 'Usuário'}
+                    </span>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
+                      <span>{entry.cards_30d.toLocaleString()} cards</span>
+                      <span>{formatMinutes(entry.minutes_30d)}</span>
+                      <span className="flex items-center gap-0.5">
+                        <Flame className="h-3 w-3 text-orange-500" />
+                        {entry.current_streak}
                       </span>
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
-                        <span>{entry.cards_30d.toLocaleString()}</span>
-                        <span>{formatMinutes(entry.minutes_30d)}</span>
-                        <span className="flex items-center gap-0.5">
-                          <Flame className="h-3 w-3 text-orange-500" />
-                          {entry.current_streak}
-                        </span>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* My position indicator if not in top 3 */}
-              {myRankEntry && myRank! >= 3 && (
-                <div className="border-t border-primary/20 bg-primary/5 px-4 py-2 flex items-center gap-2">
-                  <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium text-primary">Sua posição: {myRank! + 1}º</span>
-                </div>
-              )}
-            </>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </Card>
         {/* ─── Heatmap ──────────────────────────── */}
