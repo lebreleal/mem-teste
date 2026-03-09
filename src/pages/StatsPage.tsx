@@ -9,7 +9,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import {
