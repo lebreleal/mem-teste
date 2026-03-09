@@ -11,6 +11,10 @@ export interface RealStudyMetrics {
   avgRelearningSeconds: number;
   actualDailyMinutes: number;
   totalReviews90d: number;
+  /** Median number of interactions a new card generates on its first day (learning steps + failures). */
+  avgReviewsPerNewCard: number;
+  /** Fraction of review cards (state=2) that lapse (rating=1), e.g. 0.10 = 10%. */
+  avgLapseRate: number;
 }
 
 /** Default fallbacks based on research (used only when no user data exists). */
