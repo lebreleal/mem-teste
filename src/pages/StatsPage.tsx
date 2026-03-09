@@ -31,14 +31,15 @@ import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-type PeriodKey = 'all' | '1m' | '3m' | '1y' | 'custom';
+type PeriodKey = 'all' | '7d' | '1m' | '3m' | '1y' | 'custom';
 
-const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
-  { key: 'all', label: 'Tudo' },
-  { key: '1m', label: '1M' },
-  { key: '3m', label: '3M' },
-  { key: '1y', label: '1A' },
-  { key: 'custom', label: 'Personalizado' },
+const PERIOD_OPTIONS: { key: PeriodKey; label: string; description: string }[] = [
+  { key: 'all', label: 'Tudo', description: 'Todo o histórico' },
+  { key: '7d', label: '7D', description: 'Últimos 7 dias' },
+  { key: '1m', label: '1M', description: 'Últimos 30 dias' },
+  { key: '3m', label: '3M', description: 'Últimos 3 meses' },
+  { key: '1y', label: '1A', description: 'Último ano' },
+  { key: 'custom', label: 'Personalizado', description: 'Período customizado' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────
