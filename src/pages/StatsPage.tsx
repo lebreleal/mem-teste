@@ -519,7 +519,7 @@ const StatsPage = () => {
   const rankingSortOptions = [
     { key: 'cards' as const, label: 'Cards', icon: Zap },
     { key: 'hours' as const, label: 'Horas', icon: Clock },
-    { key: 'streak' as const, label: 'Streak', icon: Flame },
+    { key: 'streak' as const, label: 'Dias Ativos', icon: Flame },
   ];
 
   const totalHours = Math.floor(hoursStats.totalMinutes / 60);
