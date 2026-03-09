@@ -204,12 +204,12 @@ function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; t
   return filtered;
 }
 
-function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null }, totalDayMap: Record<string, any>) {
+function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null; expectedDays?: number }, totalDayMap: Record<string, any>) {
   const entries = Object.values(filteredMap);
   const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
   const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
   const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
-  const totalDays = range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length);
+  const totalDays = range.expectedDays || (range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length));
   const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
   const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
   return { totalCards, totalMinutes, daysStudied, totalDays, avgCards, avgMinutes };
