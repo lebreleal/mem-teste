@@ -42,6 +42,16 @@ serve(async (req) => {
       });
     }
 
+    // Deduct 2 credits
+    const COST = 2;
+    const ok = await deductEnergy(supabase, user.id, COST);
+    if (!ok) {
+      return new Response(JSON.stringify({ error: "Créditos IA insuficientes", requiresCredits: true }), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch top existing tags with hierarchy info
     const { data: leaderTags } = await supabase
       .from("tags")
