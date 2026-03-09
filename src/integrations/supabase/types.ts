@@ -2531,16 +2531,28 @@ export type Database = {
           total_tokens: number
         }[]
       }
-      admin_update_profile: {
-        Args: {
-          p_energy?: number
-          p_is_banned?: boolean
-          p_memocoins?: number
-          p_name?: string
-          p_user_id: string
-        }
-        Returns: undefined
-      }
+      admin_update_profile:
+        | {
+            Args: {
+              p_energy?: number
+              p_is_banned?: boolean
+              p_memocoins?: number
+              p_name?: string
+              p_user_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_energy?: number
+              p_is_banned?: boolean
+              p_memocoins?: number
+              p_name?: string
+              p_premium_expires_at?: string
+              p_user_id: string
+            }
+            Returns: undefined
+          }
       batch_reorder_decks: {
         Args: { p_deck_ids: string[] }
         Returns: undefined

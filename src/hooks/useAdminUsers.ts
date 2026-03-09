@@ -117,10 +117,10 @@ export const useAdminUsers = () => {
       description = '🎁 Premium Mensal (1 mês) presenteado pelo administrador';
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ premium_expires_at: expiresAt } as any)
-      .eq('id', userId);
+    const { error } = await supabase.rpc('admin_update_profile', {
+      p_user_id: userId,
+      p_premium_expires_at: expiresAt,
+    });
 
     if (error) {
       toast({ title: 'Erro', description: 'Falha ao conceder premium.', variant: 'destructive' });
