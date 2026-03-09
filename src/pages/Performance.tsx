@@ -19,8 +19,8 @@ const retentionColor = (pct: number) => {
 };
 
 const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
-  if (trend === 'up') return <TrendingUp className="h-3 w-3 text-emerald-500" />;
-  if (trend === 'down') return <TrendingDown className="h-3 w-3 text-red-500" />;
+  if (trend === 'up') return <TrendingUp className="h-3 w-3 text-success" />;
+  if (trend === 'down') return <TrendingDown className="h-3 w-3 text-destructive" />;
   return <Minus className="h-3 w-3 text-muted-foreground" />;
 };
 
