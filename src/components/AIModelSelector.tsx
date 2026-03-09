@@ -79,7 +79,7 @@ const AIModelSelector = ({ model, onChange, baseCost, compact = false, isPremium
             key={m}
             type="button"
             onClick={() => onChange(m)}
-            className={`flex-1 rounded-xl border-2 p-3 text-left transition-all relative overflow-hidden ${
+            className={`rounded-xl border-2 p-3 text-left transition-all relative overflow-hidden min-w-0 ${
               isSelected
                 ? isPro
                   ? 'border-primary bg-primary/5 shadow-[0_0_20px_-4px_hsl(var(--primary)/0.3)]'
