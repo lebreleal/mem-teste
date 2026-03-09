@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer, SlidersHorizontal,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
@@ -34,10 +34,10 @@ type PeriodKey = 'all' | '1m' | '3m' | '1y' | 'custom';
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: 'all', label: 'Tudo' },
-  { key: '1m', label: '1 mês' },
-  { key: '3m', label: '3 meses' },
-  { key: '1y', label: '1 ano' },
-  { key: 'custom', label: 'Período' },
+  { key: '1m', label: '1M' },
+  { key: '3m', label: '3M' },
+  { key: '1y', label: '1A' },
+  { key: 'custom', label: 'Custom' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────
@@ -55,15 +55,15 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: React.ReactNode }) {
+function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         {icon}
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-sm font-semibold truncate">{title}</h2>
         {info && (
-          <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
             <HelpCircle className="h-3.5 w-3.5" />
           </button>
         )}
@@ -80,7 +80,130 @@ function SectionTitle({ title, info, icon }: { title: string; info?: string; ico
   );
 }
 
-// Medal component for podium positions
+// ─── Per-chart period filter ──────────────────────────
+
+function usePeriodFilter() {
+  const [period, setPeriod] = useState<PeriodKey>('all');
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
+
+  const range = useMemo(() => {
+    const today = startOfDay(new Date());
+    switch (period) {
+      case '1m': return { from: subMonths(today, 1), to: today };
+      case '3m': return { from: subMonths(today, 3), to: today };
+      case '1y': return { from: subMonths(today, 12), to: today };
+      case 'custom':
+        return { from: customFrom ? startOfDay(customFrom) : subMonths(today, 12), to: customTo ? startOfDay(customTo) : today };
+      default: return { from: null, to: today };
+    }
+  }, [period, customFrom, customTo]);
+
+  return { period, setPeriod, customFrom, setCustomFrom, customTo, setCustomTo, range };
+}
+
+function PeriodFilterIcon({ filter }: { filter: ReturnType<typeof usePeriodFilter> }) {
+  const { period, setPeriod, customFrom, setCustomFrom, customTo, setCustomTo } = filter;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0 relative">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          {period !== 'all' && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3 space-y-2" align="end" side="bottom">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Período</p>
+        <div className="flex gap-1">
+          {PERIOD_OPTIONS.filter(o => o.key !== 'custom').map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setPeriod(opt.key)}
+              className={cn(
+                'px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+                period === opt.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-border/40 pt-2 space-y-1.5">
+          <p className="text-[10px] text-muted-foreground">Personalizado:</p>
+          <div className="flex items-center gap-1.5">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] px-2">
+                  <CalendarIcon className="h-3 w-3" />
+                  {customFrom ? format(customFrom, 'dd/MM/yy') : 'De'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={customFrom}
+                  onSelect={(d) => { setCustomFrom(d); setPeriod('custom'); }}
+                  locale={ptBR}
+                  className="p-3 pointer-events-auto"
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-[10px] text-muted-foreground">–</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] px-2">
+                  <CalendarIcon className="h-3 w-3" />
+                  {customTo ? format(customTo, 'dd/MM/yy') : 'Até'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={customTo}
+                  onSelect={(d) => { setCustomTo(d); setPeriod('custom'); }}
+                  locale={ptBR}
+                  className="p-3 pointer-events-auto"
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function filterDayMap(dayMap: Record<string, any>, range: { from: Date | null; to: Date | null }) {
+  if (!range.from) return dayMap;
+  const filtered: Record<string, any> = {};
+  for (const [key, val] of Object.entries(dayMap)) {
+    const d = new Date(key);
+    if ((!range.from || !isBefore(d, range.from)) && (!range.to || !isAfter(d, range.to))) {
+      filtered[key] = val;
+    }
+  }
+  return filtered;
+}
+
+function computeFilteredStats(filteredMap: Record<string, any>, range: { from: Date | null; to: Date | null }, totalDayMap: Record<string, any>) {
+  const entries = Object.values(filteredMap);
+  const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
+  const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
+  const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
+  const totalDays = range.from ? Math.max(1, Math.ceil((range.to!.getTime() - range.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(totalDayMap).length);
+  const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
+  const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
+  return { totalCards, totalMinutes, daysStudied, totalDays, avgCards, avgMinutes };
+}
+
+// Medal component
 function RankMedal({ position }: { position: number }) {
   if (position === 1) return (
     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-md shadow-amber-400/30">
@@ -118,11 +241,11 @@ const StatsPage = () => {
 
   const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
   const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
-  const [period, setPeriod] = useState<PeriodKey>('all');
-  const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
-  const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
-  const [customPickerOpen, setCustomPickerOpen] = useState(false);
-  const [pickingField, setPickingField] = useState<'from' | 'to'>('from');
+
+  // Individual period filters per chart
+  const hoursFilter = usePeriodFilter();
+  const heatmapFilter = usePeriodFilter();
+  const summaryFilter = usePeriodFilter();
 
   // Activity data from RPC
   const { data: activityData } = useQuery({
@@ -145,54 +268,17 @@ const StatsPage = () => {
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 
-  // Period date range
-  const periodRange = useMemo(() => {
-    const today = startOfDay(new Date());
-    switch (period) {
-      case '1m': return { from: subMonths(today, 1), to: today };
-      case '3m': return { from: subMonths(today, 3), to: today };
-      case '1y': return { from: subMonths(today, 12), to: today };
-      case 'custom':
-        return { from: customFrom ? startOfDay(customFrom) : subMonths(today, 12), to: customTo ? startOfDay(customTo) : today };
-      default: return { from: null, to: today }; // all time
-    }
-  }, [period, customFrom, customTo]);
+  // Filtered data per section
+  const summaryFiltered = useMemo(() => filterDayMap(dayMap, summaryFilter.range), [dayMap, summaryFilter.range]);
+  const summaryStats = useMemo(() => computeFilteredStats(summaryFiltered, summaryFilter.range, dayMap), [summaryFiltered, summaryFilter.range, dayMap]);
 
-  // Filter dayMap by period
-  const filteredDayMap = useMemo(() => {
-    if (!periodRange.from) return dayMap;
-    const filtered: Record<string, any> = {};
-    for (const [key, val] of Object.entries(dayMap)) {
-      const d = new Date(key);
-      if ((!periodRange.from || !isBefore(d, periodRange.from)) && (!periodRange.to || !isAfter(d, periodRange.to))) {
-        filtered[key] = val;
-      }
-    }
-    return filtered;
-  }, [dayMap, periodRange]);
+  const hoursFiltered = useMemo(() => filterDayMap(dayMap, hoursFilter.range), [dayMap, hoursFilter.range]);
+  const hoursStats = useMemo(() => computeFilteredStats(hoursFiltered, hoursFilter.range, dayMap), [hoursFiltered, hoursFilter.range, dayMap]);
 
-  // Computed stats from filtered data
-  const filteredStats = useMemo(() => {
-    const entries = Object.values(filteredDayMap);
-    const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
-    const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
-    const totalNew = entries.reduce((s: number, d: any) => s + (Number(d.newCards) || 0), 0);
-    const totalLearning = entries.reduce((s: number, d: any) => s + (Number(d.learning) || 0), 0);
-    const totalReview = entries.reduce((s: number, d: any) => s + (Number(d.review) || 0), 0);
-    const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
-    const totalDays = periodRange.from ? Math.max(1, Math.ceil((periodRange.to!.getTime() - periodRange.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(dayMap).length);
-    const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
-    const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
-    return { totalCards, totalMinutes, totalNew, totalLearning, totalReview, daysStudied, totalDays, avgCards, avgMinutes };
-  }, [filteredDayMap, periodRange, dayMap]);
-
-  // Hours chart data (daily minutes bar chart)
   const hoursChartData = useMemo(() => {
-    const entries = Object.entries(filteredDayMap)
+    const entries = Object.entries(hoursFiltered)
       .map(([key, val]: [string, any]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
       .sort((a, b) => a.date.localeCompare(b.date));
-
-    // If too many entries, group by week
     if (entries.length > 60) {
       const weeks: Record<string, number> = {};
       entries.forEach(e => {
@@ -202,7 +288,7 @@ const StatsPage = () => {
       return Object.entries(weeks).map(([label, minutes]) => ({ label, minutes }));
     }
     return entries.map(e => ({ label: format(new Date(e.date), 'dd/MM'), minutes: e.minutes }));
-  }, [filteredDayMap]);
+  }, [hoursFiltered]);
 
   const todayStats = dayMap[todayKey];
   const todayCards = todayStats?.cards ?? 0;
@@ -356,8 +442,8 @@ const StatsPage = () => {
     { key: 'streak' as const, label: 'Streak', icon: Flame },
   ];
 
-  const totalHours = Math.floor(filteredStats.totalMinutes / 60);
-  const totalRemainingMins = filteredStats.totalMinutes % 60;
+  const totalHours = Math.floor(hoursStats.totalMinutes / 60);
+  const totalRemainingMins = hoursStats.totalMinutes % 60;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -367,7 +453,7 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats ────────────────────── */}
+        {/* ─── Quick Stats (always visible, no filter) ────────────────────── */}
         <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
             <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
@@ -392,91 +478,36 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Period Filter ────────────────────── */}
-        <div className="flex gap-1.5 flex-wrap">
-          {PERIOD_OPTIONS.map(opt => (
-            <button
-              key={opt.key}
-              onClick={() => {
-                setPeriod(opt.key);
-                if (opt.key === 'custom') setCustomPickerOpen(true);
-              }}
-              className={cn(
-                'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
-                period === opt.key
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom period display */}
-        {period === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {customFrom ? format(customFrom, 'dd/MM/yyyy') : 'De'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={customFrom}
-                  onSelect={setCustomFrom}
-                  locale={ptBR}
-                  className="p-3 pointer-events-auto"
-                  disabled={(date) => date > new Date()}
-                />
-              </PopoverContent>
-            </Popover>
-            <span className="text-xs text-muted-foreground">até</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {customTo ? format(customTo, 'dd/MM/yyyy') : 'Até'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={customTo}
-                  onSelect={setCustomTo}
-                  locale={ptBR}
-                  className="p-3 pointer-events-auto"
-                  disabled={(date) => date > new Date()}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        )}
-
         {/* ─── Resumo do Período ────────────────── */}
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Dias estudados', value: `${filteredStats.daysStudied}/${filteredStats.totalDays}` },
-            { label: 'Total revisões', value: filteredStats.totalCards.toLocaleString() },
-            { label: 'Média/dia', value: String(filteredStats.avgCards) },
-          ].map(item => (
-            <Card key={item.label} className="p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{item.value}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
-            </Card>
-          ))}
-        </div>
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Resumo" icon={<Calendar className="h-4 w-4 text-primary" />} info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
+            <PeriodFilterIcon filter={summaryFilter} />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Dias estudados', value: `${summaryStats.daysStudied}/${summaryStats.totalDays}` },
+              { label: 'Total revisões', value: summaryStats.totalCards.toLocaleString() },
+              { label: 'Média/dia', value: String(summaryStats.avgCards) },
+            ].map(item => (
+              <div key={item.label} className="rounded-xl bg-muted/40 p-3 text-center">
+                <p className="text-lg font-bold tabular-nums">{item.value}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
 
         {/* ─── Horas Estudadas ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle
-            title="Horas Estudadas"
-            icon={<Timer className="h-4 w-4 text-primary" />}
-            info="Tempo total de estudo calculado a partir da duração real de cada revisão no período selecionado."
-          />
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              title="Horas Estudadas"
+              icon={<Timer className="h-4 w-4 text-primary" />}
+              info="Tempo total de estudo calculado a partir da duração real de cada revisão."
+            />
+            <PeriodFilterIcon filter={hoursFilter} />
+          </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
             <span className="text-sm text-muted-foreground font-medium">h</span>
@@ -484,8 +515,8 @@ const StatsPage = () => {
             <span className="text-sm text-muted-foreground font-medium">min</span>
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>Média: <strong className="text-foreground">{formatMinutes(filteredStats.avgMinutes)}/dia</strong></span>
-            <span>{filteredStats.daysStudied} dias ativos</span>
+            <span>Média: <strong className="text-foreground">{formatMinutes(hoursStats.avgMinutes)}/dia</strong></span>
+            <span>{hoursStats.daysStudied} dias ativos</span>
           </div>
           {hoursChartData.length > 1 && (
             <div style={{ height: 120 }}>
@@ -502,6 +533,66 @@ const StatsPage = () => {
               </ResponsiveContainer>
             </div>
           )}
+        </Card>
+
+        {/* ─── Atividade (Heatmap) ──────────────────────────── */}
+        <Card className="p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou." />
+          </div>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <div className="flex ml-5" style={{ gap: 0 }}>
+              {heatmapData.months.map((m, i) => {
+                const nextCol = heatmapData.months[i + 1]?.colStart ?? heatmapData.weeks.length;
+                const span = nextCol - m.colStart;
+                return (
+                  <span key={`${m.label}-${m.colStart}`} className="text-[9px] text-muted-foreground" style={{ width: span * 13, flexShrink: 0 }}>
+                    {m.label}
+                  </span>
+                );
+              })}
+            </div>
+            <div className="flex gap-0">
+              <div className="flex flex-col gap-[2px] mr-1 justify-start">
+                {WEEKDAYS.map((d, i) => (
+                  <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>{d}</span>
+                ))}
+              </div>
+              <div className="flex gap-[2px]">
+                {heatmapData.weeks.map((week, wi) => (
+                  <div key={wi} className="flex flex-col gap-[2px]">
+                    {Array.from({ length: 7 }).map((_, dow) => {
+                      const cell = week.find(c => c.dow === dow);
+                      if (!cell) return <div key={dow} className="w-[11px] h-[11px]" />;
+                      const cards = cell.cards;
+                      const intensity = cards === 0 ? 0 : cards < 20 ? 1 : cards < 50 ? 2 : cards < 100 ? 3 : 4;
+                      return (
+                        <div
+                          key={dow}
+                          title={`${format(cell.date, 'dd/MM')}: ${cards} cards`}
+                          className={cn(
+                            'w-[11px] h-[11px] rounded-[2px] transition-colors',
+                            intensity === 0 && 'bg-muted/60',
+                            intensity === 1 && 'bg-primary/20',
+                            intensity === 2 && 'bg-primary/40',
+                            intensity === 3 && 'bg-primary/70',
+                            intensity === 4 && 'bg-primary',
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 mt-2 justify-end">
+              <span className="text-[9px] text-muted-foreground mr-1">Menos</span>
+              {[0, 1, 2, 3, 4].map(level => (
+                <div key={level} className={cn('w-[11px] h-[11px] rounded-[2px]', level === 0 && 'bg-muted/60', level === 1 && 'bg-primary/20', level === 2 && 'bg-primary/40', level === 3 && 'bg-primary/70', level === 4 && 'bg-primary')} />
+              ))}
+              <span className="text-[9px] text-muted-foreground ml-1">Mais</span>
+            </div>
+          </div>
         </Card>
 
         {/* ─── Ranking Global ────────────────────── */}
@@ -624,64 +715,6 @@ const StatsPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* ─── Heatmap ──────────────────────────── */}
-        <Card className="p-4 space-y-2">
-          <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou naquele dia." />
-          <div className="overflow-x-auto -mx-1 px-1">
-            <div className="flex ml-5" style={{ gap: 0 }}>
-              {heatmapData.months.map((m, i) => {
-                const nextCol = heatmapData.months[i + 1]?.colStart ?? heatmapData.weeks.length;
-                const span = nextCol - m.colStart;
-                return (
-                  <span key={`${m.label}-${m.colStart}`} className="text-[9px] text-muted-foreground" style={{ width: span * 13, flexShrink: 0 }}>
-                    {m.label}
-                  </span>
-                );
-              })}
-            </div>
-            <div className="flex gap-0">
-              <div className="flex flex-col gap-[2px] mr-1 justify-start">
-                {WEEKDAYS.map((d, i) => (
-                  <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>{d}</span>
-                ))}
-              </div>
-              <div className="flex gap-[2px]">
-                {heatmapData.weeks.map((week, wi) => (
-                  <div key={wi} className="flex flex-col gap-[2px]">
-                    {Array.from({ length: 7 }).map((_, dow) => {
-                      const cell = week.find(c => c.dow === dow);
-                      if (!cell) return <div key={dow} className="w-[11px] h-[11px]" />;
-                      const cards = cell.cards;
-                      const intensity = cards === 0 ? 0 : cards < 20 ? 1 : cards < 50 ? 2 : cards < 100 ? 3 : 4;
-                      return (
-                        <div
-                          key={dow}
-                          title={`${format(cell.date, 'dd/MM')}: ${cards} cards`}
-                          className={cn(
-                            'w-[11px] h-[11px] rounded-[2px] transition-colors',
-                            intensity === 0 && 'bg-muted/60',
-                            intensity === 1 && 'bg-primary/20',
-                            intensity === 2 && 'bg-primary/40',
-                            intensity === 3 && 'bg-primary/70',
-                            intensity === 4 && 'bg-primary',
-                          )}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2 justify-end">
-              <span className="text-[9px] text-muted-foreground mr-1">Menos</span>
-              {[0, 1, 2, 3, 4].map(level => (
-                <div key={level} className={cn('w-[11px] h-[11px] rounded-[2px]', level === 0 && 'bg-muted/60', level === 1 && 'bg-primary/20', level === 2 && 'bg-primary/40', level === 3 && 'bg-primary/70', level === 4 && 'bg-primary')} />
-              ))}
-              <span className="text-[9px] text-muted-foreground ml-1">Mais</span>
-            </div>
-          </div>
-        </Card>
-
         {/* ─── Retenção ────── */}
         <Card className="p-4 space-y-2">
           <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
@@ -746,7 +779,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Intervals ──────────────────────── */}
+        {/* ─── Intervalos ──────────────────────── */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
