@@ -84,7 +84,8 @@ const ActivityView = () => {
     staleTime: 5_000,
   });
 
-  const { dayMap = {}, streak = 0, bestStreak = 0, totalActiveDays = 0, freezesAvailable = 0, freezesUsed = 0, frozenDays = new Set<string>() } = studyData ?? {};
+  const { dayMap = {}, streak = 0, bestStreak = 0, totalActiveDays = 0, freezesAvailable = 0, freezesUsed = 0, frozenDays: rawFrozenDays } = studyData ?? {};
+  const frozenDays = useMemo(() => rawFrozenDays instanceof Set ? rawFrozenDays : new Set<string>(Array.isArray(rawFrozenDays) ? rawFrozenDays : []), [rawFrozenDays]);
 
   const selectedDayData = selectedDate ? dayMap[selectedDate] : null;
   const isFrozenDay = selectedDate ? frozenDays.has(selectedDate) : false;
