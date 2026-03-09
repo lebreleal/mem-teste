@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Brain } from 'lucide-react';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 
 const STORAGE_KEY = 'fab-position';
 const FAB_SIZE = 56;
