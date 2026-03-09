@@ -2668,16 +2668,14 @@ export type Database = {
         Args: { p_deck_ids: string[]; p_user_id: string }
         Returns: Json
       }
-      get_hourly_breakdown:
-        | { Args: { p_days?: number; p_user_id: string }; Returns: Json }
-        | {
-            Args: {
-              p_days?: number
-              p_tz_offset_minutes?: number
-              p_user_id: string
-            }
-            Returns: Json
-          }
+      get_hourly_breakdown: {
+        Args: {
+          p_days?: number
+          p_tz_offset_minutes?: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_marketplace_fee: { Args: { tier: number }; Returns: number }
       get_plan_metrics: {
         Args: { p_deck_ids: string[]; p_user_id: string }
