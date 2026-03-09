@@ -11,20 +11,34 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon, Timer,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  format, eachDayOfInterval, getDay, subDays, startOfWeek,
+  format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, isAfter, isBefore, startOfDay,
 } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+type PeriodKey = 'all' | '1m' | '3m' | '1y' | 'custom';
+
+const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
+  { key: 'all', label: 'Tudo' },
+  { key: '1m', label: '1 mês' },
+  { key: '3m', label: '3 meses' },
+  { key: '1y', label: '1 ano' },
+  { key: 'custom', label: 'Período' },
+];
 
 // ─── Helpers ──────────────────────────────────────────
 
@@ -104,6 +118,11 @@ const StatsPage = () => {
 
   const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
   const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
+  const [period, setPeriod] = useState<PeriodKey>('all');
+  const [customFrom, setCustomFrom] = useState<Date | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<Date | undefined>(undefined);
+  const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const [pickingField, setPickingField] = useState<'from' | 'to'>('from');
 
   // Activity data from RPC
   const { data: activityData } = useQuery({
@@ -123,11 +142,70 @@ const StatsPage = () => {
   });
 
   const todayKey = format(new Date(), 'yyyy-MM-dd');
-  const todayStats = (activityData?.dayMap ?? {})[todayKey];
-  const todayCards = todayStats?.cards ?? 0;
-  const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
+
+  // Period date range
+  const periodRange = useMemo(() => {
+    const today = startOfDay(new Date());
+    switch (period) {
+      case '1m': return { from: subMonths(today, 1), to: today };
+      case '3m': return { from: subMonths(today, 3), to: today };
+      case '1y': return { from: subMonths(today, 12), to: today };
+      case 'custom':
+        return { from: customFrom ? startOfDay(customFrom) : subMonths(today, 12), to: customTo ? startOfDay(customTo) : today };
+      default: return { from: null, to: today }; // all time
+    }
+  }, [period, customFrom, customTo]);
+
+  // Filter dayMap by period
+  const filteredDayMap = useMemo(() => {
+    if (!periodRange.from) return dayMap;
+    const filtered: Record<string, any> = {};
+    for (const [key, val] of Object.entries(dayMap)) {
+      const d = new Date(key);
+      if ((!periodRange.from || !isBefore(d, periodRange.from)) && (!periodRange.to || !isAfter(d, periodRange.to))) {
+        filtered[key] = val;
+      }
+    }
+    return filtered;
+  }, [dayMap, periodRange]);
+
+  // Computed stats from filtered data
+  const filteredStats = useMemo(() => {
+    const entries = Object.values(filteredDayMap);
+    const totalCards = entries.reduce((s: number, d: any) => s + (Number(d.cards) || 0), 0);
+    const totalMinutes = entries.reduce((s: number, d: any) => s + (Number(d.minutes) || 0), 0);
+    const totalNew = entries.reduce((s: number, d: any) => s + (Number(d.newCards) || 0), 0);
+    const totalLearning = entries.reduce((s: number, d: any) => s + (Number(d.learning) || 0), 0);
+    const totalReview = entries.reduce((s: number, d: any) => s + (Number(d.review) || 0), 0);
+    const daysStudied = entries.filter((d: any) => (Number(d.cards) || 0) > 0).length;
+    const totalDays = periodRange.from ? Math.max(1, Math.ceil((periodRange.to!.getTime() - periodRange.from.getTime()) / 86400000) + 1) : Math.max(1, Object.keys(dayMap).length);
+    const avgCards = daysStudied > 0 ? Math.round(totalCards / daysStudied) : 0;
+    const avgMinutes = daysStudied > 0 ? Math.round(totalMinutes / daysStudied) : 0;
+    return { totalCards, totalMinutes, totalNew, totalLearning, totalReview, daysStudied, totalDays, avgCards, avgMinutes };
+  }, [filteredDayMap, periodRange, dayMap]);
+
+  // Hours chart data (daily minutes bar chart)
+  const hoursChartData = useMemo(() => {
+    const entries = Object.entries(filteredDayMap)
+      .map(([key, val]: [string, any]) => ({ date: key, minutes: Number(val.minutes) || 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // If too many entries, group by week
+    if (entries.length > 60) {
+      const weeks: Record<string, number> = {};
+      entries.forEach(e => {
+        const weekStart = format(startOfWeek(new Date(e.date), { weekStartsOn: 0 }), 'dd/MM');
+        weeks[weekStart] = (weeks[weekStart] || 0) + e.minutes;
+      });
+      return Object.entries(weeks).map(([label, minutes]) => ({ label, minutes }));
+    }
+    return entries.map(e => ({ label: format(new Date(e.date), 'dd/MM'), minutes: e.minutes }));
+  }, [filteredDayMap]);
+
+  const todayStats = dayMap[todayKey];
+  const todayCards = todayStats?.cards ?? 0;
 
   // Sorted ranking
   const sortedRanking = useMemo(() => {
@@ -278,6 +356,9 @@ const StatsPage = () => {
     { key: 'streak' as const, label: 'Streak', icon: Flame },
   ];
 
+  const totalHours = Math.floor(filteredStats.totalMinutes / 60);
+  const totalRemainingMins = filteredStats.totalMinutes % 60;
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
@@ -286,33 +367,141 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats (horizontal strip like reference) ────────────────────── */}
+        {/* ─── Quick Stats ────────────────────── */}
         <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
-          {/* Streak */}
           <div className="flex items-center gap-1 shrink-0">
             <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
               style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
             <span className="text-base font-bold tabular-nums">{currentStreak}</span>
             <span className="text-[10px] text-muted-foreground leading-tight">{currentStreak === 1 ? 'dia\nseguido' : 'dias\nseguidos'}</span>
           </div>
-          {/* Today cards */}
           <div className="flex items-center gap-1 shrink-0">
             <Zap className="h-4 w-4 text-primary" />
             <span className="text-sm font-bold tabular-nums">{todayCards}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
           </div>
-          {/* Today reviews */}
           <div className="flex items-center gap-1 shrink-0">
             <CheckCircle2 className="h-4 w-4 text-success" />
             <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
           </div>
-          {/* Frozen */}
           <div className="flex items-center gap-1 shrink-0">
             <Snowflake className="h-4 w-4 text-info" />
             <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
             <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
           </div>
+        </Card>
+
+        {/* ─── Period Filter ────────────────────── */}
+        <div className="flex gap-1.5 flex-wrap">
+          {PERIOD_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => {
+                setPeriod(opt.key);
+                if (opt.key === 'custom') setCustomPickerOpen(true);
+              }}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                period === opt.key
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom period display */}
+        {period === 'custom' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {customFrom ? format(customFrom, 'dd/MM/yyyy') : 'De'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={customFrom}
+                  onSelect={setCustomFrom}
+                  locale={ptBR}
+                  className="p-3 pointer-events-auto"
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-xs text-muted-foreground">até</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {customTo ? format(customTo, 'dd/MM/yyyy') : 'Até'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={customTo}
+                  onSelect={setCustomTo}
+                  locale={ptBR}
+                  className="p-3 pointer-events-auto"
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
+        {/* ─── Resumo do Período ────────────────── */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Dias estudados', value: `${filteredStats.daysStudied}/${filteredStats.totalDays}` },
+            { label: 'Total revisões', value: filteredStats.totalCards.toLocaleString() },
+            { label: 'Média/dia', value: String(filteredStats.avgCards) },
+          ].map(item => (
+            <Card key={item.label} className="p-3 text-center">
+              <p className="text-lg font-bold tabular-nums">{item.value}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
+            </Card>
+          ))}
+        </div>
+
+        {/* ─── Horas Estudadas ────────────────────── */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Horas Estudadas"
+            icon={<Timer className="h-4 w-4 text-primary" />}
+            info="Tempo total de estudo calculado a partir da duração real de cada revisão no período selecionado."
+          />
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
+            <span className="text-sm text-muted-foreground font-medium">h</span>
+            <span className="text-xl font-bold tabular-nums text-primary">{totalRemainingMins}</span>
+            <span className="text-sm text-muted-foreground font-medium">min</span>
+          </div>
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>Média: <strong className="text-foreground">{formatMinutes(filteredStats.avgMinutes)}/dia</strong></span>
+            <span>{filteredStats.daysStudied} dias ativos</span>
+          </div>
+          {hoursChartData.length > 1 && (
+            <div style={{ height: 120 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    formatter={(val: number) => [`${val} min`, 'Tempo']}
+                  />
+                  <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
 
         {/* ─── Ranking Global ────────────────────── */}
@@ -324,7 +513,6 @@ const StatsPage = () => {
             </button>
           </div>
 
-          {/* Sort pills */}
           <div className="px-4 pb-3 flex gap-2">
             {rankingSortOptions.map(opt => {
               const Icon = opt.icon;
@@ -382,7 +570,6 @@ const StatsPage = () => {
                   </div>
                 );
               })}
-              {/* Show user's position if not in top 3 */}
               {myRankEntry && myRank !== undefined && myRank >= 3 && (
                 <>
                   <div className="px-4 py-1.5 text-center">
@@ -495,20 +682,6 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* ─── Month summary ──────────────────── */}
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Dias estudados', value: `${stats.monthSummary.days_studied}/${stats.monthSummary.days_in_month}` },
-            { label: 'Total revisões', value: stats.monthSummary.total_reviews.toLocaleString() },
-            { label: 'Média/dia', value: String(stats.monthSummary.avg_reviews_per_day) },
-          ].map(item => (
-            <Card key={item.label} className="p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{item.value}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
-            </Card>
-          ))}
-        </div>
-
         {/* ─── Retenção ────── */}
         <Card className="p-4 space-y-2">
           <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
@@ -550,13 +723,11 @@ const StatsPage = () => {
             <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
             <span className="text-sm font-bold tabular-nums text-foreground">{cc.total} total</span>
           </div>
-          {/* Stacked bar */}
           <div className="h-4 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
               <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} title={`${cat.label}: ${cat.count}`} />
             ))}
           </div>
-          {/* Legend with bar visualization */}
           <div className="space-y-2">
             {cardCategories.map(cat => {
               const pct = cc.total > 0 ? (cat.count / cc.total * 100) : 0;
