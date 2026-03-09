@@ -374,7 +374,7 @@ const StatsPage = () => {
         {/* ─── Forecast ───────────────────────── */}
         {forecastData.length > 0 && (
           <Card className="p-4 space-y-3">
-            <SectionTitle title="Carga Prevista (30 dias)" info="Estimativa de quantos cartões você terá para revisar por dia nas próximas semanas." />
+            <SectionTitle title="Carga Prevista (30 dias)" info={"Este gráfico mostra uma estimativa de quantos cartões você terá para estudar por dia nas próximas semanas.\n\n• Revisão (maior parte) — Cartões que vão vencer e precisam ser revisados.\n• Novos — Cartões novos que o app vai introduzir por dia.\n• Aprendendo — Cartões que ainda estão no processo inicial de aprendizado.\n\nSe a carga estiver muito alta, considere reduzir o número de cartões novos por dia nas configurações do deck."} />
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={forecastData}>
