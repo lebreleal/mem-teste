@@ -1018,9 +1018,9 @@ function MiniBarChart({ data, color, height = 130 }: { data: { label: string; co
     <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-          <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-          <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+          <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }} />
           <Bar dataKey="count" name="Cartões" fill={color} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
