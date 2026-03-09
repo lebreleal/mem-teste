@@ -450,7 +450,16 @@ const StatsPage = () => {
     return { count: Math.round((avgRetrievability / 100) * reviewedCards), avgRetrievability };
   }, [stats]);
 
-  if (isLoading) {
+  const last7Days = useMemo(() => {
+    const today = new Date();
+    let total = 0;
+    for (let i = 0; i < 7; i++) {
+      const key = format(subDays(today, i), 'yyyy-MM-dd');
+      total += dayMap[key]?.cards ?? 0;
+    }
+    return Math.round(total / 7);
+  }, [dayMap]);
+
     return (
       <div className="min-h-screen bg-background p-4 space-y-4 pb-24">
         <Skeleton className="h-8 w-48" />
