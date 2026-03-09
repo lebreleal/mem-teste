@@ -460,6 +460,7 @@ const StatsPage = () => {
     return Math.round(total / 7);
   }, [dayMap]);
 
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-4 space-y-4 pb-24">
         <Skeleton className="h-8 w-48" />
