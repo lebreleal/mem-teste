@@ -620,7 +620,6 @@ const StatsPage = () => {
           <div className="flex items-center justify-between">
             <SectionTitle
               title="Revisões por Dia"
-              icon={<Zap className="h-4 w-4 text-primary" />}
               info="Total de cards revisados por dia no período selecionado."
             />
             <PeriodFilterIcon filter={reviewsPerDayFilter} />
