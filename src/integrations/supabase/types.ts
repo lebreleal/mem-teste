@@ -1201,6 +1201,7 @@ export type Database = {
         Row: {
           created_at: string
           creator_tier: number
+          current_streak: number
           daily_cards_studied: number
           daily_energy_earned: number
           daily_free_gradings: number
@@ -1211,6 +1212,7 @@ export type Database = {
           forecast_view: string
           id: string
           is_banned: boolean
+          is_profile_public: boolean
           last_energy_recharge: string | null
           last_grading_reset_date: string | null
           last_study_reset_date: string | null
@@ -1228,6 +1230,7 @@ export type Database = {
         Insert: {
           created_at?: string
           creator_tier?: number
+          current_streak?: number
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
@@ -1238,6 +1241,7 @@ export type Database = {
           forecast_view?: string
           id: string
           is_banned?: boolean
+          is_profile_public?: boolean
           last_energy_recharge?: string | null
           last_grading_reset_date?: string | null
           last_study_reset_date?: string | null
@@ -1255,6 +1259,7 @@ export type Database = {
         Update: {
           created_at?: string
           creator_tier?: number
+          current_streak?: number
           daily_cards_studied?: number
           daily_energy_earned?: number
           daily_free_gradings?: number
@@ -1265,6 +1270,7 @@ export type Database = {
           forecast_view?: string
           id?: string
           is_banned?: boolean
+          is_profile_public?: boolean
           last_energy_recharge?: string | null
           last_grading_reset_date?: string | null
           last_study_reset_date?: string | null
@@ -2671,6 +2677,7 @@ export type Database = {
           total_review: number
         }[]
       }
+      get_public_profile_stats: { Args: { p_user_id: string }; Returns: Json }
       get_public_profiles: {
         Args: { p_user_ids: string[] }
         Returns: {
@@ -2701,6 +2708,16 @@ export type Database = {
       get_user_performance_summary: {
         Args: { p_user_id: string }
         Returns: Json
+      }
+      get_user_ranking: {
+        Args: never
+        Returns: {
+          cards_30d: number
+          current_streak: number
+          minutes_30d: number
+          user_id: string
+          user_name: string
+        }[]
       }
       get_user_real_study_metrics: {
         Args: { p_user_id: string }
