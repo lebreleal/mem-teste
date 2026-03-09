@@ -839,9 +839,9 @@ const StatsPage = () => {
         <Card className="p-4 space-y-3">
           <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
-            <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
-            <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
-            <StatBadge label="Máx" value={`${intervalPercentiles.max}d`} />
+            <StatBadge label="p50" value={`${Math.round(intervalPercentiles.p50)}d`} />
+            <StatBadge label="p95" value={`${Math.round(intervalPercentiles.p95)}d`} />
+            <StatBadge label="Máx" value={`${Math.round(intervalPercentiles.max)}d`} />
           </div>
           <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
         </Card>
