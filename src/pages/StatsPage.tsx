@@ -584,7 +584,6 @@ const StatsPage = () => {
           <div className="flex items-center justify-between">
             <SectionTitle
               title="Horas Estudadas"
-              icon={<Timer className="h-4 w-4 text-primary" />}
               info="Tempo total de estudo calculado a partir da duração real de cada revisão."
             />
             <PeriodFilterIcon filter={hoursFilter} />
