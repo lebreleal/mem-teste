@@ -348,7 +348,7 @@ const StatsPage = () => {
               <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
-            <div className="border-t border-border/40">
+            <div className="border-t border-border/40 max-h-[400px] overflow-y-auto">
               {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
@@ -367,16 +367,6 @@ const StatsPage = () => {
                         {entry.user_name || 'Usuário'}
                         {isMe && <span className="text-[10px] text-muted-foreground ml-1">(você)</span>}
                       </p>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground tabular-nums">
-                        <span>{entry.cards_30d.toLocaleString()} cards</span>
-                        <span>·</span>
-                        <span>{formatMinutes(entry.minutes_30d)}</span>
-                        <span>·</span>
-                        <span className="flex items-center gap-0.5">
-                          <Flame className="h-2.5 w-2.5 text-orange-500" />
-                          {entry.current_streak}
-                        </span>
-                      </div>
                     </div>
                     <span className="text-xs tabular-nums font-bold text-foreground">
                       {getRankValue(entry)}

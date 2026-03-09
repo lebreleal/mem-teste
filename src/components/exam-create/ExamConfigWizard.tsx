@@ -185,7 +185,7 @@ const ExamConfigWizard = ({
                     <button
                       key={n}
                       onClick={() => setOptionsCount(n)}
-                      className={`rounded-xl border-2 py-3 px-4 transition-all ${
+                      className={`rounded-xl border-2 py-2.5 px-3 transition-all ${
                         optionsCount === n
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-border hover:border-muted-foreground/30'
@@ -199,7 +199,7 @@ const ExamConfigWizard = ({
                       </div>
                       <div className="flex gap-1">
                         {LETTERS.slice(0, n).map(l => (
-                          <span key={l} className={`flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold ${
+                          <span key={l} className={`flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold ${
                             optionsCount === n ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                           }`}>{l}</span>
                         ))}
