@@ -321,7 +321,7 @@ const StatsPage = () => {
 
         {/* ─── Card counts ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Contagem de Cartões" info="Distribuição dos seus cartões por estado de aprendizado." />
+          <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos.\n\nO objetivo é ter cada vez mais cartões maduros!"} />
           <div className="h-3 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
               <div
