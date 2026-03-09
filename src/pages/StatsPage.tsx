@@ -604,10 +604,10 @@ const StatsPage = () => {
             <div style={{ height: 120 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
                   <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                     formatter={(val: number) => [`${val} min`, 'Tempo']}
                   />
                   <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
