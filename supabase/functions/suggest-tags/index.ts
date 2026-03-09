@@ -120,7 +120,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gemini-2.0-flash",
+          model: "gemini-2.5-flash-lite",
           messages: [
             { role: "system", content: "Você é um classificador de conteúdo educacional. Responda apenas com JSON." },
             { role: "user", content: prompt },
