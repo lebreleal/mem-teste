@@ -817,33 +817,19 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 10. Conhecimento Total Estimado + Métricas Extras */}
-        <Card className="p-4 space-y-3">
+        {/* 10. Conhecimento Total Estimado */}
+        <Card className="p-4 space-y-2">
           <SectionTitle
             title="Conhecimento Total Estimado"
-            icon={<Brain className="h-4 w-4 text-primary" />}
             info={"Estimativa de quantos cartões você provavelmente lembra agora.\n\nFórmula: recuperabilidade média × cartões revisados.\n\nExemplo: se você tem 1000 cartões revisados e a recuperabilidade média é 85%, seu conhecimento estimado é ~850 cartões."}
           />
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold tabular-nums text-primary">{estimatedKnowledge.count.toLocaleString()}</span>
-            <span className="text-sm text-muted-foreground">cartões</span>
+            <span className="text-sm text-muted-foreground">de {(stats.cardCounts.total - stats.cardCounts.new).toLocaleString()} cartões revisados</span>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            Recuperabilidade média: {estimatedKnowledge.avgRetrievability}% · {stats.cardCounts.total - stats.cardCounts.new} cartões revisados
-          </p>
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{maturationRate}%</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Taxa de Maturação</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{avgTimePerCard}s</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Tempo/Card</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{last7Days}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">Carga 7d/dia</p>
-            </div>
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            <span>Recuperabilidade média: <strong className="text-foreground">{estimatedKnowledge.avgRetrievability}%</strong></span>
+            <span>Taxa de maturação: <strong className="text-foreground">{maturationRate}%</strong></span>
           </div>
         </Card>
 
