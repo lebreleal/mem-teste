@@ -25,7 +25,7 @@ import {
   ComposedChart, Line,
 } from 'recharts';
 import {
-  format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, isAfter, isBefore, startOfDay,
+  format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, startOfDay,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
