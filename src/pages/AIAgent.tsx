@@ -391,7 +391,7 @@ const AIAgent = () => {
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-4 text-center">
-              <MemoCardsLogo size={64} className="mb-4 opacity-20" />
+              <Brain className="h-16 w-16 mb-4 opacity-20" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
               <h2 className="text-xl font-bold text-foreground mb-2">Olá! Como posso ajudar?</h2>
               <p className="text-sm text-muted-foreground max-w-md">
                 Tire dúvidas sobre qualquer matéria, peça resumos, explicações ou ajuda com exercícios. Custa {cost} créditos por mensagem.
