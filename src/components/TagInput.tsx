@@ -3,10 +3,14 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Tag as TagIcon, BadgeCheck, Sparkles, Loader2, ChevronRight } from 'lucide-react';
+import { X, Plus, Tag as TagIcon, BadgeCheck, Sparkles, Loader2, ChevronRight, Brain } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTagSearch, useTagSuggestions } from '@/hooks/useTags';
 import type { Tag } from '@/types/tag';
 import type { TagTreeNode } from '@/services/tagService';
