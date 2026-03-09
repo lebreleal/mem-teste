@@ -13,14 +13,14 @@ import {
 } from 'lucide-react';
 
 const retentionColor = (pct: number) => {
-  if (pct >= 80) return { text: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', progress: '[&>div]:bg-emerald-500' };
-  if (pct >= 50) return { text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', progress: '[&>div]:bg-amber-500' };
-  return { text: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20', progress: '[&>div]:bg-red-500' };
+  if (pct >= 80) return { text: 'text-success', bg: 'bg-success/10', border: 'border-success/20', progress: '[&>div]:bg-success' };
+  if (pct >= 50) return { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/20', progress: '[&>div]:bg-warning' };
+  return { text: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20', progress: '[&>div]:bg-destructive' };
 };
 
 const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
-  if (trend === 'up') return <TrendingUp className="h-3 w-3 text-emerald-500" />;
-  if (trend === 'down') return <TrendingDown className="h-3 w-3 text-red-500" />;
+  if (trend === 'up') return <TrendingUp className="h-3 w-3 text-success" />;
+  if (trend === 'down') return <TrendingDown className="h-3 w-3 text-destructive" />;
   return <Minus className="h-3 w-3 text-muted-foreground" />;
 };
 
@@ -117,10 +117,10 @@ const Performance = () => {
                       const totalToday = s.newCards + s.reviewCards;
                       const ct = s.todayCardTypes;
                       const typeItems = [
-                        { icon: Type, label: 'Básico', count: ct.basic, color: 'text-blue-500' },
-                        { icon: Braces, label: 'Cloze', count: ct.cloze, color: 'text-violet-500' },
-                        { icon: ListChecks, label: 'Múlt. Escolha', count: ct.multiple_choice, color: 'text-amber-500' },
-                        { icon: EyeOff, label: 'Oclusão', count: ct.image_occlusion, color: 'text-emerald-500' },
+                        { icon: Type, label: 'Básico', count: ct.basic, color: 'text-primary' },
+                        { icon: Braces, label: 'Cloze', count: ct.cloze, color: 'text-accent-foreground' },
+                        { icon: ListChecks, label: 'Múlt. Escolha', count: ct.multiple_choice, color: 'text-warning' },
+                        { icon: EyeOff, label: 'Oclusão', count: ct.image_occlusion, color: 'text-success' },
                       ].filter(t => t.count > 0);
 
                       return (
