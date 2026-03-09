@@ -488,18 +488,23 @@ const StatsPage = () => {
             <p className="text-[10px] text-muted-foreground">{stats.trueRetention.correct} / {stats.trueRetention.total} acertos</p>
           </Card>
 
-          <Card className="p-4 space-y-2">
+          <Card className="p-4 space-y-2.5">
             <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
             <div className="space-y-2">
               {buttonData.map(btn => {
                 const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
                 return (
-                  <div key={btn.label} className="flex items-center gap-2">
-                    <span className="text-[11px] font-medium w-10 shrink-0">{btn.label}</span>
-                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                  <div key={btn.label} className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: btn.color }} />
+                        <span className="text-[11px] font-medium">{btn.label}</span>
+                      </div>
+                      <span className="text-[11px] tabular-nums font-semibold">{btn.count} <span className="text-muted-foreground font-normal">({pct.toFixed(0)}%)</span></span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 2)}%`, background: btn.color }} />
                     </div>
-                    <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
                   </div>
                 );
               })}
@@ -515,11 +520,13 @@ const StatsPage = () => {
               <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} />
             ))}
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             {cardCategories.map(cat => (
-              <div key={cat.label} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
-                <span className="text-[11px] text-muted-foreground">{cat.label}</span>
+              <div key={cat.label} className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
+                  <span className="text-[11px] text-muted-foreground">{cat.label}</span>
+                </div>
                 <span className="text-[11px] font-bold tabular-nums">{cat.count}</span>
               </div>
             ))}
