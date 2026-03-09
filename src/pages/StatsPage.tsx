@@ -307,7 +307,7 @@ const StatsPage = () => {
         </div>
 
         {/* ─── Ranking Global ────────────────────── */}
-        <Card className="rounded-xl overflow-hidden">
+        <Card className="rounded-xl overflow-visible">
           <div className="p-4 pb-2 flex items-center justify-between">
             <SectionTitle title="Ranking Global" icon={<Trophy className="h-4 w-4 text-warning" />} info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
             <button onClick={() => setRankingConfigOpen(true)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
