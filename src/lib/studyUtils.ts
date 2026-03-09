@@ -25,6 +25,8 @@ export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
   avgRelearningSeconds: 25,
   actualDailyMinutes: 15,
   totalReviews90d: 0,
+  avgReviewsPerNewCard: 3,
+  avgLapseRate: 0.10,
 };
 
 /**
