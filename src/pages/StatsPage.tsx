@@ -91,6 +91,7 @@ function usePeriodFilter() {
   const range = useMemo(() => {
     const today = startOfDay(new Date());
     switch (period) {
+      case '7d': return { from: subDays(today, 7), to: today };
       case '1m': return { from: subMonths(today, 1), to: today };
       case '3m': return { from: subMonths(today, 3), to: today };
       case '1y': return { from: subMonths(today, 12), to: today };
