@@ -11,16 +11,14 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn, formatMinutes } from '@/lib/utils';
 import {
-  HelpCircle, Flame, Clock, Trophy, TrendingUp, Users, Settings2,
-  ChevronRight, Zap, Calendar,
+  HelpCircle, Flame, Clock, Trophy, Users, Settings2,
+  ChevronRight, Zap, Calendar, Medal,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek,
@@ -43,8 +41,6 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-// ─── Section header with optional info tooltip ────────
-
 function SectionTitle({ title, info, icon }: { title: string; info?: string; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -61,14 +57,36 @@ function SectionTitle({ title, info, icon }: { title: string; info?: string; ico
       {info && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="text-base">{title}</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle className="text-base">{title}</DialogTitle></DialogHeader>
             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{info}</p>
           </DialogContent>
         </Dialog>
       )}
     </>
+  );
+}
+
+// Medal component for podium positions
+function RankMedal({ position }: { position: number }) {
+  if (position === 1) return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 ring-2 ring-amber-400">
+      <span className="text-base">👑</span>
+    </div>
+  );
+  if (position === 2) return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400">
+      <Medal className="h-4 w-4 text-slate-500" />
+    </div>
+  );
+  if (position === 3) return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 ring-2 ring-orange-400">
+      <Medal className="h-4 w-4 text-orange-600" />
+    </div>
+  );
+  return (
+    <div className="flex h-7 w-7 items-center justify-center">
+      <span className="text-xs font-bold tabular-nums text-muted-foreground">{position}º</span>
+    </div>
   );
 }
 
@@ -162,16 +180,11 @@ const StatsPage = () => {
   const intervalBuckets = useMemo(() => {
     if (!stats) return [];
     return bucketize(stats.intervalDistribution, [
-      { label: '0', min: 0, max: 1 },
-      { label: '1', min: 1, max: 2 },
-      { label: '2-3', min: 2, max: 4 },
-      { label: '4-7', min: 4, max: 8 },
-      { label: '8-14', min: 8, max: 15 },
-      { label: '15-30', min: 15, max: 31 },
-      { label: '1-2m', min: 31, max: 61 },
-      { label: '2-4m', min: 61, max: 121 },
-      { label: '4-6m', min: 121, max: 181 },
-      { label: '6-12m', min: 181, max: 366 },
+      { label: '0', min: 0, max: 1 }, { label: '1', min: 1, max: 2 },
+      { label: '2-3', min: 2, max: 4 }, { label: '4-7', min: 4, max: 8 },
+      { label: '8-14', min: 8, max: 15 }, { label: '15-30', min: 15, max: 31 },
+      { label: '1-2m', min: 31, max: 61 }, { label: '2-4m', min: 61, max: 121 },
+      { label: '4-6m', min: 121, max: 181 }, { label: '6-12m', min: 181, max: 366 },
       { label: '1a+', min: 366, max: 999999 },
     ]);
   }, [stats]);
@@ -179,10 +192,8 @@ const StatsPage = () => {
   const stabilityBuckets = useMemo(() => {
     if (!stats) return [];
     return bucketize(stats.stabilityDistribution, [
-      { label: '0-7d', min: 0, max: 7 },
-      { label: '7-30d', min: 7, max: 30 },
-      { label: '30-90d', min: 30, max: 90 },
-      { label: '90d-1a', min: 90, max: 365 },
+      { label: '0-7d', min: 0, max: 7 }, { label: '7-30d', min: 7, max: 30 },
+      { label: '30-90d', min: 30, max: 90 }, { label: '90d-1a', min: 90, max: 365 },
       { label: '1a+', min: 365, max: 999999 },
     ]);
   }, [stats]);
@@ -191,10 +202,7 @@ const StatsPage = () => {
     if (!stats) return [];
     const buckets: { label: string; count: number }[] = [];
     for (let i = 1; i <= 10; i++) {
-      buckets.push({
-        label: String(i),
-        count: stats.difficultyDistribution.filter(v => Math.round(v) === i).length,
-      });
+      buckets.push({ label: String(i), count: stats.difficultyDistribution.filter(v => Math.round(v) === i).length });
     }
     return buckets;
   }, [stats]);
@@ -202,12 +210,9 @@ const StatsPage = () => {
   const retrievabilityBuckets = useMemo(() => {
     if (!stats) return [];
     return bucketize(stats.retrievabilityDistribution, [
-      { label: '0-30%', min: 0, max: 30 },
-      { label: '30-50%', min: 30, max: 50 },
-      { label: '50-70%', min: 50, max: 70 },
-      { label: '70-85%', min: 70, max: 85 },
-      { label: '85-95%', min: 85, max: 95 },
-      { label: '95%+', min: 95, max: 101 },
+      { label: '0-30%', min: 0, max: 30 }, { label: '30-50%', min: 30, max: 50 },
+      { label: '50-70%', min: 50, max: 70 }, { label: '70-85%', min: 70, max: 85 },
+      { label: '85-95%', min: 85, max: 95 }, { label: '95%+', min: 95, max: 101 },
     ]);
   }, [stats]);
 
@@ -241,7 +246,6 @@ const StatsPage = () => {
   }
 
   const cc = stats.cardCounts;
-
   const cardCategories = [
     { label: 'Novos', count: cc.new, color: 'hsl(var(--chart-1))' },
     { label: 'Aprendendo', count: cc.learning, color: 'hsl(var(--chart-2))' },
@@ -262,9 +266,20 @@ const StatsPage = () => {
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
   const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
 
+  const getRankValue = (entry: typeof sortedRanking[0]) => {
+    if (rankingSort === 'hours') return formatMinutes(entry.minutes_30d);
+    if (rankingSort === 'streak') return `${entry.current_streak} dias`;
+    return `${entry.cards_30d.toLocaleString()} cards`;
+  };
+
+  const rankingSortOptions = [
+    { key: 'cards' as const, label: 'Cards', icon: Zap },
+    { key: 'hours' as const, label: 'Horas', icon: Clock },
+    { key: 'streak' as const, label: 'Streak', icon: Flame },
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
         <h1 className="text-lg font-bold font-display">Desempenho</h1>
       </div>
@@ -273,22 +288,17 @@ const StatsPage = () => {
 
         {/* ─── Quick Stats ────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
-          {/* Streak */}
           <Card className="p-3 text-center space-y-1 border-orange-500/20 bg-gradient-to-b from-orange-500/5 to-transparent">
             <Flame className={cn("h-5 w-5 mx-auto", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
               style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
             <p className="text-2xl font-bold tabular-nums">{currentStreak}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">
-              {currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}
-            </p>
+            <p className="text-[10px] text-muted-foreground font-medium">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</p>
           </Card>
-          {/* Cards hoje */}
           <Card className="p-3 text-center space-y-1 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
             <Zap className="h-5 w-5 mx-auto text-primary" />
             <p className="text-2xl font-bold tabular-nums">{todayCards}</p>
             <p className="text-[10px] text-muted-foreground font-medium">cards hoje</p>
           </Card>
-          {/* Tempo hoje */}
           <Card className="p-3 text-center space-y-1 border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent">
             <Clock className="h-5 w-5 mx-auto text-emerald-500" />
             <p className="text-2xl font-bold tabular-nums">{formatMinutes(todayMinutes)}</p>
@@ -305,26 +315,32 @@ const StatsPage = () => {
             </button>
           </div>
 
-          {/* Sort tabs */}
-          <div className="px-4 pb-3">
-            <Tabs value={rankingSort} onValueChange={(v) => setRankingSort(v as any)}>
-              <TabsList className="w-full h-8">
-                <TabsTrigger value="cards" className="text-xs flex-1 h-7 gap-1">
-                  <Zap className="h-3 w-3" /> Cards
-                </TabsTrigger>
-                <TabsTrigger value="hours" className="text-xs flex-1 h-7 gap-1">
-                  <Clock className="h-3 w-3" /> Horas
-                </TabsTrigger>
-                <TabsTrigger value="streak" className="text-xs flex-1 h-7 gap-1">
-                  <Flame className="h-3 w-3" /> Streak
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+          {/* Sort pills */}
+          <div className="px-4 pb-3 flex gap-2">
+            {rankingSortOptions.map(opt => {
+              const Icon = opt.icon;
+              const active = rankingSort === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => setRankingSort(opt.key)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                    active
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  <Icon className="h-3 w-3" />
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
 
           {rankingLoading ? (
             <div className="px-4 pb-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : !sortedRanking || sortedRanking.length === 0 ? (
             <div className="px-4 pb-4 text-center py-6">
@@ -332,61 +348,42 @@ const StatsPage = () => {
               <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
-            <div className="border-t border-border/40 divide-y divide-border/30">
-              {sortedRanking.slice(0, 10).map((entry, i) => {
+            <div className="border-t border-border/40">
+              {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
-                const medals = ['🥇', '🥈', '🥉'];
-                const mainValue = rankingSort === 'hours'
-                  ? formatMinutes(entry.minutes_30d)
-                  : rankingSort === 'streak'
-                    ? `${entry.current_streak} dias`
-                    : `${entry.cards_30d.toLocaleString()} cards`;
                 return (
                   <div
                     key={entry.user_id}
                     className={cn(
-                      'flex items-center gap-3 px-4 py-2.5 text-sm',
+                      'flex items-center gap-3 px-4 py-2.5 border-b border-border/20 last:border-b-0',
                       isMe && 'bg-primary/5',
+                      pos <= 3 && 'py-3',
                     )}
                   >
-                    <span className="w-7 text-center font-bold tabular-nums text-xs text-muted-foreground">
-                      {pos <= 3 ? medals[pos - 1] : `${pos}º`}
-                    </span>
-                    <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold text-primary')}>
-                      {entry.user_name || 'Usuário'}
-                      {isMe && <span className="text-[10px] text-muted-foreground ml-1">(você)</span>}
-                    </span>
-                    <span className="text-xs tabular-nums text-muted-foreground font-medium">
-                      {mainValue}
+                    <RankMedal position={pos} />
+                    <div className="flex-1 min-w-0">
+                      <p className={cn('text-sm truncate', isMe ? 'font-semibold text-primary' : 'font-medium')}>
+                        {entry.user_name || 'Usuário'}
+                        {isMe && <span className="text-[10px] text-muted-foreground ml-1">(você)</span>}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+                        <span>{entry.cards_30d.toLocaleString()} cards</span>
+                        <span>·</span>
+                        <span>{formatMinutes(entry.minutes_30d)}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-0.5">
+                          <Flame className="h-2.5 w-2.5 text-orange-500" />
+                          {entry.current_streak}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-xs tabular-nums font-bold text-foreground">
+                      {getRankValue(entry)}
                     </span>
                   </div>
                 );
               })}
-              {/* Show my position if not in top 10 */}
-              {myRank !== undefined && myRank >= 10 && myRankEntry && (
-                <>
-                  <div className="px-4 py-1.5 text-center">
-                    <span className="text-[10px] text-muted-foreground">···</span>
-                  </div>
-                  <div className="flex items-center gap-3 px-4 py-2.5 text-sm bg-primary/5">
-                    <span className="w-7 text-center font-bold tabular-nums text-xs text-muted-foreground">
-                      {myRank + 1}º
-                    </span>
-                    <span className="flex-1 truncate text-sm font-semibold text-primary">
-                      {myRankEntry.user_name || 'Você'}
-                      <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
-                    </span>
-                    <span className="text-xs tabular-nums text-muted-foreground font-medium">
-                      {rankingSort === 'hours'
-                        ? formatMinutes(myRankEntry.minutes_30d)
-                        : rankingSort === 'streak'
-                          ? `${myRankEntry.current_streak} dias`
-                          : `${myRankEntry.cards_30d.toLocaleString()} cards`}
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
           )}
         </Card>
@@ -429,11 +426,7 @@ const StatsPage = () => {
                 const nextCol = heatmapData.months[i + 1]?.colStart ?? heatmapData.weeks.length;
                 const span = nextCol - m.colStart;
                 return (
-                  <span
-                    key={`${m.label}-${m.colStart}`}
-                    className="text-[9px] text-muted-foreground"
-                    style={{ width: span * 13, flexShrink: 0 }}
-                  >
+                  <span key={`${m.label}-${m.colStart}`} className="text-[9px] text-muted-foreground" style={{ width: span * 13, flexShrink: 0 }}>
                     {m.label}
                   </span>
                 );
@@ -442,9 +435,7 @@ const StatsPage = () => {
             <div className="flex gap-0">
               <div className="flex flex-col gap-[2px] mr-1 justify-start">
                 {WEEKDAYS.map((d, i) => (
-                  <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>
-                    {d}
-                  </span>
+                  <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>{d}</span>
                 ))}
               </div>
               <div className="flex gap-[2px]">
@@ -477,17 +468,7 @@ const StatsPage = () => {
             <div className="flex items-center gap-1 mt-2 justify-end">
               <span className="text-[9px] text-muted-foreground mr-1">Menos</span>
               {[0, 1, 2, 3, 4].map(level => (
-                <div
-                  key={level}
-                  className={cn(
-                    'w-[11px] h-[11px] rounded-[2px]',
-                    level === 0 && 'bg-muted/60',
-                    level === 1 && 'bg-primary/20',
-                    level === 2 && 'bg-primary/40',
-                    level === 3 && 'bg-primary/70',
-                    level === 4 && 'bg-primary',
-                  )}
-                />
+                <div key={level} className={cn('w-[11px] h-[11px] rounded-[2px]', level === 0 && 'bg-muted/60', level === 1 && 'bg-primary/20', level === 2 && 'bg-primary/40', level === 3 && 'bg-primary/70', level === 4 && 'bg-primary')} />
               ))}
               <span className="text-[9px] text-muted-foreground ml-1">Mais</span>
             </div>
@@ -508,31 +489,27 @@ const StatsPage = () => {
           ))}
         </div>
 
-        {/* ─── Retenção + Botões ────── */}
+        {/* ─── Retenção + Respostas ────── */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nPor exemplo, se você revisou 100 cartões e acertou 85, sua retenção é 85%.\n\nO ideal é ficar entre 80% e 95%. Abaixo de 80% significa que os intervalos estão muito longos. Acima de 95% pode significar que você está revisando demais."} />
+            <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
             <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
             <Progress value={stats.trueRetention.rate} className="h-2" />
-            <p className="text-[10px] text-muted-foreground">
-              {stats.trueRetention.correct} / {stats.trueRetention.total} acertos
-            </p>
+            <p className="text-[10px] text-muted-foreground">{stats.trueRetention.correct} / {stats.trueRetention.total} acertos</p>
           </Card>
 
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias:\n\n• Errei — Você não lembrou do cartão. Ele volta pra fila de aprendizado.\n• Difícil — Lembrou com dificuldade. O intervalo aumenta pouco.\n• Bom — Lembrou normalmente. O intervalo aumenta de forma padrão.\n• Fácil — Lembrou instantaneamente. O intervalo aumenta bastante.\n\nUm equilíbrio saudável tem poucos 'Errei' e a maioria em 'Bom'."} />
-            <div className="space-y-1.5">
+            <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
+            <div className="space-y-2">
               {buttonData.map(btn => {
                 const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
                 return (
-                  <div key={btn.label} className="space-y-0.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-medium">{btn.label}</span>
-                      <span className="text-[10px] tabular-nums text-muted-foreground">{pct.toFixed(0)}%</span>
+                  <div key={btn.label} className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium w-10 shrink-0">{btn.label}</span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 2)}%`, background: btn.color }} />
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: btn.color }} />
-                    </div>
+                    <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
                   </div>
                 );
               })}
@@ -540,24 +517,20 @@ const StatsPage = () => {
           </Card>
         </div>
 
-        {/* ─── Card counts ────────────────────── */}
+        {/* ─── Contagem de Cartões ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos.\n\nO objetivo é ter cada vez mais cartões maduros!"} />
+          <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
           <div className="h-3 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
-              <div
-                key={cat.label}
-                className="h-full transition-all"
-                style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }}
-              />
+              <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} />
             ))}
           </div>
-          <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
             {cardCategories.map(cat => (
               <div key={cat.label} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cat.color }} />
-                <span className="text-[10px] text-muted-foreground">{cat.label}</span>
-                <span className="text-[10px] font-semibold tabular-nums ml-auto">{cat.count}</span>
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
+                <span className="text-[11px] text-muted-foreground">{cat.label}</span>
+                <span className="text-[11px] font-bold tabular-nums">{cat.count}</span>
               </div>
             ))}
           </div>
@@ -565,7 +538,7 @@ const StatsPage = () => {
 
         {/* ─── Intervals ──────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\nQuando você acerta um cartão, o app agenda a próxima revisão mais para frente. Se você acerta de novo, ele agenda ainda mais longe — e assim por diante.\n\nEste gráfico mostra como seus intervalos estão distribuídos. Quanto mais barras à direita (intervalos longos), mais cartões você já domina.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
+          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
             <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
             <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
@@ -574,32 +547,29 @@ const StatsPage = () => {
           <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
         </Card>
 
-        {/* ─── Stability + Difficulty side by side */}
+        {/* ─── Stability + Difficulty */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo cerca de 90% de chance de você lembrar.\n\nPor exemplo, estabilidade de 30 dias significa que, se você esperar 30 dias para revisar, ainda tem ~90% de chance de acertar.\n\nQuanto maior a estabilidade, melhor — significa que a memória está mais consolidada."} />
+            <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo ~90% de chance de acerto."} />
             <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
           </Card>
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (muito fácil) a 10 (muito difícil).\n\nO algoritmo ajusta automaticamente esse valor conforme você estuda. Cartões que você erra frequentemente ficam com dificuldade alta. Cartões que você sempre acerta ficam com dificuldade baixa.\n\nSe muitos cartões estão com dificuldade alta (7-10), pode ser útil reformular o conteúdo desses cartões para facilitar a memorização."} />
+            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (fácil) a 10 (difícil). Ajustada automaticamente pelo algoritmo."} />
             <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
           </Card>
         </div>
 
         {/* ─── Retrievability ─────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Recuperabilidade" info={"A recuperabilidade mostra a probabilidade estimada de você lembrar cada cartão AGORA, neste momento.\n\nQuando você acabou de revisar um cartão, a recuperabilidade é ~100%. Com o passar dos dias sem revisar, ela vai caindo.\n\n• 95%+ — Você provavelmente lembra.\n• 70-85% — Está na hora de revisar.\n• Abaixo de 50% — Provavelmente já esqueceu.\n\nO app agenda as revisões para que a recuperabilidade não caia muito antes de você rever."} />
+          <SectionTitle title="Recuperabilidade" info={"Probabilidade estimada de você lembrar cada cartão agora.\n\n• 95%+ — Provavelmente lembra.\n• 70-85% — Hora de revisar.\n• Abaixo de 50% — Provavelmente esqueceu."} />
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
         {/* ─── Carga Prevista — link to /plano ─── */}
-        <Card
-          className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
-          onClick={() => navigate('/plano')}
-        >
+        <Card className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/plano')}>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-chart-4/10">
-              <Calendar className="h-5 w-5 text-chart-4" />
+            <div className="p-2 rounded-xl bg-primary/10">
+              <Calendar className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-sm font-semibold">Carga Prevista</p>
