@@ -367,7 +367,7 @@ const StatsPage = () => {
 
         {/* ─── Retrievability ─────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Recuperabilidade" info="Probabilidade estimada de lembrar cada cartão agora, calculada pelo FSRS." />
+          <SectionTitle title="Recuperabilidade" info={"A recuperabilidade mostra a probabilidade estimada de você lembrar cada cartão AGORA, neste momento.\n\nQuando você acabou de revisar um cartão, a recuperabilidade é ~100%. Com o passar dos dias sem revisar, ela vai caindo.\n\n• 95%+ — Você provavelmente lembra.\n• 70-85% — Está na hora de revisar.\n• Abaixo de 50% — Provavelmente já esqueceu.\n\nO app agenda as revisões para que a recuperabilidade não caia muito antes de você rever."} />
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
