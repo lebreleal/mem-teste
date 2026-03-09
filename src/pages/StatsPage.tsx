@@ -231,45 +231,81 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
 
-        {/* ─── Calendar ─────────────────────────── */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="text-sm font-semibold capitalize">
-              {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-            </span>
-            <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center">
-            {WEEKDAYS.map((d, i) => (
-              <span key={i} className="text-[10px] text-muted-foreground font-medium">{d}</span>
-            ))}
-            {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`e-${i}`} />)}
-            {monthDays.map(day => {
-              const key = format(day, 'yyyy-MM-dd');
-              const dd = dayMap[key];
-              const cards = dd?.cards ?? 0;
-              const intensity = cards === 0 ? 0 : cards < 20 ? 1 : cards < 50 ? 2 : cards < 100 ? 3 : 4;
-              return (
+        {/* ─── Heatmap ──────────────────────────── */}
+        <Card className="p-4 space-y-2">
+          <SectionTitle title="Atividade" info="Mapa de calor dos últimos 6 meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou naquele dia." />
+          <div className="overflow-x-auto -mx-1 px-1">
+            {/* Month labels */}
+            <div className="flex ml-5" style={{ gap: 0 }}>
+              {heatmapData.months.map((m, i) => {
+                const nextCol = heatmapData.months[i + 1]?.colStart ?? heatmapData.weeks.length;
+                const span = nextCol - m.colStart;
+                return (
+                  <span
+                    key={`${m.label}-${m.colStart}`}
+                    className="text-[9px] text-muted-foreground"
+                    style={{ width: span * 13, flexShrink: 0 }}
+                  >
+                    {m.label}
+                  </span>
+                );
+              })}
+            </div>
+            <div className="flex gap-0">
+              {/* Day-of-week labels */}
+              <div className="flex flex-col gap-[2px] mr-1 justify-start">
+                {WEEKDAYS.map((d, i) => (
+                  <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>
+                    {i % 2 === 1 ? d : ''}
+                  </span>
+                ))}
+              </div>
+              {/* Grid */}
+              <div className="flex gap-[2px]">
+                {heatmapData.weeks.map((week, wi) => (
+                  <div key={wi} className="flex flex-col gap-[2px]">
+                    {Array.from({ length: 7 }).map((_, dow) => {
+                      const cell = week.find(c => c.dow === dow);
+                      if (!cell) return <div key={dow} className="w-[11px] h-[11px]" />;
+                      const cards = cell.cards;
+                      const intensity = cards === 0 ? 0 : cards < 20 ? 1 : cards < 50 ? 2 : cards < 100 ? 3 : 4;
+                      return (
+                        <div
+                          key={dow}
+                          title={`${format(cell.date, 'dd/MM')}: ${cards} cards`}
+                          className={cn(
+                            'w-[11px] h-[11px] rounded-[2px] transition-colors',
+                            intensity === 0 && 'bg-muted/60',
+                            intensity === 1 && 'bg-primary/20',
+                            intensity === 2 && 'bg-primary/40',
+                            intensity === 3 && 'bg-primary/70',
+                            intensity === 4 && 'bg-primary',
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Legend */}
+            <div className="flex items-center gap-1 mt-2 justify-end">
+              <span className="text-[9px] text-muted-foreground mr-1">Menos</span>
+              {[0, 1, 2, 3, 4].map(level => (
                 <div
-                  key={key}
+                  key={level}
                   className={cn(
-                    'aspect-square rounded-sm flex items-center justify-center text-[10px] font-medium transition-colors',
-                    intensity === 0 && 'bg-muted/50 text-muted-foreground',
-                    intensity === 1 && 'bg-primary/20 text-primary',
-                    intensity === 2 && 'bg-primary/40 text-primary-foreground',
-                    intensity === 3 && 'bg-primary/70 text-primary-foreground',
-                    intensity === 4 && 'bg-primary text-primary-foreground',
+                    'w-[11px] h-[11px] rounded-[2px]',
+                    level === 0 && 'bg-muted/60',
+                    level === 1 && 'bg-primary/20',
+                    level === 2 && 'bg-primary/40',
+                    level === 3 && 'bg-primary/70',
+                    level === 4 && 'bg-primary',
                   )}
-                >
-                  {format(day, 'd')}
-                </div>
-              );
-            })}
+                />
+              ))}
+              <span className="text-[9px] text-muted-foreground ml-1">Mais</span>
+            </div>
           </div>
         </Card>
 
