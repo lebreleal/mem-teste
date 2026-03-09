@@ -349,6 +349,7 @@ const StatsPage = () => {
             </div>
           ) : (
             <div className="border-t border-border/40 pb-1">
+              <p className="px-4 py-1 text-[10px] text-muted-foreground">{sortedRanking.length} participantes</p>
               {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
@@ -360,6 +361,7 @@ const StatsPage = () => {
                       isMe && 'bg-primary/5',
                       pos <= 3 && 'py-3',
                     )}
+                    style={{ display: 'flex', visibility: 'visible', opacity: 1 }}
                   >
                     <RankMedal position={pos} />
                     <div className="flex-1 min-w-0">
