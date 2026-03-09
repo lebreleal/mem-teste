@@ -2607,6 +2607,7 @@ export type Database = {
         }[]
       }
       get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
+      get_card_statistics: { Args: { p_user_id: string }; Returns: Json }
       get_community_deck_updates: {
         Args: { p_user_id: string }
         Returns: {
