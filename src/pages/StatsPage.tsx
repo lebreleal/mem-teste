@@ -494,15 +494,6 @@ const StatsPage = () => {
   // New metrics
   const maturationRate = cc.total > 0 ? Math.round((cc.mature / cc.total) * 100) : 0;
   const avgTimePerCard = summaryStats.totalCards > 0 ? (summaryStats.totalMinutes / summaryStats.totalCards * 60).toFixed(1) : '0';
-  const last7Days = useMemo(() => {
-    const today = new Date();
-    let total = 0;
-    for (let i = 0; i < 7; i++) {
-      const key = format(subDays(today, i), 'yyyy-MM-dd');
-      total += dayMap[key]?.cards ?? 0;
-    }
-    return Math.round(total / 7);
-  }, [dayMap]);
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
   const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
