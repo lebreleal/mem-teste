@@ -348,7 +348,7 @@ const StatsPage = () => {
               <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
-            <div className="border-t border-border/40 max-h-[500px] overflow-y-auto">
+            <div className="border-t border-border/40">
               {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
