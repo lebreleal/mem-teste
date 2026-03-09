@@ -403,9 +403,8 @@ const AIAgent = () => {
               {messages.map((msg, i) => (
                 <div key={i} className={cn("flex gap-3", msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                   {msg.role === 'assistant' && (
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ background: 'hsl(var(--energy-purple, 270 70% 60%) / 0.15)' }}>
-                      <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
+                    <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-primary/10">
+                      <MemoCardsLogo size={18} />
                     </div>
                   )}
                   {msg.role === 'assistant' ? (
