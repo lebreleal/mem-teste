@@ -349,19 +349,16 @@ const StatsPage = () => {
             </div>
           ) : (
             <div className="border-t border-border/40 pb-1">
-              <p className="px-4 py-1 text-[10px] text-muted-foreground">{sortedRanking.length} participantes</p>
-              {sortedRanking.map((entry, i) => {
+              {sortedRanking.slice(0, 3).map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
                 return (
                   <div
                     key={entry.user_id}
                     className={cn(
-                      'flex items-center gap-3 px-4 py-2.5 border-b border-border/20 last:border-b-0',
+                      'flex items-center gap-3 px-4 py-3 border-b border-border/20 last:border-b-0',
                       isMe && 'bg-primary/5',
-                      pos <= 3 && 'py-3',
                     )}
-                    style={{ display: 'flex', visibility: 'visible', opacity: 1 }}
                   >
                     <RankMedal position={pos} />
                     <div className="flex-1 min-w-0">
@@ -376,6 +373,28 @@ const StatsPage = () => {
                   </div>
                 );
               })}
+              {/* Show user's position if not in top 3 */}
+              {myRankEntry && myRank !== undefined && myRank >= 3 && (
+                <>
+                  <div className="px-4 py-1.5 text-center">
+                    <span className="text-[10px] text-muted-foreground">•••</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/5 border-t border-border/20">
+                    <div className="flex h-7 w-7 items-center justify-center">
+                      <span className="text-xs font-bold tabular-nums text-muted-foreground">{myRank + 1}º</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate font-semibold text-primary">
+                        {myRankEntry.user_name || 'Usuário'}
+                        <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
+                      </p>
+                    </div>
+                    <span className="text-xs tabular-nums font-bold text-foreground">
+                      {getRankValue(myRankEntry)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
