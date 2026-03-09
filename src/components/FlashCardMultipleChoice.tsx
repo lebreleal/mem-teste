@@ -49,7 +49,8 @@ interface MultipleChoiceCardProps {
   hintResponse?: string | null;
   explainResponse?: string | null;
   mcExplainResponse?: string | null;
-  recallData?: { percent: number; label: string; state: 'new' | 'learning' | 'review' } | null;
+  recallData?: any;
+  difficultyData?: DifficultyData | null;
   algorithmMode?: string;
   deckConfig?: any;
   actions?: React.ReactNode;
