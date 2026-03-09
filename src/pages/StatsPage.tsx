@@ -450,15 +450,6 @@ const StatsPage = () => {
     return { count: Math.round((avgRetrievability / 100) * reviewedCards), avgRetrievability };
   }, [stats]);
 
-  const last7Days = useMemo(() => {
-    const today = new Date();
-    let total = 0;
-    for (let i = 0; i < 7; i++) {
-      const key = format(subDays(today, i), 'yyyy-MM-dd');
-      total += dayMap[key]?.cards ?? 0;
-    }
-    return Math.round(total / 7);
-  }, [dayMap]);
 
   if (isLoading) {
     return (
