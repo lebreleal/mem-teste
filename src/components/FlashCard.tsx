@@ -159,10 +159,10 @@ const FlashCard = ({
   const isMultipleChoice = effectiveCardType === 'multiple_choice';
   const canUseTutor = energy >= tutorCost;
 
-  const recallData = useMemo(() => {
+  const difficultyData = useMemo(() => {
     if (algorithmMode === 'quick_review') return null;
-    return calculateCardRecall({ state, stability, difficulty, scheduled_date: scheduledDate, last_reviewed_at: lastReviewedAt }, algorithmMode);
-  }, [state, stability, difficulty, scheduledDate, lastReviewedAt, algorithmMode]);
+    return getCardDifficulty({ state, difficulty });
+  }, [state, difficulty, algorithmMode]);
 
   const [occlusionFallbackCanvas, setOcclusionFallbackCanvas] = useState<{ w: number; h: number } | null>(null);
 
