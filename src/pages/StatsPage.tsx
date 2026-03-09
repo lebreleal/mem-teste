@@ -72,7 +72,7 @@ const StatsPage = () => {
   const { data: stats, isLoading } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
 
   // Activity data
   const { data: activityData } = useQuery({
