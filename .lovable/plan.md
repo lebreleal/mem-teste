@@ -1,204 +1,72 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
 
-## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+# Plano: Reorganizar StatsPage + Adicionar Funcionalidades Essenciais do Anki
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+## Problemas Atuais
+1. Ícone do filtro usa `SlidersHorizontal` — usuário quer **engrenagem** (`Settings2`)
+2. Texto "Custom" no filtro está em inglês — deveria ser "Personalizado"
+3. Organização das seções pode ser melhorada
+4. Faltam funcionalidades essenciais que o Anki oferece
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+## Funcionalidades Essenciais Faltando (baseado em fóruns do Anki)
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+1. **Revisões por Dia** — gráfico de barras empilhadas (aprender/jovens/maduros/reaprender) ao longo do tempo. É o gráfico mais icônico do Anki.
+2. **Horário de Estudo** — gráfico de barras mostrando revisões por hora do dia (0-23h) + taxa de acerto por hora como linha sobreposta. Ajuda o usuário a identificar seu melhor horário.
+3. **Retenção Expandida** — tabela com retenção de cards "Jovens" (intervalo < 21d) vs "Maduros" (intervalo ≥ 21d). Atualmente mostra só um número geral.
+4. **Conhecimento Total Estimado** — métrica: `recuperabilidade média × total de cards revisados`. Simples de calcular com dados existentes.
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+## Alterações Planejadas
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+### 1. Trocar ícone do filtro
+- `SlidersHorizontal` → `Settings2` (engrenagem) no `PeriodFilterIcon`
 
----
+### 2. Traduzir "Custom" → "Personalizado"
+- Na constante `PERIOD_OPTIONS`, trocar `label: 'Custom'` para `label: 'Personalizado'`
 
-# Refatoração de Monolitos (Fase 1)
+### 3. Reorganizar ordem das seções
+```text
+ 1. Quick Stats (streak, cards hoje, revisões, congelados)
+ 2. Resumo do Período (com filtro ⚙️)
+ 3. Horas Estudadas (com filtro ⚙️)
+ 4. Revisões por Dia [NOVO] (barras empilhadas, com filtro ⚙️)
+ 5. Horário de Estudo [NOVO] (barras por hora + linha de acerto)
+ 6. Atividade (heatmap)
+ 7. Retenção (expandida com jovens/maduros)
+ 8. Respostas (botões)
+ 9. Contagem de Cartões
+10. Conhecimento Total Estimado [NOVO]
+11. Intervalos / Estabilidade / Dificuldade / Recuperabilidade
+12. Ranking Global
+13. Carga Prevista (link)
+```
 
-## Implementado
+### 4. Novo: Revisões por Dia
+- Gráfico de barras empilhadas usando `recharts` `StackedBarChart`
+- Categorias: Aprendendo (azul), Jovens (verde), Maduros (roxo), Reaprendendo (vermelho)
+- Dados extraídos do `dayMap` existente (já tem `cards` por dia)
+- Filtro ⚙️ individual com `usePeriodFilter`
+- Agrupa por semana automaticamente se período > 60 dias
 
-### StudyPlan.tsx: 1.580 → ~500 linhas
-Extraídos 3 módulos:
-- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
-- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
-- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+### 5. Novo: Horário de Estudo
+- Gráfico `ComposedChart` com `Bar` (volume de revisões) + `Line` (taxa de acerto %)
+- Eixo X: horas 0-23h
+- Requer dados por hora — se o `dayMap` não tiver granularidade horária, adicionar uma query leve ao `get_activity_daily_breakdown` ou criar RPC separada
+- Cor primária para barras, cor de sucesso para linha de acerto
 
-### ManageDeck.tsx: 1.169 → ~900 linhas
-Extraído:
-- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+### 6. Expandir Retenção
+- Manter o número geral atual
+- Adicionar tabela abaixo: "Jovens (< 21d)" e "Maduros (≥ 21d)" com % de acerto de cada
+- Dados calculados client-side a partir de `intervalDistribution` + `trueRetention` existentes, ou adicionados ao RPC `get_card_statistics`
 
-### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
-Extraído:
-- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+### 7. Novo: Conhecimento Total Estimado
+- Card simples com número grande
+- Fórmula: `média da recuperabilidade × cards com pelo menos 1 revisão`
+- Dados já disponíveis: `retrievabilityDistribution` (média) e `cardCounts` (total - new)
+- Inclui ícone de info explicando o cálculo
 
-### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
-Extraído:
-- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+### Notas técnicas
+- Todas as alterações em `src/pages/StatsPage.tsx`
+- Novos imports do recharts: `ComposedChart`, `Line`, `Area` (se necessário)
+- Dados horários podem precisar de nova RPC ou campo adicional no `get_activity_daily_breakdown`
+- Filtros individuais reutilizam o hook `usePeriodFilter` existente
 
-### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
-Extraído:
-- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
-
----
-
-# Rebalanceamento da Economia de Créditos IA
-
-## Implementado
-
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
-
-Total mensal free: ~1.500 → ~270 créditos.
-
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
-
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
-
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
-
----
-
-# Transação com Rollback de Créditos em Edge Functions
-
-## Implementado
-
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
-
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
-
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
-
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
-
----
-
-# Dashboard Performance & Bug Fixes
-
-## Implementado
-
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
-
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
-
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
-
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
-
-## Resumo de impacto
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
-
----
-
-# Otimização de Requisições do Dashboard
-
-## Implementado
-
-### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
-- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
-- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
-
-### Fase B: deck-hierarchy via cache (economia: -1 query)
-- Removida query separada `['deck-hierarchy']`
-- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
-
-### Fase C: Missões com cache (economia: -2 queries)
-- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
-- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
-
-### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
-- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
-
-### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
-- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
-
-### Fase F: Aggregate stats memoizado (economia: CPU)
-- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
-- Build O(n) uma vez, lookup O(1) por deck
-
-## Resumo de impacto
-| Otimização | Economia |
-|------------|----------|
-| useStudyPlan split (A) | -3 queries |
-| deck-hierarchy cache (B) | -1 query |
-| Missões com cache (C) | -2 queries |
-| useIsAdmin useQuery (D) | cache 10min |
-| Subscription polling (E) | -80% calls |
-| AggregateStats memo (F) | O(n²) → O(1) |
-| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
-
----
-
-# Métricas Reais de Repetições por Sessão
-
-## Implementado
-
-### 1. RPC `get_user_real_study_metrics` atualizada
-Adicionados 2 novos campos:
-- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
-- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
-
-### 2. `calculateRealStudyTime` reescrita
-- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
-- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
-- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
-
-### 3. Interface `RealStudyMetrics` expandida
-- `avgReviewsPerNewCard: number` (mediana do histórico real)
-- `avgLapseRate: number` (taxa de erro em revisões)
-
-### 4. `useStudyPlan` mapeia novos campos da RPC
-- Fallbacks para contas sem histórico suficiente
