@@ -95,10 +95,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
       absorbedRef.current = streamingResponse;
       setMessages(prev => [...prev, { role: 'assistant', content: streamingResponse }]);
       onClearStreaming?.();
-      // Auto-scroll to show the new absorbed message
-      requestAnimationFrame(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      });
+      // Don't auto-scroll when AI finishes — keep user reading position
     }
   }, [open, streamingResponse, isStreamingResponse, onClearStreaming]);
 

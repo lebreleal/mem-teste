@@ -146,7 +146,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
       completion_tokens: rawUsage.completion_tokens || 0,
       total_tokens: rawUsage.total_tokens || 0,
     } : undefined;
-    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.0-flash", usage, 0);
+    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.5-flash-lite", usage, COST);
     const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
     let suggestedTags: string[] = [];
