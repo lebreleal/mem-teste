@@ -562,7 +562,7 @@ const StatsPage = () => {
         {/* 2. Resumo do Período */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <SectionTitle title="Resumo" icon={<Calendar className="h-4 w-4 text-primary" />} info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
+            <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
             <PeriodFilterIcon filter={summaryFilter} />
           </div>
           <div className="grid grid-cols-3 gap-2">
