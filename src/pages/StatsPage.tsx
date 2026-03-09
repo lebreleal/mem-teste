@@ -40,22 +40,28 @@ function percentile(sorted: number[], p: number): number {
 // ─── Section header with optional info tooltip ────────
 
 function SectionTitle({ title, info }: { title: string; info?: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center gap-1.5">
-      <h2 className="text-sm font-semibold">{title}</h2>
+    <>
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {info && (
+          <button onClick={() => setOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       {info && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
-              <HelpCircle className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[220px] text-xs">
-            {info}
-          </TooltipContent>
-        </Tooltip>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base">{title}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{info}</p>
+          </DialogContent>
+        </Dialog>
       )}
-    </div>
+    </>
   );
 }
 
