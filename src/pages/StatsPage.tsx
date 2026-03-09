@@ -45,7 +45,7 @@ function percentile(sorted: number[], p: number): number {
 const StatsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: stats, isLoading } = useCardStatistics();
+  const { data: stats, isLoading, isError } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
   const [currentMonth, setCurrentMonth] = useState(new Date());
