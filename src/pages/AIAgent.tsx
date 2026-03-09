@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Brain, Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Send, Loader2, Plus, Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
