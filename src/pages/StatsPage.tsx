@@ -360,7 +360,7 @@ const StatsPage = () => {
             <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
           </Card>
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Dificuldade" info="Escala de 1 a 10 do FSRS. Cartões com dificuldade alta precisam de mais revisões." />
+            <SectionTitle title="Dificuldade" info={"A dificuldade vai de 1 (muito fácil) a 10 (muito difícil).\n\nO algoritmo ajusta automaticamente esse valor conforme você estuda. Cartões que você erra frequentemente ficam com dificuldade alta. Cartões que você sempre acerta ficam com dificuldade baixa.\n\nSe muitos cartões estão com dificuldade alta (7-10), pode ser útil reformular o conteúdo desses cartões para facilitar a memorização."} />
             <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
           </Card>
         </div>
