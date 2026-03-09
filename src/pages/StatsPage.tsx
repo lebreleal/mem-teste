@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
@@ -247,20 +247,20 @@ const StatsPage = () => {
 
   const cc = stats.cardCounts;
   const cardCategories = [
-    { label: 'Novos', count: cc.new, color: 'hsl(var(--chart-1))' },
-    { label: 'Aprendendo', count: cc.learning, color: 'hsl(var(--chart-2))' },
-    { label: 'Reaprendendo', count: cc.relearning, color: 'hsl(var(--chart-3))' },
-    { label: 'Recentes', count: cc.young, color: 'hsl(var(--chart-4))' },
-    { label: 'Maduros', count: cc.mature, color: 'hsl(var(--chart-5))' },
+    { label: 'Novos', count: cc.new, color: 'hsl(var(--info))' },
+    { label: 'Aprendendo', count: cc.learning, color: 'hsl(var(--warning))' },
+    { label: 'Reaprendendo', count: cc.relearning, color: 'hsl(var(--destructive))' },
+    { label: 'Recentes', count: cc.young, color: 'hsl(var(--success))' },
+    { label: 'Maduros', count: cc.mature, color: 'hsl(var(--primary))' },
     { label: 'Congelados', count: cc.frozen, color: 'hsl(var(--muted-foreground))' },
   ];
 
   const bc = stats.buttonCounts;
   const buttonData = [
     { label: 'Errei', count: bc.again, color: 'hsl(var(--destructive))' },
-    { label: 'Difícil', count: bc.hard, color: 'hsl(var(--chart-3))' },
-    { label: 'Bom', count: bc.good, color: 'hsl(var(--chart-2))' },
-    { label: 'Fácil', count: bc.easy, color: 'hsl(var(--chart-1))' },
+    { label: 'Difícil', count: bc.hard, color: 'hsl(var(--warning))' },
+    { label: 'Bom', count: bc.good, color: 'hsl(var(--success))' },
+    { label: 'Fácil', count: bc.easy, color: 'hsl(var(--info))' },
   ];
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
@@ -286,25 +286,35 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats ────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="p-3 text-center space-y-1 border-orange-500/20 bg-gradient-to-b from-orange-500/5 to-transparent">
-            <Flame className={cn("h-5 w-5 mx-auto", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
+        {/* ─── Quick Stats (horizontal strip like reference) ────────────────────── */}
+        <Card className="px-4 py-3 flex items-center gap-4 overflow-x-auto">
+          {/* Streak */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
               style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
-            <p className="text-2xl font-bold tabular-nums">{currentStreak}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</p>
-          </Card>
-          <Card className="p-3 text-center space-y-1 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
-            <Zap className="h-5 w-5 mx-auto text-primary" />
-            <p className="text-2xl font-bold tabular-nums">{todayCards}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">cards hoje</p>
-          </Card>
-          <Card className="p-3 text-center space-y-1 border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent">
-            <Clock className="h-5 w-5 mx-auto text-emerald-500" />
-            <p className="text-2xl font-bold tabular-nums">{formatMinutes(todayMinutes)}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">tempo hoje</p>
-          </Card>
-        </div>
+            <span className="text-lg font-bold tabular-nums">{currentStreak}</span>
+            <span className="text-[10px] text-muted-foreground">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</span>
+          </div>
+          <div className="h-6 w-px bg-border/50 shrink-0" />
+          {/* Today cards */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Zap className="h-4 w-4 text-primary" />
+            <span className="text-sm font-bold tabular-nums">{todayCards}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+          {/* Today reviews */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CheckCircle2 className="h-4 w-4 text-success" />
+            <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+          {/* Frozen */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Snowflake className="h-4 w-4 text-info" />
+            <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+        </Card>
 
         {/* ─── Ranking Global ────────────────────── */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
@@ -522,17 +532,12 @@ const StatsPage = () => {
               const barWidth = (btn.count / maxCount) * 100;
               return (
                 <div key={btn.label} className="flex items-center gap-3">
-                  <div className="w-14 flex items-center gap-1.5 shrink-0">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: btn.color }} />
-                    <span className="text-xs font-medium">{btn.label}</span>
+                  <span className="text-xs font-medium w-12 shrink-0">{btn.label}</span>
+                  <div className="flex-1 h-5 rounded-md bg-muted/40 overflow-hidden relative">
+                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.75 }} />
                   </div>
-                  <div className="flex-1 h-6 rounded-md bg-muted/60 overflow-hidden relative">
-                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.8 }} />
-                    <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-semibold tabular-nums">
-                      {btn.count.toLocaleString()}
-                    </span>
-                  </div>
-                  <span className="text-[11px] tabular-nums text-muted-foreground w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
+                  <span className="text-xs tabular-nums font-bold w-10 text-right shrink-0">{btn.count.toLocaleString()}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right shrink-0">{pct.toFixed(0)}%</span>
                 </div>
               );
             })}
