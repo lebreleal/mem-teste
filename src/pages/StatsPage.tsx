@@ -344,7 +344,7 @@ const StatsPage = () => {
 
         {/* ─── Intervals ──────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Intervalos" info="Tempo entre revisões dos cartões em revisão. Quanto maior, mais espaçada está sua repetição." />
+          <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\nQuando você acerta um cartão, o app agenda a próxima revisão mais para frente. Se você acerta de novo, ele agenda ainda mais longe — e assim por diante.\n\nEste gráfico mostra como seus intervalos estão distribuídos. Quanto mais barras à direita (intervalos longos), mais cartões você já domina.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
             <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
             <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
