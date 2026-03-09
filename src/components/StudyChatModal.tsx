@@ -316,8 +316,8 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
             {/* Live streaming response at the end */}
             {streamingResponse && absorbedRef.current !== streamingResponse && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm bg-muted text-foreground">
-                  <div className="prose prose-sm max-w-none dark:prose-invert [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-foreground [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-foreground [&_hr]:my-4 [&_hr]:border-0 [&_hr]:h-px [&_hr]:bg-border/40 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_strong]:text-foreground">
+                <div className="max-w-[92%]">
+                  <div className="ai-prose">
                     <ReactMarkdown>{streamingResponse}</ReactMarkdown>
                     {isStreamingResponse && (
                       <div className="flex items-center gap-1.5 mt-2">

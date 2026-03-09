@@ -440,3 +440,76 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ── AI Chat Prose (Gemini-like) ── */
+.ai-prose {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+}
+.ai-prose > *:first-child { margin-top: 0; }
+.ai-prose > *:last-child { margin-bottom: 0; }
+
+.ai-prose h1, .ai-prose h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--foreground));
+}
+.ai-prose h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 1.2rem;
+  margin-bottom: 0.4rem;
+  color: hsl(var(--foreground));
+}
+.ai-prose p {
+  margin: 0.6rem 0;
+}
+.ai-prose ul, .ai-prose ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+.ai-prose li {
+  margin: 0.35rem 0;
+}
+.ai-prose li::marker {
+  color: hsl(var(--muted-foreground));
+}
+.ai-prose strong {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+.ai-prose em {
+  font-style: italic;
+}
+.ai-prose hr {
+  margin: 1rem 0;
+  border: none;
+  height: 1px;
+  background: hsl(var(--border) / 0.5);
+}
+.ai-prose blockquote {
+  border-left: 3px solid hsl(var(--primary) / 0.3);
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+  color: hsl(var(--muted-foreground));
+}
+.ai-prose code {
+  font-size: 0.8rem;
+  background: hsl(var(--muted));
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.ai-prose pre {
+  background: hsl(var(--muted));
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.ai-prose pre code {
+  background: none;
+  padding: 0;
+}

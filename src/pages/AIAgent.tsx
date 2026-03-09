@@ -399,20 +399,17 @@ const AIAgent = () => {
                       <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
                     </div>
                   )}
-                  <div className={cn(
-                    "rounded-2xl px-4 py-3 text-sm max-w-[85%] leading-relaxed",
-                    msg.role === 'user'
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted/60 text-foreground rounded-bl-md"
-                  )}>
-                    {msg.role === 'assistant' ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                  {msg.role === 'assistant' ? (
+                    <div className="max-w-[90%]">
+                      <div className="ai-prose">
                         <ReactMarkdown>{msg.content || '...'}</ReactMarkdown>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl rounded-br-md px-4 py-3 text-sm max-w-[85%] leading-relaxed bg-primary text-primary-foreground">
                       <p className="whitespace-pre-wrap">{msg.content}</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
