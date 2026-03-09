@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Brain } from 'lucide-react';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 
 const STORAGE_KEY = 'fab-position';
 const FAB_SIZE = 56;
@@ -186,7 +186,7 @@ const DraggableFab = ({ actions }: { actions: FabMenuAction[] }) => {
           setMenuOpen(prev => !prev);
         }}
       >
-        <Brain className="h-6 w-6 text-primary-foreground" />
+        <MemoCardsLogo size={28} />
       </button>
     </div>
   );

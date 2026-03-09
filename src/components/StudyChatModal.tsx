@@ -5,7 +5,8 @@
 
 import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Brain, Send, Loader2, X } from 'lucide-react';
+import { Send, Loader2, X } from 'lucide-react';
+import MemoCardsLogo from '@/components/MemoCardsLogo';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -249,7 +250,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2 min-w-0">
-              <Brain className="h-4 w-4 text-primary shrink-0" />
+              <MemoCardsLogo size={18} className="shrink-0" />
               <div className="flex flex-col min-w-0">
                 <span className="font-display font-semibold text-sm leading-tight">Chat IA</span>
                 {cardContext && (
@@ -273,7 +274,7 @@ const StudyChatModal = ({ open, onOpenChange, cardContext, streamingResponse, is
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && !streamingResponse && !isStreamingResponse && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6">
-                <Brain className="h-10 w-10 mb-3 opacity-30" />
+                <MemoCardsLogo size={40} className="mb-3 opacity-30" />
                 <p className="text-sm font-medium">Tire dúvidas sobre este card</p>
                 <p className="text-xs mt-1 leading-relaxed">O chat está contextualizado com o conteúdo do cartão que você está estudando</p>
                 <p className="text-[11px] mt-2 opacity-60">O histórico é mantido enquanto estiver neste card</p>
