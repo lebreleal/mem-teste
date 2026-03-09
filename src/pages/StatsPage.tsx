@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCardStatistics } from '@/hooks/useCardStatistics';
-import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
 import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';
@@ -11,9 +11,14 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn, formatMinutes } from '@/lib/utils';
-import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff, TrendingUp, Users } from 'lucide-react';
+import {
+  HelpCircle, Flame, Clock, Trophy, TrendingUp, Users, Settings2,
+  ChevronRight, Zap, Calendar,
+} from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
@@ -71,14 +76,18 @@ function SectionTitle({ title, info, icon }: { title: string; info?: string; ico
 
 const StatsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: stats, isLoading } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
   const { data: ranking, isLoading: rankingLoading } = useRanking();
   const togglePublic = useTogglePublicProfile();
-  const isPublic = profile.data?.is_profile_public ?? false;
+  const isPublic = profile.data?.is_profile_public ?? true;
 
-  // Activity data from RPC - this has the accurate daily data
+  const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
+  const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
+
+  // Activity data from RPC
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
@@ -95,32 +104,27 @@ const StatsPage = () => {
     staleTime: 60_000,
   });
 
-  // Today's stats from activity data
   const todayKey = format(new Date(), 'yyyy-MM-dd');
   const todayStats = (activityData?.dayMap ?? {})[todayKey];
   const todayCards = todayStats?.cards ?? 0;
   const todayMinutes = todayStats?.minutes ?? 0;
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
-  // Use streak from activity RPC (accurate), not profile column (may be stale/zero)
   const currentStreak = activityData?.streak ?? 0;
 
-  // Forecast
-  const allDeckIds = useMemo(() => (decks ?? []).filter(d => !d.is_archived).map(d => d.id), [decks]);
-  const dailyMinutes = profile.data?.daily_study_minutes ?? 30;
+  // Sorted ranking
+  const sortedRanking = useMemo(() => {
+    if (!ranking) return [];
+    const copy = [...ranking];
+    if (rankingSort === 'hours') copy.sort((a, b) => b.minutes_30d - a.minutes_30d);
+    else if (rankingSort === 'streak') copy.sort((a, b) => b.current_streak - a.current_streak);
+    else copy.sort((a, b) => b.cards_30d - a.cards_30d);
+    return copy;
+  }, [ranking, rankingSort]);
 
-  const forecast = useForecastSimulator({
-    deckIds: allDeckIds,
-    horizonDays: 30,
-    dailyMinutes,
-    weeklyMinutes: null,
-    enabled: allDeckIds.length > 0,
-  });
-
-  // ─── Heatmap (from account creation or last 6 months, whichever is shorter) ─────────────
+  // ─── Heatmap ─────────────
   const heatmapData = useMemo(() => {
     const today = new Date();
     const sixMonthsAgo = subDays(today, 182);
-    // If user account is newer than 6 months, start from account creation
     const accountCreated = profile.data?.created_at ? new Date(profile.data.created_at) : sixMonthsAgo;
     const effectiveStart = accountCreated > sixMonthsAgo ? accountCreated : sixMonthsAgo;
     const start = startOfWeek(effectiveStart, { weekStartsOn: 0 });
@@ -213,16 +217,6 @@ const StatsPage = () => {
     return { p50: percentile(sorted, 50), p95: percentile(sorted, 95), max: sorted[sorted.length - 1] };
   }, [stats]);
 
-  const forecastData = useMemo(() => {
-    if (!forecast.data || forecast.data.length === 0) return [];
-    return forecast.data.slice(0, 30).map((pt: any) => ({
-      day: `D${pt.day}`,
-      review: pt.review ?? 0,
-      new: pt.new ?? 0,
-      learning: pt.learning ?? 0,
-    }));
-  }, [forecast.data]);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-4 space-y-4 pb-24">
@@ -265,9 +259,8 @@ const StatsPage = () => {
     { label: 'Fácil', count: bc.easy, color: 'hsl(var(--chart-1))' },
   ];
 
-  // Find my rank
-  const myRank = ranking?.findIndex(r => r.user_id === user?.id);
-  const myRankEntry = myRank !== undefined && myRank >= 0 ? ranking![myRank] : null;
+  const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
+  const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -278,74 +271,77 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats Row ────────────────────── */}
+        {/* ─── Quick Stats ────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
+          {/* Streak */}
           <Card className="p-3 text-center space-y-1 border-orange-500/20 bg-gradient-to-b from-orange-500/5 to-transparent">
-            <Flame className="h-5 w-5 mx-auto text-orange-500" />
+            <Flame className={cn("h-5 w-5 mx-auto", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
+              style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
             <p className="text-2xl font-bold tabular-nums">{currentStreak}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">Streak</p>
+            <p className="text-[10px] text-muted-foreground font-medium">
+              {currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}
+            </p>
           </Card>
+          {/* Cards hoje */}
           <Card className="p-3 text-center space-y-1 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
-            <Trophy className="h-5 w-5 mx-auto text-primary" />
+            <Zap className="h-5 w-5 mx-auto text-primary" />
             <p className="text-2xl font-bold tabular-nums">{todayCards}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">Cards hoje</p>
+            <p className="text-[10px] text-muted-foreground font-medium">cards hoje</p>
           </Card>
+          {/* Tempo hoje */}
           <Card className="p-3 text-center space-y-1 border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent">
             <Clock className="h-5 w-5 mx-auto text-emerald-500" />
             <p className="text-2xl font-bold tabular-nums">{formatMinutes(todayMinutes)}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">Tempo hoje</p>
+            <p className="text-[10px] text-muted-foreground font-medium">tempo hoje</p>
           </Card>
         </div>
 
-        {/* ─── Perfil Público Toggle ─────────────── */}
-        <Card className="p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              {isPublic ? (
-                <div className="p-1.5 rounded-full bg-primary/10">
-                  <Eye className="h-4 w-4 text-primary" />
-                </div>
-              ) : (
-                <div className="p-1.5 rounded-full bg-muted">
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                </div>
-              )}
-              <div>
-                <p className="text-sm font-medium">Perfil público</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {isPublic ? 'Visível no ranking global' : 'Ative para aparecer no ranking'}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={isPublic}
-              onCheckedChange={(checked) => togglePublic.mutate(checked)}
-              disabled={togglePublic.isPending}
-            />
-          </div>
-        </Card>
-
         {/* ─── Ranking Global ────────────────────── */}
         <Card className="overflow-hidden">
-          <div className="p-4 pb-3">
-            <SectionTitle title="Ranking Global" icon={<Users className="h-4 w-4 text-primary" />} info="Usuários com perfil público, ordenados por cards revisados nos últimos 30 dias." />
+          <div className="p-4 pb-2 flex items-center justify-between">
+            <SectionTitle title="Ranking Global" icon={<Trophy className="h-4 w-4 text-warning" />} info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
+            <button onClick={() => setRankingConfigOpen(true)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+              <Settings2 className="h-4 w-4" />
+            </button>
           </div>
+
+          {/* Sort tabs */}
+          <div className="px-4 pb-3">
+            <Tabs value={rankingSort} onValueChange={(v) => setRankingSort(v as any)}>
+              <TabsList className="w-full h-8">
+                <TabsTrigger value="cards" className="text-xs flex-1 h-7 gap-1">
+                  <Zap className="h-3 w-3" /> Cards
+                </TabsTrigger>
+                <TabsTrigger value="hours" className="text-xs flex-1 h-7 gap-1">
+                  <Clock className="h-3 w-3" /> Horas
+                </TabsTrigger>
+                <TabsTrigger value="streak" className="text-xs flex-1 h-7 gap-1">
+                  <Flame className="h-3 w-3" /> Streak
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           {rankingLoading ? (
             <div className="px-4 pb-4 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
-          ) : !ranking || ranking.length === 0 ? (
+          ) : !sortedRanking || sortedRanking.length === 0 ? (
             <div className="px-4 pb-4 text-center py-6">
               <Users className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-              <p className="text-xs text-muted-foreground">Nenhum usuário público ainda</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">Ative seu perfil público para aparecer aqui!</p>
+              <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
             <div className="border-t border-border/40 divide-y divide-border/30">
-              {ranking.map((entry, i) => {
+              {sortedRanking.slice(0, 10).map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
                 const medals = ['🥇', '🥈', '🥉'];
+                const mainValue = rankingSort === 'hours'
+                  ? formatMinutes(entry.minutes_30d)
+                  : rankingSort === 'streak'
+                    ? `${entry.current_streak} dias`
+                    : `${entry.cards_30d.toLocaleString()} cards`;
                 return (
                   <div
                     key={entry.user_id}
@@ -359,26 +355,75 @@ const StatsPage = () => {
                     </span>
                     <span className={cn('flex-1 truncate text-sm', isMe && 'font-semibold text-primary')}>
                       {entry.user_name || 'Usuário'}
+                      {isMe && <span className="text-[10px] text-muted-foreground ml-1">(você)</span>}
                     </span>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
-                      <span>{entry.cards_30d.toLocaleString()} cards</span>
-                      <span>{formatMinutes(entry.minutes_30d)}</span>
-                      <span className="flex items-center gap-0.5">
-                        <Flame className="h-3 w-3 text-orange-500" />
-                        {entry.current_streak}
-                      </span>
-                    </div>
+                    <span className="text-xs tabular-nums text-muted-foreground font-medium">
+                      {mainValue}
+                    </span>
                   </div>
                 );
               })}
+              {/* Show my position if not in top 10 */}
+              {myRank !== undefined && myRank >= 10 && myRankEntry && (
+                <>
+                  <div className="px-4 py-1.5 text-center">
+                    <span className="text-[10px] text-muted-foreground">···</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-2.5 text-sm bg-primary/5">
+                    <span className="w-7 text-center font-bold tabular-nums text-xs text-muted-foreground">
+                      {myRank + 1}º
+                    </span>
+                    <span className="flex-1 truncate text-sm font-semibold text-primary">
+                      {myRankEntry.user_name || 'Você'}
+                      <span className="text-[10px] text-muted-foreground ml-1">(você)</span>
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground font-medium">
+                      {rankingSort === 'hours'
+                        ? formatMinutes(myRankEntry.minutes_30d)
+                        : rankingSort === 'streak'
+                          ? `${myRankEntry.current_streak} dias`
+                          : `${myRankEntry.cards_30d.toLocaleString()} cards`}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </Card>
+
+        {/* Ranking config dialog */}
+        <Dialog open={rankingConfigOpen} onOpenChange={setRankingConfigOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base flex items-center gap-2">
+                <Settings2 className="h-4 w-4" /> Configurações do Ranking
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-muted/30">
+                <div>
+                  <p className="text-sm font-medium">Participar do ranking global</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {isPublic ? 'Seu nome aparece no ranking' : 'Ative para participar'}
+                  </p>
+                </div>
+                <Switch
+                  checked={isPublic}
+                  onCheckedChange={(checked) => togglePublic.mutate(checked)}
+                  disabled={togglePublic.isPending}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Ao participar, seu nome e estatísticas de estudo dos últimos 30 dias ficam visíveis para outros usuários no ranking.
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* ─── Heatmap ──────────────────────────── */}
         <Card className="p-4 space-y-2">
-          <SectionTitle title="Atividade" info="Mapa de calor dos últimos 6 meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou naquele dia." />
+          <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou naquele dia." />
           <div className="overflow-x-auto -mx-1 px-1">
-            {/* Month labels */}
             <div className="flex ml-5" style={{ gap: 0 }}>
               {heatmapData.months.map((m, i) => {
                 const nextCol = heatmapData.months[i + 1]?.colStart ?? heatmapData.weeks.length;
@@ -395,7 +440,6 @@ const StatsPage = () => {
               })}
             </div>
             <div className="flex gap-0">
-              {/* Day-of-week labels */}
               <div className="flex flex-col gap-[2px] mr-1 justify-start">
                 {WEEKDAYS.map((d, i) => (
                   <span key={i} className="text-[8px] text-muted-foreground leading-none" style={{ height: 11, display: 'flex', alignItems: 'center' }}>
@@ -403,7 +447,6 @@ const StatsPage = () => {
                   </span>
                 ))}
               </div>
-              {/* Grid */}
               <div className="flex gap-[2px]">
                 {heatmapData.weeks.map((week, wi) => (
                   <div key={wi} className="flex flex-col gap-[2px]">
@@ -431,7 +474,6 @@ const StatsPage = () => {
                 ))}
               </div>
             </div>
-            {/* Legend */}
             <div className="flex items-center gap-1 mt-2 justify-end">
               <span className="text-[9px] text-muted-foreground mr-1">Menos</span>
               {[0, 1, 2, 3, 4].map(level => (
@@ -466,7 +508,7 @@ const StatsPage = () => {
           ))}
         </div>
 
-        {/* ─── Retenção Verdadeira + Botões ────── */}
+        {/* ─── Retenção + Botões ────── */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
             <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nPor exemplo, se você revisou 100 cartões e acertou 85, sua retenção é 85%.\n\nO ideal é ficar entre 80% e 95%. Abaixo de 80% significa que os intervalos estão muito longos. Acima de 95% pode significar que você está revisando demais."} />
@@ -550,25 +592,22 @@ const StatsPage = () => {
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
-        {/* ─── Forecast ───────────────────────── */}
-        {forecastData.length > 0 && (
-          <Card className="p-4 space-y-3">
-            <SectionTitle title="Carga Prevista (30 dias)" info={"Este gráfico mostra uma estimativa de quantos cartões você terá para estudar por dia nas próximas semanas.\n\n• Revisão (maior parte) — Cartões que vão vencer e precisam ser revisados.\n• Novos — Cartões novos que o app vai introduzir por dia.\n• Aprendendo — Cartões que ainda estão no processo inicial de aprendizado.\n\nSe a carga estiver muito alta, considere reduzir o número de cartões novos por dia nas configurações do deck."} />
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={forecastData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 9 }} interval={4} />
-                  <YAxis tick={{ fontSize: 10 }} width={28} />
-                  <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                  <Area type="monotone" dataKey="review" name="Revisão" stackId="1" fill="hsl(var(--chart-4))" stroke="hsl(var(--chart-4))" fillOpacity={0.5} />
-                  <Area type="monotone" dataKey="new" name="Novos" stackId="1" fill="hsl(var(--chart-1))" stroke="hsl(var(--chart-1))" fillOpacity={0.5} />
-                  <Area type="monotone" dataKey="learning" name="Aprendendo" stackId="1" fill="hsl(var(--chart-2))" stroke="hsl(var(--chart-2))" fillOpacity={0.5} />
-                </AreaChart>
-              </ResponsiveContainer>
+        {/* ─── Carga Prevista — link to /plano ─── */}
+        <Card
+          className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
+          onClick={() => navigate('/plano')}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-chart-4/10">
+              <Calendar className="h-5 w-5 text-chart-4" />
             </div>
-          </Card>
-        )}
+            <div>
+              <p className="text-sm font-semibold">Carga Prevista</p>
+              <p className="text-[10px] text-muted-foreground">Veja a previsão de revisões dos próximos dias</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </Card>
       </div>
     </div>
   );
