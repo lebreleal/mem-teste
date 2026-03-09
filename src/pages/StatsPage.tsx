@@ -6,12 +6,15 @@ import { useCardStatistics } from '@/hooks/useCardStatistics';
 import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
+import { useRanking, useTogglePublicProfile } from '@/hooks/useRanking';
+import { useStudyStats } from '@/hooks/useStudyStats';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
-import { HelpCircle } from 'lucide-react';
+import { cn, formatMinutes } from '@/lib/utils';
+import { HelpCircle, Flame, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
