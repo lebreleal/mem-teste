@@ -1,22 +1,19 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCardStatistics } from '@/hooks/useCardStatistics';
-import { useForecastSimulator, useForecastView } from '@/hooks/useForecastSimulator';
+import { useForecastSimulator } from '@/hooks/useForecastSimulator';
 import { useDecks } from '@/hooks/useDecks';
 import { useProfile } from '@/hooks/useProfile';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import {
-  Activity, Calendar, ChevronLeft, ChevronRight, TrendingUp,
-  Layers, Brain, Target, Zap, RotateCcw, BarChart3,
-} from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from 'recharts';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths,
@@ -40,12 +37,33 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
+// ─── Section header with optional info tooltip ────────
+
+function SectionTitle({ title, info }: { title: string; info?: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      {info && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="text-muted-foreground hover:text-foreground transition-colors">
+              <HelpCircle className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px] text-xs">
+            {info}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────
 
 const StatsPage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const { data: stats, isLoading, isError } = useCardStatistics();
+  const { data: stats, isLoading } = useCardStatistics();
   const { decks } = useDecks();
   const profile = useProfile();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -82,14 +100,12 @@ const StatsPage = () => {
   });
 
   // ─── Calendar ───────────────────────────────
-
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart);
 
   // ─── Distributions ──────────────────────────
-
   const intervalBuckets = useMemo(() => {
     if (!stats) return [];
     return bucketize(stats.intervalDistribution, [
@@ -103,7 +119,7 @@ const StatsPage = () => {
       { label: '2-4m', min: 61, max: 121 },
       { label: '4-6m', min: 121, max: 181 },
       { label: '6-12m', min: 181, max: 366 },
-      { label: '1y+', min: 366, max: 999999 },
+      { label: '1a+', min: 366, max: 999999 },
     ]);
   }, [stats]);
 
@@ -171,10 +187,7 @@ const StatsPage = () => {
     return (
       <div className="min-h-screen bg-background pb-24">
         <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
-          <h1 className="text-lg font-bold font-display flex items-center gap-2">
-            <Activity className="h-5 w-5 text-primary" />
-            Desempenho
-          </h1>
+          <h1 className="text-lg font-bold font-display">Desempenho</h1>
         </div>
         <div className="p-4 text-center text-muted-foreground mt-10">
           <p className="text-sm">Nenhum dado disponível ainda.</p>
@@ -185,7 +198,6 @@ const StatsPage = () => {
   }
 
   const cc = stats.cardCounts;
-  const totalActive = cc.new + cc.learning + cc.review + cc.relearning;
 
   const cardCategories = [
     { label: 'Novos', count: cc.new, color: 'hsl(var(--chart-1))' },
@@ -198,33 +210,31 @@ const StatsPage = () => {
 
   const bc = stats.buttonCounts;
   const buttonData = [
-    { label: 'Errei', count: bc.again, color: 'hsl(0 84% 60%)' },
-    { label: 'Difícil', count: bc.hard, color: 'hsl(30 95% 55%)' },
-    { label: 'Bom', count: bc.good, color: 'hsl(142 71% 45%)' },
-    { label: 'Fácil', count: bc.easy, color: 'hsl(217 91% 60%)' },
+    { label: 'Errei', count: bc.again, color: 'hsl(var(--destructive))' },
+    { label: 'Difícil', count: bc.hard, color: 'hsl(var(--chart-3))' },
+    { label: 'Bom', count: bc.good, color: 'hsl(var(--chart-2))' },
+    { label: 'Fácil', count: bc.easy, color: 'hsl(var(--chart-1))' },
   ];
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
-        <h1 className="text-lg font-bold font-display flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          Desempenho
-        </h1>
+        <h1 className="text-lg font-bold font-display">Desempenho</h1>
       </div>
 
-      <div className="p-4 space-y-5 max-w-lg mx-auto">
+      <div className="p-4 space-y-4 max-w-lg mx-auto">
+
         {/* ─── Calendar ─────────────────────────── */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-1 rounded-md hover:bg-muted">
+            <button onClick={() => setCurrentMonth(m => subMonths(m, 1))} className="p-1.5 rounded-md hover:bg-muted transition-colors">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="text-sm font-semibold capitalize">
               {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
             </span>
-            <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-1 rounded-md hover:bg-muted">
+            <button onClick={() => setCurrentMonth(m => addMonths(m, 1))} className="p-1.5 rounded-md hover:bg-muted transition-colors">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -258,40 +268,54 @@ const StatsPage = () => {
         </Card>
 
         {/* ─── Month summary ──────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Dias estudados', value: `${stats.monthSummary.days_studied}/${stats.monthSummary.days_in_month}`, icon: Calendar },
-            { label: 'Total revisões', value: stats.monthSummary.total_reviews.toLocaleString(), icon: Layers },
-            { label: 'Média/dia', value: String(stats.monthSummary.avg_reviews_per_day), icon: TrendingUp },
+            { label: 'Dias estudados', value: `${stats.monthSummary.days_studied}/${stats.monthSummary.days_in_month}` },
+            { label: 'Total revisões', value: stats.monthSummary.total_reviews.toLocaleString() },
+            { label: 'Média/dia', value: String(stats.monthSummary.avg_reviews_per_day) },
           ].map(item => (
-            <Card key={item.label} className="p-3 text-center space-y-1">
-              <item.icon className="h-4 w-4 mx-auto text-primary" />
-              <p className="text-lg font-bold">{item.value}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{item.label}</p>
+            <Card key={item.label} className="p-3 text-center">
+              <p className="text-lg font-bold tabular-nums">{item.value}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
             </Card>
           ))}
         </div>
 
+        {/* ─── Retenção Verdadeira + Botões ────── */}
+        <div className="grid grid-cols-2 gap-2">
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Retenção" info="Porcentagem de acertos nos cartões de revisão dos últimos 30 dias." />
+            <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
+            <Progress value={stats.trueRetention.rate} className="h-2" />
+            <p className="text-[10px] text-muted-foreground">
+              {stats.trueRetention.correct} / {stats.trueRetention.total} acertos
+            </p>
+          </Card>
+
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Respostas" info="Quantas vezes você usou cada botão nos últimos 30 dias." />
+            <div className="space-y-1.5">
+              {buttonData.map(btn => {
+                const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
+                return (
+                  <div key={btn.label} className="space-y-0.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-medium">{btn.label}</span>
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: btn.color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+
         {/* ─── Card counts ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Layers className="h-4 w-4 text-primary" />
-            Contagem de Cartões
-          </h2>
-          <div className="space-y-2">
-            {cardCategories.map(cat => {
-              const pct = totalActive > 0 ? (cat.count / cc.total * 100) : 0;
-              return (
-                <div key={cat.label} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
-                  <span className="text-xs flex-1">{cat.label}</span>
-                  <span className="text-xs font-semibold tabular-nums">{cat.count.toLocaleString()}</span>
-                  <span className="text-[10px] text-muted-foreground w-10 text-right">{pct.toFixed(0)}%</span>
-                </div>
-              );
-            })}
-          </div>
-          {/* Stacked bar */}
+          <SectionTitle title="Contagem de Cartões" info="Distribuição dos seus cartões por estado de aprendizado." />
           <div className="h-3 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
               <div
@@ -301,145 +325,60 @@ const StatsPage = () => {
               />
             ))}
           </div>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+            {cardCategories.map(cat => (
+              <div key={cat.label} className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cat.color }} />
+                <span className="text-[10px] text-muted-foreground">{cat.label}</span>
+                <span className="text-[10px] font-semibold tabular-nums ml-auto">{cat.count}</span>
+              </div>
+            ))}
+          </div>
         </Card>
 
         {/* ─── Intervals ──────────────────────── */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Calendar className="h-4 w-4 text-primary" />
-            Intervalos
-          </h2>
-          <div className="flex gap-2 flex-wrap">
-            <Badge label="p50" value={`${intervalPercentiles.p50}d`} />
-            <Badge label="p95" value={`${intervalPercentiles.p95}d`} />
-            <Badge label="Máx" value={`${intervalPercentiles.max}d`} />
+          <SectionTitle title="Intervalos" info="Tempo entre revisões dos cartões em revisão. Quanto maior, mais espaçada está sua repetição." />
+          <div className="flex gap-1.5 flex-wrap">
+            <StatBadge label="p50" value={`${intervalPercentiles.p50}d`} />
+            <StatBadge label="p95" value={`${intervalPercentiles.p95}d`} />
+            <StatBadge label="Máx" value={`${intervalPercentiles.max}d`} />
           </div>
-          <div className="h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={intervalBuckets}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="count" name="Cartões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
         </Card>
 
-        {/* ─── Stability ──────────────────────── */}
-        <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Brain className="h-4 w-4 text-primary" />
-            Estabilidade
-            <span className="text-[10px] text-muted-foreground font-normal ml-1">(atraso previsto p/ 90% de recall)</span>
-          </h2>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stabilityBuckets}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="count" name="Cartões" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* ─── Difficulty ─────────────────────── */}
-        <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Target className="h-4 w-4 text-primary" />
-            Dificuldade
-          </h2>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={difficultyBuckets}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="count" name="Cartões" fill="hsl(var(--chart-3))" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        {/* ─── Stability + Difficulty side by side */}
+        <div className="grid grid-cols-2 gap-2">
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Estabilidade" info="Tempo (em dias) que um cartão pode esperar mantendo ~90% de chance de recall." />
+            <MiniBarChart data={stabilityBuckets} color="hsl(var(--chart-2))" height={100} />
+          </Card>
+          <Card className="p-4 space-y-2">
+            <SectionTitle title="Dificuldade" info="Escala de 1 a 10 do FSRS. Cartões com dificuldade alta precisam de mais revisões." />
+            <MiniBarChart data={difficultyBuckets} color="hsl(var(--chart-3))" height={100} />
+          </Card>
+        </div>
 
         {/* ─── Retrievability ─────────────────── */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Zap className="h-4 w-4 text-primary" />
-            Recuperabilidade
-          </h2>
-          <div className="h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={retrievabilityBuckets}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Bar dataKey="count" name="Cartões" fill="hsl(var(--chart-4))" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* ─── True retention ─────────────────── */}
-        <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            Retenção Verdadeira
-            <span className="text-[10px] text-muted-foreground font-normal ml-1">(últimos 30 dias)</span>
-          </h2>
-          <div className="flex items-end gap-3">
-            <span className="text-4xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</span>
-            <span className="text-xs text-muted-foreground pb-1">
-              {stats.trueRetention.correct.toLocaleString()} / {stats.trueRetention.total.toLocaleString()} acertos
-            </span>
-          </div>
-          <Progress value={stats.trueRetention.rate} className="h-2.5" />
-        </Card>
-
-        {/* ─── Button counts ──────────────────── */}
-        <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <RotateCcw className="h-4 w-4 text-primary" />
-            Botões de Resposta
-            <span className="text-[10px] text-muted-foreground font-normal ml-1">(últimos 30 dias)</span>
-          </h2>
-          <div className="space-y-2">
-            {buttonData.map(btn => {
-              const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
-              return (
-                <div key={btn.label} className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium">{btn.label}</span>
-                    <span className="text-xs tabular-nums">{btn.count.toLocaleString()} ({pct.toFixed(1)}%)</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: btn.color }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <SectionTitle title="Recuperabilidade" info="Probabilidade estimada de lembrar cada cartão agora, calculada pelo FSRS." />
+          <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
         {/* ─── Forecast ───────────────────────── */}
         {forecastData.length > 0 && (
           <Card className="p-4 space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              Carga Diária Prevista
-              <span className="text-[10px] text-muted-foreground font-normal ml-1">(próximos 30 dias)</span>
-            </h2>
-            <div className="h-44">
+            <SectionTitle title="Carga Prevista (30 dias)" info="Estimativa de quantos cartões você terá para revisar por dia nas próximas semanas." />
+            <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={forecastData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="day" tick={{ fontSize: 9 }} interval={4} />
-                  <YAxis tick={{ fontSize: 10 }} width={30} />
-                  <Tooltip contentStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="review" name="Revisão" stackId="1" fill="hsl(var(--chart-4))" stroke="hsl(var(--chart-4))" fillOpacity={0.6} />
-                  <Area type="monotone" dataKey="new" name="Novos" stackId="1" fill="hsl(var(--chart-1))" stroke="hsl(var(--chart-1))" fillOpacity={0.6} />
-                  <Area type="monotone" dataKey="learning" name="Aprendendo" stackId="1" fill="hsl(var(--chart-2))" stroke="hsl(var(--chart-2))" fillOpacity={0.6} />
+                  <YAxis tick={{ fontSize: 10 }} width={28} />
+                  <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
+                  <Area type="monotone" dataKey="review" name="Revisão" stackId="1" fill="hsl(var(--chart-4))" stroke="hsl(var(--chart-4))" fillOpacity={0.5} />
+                  <Area type="monotone" dataKey="new" name="Novos" stackId="1" fill="hsl(var(--chart-1))" stroke="hsl(var(--chart-1))" fillOpacity={0.5} />
+                  <Area type="monotone" dataKey="learning" name="Aprendendo" stackId="1" fill="hsl(var(--chart-2))" stroke="hsl(var(--chart-2))" fillOpacity={0.5} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -450,14 +389,29 @@ const StatsPage = () => {
   );
 };
 
-// ─── Tiny components ───────────────────────────────────
+// ─── Tiny reusable components ──────────────────────────
 
-function Badge({ label, value }: { label: string; value: string }) {
+function StatBadge({ label, value }: { label: string; value: string }) {
   return (
     <span className="inline-flex items-center gap-1 text-[10px] bg-muted px-2 py-0.5 rounded-full">
       <span className="text-muted-foreground">{label}:</span>
       <span className="font-semibold">{value}</span>
     </span>
+  );
+}
+
+function MiniBarChart({ data, color, height = 130 }: { data: { label: string; count: number }[]; color: string; height?: number }) {
+  return (
+    <div style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+          <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
+          <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
+          <Bar dataKey="count" name="Cartões" fill={color} radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
