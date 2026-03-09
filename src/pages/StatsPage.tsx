@@ -282,7 +282,7 @@ const StatsPage = () => {
     queryKey: ['hourly-breakdown', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = -180; // Brasília UTC-3
       const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
       if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
       return (data as any[]) ?? [];
