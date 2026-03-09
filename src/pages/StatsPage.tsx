@@ -89,15 +89,20 @@ function usePeriodFilter() {
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const range = useMemo(() => {
-    const today = startOfDay(new Date());
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
     switch (period) {
-      case '7d': return { from: subDays(today, 7), to: today };
-      case '1m': return { from: subMonths(today, 1), to: today };
-      case '3m': return { from: subMonths(today, 3), to: today };
-      case '1y': return { from: subMonths(today, 12), to: today };
-      case 'custom':
-        return { from: customFrom ? startOfDay(customFrom) : subMonths(today, 12), to: customTo ? startOfDay(customTo) : today };
-      default: return { from: null, to: today };
+      case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
+      case '1m': return { from: subDays(today, 29), to: today, expectedDays: 30 };
+      case '3m': return { from: subDays(today, 89), to: today, expectedDays: 90 };
+      case '1y': return { from: subDays(today, 364), to: today, expectedDays: 365 };
+      case 'custom': {
+        const f = customFrom ? startOfDay(customFrom) : subDays(today, 364);
+        const t = customTo ? startOfDay(customTo) : today;
+        const diff = Math.max(1, Math.ceil((t.getTime() - f.getTime()) / 86400000) + 1);
+        return { from: f, to: t, expectedDays: diff };
+      }
+      default: return { from: null, to: today, expectedDays: 0 };
     }
   }, [period, customFrom, customTo]);
 
