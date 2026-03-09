@@ -12,8 +12,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
-  BarChart3, Calendar, ChevronLeft, ChevronRight, TrendingUp,
-  Layers, Brain, Target, Zap, RotateCcw,
+  Activity, Calendar, ChevronLeft, ChevronRight, TrendingUp,
+  Layers, Brain, Target, Zap, RotateCcw, BarChart3,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell,
