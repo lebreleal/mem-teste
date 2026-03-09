@@ -647,7 +647,6 @@ const StatsPage = () => {
         <Card className="p-4 space-y-3">
           <SectionTitle
             title="Horário de Estudo"
-            icon={<Clock className="h-4 w-4 text-primary" />}
             info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora."
           />
           {hourlyChartData.some(h => h.total > 0) ? (
