@@ -69,18 +69,18 @@ function SectionTitle({ title, info, icon }: { title: string; info?: string; ico
 // Medal component for podium positions
 function RankMedal({ position }: { position: number }) {
   if (position === 1) return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 ring-2 ring-amber-400">
-      <span className="text-base">👑</span>
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-md shadow-amber-400/30">
+      <Trophy className="h-4 w-4 text-white drop-shadow" />
     </div>
   );
   if (position === 2) return (
-    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400">
-      <Medal className="h-4 w-4 text-slate-500" />
+    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-300 to-slate-400 shadow-sm">
+      <Medal className="h-3.5 w-3.5 text-white drop-shadow" />
     </div>
   );
   if (position === 3) return (
-    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 ring-2 ring-orange-400">
-      <Medal className="h-4 w-4 text-orange-600" />
+    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-500 shadow-sm">
+      <Medal className="h-3.5 w-3.5 text-white drop-shadow" />
     </div>
   );
   return (
@@ -348,7 +348,7 @@ const StatsPage = () => {
               <p className="text-xs text-muted-foreground">Nenhum participante ainda</p>
             </div>
           ) : (
-            <div className="border-t border-border/40">
+            <div className="border-t border-border/40 max-h-[400px] overflow-y-auto">
               {sortedRanking.map((entry, i) => {
                 const isMe = entry.user_id === user?.id;
                 const pos = i + 1;
@@ -367,16 +367,6 @@ const StatsPage = () => {
                         {entry.user_name || 'Usuário'}
                         {isMe && <span className="text-[10px] text-muted-foreground ml-1">(você)</span>}
                       </p>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground tabular-nums">
-                        <span>{entry.cards_30d.toLocaleString()} cards</span>
-                        <span>·</span>
-                        <span>{formatMinutes(entry.minutes_30d)}</span>
-                        <span>·</span>
-                        <span className="flex items-center gap-0.5">
-                          <Flame className="h-2.5 w-2.5 text-orange-500" />
-                          {entry.current_streak}
-                        </span>
-                      </div>
                     </div>
                     <span className="text-xs tabular-nums font-bold text-foreground">
                       {getRankValue(entry)}
