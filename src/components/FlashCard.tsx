@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { sanitizeHtml } from '@/lib/sanitize';
 import type { Rating } from '@/lib/fsrs';
-import { buildPreviewParams, getPreviewIntervals, getRecallColor, getRecallBgColor } from '@/lib/flashCardUtils';
-import { calculateCardRecall } from '@/components/RetentionGauge';
+import { buildPreviewParams, getPreviewIntervals, getCardDifficulty, getDifficultyColor, getDifficultyBgColor } from '@/lib/flashCardUtils';
+import type { DifficultyData } from '@/lib/flashCardUtils';
 import { Lightbulb, Sparkles, CheckCircle2, XCircle, Gauge, RotateCcw, BookOpen, Keyboard, Undo2, Check, Loader2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import TutorLoadingAnimation from '@/components/TutorLoadingAnimation';
