@@ -299,7 +299,7 @@ const StatsPage = () => {
           </Card>
 
           <Card className="p-4 space-y-2">
-            <SectionTitle title="Respostas" info="Quantas vezes você usou cada botão nos últimos 30 dias." />
+            <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias:\n\n• Errei — Você não lembrou do cartão. Ele volta pra fila de aprendizado.\n• Difícil — Lembrou com dificuldade. O intervalo aumenta pouco.\n• Bom — Lembrou normalmente. O intervalo aumenta de forma padrão.\n• Fácil — Lembrou instantaneamente. O intervalo aumenta bastante.\n\nUm equilíbrio saudável tem poucos 'Errei' e a maioria em 'Bom'."} />
             <div className="space-y-1.5">
               {buttonData.map(btn => {
                 const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
