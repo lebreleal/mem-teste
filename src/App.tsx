@@ -53,6 +53,7 @@ const Performance = lazyRetry(() => import("./pages/Performance"));
 const StudyPlan = lazyRetry(() => import("./pages/StudyPlan"));
 const Missions = lazyRetry(() => import("./pages/Missions"));
 const AIAgent = lazyRetry(() => import("./pages/AIAgent"));
+const StatsPage = lazyRetry(() => import("./pages/StatsPage"));
 const AdminIA = lazyRetry(() => import("./pages/AdminIA"));
 const AdminUsers = lazyRetry(() => import("./pages/AdminUsers"));
 const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
