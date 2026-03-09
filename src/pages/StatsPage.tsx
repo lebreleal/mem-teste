@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
-  ChevronRight, Zap, Calendar, Medal,
+  ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
