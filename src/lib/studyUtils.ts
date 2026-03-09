@@ -31,7 +31,9 @@ export const DEFAULT_STUDY_METRICS: RealStudyMetrics = {
 
 /**
  * Calculate study time using REAL per-state seconds from user history.
- * No theoretical multipliers — each state has its own measured average.
+ * Accounts for:
+ * - New cards generating multiple interactions (learning steps + failures)
+ * - Review cards that lapse and become relearning cards
  */
 export function calculateRealStudyTime(
   newCards: number,
@@ -39,10 +41,17 @@ export function calculateRealStudyTime(
   reviewCards: number,
   metrics: RealStudyMetrics,
 ): number {
+  // New cards: each generates avgReviewsPerNewCard interactions on first day
+  const newInteractions = newCards * metrics.avgReviewsPerNewCard;
+  // Review cards: some will lapse → become relearning (each lapse ≈ 2 extra interactions)
+  const expectedLapses = reviewCards * metrics.avgLapseRate;
+  const successfulReviews = reviewCards - expectedLapses;
+
   return Math.round(
-    (newCards * metrics.avgNewSeconds) +
+    (newInteractions * metrics.avgNewSeconds) +
     (learningCards * metrics.avgLearningSeconds) +
-    (reviewCards * metrics.avgReviewSeconds)
+    (successfulReviews * metrics.avgReviewSeconds) +
+    (expectedLapses * metrics.avgRelearningSeconds * 2)
   );
 }
 
