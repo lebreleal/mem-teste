@@ -655,11 +655,11 @@ const StatsPage = () => {
             <div style={{ height: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval={2} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
                   <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                     formatter={(val: number, name: string) => [
                       name === 'Acerto' ? `${val}%` : `${val} revisões`,
                       name
