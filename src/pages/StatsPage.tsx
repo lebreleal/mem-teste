@@ -479,57 +479,74 @@ const StatsPage = () => {
           ))}
         </div>
 
-        {/* ─── Retenção + Respostas ────── */}
-        <div className="grid grid-cols-2 gap-2">
-          <Card className="p-4 space-y-2">
-            <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
+        {/* ─── Retenção ────── */}
+        <Card className="p-4 space-y-2">
+          <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%."} />
+          <div className="flex items-center gap-4">
             <p className="text-3xl font-bold text-primary tabular-nums">{stats.trueRetention.rate}%</p>
-            <Progress value={stats.trueRetention.rate} className="h-2" />
-            <p className="text-[10px] text-muted-foreground">{stats.trueRetention.correct} / {stats.trueRetention.total} acertos</p>
-          </Card>
-
-          <Card className="p-4 space-y-2.5">
-            <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
-            <div className="space-y-2">
-              {buttonData.map(btn => {
-                const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
-                return (
-                  <div key={btn.label} className="space-y-0.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: btn.color }} />
-                        <span className="text-[11px] font-medium">{btn.label}</span>
-                      </div>
-                      <span className="text-[11px] tabular-nums font-semibold">{btn.count} <span className="text-muted-foreground font-normal">({pct.toFixed(0)}%)</span></span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 2)}%`, background: btn.color }} />
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex-1 space-y-1">
+              <Progress value={stats.trueRetention.rate} className="h-2.5" />
+              <p className="text-[11px] text-muted-foreground">{stats.trueRetention.correct} acertos de {stats.trueRetention.total} revisões</p>
             </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
+
+        {/* ─── Respostas ────── */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
+          <div className="space-y-3">
+            {buttonData.map(btn => {
+              const pct = bc.total > 0 ? (btn.count / bc.total * 100) : 0;
+              const maxCount = Math.max(...buttonData.map(b => b.count), 1);
+              const barWidth = (btn.count / maxCount) * 100;
+              return (
+                <div key={btn.label} className="flex items-center gap-3">
+                  <div className="w-14 flex items-center gap-1.5 shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: btn.color }} />
+                    <span className="text-xs font-medium">{btn.label}</span>
+                  </div>
+                  <div className="flex-1 h-6 rounded-md bg-muted/60 overflow-hidden relative">
+                    <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(barWidth, 2)}%`, background: btn.color, opacity: 0.8 }} />
+                    <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-semibold tabular-nums">
+                      {btn.count.toLocaleString()}
+                    </span>
+                  </div>
+                  <span className="text-[11px] tabular-nums text-muted-foreground w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
+        </Card>
 
         {/* ─── Contagem de Cartões ────────────────────── */}
         <Card className="p-4 space-y-3">
-          <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
-          <div className="h-3 rounded-full overflow-hidden flex bg-muted">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
+            <span className="text-sm font-bold tabular-nums text-foreground">{cc.total} total</span>
+          </div>
+          {/* Stacked bar */}
+          <div className="h-4 rounded-full overflow-hidden flex bg-muted">
             {cardCategories.filter(c => c.count > 0).map(cat => (
-              <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} />
+              <div key={cat.label} className="h-full transition-all" style={{ width: `${(cat.count / cc.total) * 100}%`, background: cat.color }} title={`${cat.label}: ${cat.count}`} />
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {cardCategories.map(cat => (
-              <div key={cat.label} className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
-                  <span className="text-[11px] text-muted-foreground">{cat.label}</span>
+          {/* Legend with bar visualization */}
+          <div className="space-y-2">
+            {cardCategories.map(cat => {
+              const pct = cc.total > 0 ? (cat.count / cc.total * 100) : 0;
+              return (
+                <div key={cat.label} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: cat.color }} />
+                  <span className="text-xs w-24 shrink-0">{cat.label}</span>
+                  <div className="flex-1 h-2 rounded-full bg-muted/60 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct, 1)}%`, background: cat.color }} />
+                  </div>
+                  <span className="text-xs font-bold tabular-nums w-10 text-right">{cat.count}</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">{pct.toFixed(0)}%</span>
                 </div>
-                <span className="text-[11px] font-bold tabular-nums">{cat.count}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
 
