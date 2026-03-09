@@ -286,25 +286,35 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* ─── Quick Stats ────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="p-3 text-center space-y-1 border-orange-500/20 bg-gradient-to-b from-orange-500/5 to-transparent">
-            <Flame className={cn("h-5 w-5 mx-auto", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
+        {/* ─── Quick Stats (horizontal strip like reference) ────────────────────── */}
+        <Card className="px-4 py-3 flex items-center gap-4 overflow-x-auto">
+          {/* Streak */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
               style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
-            <p className="text-2xl font-bold tabular-nums">{currentStreak}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</p>
-          </Card>
-          <Card className="p-3 text-center space-y-1 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
-            <Zap className="h-5 w-5 mx-auto text-primary" />
-            <p className="text-2xl font-bold tabular-nums">{todayCards}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">cards hoje</p>
-          </Card>
-          <Card className="p-3 text-center space-y-1 border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent">
-            <Clock className="h-5 w-5 mx-auto text-emerald-500" />
-            <p className="text-2xl font-bold tabular-nums">{formatMinutes(todayMinutes)}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">tempo hoje</p>
-          </Card>
-        </div>
+            <span className="text-lg font-bold tabular-nums">{currentStreak}</span>
+            <span className="text-[10px] text-muted-foreground">{currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}</span>
+          </div>
+          <div className="h-6 w-px bg-border/50 shrink-0" />
+          {/* Today cards */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Zap className="h-4 w-4 text-primary" />
+            <span className="text-sm font-bold tabular-nums">{todayCards}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+          {/* Today reviews */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CheckCircle2 className="h-4 w-4 text-success" />
+            <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+          {/* Frozen */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Snowflake className="h-4 w-4 text-info" />
+            <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
+            <HelpCircle className="h-3 w-3 text-muted-foreground/40" />
+          </div>
+        </Card>
 
         {/* ─── Ranking Global ────────────────────── */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
