@@ -481,7 +481,7 @@ const StatsPage = () => {
     { label: 'Recentes', count: cc.young, color: 'hsl(var(--success))' },
     { label: 'Maduros', count: cc.mature, color: 'hsl(var(--primary))' },
     { label: 'Congelados', count: cc.frozen, color: 'hsl(var(--muted-foreground))' },
-  ];
+  ].sort((a, b) => b.count - a.count);
 
   const bc = stats.buttonCounts;
   const buttonData = [
@@ -489,7 +489,20 @@ const StatsPage = () => {
     { label: 'Difícil', count: bc.hard, color: 'hsl(var(--warning))' },
     { label: 'Bom', count: bc.good, color: 'hsl(var(--success))' },
     { label: 'Fácil', count: bc.easy, color: 'hsl(var(--info))' },
-  ];
+  ].sort((a, b) => b.count - a.count);
+
+  // New metrics
+  const maturationRate = cc.total > 0 ? Math.round((cc.mature / cc.total) * 100) : 0;
+  const avgTimePerCard = summaryStats.totalCards > 0 ? (summaryStats.totalMinutes / summaryStats.totalCards * 60).toFixed(1) : '0';
+  const last7Days = useMemo(() => {
+    const today = new Date();
+    let total = 0;
+    for (let i = 0; i < 7; i++) {
+      const key = format(subDays(today, i), 'yyyy-MM-dd');
+      total += dayMap[key]?.cards ?? 0;
+    }
+    return Math.round(total / 7);
+  }, [dayMap]);
 
   const myRank = sortedRanking?.findIndex(r => r.user_id === user?.id);
   const myRankEntry = myRank !== undefined && myRank >= 0 ? sortedRanking![myRank] : null;
