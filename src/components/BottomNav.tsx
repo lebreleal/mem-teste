@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Brain, Home, Gauge } from 'lucide-react';
+import { Home, Gauge } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
@@ -11,7 +11,6 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
 
   const items = [
     { icon: Home, label: null, onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: Brain, label: 'IA', onClick: () => navigate('/ia'), active: isActive('/ia') },
     { icon: Gauge, label: null, onClick: () => navigate('/desempenho'), active: isActive('/desempenho') },
   ];
 
