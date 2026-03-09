@@ -209,7 +209,7 @@ const StatsPage = () => {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border/40 px-4 py-3">
         <h1 className="text-lg font-bold font-display flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
+          <Activity className="h-5 w-5 text-primary" />
           Desempenho
         </h1>
       </div>
