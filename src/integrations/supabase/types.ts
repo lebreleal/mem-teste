@@ -2626,6 +2626,13 @@ export type Database = {
       }
       get_avg_seconds_per_card: { Args: { p_user_id: string }; Returns: number }
       get_card_statistics: { Args: { p_user_id: string }; Returns: Json }
+      get_cards_added_per_day: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          added: number
+          day: string
+        }[]
+      }
       get_community_deck_updates: {
         Args: { p_user_id: string }
         Returns: {
@@ -2704,6 +2711,14 @@ export type Database = {
           creator_tier: number
           id: string
           name: string
+        }[]
+      }
+      get_retention_over_time: {
+        Args: { p_days?: number; p_user_id: string }
+        Returns: {
+          correct: number
+          total: number
+          week_start: string
         }[]
       }
       get_study_queue_limits: {
