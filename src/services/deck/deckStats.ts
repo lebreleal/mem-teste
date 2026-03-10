@@ -31,7 +31,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
 
   const [decks, statsResult] = await Promise.all([
     fetchAllDecks(),
-    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: -new Date().getTimezoneOffset() }),
+    supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: TZ_OFFSET_SP }),
   ]);
 
   const allStats = statsResult.data;

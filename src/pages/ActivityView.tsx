@@ -43,7 +43,7 @@ const ActivityView = () => {
     queryFn: async () => {
       if (!user) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = TZ_OFFSET_SP;
 
       const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
