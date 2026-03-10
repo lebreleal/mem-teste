@@ -256,6 +256,10 @@ const StatsPage = () => {
 
   const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
   const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
+  const [newInfoOpen, setNewInfoOpen] = useState(false);
+  const [learningInfoOpen, setLearningInfoOpen] = useState(false);
+  const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
+  const [relearningInfoOpen, setRelearningInfoOpen] = useState(false);
 
   // Individual period filters per chart
   const hoursFilter = usePeriodFilter();
