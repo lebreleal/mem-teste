@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 export interface StudyQueueResult {
   cards: any[];

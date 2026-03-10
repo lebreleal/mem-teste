@@ -9,6 +9,7 @@ import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calen
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
