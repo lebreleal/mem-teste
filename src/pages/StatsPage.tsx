@@ -799,10 +799,13 @@ const StatsPage = () => {
 
         {/* 6. Cards Adicionados vs Revisados (NOVO) */}
         <Card className="p-4 space-y-3">
-          <SectionTitle
-            title="Cards Adicionados vs Revisados"
-            info={"Comparação semanal entre quantos cards novos você criou e quantos revisou.\n\nAjuda a equilibrar a entrada de conteúdo novo com a revisão do existente."}
-          />
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              title="Cards Adicionados vs Revisados"
+              info={"Comparação diária entre quantos cards novos você criou e quantos revisou.\n\nAjuda a equilibrar a entrada de conteúdo novo com a revisão do existente."}
+            />
+            <PeriodFilterIcon filter={addedVsReviewedFilter} />
+          </div>
           {addedVsReviewedData.length > 1 ? (
             <div style={{ height: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
