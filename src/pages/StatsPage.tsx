@@ -381,7 +381,7 @@ const StatsPage = () => {
     }));
   }, [retentionOverTime]);
 
-  // Cards added vs reviewed chart data (daily, filtered by period)
+  // Cards added vs first-time studied chart data (daily, filtered by period)
   const addedVsReviewedData = useMemo(() => {
     if (!cardsAddedData) return [];
     const addedMap = new Map<string, number>();
@@ -394,16 +394,16 @@ const StatsPage = () => {
 
     // For large ranges (>60 days), group by week
     if (days.length > 60) {
-      const weeks: Record<string, { added: number; reviewed: number }> = {};
+      const weeks: Record<string, { added: number; studied: number }> = {};
       days.forEach(day => {
         const d = format(day, 'yyyy-MM-dd');
         const weekLabel = format(startOfWeek(day, { weekStartsOn: 0 }), 'dd/MM');
-        if (!weeks[weekLabel]) weeks[weekLabel] = { added: 0, reviewed: 0 };
+        if (!weeks[weekLabel]) weeks[weekLabel] = { added: 0, studied: 0 };
         weeks[weekLabel].added += addedMap.get(d) ?? 0;
-        weeks[weekLabel].reviewed += dayMap[d]?.cards ?? 0;
+        weeks[weekLabel].studied += dayMap[d]?.newCards ?? 0;
       });
       return Object.entries(weeks).map(([label, vals]) => ({
-        label, added: vals.added, reviewed: vals.reviewed,
+        label, added: vals.added, studied: vals.studied,
       }));
     }
 
@@ -412,7 +412,7 @@ const StatsPage = () => {
       return {
         label: format(day, 'dd/MM'),
         added: addedMap.get(d) ?? 0,
-        reviewed: dayMap[d]?.cards ?? 0,
+        studied: dayMap[d]?.newCards ?? 0,
       };
     });
   }, [cardsAddedData, dayMap, addedVsReviewedFilter.range]);
