@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 export interface StudyQueueResult {
   cards: any[];
@@ -81,7 +82,7 @@ export async function fetchStudyQueue(
   endOfToday.setHours(23, 59, 59, 999);
   const endOfTodayISO = endOfToday.toISOString();
   const nowISO = new Date().toISOString();
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
+  const tzOffsetMinutes = TZ_OFFSET_SP;
   const allActiveDeckIds = activeDecks.map(d => d.id);
 
   // Paginated fetch for all card IDs (Supabase caps at 1000 rows per query)
@@ -312,7 +313,7 @@ export type { StudyStats } from '@/types/study';
 
 /** Fetch study statistics using server-side RPC (eliminates 1500+ row transfer). */
 export async function fetchStudyStats(userId: string, _cachedProfile?: any): Promise<StudyStats> {
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
+  const tzOffsetMinutes = TZ_OFFSET_SP;
   const { data, error } = await supabase.rpc('get_study_stats_summary', {
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
   } as any);

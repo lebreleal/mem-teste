@@ -29,6 +29,7 @@ import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, startOfDay,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getToday, TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -91,7 +92,7 @@ function usePeriodFilter() {
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const range = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayStr = getToday();
     const today = new Date(todayStr + 'T03:00:00Z');
     switch (period) {
       case 'today': return { from: today, to: today, expectedDays: 1 };
@@ -324,7 +325,7 @@ const StatsPage = () => {
     staleTime: 120_000,
   });
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayKey = getToday();
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 

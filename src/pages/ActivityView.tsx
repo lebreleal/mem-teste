@@ -9,6 +9,7 @@ import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calen
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { TZ_OFFSET_SP, getToday } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -36,14 +37,14 @@ const ActivityView = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState<string | null>(getToday());
 
   const { data: studyData, isLoading } = useQuery({
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
       if (!user) return { dayMap: {} as Record<string, DayData>, streak: 0, bestStreak: 0, totalActiveDays: 0, freezesAvailable: 0, freezesUsed: 0, frozenDays: new Set<string>() };
 
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const tzOffsetMinutes = TZ_OFFSET_SP;
 
       const { data, error } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
@@ -93,7 +94,7 @@ const ActivityView = () => {
   const selectedDayData = selectedDate ? dayMap[selectedDate] : null;
   const isFrozenDay = selectedDate ? frozenDays.has(selectedDate) : false;
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayKey = getToday();
   const todayData = dayMap[todayKey];
   const todayCards = todayData?.cards ?? 0;
   const todayMinutes = todayData?.minutes ?? 0;
