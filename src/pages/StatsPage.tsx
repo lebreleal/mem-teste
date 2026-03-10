@@ -19,11 +19,11 @@ import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
   ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon,
-  SquarePlus, Layers, RotateCcw, Info,
+  Info, BookOpen,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
-  ComposedChart, Line,
+  ComposedChart, Line, LineChart, Area, AreaChart,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, startOfDay,
@@ -92,7 +92,7 @@ function usePeriodFilter() {
 
   const range = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
+    const today = new Date(todayStr + 'T03:00:00Z');
     switch (period) {
       case 'today': return { from: today, to: today, expectedDays: 1 };
       case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
@@ -256,11 +256,9 @@ const StatsPage = () => {
 
   const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
   const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
-  const [newInfoOpen, setNewInfoOpen] = useState(false);
-  const [learningInfoOpen, setLearningInfoOpen] = useState(false);
-  const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
-  const [relearningInfoOpen, setRelearningInfoOpen] = useState(false);
   const [streakInfoOpen, setStreakInfoOpen] = useState(false);
+  const [todayCardsInfoOpen, setTodayCardsInfoOpen] = useState(false);
+  const [todayTimeInfoOpen, setTodayTimeInfoOpen] = useState(false);
 
   // Individual period filters per chart
   const hoursFilter = usePeriodFilter();
@@ -273,7 +271,7 @@ const StatsPage = () => {
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const tzOffsetMinutes = -180; // Brasília UTC-3
+      const tzOffsetMinutes = -180;
       const { data } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
         p_tz_offset_minutes: tzOffsetMinutes,
@@ -290,13 +288,39 @@ const StatsPage = () => {
     queryKey: ['hourly-breakdown', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const tzOffsetMinutes = -180; // Brasília UTC-3
+      const tzOffsetMinutes = -180;
       const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
       if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
       return (data as any[]) ?? [];
     },
     enabled: !!user,
     staleTime: 60_000,
+  });
+
+  // Retention over time RPC
+  const { data: retentionOverTime } = useQuery({
+    queryKey: ['retention-over-time', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.rpc('get_retention_over_time' as any, { p_user_id: user.id, p_days: 180 });
+      if (error) { console.warn('[retention-over-time] RPC error:', error.message); return []; }
+      return (data as any[]) ?? [];
+    },
+    enabled: !!user,
+    staleTime: 120_000,
+  });
+
+  // Cards added per day RPC
+  const { data: cardsAddedData } = useQuery({
+    queryKey: ['cards-added-per-day', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, { p_user_id: user.id, p_days: 90 });
+      if (error) { console.warn('[cards-added] RPC error:', error.message); return []; }
+      return (data as any[]) ?? [];
+    },
+    enabled: !!user,
+    staleTime: 120_000,
   });
 
   const todayKey = format(new Date(), 'yyyy-MM-dd');
@@ -346,6 +370,69 @@ const StatsPage = () => {
     return entries;
   }, [reviewsPerDayFiltered]);
 
+  // Retention over time chart data
+  const retentionChartData = useMemo(() => {
+    if (!retentionOverTime || retentionOverTime.length === 0) return [];
+    return retentionOverTime.map((row: any) => ({
+      label: format(new Date(row.week_start), 'dd/MM'),
+      rate: row.total > 0 ? Math.round((Number(row.correct) / Number(row.total)) * 100) : 0,
+      total: Number(row.total),
+    }));
+  }, [retentionOverTime]);
+
+  // Cards added vs reviewed chart data
+  const addedVsReviewedData = useMemo(() => {
+    if (!cardsAddedData) return [];
+    const addedMap = new Map<string, number>();
+    cardsAddedData.forEach((row: any) => addedMap.set(row.day, Number(row.added) || 0));
+
+    // Merge with dayMap (reviewed) for last 90 days
+    const today = new Date();
+    const allDays = new Set<string>();
+    for (let i = 0; i < 90; i++) {
+      const d = format(subDays(today, i), 'yyyy-MM-dd');
+      allDays.add(d);
+    }
+    // Also add days from addedMap
+    addedMap.forEach((_, key) => allDays.add(key));
+
+    const sorted = Array.from(allDays).sort();
+    // Group by week to avoid too many bars
+    const weeks: Record<string, { added: number; reviewed: number }> = {};
+    sorted.forEach(d => {
+      const weekStart = format(startOfWeek(new Date(d), { weekStartsOn: 0 }), 'dd/MM');
+      if (!weeks[weekStart]) weeks[weekStart] = { added: 0, reviewed: 0 };
+      weeks[weekStart].added += addedMap.get(d) ?? 0;
+      weeks[weekStart].reviewed += dayMap[d]?.cards ?? 0;
+    });
+    return Object.entries(weeks).map(([label, vals]) => ({
+      label,
+      added: vals.added,
+      reviewed: vals.reviewed,
+    }));
+  }, [cardsAddedData, dayMap]);
+
+  // Avg time per card (weekly)
+  const avgTimePerCardData = useMemo(() => {
+    const today = new Date();
+    const weekGroups: Record<string, { totalSec: number; totalCards: number }> = {};
+    for (let i = 0; i < 90; i++) {
+      const d = format(subDays(today, i), 'yyyy-MM-dd');
+      const entry = dayMap[d];
+      if (!entry || !entry.cards || entry.cards === 0) continue;
+      const weekStart = format(startOfWeek(new Date(d), { weekStartsOn: 0 }), 'dd/MM');
+      if (!weekGroups[weekStart]) weekGroups[weekStart] = { totalSec: 0, totalCards: 0 };
+      weekGroups[weekStart].totalSec += (Number(entry.minutes) || 0) * 60;
+      weekGroups[weekStart].totalCards += Number(entry.cards) || 0;
+    }
+    return Object.entries(weekGroups)
+      .map(([label, v]) => ({
+        label,
+        avgSeconds: v.totalCards > 0 ? Math.round(v.totalSec / v.totalCards) : 0,
+      }))
+      .reverse(); // chronological order
+  }, [dayMap]);
+
   // Hourly chart data (0-23h)
   const hourlyChartData = useMemo(() => {
     const hourMap: Record<number, { total: number; correct: number }> = {};
@@ -367,21 +454,7 @@ const StatsPage = () => {
 
   const todayStats = dayMap[todayKey];
   const todayCards = todayStats?.cards ?? 0;
-
-  // Aggregate card state counts from decks
-  const cardStateCounts = useMemo(() => {
-    let newCount = 0, learningCount = 0, reviewCount = 0;
-    const addDeck = (deckId: string) => {
-      const deck = (decks ?? []).find(d => d.id === deckId);
-      if (!deck || deck.is_archived) return;
-      newCount += deck.new_count ?? 0;
-      learningCount += deck.learning_count ?? 0;
-      reviewCount += deck.review_count ?? 0;
-      (decks ?? []).filter(d => d.parent_deck_id === deckId && !d.is_archived).forEach(c => addDeck(c.id));
-    };
-    (decks ?? []).filter(d => !d.is_archived && !d.parent_deck_id).forEach(d => addDeck(d.id));
-    return { newCount, learningCount, reviewCount };
-  }, [decks]);
+  const todayMinutes = todayStats?.minutes ?? 0;
 
   // Sorted ranking
   const sortedRanking = useMemo(() => {
@@ -556,7 +629,7 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* Visão geral - static counts */}
+        {/* 1. Visão geral - Streak + Revisões hoje + Tempo hoje */}
         <Card className="px-4 py-3">
           <div className="flex items-center justify-between">
             <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
@@ -565,28 +638,23 @@ const StatsPage = () => {
               <span className="text-base font-extrabold text-foreground tabular-nums">{currentStreak}</span>
               <Info className="h-3 w-3 text-muted-foreground/60" />
             </button>
-            <div className="flex items-center gap-2.5">
-              <button onClick={() => setNewInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
-                <SquarePlus className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setTodayCardsInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{todayCards}</span>
+                <span className="text-[10px] text-muted-foreground">revisões</span>
               </button>
-              <button onClick={() => setLearningInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
-                <RotateCcw className="h-4 w-4 text-warning" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
-              </button>
-              <button onClick={() => setReviewInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
-                <Layers className="h-4 w-4 text-primary" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
-              </button>
-              <button onClick={() => setRelearningInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
-                <RotateCcw className="h-4 w-4 text-destructive" />
-                <span className="text-sm font-bold text-foreground tabular-nums">0</span>
+              <div className="w-px h-4 bg-border/60" />
+              <button onClick={() => setTodayTimeInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <Clock className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{todayMinutes}</span>
+                <span className="text-[10px] text-muted-foreground">min</span>
               </button>
             </div>
           </div>
         </Card>
 
-        {/* Resumo do Período */}
+        {/* 2. Resumo do Período */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
@@ -613,28 +681,16 @@ const StatsPage = () => {
             <p className="text-sm text-muted-foreground">Número de dias consecutivos que você estudou. Continue todos os dias para aumentar sua sequência!</p>
           </DialogContent>
         </Dialog>
-        <Dialog open={newInfoOpen} onOpenChange={setNewInfoOpen}>
+        <Dialog open={todayCardsInfoOpen} onOpenChange={setTodayCardsInfoOpen}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><SquarePlus className="h-5 w-5 text-muted-foreground" />Novos</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">Cards que você ainda não estudou. Serão introduzidos gradualmente conforme seu limite diário.</p>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-success" />Revisões hoje</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Quantidade de cards que você revisou hoje. Inclui cards novos, de revisão e reaprendizado.</p>
           </DialogContent>
         </Dialog>
-        <Dialog open={learningInfoOpen} onOpenChange={setLearningInfoOpen}>
+        <Dialog open={todayTimeInfoOpen} onOpenChange={setTodayTimeInfoOpen}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5 text-warning" />Aprendendo</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">Cards na fase inicial de aprendizado. Aparecem várias vezes na mesma sessão até serem memorizados.</p>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={reviewInfoOpen} onOpenChange={setReviewInfoOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" />Dominados</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">Cards graduados em repetição espaçada. Aparecem em intervalos cada vez maiores.</p>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={relearningInfoOpen} onOpenChange={setRelearningInfoOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-5 w-5 text-destructive" />Reaprendendo</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">Cards dominados que você errou e voltaram para a fase de aprendizado.</p>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Tempo de estudo hoje</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Tempo total que você dedicou aos estudos hoje, calculado a partir da duração real de cada revisão.</p>
           </DialogContent>
         </Dialog>
 
@@ -674,7 +730,7 @@ const StatsPage = () => {
           )}
         </Card>
 
-        {/* 4. Revisões por Dia [NOVO] */}
+        {/* 4. Revisões por Dia */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle
@@ -702,7 +758,66 @@ const StatsPage = () => {
           )}
         </Card>
 
-        {/* 5. Horário de Estudo [NOVO] */}
+        {/* 5. Retenção ao Longo do Tempo (NOVO) */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Retenção ao Longo do Tempo"
+            info={"Taxa de acerto (%) por semana nos últimos meses.\n\nMostra a evolução da sua retenção — se está melhorando ou piorando ao longo do tempo.\n\nO ideal é manter acima de 80%."}
+          />
+          {retentionChartData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={retentionChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="retentionGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Revisões' ? `${val}` : `${val}%`,
+                      name
+                    ]}
+                  />
+                  <Area type="monotone" dataKey="rate" name="Retenção" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#retentionGrad)" dot={{ r: 3, fill: 'hsl(var(--success))' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes — continue estudando para ver a evolução.</p>
+          )}
+        </Card>
+
+        {/* 6. Cards Adicionados vs Revisados (NOVO) */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Cards Adicionados vs Revisados"
+            info={"Comparação semanal entre quantos cards novos você criou e quantos revisou.\n\nAjuda a equilibrar a entrada de conteúdo novo com a revisão do existente."}
+          />
+          {addedVsReviewedData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={addedVsReviewedData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="added" name="Adicionados" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="reviewed" name="Revisados" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 7. Horário de Estudo */}
         <Card className="p-4 space-y-3">
           <SectionTitle
             title="Horário de Estudo"
@@ -732,7 +847,7 @@ const StatsPage = () => {
           )}
         </Card>
 
-        {/* 6. Atividade (Heatmap) */}
+        {/* 8. Atividade (Heatmap) */}
         <Card className="p-4 space-y-2">
           <div className="flex items-center justify-between">
             <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou." />
@@ -792,7 +907,38 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 7. Retenção (expandida com jovens/maduros) */}
+        {/* 9. Tempo Médio por Card (NOVO) */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Tempo Médio por Card"
+            info={"Média de segundos gastos por revisão, agrupado por semana.\n\nUma tendência de queda indica que você está ficando mais fluente no conteúdo."}
+          />
+          {avgTimePerCardData.length > 1 ? (
+            <div style={{ height: 130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={avgTimePerCardData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="avgTimeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val}s`, 'Média/card']}
+                  />
+                  <Area type="monotone" dataKey="avgSeconds" name="Segundos/card" stroke="hsl(var(--chart-3))" strokeWidth={2} fill="url(#avgTimeGrad)" dot={{ r: 3, fill: 'hsl(var(--chart-3))' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 10. Retenção (expandida com jovens/maduros) */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%.\n\n• Jovens — Cards com estabilidade < 21 dias\n• Maduros — Cards com estabilidade ≥ 21 dias"} />
           <div className="flex items-center gap-4">
@@ -802,7 +948,6 @@ const StatsPage = () => {
               <p className="text-[11px] text-muted-foreground">{stats.trueRetention.correct} acertos de {stats.trueRetention.total} revisões</p>
             </div>
           </div>
-          {/* Young vs Mature breakdown table */}
           <div className="rounded-lg border border-border/50 overflow-hidden">
             <div className="grid grid-cols-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/30 px-3 py-1.5">
               <span>Tipo</span>
@@ -824,7 +969,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 8. Respostas */}
+        {/* 11. Respostas */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
           <div className="space-y-3">
@@ -847,7 +992,7 @@ const StatsPage = () => {
           <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
         </Card>
 
-        {/* 9. Contagem de Cartões */}
+        {/* 12. Contagem de Cartões */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
@@ -876,7 +1021,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 10. Conhecimento Total Estimado */}
+        {/* 13. Conhecimento Total Estimado */}
         <Card className="p-4 space-y-2">
           <SectionTitle
             title="Conhecimento Total Estimado"
@@ -892,7 +1037,7 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 11. Intervalos */}
+        {/* 14. Intervalos */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
@@ -921,7 +1066,7 @@ const StatsPage = () => {
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
-        {/* 12. Ranking Global */}
+        {/* 15. Ranking Global */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
           <div className="p-4 pb-2 flex items-center justify-between">
             <SectionTitle title="Ranking Global" info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
@@ -1041,7 +1186,7 @@ const StatsPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* 13. Carga Prevista — link to /plano */}
+        {/* 16. Carga Prevista — link to /plano */}
         <Card className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/plano')}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary/10">
