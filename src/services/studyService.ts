@@ -131,7 +131,7 @@ export async function fetchStudyQueue(
 
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
-  const allCardRows = allCardIdsResult.data ?? [];
+  // allCardRows already resolved from fetchAllCardIds() above
   const studyPlans = plansResult.data as any[] | null;
   const profileData = profileResult.data as any;
 
