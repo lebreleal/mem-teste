@@ -265,6 +265,7 @@ const StatsPage = () => {
   const heatmapFilter = usePeriodFilter();
   const summaryFilter = usePeriodFilter();
   const reviewsPerDayFilter = usePeriodFilter();
+  const addedVsReviewedFilter = usePeriodFilter();
 
   // Activity data from RPC
   const { data: activityData } = useQuery({
