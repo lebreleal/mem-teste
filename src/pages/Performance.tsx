@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, BookOpen,
   Calendar, BarChart3, Layers, RotateCcw, Sparkles,
-  Type, EyeOff, ListChecks, Braces, SquarePlus,
+  Type, EyeOff, ListChecks, Braces, SquarePlus, Info,
 } from 'lucide-react';
 
 const retentionColor = (pct: number) => {
