@@ -29,6 +29,7 @@ import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, startOfDay,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getToday, TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
