@@ -10,12 +10,11 @@
  */
 export const TZ_OFFSET_SP = -180;
 
-/** Get current date/time adjusted to São Paulo timezone. */
+/** Get current date/time adjusted to São Paulo timezone (UTC-3). */
 function nowInSP(): Date {
-  const now = new Date();
-  // Convert UTC to SP: add the offset difference
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utcMs + TZ_OFFSET_SP * 60000);
+  // Date.now() is always UTC epoch ms regardless of browser timezone.
+  // Subtract 3h to get SP local time represented as a fake UTC Date.
+  return new Date(Date.now() + TZ_OFFSET_SP * 60000);
 }
 
 /** Get today as YYYY-MM-DD in São Paulo timezone. */
