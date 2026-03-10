@@ -135,10 +135,10 @@ const ActivityView = () => {
       </header>
 
       <main className="container mx-auto px-4 py-5 max-w-lg space-y-4">
-        {/* Streak hero card - compact */}
-        <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+        {/* Streak hero card */}
+        <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm space-y-3">
+          {/* Row 1: Streak + today stats */}
           <div className="flex items-center justify-between">
-            {/* Streak */}
             <button
               onClick={() => setStreakInfoOpen(true)}
               className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
@@ -159,7 +159,6 @@ const ActivityView = () => {
               <span className="text-[10px] text-muted-foreground leading-tight">dias<br/>seguidos</span>
             </button>
 
-            {/* Today stats */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setCardsInfoOpen(true)}
@@ -177,7 +176,96 @@ const ActivityView = () => {
               </button>
             </div>
           </div>
+
+          {/* Row 2: Best streak, active days, freezes */}
+          <div className="flex items-center justify-center gap-4 pt-2 border-t border-border/30">
+            <button
+              onClick={() => setBestStreakInfoOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <Trophy className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold text-foreground tabular-nums">{bestStreak}</span>
+              <Info className="h-3 w-3 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => setActiveDaysInfoOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <CheckCircle className="h-4 w-4 text-success" />
+              <span className="text-sm font-bold text-foreground tabular-nums">{totalActiveDays}</span>
+              <Info className="h-3 w-3 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => setFreezeInfoOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <Snowflake className="h-4 w-4 text-blue-400" />
+              <span className="text-sm font-bold text-foreground tabular-nums">{freezesAvailable}</span>
+              <Info className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
         </div>
+
+        {/* Best streak info */}
+        <Dialog open={bestStreakInfoOpen} onOpenChange={setBestStreakInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                Melhor sequência
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              O maior número de dias consecutivos que você estudou. Continue estudando todos os dias para bater seu recorde!
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+              <Trophy className="h-5 w-5 text-primary" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{bestStreak}</span>
+              <span className="text-muted-foreground">dias</span>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Active days info */}
+        <Dialog open={activeDaysInfoOpen} onOpenChange={setActiveDaysInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-success" />
+                Dias ativos
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Total de dias em que você revisou pelo menos um card. Cada dia de estudo conta, mesmo que não sejam consecutivos.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+              <CheckCircle className="h-5 w-5 text-success" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{totalActiveDays}</span>
+              <span className="text-muted-foreground">dias</span>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Freezes info */}
+        <Dialog open={freezeInfoOpen} onOpenChange={setFreezeInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Snowflake className="h-5 w-5 text-blue-400" />
+                Congelamentos
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>A cada <strong className="text-foreground">7 dias seguidos</strong> estudando, você ganha <strong className="text-foreground">1 congelamento</strong>.</p>
+              <p>Se você esquecer de estudar em um dia, um congelamento é usado automaticamente para manter sua sequência de dias seguidos.</p>
+              <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+                <Snowflake className="h-5 w-5 text-blue-400" />
+                <span className="text-foreground font-bold text-lg tabular-nums">{freezesAvailable}</span>
+                <span className="text-muted-foreground">disponíveis</span>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Streak info dialog */}
         <Dialog open={streakInfoOpen} onOpenChange={setStreakInfoOpen}>
