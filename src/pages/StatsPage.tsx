@@ -367,6 +367,21 @@ const StatsPage = () => {
   const todayStats = dayMap[todayKey];
   const todayCards = todayStats?.cards ?? 0;
 
+  // Aggregate card state counts from decks
+  const cardStateCounts = useMemo(() => {
+    let newCount = 0, learningCount = 0, reviewCount = 0;
+    const addDeck = (deckId: string) => {
+      const deck = (decks ?? []).find(d => d.id === deckId);
+      if (!deck || deck.is_archived) return;
+      newCount += deck.new_count ?? 0;
+      learningCount += deck.learning_count ?? 0;
+      reviewCount += deck.review_count ?? 0;
+      (decks ?? []).filter(d => d.parent_deck_id === deckId && !d.is_archived).forEach(c => addDeck(c.id));
+    };
+    (decks ?? []).filter(d => !d.is_archived && !d.parent_deck_id).forEach(d => addDeck(d.id));
+    return { newCount, learningCount, reviewCount };
+  }, [decks]);
+
   // Sorted ranking
   const sortedRanking = useMemo(() => {
     if (!ranking) return [];
