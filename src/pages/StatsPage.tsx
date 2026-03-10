@@ -807,8 +807,8 @@ const StatsPage = () => {
                   <RTooltip
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                   />
-                  <Bar dataKey="added" name="Adicionados" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="reviewed" name="Revisados" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="added" name="Adicionados" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} opacity={0.85} />
+                  <Bar dataKey="reviewed" name="Revisados" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} opacity={0.85} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
