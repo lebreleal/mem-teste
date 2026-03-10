@@ -31,10 +31,11 @@ import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-type PeriodKey = 'all' | '7d' | '1m' | '3m' | '1y' | 'custom';
+type PeriodKey = 'all' | 'today' | '7d' | '1m' | '3m' | '1y' | 'custom';
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string; description: string }[] = [
   { key: 'all', label: 'Tudo', description: 'Todo o histórico' },
+  { key: 'today', label: 'Hoje', description: 'Apenas hoje' },
   { key: '7d', label: '7D', description: 'Últimos 7 dias' },
   { key: '1m', label: '1M', description: 'Últimos 30 dias' },
   { key: '3m', label: '3M', description: 'Últimos 3 meses' },
