@@ -81,7 +81,7 @@ export async function fetchStudyQueue(
   endOfToday.setHours(23, 59, 59, 999);
   const endOfTodayISO = endOfToday.toISOString();
   const nowISO = new Date().toISOString();
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
+  const tzOffsetMinutes = TZ_OFFSET_SP;
   const allActiveDeckIds = activeDecks.map(d => d.id);
 
   // Paginated fetch for all card IDs (Supabase caps at 1000 rows per query)
