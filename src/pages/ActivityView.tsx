@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, SquarePlus, RotateCcw, Layers } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, CheckCircle, ChevronLeft, ChevronRight, Calendar, Snowflake, Info, Clock, SquarePlus, RotateCcw, Layers, Zap } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,9 @@ const ActivityView = () => {
   const [freezeInfoOpen, setFreezeInfoOpen] = useState(false);
   const [bestStreakInfoOpen, setBestStreakInfoOpen] = useState(false);
   const [activeDaysInfoOpen, setActiveDaysInfoOpen] = useState(false);
+  const [streakInfoOpen, setStreakInfoOpen] = useState(false);
+  const [cardsInfoOpen, setCardsInfoOpen] = useState(false);
+  const [totalCardsInfoOpen, setTotalCardsInfoOpen] = useState(false);
   const [newCardsInfoOpen, setNewCardsInfoOpen] = useState(false);
   const [learningInfoOpen, setLearningInfoOpen] = useState(false);
   const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
@@ -90,6 +93,16 @@ const ActivityView = () => {
   const selectedDayData = selectedDate ? dayMap[selectedDate] : null;
   const isFrozenDay = selectedDate ? frozenDays.has(selectedDate) : false;
 
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayData = dayMap[todayKey];
+  const todayCards = todayData?.cards ?? 0;
+  const todayMinutes = todayData?.minutes ?? 0;
+
+  // Compute total cards across all days
+  const totalCardsAllTime = useMemo(() => {
+    return Object.values(dayMap).reduce((sum, d) => sum + d.cards, 0);
+  }, [dayMap]);
+
   // Calendar
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -122,14 +135,17 @@ const ActivityView = () => {
       </header>
 
       <main className="container mx-auto px-4 py-5 max-w-lg space-y-4">
-        {/* Streak hero card */}
+        {/* Streak hero card - compact */}
         <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
           <div className="flex items-center justify-between">
             {/* Streak */}
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => setStreakInfoOpen(true)}
+              className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+            >
               <Flame
                 className={cn(
-                  "h-6 w-6 transition-all flex-shrink-0",
+                  "h-5 w-5 transition-all flex-shrink-0",
                   streak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30"
                 )}
                 strokeWidth={isIntense ? 2.5 : 2}
@@ -139,95 +155,93 @@ const ActivityView = () => {
                     : 'drop-shadow(0 0 4px hsl(var(--warning) / 0.3))',
                 } : undefined}
               />
-              <span className="text-2xl font-extrabold text-foreground tabular-nums leading-none">{streak}</span>
-              <span className="text-xs text-muted-foreground">dias<br/>seguidos</span>
-            </div>
+              <span className="text-xl font-extrabold text-foreground tabular-nums leading-none">{streak}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">dias<br/>seguidos</span>
+            </button>
 
-            {/* Stats */}
+            {/* Today stats */}
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setBestStreakInfoOpen(true)}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+                onClick={() => setCardsInfoOpen(true)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <Trophy className="h-4 w-4 text-primary" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{bestStreak}</span>
-                <Info className="h-3 w-3 text-muted-foreground" />
+                <Zap className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{todayCards}</span>
               </button>
               <button
-                onClick={() => setActiveDaysInfoOpen(true)}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+                onClick={() => setTotalCardsInfoOpen(true)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <CheckCircle className="h-4 w-4 text-success" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{totalActiveDays}</span>
-                <Info className="h-3 w-3 text-muted-foreground" />
-              </button>
-              <button
-                onClick={() => setFreezeInfoOpen(true)}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <Snowflake className="h-4 w-4 text-blue-400" />
-                <span className="text-sm font-bold text-foreground tabular-nums">{freezesAvailable}</span>
-                <Info className="h-3 w-3 text-muted-foreground" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{totalCardsAllTime}</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Info dialogs */}
-        <Dialog open={bestStreakInfoOpen} onOpenChange={setBestStreakInfoOpen}>
+        {/* Streak info dialog */}
+        <Dialog open={streakInfoOpen} onOpenChange={setStreakInfoOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-primary" />
-                Melhor sequência
+                <Flame className="h-5 w-5 text-warning" />
+                Dias seguidos
               </DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              O maior número de dias consecutivos que você estudou. Continue estudando todos os dias para bater seu recorde!
+              Número de dias consecutivos que você estudou. Continue todos os dias para aumentar sua sequência!
             </p>
             <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
-              <Trophy className="h-5 w-5 text-primary" />
-              <span className="text-foreground font-bold text-lg tabular-nums">{bestStreak}</span>
+              <Flame className="h-5 w-5 text-warning fill-warning" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{streak}</span>
               <span className="text-muted-foreground">dias</span>
             </div>
           </DialogContent>
         </Dialog>
 
-        <Dialog open={activeDaysInfoOpen} onOpenChange={setActiveDaysInfoOpen}>
+        {/* Cards today info dialog */}
+        <Dialog open={cardsInfoOpen} onOpenChange={setCardsInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-primary" />
+                Cards revisados hoje
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Total de cards que você revisou hoje, incluindo novos, em aprendizado e revisões.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="text-foreground font-bold text-lg tabular-nums">{todayCards}</span>
+              <span className="text-muted-foreground">cards hoje</span>
+            </div>
+            {todayData && (
+              <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <span className="text-foreground font-bold text-lg tabular-nums">{todayMinutes}</span>
+                <span className="text-muted-foreground">min estudados</span>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Total cards info dialog */}
+        <Dialog open={totalCardsInfoOpen} onOpenChange={setTotalCardsInfoOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-success" />
-                Dias ativos
+                Total de revisões
               </DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              Total de dias em que você revisou pelo menos um card. Cada dia de estudo conta, mesmo que não sejam consecutivos.
+              Total de cards revisados em todo o seu histórico. Quanto mais revisões, mais sólido seu conhecimento!
             </p>
             <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
               <CheckCircle className="h-5 w-5 text-success" />
-              <span className="text-foreground font-bold text-lg tabular-nums">{totalActiveDays}</span>
-              <span className="text-muted-foreground">dias</span>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={freezeInfoOpen} onOpenChange={setFreezeInfoOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Snowflake className="h-5 w-5 text-blue-400" />
-                Congelamentos
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p>A cada <strong className="text-foreground">7 dias seguidos</strong> estudando, você ganha <strong className="text-foreground">1 congelamento</strong>.</p>
-              <p>Se você esquecer de estudar em um dia, um congelamento é usado automaticamente para manter sua sequência de dias seguidos.</p>
-              <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3">
-                <Snowflake className="h-5 w-5 text-blue-400" />
-                <span className="text-foreground font-bold text-lg tabular-nums">{freezesAvailable}</span>
-                <span className="text-muted-foreground">disponíveis</span>
-              </div>
+              <span className="text-foreground font-bold text-lg tabular-nums">{totalCardsAllTime}</span>
+              <span className="text-muted-foreground">revisões totais</span>
             </div>
           </DialogContent>
         </Dialog>

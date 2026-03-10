@@ -31,10 +31,11 @@ import { ptBR } from 'date-fns/locale';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-type PeriodKey = 'all' | '7d' | '1m' | '3m' | '1y' | 'custom';
+type PeriodKey = 'all' | 'today' | '7d' | '1m' | '3m' | '1y' | 'custom';
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string; description: string }[] = [
   { key: 'all', label: 'Tudo', description: 'Todo o histórico' },
+  { key: 'today', label: 'Hoje', description: 'Apenas hoje' },
   { key: '7d', label: '7D', description: 'Últimos 7 dias' },
   { key: '1m', label: '1M', description: 'Últimos 30 dias' },
   { key: '3m', label: '3M', description: 'Últimos 3 meses' },
@@ -84,7 +85,7 @@ function SectionTitle({ title, info }: { title: string; info?: string }) {
 // ─── Per-chart period filter ──────────────────────────
 
 function usePeriodFilter() {
-  const [period, setPeriod] = useState<PeriodKey>('1m');
+  const [period, setPeriod] = useState<PeriodKey>('7d');
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
@@ -92,6 +93,7 @@ function usePeriodFilter() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
     switch (period) {
+      case 'today': return { from: today, to: today, expectedDays: 1 };
       case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
       case '1m': return { from: subDays(today, 29), to: today, expectedDays: 30 };
       case '3m': return { from: subDays(today, 89), to: today, expectedDays: 90 };
