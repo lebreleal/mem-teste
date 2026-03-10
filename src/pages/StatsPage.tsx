@@ -93,6 +93,7 @@ function usePeriodFilter() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
     switch (period) {
+      case 'today': return { from: today, to: today, expectedDays: 1 };
       case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
       case '1m': return { from: subDays(today, 29), to: today, expectedDays: 30 };
       case '3m': return { from: subDays(today, 89), to: today, expectedDays: 90 };
