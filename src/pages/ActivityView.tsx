@@ -37,7 +37,7 @@ const ActivityView = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState<string | null>(getToday());
 
   const { data: studyData, isLoading } = useQuery({
     queryKey: ['activity-full', user?.id],
