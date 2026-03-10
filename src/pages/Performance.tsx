@@ -1,15 +1,18 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePerformance, type SubjectRetention, type CardTypeBreakdown } from '@/hooks/usePerformance';
+import { useDecks } from '@/hooks/useDecks';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus, BookOpen,
   Calendar, BarChart3, Layers, RotateCcw, Sparkles,
-  Type, EyeOff, ListChecks, Braces,
+  Type, EyeOff, ListChecks, Braces, SquarePlus,
 } from 'lucide-react';
 
 const retentionColor = (pct: number) => {
@@ -27,13 +30,42 @@ const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
 const Performance = () => {
   const navigate = useNavigate();
   const { data, isLoading } = usePerformance();
+  const { decks } = useDecks();
   const subjects = data?.subjects ?? [];
+
+  const [newInfoOpen, setNewInfoOpen] = useState(false);
+  const [learningInfoOpen, setLearningInfoOpen] = useState(false);
+  const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
+  const [relearningInfoOpen, setRelearningInfoOpen] = useState(false);
 
   const globalRetention = subjects.length > 0
     ? Math.round(subjects.reduce((sum, s) => sum + s.avgRetention, 0) / subjects.length)
     : 0;
 
   const todaySubjects = subjects.filter(s => s.reviewCards > 0 || s.newCards > 0);
+
+  // Aggregate card state counts from all root decks
+  const cardStateCounts = useMemo(() => {
+    const rootDecks = (decks ?? []).filter(d => !d.is_archived && !d.parent_deck_id);
+    let newCount = 0, learningCount = 0, reviewCount = 0, relearningCount = 0;
+
+    const addDeckAndChildren = (deckId: string) => {
+      const deck = (decks ?? []).find(d => d.id === deckId);
+      if (!deck || deck.is_archived) return;
+      newCount += deck.new_count ?? 0;
+      // learning_count includes both learning (state 1) and relearning (state 3)
+      // We'll split based on state if available, otherwise show combined
+      const lc = deck.learning_count ?? 0;
+      learningCount += lc;
+      reviewCount += deck.review_count ?? 0;
+      // Find children
+      const children = (decks ?? []).filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      children.forEach(c => addDeckAndChildren(c.id));
+    };
+
+    rootDecks.forEach(d => addDeckAndChildren(d.id));
+    return { newCount, learningCount, reviewCount, relearningCount };
+  }, [decks]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -53,7 +85,6 @@ const Performance = () => {
       </header>
 
       <main className="container mx-auto px-4 py-5 max-w-2xl space-y-5">
-        
 
         {isLoading ? (
           <div className="space-y-4">
@@ -74,29 +105,75 @@ const Performance = () => {
           </Card>
         ) : (
           <>
-            {/* Stats row */}
-            <div className="grid grid-cols-3 gap-3">
-              <Card className="rounded-2xl">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <div className={`text-2xl font-bold ${retentionColor(globalRetention).text}`}>
-                    {globalRetention}%
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Retenção Geral</p>
-                </CardContent>
-              </Card>
-              <Card className="rounded-2xl">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-2xl font-bold text-primary">{data?.totalPendingReviews ?? 0}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Revisões</p>
-                </CardContent>
-              </Card>
-              <Card className="rounded-2xl">
-                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-2xl font-bold text-primary">{data?.totalNewCards ?? 0}</div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Novos</p>
-                </CardContent>
-              </Card>
+            {/* Card state breakdown row */}
+            <div className="grid grid-cols-4 gap-2">
+              <button onClick={() => setNewInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
+                <SquarePlus className="h-5 w-5 text-muted-foreground" />
+                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
+                <span className="text-[10px] text-muted-foreground">Novos</span>
+              </button>
+              <button onClick={() => setLearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
+                <RotateCcw className="h-5 w-5 text-warning" />
+                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
+                <span className="text-[10px] text-muted-foreground">Aprendendo</span>
+              </button>
+              <button onClick={() => setReviewInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
+                <Layers className="h-5 w-5 text-primary" />
+                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
+                <span className="text-[10px] text-muted-foreground">Dominados</span>
+              </button>
+              <button onClick={() => setRelearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
+                <RotateCcw className="h-5 w-5 text-destructive" />
+                <span className="text-lg font-bold text-foreground tabular-nums">{data?.totalPendingReviews ?? 0}</span>
+                <span className="text-[10px] text-muted-foreground">Reaprendendo</span>
+              </button>
             </div>
+
+            {/* Info dialogs */}
+            <Dialog open={newInfoOpen} onOpenChange={setNewInfoOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <SquarePlus className="h-5 w-5 text-muted-foreground" />
+                    Novos
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">Cards que você ainda não estudou. Eles serão introduzidos gradualmente conforme seu limite diário de novos cards.</p>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={learningInfoOpen} onOpenChange={setLearningInfoOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <RotateCcw className="h-5 w-5 text-warning" />
+                    Aprendendo
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">Cards na fase inicial de aprendizado. Eles aparecem várias vezes na mesma sessão até serem memorizados o suficiente para a repetição espaçada.</p>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={reviewInfoOpen} onOpenChange={setReviewInfoOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Layers className="h-5 w-5 text-primary" />
+                    Dominados
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">Cards que já foram graduados e estão em repetição espaçada. Aparecem em intervalos cada vez maiores conforme você os domina.</p>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={relearningInfoOpen} onOpenChange={setRelearningInfoOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <RotateCcw className="h-5 w-5 text-destructive" />
+                    Reaprendendo
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">Cards dominados que você errou durante a revisão. Eles voltam para a fase de aprendizado até serem memorizados novamente.</p>
+              </DialogContent>
+            </Dialog>
 
             {/* Today's tasks */}
             <Card className="rounded-2xl">
