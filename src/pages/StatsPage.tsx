@@ -556,43 +556,42 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
+        {/* Visão geral - static counts */}
+        <Card className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+              <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30")}
+                style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(var(--warning) / 0.5))' } : undefined} />
+              <span className="text-base font-extrabold text-foreground tabular-nums">{currentStreak}</span>
+              <Info className="h-3 w-3 text-muted-foreground/60" />
+            </button>
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => setNewInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <SquarePlus className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
+              </button>
+              <button onClick={() => setLearningInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <RotateCcw className="h-4 w-4 text-warning" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
+              </button>
+              <button onClick={() => setReviewInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <Layers className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
+              </button>
+              <button onClick={() => setRelearningInfoOpen(true)} className="flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <RotateCcw className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-bold text-foreground tabular-nums">0</span>
+              </button>
+            </div>
+          </div>
+        </Card>
+
         {/* Resumo do Período */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
             <PeriodFilterIcon filter={summaryFilter} />
           </div>
-
-          {/* Streak + card states inline */}
-          <div className="flex items-center justify-between">
-            <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-              <Flame className={cn("h-4 w-4", currentStreak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30")} />
-              <span className="text-sm font-bold text-foreground tabular-nums">{currentStreak}</span>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </button>
-            <button onClick={() => setNewInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-              <SquarePlus className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </button>
-            <button onClick={() => setLearningInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-              <RotateCcw className="h-4 w-4 text-warning" />
-              <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </button>
-            <button onClick={() => setReviewInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-              <Layers className="h-4 w-4 text-primary" />
-              <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </button>
-            <button onClick={() => setRelearningInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-              <RotateCcw className="h-4 w-4 text-destructive" />
-              <span className="text-sm font-bold text-foreground tabular-nums">0</span>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* Period stats */}
           <div className="grid grid-cols-3 gap-2">
             {[
               { label: 'Dias estudados', value: `${summaryStats.daysStudied}/${summaryStats.totalDays}` },
