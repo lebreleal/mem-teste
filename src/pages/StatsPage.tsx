@@ -381,37 +381,41 @@ const StatsPage = () => {
     }));
   }, [retentionOverTime]);
 
-  // Cards added vs reviewed chart data
+  // Cards added vs reviewed chart data (daily, filtered by period)
   const addedVsReviewedData = useMemo(() => {
     if (!cardsAddedData) return [];
     const addedMap = new Map<string, number>();
     cardsAddedData.forEach((row: any) => addedMap.set(row.day, Number(row.added) || 0));
 
-    // Merge with dayMap (reviewed) for last 90 days
-    const today = new Date();
-    const allDays = new Set<string>();
-    for (let i = 0; i < 90; i++) {
-      const d = format(subDays(today, i), 'yyyy-MM-dd');
-      allDays.add(d);
-    }
-    // Also add days from addedMap
-    addedMap.forEach((_, key) => allDays.add(key));
+    const { from, to } = addedVsReviewedFilter.range;
+    const fromDate = from ?? subDays(new Date(), 6);
+    const toDate = to ?? new Date();
+    const days = eachDayOfInterval({ start: fromDate, end: toDate });
 
-    const sorted = Array.from(allDays).sort();
-    // Group by week to avoid too many bars
-    const weeks: Record<string, { added: number; reviewed: number }> = {};
-    sorted.forEach(d => {
-      const weekStart = format(startOfWeek(new Date(d), { weekStartsOn: 0 }), 'dd/MM');
-      if (!weeks[weekStart]) weeks[weekStart] = { added: 0, reviewed: 0 };
-      weeks[weekStart].added += addedMap.get(d) ?? 0;
-      weeks[weekStart].reviewed += dayMap[d]?.cards ?? 0;
+    // For large ranges (>60 days), group by week
+    if (days.length > 60) {
+      const weeks: Record<string, { added: number; reviewed: number }> = {};
+      days.forEach(day => {
+        const d = format(day, 'yyyy-MM-dd');
+        const weekLabel = format(startOfWeek(day, { weekStartsOn: 0 }), 'dd/MM');
+        if (!weeks[weekLabel]) weeks[weekLabel] = { added: 0, reviewed: 0 };
+        weeks[weekLabel].added += addedMap.get(d) ?? 0;
+        weeks[weekLabel].reviewed += dayMap[d]?.cards ?? 0;
+      });
+      return Object.entries(weeks).map(([label, vals]) => ({
+        label, added: vals.added, reviewed: vals.reviewed,
+      }));
+    }
+
+    return days.map(day => {
+      const d = format(day, 'yyyy-MM-dd');
+      return {
+        label: format(day, 'dd/MM'),
+        added: addedMap.get(d) ?? 0,
+        reviewed: dayMap[d]?.cards ?? 0,
+      };
     });
-    return Object.entries(weeks).map(([label, vals]) => ({
-      label,
-      added: vals.added,
-      reviewed: vals.reviewed,
-    }));
-  }, [cardsAddedData, dayMap]);
+  }, [cardsAddedData, dayMap, addedVsReviewedFilter.range]);
 
   // Avg time per card (weekly)
   const avgTimePerCardData = useMemo(() => {
