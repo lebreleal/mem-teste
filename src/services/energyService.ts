@@ -5,8 +5,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { EnergyData } from '@/types/energy';
 import type { ProfileData } from '@/hooks/useProfile';
+import { getToday } from '@/lib/dateUtils';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => getToday();
 
 /** Convert cached profile data to EnergyData, handling daily reset logic. */
 export function profileToEnergyData(profile: ProfileData): { data: EnergyData; needsReset: boolean } {
