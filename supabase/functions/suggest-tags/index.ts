@@ -6,7 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { logTokenUsage } from "../_shared/utils.ts";
+import { logTokenUsage, deductEnergy, refundEnergy } from "../_shared/utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +38,16 @@ serve(async (req) => {
     if (!textContent && !deckName) {
       return new Response(JSON.stringify({ error: "No content provided" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Deduct 2 credits
+    const COST = 2;
+    const ok = await deductEnergy(supabase, user.id, COST);
+    if (!ok) {
+      return new Response(JSON.stringify({ error: "Créditos IA insuficientes", requiresCredits: true }), {
+        status: 402,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -110,7 +120,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gemini-2.0-flash",
+          model: "gemini-2.5-flash-lite",
           messages: [
             { role: "system", content: "Você é um classificador de conteúdo educacional. Responda apenas com JSON." },
             { role: "user", content: prompt },
@@ -136,7 +146,7 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
       completion_tokens: rawUsage.completion_tokens || 0,
       total_tokens: rawUsage.total_tokens || 0,
     } : undefined;
-    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.0-flash", usage, 0);
+    await logTokenUsage(supabase, user!.id, "suggest_tags", "gemini-2.5-flash-lite", usage, COST);
     const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
     let suggestedTags: string[] = [];

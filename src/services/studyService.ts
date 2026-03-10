@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
+import { TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 export interface StudyQueueResult {
   cards: any[];
@@ -81,21 +82,42 @@ export async function fetchStudyQueue(
   endOfToday.setHours(23, 59, 59, 999);
   const endOfTodayISO = endOfToday.toISOString();
   const nowISO = new Date().toISOString();
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
+  const tzOffsetMinutes = TZ_OFFSET_SP;
   const allActiveDeckIds = activeDecks.map(d => d.id);
 
-  const [cardsResult, allCardIdsResult, plansResult, profileResult] = await Promise.all([
+  // Paginated fetch for all card IDs (Supabase caps at 1000 rows per query)
+  const fetchAllCardIds = async (): Promise<{ id: string; deck_id: string }[]> => {
+    const PAGE = 1000;
+    const IN_BATCH = 300;
+    const rows: { id: string; deck_id: string }[] = [];
+    for (let i = 0; i < allActiveDeckIds.length; i += IN_BATCH) {
+      const batch = allActiveDeckIds.slice(i, i + IN_BATCH);
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('cards')
+          .select('id, deck_id')
+          .in('deck_id', batch)
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        const chunk = data ?? [];
+        rows.push(...chunk);
+        hasMore = chunk.length === PAGE;
+        offset += PAGE;
+      }
+    }
+    return rows;
+  };
+
+  const [cardsResult, allCardRows, plansResult, profileResult] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
       .in('deck_id', deckIds)
       .or(`and(state.eq.0,or(scheduled_date.is.null,scheduled_date.lte.${endOfTodayISO})),and(state.in.(1,3),scheduled_date.lte.${endOfTodayISO}),and(state.eq.2,scheduled_date.lte.${nowISO})`)
       .order('created_at', { ascending: true }),
-    // Single query for ALL user card IDs — used for both hierarchy and global limits
-    supabase
-      .from('cards')
-      .select('id, deck_id')
-      .in('deck_id', allActiveDeckIds),
+    fetchAllCardIds(),
     supabase
       .from('study_plans' as any)
       .select('deck_ids, priority')
@@ -110,7 +132,7 @@ export async function fetchStudyQueue(
 
   if (cardsResult.error) throw cardsResult.error;
   const cards = cardsResult.data ?? [];
-  const allCardRows = allCardIdsResult.data ?? [];
+  // allCardRows already resolved from fetchAllCardIds() above
   const studyPlans = plansResult.data as any[] | null;
   const profileData = profileResult.data as any;
 
@@ -291,7 +313,7 @@ export type { StudyStats } from '@/types/study';
 
 /** Fetch study statistics using server-side RPC (eliminates 1500+ row transfer). */
 export async function fetchStudyStats(userId: string, _cachedProfile?: any): Promise<StudyStats> {
-  const tzOffsetMinutes = -new Date().getTimezoneOffset();
+  const tzOffsetMinutes = TZ_OFFSET_SP;
   const { data, error } = await supabase.rpc('get_study_stats_summary', {
     p_user_id: userId, p_tz_offset_minutes: tzOffsetMinutes,
   } as any);

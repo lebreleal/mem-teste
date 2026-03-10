@@ -19,22 +19,25 @@ import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
   ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon,
+  Info, BookOpen,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
-  ComposedChart, Line,
+  ComposedChart, Line, LineChart, Area, AreaChart,
 } from 'recharts';
 import {
   format, eachDayOfInterval, getDay, subDays, startOfWeek, subMonths, startOfDay,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getToday, TZ_OFFSET_SP } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-type PeriodKey = 'all' | '7d' | '1m' | '3m' | '1y' | 'custom';
+type PeriodKey = 'all' | 'today' | '7d' | '1m' | '3m' | '1y' | 'custom';
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string; description: string }[] = [
   { key: 'all', label: 'Tudo', description: 'Todo o histórico' },
+  { key: 'today', label: 'Hoje', description: 'Apenas hoje' },
   { key: '7d', label: '7D', description: 'Últimos 7 dias' },
   { key: '1m', label: '1M', description: 'Últimos 30 dias' },
   { key: '3m', label: '3M', description: 'Últimos 3 meses' },
@@ -84,14 +87,15 @@ function SectionTitle({ title, info }: { title: string; info?: string }) {
 // ─── Per-chart period filter ──────────────────────────
 
 function usePeriodFilter() {
-  const [period, setPeriod] = useState<PeriodKey>('1m');
+  const [period, setPeriod] = useState<PeriodKey>('7d');
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const range = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const today = new Date(todayStr + 'T03:00:00Z'); // Brasília midnight in UTC
+    const todayStr = getToday();
+    const today = new Date(todayStr + 'T03:00:00Z');
     switch (period) {
+      case 'today': return { from: today, to: today, expectedDays: 1 };
       case '7d': return { from: subDays(today, 6), to: today, expectedDays: 7 };
       case '1m': return { from: subDays(today, 29), to: today, expectedDays: 30 };
       case '3m': return { from: subDays(today, 89), to: today, expectedDays: 90 };
@@ -253,19 +257,23 @@ const StatsPage = () => {
 
   const [rankingSort, setRankingSort] = useState<'cards' | 'hours' | 'streak'>('cards');
   const [rankingConfigOpen, setRankingConfigOpen] = useState(false);
+  const [streakInfoOpen, setStreakInfoOpen] = useState(false);
+  const [todayCardsInfoOpen, setTodayCardsInfoOpen] = useState(false);
+  const [todayTimeInfoOpen, setTodayTimeInfoOpen] = useState(false);
 
   // Individual period filters per chart
   const hoursFilter = usePeriodFilter();
   const heatmapFilter = usePeriodFilter();
   const summaryFilter = usePeriodFilter();
   const reviewsPerDayFilter = usePeriodFilter();
+  const addedVsReviewedFilter = usePeriodFilter();
 
   // Activity data from RPC
   const { data: activityData } = useQuery({
     queryKey: ['activity-full', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const tzOffsetMinutes = -180; // Brasília UTC-3
+      const tzOffsetMinutes = -180;
       const { data } = await supabase.rpc('get_activity_daily_breakdown', {
         p_user_id: user.id,
         p_tz_offset_minutes: tzOffsetMinutes,
@@ -282,7 +290,7 @@ const StatsPage = () => {
     queryKey: ['hourly-breakdown', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const tzOffsetMinutes = -180; // Brasília UTC-3
+      const tzOffsetMinutes = -180;
       const { data, error } = await supabase.rpc('get_hourly_breakdown' as any, { p_user_id: user.id, p_tz_offset_minutes: tzOffsetMinutes, p_days: 30 });
       if (error) { console.warn('[hourly] RPC error:', error.message); return []; }
       return (data as any[]) ?? [];
@@ -291,7 +299,33 @@ const StatsPage = () => {
     staleTime: 60_000,
   });
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  // Retention over time RPC
+  const { data: retentionOverTime } = useQuery({
+    queryKey: ['retention-over-time', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.rpc('get_retention_over_time' as any, { p_user_id: user.id, p_days: 180 });
+      if (error) { console.warn('[retention-over-time] RPC error:', error.message); return []; }
+      return (data as any[]) ?? [];
+    },
+    enabled: !!user,
+    staleTime: 120_000,
+  });
+
+  // Cards added per day RPC
+  const { data: cardsAddedData } = useQuery({
+    queryKey: ['cards-added-per-day', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.rpc('get_cards_added_per_day' as any, { p_user_id: user.id, p_days: 90 });
+      if (error) { console.warn('[cards-added] RPC error:', error.message); return []; }
+      return (data as any[]) ?? [];
+    },
+    enabled: !!user,
+    staleTime: 120_000,
+  });
+
+  const todayKey = getToday();
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 
@@ -338,6 +372,73 @@ const StatsPage = () => {
     return entries;
   }, [reviewsPerDayFiltered]);
 
+  // Retention over time chart data
+  const retentionChartData = useMemo(() => {
+    if (!retentionOverTime || retentionOverTime.length === 0) return [];
+    return retentionOverTime.map((row: any) => ({
+      label: format(new Date(row.week_start), 'dd/MM'),
+      rate: row.total > 0 ? Math.round((Number(row.correct) / Number(row.total)) * 100) : 0,
+      total: Number(row.total),
+    }));
+  }, [retentionOverTime]);
+
+  // Cards added vs first-time studied chart data (daily, filtered by period)
+  const addedVsReviewedData = useMemo(() => {
+    if (!cardsAddedData) return [];
+    const addedMap = new Map<string, number>();
+    cardsAddedData.forEach((row: any) => addedMap.set(row.day, Number(row.added) || 0));
+
+    const { from, to } = addedVsReviewedFilter.range;
+    const fromDate = from ?? subDays(new Date(), 6);
+    const toDate = to ?? new Date();
+    const days = eachDayOfInterval({ start: fromDate, end: toDate });
+
+    // For large ranges (>60 days), group by week
+    if (days.length > 60) {
+      const weeks: Record<string, { added: number; studied: number }> = {};
+      days.forEach(day => {
+        const d = format(day, 'yyyy-MM-dd');
+        const weekLabel = format(startOfWeek(day, { weekStartsOn: 0 }), 'dd/MM');
+        if (!weeks[weekLabel]) weeks[weekLabel] = { added: 0, studied: 0 };
+        weeks[weekLabel].added += addedMap.get(d) ?? 0;
+        weeks[weekLabel].studied += dayMap[d]?.newCards ?? 0;
+      });
+      return Object.entries(weeks).map(([label, vals]) => ({
+        label, added: vals.added, studied: vals.studied,
+      }));
+    }
+
+    return days.map(day => {
+      const d = format(day, 'yyyy-MM-dd');
+      return {
+        label: format(day, 'dd/MM'),
+        added: addedMap.get(d) ?? 0,
+        studied: dayMap[d]?.newCards ?? 0,
+      };
+    });
+  }, [cardsAddedData, dayMap, addedVsReviewedFilter.range]);
+
+  // Avg time per card (weekly)
+  const avgTimePerCardData = useMemo(() => {
+    const today = new Date();
+    const weekGroups: Record<string, { totalSec: number; totalCards: number }> = {};
+    for (let i = 0; i < 90; i++) {
+      const d = format(subDays(today, i), 'yyyy-MM-dd');
+      const entry = dayMap[d];
+      if (!entry || !entry.cards || entry.cards === 0) continue;
+      const weekStart = format(startOfWeek(new Date(d), { weekStartsOn: 0 }), 'dd/MM');
+      if (!weekGroups[weekStart]) weekGroups[weekStart] = { totalSec: 0, totalCards: 0 };
+      weekGroups[weekStart].totalSec += (Number(entry.minutes) || 0) * 60;
+      weekGroups[weekStart].totalCards += Number(entry.cards) || 0;
+    }
+    return Object.entries(weekGroups)
+      .map(([label, v]) => ({
+        label,
+        avgSeconds: v.totalCards > 0 ? Math.round(v.totalSec / v.totalCards) : 0,
+      }))
+      .reverse(); // chronological order
+  }, [dayMap]);
+
   // Hourly chart data (0-23h)
   const hourlyChartData = useMemo(() => {
     const hourMap: Record<number, { total: number; correct: number }> = {};
@@ -359,6 +460,7 @@ const StatsPage = () => {
 
   const todayStats = dayMap[todayKey];
   const todayCards = todayStats?.cards ?? 0;
+  const todayMinutes = todayStats?.minutes ?? 0;
 
   // Sorted ranking
   const sortedRanking = useMemo(() => {
@@ -533,32 +635,30 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* 1. Quick Stats — hide items with value 0 */}
-        <Card className="px-3 py-2.5 flex items-center justify-between gap-2 overflow-hidden flex-wrap">
-          <div className="flex items-center gap-1 shrink-0">
-            <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-orange-500 fill-orange-500" : "text-muted-foreground/40")}
-              style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(38 92% 50% / 0.5))' } : undefined} />
-            <span className="text-base font-bold tabular-nums">{currentStreak}</span>
-            <span className="text-[10px] text-muted-foreground leading-tight">{currentStreak === 1 ? 'dia\nseguido' : 'dias\nseguidos'}</span>
+        {/* ═══ VISÃO GERAL ═══ */}
+        {/* 1. Streak + Revisões hoje + Tempo hoje */}
+        <Card className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+              <Flame className={cn("h-5 w-5", currentStreak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30")}
+                style={currentStreak >= 3 ? { filter: 'drop-shadow(0 0 4px hsl(var(--warning) / 0.5))' } : undefined} />
+              <span className="text-base font-extrabold text-foreground tabular-nums">{currentStreak}</span>
+              <Info className="h-3 w-3 text-muted-foreground/60" />
+            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setTodayCardsInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{todayCards}</span>
+                <span className="text-[10px] text-muted-foreground">revisões</span>
+              </button>
+              <div className="w-px h-4 bg-border/60" />
+              <button onClick={() => setTodayTimeInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
+                <Clock className="h-4 w-4 text-primary" />
+                <span className="text-sm font-bold text-foreground tabular-nums">{todayMinutes}</span>
+                <span className="text-[10px] text-muted-foreground">min</span>
+              </button>
+            </div>
           </div>
-          {todayCards > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <Zap className="h-4 w-4 text-primary" />
-              <span className="text-sm font-bold tabular-nums">{todayCards}</span>
-            </div>
-          )}
-          {stats.monthSummary.total_reviews > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <CheckCircle2 className="h-4 w-4 text-success" />
-              <span className="text-sm font-bold tabular-nums">{stats.monthSummary.total_reviews}</span>
-            </div>
-          )}
-          {cc.frozen > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <Snowflake className="h-4 w-4 text-info" />
-              <span className="text-sm font-bold tabular-nums">{cc.frozen}</span>
-            </div>
-          )}
         </Card>
 
         {/* 2. Resumo do Período */}
@@ -581,101 +681,29 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 3. Horas Estudadas */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              title="Horas Estudadas"
-              info="Tempo total de estudo calculado a partir da duração real de cada revisão."
-            />
-            <PeriodFilterIcon filter={hoursFilter} />
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
-            <span className="text-sm text-muted-foreground font-medium">h</span>
-            <span className="text-xl font-bold tabular-nums text-primary">{totalRemainingMins}</span>
-            <span className="text-sm text-muted-foreground font-medium">min</span>
-          </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>Média: <strong className="text-foreground">{formatMinutes(hoursStats.avgMinutes)}/dia</strong></span>
-            <span>{hoursStats.daysStudied} dias ativos</span>
-          </div>
-          {hoursChartData.length > 1 && (
-            <div style={{ height: 120 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                    formatter={(val: number) => [`${val} min`, 'Tempo']}
-                  />
-                  <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Card>
+        {/* Info dialogs */}
+        <Dialog open={streakInfoOpen} onOpenChange={setStreakInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Flame className="h-5 w-5 text-warning" />Dias seguidos</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Número de dias consecutivos que você estudou. Continue todos os dias para aumentar sua sequência!</p>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={todayCardsInfoOpen} onOpenChange={setTodayCardsInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-success" />Revisões hoje</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Quantidade de cards que você revisou hoje. Inclui cards novos, de revisão e reaprendizado.</p>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={todayTimeInfoOpen} onOpenChange={setTodayTimeInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Tempo de estudo hoje</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Tempo total que você dedicou aos estudos hoje, calculado a partir da duração real de cada revisão.</p>
+          </DialogContent>
+        </Dialog>
 
-        {/* 4. Revisões por Dia [NOVO] */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              title="Revisões por Dia"
-              info="Total de cards revisados por dia no período selecionado."
-            />
-            <PeriodFilterIcon filter={reviewsPerDayFilter} />
-          </div>
-          {reviewsPerDayChartData.length > 1 ? (
-            <div style={{ height: 130 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reviewsPerDayChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                    formatter={(val: number) => [`${val} cards`, 'Revisões']}
-                  />
-                  <Bar dataKey="cards" name="Cards" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
-          )}
-        </Card>
+        {/* ═══ ATIVIDADE & VOLUME ═══ */}
 
-        {/* 5. Horário de Estudo [NOVO] */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle
-            title="Horário de Estudo"
-            info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora."
-          />
-          {hourlyChartData.some(h => h.total > 0) ? (
-            <div style={{ height: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8 }} tickLine={false} axisLine={false} interval={2} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                    formatter={(val: number, name: string) => [
-                      name === 'Acerto' ? `${val}%` : `${val} revisões`,
-                      name
-                    ]}
-                  />
-                  <Bar yAxisId="left" dataKey="total" name="Revisões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.7} />
-                  <Line yAxisId="right" dataKey="successRate" name="Acerto" type="monotone" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhum dado de horário disponível.</p>
-          )}
-        </Card>
-
-        {/* 6. Atividade (Heatmap) */}
+        {/* 3. Atividade (Heatmap) — agrupado com resumo */}
         <Card className="p-4 space-y-2">
           <div className="flex items-center justify-between">
             <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou." />
@@ -735,7 +763,125 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 7. Retenção (expandida com jovens/maduros) */}
+        {/* 4. Revisões por Dia */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Revisões por Dia" info="Total de cards revisados por dia no período selecionado." />
+            <PeriodFilterIcon filter={reviewsPerDayFilter} />
+          </div>
+          {reviewsPerDayChartData.length > 1 ? (
+            <div style={{ height: 130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={reviewsPerDayChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val} cards`, 'Revisões']}
+                  />
+                  <Bar dataKey="cards" name="Cards" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 5. Horas Estudadas */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Horas Estudadas" info="Tempo total de estudo calculado a partir da duração real de cada revisão." />
+            <PeriodFilterIcon filter={hoursFilter} />
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
+            <span className="text-sm text-muted-foreground font-medium">h</span>
+            <span className="text-xl font-bold tabular-nums text-primary">{totalRemainingMins}</span>
+            <span className="text-sm text-muted-foreground font-medium">min</span>
+          </div>
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>Média: <strong className="text-foreground">{formatMinutes(hoursStats.avgMinutes)}/dia</strong></span>
+            <span>{hoursStats.daysStudied} dias ativos</span>
+          </div>
+          {hoursChartData.length > 1 && (
+            <div style={{ height: 120 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val} min`, 'Tempo']}
+                  />
+                  <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        {/* 6. Horário de Estudo */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Horário de Estudo" info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora." />
+          {hourlyChartData.some(h => h.total > 0) ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Acerto' ? `${val}%` : `${val} revisões`,
+                      name
+                    ]}
+                  />
+                  <Bar yAxisId="left" dataKey="total" name="Revisões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.7} />
+                  <Line yAxisId="right" dataKey="successRate" name="Acerto" type="monotone" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhum dado de horário disponível.</p>
+          )}
+        </Card>
+
+        {/* 7. Tempo Médio por Card */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Tempo Médio por Card"
+            info={"Média de segundos gastos por revisão, agrupado por semana.\n\nUma tendência de queda indica que você está ficando mais fluente no conteúdo."}
+          />
+          {avgTimePerCardData.length > 1 ? (
+            <div style={{ height: 130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={avgTimePerCardData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="avgTimeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val}s`, 'Média/card']}
+                  />
+                  <Area type="monotone" dataKey="avgSeconds" name="Segundos/card" stroke="hsl(var(--chart-3))" strokeWidth={2} fill="url(#avgTimeGrad)" dot={{ r: 3, fill: 'hsl(var(--chart-3))' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* ═══ RETENÇÃO & ACERTO ═══ */}
+
+        {/* 8. Retenção (gauges) */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%.\n\n• Jovens — Cards com estabilidade < 21 dias\n• Maduros — Cards com estabilidade ≥ 21 dias"} />
           <div className="flex items-center gap-4">
@@ -745,7 +891,6 @@ const StatsPage = () => {
               <p className="text-[11px] text-muted-foreground">{stats.trueRetention.correct} acertos de {stats.trueRetention.total} revisões</p>
             </div>
           </div>
-          {/* Young vs Mature breakdown table */}
           <div className="rounded-lg border border-border/50 overflow-hidden">
             <div className="grid grid-cols-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/30 px-3 py-1.5">
               <span>Tipo</span>
@@ -767,7 +912,41 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 8. Respostas */}
+        {/* 9. Retenção ao Longo do Tempo */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Retenção ao Longo do Tempo"
+            info={"Taxa de acerto (%) por semana nos últimos meses.\n\nMostra a evolução da sua retenção — se está melhorando ou piorando ao longo do tempo.\n\nO ideal é manter acima de 80%."}
+          />
+          {retentionChartData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={retentionChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="retentionGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Revisões' ? `${val}` : `${val}%`,
+                      name
+                    ]}
+                  />
+                  <Area type="monotone" dataKey="rate" name="Retenção" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#retentionGrad)" dot={{ r: 3, fill: 'hsl(var(--success))' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes — continue estudando para ver a evolução.</p>
+          )}
+        </Card>
+
+        {/* 10. Respostas */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
           <div className="space-y-3">
@@ -790,7 +969,9 @@ const StatsPage = () => {
           <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
         </Card>
 
-        {/* 9. Contagem de Cartões */}
+        {/* ═══ CARDS & CONTEÚDO ═══ */}
+
+        {/* 11. Contagem de Cartões */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
@@ -819,7 +1000,35 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 10. Conhecimento Total Estimado */}
+        {/* 12. Cards Novos: Criados vs Estudados */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              title="Novos: Criados vs Estudados"
+              info={"Comparação diária entre quantos cards novos você criou e quantos cards novos estudou pela primeira vez.\n\nAjuda a equilibrar a entrada de conteúdo novo com o ritmo de estudo."}
+            />
+            <PeriodFilterIcon filter={addedVsReviewedFilter} />
+          </div>
+          {addedVsReviewedData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={addedVsReviewedData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="added" name="Criados" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} opacity={0.85} />
+                  <Bar dataKey="studied" name="Estudados" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} opacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 13. Conhecimento Total Estimado */}
         <Card className="p-4 space-y-2">
           <SectionTitle
             title="Conhecimento Total Estimado"
@@ -835,7 +1044,9 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 11. Intervalos */}
+        {/* ═══ DISTRIBUIÇÕES SRS ═══ */}
+
+        {/* 14. Intervalos */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
           <div className="flex gap-1.5 flex-wrap">
@@ -846,7 +1057,7 @@ const StatsPage = () => {
           <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
         </Card>
 
-        {/* Stability + Difficulty */}
+        {/* Estabilidade + Dificuldade */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
             <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo ~90% de chance de acerto."} />
@@ -864,7 +1075,9 @@ const StatsPage = () => {
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
 
-        {/* 12. Ranking Global */}
+        {/* ═══ SOCIAL ═══ */}
+
+        {/* 15. Ranking Global */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
           <div className="p-4 pb-2 flex items-center justify-between">
             <SectionTitle title="Ranking Global" info="Usuários participantes do ranking, ordenados pelos últimos 30 dias." />
@@ -984,7 +1197,7 @@ const StatsPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* 13. Carga Prevista — link to /plano */}
+        {/* 16. Carga Prevista — link to /plano */}
         <Card className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/plano')}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary/10">
@@ -1018,9 +1231,9 @@ function MiniBarChart({ data, color, height = 130 }: { data: { label: string; co
     <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-          <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 9 }} width={28} tickLine={false} axisLine={false} />
-          <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+          <RTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }} />
           <Bar dataKey="count" name="Cartões" fill={color} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>

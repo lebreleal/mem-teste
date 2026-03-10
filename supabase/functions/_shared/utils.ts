@@ -32,7 +32,7 @@ export function getAIConfig() {
 
 /** Fetch model mapping from ai_settings table. */
 export async function getModelMap(supabase: any): Promise<Record<string, string>> {
-  const map: Record<string, string> = { pro: "gemini-2.5-pro", flash: "gemini-2.5-flash" };
+  const map: Record<string, string> = { pro: "gemini-2.5-pro", flash: "gemini-2.5-flash-lite" };
   try {
     const { data } = await supabase
       .from("ai_settings")

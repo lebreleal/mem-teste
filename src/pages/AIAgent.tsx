@@ -68,10 +68,17 @@ const AIAgent = () => {
     if (data) setConversations(data);
   };
 
+  const justCreatedRef = useRef(false);
+
   // Load messages for active conversation
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
+      return;
+    }
+    // Skip reload when we just created this conversation (messages are already in state)
+    if (justCreatedRef.current) {
+      justCreatedRef.current = false;
       return;
     }
     loadMessages(activeConversationId);
@@ -135,6 +142,7 @@ const AIAgent = () => {
       let convId = activeConversationId;
       if (!convId) {
         convId = await createConversation(text);
+        justCreatedRef.current = true;
         setActiveConversationId(convId);
       }
 
@@ -399,27 +407,23 @@ const AIAgent = () => {
                       <Brain className="h-4 w-4" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
                     </div>
                   )}
-                  <div className={cn(
-                    "rounded-2xl px-4 py-3 text-sm max-w-[85%] leading-relaxed",
-                    msg.role === 'user'
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted/60 text-foreground rounded-bl-md"
-                  )}>
-                    {msg.role === 'assistant' ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                  {msg.role === 'assistant' ? (
+                    <div className="max-w-[90%]">
+                      <div className="ai-prose">
                         <ReactMarkdown>{msg.content || '...'}</ReactMarkdown>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl rounded-br-md px-4 py-3 text-sm max-w-[85%] leading-relaxed bg-primary text-primary-foreground">
                       <p className="whitespace-pre-wrap">{msg.content}</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
                 <div className="flex gap-3 justify-start">
-                  <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: 'hsl(var(--energy-purple, 270 70% 60%) / 0.15)' }}>
-                    <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'hsl(var(--energy-purple, 270 70% 60%))' }} />
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-primary/10">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   </div>
                   <div className="rounded-2xl rounded-bl-md bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
                     Pensando...
