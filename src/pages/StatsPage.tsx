@@ -19,6 +19,7 @@ import { cn, formatMinutes } from '@/lib/utils';
 import {
   HelpCircle, Flame, Clock, Trophy, Users, Settings2,
   ChevronRight, Zap, Calendar, Medal, CheckCircle2, Snowflake, CalendarIcon,
+  SquarePlus, Layers, RotateCcw, Info,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
