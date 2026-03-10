@@ -634,7 +634,8 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* 1. Visão geral - Streak + Revisões hoje + Tempo hoje */}
+        {/* ═══ VISÃO GERAL ═══ */}
+        {/* 1. Streak + Revisões hoje + Tempo hoje */}
         <Card className="px-4 py-3">
           <div className="flex items-center justify-between">
             <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-muted/50 transition-colors">
@@ -699,163 +700,9 @@ const StatsPage = () => {
           </DialogContent>
         </Dialog>
 
-        {/* 3. Horas Estudadas */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              title="Horas Estudadas"
-              info="Tempo total de estudo calculado a partir da duração real de cada revisão."
-            />
-            <PeriodFilterIcon filter={hoursFilter} />
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
-            <span className="text-sm text-muted-foreground font-medium">h</span>
-            <span className="text-xl font-bold tabular-nums text-primary">{totalRemainingMins}</span>
-            <span className="text-sm text-muted-foreground font-medium">min</span>
-          </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>Média: <strong className="text-foreground">{formatMinutes(hoursStats.avgMinutes)}/dia</strong></span>
-            <span>{hoursStats.daysStudied} dias ativos</span>
-          </div>
-          {hoursChartData.length > 1 && (
-            <div style={{ height: 120 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-                    formatter={(val: number) => [`${val} min`, 'Tempo']}
-                  />
-                  <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Card>
+        {/* ═══ ATIVIDADE & VOLUME ═══ */}
 
-        {/* 4. Revisões por Dia */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              title="Revisões por Dia"
-              info="Total de cards revisados por dia no período selecionado."
-            />
-            <PeriodFilterIcon filter={reviewsPerDayFilter} />
-          </div>
-          {reviewsPerDayChartData.length > 1 ? (
-            <div style={{ height: 130 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reviewsPerDayChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-                    formatter={(val: number) => [`${val} cards`, 'Revisões']}
-                  />
-                  <Bar dataKey="cards" name="Cards" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
-          )}
-        </Card>
-
-        {/* 5. Retenção ao Longo do Tempo (NOVO) */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle
-            title="Retenção ao Longo do Tempo"
-            info={"Taxa de acerto (%) por semana nos últimos meses.\n\nMostra a evolução da sua retenção — se está melhorando ou piorando ao longo do tempo.\n\nO ideal é manter acima de 80%."}
-          />
-          {retentionChartData.length > 1 ? (
-            <div style={{ height: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={retentionChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="retentionGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-                    formatter={(val: number, name: string) => [
-                      name === 'Revisões' ? `${val}` : `${val}%`,
-                      name
-                    ]}
-                  />
-                  <Area type="monotone" dataKey="rate" name="Retenção" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#retentionGrad)" dot={{ r: 3, fill: 'hsl(var(--success))' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes — continue estudando para ver a evolução.</p>
-          )}
-        </Card>
-
-        {/* 6. Cards Adicionados vs Revisados (NOVO) */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle
-              title="Cards Adicionados vs Revisados"
-              info={"Comparação diária entre quantos cards novos você criou e quantos revisou.\n\nAjuda a equilibrar a entrada de conteúdo novo com a revisão do existente."}
-            />
-            <PeriodFilterIcon filter={addedVsReviewedFilter} />
-          </div>
-          {addedVsReviewedData.length > 1 ? (
-            <div style={{ height: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={addedVsReviewedData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-                  />
-                  <Bar dataKey="added" name="Adicionados" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} opacity={0.85} />
-                  <Bar dataKey="reviewed" name="Revisados" fill="hsl(var(--success))" radius={[3, 3, 0, 0]} opacity={0.85} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
-          )}
-        </Card>
-
-        {/* 7. Horário de Estudo */}
-        <Card className="p-4 space-y-3">
-          <SectionTitle
-            title="Horário de Estudo"
-            info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora."
-          />
-          {hourlyChartData.some(h => h.total > 0) ? (
-            <div style={{ height: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <RTooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-                    formatter={(val: number, name: string) => [
-                      name === 'Acerto' ? `${val}%` : `${val} revisões`,
-                      name
-                    ]}
-                  />
-                  <Bar yAxisId="left" dataKey="total" name="Revisões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.7} />
-                  <Line yAxisId="right" dataKey="successRate" name="Acerto" type="monotone" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhum dado de horário disponível.</p>
-          )}
-        </Card>
-
-        {/* 8. Atividade (Heatmap) */}
+        {/* 3. Atividade (Heatmap) — agrupado com resumo */}
         <Card className="p-4 space-y-2">
           <div className="flex items-center justify-between">
             <SectionTitle title="Atividade" info="Mapa de calor dos últimos meses. Cada quadrado representa um dia — quanto mais escuro, mais cards você revisou." />
@@ -915,7 +762,92 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 9. Tempo Médio por Card (NOVO) */}
+        {/* 4. Revisões por Dia */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Revisões por Dia" info="Total de cards revisados por dia no período selecionado." />
+            <PeriodFilterIcon filter={reviewsPerDayFilter} />
+          </div>
+          {reviewsPerDayChartData.length > 1 ? (
+            <div style={{ height: 130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={reviewsPerDayChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val} cards`, 'Revisões']}
+                  />
+                  <Bar dataKey="cards" name="Cards" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
+        {/* 5. Horas Estudadas */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle title="Horas Estudadas" info="Tempo total de estudo calculado a partir da duração real de cada revisão." />
+            <PeriodFilterIcon filter={hoursFilter} />
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-bold tabular-nums text-primary">{totalHours}</span>
+            <span className="text-sm text-muted-foreground font-medium">h</span>
+            <span className="text-xl font-bold tabular-nums text-primary">{totalRemainingMins}</span>
+            <span className="text-sm text-muted-foreground font-medium">min</span>
+          </div>
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>Média: <strong className="text-foreground">{formatMinutes(hoursStats.avgMinutes)}/dia</strong></span>
+            <span>{hoursStats.daysStudied} dias ativos</span>
+          </div>
+          {hoursChartData.length > 1 && (
+            <div style={{ height: 120 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hoursChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number) => [`${val} min`, 'Tempo']}
+                  />
+                  <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        {/* 6. Horário de Estudo */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle title="Horário de Estudo" info="Distribuição das suas revisões por hora do dia (últimos 30 dias). A linha mostra a taxa de acerto (%) por hora." />
+          {hourlyChartData.some(h => h.total > 0) ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={hourlyChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Acerto' ? `${val}%` : `${val} revisões`,
+                      name
+                    ]}
+                  />
+                  <Bar yAxisId="left" dataKey="total" name="Revisões" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} opacity={0.7} />
+                  <Line yAxisId="right" dataKey="successRate" name="Acerto" type="monotone" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhum dado de horário disponível.</p>
+          )}
+        </Card>
+
+        {/* 7. Tempo Médio por Card */}
         <Card className="p-4 space-y-3">
           <SectionTitle
             title="Tempo Médio por Card"
@@ -946,7 +878,9 @@ const StatsPage = () => {
           )}
         </Card>
 
-        {/* 10. Retenção (expandida com jovens/maduros) */}
+        {/* ═══ RETENÇÃO & ACERTO ═══ */}
+
+        {/* 8. Retenção (gauges) */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Retenção" info={"Esse número mostra a % de vezes que você acertou um cartão ao revisá-lo nos últimos 30 dias.\n\nO ideal é ficar entre 80% e 95%.\n\n• Jovens — Cards com estabilidade < 21 dias\n• Maduros — Cards com estabilidade ≥ 21 dias"} />
           <div className="flex items-center gap-4">
@@ -977,7 +911,41 @@ const StatsPage = () => {
           </div>
         </Card>
 
-        {/* 11. Respostas */}
+        {/* 9. Retenção ao Longo do Tempo */}
+        <Card className="p-4 space-y-3">
+          <SectionTitle
+            title="Retenção ao Longo do Tempo"
+            info={"Taxa de acerto (%) por semana nos últimos meses.\n\nMostra a evolução da sua retenção — se está melhorando ou piorando ao longo do tempo.\n\nO ideal é manter acima de 80%."}
+          />
+          {retentionChartData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={retentionChartData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="retentionGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} domain={[0, 100]} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                    formatter={(val: number, name: string) => [
+                      name === 'Revisões' ? `${val}` : `${val}%`,
+                      name
+                    ]}
+                  />
+                  <Area type="monotone" dataKey="rate" name="Retenção" stroke="hsl(var(--success))" strokeWidth={2} fill="url(#retentionGrad)" dot={{ r: 3, fill: 'hsl(var(--success))' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes — continue estudando para ver a evolução.</p>
+          )}
+        </Card>
+
+        {/* 10. Respostas */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Respostas" info={"Mostra quantas vezes você apertou cada botão nos últimos 30 dias."} />
           <div className="space-y-3">
@@ -1000,7 +968,9 @@ const StatsPage = () => {
           <p className="text-[10px] text-muted-foreground text-right">Total: {bc.total.toLocaleString()} revisões</p>
         </Card>
 
-        {/* 12. Contagem de Cartões */}
+        {/* ═══ CARDS & CONTEÚDO ═══ */}
+
+        {/* 11. Contagem de Cartões */}
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <SectionTitle title="Contagem de Cartões" info={"Seus cartões são divididos em categorias:\n\n• Novos — Cartões que você nunca estudou.\n• Aprendendo — Cartões que você está vendo pela primeira vez hoje.\n• Reaprendendo — Cartões que você errou e voltaram para estudo.\n• Recentes — Cartões já revisados, mas com intervalo curto (menos de 21 dias).\n• Maduros — Cartões que você conhece bem (intervalo de 21+ dias).\n• Congelados — Cartões pausados ou suspensos."} />
@@ -1029,6 +999,34 @@ const StatsPage = () => {
           </div>
         </Card>
 
+        {/* 12. Cards Novos: Criados vs Estudados */}
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              title="Novos: Criados vs Estudados"
+              info={"Comparação diária entre quantos cards novos você criou e quantos cards novos estudou pela primeira vez.\n\nAjuda a equilibrar a entrada de conteúdo novo com o ritmo de estudo."}
+            />
+            <PeriodFilterIcon filter={addedVsReviewedFilter} />
+          </div>
+          {addedVsReviewedData.length > 1 ? (
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={addedVsReviewedData} margin={{ top: 4, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} width={28} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="added" name="Criados" fill="hsl(var(--warning))" radius={[3, 3, 0, 0]} opacity={0.85} />
+                  <Bar dataKey="studied" name="Estudados" fill="hsl(var(--info))" radius={[3, 3, 0, 0]} opacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Dados insuficientes para o gráfico.</p>
+          )}
+        </Card>
+
         {/* 13. Conhecimento Total Estimado */}
         <Card className="p-4 space-y-2">
           <SectionTitle
@@ -1045,6 +1043,8 @@ const StatsPage = () => {
           </div>
         </Card>
 
+        {/* ═══ DISTRIBUIÇÕES SRS ═══ */}
+
         {/* 14. Intervalos */}
         <Card className="p-4 space-y-3">
           <SectionTitle title="Intervalos" info={"O intervalo é o tempo entre uma revisão e a próxima de cada cartão.\n\n• p50 — Metade dos seus cartões tem intervalo menor que esse valor.\n• p95 — 95% dos cartões tem intervalo menor que esse.\n• Máx — O maior intervalo entre todos seus cartões."} />
@@ -1056,7 +1056,7 @@ const StatsPage = () => {
           <MiniBarChart data={intervalBuckets} color="hsl(var(--primary))" />
         </Card>
 
-        {/* Stability + Difficulty */}
+        {/* Estabilidade + Dificuldade */}
         <div className="grid grid-cols-2 gap-2">
           <Card className="p-4 space-y-2">
             <SectionTitle title="Estabilidade" info={"A estabilidade representa por quantos dias um cartão consegue ficar sem revisão mantendo ~90% de chance de acerto."} />
@@ -1073,6 +1073,8 @@ const StatsPage = () => {
           <SectionTitle title="Recuperabilidade" info={"Probabilidade estimada de você lembrar cada cartão agora.\n\n• 95%+ — Provavelmente lembra.\n• 70-85% — Hora de revisar.\n• Abaixo de 50% — Provavelmente esqueceu."} />
           <MiniBarChart data={retrievabilityBuckets} color="hsl(var(--chart-4))" />
         </Card>
+
+        {/* ═══ SOCIAL ═══ */}
 
         {/* 15. Ranking Global */}
         <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
