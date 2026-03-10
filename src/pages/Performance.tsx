@@ -105,28 +105,30 @@ const Performance = () => {
           </Card>
         ) : (
           <>
-            {/* Card state breakdown row */}
-            <div className="grid grid-cols-4 gap-2">
-              <button onClick={() => setNewInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
-                <SquarePlus className="h-5 w-5 text-muted-foreground" />
-                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
-                <span className="text-[10px] text-muted-foreground">Novos</span>
-              </button>
-              <button onClick={() => setLearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
-                <RotateCcw className="h-5 w-5 text-warning" />
-                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
-                <span className="text-[10px] text-muted-foreground">Aprendendo</span>
-              </button>
-              <button onClick={() => setReviewInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
-                <Layers className="h-5 w-5 text-primary" />
-                <span className="text-lg font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
-                <span className="text-[10px] text-muted-foreground">Dominados</span>
-              </button>
-              <button onClick={() => setRelearningInfoOpen(true)} className="flex flex-col items-center gap-1 rounded-2xl border border-border/50 bg-card p-3 hover:bg-muted/50 transition-colors shadow-sm">
-                <RotateCcw className="h-5 w-5 text-destructive" />
-                <span className="text-lg font-bold text-foreground tabular-nums">{data?.totalPendingReviews ?? 0}</span>
-                <span className="text-[10px] text-muted-foreground">Reaprendendo</span>
-              </button>
+            {/* Card state breakdown - inline row */}
+            <div className="rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <button onClick={() => setNewInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+                  <SquarePlus className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </button>
+                <button onClick={() => setLearningInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+                  <RotateCcw className="h-4 w-4 text-warning" />
+                  <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.learningCount}</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </button>
+                <button onClick={() => setReviewInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+                  <Layers className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.reviewCount}</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </button>
+                <button onClick={() => setRelearningInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+                  <RotateCcw className="h-4 w-4 text-destructive" />
+                  <span className="text-sm font-bold text-foreground tabular-nums">{data?.totalPendingReviews ?? 0}</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* Info dialogs */}
