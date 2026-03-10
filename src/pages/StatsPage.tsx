@@ -92,7 +92,7 @@ function usePeriodFilter() {
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const range = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayStr = getToday();
     const today = new Date(todayStr + 'T03:00:00Z');
     switch (period) {
       case 'today': return { from: today, to: today, expectedDays: 1 };
