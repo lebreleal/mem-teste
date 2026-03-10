@@ -260,6 +260,7 @@ const StatsPage = () => {
   const [learningInfoOpen, setLearningInfoOpen] = useState(false);
   const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
   const [relearningInfoOpen, setRelearningInfoOpen] = useState(false);
+  const [streakInfoOpen, setStreakInfoOpen] = useState(false);
 
   // Individual period filters per chart
   const hoursFilter = usePeriodFilter();
