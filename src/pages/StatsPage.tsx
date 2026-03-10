@@ -556,9 +556,20 @@ const StatsPage = () => {
 
       <div className="p-4 space-y-5 max-w-lg mx-auto">
 
-        {/* 1. Card state counts - inline row */}
-        <Card className="px-4 py-3">
+        {/* Resumo do Período */}
+        <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
+            <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
+            <PeriodFilterIcon filter={summaryFilter} />
+          </div>
+
+          {/* Streak + card states inline */}
+          <div className="flex items-center justify-between">
+            <button onClick={() => setStreakInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
+              <Flame className={cn("h-4 w-4", currentStreak > 0 ? "text-warning fill-warning" : "text-muted-foreground/30")} />
+              <span className="text-sm font-bold text-foreground tabular-nums">{currentStreak}</span>
+              <Info className="h-3 w-3 text-muted-foreground" />
+            </button>
             <button onClick={() => setNewInfoOpen(true)} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
               <SquarePlus className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-bold text-foreground tabular-nums">{cardStateCounts.newCount}</span>
@@ -580,9 +591,29 @@ const StatsPage = () => {
               <Info className="h-3 w-3 text-muted-foreground" />
             </button>
           </div>
+
+          {/* Period stats */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Dias estudados', value: `${summaryStats.daysStudied}/${summaryStats.totalDays}` },
+              { label: 'Total revisões', value: summaryStats.totalCards.toLocaleString() },
+              { label: 'Média/dia', value: String(summaryStats.avgCards) },
+            ].map(item => (
+              <div key={item.label} className="rounded-xl bg-muted/40 p-3 text-center">
+                <p className="text-lg font-bold tabular-nums">{item.value}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
+              </div>
+            ))}
+          </div>
         </Card>
 
-        {/* Info dialogs for card states */}
+        {/* Info dialogs */}
+        <Dialog open={streakInfoOpen} onOpenChange={setStreakInfoOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Flame className="h-5 w-5 text-warning" />Dias seguidos</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Número de dias consecutivos que você estudou. Continue todos os dias para aumentar sua sequência!</p>
+          </DialogContent>
+        </Dialog>
         <Dialog open={newInfoOpen} onOpenChange={setNewInfoOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle className="flex items-center gap-2"><SquarePlus className="h-5 w-5 text-muted-foreground" />Novos</DialogTitle></DialogHeader>
@@ -607,26 +638,6 @@ const StatsPage = () => {
             <p className="text-sm text-muted-foreground">Cards dominados que você errou e voltaram para a fase de aprendizado.</p>
           </DialogContent>
         </Dialog>
-
-        {/* 2. Resumo do Período */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle title="Resumo" info="Visão geral do período selecionado: dias estudados, total de revisões e média por dia." />
-            <PeriodFilterIcon filter={summaryFilter} />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: 'Dias estudados', value: `${summaryStats.daysStudied}/${summaryStats.totalDays}` },
-              { label: 'Total revisões', value: summaryStats.totalCards.toLocaleString() },
-              { label: 'Média/dia', value: String(summaryStats.avgCards) },
-            ].map(item => (
-              <div key={item.label} className="rounded-xl bg-muted/40 p-3 text-center">
-                <p className="text-lg font-bold tabular-nums">{item.value}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
 
         {/* 3. Horas Estudadas */}
         <Card className="p-4 space-y-3">
