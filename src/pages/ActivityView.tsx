@@ -26,6 +26,9 @@ const ActivityView = () => {
   const [freezeInfoOpen, setFreezeInfoOpen] = useState(false);
   const [bestStreakInfoOpen, setBestStreakInfoOpen] = useState(false);
   const [activeDaysInfoOpen, setActiveDaysInfoOpen] = useState(false);
+  const [streakInfoOpen, setStreakInfoOpen] = useState(false);
+  const [cardsInfoOpen, setCardsInfoOpen] = useState(false);
+  const [totalCardsInfoOpen, setTotalCardsInfoOpen] = useState(false);
   const [newCardsInfoOpen, setNewCardsInfoOpen] = useState(false);
   const [learningInfoOpen, setLearningInfoOpen] = useState(false);
   const [reviewInfoOpen, setReviewInfoOpen] = useState(false);
