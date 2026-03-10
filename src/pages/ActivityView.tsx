@@ -94,7 +94,7 @@ const ActivityView = () => {
   const selectedDayData = selectedDate ? dayMap[selectedDate] : null;
   const isFrozenDay = selectedDate ? frozenDays.has(selectedDate) : false;
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayKey = getToday();
   const todayData = dayMap[todayKey];
   const todayCards = todayData?.cards ?? 0;
   const todayMinutes = todayData?.minutes ?? 0;

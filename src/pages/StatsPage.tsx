@@ -325,7 +325,7 @@ const StatsPage = () => {
     staleTime: 120_000,
   });
 
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayKey = getToday();
   const dayMap: Record<string, any> = activityData?.dayMap ?? {};
   const currentStreak = activityData?.streak ?? 0;
 
