@@ -156,6 +156,7 @@ const ActivityView = () => {
                 } : undefined}
               />
               <span className="text-xl font-extrabold text-foreground tabular-nums leading-none">{streak}</span>
+            </button>
 
             {/* Today stats */}
             <div className="flex items-center gap-3">
