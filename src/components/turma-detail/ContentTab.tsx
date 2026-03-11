@@ -307,6 +307,7 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
