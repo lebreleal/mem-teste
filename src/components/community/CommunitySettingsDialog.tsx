@@ -205,10 +205,38 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
               </div>
             </div>
 
+            <div className="rounded-xl border border-border/50 p-3 space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Share2 className="h-3.5 w-3.5" /> Link público</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Defina um slug personalizado para compartilhar sua comunidade (ex: "minha-turma").
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+                <Input
+                  value={shareSlug}
+                  onChange={e => setShareSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="meu-link"
+                  className="flex-1"
+                  maxLength={40}
+                />
+              </div>
+              {shareSlug && (
+                <button
+                  className="text-[11px] text-primary hover:underline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/c/${shareSlug}`);
+                    toast({ title: 'Link copiado!' });
+                  }}
+                >
+                  Copiar link: {window.location.origin}/c/{shareSlug}
+                </button>
+              )}
+            </div>
+
             <Button
               className="w-full"
               disabled={!name.trim() || isSaving}
-              onClick={() => onSave({ name: name.trim(), description: description.trim(), isPrivate, coverImageUrl: coverUrl, subscriptionPrice: Number(subscriptionPrice) || 0 })}
+              onClick={() => onSave({ name: name.trim(), description: description.trim(), isPrivate, coverImageUrl: coverUrl, subscriptionPrice: Number(subscriptionPrice) || 0, shareSlug: shareSlug.trim() || undefined })}
             >
               {isSaving ? 'Salvando...' : 'Salvar Configurações'}
             </Button>
