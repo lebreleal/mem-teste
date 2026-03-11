@@ -87,6 +87,8 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       source_listing_id: deck.source_listing_id ?? null,
       source_author: deck.source_listing_id ? (authorMap.get(deck.source_listing_id) ?? null) : null,
       source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,
+      community_id: (deck as any).community_id ?? null,
+      updated_at: deck.updated_at ?? deck.created_at,
     };
   });
 }

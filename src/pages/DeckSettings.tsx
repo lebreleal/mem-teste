@@ -96,6 +96,7 @@ const DeckSettings = () => {
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
   const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
+  const [communityId, setCommunityId] = useState<string | null>(null);
 
   // Modals
   const [algorithmModal, setAlgorithmModal] = useState(false);
@@ -108,6 +109,8 @@ const DeckSettings = () => {
   const [exportModal, setExportModal] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingAnki, setExportingAnki] = useState(false);
+  const [detachConfirm, setDetachConfirm] = useState(false);
+  const [detaching, setDetaching] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'fsrs' | 'quick_review' | null>(null);
 
   const studyPlansQuery = useQuery({
@@ -181,6 +184,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setCommunityId((data as any).community_id ?? null);
       setBuryNewSiblings((data as any).bury_new_siblings !== false);
       setBuryReviewSiblings((data as any).bury_review_siblings !== false);
       setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
@@ -277,6 +281,29 @@ const DeckSettings = () => {
         if (data?.id) navigate(`/decks/${data.id}`);
       },
     });
+  };
+
+  const isCommunityDeck = !!(sourceTurmaDeckId || communityId);
+
+  const handleDetachDeck = async () => {
+    if (!deckId) return;
+    setDetaching(true);
+    try {
+      await supabase.from('decks').update({
+        source_turma_deck_id: null,
+        source_listing_id: null,
+        community_id: null,
+      } as any).eq('id', deckId);
+      setSourceTurmaDeckId(null);
+      setCommunityId(null);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+      setDetachConfirm(false);
+    } catch {
+      toast({ title: 'Erro ao importar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+    }
   };
 
   const handleArchive = () => {
@@ -558,11 +585,20 @@ const DeckSettings = () => {
                 label="Renomear baralho"
                 onClick={() => setRenameModal(true)}
               />
-              <SettingsRow
-                icon={<Copy className="h-5 w-5" />}
-                label="Duplicar baralho"
-                onClick={handleDuplicate}
-              />
+              {isCommunityDeck ? (
+                <SettingsRow
+                  icon={<Download className="h-5 w-5" />}
+                  label="Importar pro meu deck"
+                  subtitle="Converter em deck pessoal independente"
+                  onClick={() => setDetachConfirm(true)}
+                />
+              ) : (
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Duplicar baralho"
+                  onClick={handleDuplicate}
+                />
+              )}
               <SettingsRow
                 icon={<RotateCcw className="h-5 w-5" />}
                 label="Redefinir progresso"
@@ -660,6 +696,30 @@ const DeckSettings = () => {
         handleExportAnki={handleExportAnki}
         toast={toast}
       />
+
+      {/* Detach community deck dialog */}
+      <AlertDialog open={detachConfirm} onOpenChange={setDetachConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>O baralho <strong>"{name}"</strong> será convertido em um deck pessoal independente.</p>
+              <p>Isso significa que:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
+                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
+                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Importando...' : 'Confirmar importação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

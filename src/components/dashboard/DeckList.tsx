@@ -53,6 +53,7 @@ interface DeckListProps {
   onMoveDeck: (deck: DeckWithStats) => void;
   onArchiveDeck: (id: string) => void;
   onDeleteDeck: (deck: DeckWithStats) => void;
+  onDetachCommunityDeck?: (deck: DeckWithStats) => void;
 
   // Reorder callbacks
   onReorderFolders?: (reordered: Folder[]) => void;
@@ -68,7 +69,8 @@ interface DeckListProps {
 const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
-  onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
+  onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
+  getFolderDueCount, getFolderCommunityLinkId,
   folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
   ...deckRowProps
@@ -277,6 +279,7 @@ const DeckList = ({
             onMove={onMoveDeck}
             onArchive={onArchiveDeck}
             onDelete={onDeleteDeck}
+            onDetachCommunityDeck={onDetachCommunityDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
             hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}

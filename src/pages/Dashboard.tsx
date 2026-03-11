@@ -11,6 +11,11 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -105,6 +110,8 @@ const Dashboard = () => {
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
+  const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
+  const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -112,6 +119,25 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+
+  const handleDetachDeck = useCallback(async () => {
+    if (!detachTarget) return;
+    setDetaching(true);
+    try {
+      await supabase.from('decks').update({
+        source_turma_deck_id: null,
+        source_listing_id: null,
+        community_id: null,
+      } as any).eq('id', detachTarget.id);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+    } catch {
+      toast({ title: 'Erro ao importar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+      setDetachTarget(null);
+    }
+  }, [detachTarget, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
@@ -255,6 +281,7 @@ const Dashboard = () => {
             onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
             onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
             onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
@@ -303,6 +330,7 @@ const Dashboard = () => {
             onMoveDeck={() => {}}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
@@ -483,6 +511,30 @@ const Dashboard = () => {
           />
         )}
       </Suspense>
+
+      {/* Detach community deck dialog */}
+      <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>O baralho <strong>"{detachTarget?.name}"</strong> será convertido em um deck pessoal independente.</p>
+              <p>Isso significa que:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
+                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
+                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Importando...' : 'Confirmar importação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
