@@ -59,6 +59,7 @@ interface FlashCardProps {
   explainResponse?: string | null;
   mcExplainResponse?: string | null;
   actions?: React.ReactNode;
+  communityMeta?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
