@@ -119,8 +119,9 @@ const Study = () => {
     queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
       const { data } = await supabase.rpc('resolve_community_deck_source', { p_deck_id: currentCardDeckId! });
-      if (!data) return null;
-      return { authorName: data.authorName as string | null, updatedAt: data.updatedAt as string | null };
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+      const obj = data as Record<string, unknown>;
+      return { authorName: (obj.authorName as string) ?? null, updatedAt: (obj.updatedAt as string) ?? null };
     },
     enabled: !!currentCardDeckId,
     staleTime: 5 * 60_000,
