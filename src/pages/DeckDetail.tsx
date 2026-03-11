@@ -281,7 +281,7 @@ const PersonalDeckTabs = ({ deckId }: { deckId: string }) => {
           value="questions"
           className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
         >
-          <MessageSquare className="h-4 w-4" /> Questões
+          <HelpCircle className="h-4 w-4" /> Questões
         </TabsTrigger>
       </TabsList>
       <TabsContent value="cards" className="mt-4">
