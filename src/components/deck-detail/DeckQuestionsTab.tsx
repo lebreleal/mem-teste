@@ -622,23 +622,22 @@ const QuestionPractice = ({
                   }`}>
                     {confirmed && isCorrectOpt ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
                   </span>
-                  <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
+                  <span className="text-sm leading-relaxed pt-0.5 flex-1">
+                    {opt}
+                    {confirmed && !optExplanation && (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); handleExplainOption(i); }}
+                        className="ml-2 text-xs font-medium cursor-pointer inline-flex items-center gap-1 disabled:opacity-50"
+                        style={{ color: isCorrectOpt ? 'hsl(142, 71%, 45%)' : 'hsl(var(--destructive))' }}
+                      >
+                        {optionExplainLoading === i && <Loader2 className="h-3 w-3 animate-spin inline" />}
+                        {isCorrectOpt ? 'Por que está correta?' : 'Por que está errada?'}
+                      </span>
+                    )}
+                  </span>
                   {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
                 </button>
-
-                {/* Per-option "Explicar alternativa" link — shown after confirming for ALL options */}
-                {confirmed && !optExplanation && (
-                  <button
-                    onClick={() => handleExplainOption(i)}
-                    disabled={optionExplainLoading === i}
-                    className="ml-10 mt-1 flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-                    style={{ color: isCorrectOpt ? 'hsl(142, 71%, 45%)' : 'hsl(var(--destructive))' }}
-                  >
-                    {optionExplainLoading === i && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {isCorrectOpt ? 'Por que está correta?' : 'Por que está errada?'}
-                    <span className="text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
-                  </button>
-                )}
 
                 {/* Inline explanation for this option */}
                 {optExplanation && (
