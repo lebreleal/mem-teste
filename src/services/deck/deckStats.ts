@@ -116,6 +116,29 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
+  // Batch source deck updated_at lookup (for community decks, show original deck's last edit)
+  const sourceUpdatedAtMap = new Map<string, string>();
+  // Via source_turma_deck_id → turma_decks.deck_id → decks.updated_at
+  if (turmaDecksIds.length > 0) {
+    const { data: turmaDecks } = await supabase
+      .from('turma_decks')
+      .select('id, deck_id')
+      .in('id', turmaDecksIds);
+    if (turmaDecks && turmaDecks.length > 0) {
+      const sourceDeckIds = [...new Set(turmaDecks.map((td: any) => td.deck_id))];
+      const { data: sourceDecks } = await supabase
+        .from('decks')
+        .select('id, updated_at')
+        .in('id', sourceDeckIds);
+      const srcMap = new Map<string, string>();
+      if (sourceDecks) for (const sd of sourceDecks as any[]) srcMap.set(sd.id, sd.updated_at);
+      for (const td of turmaDecks as any[]) {
+        const ts = srcMap.get(td.deck_id);
+        if (ts) sourceUpdatedAtMap.set(td.id, ts);
+      }
+    }
+  }
+
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
     // Resolve author: marketplace listing author OR turma sharer OR community owner (with fallback chain)
