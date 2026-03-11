@@ -61,7 +61,15 @@ export async function fetchTurmaRanking(turmaId: string): Promise<TurmaMemberWit
 }
 
 export async function fetchTurmaRole(userId: string, turmaId: string): Promise<TurmaRole | null> {
-  const { data } = await supabase.from('turma_members').select('role').eq('turma_id', turmaId).eq('user_id', userId).single();
+  // Order by role to prioritize admin > moderator > member, use limit(1) to handle duplicate rows
+  const { data } = await supabase
+    .from('turma_members')
+    .select('role')
+    .eq('turma_id', turmaId)
+    .eq('user_id', userId)
+    .order('role', { ascending: true }) // admin < member < moderator alphabetically
+    .limit(1)
+    .maybeSingle();
   return (data as any)?.role ?? null;
 }
 
