@@ -4,6 +4,7 @@
  * option elimination (scissors), AI concept card generation.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -280,7 +281,7 @@ const ConceptMasterySection = ({
                                   <span className="text-[10px] text-muted-foreground">Frente</span>
                                 </div>
                                 <div className="text-xs text-foreground leading-relaxed line-clamp-3"
-                                  dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                                  dangerouslySetInnerHTML={{ __html: card.card_type === 'cloze' ? renderClozePreview(card.front_content, true) : card.front_content }} />
                               </div>
                               {hasRealBack && (
                                 <div className="px-3.5 py-2 bg-primary/[0.02]">
