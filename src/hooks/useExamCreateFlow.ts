@@ -101,8 +101,19 @@ export function useExamCreateFlow() {
 
   // Populate form when editing
   useEffect(() => {
+    if (isEditing) return;
+
     if (preselectedDeckId && !selectedDeckId) setSelectedDeckId(preselectedDeckId);
-  }, [preselectedDeckId]);
+
+    if (preselectedMode === 'ai' || preselectedMode === 'file' || preselectedMode === 'manual') {
+      setCreationMode(preselectedMode);
+      if (preselectedMode === 'file') setFileStep('upload');
+    }
+
+    if (preselectedModel === 'flash' || preselectedModel === 'pro') {
+      setModel(preselectedModel);
+    }
+  }, [isEditing, preselectedDeckId, selectedDeckId, preselectedMode, preselectedModel, setModel]);
 
   useEffect(() => {
     if (isEditing && existingExam && existingQuestions.length > 0) {
