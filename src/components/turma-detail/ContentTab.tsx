@@ -124,8 +124,12 @@ const DeckListItem = ({
       </div>
     </div>
     <div className="flex items-center gap-1.5 shrink-0">
-      {!inCollection && subscriberOnly && !canImport && (
-        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+      {onShare && (
+        <div onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={onShare} title="Compartilhar">
+            <Share2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       )}
       {(isAdmin || isOwner) && (
         <div onClick={e => e.stopPropagation()} className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
