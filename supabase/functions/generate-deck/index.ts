@@ -304,6 +304,7 @@ Deno.serve(async (req) => {
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
+    const isFlashLite = selectedModel.includes("flash-lite");
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
@@ -311,10 +312,14 @@ Deno.serve(async (req) => {
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
-    let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
-
+    // Flash-lite uses simplified prompt; Pro/Flash use full prompt
+    let systemPrompt: string;
     if (customInstructions && /prova|exame|questões/i.test(customInstructions)) {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
+    } else if (isFlashLite) {
+      systemPrompt = FLASH_SYSTEM_PROMPT;
+    } else {
+      systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     }
 
     const countInstruction = requestedCount > 0
