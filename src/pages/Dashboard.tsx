@@ -121,23 +121,41 @@ const Dashboard = () => {
   } | null>(null);
 
   const handleDetachDeck = useCallback(async () => {
-    if (!detachTarget) return;
+    if (!detachTarget || !user) return;
     setDetaching(true);
     try {
-      await supabase.from('decks').update({
-        source_turma_deck_id: null,
-        source_listing_id: null,
-        community_id: null,
-      } as any).eq('id', detachTarget.id);
+      // Duplicate the deck as a personal copy (no community links)
+      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', detachTarget.id).single();
+      if (!originalDeck) throw new Error('Deck not found');
+
+      const { data: newDeck, error } = await supabase.from('decks').insert({
+        name: `${(originalDeck as any).name}`,
+        user_id: user.id,
+        folder_id: null,
+      } as any).select().single();
+      if (error || !newDeck) throw error || new Error('Failed to create deck');
+
+      // Copy cards
+      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', detachTarget.id);
+      if (cards && cards.length > 0) {
+        const newCards = cards.map((c: any) => ({
+          deck_id: (newDeck as any).id,
+          front_content: c.front_content,
+          back_content: c.back_content,
+          card_type: c.card_type ?? 'basic',
+        }));
+        await supabase.from('cards').insert(newCards as any);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['decks'] });
-      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+      toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
     } catch {
-      toast({ title: 'Erro ao importar', variant: 'destructive' });
+      toast({ title: 'Erro ao copiar', variant: 'destructive' });
     } finally {
       setDetaching(false);
       setDetachTarget(null);
     }
-  }, [detachTarget, queryClient, toast]);
+  }, [detachTarget, user, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
