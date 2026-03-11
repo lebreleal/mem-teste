@@ -21,6 +21,7 @@ interface TurmaSubHeaderProps {
   turmaId: string;
   turmaName: string;
   inviteCode: string;
+  shareSlug?: string;
   isAdmin: boolean;
   hasSubscription: boolean;
   hasExclusiveContent: boolean;
