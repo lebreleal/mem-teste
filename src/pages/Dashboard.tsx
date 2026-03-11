@@ -511,6 +511,30 @@ const Dashboard = () => {
           />
         )}
       </Suspense>
+
+      {/* Detach community deck dialog */}
+      <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>O baralho <strong>"{detachTarget?.name}"</strong> será convertido em um deck pessoal independente.</p>
+              <p>Isso significa que:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
+                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
+                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Importando...' : 'Confirmar importação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
