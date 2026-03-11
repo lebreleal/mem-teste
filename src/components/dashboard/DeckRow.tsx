@@ -139,7 +139,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               )}
               {isCommunityDeck && onDetachCommunityDeck && (
                 <DropdownMenuItem onClick={() => onDetachCommunityDeck(deck)}>
-                  <Download className="mr-2 h-4 w-4" /> Importar pro meu deck
+                  <Copy className="mr-2 h-4 w-4" /> Copiar para meu deck pessoal
                 </DropdownMenuItem>
               )}
               {!isCommunityDeck && (
