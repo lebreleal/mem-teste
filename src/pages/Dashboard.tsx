@@ -109,6 +109,18 @@ const Dashboard = () => {
     [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
   );
 
+  const personalCurrentFolders = useMemo(
+    () => state.currentFolders.filter(f => (f.section ?? 'personal') === 'personal'),
+    [state.currentFolders]
+  );
+
+  const communityRootFolders = useMemo(
+    () => state.folders
+      .filter(f => !f.parent_id && !f.is_archived && (f.section ?? 'personal') === 'community')
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+    [state.folders]
+  );
+
   // Carousel helpers
   const hasPlan = plans.length > 0;
   const planDeckIds = allDeckIds;
