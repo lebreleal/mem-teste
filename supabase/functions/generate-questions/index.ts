@@ -175,7 +175,7 @@ Para cada questão, retorne:
               concepts: {
                 type: "array",
                 items: { type: "string" },
-                description: "2-5 conceitos-chave testados",
+                description: "2-4 perguntas de autoavaliação sobre os micro-conceitos testados nesta questão. Cada item é uma pergunta como 'Você conseguiu identificar que X é Y?'",
               },
               source_card_ids: {
                 type: "array",
