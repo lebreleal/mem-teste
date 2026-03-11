@@ -223,7 +223,7 @@ const Dashboard = () => {
         )}
 
         <DashboardActions
-          mode={activeSection}
+          mode="personal"
           currentFolderId={state.currentFolderId}
           breadcrumb={state.breadcrumb}
           onNavigateFolder={state.setCurrentFolderId}
