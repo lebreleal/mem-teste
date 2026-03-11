@@ -13,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2, RefreshCw,
+  ArrowLeft, Crown, Settings, Users, Check, Star, BarChart3, Share2, RefreshCw,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -134,10 +134,6 @@ const TurmaSubHeader = ({
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
                 <Users className="h-4 w-4 text-muted-foreground" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8"
-                onClick={() => { navigator.clipboard.writeText(inviteCode); toast({ title: 'Código copiado!', description: inviteCode }); }}>
-                <UserPlus className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
           </div>

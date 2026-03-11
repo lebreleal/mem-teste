@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Bot, ChevronRight, RotateCcw, Users, Settings, Volume2, Play, BarChart3, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -218,6 +218,19 @@ const AdminIA = () => {
                   <div>
                     <p className="font-medium">Relatório de Uso IA</p>
                     <p className="text-xs text-muted-foreground">Consumo global, filtros por data e usuário</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
+            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/admin/tags')}>
+              <CardContent className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="font-medium">Gerenciar Tags</p>
+                    <p className="text-xs text-muted-foreground">Hierarquia, sinônimos, oficializar e mesclar tags</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />

@@ -307,6 +307,7 @@ const ContentTab = () => {
 
   // ── Local state ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [addDeckSectionId, setAddDeckSectionId] = useState<string | null>(null);
   const [selectedDeckIds, setSelectedDeckIds] = useState<Set<string>>(new Set());
@@ -325,6 +326,26 @@ const ContentTab = () => {
   // ── Batch tags for all community decks ──
   const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
   const { data: deckTagsMap = {} } = useDeckTagsBatch(allDeckIds);
+
+  // ── Collect unique tags from community decks for filter chips ──
+  const communityTags = useMemo(() => {
+    const tagMap = new Map<string, Tag>();
+    Object.values(deckTagsMap).forEach((tags: Tag[]) => {
+      tags.forEach(tag => { if (!tagMap.has(tag.id)) tagMap.set(tag.id, tag); });
+    });
+    return Array.from(tagMap.values())
+      .sort((a, b) => {
+        if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
+        return b.usage_count - a.usage_count;
+      });
+  }, [deckTagsMap]);
+
+  // ── Get descendant tag IDs for inclusive filtering ──
+  const { data: descendantIds = [] } = useTagDescendants(selectedTagId);
+  const activeTagIds = useMemo(() => {
+    if (!selectedTagId) return null;
+    return new Set([selectedTagId, ...descendantIds]);
+  }, [selectedTagId, descendantIds]);
 
   // ── Subscriber-only validation ──
   const canSetSubscribersOnly = (turma?.subscription_price ?? 0) > 0;
@@ -433,14 +454,20 @@ const ContentTab = () => {
     return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
-  // ── Current folder's decks ──
+  // ── Current folder's decks (when tag is active, search across ALL folders) ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
+    const filterByFolder = !activeTagIds; // skip folder filter when tag is active
     return turmaDecks
-      .filter((d: any) => d.subject_id === contentFolderId)
+      .filter((d: any) => filterByFolder ? d.subject_id === contentFolderId : true)
       .filter((d: any) => isAdmin || d.is_published !== false)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q));
-  }, [turmaDecks, contentFolderId, searchQuery, isAdmin]);
+      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
+      .filter((d: any) => {
+        if (!activeTagIds) return true;
+        const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
+        return tags?.some(t => activeTagIds.has(t.id)) ?? false;
+      });
+  }, [turmaDecks, contentFolderId, searchQuery, isAdmin, activeTagIds, deckTagsMap]);
 
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
@@ -558,6 +585,35 @@ const ContentTab = () => {
           </div>
         )}
       </div>
+
+      {/* Tag filter chips */}
+      {communityTags.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            onClick={() => setSelectedTagId(null)}
+            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+              !selectedTagId
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            Todos
+          </button>
+          {communityTags.map(tag => (
+            <button
+              key={tag.id}
+              onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                selectedTagId === tag.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Content */}
       {!hasContent ? (
