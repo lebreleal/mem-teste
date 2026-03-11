@@ -10,6 +10,7 @@ import AIExamConfig from '@/components/exam-create/AIExamConfig';
 import FileExamFlow from '@/components/exam-create/FileExamFlow';
 import ManualQuestionsEditor from '@/components/exam-create/ManualQuestionsEditor';
 import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
+import { useExamCreateFlow } from '@/hooks/useExamCreateFlow';
 
 const ExamCreate = () => {
   const flow = useExamCreateFlow();
