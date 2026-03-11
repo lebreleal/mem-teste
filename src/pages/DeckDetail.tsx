@@ -248,6 +248,38 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; reso
   );
 };
 
+const PersonalDeckTabs = ({ deckId }: { deckId: string }) => {
+  const { cardCounts } = useDeckDetail();
+  const totalCards = cardCounts?.total ?? 0;
+
+  return (
+    <Tabs defaultValue="cards" className="w-full">
+      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger
+          value="cards"
+          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+        >
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger
+          value="questions"
+          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+        >
+          <MessageSquare className="h-4 w-4" /> Questões
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab deckId={deckId} />
+        </Suspense>
+      </TabsContent>
+    </Tabs>
+  );
+};
+
 /** List of suggestions for a deck */
 const SuggestionsList = ({ deckId }: { deckId: string }) => {
   const { data: suggestions = [], isLoading } = useQuery({
