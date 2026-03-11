@@ -447,7 +447,7 @@ const Study = () => {
                   chatHasMessages={chatHasMessages}
                 />
                 {sourceInfo && (
-                  <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-1">
+                  <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-2 w-full">
                     {sourceInfo.authorName && (
                       <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
                     )}
