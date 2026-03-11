@@ -79,7 +79,6 @@ const Dashboard = () => {
 
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
-  const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
@@ -90,43 +89,10 @@ const Dashboard = () => {
     textSample?: string;
   } | null>(null);
 
-  // Determine active section — if inside a folder, derive from folder's section
-  const activeSection = useMemo(() => {
-    if (state.currentFolderId) {
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-      if (currentFolder) return (currentFolder.section ?? 'personal') as 'personal' | 'community';
-    }
-    return dashboardTab === 'community' ? 'community' : 'personal';
-  }, [state.currentFolderId, state.folders, dashboardTab]);
+  const activeSection = 'personal' as const;
 
   // Extracted actions hook
   const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
-
-  const visibleFolders = useMemo(
-    () => state.folders
-      .filter(f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === activeSection)
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [state.folders, state.currentFolderId, activeSection]
-  );
-
-  const visibleDecks = useMemo(
-    () => activeSection === 'community'
-      ? state.communityDecks.filter(d => d.folder_id === state.currentFolderId)
-      : state.currentDecks,
-    [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
-  );
-
-  const personalCurrentFolders = useMemo(
-    () => state.currentFolders.filter(f => (f.section ?? 'personal') === 'personal'),
-    [state.currentFolders]
-  );
-
-  const communityRootFolders = useMemo(
-    () => state.folders
-      .filter(f => !f.parent_id && !f.is_archived && (f.section ?? 'personal') === 'community')
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [state.folders]
-  );
 
   // Carousel helpers
   const hasPlan = plans.length > 0;
