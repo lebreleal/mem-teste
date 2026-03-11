@@ -278,7 +278,7 @@ const Dashboard = () => {
           onSearchChange={setSearchQuery}
         />
 
-        {/* Tab switcher */}
+        {/* Tab switcher — hidden when inside a folder */}
         {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
