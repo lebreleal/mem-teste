@@ -31,7 +31,7 @@ export function useExamCreateFlow() {
   const { decks } = useDecks();
   const { createExam, updateExam } = useExams();
   const { energy, spendEnergy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
+  const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { data: studyStats } = useStudyStats();
   const { addNotification, updateNotification } = useExamNotifications();
   const [creditsOpen, setCreditsOpen] = useState(false);
