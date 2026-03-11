@@ -1,7 +1,7 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
 import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX } from 'lucide-react';
