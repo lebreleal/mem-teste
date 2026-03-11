@@ -64,6 +64,7 @@ const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
 const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
+const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
