@@ -326,9 +326,16 @@ const Study = () => {
   return (
     <div className="flex h-[100dvh] flex-col bg-background overflow-hidden">
       <header className="sticky top-0 z-20 bg-background flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3">
-        <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 text-muted-foreground">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          {isLiveDeck && (
+            <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              <Users className="h-3 w-3" /> Comunidade
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button onClick={toggleTheme} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
