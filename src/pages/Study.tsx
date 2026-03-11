@@ -451,16 +451,23 @@ const Study = () => {
                   chatHasMessages={chatHasMessages}
                 />
                 {sourceInfo && (
-                  <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-2 w-full">
+                  <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
                     {sourceInfo.authorName && (
                       <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
                     )}
-                    {sourceInfo.updatedAt && (
+                    {currentCard?.updated_at && (
                       <span className="flex items-center gap-0.5">
                         <RefreshCw className="h-2.5 w-2.5" />
-                        {formatDistanceToNow(new Date(sourceInfo.updatedAt), { addSuffix: true, locale: ptBR })}
+                        {formatDistanceToNow(new Date(currentCard.updated_at), { addSuffix: true, locale: ptBR })}
                       </span>
                     )}
+                    <button
+                      onClick={() => setCommunityInfoOpen(true)}
+                      className="flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Informações do card de comunidade"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
                   </div>
                 )}
               </>
