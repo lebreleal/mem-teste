@@ -33,7 +33,7 @@ import {
   Copy, Link2, ClipboardList, Clock, Import, LogIn, RefreshCw, Check,
   Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
-import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
 import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
 import { formatDistanceToNow } from 'date-fns';
