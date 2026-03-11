@@ -738,9 +738,9 @@ const CreateQuestionDialog = ({
             )}
 
 
-            {/* Auto-calculated question info */}
+            {/* Concept-cluster info */}
             <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
-              A IA vai gerar automaticamente <span className="font-bold text-foreground">{aiCount} questões</span> correlacionando múltiplos cards por questão.
+              A IA vai analisar todos os cards, agrupar por conceitos relacionados e criar <span className="font-bold text-foreground">uma questão por grupo conceitual</span>. Cards que compartilham temas serão combinados em questões integradas.
             </div>
 
             {/* Custom instructions */}
