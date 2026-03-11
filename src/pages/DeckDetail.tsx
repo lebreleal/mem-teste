@@ -182,7 +182,7 @@ const DeckDetailContent = () => {
         {isLinkedDeck ? (
           <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} />
         ) : (
-          <CardList />
+          <PersonalDeckTabs deckId={deckId!} />
         )}
       </main>
 
