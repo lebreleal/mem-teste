@@ -76,12 +76,7 @@ const PublicCommunity = () => {
   
   const [showAuthGate, setShowAuthGate] = useState(false);
 
-  // If user is authenticated and turma loaded, redirect to the real community page
-  useEffect(() => {
-    if (user && turma?.id) {
-      navigate(`/turmas/${turma.id}`, { replace: true });
-    }
-  }, [user, turma?.id, navigate]);
+  // Fetch turma by slug or ID
   const { data: turma, isLoading: turmaLoading } = useQuery({
     queryKey: ['public-community', slugOrId],
     queryFn: async () => {
