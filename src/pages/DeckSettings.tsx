@@ -289,18 +289,36 @@ const DeckSettings = () => {
     if (!deckId) return;
     setDetaching(true);
     try {
-      await supabase.from('decks').update({
-        source_turma_deck_id: null,
-        source_listing_id: null,
-        community_id: null,
-      } as any).eq('id', deckId);
-      setSourceTurmaDeckId(null);
-      setCommunityId(null);
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Not authenticated');
+
+      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+      if (!originalDeck) throw new Error('Deck not found');
+
+      const { data: newDeck, error } = await supabase.from('decks').insert({
+        name: `${(originalDeck as any).name}`,
+        user_id: currentUser.id,
+        folder_id: null,
+      } as any).select().single();
+      if (error || !newDeck) throw error || new Error('Failed');
+
+      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
+      if (cards && cards.length > 0) {
+        const newCards = cards.map((c: any) => ({
+          deck_id: (newDeck as any).id,
+          front_content: c.front_content,
+          back_content: c.back_content,
+          card_type: c.card_type ?? 'basic',
+        }));
+        await supabase.from('cards').insert(newCards as any);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['decks'] });
-      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+      toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
       setDetachConfirm(false);
+      navigate(`/decks/${(newDeck as any).id}`);
     } catch {
-      toast({ title: 'Erro ao importar', variant: 'destructive' });
+      toast({ title: 'Erro ao copiar', variant: 'destructive' });
     } finally {
       setDetaching(false);
     }
@@ -587,9 +605,9 @@ const DeckSettings = () => {
               />
               {isCommunityDeck ? (
                 <SettingsRow
-                  icon={<Download className="h-5 w-5" />}
-                  label="Importar pro meu deck"
-                  subtitle="Converter em deck pessoal independente"
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Copiar para meu deck pessoal"
+                  subtitle="Criar cópia independente e editável"
                   onClick={() => setDetachConfirm(true)}
                 />
               ) : (
@@ -697,25 +715,25 @@ const DeckSettings = () => {
         toast={toast}
       />
 
-      {/* Detach community deck dialog */}
+      {/* Copy community deck dialog */}
       <AlertDialog open={detachConfirm} onOpenChange={setDetachConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogTitle>Copiar para meu deck pessoal</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>O baralho <strong>"{name}"</strong> será convertido em um deck pessoal independente.</p>
-              <p>Isso significa que:</p>
+              <p>Uma cópia independente de <strong>"{name}"</strong> será criada no seu deck pessoal.</p>
+              <p>A cópia:</p>
               <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
-                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
-                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+                <li>Será um deck <strong>pessoal e editável</strong></li>
+                <li><strong>Não receberá</strong> atualizações automáticas da comunidade</li>
+                <li>O deck original da comunidade <strong>permanecerá intacto</strong></li>
               </ul>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
-              {detaching ? 'Importando...' : 'Confirmar importação'}
+              {detaching ? 'Copiando...' : 'Confirmar cópia'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
