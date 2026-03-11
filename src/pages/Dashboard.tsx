@@ -302,7 +302,7 @@ const Dashboard = () => {
         )}
 
         {/* Personal decks tab */}
-        {(dashboardTab === 'personal' || !!state.currentFolderId) && (
+        {activeSection === 'personal' && (
           <DeckList
             isLoading={state.isLoading}
             currentFolders={personalCurrentFolders}
