@@ -9,15 +9,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { sanitizeHtml } from '@/lib/sanitize';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import {
   Layers, Star, ArrowLeft, LogIn, Loader2,
   ChevronRight, Clock, Folder, FolderOpen, Crown, Globe,
@@ -29,63 +25,6 @@ const formatRelativeTime = (dateStr: string) => {
   try { return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR }); } catch { return ''; }
 };
 
-/* ── Card Preview Sheet (read-only) ── */
-const CardPreviewSheet = ({ open, onOpenChange, deckId, deckName }: {
-  open: boolean; onOpenChange: (v: boolean) => void; deckId: string; deckName: string;
-}) => {
-  const isMobile = useIsMobile();
-  const { data: cards = [], isLoading } = useQuery({
-    queryKey: ['public-deck-cards', deckId],
-    queryFn: async () => {
-      const { data } = await supabase.from('cards').select('id, front_content, back_content, card_type').eq('deck_id', deckId).limit(50);
-      return data ?? [];
-    },
-    enabled: open && !!deckId,
-  });
-
-  const content = (
-    <div className="space-y-3 p-1">
-      {isLoading ? (
-        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : cards.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground py-8">Nenhum cartão neste deck</p>
-      ) : (
-        cards.map((card: any) => (
-          <div key={card.id} className="rounded-xl border border-border bg-card p-4 space-y-2">
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Frente</p>
-              <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
-            </div>
-            <div className="border-t border-border/50 pt-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Verso</p>
-              <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader><DrawerTitle className="truncate">{deckName}</DrawerTitle></DrawerHeader>
-          <ScrollArea className="flex-1 px-4 pb-6">{content}</ScrollArea>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col">
-        <SheetHeader><SheetTitle className="truncate">{deckName}</SheetTitle></SheetHeader>
-        <ScrollArea className="flex-1 mt-4">{content}</ScrollArea>
-      </SheetContent>
-    </Sheet>
-  );
-};
 
 /* ── Auth Gate Dialog ── */
 const AuthGatePrompt = ({ open, onOpenChange, slugOrId }: {
@@ -134,7 +73,7 @@ const PublicCommunity = () => {
   const { user } = useAuth();
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [previewDeck, setPreviewDeck] = useState<{ id: string; name: string } | null>(null);
+  const [previewDeck, setPreviewDeck] = useState<{ id: string; name: string; cardCount: number } | null>(null);
   const [showAuthGate, setShowAuthGate] = useState(false);
 
   // Fetch turma by slug or ID
@@ -288,7 +227,7 @@ const PublicCommunity = () => {
   };
 
   const handleDeckClick = (td: any) => {
-    setPreviewDeck({ id: td.deck_id, name: td.deck_name });
+    setPreviewDeck({ id: td.deck_id, name: td.deck_name, cardCount: td.card_count ?? 0 });
   };
 
   const handleJoin = () => {
@@ -488,11 +427,19 @@ const PublicCommunity = () => {
 
       {/* Card Preview Sheet */}
       {previewDeck && (
-        <CardPreviewSheet
+        <DeckPreviewSheet
           open={!!previewDeck}
           onOpenChange={v => { if (!v) setPreviewDeck(null); }}
           deckId={previewDeck.id}
           deckName={previewDeck.name}
+          cardCount={previewDeck.cardCount}
+          alreadyLinked={false}
+          alreadyOwns={false}
+          allowDownload={false}
+          onAddToCollection={() => { if (!user) setShowAuthGate(true); }}
+          onDownload={() => {}}
+          isAdding={false}
+          isDownloading={false}
         />
       )}
 
