@@ -305,7 +305,7 @@ const Dashboard = () => {
         {(dashboardTab === 'personal' || !!state.currentFolderId) && (
           <DeckList
             isLoading={state.isLoading}
-            currentFolders={state.currentFolders}
+            currentFolders={personalCurrentFolders}
             currentDecks={state.currentDecks}
             currentFolderId={state.currentFolderId}
             searchQuery={searchQuery}
