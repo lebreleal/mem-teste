@@ -14,7 +14,10 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check, LogIn } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check, LogIn, HelpCircle } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+
+const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { charDiff, type DiffSegment } from '@/lib/charDiff';
@@ -1554,6 +1557,12 @@ const PublicDeckPreview = () => {
               <Layers className="h-3.5 w-3.5" /> Cards ({allCards.length})
             </TabsTrigger>
             <TabsTrigger
+              value="questions"
+              className="flex-1 text-xs gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+            >
+              <HelpCircle className="h-3.5 w-3.5" /> Questões
+            </TabsTrigger>
+            <TabsTrigger
               value="suggestions"
               className="flex-1 text-xs gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
             >
@@ -1644,6 +1653,12 @@ const PublicDeckPreview = () => {
                 </div>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="questions" className="mt-4">
+            <Suspense fallback={null}>
+              <DeckQuestionsTab deckId={deck.id} isReadOnly sourceDeckId={deck.id} />
+            </Suspense>
           </TabsContent>
 
           <TabsContent value="suggestions" className="mt-3">

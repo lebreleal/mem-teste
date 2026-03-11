@@ -8,7 +8,7 @@ import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
@@ -193,7 +193,7 @@ const DeckDetailContent = () => {
   );
 };
 
-/** Tabs component for linked decks: Cards + Sugestões */
+/** Tabs component for linked decks: Cards + Questões + Sugestões */
 const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; resolvedSourceDeckId: string | null }) => {
   const { cardCounts } = useDeckDetail();
   const effectiveDeckId = resolvedSourceDeckId ?? deckId;
@@ -212,16 +212,35 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; reso
     staleTime: 60_000,
   });
 
+  const { data: questionCount = 0 } = useQuery({
+    queryKey: ['deck-questions-count', effectiveDeckId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('deck_questions' as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('deck_id', effectiveDeckId);
+      return count ?? 0;
+    },
+    enabled: !!effectiveDeckId,
+    staleTime: 60_000,
+  });
+
   const totalCards = cardCounts?.total ?? 0;
 
   return (
     <Tabs defaultValue="cards" className="w-full">
-      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+      <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
         <TabsTrigger
           value="cards"
           className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
         >
           <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger
+          value="questions"
+          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+        >
+          <HelpCircle className="h-4 w-4" /> Questões ({questionCount})
         </TabsTrigger>
         <TabsTrigger
           value="suggestions"
@@ -232,6 +251,11 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; reso
       </TabsList>
       <TabsContent value="cards" className="mt-4">
         <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab deckId={deckId} isReadOnly sourceDeckId={effectiveDeckId} />
+        </Suspense>
       </TabsContent>
       <TabsContent value="suggestions" className="mt-4">
         <SuggestionsList deckId={effectiveDeckId} />
@@ -257,7 +281,7 @@ const PersonalDeckTabs = ({ deckId }: { deckId: string }) => {
           value="questions"
           className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
         >
-          <MessageSquare className="h-4 w-4" /> Questões
+          <HelpCircle className="h-4 w-4" /> Questões
         </TabsTrigger>
       </TabsList>
       <TabsContent value="cards" className="mt-4">
