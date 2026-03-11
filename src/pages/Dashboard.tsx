@@ -354,7 +354,7 @@ const Dashboard = () => {
         {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
           <DeckList
             isLoading={false}
-            currentFolders={[]}
+            currentFolders={communityRootFolders}
             currentDecks={state.communityDecks}
             currentFolderId={null}
             searchQuery={searchQuery}
