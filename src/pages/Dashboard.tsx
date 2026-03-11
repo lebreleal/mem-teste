@@ -90,7 +90,14 @@ const Dashboard = () => {
     textSample?: string;
   } | null>(null);
 
-  const activeSection = dashboardTab === 'community' ? 'community' : 'personal';
+  // Determine active section — if inside a folder, derive from folder's section
+  const activeSection = useMemo(() => {
+    if (state.currentFolderId) {
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      if (currentFolder) return (currentFolder.section ?? 'personal') as 'personal' | 'community';
+    }
+    return dashboardTab === 'community' ? 'community' : 'personal';
+  }, [state.currentFolderId, state.folders, dashboardTab]);
 
   // Extracted actions hook
   const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
