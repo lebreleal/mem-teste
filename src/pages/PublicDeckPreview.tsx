@@ -1159,6 +1159,20 @@ const PublicDeckPreview = () => {
           .eq('deck_id', deckId!).eq('is_published', true).maybeSingle();
         if (listing) insertData.source_listing_id = listing.id;
 
+        // Try to resolve community_id from the source deck owner's turma membership
+        if (!listing) {
+          const { data: srcDeck } = await supabase.from('decks').select('user_id').eq('id', deckId!).single();
+          if (srcDeck) {
+            const { data: ownerMembership } = await supabase
+              .from('turma_members')
+              .select('turma_id')
+              .eq('user_id', (srcDeck as any).user_id)
+              .limit(1)
+              .maybeSingle();
+            if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
+          }
+        }
+
         const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
         if (error) throw error;
         if (newDeck) {
