@@ -86,13 +86,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </button>
         )}
 
-        {/* Community deck icon */}
-        {isCommunityDeck && (
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Users className="h-4 w-4 text-primary" />
-          </div>
-        )}
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="font-display font-semibold text-card-foreground truncate">{deck.name}</h3>
@@ -102,17 +95,17 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </div>
           {isCommunityDeck ? (
             <div className="space-y-0">
-              <p className="text-[11px] text-muted-foreground">
-                {communitySourceName ? (
-                  <>criado por <span className="font-medium text-foreground">{communitySourceName}</span></>
-                ) : (
-                  <span className="font-medium text-primary">Deck da comunidade</span>
-                )}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
+              {(communitySourceName || deck.source_author) && (
+                <p className="text-[11px] text-muted-foreground">
+                  criado por <span className="font-medium text-foreground">{communitySourceName || deck.source_author}</span>
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <span>{totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}</span>
                 {deck.updated_at && (
-                  <> · atualizado {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}</>
+                  <span className="flex items-center gap-0.5">
+                    · <Clock className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+                  </span>
                 )}
               </p>
             </div>
