@@ -460,8 +460,13 @@ const ContentTab = () => {
     return turmaDecks
       .filter((d: any) => d.subject_id === contentFolderId)
       .filter((d: any) => isAdmin || d.is_published !== false)
-      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q));
-  }, [turmaDecks, contentFolderId, searchQuery, isAdmin]);
+      .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
+      .filter((d: any) => {
+        if (!activeTagIds) return true;
+        const tags = deckTagsMap[d.deck_id] as Tag[] | undefined;
+        return tags?.some(t => activeTagIds.has(t.id)) ?? false;
+      });
+  }, [turmaDecks, contentFolderId, searchQuery, isAdmin, activeTagIds, deckTagsMap]);
 
   // ── Top decks (most subscribed across the entire community) ──
   const topDecks = useMemo(() => {
