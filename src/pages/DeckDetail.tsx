@@ -262,35 +262,40 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; reso
   );
 };
 
-const PersonalDeckTabs = ({ deckId }: { deckId: string }) => {
+const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
   const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
+  const [activeTab, setActiveTab] = useState('cards');
 
   return (
-    <Tabs defaultValue="cards" className="w-full">
-      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-        <TabsTrigger
-          value="cards"
-          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-        >
-          <Layers className="h-4 w-4" /> Cards ({totalCards})
-        </TabsTrigger>
-        <TabsTrigger
-          value="questions"
-          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-        >
-          <HelpCircle className="h-4 w-4" /> Questões
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="cards" className="mt-4">
-        <CardList />
-      </TabsContent>
-      <TabsContent value="questions" className="mt-4">
-        <Suspense fallback={null}>
-          <DeckQuestionsTab deckId={deckId} />
-        </Suspense>
-      </TabsContent>
-    </Tabs>
+    <>
+      {activeTab === 'cards' && <DeckStatsCard />}
+      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+          <TabsTrigger
+            value="cards"
+            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+          >
+            <Layers className="h-4 w-4" /> Cards ({totalCards})
+          </TabsTrigger>
+          <TabsTrigger
+            value="questions"
+            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+          >
+            <HelpCircle className="h-4 w-4" /> Questões
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="cards" className="mt-4">
+          <CardList />
+        </TabsContent>
+        <TabsContent value="questions" className="mt-4">
+          <Suspense fallback={null}>
+            <DeckQuestionsTab deckId={deckId} />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
+    </>
   );
 };
 
