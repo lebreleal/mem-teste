@@ -70,7 +70,7 @@ const CommunityCard = ({
     <div className="flex items-center gap-3">
       <span className="flex items-center gap-1 text-[11px] text-foreground">
         <Layers className="h-3 w-3 shrink-0" />
-        <span className="font-bold">{formatCount(turma.member_count ?? 0)}</span>
+        <span className="font-bold">{formatCount(turma.card_count ?? 0)}</span>
       </span>
       <RatingStars rating={Number(turma.avg_rating ?? 0)} count={turma.rating_count ?? 0} />
       {(turma.subscription_price ?? 0) > 0 && (
