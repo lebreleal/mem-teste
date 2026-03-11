@@ -51,37 +51,7 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  // Fetch community deck source info (author + updated_at)
-  const { data: sourceInfo } = useQuery({
-    queryKey: ['study-source-info', deckId],
-    queryFn: async () => {
-      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', deckId!).single();
-      if (!deck) return null;
-      let authorName: string | null = null;
-      let updatedAt: string | null = null;
-      if (deck.source_turma_deck_id) {
-        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
-        if (td) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
-          authorName = profile?.name ?? null;
-          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
-          updatedAt = srcDeck?.updated_at ?? null;
-        }
-      } else if (deck.source_listing_id) {
-        const { data: listing } = await supabase.from('marketplace_listings').select('seller_id, deck_id').eq('id', deck.source_listing_id).maybeSingle();
-        if (listing) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', listing.seller_id).single();
-          authorName = profile?.name ?? null;
-          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
-          updatedAt = srcDeck?.updated_at ?? null;
-        }
-      }
-      if (!authorName && !updatedAt) return null;
-      return { authorName, updatedAt };
-    },
-    enabled: !!deckId && isLiveDeck,
-    staleTime: 5 * 60_000,
-  });
+  
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
@@ -143,7 +113,40 @@ const Study = () => {
   }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
-  // Force re-render when learning card timer expires
+  // Fetch community deck source info based on current card's deck
+  const currentCardDeckId = currentCard?.deck_id ?? null;
+  const { data: sourceInfo } = useQuery({
+    queryKey: ['study-source-info', currentCardDeckId],
+    queryFn: async () => {
+      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck').eq('id', currentCardDeckId!).single();
+      if (!deck) return null;
+      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) return null;
+      let authorName: string | null = null;
+      let updatedAt: string | null = null;
+      if (deck.source_turma_deck_id) {
+        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
+        if (td) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      } else if (deck.source_listing_id) {
+        const { data: listing } = await supabase.from('marketplace_listings').select('seller_id, deck_id').eq('id', deck.source_listing_id).maybeSingle();
+        if (listing) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', listing.seller_id).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      }
+      if (!authorName && !updatedAt) return null;
+      return { authorName, updatedAt };
+    },
+    enabled: !!currentCardDeckId,
+    staleTime: 5 * 60_000,
+  });
+
   useEffect(() => {
     const now = Date.now();
     const futureTimes = localQueue
@@ -463,7 +466,7 @@ const Study = () => {
                   onOpenChat={() => setChatOpen(true)}
                   chatHasMessages={chatHasMessages}
                 />
-                {isLiveDeck && sourceInfo && (
+                {sourceInfo && (
                   <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-1">
                     {sourceInfo.authorName && (
                       <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
