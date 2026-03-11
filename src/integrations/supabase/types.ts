@@ -2304,6 +2304,7 @@ export type Database = {
           name: string
           owner_id: string
           rating_count: number
+          share_slug: string | null
           subscription_price: number
           subscription_price_yearly: number
           updated_at: string
@@ -2320,6 +2321,7 @@ export type Database = {
           name: string
           owner_id: string
           rating_count?: number
+          share_slug?: string | null
           subscription_price?: number
           subscription_price_yearly?: number
           updated_at?: string
@@ -2336,6 +2338,7 @@ export type Database = {
           name?: string
           owner_id?: string
           rating_count?: number
+          share_slug?: string | null
           subscription_price?: number
           subscription_price_yearly?: number
           updated_at?: string
