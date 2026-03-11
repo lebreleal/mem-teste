@@ -320,7 +320,7 @@ const ContentTab = () => {
   const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
-  const [previewDeck, setPreviewDeck] = useState<{ td: any; alreadyLinked: boolean; alreadyOwns: boolean } | null>(null);
+  const [_previewDeckUnused] = useState<any>(null);
 
   // ── Batch tags for all community decks ──
   const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
