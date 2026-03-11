@@ -29,6 +29,27 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
     turmas = turmas.map(t => ({ ...t, owner_name: profileMap.get(t.owner_id) ?? 'Anônimo' }));
   }
 
+  // Enrich with card counts
+  const turmaIds = turmas.map(t => t.id);
+  if (turmaIds.length > 0) {
+    const { data: turmaDecks } = await supabase
+      .from('turma_decks')
+      .select('turma_id, deck_id')
+      .in('turma_id', turmaIds)
+      .eq('is_published', true);
+    const allDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
+    if (allDeckIds.length > 0) {
+      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
+      const deckCardMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
+      const cardCountMap = new Map<string, number>();
+      (turmaDecks ?? []).forEach((td: any) => {
+        const cards = deckCardMap.get(td.deck_id) ?? 0;
+        cardCountMap.set(td.turma_id, (cardCountMap.get(td.turma_id) ?? 0) + cards);
+      });
+      turmas = turmas.map(t => ({ ...t, card_count: cardCountMap.get(t.id) ?? 0 }));
+    }
+  }
+
   return turmas as Turma[];
 }
 
