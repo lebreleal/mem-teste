@@ -145,86 +145,172 @@ const QuestionStatsBar = ({
 
 /* ════════════════════════════════════════════════════════════
    Concept Self-Assessment (after answering)
-   User answers Yes/No for each comprehension question.
-   If "No" → can request AI to create flashcards for that concept.
+   - If concept cards exist in deck → show preview
+   - If not → offer to create or explain via AI
    ════════════════════════════════════════════════════════════ */
 const ConceptMasterySection = ({
-  concepts, mastery, onGenerateCards, generating,
+  concepts, deckId, questionId, onGenerateCards, generating,
 }: {
   concepts: string[];
-  mastery: ConceptMastery[];
+  deckId: string;
+  questionId: string;
   onGenerateCards: (concept: string) => void;
   generating: string | null;
 }) => {
   const [feedback, setFeedback] = useState<Record<string, 'yes' | 'no'>>({});
+  const [conceptExplaining, setConceptExplaining] = useState<string | null>(null);
+  const [conceptExplanations, setConceptExplanations] = useState<Record<string, string>>({});
+  const [previewCards, setPreviewCards] = useState<Record<string, any[]>>({});
+  const [loadingCards, setLoadingCards] = useState<Record<string, boolean>>({});
+  const { energy, spendEnergy } = useEnergy();
+  const { toast } = useToast();
 
   if (!concepts || concepts.length === 0) return null;
 
   const handleFeedback = (concept: string, value: 'yes' | 'no') => {
     setFeedback(prev => ({ ...prev, [concept]: value }));
+    if (value === 'no') {
+      // Search for existing cards related to this concept in the deck
+      searchExistingCards(concept);
+    }
+  };
+
+  const searchExistingCards = async (concept: string) => {
+    setLoadingCards(prev => ({ ...prev, [concept]: true }));
+    try {
+      // Search cards whose front or back contains keywords from the concept
+      const keywords = concept
+        .replace(/^(Você conseguiu|Você entendeu|Você sabe).*?\??\s*/i, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3)
+        .slice(0, 4);
+
+      if (keywords.length === 0) { setLoadingCards(prev => ({ ...prev, [concept]: false })); return; }
+
+      const { data } = await supabase
+        .from('cards')
+        .select('id, front_content, back_content, card_type')
+        .eq('deck_id', deckId)
+        .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
+        .limit(5);
+
+      setPreviewCards(prev => ({ ...prev, [concept]: data || [] }));
+    } catch { /* ignore */ }
+    finally { setLoadingCards(prev => ({ ...prev, [concept]: false })); }
+  };
+
+  const handleExplainConcept = async (concept: string) => {
+    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    setConceptExplaining(concept);
+    try {
+      spendEnergy.mutate(1);
+      const { data, error } = await supabase.functions.invoke('ai-tutor', {
+        body: { type: 'explain-concept', concept, deckId },
+      });
+      if (error) throw error;
+      setConceptExplanations(prev => ({ ...prev, [concept]: data?.response || 'Explicação indisponível.' }));
+    } catch { toast({ title: 'Erro ao explicar conceito', variant: 'destructive' }); }
+    finally { setConceptExplaining(null); }
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
+    <div className="mt-5 rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
       <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-        <Brain className="h-3.5 w-3.5 text-primary" />
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
         Autoavaliação
       </p>
       <p className="text-[11px] text-muted-foreground">
-        Avalie sua compreensão sobre os conceitos testados nesta questão:
+        Avalie sua compreensão sobre os conceitos testados:
       </p>
       <div className="space-y-3">
         {concepts.map((c, i) => {
           const answer = feedback[c];
+          const existingCards = previewCards[c] || [];
+          const isLoadingConcept = loadingCards[c];
+          const explanation = conceptExplanations[c];
+
           return (
-            <div key={i} className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2">
+            <div key={i} className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2.5">
               <p className="text-sm text-foreground leading-relaxed">{c}</p>
-              <div className="flex items-center gap-2">
-                {!answer ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                      onClick={() => handleFeedback(c, 'yes')}
+
+              {!answer ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm"
+                    className="h-7 px-3 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    onClick={() => handleFeedback(c, 'yes')}>
+                    <Check className="h-3 w-3" /> Sim, entendi
+                  </Button>
+                  <Button variant="outline" size="sm"
+                    className="h-7 px-3 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={() => handleFeedback(c, 'no')}>
+                    <X className="h-3 w-3" /> Não entendi
+                  </Button>
+                </div>
+              ) : answer === 'yes' ? (
+                <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="h-3 w-3" /> Conceito compreendido ✓
+                </span>
+              ) : (
+                <div className="space-y-2.5">
+                  {isLoadingConcept ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Buscando cards relacionados...
+                    </div>
+                  ) : existingCards.length > 0 ? (
+                    /* Show existing cards from deck */
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Check className="h-3 w-3 text-primary" />
+                        <span><span className="font-bold text-foreground">{existingCards.length}</span> cards relacionados encontrados no seu baralho:</span>
+                      </p>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {existingCards.map(card => (
+                          <div key={card.id} className="rounded-lg border border-border/30 bg-muted/30 px-3 py-2">
+                            <div className="text-xs text-foreground line-clamp-2"
+                              dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Revise esses cards na próxima sessão de estudo para reforçar o conceito.
+                      </p>
+                    </div>
+                  ) : (
+                    /* No existing cards — offer to create */
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-xs text-destructive font-medium">
+                        <AlertCircle className="h-3 w-3" /> Nenhum card encontrado.
+                      </span>
+                      <Button variant="default" size="sm" className="h-7 px-3 text-xs gap-1.5"
+                        onClick={() => onGenerateCards(c)} disabled={generating === c}>
+                        {generating === c ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                        Criar cards (2 créditos)
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* AI explanation for concept */}
+                  {!explanation ? (
+                    <button
+                      onClick={() => handleExplainConcept(c)}
+                      disabled={conceptExplaining === c}
+                      className="flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
                     >
-                      <Check className="h-3 w-3" /> Sim, entendi
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleFeedback(c, 'no')}
-                    >
-                      <X className="h-3 w-3" /> Não entendi
-                    </Button>
-                  </>
-                ) : answer === 'yes' ? (
-                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    <Check className="h-3 w-3" /> Ótimo! Conceito compreendido.
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-xs text-destructive font-medium">
-                      <AlertCircle className="h-3 w-3" /> Vamos reforçar!
-                    </span>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5"
-                      onClick={() => onGenerateCards(c)}
-                      disabled={generating === c}
-                    >
-                      {generating === c ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Zap className="h-3 w-3" />
-                      )}
-                      Criar cards para estudar
-                    </Button>
-                  </div>
-                )}
-              </div>
+                      {conceptExplaining === c ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
+                      Explicar conceito com IA (1 crédito)
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="text-[11px] font-bold text-primary mb-1 flex items-center gap-1">
+                        <MessageSquareText className="h-3 w-3" /> Explicação do conceito
+                      </p>
+                      <div className="text-xs text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown>{explanation}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -254,8 +340,8 @@ const QuestionPractice = ({
   const [scissorsMode, setScissorsMode] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintText, setHintText] = useState<string | null>(null);
-  const [explainLoading, setExplainLoading] = useState(false);
-  const [explainText, setExplainText] = useState<string | null>(null);
+  const [optionExplanations, setOptionExplanations] = useState<Record<number, string>>({});
+  const [optionExplainLoading, setOptionExplainLoading] = useState<number | null>(null);
   const [generatingConcept, setGeneratingConcept] = useState<string | null>(null);
 
   // Concept mastery for current deck
@@ -282,9 +368,9 @@ const QuestionPractice = ({
     setEliminated(new Set());
     setScissorsMode(false);
     setHintText(null);
-    setExplainText(null);
+    setOptionExplanations({});
+    setOptionExplainLoading(null);
     setHintLoading(false);
-    setExplainLoading(false);
   }, []);
 
   const handleConfirm = useCallback(async () => {
@@ -355,20 +441,28 @@ const QuestionPractice = ({
     finally { setHintLoading(false); }
   }, [q, user, energy, spendEnergy, toast]);
 
-  const handleExplain = useCallback(async () => {
+  const handleExplainOption = useCallback(async (optIdx: number) => {
     if (!q || !user) return;
     if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
-    setExplainLoading(true);
+    setOptionExplainLoading(optIdx);
     try {
       spendEnergy.mutate(1);
+      const isCorrectOpt = q.correct_indices?.includes(optIdx);
       const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-explain', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0, userAnswer: selected },
+        body: {
+          type: 'explain-option',
+          question: q.question_text,
+          options: q.options,
+          optionIndex: optIdx,
+          isCorrect: isCorrectOpt,
+          correctIndex: q.correct_indices?.[0] ?? 0,
+        },
       });
       if (error) throw error;
-      setExplainText(data?.response || 'Não foi possível gerar a explicação.');
-    } catch { toast({ title: 'Erro ao gerar explicação', variant: 'destructive' }); }
-    finally { setExplainLoading(false); }
-  }, [q, user, energy, selected, spendEnergy, toast]);
+      setOptionExplanations(prev => ({ ...prev, [optIdx]: data?.response || 'Explicação indisponível.' }));
+    } catch { toast({ title: 'Erro ao explicar alternativa', variant: 'destructive' }); }
+    finally { setOptionExplainLoading(null); }
+  }, [q, user, energy, spendEnergy, toast]);
 
   const handleGenerateConceptCards = useCallback(async (concept: string) => {
     if (!user || !q) return;
@@ -468,6 +562,7 @@ const QuestionPractice = ({
             const isEliminated = eliminated.has(i);
             const isSelected = selected === i;
             const isCorrectOpt = i === correctIdx;
+            const optExplanation = optionExplanations[i];
 
             if (isEliminated && !confirmed) {
               return (
@@ -490,21 +585,50 @@ const QuestionPractice = ({
             }
 
             return (
-              <button key={i}
-                onClick={() => { if (confirmed) return; scissorsMode ? handleEliminate(i) : setSelected(i); }}
-                disabled={confirmed}
-                className={`w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all ${optClass}`}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                  confirmed && isCorrectOpt ? 'bg-emerald-500 text-white'
-                    : confirmed && isSelected && !isCorrectOpt ? 'bg-destructive text-white'
-                    : isSelected ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
-                  {confirmed && isCorrectOpt ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
-                </span>
-                <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
-                {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
-              </button>
+              <div key={i} className="space-y-0">
+                <button
+                  onClick={() => { if (confirmed) return; scissorsMode ? handleEliminate(i) : setSelected(i); }}
+                  disabled={confirmed}
+                  className={`w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all ${optClass}`}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                    confirmed && isCorrectOpt ? 'bg-emerald-500 text-white'
+                      : confirmed && isSelected && !isCorrectOpt ? 'bg-destructive text-white'
+                      : isSelected ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {confirmed && isCorrectOpt ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
+                  </span>
+                  <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
+                  {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
+                </button>
+
+                {/* Per-option "Explicar alternativa" link — shown after confirming for correct & user-selected wrong */}
+                {confirmed && (isCorrectOpt || (isSelected && !isCorrectOpt)) && !optExplanation && (
+                  <button
+                    onClick={() => handleExplainOption(i)}
+                    disabled={optionExplainLoading === i}
+                    className="ml-10 mt-1 flex items-center gap-1 text-xs font-medium hover:underline disabled:opacity-50"
+                    style={{ color: isCorrectOpt ? 'hsl(142, 71%, 45%)' : 'hsl(var(--destructive))' }}
+                  >
+                    {optionExplainLoading === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
+                    {isCorrectOpt ? 'Por que está correta?' : 'Por que está errada?'}
+                    <span className="text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
+                  </button>
+                )}
+
+                {/* Inline explanation for this option */}
+                {optExplanation && (
+                  <div className={`ml-10 mt-1.5 mb-1 rounded-lg border p-3 ${
+                    isCorrectOpt
+                      ? 'border-emerald-500/20 bg-emerald-500/5'
+                      : 'border-destructive/20 bg-destructive/5'
+                  }`}>
+                    <div className="text-xs text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{optExplanation}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -521,33 +645,12 @@ const QuestionPractice = ({
           </div>
         )}
 
-        {/* Static explanation */}
-        {confirmed && q.explanation && (
-          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <p className="text-xs font-bold text-primary mb-1.5 flex items-center gap-1">
-              <AlertCircle className="h-3.5 w-3.5" /> Explicação
-            </p>
-            <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation }} />
-          </div>
-        )}
-
-        {/* AI Explanation */}
-        {confirmed && explainText && (
-          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1">
-              <Brain className="h-3.5 w-3.5" /> Explicação da IA
-            </p>
-            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{explainText}</ReactMarkdown>
-            </div>
-          </div>
-        )}
-
         {/* Concept Mastery (after confirming, if question has concepts) */}
         {confirmed && q.concepts && q.concepts.length > 0 && (
           <ConceptMasterySection
             concepts={q.concepts}
-            mastery={conceptMastery}
+            deckId={deckId}
+            questionId={q.id}
             onGenerateCards={handleGenerateConceptCards}
             generating={generatingConcept}
           />
@@ -564,7 +667,7 @@ const QuestionPractice = ({
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleHint} disabled={hintLoading || !!hintText}>
                 {hintLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
-                Dica <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 <Brain className="inline h-2.5 w-2.5" />)</span>
+                Dica <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
               </Button>
             </div>
             <Button onClick={handleConfirm} disabled={selected === null} className="w-full gap-1.5">
@@ -572,17 +675,9 @@ const QuestionPractice = ({
             </Button>
           </>
         ) : (
-          <div className="space-y-2">
-            {!explainText && (
-              <Button variant="outline" className="w-full gap-1.5 text-sm" onClick={handleExplain} disabled={explainLoading}>
-                {explainLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
-                Pedir IA para explicar <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 <Brain className="inline h-2.5 w-2.5" />)</span>
-              </Button>
-            )}
-            <Button onClick={handleNext} className="w-full gap-1.5">
-              {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button onClick={handleNext} className="w-full gap-1.5">
+            {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
+          </Button>
         )}
       </div>
     </div>
