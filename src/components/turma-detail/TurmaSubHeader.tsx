@@ -13,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2, Clock,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -92,13 +92,18 @@ const TurmaSubHeader = ({
                   <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
                 </button>
               </div>
-              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                {ownerName && <span>por {ownerName}</span>}
-                {createdAt && <span>· {formatDistanceToNow(new Date(createdAt), { addSuffix: true, locale: ptBR })}</span>}
+              <div className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground">
+                {ownerName && <p>por <span className="font-medium text-primary">{ownerName}</span></p>}
+                {createdAt && (
+                  <p className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {formatDistanceToNow(new Date(createdAt), { addSuffix: true, locale: ptBR })}
+                  </p>
+                )}
                 {isSubscriber && (
-                  <span className="flex items-center gap-0.5 text-[hsl(270,70%,55%)]">
-                    · <Crown className="h-3 w-3 fill-current" /> Inscrito
-                  </span>
+                  <p className="flex items-center gap-1 text-[hsl(270,70%,55%)]">
+                    <Check className="h-3 w-3" /> Inscrito
+                  </p>
                 )}
               </div>
             </div>
