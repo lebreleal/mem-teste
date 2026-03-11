@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Pencil, Users, Copy, Download, Clock,
+  ChevronRight, Pencil, Users, Copy, Download, Clock, RefreshCw,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
