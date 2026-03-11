@@ -23,6 +23,8 @@ export interface DeckWithStats {
   source_author?: string | null;
   source_turma_deck_id?: string | null;
   community_id?: string | null;
+  /** The original (source) deck's updated_at timestamp, for community decks */
+  source_updated_at?: string | null;
 }
 
 /** Raw card row from the cards table. */
