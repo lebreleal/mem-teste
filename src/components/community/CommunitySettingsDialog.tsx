@@ -18,7 +18,7 @@ const DESC_MAX = 2000;
 interface CommunitySettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  turma: { id: string; name: string; description: string; invite_code: string; is_private?: boolean; cover_image_url?: string; subscription_price?: number };
+  turma: { id: string; name: string; description: string; invite_code: string; is_private?: boolean; cover_image_url?: string; subscription_price?: number; share_slug?: string };
   onSave: (data: { name: string; description: string; isPrivate: boolean; coverImageUrl?: string; subscriptionPrice?: number }) => void;
   isSaving: boolean;
   members?: { user_id: string; user_name: string; role: string; is_subscriber: boolean }[];
