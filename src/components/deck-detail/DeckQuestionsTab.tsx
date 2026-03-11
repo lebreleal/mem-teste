@@ -604,9 +604,8 @@ const CreateQuestionDialog = ({
     staleTime: 60_000,
   });
 
-  // Auto-calculate question count: ~1 question per 4 cards, min 3, max 20
-  const aiCount = Math.max(3, Math.min(20, Math.ceil(cardCount / 4)));
-  const aiCost = aiCount * 2; // 2 credits per question
+  // Cost based on card count: 1 credit per 5 cards, min 2
+  const aiCost = Math.max(2, Math.ceil(cardCount / 5));
 
   const resetForm = () => {
     setQuestionText(''); setOptions(['', '', '', '']); setCorrectIdx(null);
@@ -674,7 +673,6 @@ const CreateQuestionDialog = ({
       const { data, error } = await supabase.functions.invoke('generate-questions', {
         body: {
           deckId,
-          count: aiCount,
           optionsCount: 4,
           aiModel: 'flash',
           energyCost: aiCost,
@@ -740,9 +738,9 @@ const CreateQuestionDialog = ({
             )}
 
 
-            {/* Auto-calculated question info */}
+            {/* Concept-cluster info */}
             <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
-              A IA vai gerar automaticamente <span className="font-bold text-foreground">{aiCount} questões</span> correlacionando múltiplos cards por questão.
+              A IA vai analisar todos os cards, agrupar por conceitos relacionados e criar <span className="font-bold text-foreground">uma questão por grupo conceitual</span>. Cards que compartilham temas serão combinados em questões integradas.
             </div>
 
             {/* Custom instructions */}
@@ -779,7 +777,7 @@ const CreateQuestionDialog = ({
                 className="gap-1.5"
               >
                 {aiGenerating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando {aiCount} questões...</>
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando conceitos...</>
                 ) : (
                   <><Sparkles className="h-3.5 w-3.5" /> Gerar questões</>
                 )}
