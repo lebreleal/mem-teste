@@ -94,9 +94,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </div>
           {isCommunityDeck ? (
             <div>
-              {(communitySourceName || deck.source_author) && (
+              {deck.source_author && (
                 <p className="text-[11px] text-muted-foreground">
-                  por <span className="font-medium text-foreground">{communitySourceName || deck.source_author}</span>
+                  por <span className="font-medium text-foreground">{deck.source_author}</span>
                 </p>
               )}
               {deck.updated_at && (
