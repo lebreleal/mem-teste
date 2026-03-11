@@ -1105,83 +1105,8 @@ const PublicDeckPreview = () => {
         queryClient.invalidateQueries({ queryKey: ['turmas'] });
       }
 
-      // ── Resolve folder hierarchy (community folder → subject folders) ──
+      // ── No folder creation — decks go directly to root ──
       let targetFolderId: string | null = null;
-
-      if (turmaDeck?.turma_id) {
-        // Fetch turma name
-        const { data: turmaData } = await supabase
-          .from('turmas')
-          .select('name')
-          .eq('id', turmaDeck.turma_id)
-          .single();
-        const turmaName = turmaData?.name ?? 'Comunidade';
-
-        // Fetch user's existing folders
-        const { data: freshFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
-        const latestFolders = (freshFolders || []) as any[];
-
-        // Find or create linked turma root folder
-        let turmaFolder = latestFolders.find((f: any) => f.source_turma_id === turmaDeck.turma_id && !f.source_turma_subject_id && !f.parent_id);
-        if (!turmaFolder) {
-          turmaFolder = latestFolders.find((f: any) => f.name === turmaName && !f.parent_id && !f.source_turma_id);
-          if (turmaFolder) {
-            await supabase.from('folders').update({ source_turma_id: turmaDeck.turma_id } as any).eq('id', turmaFolder.id);
-            turmaFolder.source_turma_id = turmaDeck.turma_id;
-          }
-        }
-        if (turmaFolder && turmaFolder.is_archived) {
-          await supabase.from('folders').update({ is_archived: false } as any).eq('id', turmaFolder.id);
-        }
-        if (!turmaFolder) {
-          const { data: newFolder } = await supabase.from('folders').insert({
-            name: turmaName, user_id: user.id, source_turma_id: turmaDeck.turma_id,
-          } as any).select().single();
-          turmaFolder = newFolder;
-        }
-
-        targetFolderId = turmaFolder?.id ?? null;
-
-        // Resolve subject hierarchy: walk from the deck's subject up to the root, creating folders
-        if (turmaDeck.subject_id && turmaFolder) {
-          // Fetch ALL subjects of this turma to resolve the ancestor chain
-          const { data: allSubjects } = await supabase
-            .from('turma_subjects')
-            .select('id, name, parent_id')
-            .eq('turma_id', turmaDeck.turma_id);
-          const subjectsMap = new Map((allSubjects ?? []).map((s: any) => [s.id, s]));
-
-          // Build ancestor chain from leaf to root
-          const chain: { id: string; name: string }[] = [];
-          let currentSubjectId: string | null = turmaDeck.subject_id;
-          while (currentSubjectId) {
-            const subj = subjectsMap.get(currentSubjectId);
-            if (!subj) break;
-            chain.unshift({ id: subj.id, name: subj.name }); // prepend
-            currentSubjectId = subj.parent_id;
-          }
-
-          // Refresh folders list (in case we just created turma root)
-          const { data: updatedFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
-          const allUserFolders = (updatedFolders || []) as any[];
-
-          // Walk chain and create missing folders
-          let parentId = turmaFolder.id;
-          for (const subj of chain) {
-            let existing = allUserFolders.find((f: any) => f.source_turma_subject_id === subj.id && f.parent_id === parentId);
-            if (!existing) {
-              const { data: newSubFolder } = await supabase.from('folders').insert({
-                name: subj.name, user_id: user.id, parent_id: parentId,
-                source_turma_id: turmaDeck.turma_id, source_turma_subject_id: subj.id,
-              } as any).select().single();
-              existing = newSubFolder;
-              if (existing) allUserFolders.push(existing);
-            }
-            if (existing) parentId = existing.id;
-          }
-          targetFolderId = parentId;
-        }
-      }
 
       // ── Helper to copy a single deck with its cards ──
       const copyDeck = async (sourceDeckId: string, deckName: string, parentDeckId: string | null, sourceTurmaDeckId: string | null, folderId: string | null) => {

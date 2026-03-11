@@ -100,10 +100,10 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     const uniqueCommunityIds = [...new Set(communityOnlyIds)];
     const { data: turmas } = await supabase
       .from('turmas')
-      .select('id, created_by')
+      .select('id, owner_id')
       .in('id', uniqueCommunityIds);
     if (turmas && turmas.length > 0) {
-      const ownerIds = [...new Set(turmas.map((t: any) => t.created_by))];
+      const ownerIds = [...new Set(turmas.map((t: any) => t.owner_id))];
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, name')
@@ -111,7 +111,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       const profileMap = new Map<string, string>();
       if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
       for (const t of turmas as any[]) {
-        communityOwnerMap.set(t.id, profileMap.get(t.created_by) || null);
+        communityOwnerMap.set(t.id, profileMap.get(t.owner_id) || null);
       }
     }
   }
