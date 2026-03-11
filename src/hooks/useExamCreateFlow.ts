@@ -39,6 +39,8 @@ export function useExamCreateFlow() {
   const { exam: existingExam, questions: existingQuestions, isLoading: examLoading } = useExamDetail(examId ?? '');
 
   const preselectedDeckId = searchParams.get('deckId') || '';
+  const preselectedMode = searchParams.get('mode');
+  const preselectedModel = searchParams.get('model');
   const [creationMode, setCreationMode] = useState<CreationMode>('manual');
 
   // AI mode state
