@@ -56,7 +56,7 @@ const DeckDetailContent = () => {
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
 
   // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
