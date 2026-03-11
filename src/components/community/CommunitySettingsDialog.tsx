@@ -205,32 +205,39 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
               </div>
             </div>
 
-            <div className="rounded-xl border border-border/50 p-3 space-y-1.5">
+            <div className="rounded-xl border border-border/50 p-3 space-y-2">
               <Label className="flex items-center gap-1.5"><Share2 className="h-3.5 w-3.5" /> Link público</Label>
               <p className="text-[10px] text-muted-foreground">
                 Defina um slug personalizado para compartilhar sua comunidade (ex: "minha-turma").
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
-                <Input
-                  value={shareSlug}
-                  onChange={e => setShareSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  placeholder="meu-link"
-                  className="flex-1"
-                  maxLength={40}
-                />
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-muted-foreground shrink-0">/c/</span>
+                  <Input
+                    value={shareSlug}
+                    onChange={e => setShareSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    placeholder="meu-link"
+                    className="flex-1"
+                    maxLength={40}
+                  />
+                </div>
+                {shareSlug && (
+                  <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
+                    <code className="text-[11px] text-foreground flex-1 break-all select-all">
+                      {window.location.origin}/c/{shareSlug}
+                    </code>
+                    <Button
+                      variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/c/${shareSlug}`);
+                        toast({ title: 'Link copiado!' });
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
-              {shareSlug && (
-                <button
-                  className="text-[11px] text-primary hover:underline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/c/${shareSlug}`);
-                    toast({ title: 'Link copiado!' });
-                  }}
-                >
-                  Copiar link: {window.location.origin}/c/{shareSlug}
-                </button>
-              )}
             </div>
 
             <Button
