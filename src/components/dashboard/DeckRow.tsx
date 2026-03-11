@@ -45,7 +45,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
   onCreateSubDeck, onRename, onMove, onArchive, onDelete, onDetachCommunityDeck,
-  dragHandlers, hasPendingUpdate, communitySourceName,
+  dragHandlers, hasPendingUpdate,
 }, ref) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
