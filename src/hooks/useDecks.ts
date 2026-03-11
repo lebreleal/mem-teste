@@ -32,7 +32,11 @@ export const useDecks = () => {
 
   const moveDeck = useMutation({
     mutationFn: ({ id, folderId, parentDeckId }: { id: string; folderId: string | null; parentDeckId?: string | null }) => deckService.moveDeck(id, folderId, parentDeckId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['decks'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['card-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['cards-display'] });
+    },
   });
 
   const archiveDeck = useMutation({
