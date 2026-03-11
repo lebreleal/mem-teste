@@ -38,7 +38,6 @@ interface DeckRowProps {
   onDetachCommunityDeck?: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
   hasPendingUpdate?: boolean;
-  communitySourceName?: string | null;
 }
 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
