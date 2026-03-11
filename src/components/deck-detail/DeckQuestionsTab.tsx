@@ -144,7 +144,9 @@ const QuestionStatsBar = ({
 };
 
 /* ════════════════════════════════════════════════════════════
-   Concept Mastery Display (after answering)
+   Concept Self-Assessment (after answering)
+   User answers Yes/No for each comprehension question.
+   If "No" → can request AI to create flashcards for that concept.
    ════════════════════════════════════════════════════════════ */
 const ConceptMasterySection = ({
   concepts, mastery, onGenerateCards, generating,
@@ -154,60 +156,75 @@ const ConceptMasterySection = ({
   onGenerateCards: (concept: string) => void;
   generating: string | null;
 }) => {
+  const [feedback, setFeedback] = useState<Record<string, 'yes' | 'no'>>({});
+
   if (!concepts || concepts.length === 0) return null;
 
-  const masteryMap = new Map(mastery.map(m => [m.concept, m]));
-
-  const levelColor = (level: string) => {
-    if (level === 'strong') return 'text-emerald-600 dark:text-emerald-400';
-    if (level === 'learning') return 'text-amber-600 dark:text-amber-400';
-    return 'text-destructive';
-  };
-
-  const levelLabel = (level: string) => {
-    if (level === 'strong') return 'Dominado';
-    if (level === 'learning') return 'Aprendendo';
-    return 'Fraco';
+  const handleFeedback = (concept: string, value: 'yes' | 'no') => {
+    setFeedback(prev => ({ ...prev, [concept]: value }));
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-border/50 bg-card/50 p-3.5 space-y-2">
+    <div className="mt-4 rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
       <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
         <Brain className="h-3.5 w-3.5 text-primary" />
-        Conceitos desta questão
+        Autoavaliação
       </p>
-      <div className="space-y-1.5">
-        {concepts.map(c => {
-          const m = masteryMap.get(c);
-          const level = m?.mastery_level || 'weak';
-          const total = (m?.correct_count || 0) + (m?.wrong_count || 0);
-          const isWeak = level === 'weak' || level === 'learning';
+      <p className="text-[11px] text-muted-foreground">
+        Avalie sua compreensão sobre os conceitos testados nesta questão:
+      </p>
+      <div className="space-y-3">
+        {concepts.map((c, i) => {
+          const answer = feedback[c];
           return (
-            <div key={c} className="flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <span className={`font-bold ${levelColor(level)}`}>●</span>
-                <span className="text-foreground truncate">{c}</span>
-                <span className={`text-[10px] ${levelColor(level)}`}>
-                  {levelLabel(level)}
-                  {total > 0 && ` (${m?.correct_count}/${total})`}
-                </span>
+            <div key={i} className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2">
+              <p className="text-sm text-foreground leading-relaxed">{c}</p>
+              <div className="flex items-center gap-2">
+                {!answer ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-3 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      onClick={() => handleFeedback(c, 'yes')}
+                    >
+                      <Check className="h-3 w-3" /> Sim, entendi
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-3 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleFeedback(c, 'no')}
+                    >
+                      <X className="h-3 w-3" /> Não entendi
+                    </Button>
+                  </>
+                ) : answer === 'yes' ? (
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                    <Check className="h-3 w-3" /> Ótimo! Conceito compreendido.
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-xs text-destructive font-medium">
+                      <AlertCircle className="h-3 w-3" /> Vamos reforçar!
+                    </span>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-7 px-3 text-xs gap-1.5"
+                      onClick={() => onGenerateCards(c)}
+                      disabled={generating === c}
+                    >
+                      {generating === c ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Zap className="h-3 w-3" />
+                      )}
+                      Criar cards para estudar
+                    </Button>
+                  </div>
+                )}
               </div>
-              {isWeak && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] gap-1 text-primary hover:text-primary"
-                  onClick={() => onGenerateCards(c)}
-                  disabled={generating === c}
-                >
-                  {generating === c ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Zap className="h-3 w-3" />
-                  )}
-                  Criar cards
-                </Button>
-              )}
             </div>
           );
         })}

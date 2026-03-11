@@ -108,8 +108,23 @@ Crie UMA questão por grupo conceitual. A questão deve exigir que o aluno INTEG
 ✅ Alternativas incorretas devem ser plausíveis (conceitos REAIS de outros cartões)
 ✅ Explicação deve justificar por que a correta está certa E por que cada incorreta está errada
 ✅ source_card_ids deve conter os IDs EXATOS dos cartões usados
-✅ concepts deve listar 2-5 conceitos-chave testados (strings curtas)
 ✅ Questões na mesma língua dos cartões
+
+## CONCEPTS — PERGUNTAS DE AUTOAVALIAÇÃO:
+O campo "concepts" NÃO deve conter nomes de conceitos soltos (ex: "Abscesso", "Flegmão").
+Em vez disso, cada item deve ser uma PERGUNTA DE COMPREENSÃO que o aluno usa para se autoavaliar.
+Exemplos:
+- "Você conseguiu identificar que uma coleção de pus localizada e confinada é um abscesso?"
+- "Você conseguiu distinguir a diferença entre flegmão e abscesso?"
+- "Você entendeu por que a inflamação purulenta difusa caracteriza o flegmão?"
+Cada pergunta deve testar um micro-conceito específico da questão (2-4 perguntas por questão).
+
+## EXPLICAÇÃO:
+A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
+- Comece com uma frase-resumo da resposta correta
+- Explique POR QUE cada alternativa incorreta está errada
+- Use **negrito** para termos-chave
+- Seja conciso mas completo
 
 ## PROIBIDO:
 ❌ Criar questões que testam apenas 1 cartão isolado (exceto se inevitável)
@@ -117,7 +132,8 @@ Crie UMA questão por grupo conceitual. A questão deve exigir que o aluno INTEG
 ❌ Criar alternativas absurdas que qualquer pessoa eliminaria
 ❌ Usar "todas as alternativas" ou "nenhuma das alternativas"
 ❌ Dizer "de acordo com o material", "segundo os cards" etc.
-❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem`;
+❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem
+❌ Colocar nomes de conceitos soltos no campo concepts — SEMPRE usar perguntas de autoavaliação`;
 
     const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
 
@@ -159,7 +175,7 @@ Para cada questão, retorne:
               concepts: {
                 type: "array",
                 items: { type: "string" },
-                description: "2-5 conceitos-chave testados",
+                description: "2-4 perguntas de autoavaliação sobre os micro-conceitos testados nesta questão. Cada item é uma pergunta como 'Você conseguiu identificar que X é Y?'",
               },
               source_card_ids: {
                 type: "array",
