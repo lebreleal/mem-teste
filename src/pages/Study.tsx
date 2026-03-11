@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo, lazy, Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useEnergy } from '@/hooks/useEnergy';
@@ -11,11 +11,13 @@ import { useStudyUndo } from '@/hooks/useStudyUndo';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
@@ -48,6 +50,38 @@ const Study = () => {
     else navigate('/dashboard', { replace: true });
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
+
+  // Fetch community deck source info (author + updated_at)
+  const { data: sourceInfo } = useQuery({
+    queryKey: ['study-source-info', deckId],
+    queryFn: async () => {
+      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', deckId!).single();
+      if (!deck) return null;
+      let authorName: string | null = null;
+      let updatedAt: string | null = null;
+      if (deck.source_turma_deck_id) {
+        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
+        if (td) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      } else if (deck.source_listing_id) {
+        const { data: listing } = await supabase.from('marketplace_listings').select('seller_id, deck_id').eq('id', deck.source_listing_id).maybeSingle();
+        if (listing) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', listing.seller_id).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      }
+      if (!authorName && !updatedAt) return null;
+      return { authorName, updatedAt };
+    },
+    enabled: !!deckId && isLiveDeck,
+    staleTime: 5 * 60_000,
+  });
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
@@ -330,11 +364,6 @@ const Study = () => {
           <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 text-muted-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          {isLiveDeck && (
-            <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-              <Users className="h-3 w-3" /> Comunidade
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button onClick={toggleTheme} className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Alternar tema">
@@ -393,46 +422,61 @@ const Study = () => {
               tutor.handleTutorRequest(currentCard, options || { action: 'explain' });
             }}
             actions={
-              <StudyCardActions
-                card={currentCard}
-                isLiveDeck={isLiveDeck}
-                onCardUpdated={(updatedFields) => {
-                  setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
-                  setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
-                }}
-                onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
-                onCardBuried={() => {
-                  setLocalQueue(prev => {
-                    let filtered = prev.filter(c => c.id !== currentCard.id);
-                    if (currentCard.card_type === 'cloze') {
-                      const sibIds = getSiblingIds(currentCard, filtered);
-                      if (sibIds.length > 0) {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        tomorrow.setHours(0, 0, 0, 0);
-                        sibIds.forEach(sid => {
-                          supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
-                        });
-                        filtered = filtered.filter(c => !sibIds.includes(c.id));
+              <>
+                <StudyCardActions
+                  card={currentCard}
+                  isLiveDeck={isLiveDeck}
+                  onCardUpdated={(updatedFields) => {
+                    setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
+                    setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
+                  }}
+                  onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
+                  onCardBuried={() => {
+                    setLocalQueue(prev => {
+                      let filtered = prev.filter(c => c.id !== currentCard.id);
+                      if (currentCard.card_type === 'cloze') {
+                        const sibIds = getSiblingIds(currentCard, filtered);
+                        if (sibIds.length > 0) {
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          tomorrow.setHours(0, 0, 0, 0);
+                          sibIds.forEach(sid => {
+                            supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
+                          });
+                          filtered = filtered.filter(c => !sibIds.includes(c.id));
+                        }
                       }
-                    }
-                    return filtered;
-                  });
-                  setCardKey(prev => prev + 1);
-                }}
-                onSiblingsUpdated={(updates, deletedIds) => {
-                  setLocalQueue(prev => {
-                    let q = prev.map(c => {
-                      const upd = updates.find(u => u.id === c.id);
-                      return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
+                      return filtered;
                     });
-                    if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id));
-                    return q;
-                  });
-                }}
-                onOpenChat={() => setChatOpen(true)}
-                chatHasMessages={chatHasMessages}
-              />
+                    setCardKey(prev => prev + 1);
+                  }}
+                  onSiblingsUpdated={(updates, deletedIds) => {
+                    setLocalQueue(prev => {
+                      let q = prev.map(c => {
+                        const upd = updates.find(u => u.id === c.id);
+                        return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
+                      });
+                      if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id));
+                      return q;
+                    });
+                  }}
+                  onOpenChat={() => setChatOpen(true)}
+                  chatHasMessages={chatHasMessages}
+                />
+                {isLiveDeck && sourceInfo && (
+                  <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-1">
+                    {sourceInfo.authorName && (
+                      <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
+                    )}
+                    {sourceInfo.updatedAt && (
+                      <span className="flex items-center gap-0.5">
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        {formatDistanceToNow(new Date(sourceInfo.updatedAt), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </>
             }
           />
         </div>
