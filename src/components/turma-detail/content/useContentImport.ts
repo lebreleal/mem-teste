@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTurmaDetail } from '../TurmaDetailContext';
 import { useDecks } from '@/hooks/useDecks';
-import { useFolders } from '@/hooks/useFolders';
 
 const resolveNameConflict = (baseName: string, existingNames: string[]): string => {
   if (!existingNames.includes(baseName)) return baseName;
