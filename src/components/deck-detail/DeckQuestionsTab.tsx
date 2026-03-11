@@ -251,7 +251,7 @@ const QuestionPractice = ({
         .select('*')
         .eq('user_id', user.id)
         .eq('deck_id', deckId);
-      return (data ?? []) as ConceptMastery[];
+      return (data ?? []) as unknown as ConceptMastery[];
     },
     enabled: !!user,
     staleTime: 30_000,
