@@ -11,7 +11,10 @@ import { useStudyUndo } from '@/hooks/useStudyUndo';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
@@ -77,6 +80,7 @@ const Study = () => {
   const [explainInChat, setExplainInChat] = useState<string | false>(false);
   const [chatHasMessages, setChatHasMessages] = useState(false);
   const chatClearRef = useRef<(() => void) | null>(null);
+  const [communityInfoOpen, setCommunityInfoOpen] = useState(false);
 
   // Initialize local queue from fetched data (once)
   useEffect(() => {
@@ -447,16 +451,23 @@ const Study = () => {
                   chatHasMessages={chatHasMessages}
                 />
                 {sourceInfo && (
-                  <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-2 w-full">
+                  <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
                     {sourceInfo.authorName && (
                       <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
                     )}
-                    {sourceInfo.updatedAt && (
+                    {currentCard?.updated_at && (
                       <span className="flex items-center gap-0.5">
                         <RefreshCw className="h-2.5 w-2.5" />
-                        {formatDistanceToNow(new Date(sourceInfo.updatedAt), { addSuffix: true, locale: ptBR })}
+                        {formatDistanceToNow(new Date(currentCard.updated_at), { addSuffix: true, locale: ptBR })}
                       </span>
                     )}
+                    <button
+                      onClick={() => setCommunityInfoOpen(true)}
+                      className="flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Informações do card de comunidade"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
                   </div>
                 )}
               </>
@@ -478,6 +489,25 @@ const Study = () => {
           clearRef={chatClearRef}
         />
       </Suspense>
+      <Dialog open={communityInfoOpen} onOpenChange={setCommunityInfoOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Card de Comunidade</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Este cartão pertence a um baralho de comunidade
+              {sourceInfo?.authorName && <> criado por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></>}.
+            </p>
+            <p className="flex items-start gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5 mt-0.5 shrink-0 text-foreground" />
+              <span>
+                A data de atualização indica quando <strong className="text-foreground">este cartão específico</strong> foi editado pelo criador. Cada cartão tem sua própria data — o deck pode ter sido atualizado recentemente mesmo que este cartão não tenha mudado.
+              </span>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

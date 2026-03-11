@@ -275,27 +275,29 @@ const FlashCard = ({
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-1 h-[calc(100dvh-7rem)] relative">
       {/* Top bar: difficulty + actions */}
-      <div className="flex items-center justify-center gap-2 flex-shrink-0 pb-3">
-        {difficultyData && (
-          <button
-            onClick={() => setRecallExpanded(prev => !prev)}
-            className={`flex items-center gap-1.5 rounded-xl ${diffBgColor} px-2.5 py-1 transition-all active:scale-95`}
-          >
-            <Gauge className={`h-3 w-3 ${diffColor}`} />
-            <span className={`text-[11px] font-bold ${diffColor}`}>
-              {recallExpanded
-                ? (difficultyData.state === 'new' ? 'Card novo' : `Dificuldade: ${difficultyData.value}`)
-                : (difficultyData.state === 'new' ? 'Novo' : `D: ${difficultyData.value}`)}
-            </span>
-            {!recallExpanded && (
-              <>
-                <span className="text-[10px] text-muted-foreground">•</span>
-                <span className="text-[10px] text-muted-foreground font-medium">{difficultyData.label}</span>
-              </>
-            )}
-          </button>
-        )}
-        {actions}
+      <div className="flex flex-col items-center gap-1 flex-shrink-0 pb-3">
+        <div className="flex items-center justify-center gap-2">
+          {difficultyData && (
+            <button
+              onClick={() => setRecallExpanded(prev => !prev)}
+              className={`flex items-center gap-1.5 rounded-xl ${diffBgColor} px-2.5 py-1 transition-all active:scale-95`}
+            >
+              <Gauge className={`h-3 w-3 ${diffColor}`} />
+              <span className={`text-[11px] font-bold ${diffColor}`}>
+                {recallExpanded
+                  ? (difficultyData.state === 'new' ? 'Card novo' : `Dificuldade: ${difficultyData.value}`)
+                  : (difficultyData.state === 'new' ? 'Novo' : `D: ${difficultyData.value}`)}
+              </span>
+              {!recallExpanded && (
+                <>
+                  <span className="text-[10px] text-muted-foreground">•</span>
+                  <span className="text-[10px] text-muted-foreground font-medium">{difficultyData.label}</span>
+                </>
+              )}
+            </button>
+          )}
+          {actions}
+        </div>
       </div>
 
       {/* Scrollable content area */}
