@@ -157,6 +157,8 @@ const DeckListItem = ({
 const FolderItem = ({
   folder,
   deckCount,
+  cardCount,
+  attachmentCount,
   canEdit,
   isAdmin,
   onClick,
@@ -165,6 +167,8 @@ const FolderItem = ({
 }: {
   folder: any;
   deckCount: number;
+  cardCount?: number;
+  attachmentCount?: number;
   canEdit: boolean;
   isAdmin: boolean;
   onClick: () => void;
@@ -180,7 +184,19 @@ const FolderItem = ({
     </div>
     <div className="flex-1 min-w-0">
       <h3 className="font-medium text-sm text-foreground truncate">{folder.name}</h3>
-      <span className="text-[11px] text-muted-foreground">{deckCount} decks</span>
+        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+          <span>{deckCount} decks</span>
+          {(cardCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Layers className="h-3 w-3 shrink-0" /> {cardCount}
+            </span>
+          )}
+          {(attachmentCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Paperclip className="h-3 w-3 shrink-0" /> {attachmentCount}
+            </span>
+          )}
+        </div>
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {canEdit && (
@@ -390,6 +406,28 @@ const ContentTab = () => {
     return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
   };
 
+  // ── Count cards recursively in a folder ──
+  const getFolderCardCount = (folderId: string): number => {
+    const directCards = turmaDecks
+      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+  };
+
+  // ── Count attachments (files + exams) recursively in a folder ──
+  const getFolderAttachmentCount = (folderId: string): number => {
+    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    let count = 0;
+    folderDecks.forEach((d: any) => {
+      if (d.lesson_id) {
+        count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
+      }
+    });
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+  };
+
   // ── Current folder's decks ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
@@ -536,6 +574,8 @@ const ContentTab = () => {
                   key={folder.id}
                   folder={folder}
                   deckCount={countDecksInFolder(folder.id)}
+                  cardCount={getFolderCardCount(folder.id)}
+                  attachmentCount={getFolderAttachmentCount(folder.id)}
                   canEdit={canEdit}
                   isAdmin={isAdmin}
                   onClick={() => setContentFolderId(folder.id)}
