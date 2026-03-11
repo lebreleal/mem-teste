@@ -326,7 +326,26 @@ Deno.serve(async (req) => {
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
 
-    const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
+    const formatInstructions = isFlashLite ? getFlashFormatInstructions(formats) : getFormatInstructions(formats);
+
+    const prompt = isFlashLite
+      ? `Crie flashcards para este conteúdo.
+
+- ${countInstruction}
+- ${getDetailInstruction(detail)}
+- Idioma: mesmo do conteúdo.
+${customInstructions ? `- INSTRUÇÃO DO USUÁRIO: ${customInstructions}` : ""}
+
+FORMATOS:
+${formatInstructions}
+
+CONTEÚDO:
+---
+${trimmedContent}
+---
+
+Verifique: cada seção do conteúdo tem pelo menos 1 cartão?`
+      : `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
 REGRAS OBRIGATÓRIAS:
 - ${countInstruction}
@@ -342,7 +361,7 @@ REGRAS OBRIGATÓRIAS:
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
-${getFormatInstructions(formats)}
+${formatInstructions}
 
 CONTEÚDO-BASE (use APENAS isto para gerar os cartões):
 ---
