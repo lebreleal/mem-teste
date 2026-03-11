@@ -246,11 +246,11 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] w-full overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 min-w-0 overflow-hidden">
               <ArrowUpRight className="h-5 w-5 shrink-0" />
-              <span className="truncate block max-w-[calc(100%-2rem)]">Mover "{props.moveTarget?.name}"</span>
+              <span className="truncate block">{`Mover "${props.moveTarget?.name}"`}</span>
             </DialogTitle>
           </DialogHeader>
           <MoveBrowser
