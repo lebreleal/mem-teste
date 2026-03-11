@@ -118,13 +118,15 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
 
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
-    // Resolve author: marketplace listing author OR turma sharer OR community owner
+    // Resolve author: marketplace listing author OR turma sharer OR community owner (with fallback chain)
     let resolvedAuthor: string | null = null;
     if (deck.source_listing_id) {
       resolvedAuthor = authorMap.get(deck.source_listing_id) ?? null;
-    } else if (deck.source_turma_deck_id) {
+    }
+    if (!resolvedAuthor && deck.source_turma_deck_id) {
       resolvedAuthor = turmaAuthorMap.get(deck.source_turma_deck_id) ?? null;
-    } else if (deck.community_id) {
+    }
+    if (!resolvedAuthor && deck.community_id) {
       resolvedAuthor = communityOwnerMap.get(deck.community_id) ?? null;
     }
     return {
