@@ -585,6 +585,35 @@ const ContentTab = () => {
         )}
       </div>
 
+      {/* Tag filter chips */}
+      {communityTags.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            onClick={() => setSelectedTagId(null)}
+            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+              !selectedTagId
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            Todos
+          </button>
+          {communityTags.map(tag => (
+            <button
+              key={tag.id}
+              onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                selectedTagId === tag.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
       {!hasContent ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center">
