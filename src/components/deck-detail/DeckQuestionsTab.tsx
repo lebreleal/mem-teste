@@ -762,6 +762,62 @@ const CreateQuestionDialog = ({
           <DialogTitle>{mode === 'ai' ? 'Gerar Questões com IA' : 'Nova Questão'}</DialogTitle>
         </DialogHeader>
         {mode === 'ai' ? (
+          aiGenerating ? (
+            /* ── Generation Loading State ── */
+            <div className="py-6 space-y-6">
+              {/* Animated sparkle icon */}
+              <div className="flex justify-center">
+                <div className="relative">
+                  <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center animate-pulse">
+                    <Sparkles className="h-7 w-7 text-primary" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary animate-ping opacity-30" />
+                </div>
+              </div>
+
+              <div className="text-center">
+                <h3 className="text-base font-bold text-foreground">Gerando questões...</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Analisando {cardCount} cards com modelo {aiModel === 'pro' ? 'Pro' : 'Flash'}
+                </p>
+              </div>
+
+              {/* Progress steps */}
+              <div className="space-y-2 px-2">
+                {GENERATION_STEPS.map((step, i) => {
+                  const isActive = i === generationStep;
+                  const isDone = i < generationStep;
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all duration-500 ${
+                        isActive ? 'bg-primary/10 border border-primary/20' :
+                        isDone ? 'opacity-60' : 'opacity-30'
+                      }`}
+                    >
+                      <span className="text-base w-6 text-center shrink-0">
+                        {isDone ? <Check className="h-4 w-4 text-primary mx-auto" /> :
+                         isActive ? <Loader2 className="h-4 w-4 text-primary mx-auto animate-spin" /> :
+                         step.icon}
+                      </span>
+                      <span className={`text-sm ${isActive ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Progress bar */}
+              <div className="px-2">
+                <Progress value={((generationStep + 1) / GENERATION_STEPS.length) * 100} className="h-1.5" />
+              </div>
+
+              <p className="text-center text-[11px] text-muted-foreground">
+                Isso pode levar alguns segundos dependendo da quantidade de cards.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-4">
             {/* Card count header */}
             <div className="rounded-xl border border-border/50 bg-muted/30 p-3.5">
@@ -784,7 +840,6 @@ const CreateQuestionDialog = ({
             <div className="space-y-2">
               <label className="text-xs font-semibold text-foreground">Modelo de IA</label>
               <div className="grid grid-cols-2 gap-2">
-                {/* Flash */}
                 <button
                   type="button"
                   onClick={() => setAiModel('flash')}
@@ -799,11 +854,8 @@ const CreateQuestionDialog = ({
                     <span className="text-sm font-bold text-foreground">Flash</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mb-2">Rápido e econômico</p>
-                  <p className="text-xs font-bold text-foreground tabular-nums">
-                    {baseCost} créditos
-                  </p>
+                  <p className="text-xs font-bold text-foreground tabular-nums">{baseCost} créditos</p>
                 </button>
-                {/* Pro */}
                 <button
                   type="button"
                   onClick={() => setAiModel('pro')}
@@ -822,9 +874,7 @@ const CreateQuestionDialog = ({
                     <Crown className="h-3 w-3 text-warning" />
                   </div>
                   <p className="text-[10px] text-muted-foreground mb-2">Raciocínio avançado</p>
-                  <p className="text-xs font-bold text-foreground tabular-nums">
-                    {baseCost * 5} créditos
-                  </p>
+                  <p className="text-xs font-bold text-foreground tabular-nums">{baseCost * 5} créditos</p>
                 </button>
               </div>
             </div>
@@ -842,7 +892,7 @@ const CreateQuestionDialog = ({
               />
             </div>
 
-            {/* Cost + balance bar */}
+            {/* Cost + balance */}
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-sm">
                 <Zap className="h-4 w-4 text-primary" />
@@ -859,15 +909,14 @@ const CreateQuestionDialog = ({
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button
                 onClick={() => aiGenerateMutation.mutate()}
-                disabled={aiGenerating || cardCount === 0 || energy < aiCost}
+                disabled={cardCount === 0 || energy < aiCost}
                 className="gap-1.5"
               >
-                {aiGenerating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando conceitos...</>
-                ) : (
-                  <><Sparkles className="h-3.5 w-3.5" /> Gerar questões</>
-                )}
+                <Sparkles className="h-3.5 w-3.5" /> Gerar questões
               </Button>
+            </DialogFooter>
+          </div>
+          )
             </DialogFooter>
           </div>
         ) : (
