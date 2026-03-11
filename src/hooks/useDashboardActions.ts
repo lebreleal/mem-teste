@@ -81,7 +81,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         }
       );
     } else {
-      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
+      state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
         onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
         onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
       });
