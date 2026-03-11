@@ -69,7 +69,8 @@ interface DeckListProps {
 const DeckList = ({
   isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
   onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
-  onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, getFolderDueCount, getFolderCommunityLinkId,
+  onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
+  getFolderDueCount, getFolderCommunityLinkId,
   folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
   ...deckRowProps
