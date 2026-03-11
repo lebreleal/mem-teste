@@ -228,6 +228,23 @@ const Dashboard = () => {
           ))}
         </div>
 
+        {/* Caderno de Erros shortcut */}
+        {errorCount > 0 && (
+          <button
+            onClick={() => navigate('/caderno-de-erros')}
+            className="mb-6 w-full flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 hover:bg-destructive/10 transition-colors"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+              <BookX className="h-5 w-5 text-destructive" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-bold text-foreground">Caderno de Erros</p>
+              <p className="text-[11px] text-muted-foreground">{errorCount} {errorCount === 1 ? 'questão errada' : 'questões erradas'} para revisar</p>
+            </div>
+            <Badge variant="destructive" className="text-xs">{errorCount}</Badge>
+          </button>
+        )}
+
         {/* Study deck carousel */}
         {allDecks && (
           <DeckCarousel
