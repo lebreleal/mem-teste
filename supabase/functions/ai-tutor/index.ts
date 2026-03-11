@@ -197,6 +197,43 @@ Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objet
       return jsonResponse({ response: ceText });
     }
 
+    // ─── Option Explanation (non-streaming) ───
+    if (isOptionExplainMode) {
+      const { question: oQuestion, options: oOptions, optionIndex, isCorrect, correctIndex: oCorrectIdx } = body;
+      const qText = (oQuestion || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (oOptions || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+      const targetLetter = String.fromCharCode(65 + (optionIndex ?? 0));
+      const targetText = oOptions?.[optionIndex] || "";
+      const correctLetter = String.fromCharCode(65 + (oCorrectIdx ?? 0));
+
+      const oePrompt = isCorrect
+        ? `O aluno quer entender por que a alternativa ${targetLetter} está CORRETA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nExplique de forma clara e didática por que a alternativa ${targetLetter} ("${targetText}") é a resposta correta. Use 2-3 frases. Responda na mesma língua da questão.`
+        : `O aluno quer entender por que a alternativa ${targetLetter} está ERRADA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é: ${correctLetter}\n\nExplique de forma clara e didática por que a alternativa ${targetLetter} ("${targetText}") está incorreta e o que a torna diferente da correta. Use 2-3 frases. Responda na mesma língua da questão.`;
+
+      const oeResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto." },
+            { role: "user", content: oePrompt },
+          ],
+          max_tokens: 500,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!oeResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const oeData = await oeResponse.json();
+      const oeText = oeData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: oeText });
+    }
+
     // ─── Question Hint / Explain (non-streaming, returns JSON) ───
     if (isQuestionMode) {
       const qText = (question || "").replace(/<[^>]*>/g, "").trim();
