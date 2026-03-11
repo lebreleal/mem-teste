@@ -694,7 +694,7 @@ const CreateQuestionDialog = ({
         body: {
           deckId,
           optionsCount: 4,
-          aiModel: 'flash',
+          aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
           energyCost: aiCost,
           customInstructions: aiCustomInstructions.trim() || undefined,
         },
