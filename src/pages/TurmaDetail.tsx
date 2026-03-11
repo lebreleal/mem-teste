@@ -288,6 +288,8 @@ const MemberCommunityView = () => {
         <TurmaSubHeader
         turmaId={turmaId}
         turmaName={turma.name}
+        ownerName={turma.owner_name}
+        createdAt={turma.created_at}
         inviteCode={turma.invite_code}
         shareSlug={turma.share_slug}
         isAdmin={isAdmin}
