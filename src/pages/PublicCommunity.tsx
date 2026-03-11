@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+
 import {
   Layers, Star, ArrowLeft, LogIn, Loader2,
   ChevronRight, Clock, Folder, FolderOpen, Crown, Globe,
@@ -73,7 +73,7 @@ const PublicCommunity = () => {
   const { user } = useAuth();
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [previewDeck, setPreviewDeck] = useState<{ id: string; name: string; cardCount: number } | null>(null);
+  
   const [showAuthGate, setShowAuthGate] = useState(false);
 
   // Fetch turma by slug or ID
@@ -227,7 +227,7 @@ const PublicCommunity = () => {
   };
 
   const handleDeckClick = (td: any) => {
-    setPreviewDeck({ id: td.deck_id, name: td.deck_name, cardCount: td.card_count ?? 0 });
+    navigate(`/decks/${td.deck_id}/preview`);
   };
 
   const handleJoin = () => {
@@ -425,23 +425,6 @@ const PublicCommunity = () => {
         )}
       </main>
 
-      {/* Card Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck}
-          onOpenChange={v => { if (!v) setPreviewDeck(null); }}
-          deckId={previewDeck.id}
-          deckName={previewDeck.name}
-          cardCount={previewDeck.cardCount}
-          alreadyLinked={false}
-          alreadyOwns={false}
-          allowDownload={false}
-          onAddToCollection={() => { if (!user) setShowAuthGate(true); }}
-          onDownload={() => {}}
-          isAdding={false}
-          isDownloading={false}
-        />
-      )}
 
       {/* Auth Gate */}
       <AuthGatePrompt open={showAuthGate} onOpenChange={setShowAuthGate} slugOrId={slugOrId!} />
