@@ -263,15 +263,29 @@ const ConceptMasterySection = ({
                         <Check className="h-3 w-3 text-primary" />
                         <span><span className="font-bold text-foreground">{existingCards.length}</span> cards relacionados encontrados no seu baralho:</span>
                       </p>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
                         {existingCards.map(card => (
-                          <div key={card.id} className="rounded-lg border border-border/30 bg-muted/30 px-3 py-2">
-                            <div className="text-xs text-foreground line-clamp-2"
-                              dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                          <div key={card.id} className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
+                            <div className="px-3.5 py-2.5 border-b border-border/30 bg-muted/20">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Badge variant="outline" className="text-[9px] h-4 px-1.5">
+                                  {card.card_type === 'cloze' ? 'Cloze' : card.card_type === 'multiple_choice' ? 'MC' : 'Básico'}
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground">Frente</span>
+                              </div>
+                              <div className="text-xs text-foreground leading-relaxed line-clamp-3"
+                                dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                            </div>
+                            <div className="px-3.5 py-2 bg-primary/[0.02]">
+                              <span className="text-[10px] text-muted-foreground">Verso</span>
+                              <div className="text-xs text-foreground leading-relaxed line-clamp-2 mt-0.5"
+                                dangerouslySetInnerHTML={{ __html: card.back_content }} />
+                            </div>
                           </div>
                         ))}
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <PlayCircle className="h-3 w-3" />
                         Revise esses cards na próxima sessão de estudo para reforçar o conceito.
                       </p>
                     </div>
@@ -602,8 +616,8 @@ const QuestionPractice = ({
                   {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
                 </button>
 
-                {/* Per-option "Explicar alternativa" link — shown after confirming for correct & user-selected wrong */}
-                {confirmed && (isCorrectOpt || (isSelected && !isCorrectOpt)) && !optExplanation && (
+                {/* Per-option "Explicar alternativa" link — shown after confirming for ALL options */}
+                {confirmed && !optExplanation && (
                   <button
                     onClick={() => handleExplainOption(i)}
                     disabled={optionExplainLoading === i}
@@ -823,12 +837,24 @@ const CreateQuestionDialog = ({
         setGenerationStep(4); // Saving step
 
         for (const qi of qs) {
+          // Shuffle options so correct answer isn't always in the same position
+          const opts = qi.options || [];
+          const correctIdx = qi.correct_index ?? 0;
+          const indices = opts.map((_: any, i: number) => i);
+          // Fisher-Yates shuffle
+          for (let j = indices.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [indices[j], indices[k]] = [indices[k], indices[j]];
+          }
+          const shuffledOpts = indices.map((i: number) => opts[i]);
+          const newCorrectIdx = indices.indexOf(correctIdx);
+
           await supabase.from('deck_questions' as any).insert({
             deck_id: deckId, created_by: user.id,
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
-            options: qi.options || [],
-            correct_indices: [qi.correct_index ?? 0],
+            options: shuffledOpts,
+            correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
           });
