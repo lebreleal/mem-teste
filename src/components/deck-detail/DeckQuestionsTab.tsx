@@ -1,10 +1,12 @@
 /**
  * DeckQuestionsTab — standalone question bank for a deck.
  * Questions are independent from exams. Style: one question at a time (Estratégia Concursos).
+ * Features: option elimination (scissors), AI hint (1 credit), AI explanation after answer.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,9 +17,10 @@ import {
 } from '@/components/ui/dialog';
 import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
-  ChevronRight, AlertCircle,
+  ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import ReactMarkdown from 'react-markdown';
 
 interface DeckQuestion {
   id: string;
@@ -35,7 +38,7 @@ interface DeckQuestion {
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
-/** ─── Question Practice Mode (one at a time) ─── */
+/** ─── Question Practice Mode (one at a time, full screen study) ─── */
 const QuestionPractice = ({
   questions,
   onClose,
@@ -44,26 +47,51 @@ const QuestionPractice = ({
   onClose: () => void;
 }) => {
   const { user } = useAuth();
+  const { energy, spendEnergy } = useEnergy();
+  const { toast } = useToast();
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [stats, setStats] = useState({ correct: 0, total: 0 });
   const [finished, setFinished] = useState(false);
 
+  // Scissors: eliminated options
+  const [eliminated, setEliminated] = useState<Set<number>>(new Set());
+  const [scissorsMode, setScissorsMode] = useState(false);
+
+  // AI Hint
+  const [hintLoading, setHintLoading] = useState(false);
+  const [hintText, setHintText] = useState<string | null>(null);
+
+  // AI Explain (post-answer)
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainText, setExplainText] = useState<string | null>(null);
+
   const q = questions[index];
+
+  const resetForNext = useCallback(() => {
+    setSelected(null);
+    setConfirmed(false);
+    setEliminated(new Set());
+    setScissorsMode(false);
+    setHintText(null);
+    setExplainText(null);
+    setHintLoading(false);
+    setExplainLoading(false);
+  }, []);
 
   const handleConfirm = useCallback(async () => {
     if (selected === null || !q) return;
     const isCorrect = q.correct_indices
       ? q.correct_indices.includes(selected)
-      : selected === 0; // fallback
+      : selected === 0;
     setConfirmed(true);
+    setScissorsMode(false);
     setStats(prev => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
       total: prev.total + 1,
     }));
 
-    // Record attempt
     if (user) {
       await supabase.from('deck_question_attempts' as any).insert({
         question_id: q.id,
@@ -80,9 +108,75 @@ const QuestionPractice = ({
       return;
     }
     setIndex(prev => prev + 1);
-    setSelected(null);
-    setConfirmed(false);
-  }, [index, questions.length]);
+    resetForNext();
+  }, [index, questions.length, resetForNext]);
+
+  // Toggle elimination of an option
+  const handleEliminate = useCallback((optIdx: number) => {
+    setEliminated(prev => {
+      const next = new Set(prev);
+      if (next.has(optIdx)) next.delete(optIdx);
+      else next.add(optIdx);
+      return next;
+    });
+    // If eliminated option was selected, deselect it
+    if (selected === optIdx) setSelected(null);
+  }, [selected]);
+
+  // AI Hint: costs 1 credit
+  const handleHint = useCallback(async () => {
+    if (!q || !user) return;
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito para usar a dica.', variant: 'destructive' });
+      return;
+    }
+    setHintLoading(true);
+    try {
+      spendEnergy.mutate(1);
+      const { data, error } = await supabase.functions.invoke('ai-tutor', {
+        body: {
+          type: 'question-hint',
+          question: q.question_text,
+          options: q.options,
+          correctIndex: q.correct_indices?.[0] ?? 0,
+        },
+      });
+      if (error) throw error;
+      setHintText(data?.response || data?.hint || 'Tente analisar cada alternativa com cuidado.');
+    } catch (err: any) {
+      toast({ title: 'Erro ao gerar dica', variant: 'destructive' });
+    } finally {
+      setHintLoading(false);
+    }
+  }, [q, user, energy, spendEnergy, toast]);
+
+  // AI Explain: after answering, explain all alternatives
+  const handleExplain = useCallback(async () => {
+    if (!q || !user) return;
+    if (energy < 1) {
+      toast({ title: 'Créditos insuficientes', description: 'Você precisa de 1 crédito.', variant: 'destructive' });
+      return;
+    }
+    setExplainLoading(true);
+    try {
+      spendEnergy.mutate(1);
+      const { data, error } = await supabase.functions.invoke('ai-tutor', {
+        body: {
+          type: 'question-explain',
+          question: q.question_text,
+          options: q.options,
+          correctIndex: q.correct_indices?.[0] ?? 0,
+          userAnswer: selected,
+        },
+      });
+      if (error) throw error;
+      setExplainText(data?.response || data?.explanation || 'Não foi possível gerar a explicação.');
+    } catch (err: any) {
+      toast({ title: 'Erro ao gerar explicação', variant: 'destructive' });
+    } finally {
+      setExplainLoading(false);
+    }
+  }, [q, user, energy, selected, spendEnergy, toast]);
 
   if (finished) {
     const pct = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
@@ -127,7 +221,11 @@ const QuestionPractice = ({
         <span className="text-sm font-bold text-foreground tabular-nums">
           {index + 1}/{questions.length}
         </span>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1 rounded-xl px-2 py-1" style={{ background: 'hsl(var(--primary) / 0.1)' }}>
+            <Brain className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
+          </div>
           <span className="text-primary font-bold">{stats.correct}</span>
           <span>/</span>
           <span>{stats.total}</span>
@@ -166,8 +264,29 @@ const QuestionPractice = ({
         {/* Options */}
         <div className="space-y-2.5">
           {opts.map((opt, i) => {
+            const isEliminated = eliminated.has(i);
             const isSelected = selected === i;
             const isCorrect = i === correctIdx;
+
+            if (isEliminated && !confirmed) {
+              // Show eliminated option with strikethrough
+              return (
+                <button
+                  key={i}
+                  onClick={() => scissorsMode && handleEliminate(i)}
+                  className="w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all border-border/30 bg-card/30 opacity-40 cursor-pointer"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold bg-muted text-muted-foreground line-through">
+                    {LETTERS[i]}
+                  </span>
+                  <span className="text-sm leading-relaxed pt-0.5 line-through text-muted-foreground">{opt}</span>
+                  {scissorsMode && (
+                    <span className="ml-auto text-[10px] text-primary font-medium">restaurar</span>
+                  )}
+                </button>
+              );
+            }
+
             let optClass = 'border-border/60 bg-card hover:border-primary/40 cursor-pointer';
 
             if (confirmed) {
@@ -175,6 +294,8 @@ const QuestionPractice = ({
                 optClass = 'border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/30';
               } else if (isSelected && !isCorrect) {
                 optClass = 'border-destructive bg-destructive/10 ring-1 ring-destructive/30';
+              } else if (isEliminated) {
+                optClass = 'border-border/30 bg-card/30 opacity-40';
               } else {
                 optClass = 'border-border/40 bg-card/50 opacity-60';
               }
@@ -185,7 +306,14 @@ const QuestionPractice = ({
             return (
               <button
                 key={i}
-                onClick={() => !confirmed && setSelected(i)}
+                onClick={() => {
+                  if (confirmed) return;
+                  if (scissorsMode) {
+                    handleEliminate(i);
+                  } else {
+                    setSelected(i);
+                  }
+                }}
                 disabled={confirmed}
                 className={`w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all ${optClass}`}
               >
@@ -200,15 +328,30 @@ const QuestionPractice = ({
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {LETTERS[i]}
+                  {confirmed && isCorrect ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
                 </span>
-                <span className="text-sm leading-relaxed pt-0.5">{opt}</span>
+                <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
+                {scissorsMode && !confirmed && (
+                  <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* Explanation (after confirming) */}
+        {/* Hint (before confirming) */}
+        {!confirmed && hintText && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+              <Lightbulb className="h-3.5 w-3.5" /> Dica
+            </p>
+            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{hintText}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {/* Static explanation (after confirming) */}
         {confirmed && q.explanation && (
           <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <p className="text-xs font-bold text-primary mb-1.5 flex items-center gap-1">
@@ -220,23 +363,86 @@ const QuestionPractice = ({
             />
           </div>
         )}
+
+        {/* AI Explanation (after confirming) */}
+        {confirmed && explainText && (
+          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1">
+              <Brain className="h-3.5 w-3.5" /> Explicação da IA
+            </p>
+            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{explainText}</ReactMarkdown>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="border-t border-border/50 px-4 py-3">
+      <div className="border-t border-border/50 px-4 py-3 space-y-2">
         {!confirmed ? (
-          <Button
-            onClick={handleConfirm}
-            disabled={selected === null}
-            className="w-full gap-1.5"
-          >
-            <Check className="h-4 w-4" /> Confirmar Resposta
-          </Button>
+          <>
+            {/* Action buttons row */}
+            <div className="flex items-center gap-2 mb-2">
+              <Button
+                variant={scissorsMode ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setScissorsMode(!scissorsMode)}
+              >
+                <Scissors className="h-3.5 w-3.5" />
+                {scissorsMode ? 'Saindo' : 'Eliminar'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={handleHint}
+                disabled={hintLoading || !!hintText}
+              >
+                {hintLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Lightbulb className="h-3.5 w-3.5" />
+                )}
+                Dica
+                <span className="text-[10px] text-muted-foreground font-normal ml-0.5">
+                  (1 <Brain className="inline h-2.5 w-2.5" />)
+                </span>
+              </Button>
+            </div>
+            <Button
+              onClick={handleConfirm}
+              disabled={selected === null}
+              className="w-full gap-1.5"
+            >
+              <Check className="h-4 w-4" /> Confirmar Resposta
+            </Button>
+          </>
         ) : (
-          <Button onClick={handleNext} className="w-full gap-1.5">
-            {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'}
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="space-y-2">
+            {!explainText && (
+              <Button
+                variant="outline"
+                className="w-full gap-1.5 text-sm"
+                onClick={handleExplain}
+                disabled={explainLoading}
+              >
+                {explainLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquareText className="h-4 w-4" />
+                )}
+                Pedir IA para explicar
+                <span className="text-[10px] text-muted-foreground font-normal ml-0.5">
+                  (1 <Brain className="inline h-2.5 w-2.5" />)
+                </span>
+              </Button>
+            )}
+            <Button onClick={handleNext} className="w-full gap-1.5">
+              {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -344,7 +550,6 @@ const CreateQuestionDialog = ({
       });
       if (error) throw error;
 
-      // Insert generated questions
       const questions = data?.questions ?? [];
       if (questions.length === 0) throw new Error('Nenhuma questão gerada');
 
@@ -459,7 +664,6 @@ const CreateQuestionDialog = ({
                       placeholder={`Alternativa ${LETTERS[i]}`}
                       className="text-sm"
                     />
-                    {/* Remove 5th option */}
                     {i === 4 && (
                       <Button
                         variant="ghost"
@@ -504,7 +708,6 @@ const CreateQuestionDialog = ({
 
               {showExplanations && (
                 <div className="mt-3 space-y-3 rounded-xl border border-border/50 bg-muted/30 p-3">
-                  {/* Correct answer explanation */}
                   <div>
                     <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1">
                       <Check className="h-3 w-3" />
@@ -518,7 +721,6 @@ const CreateQuestionDialog = ({
                     />
                   </div>
 
-                  {/* Wrong answers explanations */}
                   {options.map((opt, i) => {
                     if (i === correctIdx || !opt.trim()) return null;
                     return (
@@ -573,7 +775,6 @@ const DeckQuestionsTab = ({
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
   const [practicing, setPracticing] = useState(false);
 
-  // For linked decks, fetch questions from the source deck
   const effectiveDeckId = sourceDeckId || deckId;
 
   const { data: questions = [], isLoading } = useQuery({
@@ -633,18 +834,18 @@ const DeckQuestionsTab = ({
         </div>
       )}
 
-      {/* Practice button */}
+      {/* Study questions button (same style as "Estudar" for cards) */}
       {questions.length > 0 && (
         <Button
           onClick={() => setPracticing(true)}
-          className="w-full gap-2"
+          className="w-full gap-2 h-12 text-base font-semibold"
           variant="default"
         >
-          <PlayCircle className="h-4 w-4" /> Praticar ({questions.length} questões)
+          <PlayCircle className="h-5 w-5" /> Estudar Questões
         </Button>
       )}
 
-      {/* Question list */}
+      {/* Question previews (like card previews) */}
       <div className="rounded-2xl border border-border/50 bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-display text-sm font-bold text-foreground">Banco de Questões</h3>
@@ -661,25 +862,26 @@ const DeckQuestionsTab = ({
           <div className="space-y-2">
             {questions.map((q, idx) => {
               const opts: string[] = q.options;
-              const correctIdx = q.correct_indices?.[0] ?? 0;
+              const cIdx = q.correct_indices?.[0] ?? 0;
+              const plainText = q.question_text.replace(/<[^>]+>/g, '');
               return (
-                <div key={q.id} className="rounded-xl border border-border/50 bg-background px-3 py-2.5">
+                <div key={q.id} className="rounded-xl border border-border/50 bg-background px-3 py-2.5 hover:border-primary/30 transition-colors">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground line-clamp-2">
-                        {idx + 1}. {q.question_text.replace(/<[^>]+>/g, '')}
+                        {idx + 1}. {plainText}
                       </p>
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {opts.slice(0, 5).map((opt, oi) => (
                           <span
                             key={oi}
                             className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              oi === correctIdx
+                              oi === cIdx
                                 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold'
                                 : 'bg-muted text-muted-foreground'
                             }`}
                           >
-                            {LETTERS[oi]}
+                            {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
                           </span>
                         ))}
                       </div>
