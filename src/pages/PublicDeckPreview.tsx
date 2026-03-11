@@ -1314,7 +1314,7 @@ const PublicDeckPreview = () => {
                 variant={isFollowing ? 'outline' : 'default'}
                 size="sm"
                 className="gap-1.5 text-xs h-8"
-                onClick={handleFollowDeck}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } handleFollowDeck(); }}
                 disabled={following || isFollowing}
               >
                 {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -1337,7 +1337,7 @@ const PublicDeckPreview = () => {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setShowDeckReport(true)}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } setShowDeckReport(true); }}
               >
                 <Pencil className="h-4 w-4 text-muted-foreground" />
               </Button>
