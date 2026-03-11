@@ -696,6 +696,30 @@ const DeckSettings = () => {
         handleExportAnki={handleExportAnki}
         toast={toast}
       />
+
+      {/* Detach community deck dialog */}
+      <AlertDialog open={detachConfirm} onOpenChange={setDetachConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>O baralho <strong>"{name}"</strong> será convertido em um deck pessoal independente.</p>
+              <p>Isso significa que:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
+                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
+                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Importando...' : 'Confirmar importação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
