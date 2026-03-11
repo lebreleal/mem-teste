@@ -585,11 +585,20 @@ const DeckSettings = () => {
                 label="Renomear baralho"
                 onClick={() => setRenameModal(true)}
               />
-              <SettingsRow
-                icon={<Copy className="h-5 w-5" />}
-                label="Duplicar baralho"
-                onClick={handleDuplicate}
-              />
+              {isCommunityDeck ? (
+                <SettingsRow
+                  icon={<Download className="h-5 w-5" />}
+                  label="Importar pro meu deck"
+                  subtitle="Converter em deck pessoal independente"
+                  onClick={() => setDetachConfirm(true)}
+                />
+              ) : (
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Duplicar baralho"
+                  onClick={handleDuplicate}
+                />
+              )}
               <SettingsRow
                 icon={<RotateCcw className="h-5 w-5" />}
                 label="Redefinir progresso"
