@@ -108,6 +108,8 @@ const DeckSettings = () => {
   const [exportModal, setExportModal] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingAnki, setExportingAnki] = useState(false);
+  const [detachConfirm, setDetachConfirm] = useState(false);
+  const [detaching, setDetaching] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'fsrs' | 'quick_review' | null>(null);
 
   const studyPlansQuery = useQuery({
