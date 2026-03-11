@@ -262,6 +262,18 @@ const Dashboard = () => {
         )}
 
         {/* Community decks tab */}
+        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Users className="h-7 w-7 text-primary" />
+            </div>
+            <h3 className="font-display text-lg font-bold text-foreground">Nenhum deck de comunidade</h3>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Explore comunidades e adicione baralhos à sua coleção.</p>
+            <Button variant="default" size="sm" className="mt-4 gap-1.5" onClick={() => navigate('/turmas')}>
+              <Users className="h-4 w-4" /> Explorar comunidades
+            </Button>
+          </div>
+        )}
         {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
           <DeckList
             isLoading={false}
