@@ -425,23 +425,6 @@ const PublicCommunity = () => {
         )}
       </main>
 
-      {/* Card Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck}
-          onOpenChange={v => { if (!v) setPreviewDeck(null); }}
-          deckId={previewDeck.id}
-          deckName={previewDeck.name}
-          cardCount={previewDeck.cardCount}
-          alreadyLinked={false}
-          alreadyOwns={false}
-          allowDownload={false}
-          onAddToCollection={() => { if (!user) setShowAuthGate(true); }}
-          onDownload={() => {}}
-          isAdding={false}
-          isDownloading={false}
-        />
-      )}
 
       {/* Auth Gate */}
       <AuthGatePrompt open={showAuthGate} onOpenChange={setShowAuthGate} slugOrId={slugOrId!} />
