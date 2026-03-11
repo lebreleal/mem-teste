@@ -224,6 +224,19 @@ const AdminIA = () => {
               </CardContent>
             </Card>
 
+            <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/admin/tags')}>
+              <CardContent className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <Tag className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="font-medium">Gerenciar Tags</p>
+                    <p className="text-xs text-muted-foreground">Hierarquia, sinônimos, oficializar e mesclar tags</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
             <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={openModelConfig}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
