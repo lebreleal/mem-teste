@@ -77,40 +77,37 @@ const Dashboard = () => {
   const { isAdmin } = useIsAdmin();
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
 
-  // Extracted actions hook
-  const actions = useDashboardActions(state, defaultAlgorithm);
-
-  // Carousel helpers
-  const hasPlan = plans.length > 0;
-  const planDeckIds = allDeckIds;
-  const plansByDeckId = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const p of plans) {
-      for (const id of (p.deck_ids ?? [])) {
-        if (!map[id]) map[id] = p.name;
-      }
-    }
-    return map;
-  }, [plans]);
-
-  // Handle payment return
-  useEffect(() => {
-    const payment = searchParams.get('payment');
-    if (payment === 'success') {
-      toast({ title: '🎉 Pagamento realizado!', description: 'Seu status será atualizado em instantes.' });
-      refreshStatus();
-      setTimeout(refreshStatus, 5000);
-      setSearchParams({}, { replace: true });
-    } else if (payment === 'canceled') {
-      toast({ title: 'Pagamento cancelado', description: 'Nenhuma cobrança foi feita.' });
-      setSearchParams({}, { replace: true });
-    }
-  }, [searchParams]);
-
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
+  const [detaching, setDetaching] = useState(false);
+  const [pendingReviewData, setPendingReviewData] = useState<{
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null>(null);
+
+  const activeSection = dashboardTab === 'community' ? 'community' : 'personal';
+
+  // Extracted actions hook
+  const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
+
+  const visibleFolders = useMemo(
+    () => state.folders
+      .filter(f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === activeSection)
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+    [state.folders, state.currentFolderId, activeSection]
+  );
+
+  const visibleDecks = useMemo(
+    () => activeSection === 'community'
+      ? state.communityDecks.filter(d => d.folder_id === state.currentFolderId)
+      : state.currentDecks,
+    [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
+  );
   const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
