@@ -96,16 +96,18 @@ const DashboardActions = ({
               <Button variant="outline" onClick={onCreateFolder} className="gap-2">
                 <FolderPlus className="h-4 w-4" /><span className="hidden sm:inline">Nova Pasta</span>
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="gap-2"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Adicionar</span></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onCreateDeck}><BookOpen className="mr-2 h-4 w-4" /> Criar baralho</DropdownMenuItem>
-                  <DropdownMenuItem onClick={onCreateAI}><Brain className="mr-2 h-4 w-4" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA</DropdownMenuItem>
-                  <DropdownMenuItem onClick={onImport}><Download className="mr-2 h-4 w-4" /> Importar cartões</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {mode === 'personal' && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="gap-2"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Adicionar</span></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={onCreateDeck}><BookOpen className="mr-2 h-4 w-4" /> Criar baralho</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onCreateAI}><Brain className="mr-2 h-4 w-4" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA</DropdownMenuItem>
+                    <DropdownMenuItem onClick={onImport}><Download className="mr-2 h-4 w-4" /> Importar cartões</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           )}
         </div>
