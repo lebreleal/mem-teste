@@ -837,12 +837,24 @@ const CreateQuestionDialog = ({
         setGenerationStep(4); // Saving step
 
         for (const qi of qs) {
+          // Shuffle options so correct answer isn't always in the same position
+          const opts = qi.options || [];
+          const correctIdx = qi.correct_index ?? 0;
+          const indices = opts.map((_: any, i: number) => i);
+          // Fisher-Yates shuffle
+          for (let j = indices.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [indices[j], indices[k]] = [indices[k], indices[j]];
+          }
+          const shuffledOpts = indices.map((i: number) => opts[i]);
+          const newCorrectIdx = indices.indexOf(correctIdx);
+
           await supabase.from('deck_questions' as any).insert({
             deck_id: deckId, created_by: user.id,
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
-            options: qi.options || [],
-            correct_indices: [qi.correct_index ?? 0],
+            options: shuffledOpts,
+            correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
           });
