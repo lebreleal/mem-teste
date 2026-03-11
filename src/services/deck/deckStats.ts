@@ -91,9 +91,9 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // Batch source author lookup (community_id only — turma owner)
+  // Batch source author lookup (community_id — turma owner, used as fallback)
   const communityOnlyIds = (decks || [])
-    .filter((d: any) => d.community_id && !d.source_turma_deck_id && !d.source_listing_id)
+    .filter((d: any) => d.community_id)
     .map((d: any) => d.community_id);
   const communityOwnerMap = new Map<string, string | null>();
   if (communityOnlyIds.length > 0) {
