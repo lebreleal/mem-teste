@@ -51,7 +51,7 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  // sourceInfo query is declared after currentCard (see below)
+  
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
