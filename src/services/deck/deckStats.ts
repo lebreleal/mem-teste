@@ -152,6 +152,11 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     if (!resolvedAuthor && deck.community_id) {
       resolvedAuthor = communityOwnerMap.get(deck.community_id) ?? null;
     }
+    // Resolve source updated_at (original deck's last edit)
+    let sourceUpdatedAt: string | null = null;
+    if (deck.source_turma_deck_id) {
+      sourceUpdatedAt = sourceUpdatedAtMap.get(deck.source_turma_deck_id) ?? null;
+    }
     return {
       ...deck,
       folder_id: deck.folder_id ?? null,
@@ -170,6 +175,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,
       community_id: (deck as any).community_id ?? null,
       updated_at: deck.updated_at ?? deck.created_at,
+      source_updated_at: sourceUpdatedAt,
     };
   });
 }
