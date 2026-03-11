@@ -98,11 +98,26 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
     return result;
   };
 
+  // Fetch sharer profile names
+  const sharerIds = [...new Set(data.map((d: any) => d.shared_by).filter(Boolean))];
+  const sharerNameMap = new Map<string, string>();
+  if (sharerIds.length > 0) {
+    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sharerIds);
+    (profiles ?? []).forEach((p: any) => sharerNameMap.set(p.id, p.name));
+  }
+
   return data.map((d: any) => {
     const deckInfo = deckMap.get(d.deck_id);
     const subtreeIds = collectPublishedSubtree(d.deck_id);
     const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
-    return { ...d, deck_name: deckInfo?.name || 'Sem nome', card_count: aggregatedCount, parent_deck_id: deckInfo?.parent_deck_id ?? null, is_published: d.is_published ?? true };
+    return {
+      ...d,
+      deck_name: deckInfo?.name || 'Sem nome',
+      card_count: aggregatedCount,
+      parent_deck_id: deckInfo?.parent_deck_id ?? null,
+      is_published: d.is_published ?? true,
+      shared_by_name: sharerNameMap.get(d.shared_by) || null,
+    };
   });
 }
 
