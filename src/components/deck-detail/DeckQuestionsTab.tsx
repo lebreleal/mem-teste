@@ -317,7 +317,7 @@ const ConceptMasterySection = ({
                     <button
                       onClick={() => handleExplainConcept(c)}
                       disabled={conceptExplaining === c}
-                      className="flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
+                      className="flex items-center gap-1 text-xs text-primary font-medium underline underline-offset-2 decoration-primary/50 hover:decoration-primary disabled:opacity-50"
                     >
                       {conceptExplaining === c ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
                       Explicar conceito com IA (1 crédito)
