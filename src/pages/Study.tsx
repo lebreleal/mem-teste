@@ -489,6 +489,24 @@ const Study = () => {
           clearRef={chatClearRef}
         />
       </Suspense>
+      <Dialog open={communityInfoOpen} onOpenChange={setCommunityInfoOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Card de Comunidade</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Este cartão pertence a um baralho de comunidade{sourceInfo?.authorName ? ` criado por <span class="font-medium text-foreground">${sourceInfo.authorName}</span>` : ''}.
+            </p>
+            <p>
+              A data de atualização (<RefreshCw className="inline h-3 w-3 mb-0.5" />) indica quando <strong className="text-foreground">este cartão específico</strong> foi editado pelo criador original. Cada cartão pode ter sua própria data de atualização.
+            </p>
+            <p>
+              Para sugerir correções, use o botão de edição (<span className="text-foreground">✏️</span>) que abrirá o formulário de sugestão.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
