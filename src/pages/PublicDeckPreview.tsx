@@ -1626,6 +1626,24 @@ const PublicDeckPreview = () => {
           deckName={deck?.name}
         />
       )}
+
+      {/* Auth Gate for unauthenticated users */}
+      {showAuthGate && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowAuthGate(false)}>
+          <div className="w-full max-w-sm bg-card rounded-t-2xl sm:rounded-2xl p-6 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center space-y-2">
+              <h3 className="font-display text-lg font-bold text-foreground">Crie sua conta gratuita</h3>
+              <p className="text-sm text-muted-foreground">Para interagir com este deck, você precisa de uma conta.</p>
+            </div>
+            <Button className="w-full" onClick={() => navigate('/auth', { state: { from: `/decks/${deckId}/preview` } })}>
+              <LogIn className="mr-2 h-4 w-4" /> Criar conta / Entrar
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowAuthGate(false)}>
+              Continuar navegando
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
