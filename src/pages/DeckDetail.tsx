@@ -18,17 +18,9 @@ const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrection
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 /** Detect if a deck is linked to a community/marketplace source */
-function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
+function checkIsLinkedDeck(deck: any): boolean {
   if (!deck) return false;
-  if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
-  let parentId = deck.parent_deck_id;
-  while (parentId) {
-    const parent = decks.find((d: any) => d.id === parentId);
-    if (!parent) break;
-    if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
-    parentId = parent.parent_deck_id;
-  }
-  return false;
+  return !!(deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck);
 }
 
 /** Resolve source deck ID from a linked deck — single unified query */
