@@ -454,11 +454,12 @@ const ContentTab = () => {
     return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
-  // ── Current folder's decks ──
+  // ── Current folder's decks (when tag is active, search across ALL folders) ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
+    const filterByFolder = !activeTagIds; // skip folder filter when tag is active
     return turmaDecks
-      .filter((d: any) => d.subject_id === contentFolderId)
+      .filter((d: any) => filterByFolder ? d.subject_id === contentFolderId : true)
       .filter((d: any) => isAdmin || d.is_published !== false)
       .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
       .filter((d: any) => {
