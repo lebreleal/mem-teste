@@ -51,6 +51,38 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
+  // Fetch community deck source info (author + updated_at)
+  const { data: sourceInfo } = useQuery({
+    queryKey: ['study-source-info', deckId],
+    queryFn: async () => {
+      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', deckId!).single();
+      if (!deck) return null;
+      let authorName: string | null = null;
+      let updatedAt: string | null = null;
+      if (deck.source_turma_deck_id) {
+        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
+        if (td) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      } else if (deck.source_listing_id) {
+        const { data: listing } = await supabase.from('marketplace_listings').select('seller_id, deck_id').eq('id', deck.source_listing_id).maybeSingle();
+        if (listing) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', listing.seller_id).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
+      }
+      if (!authorName && !updatedAt) return null;
+      return { authorName, updatedAt };
+    },
+    enabled: !!deckId && isLiveDeck,
+    staleTime: 5 * 60_000,
+  });
+
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
   const [queueInitialized, setQueueInitialized] = useState(false);
