@@ -340,8 +340,8 @@ const QuestionPractice = ({
   const [scissorsMode, setScissorsMode] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintText, setHintText] = useState<string | null>(null);
-  const [explainLoading, setExplainLoading] = useState(false);
-  const [explainText, setExplainText] = useState<string | null>(null);
+  const [optionExplanations, setOptionExplanations] = useState<Record<number, string>>({});
+  const [optionExplainLoading, setOptionExplainLoading] = useState<number | null>(null);
   const [generatingConcept, setGeneratingConcept] = useState<string | null>(null);
 
   // Concept mastery for current deck
