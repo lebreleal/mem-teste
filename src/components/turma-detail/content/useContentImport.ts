@@ -26,7 +26,7 @@ export const useContentImport = () => {
   } = ctx;
   const queryClient = useQueryClient();
   const { decks: userDecks } = useDecks();
-  const { folders, createFolder } = useFolders();
+  
 
   const [showImportExam, setShowImportExam] = useState(false);
   const [importingExamId, setImportingExamId] = useState<string | null>(null);
