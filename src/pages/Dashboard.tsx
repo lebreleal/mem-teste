@@ -351,12 +351,12 @@ const Dashboard = () => {
             </Button>
           </div>
         )}
-        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
+        {activeSection === 'community' && (visibleDecks.length > 0 || visibleFolders.length > 0) && (
           <DeckList
             isLoading={false}
-            currentFolders={communityRootFolders}
-            currentDecks={state.communityDecks}
-            currentFolderId={null}
+            currentFolders={visibleFolders}
+            currentDecks={visibleDecks}
+            currentFolderId={state.currentFolderId}
             searchQuery={searchQuery}
             deckSelectionMode={false}
             selectedDeckIds={new Set()}
@@ -370,14 +370,14 @@ const Dashboard = () => {
             getFolderDueCount={() => 0}
             getFolderCommunityLinkId={() => null}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onFolderClick={() => {}}
-            onRenameFolder={() => {}}
-            onMoveFolder={() => {}}
-            onArchiveFolder={() => {}}
-            onDeleteFolder={() => {}}
+            onFolderClick={state.setCurrentFolderId}
+            onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
+            onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
+            onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
+            onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
             onCreateSubDeck={() => {}}
             onRenameDeck={() => {}}
-            onMoveDeck={() => {}}
+            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
