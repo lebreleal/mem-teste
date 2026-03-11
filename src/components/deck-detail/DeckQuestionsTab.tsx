@@ -604,9 +604,8 @@ const CreateQuestionDialog = ({
     staleTime: 60_000,
   });
 
-  // Auto-calculate question count: ~1 question per 4 cards, min 3, max 20
-  const aiCount = Math.max(3, Math.min(20, Math.ceil(cardCount / 4)));
-  const aiCost = aiCount * 2; // 2 credits per question
+  // Cost based on card count: 1 credit per 5 cards, min 2
+  const aiCost = Math.max(2, Math.ceil(cardCount / 5));
 
   const resetForm = () => {
     setQuestionText(''); setOptions(['', '', '', '']); setCorrectIdx(null);
