@@ -153,7 +153,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             </span>
           )}
         </div>
-        {!isOwner && vc?.card && deckId ? (
+        {!isOwner && !hideActions && vc?.card && deckId ? (
           <Button
             variant="outline"
             size="sm"
