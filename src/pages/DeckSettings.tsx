@@ -605,9 +605,9 @@ const DeckSettings = () => {
               />
               {isCommunityDeck ? (
                 <SettingsRow
-                  icon={<Download className="h-5 w-5" />}
-                  label="Importar pro meu deck"
-                  subtitle="Converter em deck pessoal independente"
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Copiar para meu deck pessoal"
+                  subtitle="Criar cópia independente e editável"
                   onClick={() => setDetachConfirm(true)}
                 />
               ) : (
