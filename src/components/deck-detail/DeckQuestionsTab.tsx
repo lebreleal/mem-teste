@@ -602,8 +602,8 @@ const QuestionPractice = ({
                   {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
                 </button>
 
-                {/* Per-option "Explicar alternativa" link — shown after confirming for correct & user-selected wrong */}
-                {confirmed && (isCorrectOpt || (isSelected && !isCorrectOpt)) && !optExplanation && (
+                {/* Per-option "Explicar alternativa" link — shown after confirming for ALL options */}
+                {confirmed && !optExplanation && (
                   <button
                     onClick={() => handleExplainOption(i)}
                     disabled={optionExplainLoading === i}
