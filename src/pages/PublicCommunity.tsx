@@ -227,7 +227,7 @@ const PublicCommunity = () => {
   };
 
   const handleDeckClick = (td: any) => {
-    setPreviewDeck({ id: td.deck_id, name: td.deck_name });
+    setPreviewDeck({ id: td.deck_id, name: td.deck_name, cardCount: td.card_count ?? 0 });
   };
 
   const handleJoin = () => {
