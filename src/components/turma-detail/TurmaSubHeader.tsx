@@ -13,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
