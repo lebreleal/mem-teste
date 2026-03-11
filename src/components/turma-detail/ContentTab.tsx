@@ -73,40 +73,44 @@ const DeckListItem = ({
     className={`group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${td.is_published === false ? 'opacity-50' : ''}`}
     onClick={onClick}
   >
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-      <Layers className="h-4 w-4 text-primary" />
-    </div>
     <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-1.5">
-        <h3 className="font-medium text-sm text-foreground truncate">{td.deck_name}</h3>
-        {td.is_published === false && (isAdmin || isOwner) && <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
+      <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
+      <div className="flex items-center gap-2 mt-1 flex-wrap">
+        {td.is_published === false && (isAdmin || isOwner) && (
+          <span className="text-[11px] text-muted-foreground flex items-center gap-0.5"><EyeOff className="h-3 w-3" /> Rascunho</span>
+        )}
         {subscriberOnly && <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />}
-        {inCollection && <Link2 className="h-3 w-3 shrink-0 text-primary" />}
+        {inCollection && (
+          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">✓ Inscrito</span>
+        )}
       </div>
-      <div className="flex items-center gap-3 mt-0.5">
+      <div className="flex items-center gap-3 mt-1.5">
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Layers className="h-3 w-3 text-foreground shrink-0" /> <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
+          <Layers className="h-3 w-3 shrink-0" /> {td.card_count ?? 0}
         </span>
         {(fileCount ?? 0) > 0 && (
-          <span className="text-[11px] text-foreground flex items-center gap-1">
-            <Paperclip className="h-3 w-3 shrink-0" /> <span className="font-bold">{fileCount}</span>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
           </span>
         )}
         {(examCount ?? 0) > 0 && (
-          <span className="text-[11px] text-foreground flex items-center gap-1">
-            <ClipboardList className="h-3 w-3 shrink-0" /> <span className="font-bold">{examCount}</span>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
+          </span>
+        )}
+        {(downloads ?? 0) > 0 && (
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Link2 className="h-3 w-3 shrink-0" /> {downloads}
           </span>
         )}
       </div>
     </div>
-    <div className="flex items-center gap-2 shrink-0">
-      {inCollection ? (
-        <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">✓ Inscrito</span>
-      ) : subscriberOnly && !canImport ? (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {!inCollection && subscriberOnly && !canImport && (
         <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-      ) : null}
+      )}
       {(isAdmin || isOwner) && (
-        <div onClick={e => e.stopPropagation()} className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <div onClick={e => e.stopPropagation()} className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7">
