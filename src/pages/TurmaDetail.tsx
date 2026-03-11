@@ -315,10 +315,10 @@ const MemberCommunityView = () => {
         onOpenChange={setShowSettings}
         turma={turma}
         members={members.map(m => ({ user_id: m.user_id, user_name: m.user_name, role: m.role, is_subscriber: m.is_subscriber }))}
-        onSave={({ name, description, isPrivate, coverImageUrl, subscriptionPrice }) => {
-          updateTurma.mutate({ turmaId, name, description, isPrivate, coverImageUrl, subscriptionPrice }, {
+        onSave={({ name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }) => {
+          updateTurma.mutate({ turmaId, name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }, {
             onSuccess: () => { setShowSettings(false); toast({ title: 'Comunidade atualizada!' }); },
-            onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
+            onError: (e: any) => toast({ title: 'Erro ao atualizar', description: e?.message?.includes('turmas_share_slug_key') ? 'Esse link já está em uso por outra comunidade.' : undefined, variant: 'destructive' }),
           });
         }}
         isSaving={updateTurma.isPending}
