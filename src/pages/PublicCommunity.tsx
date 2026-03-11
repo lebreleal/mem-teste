@@ -73,7 +73,7 @@ const PublicCommunity = () => {
   const { user } = useAuth();
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [previewDeck, setPreviewDeck] = useState<{ id: string; name: string; cardCount: number } | null>(null);
+  
   const [showAuthGate, setShowAuthGate] = useState(false);
 
   // Fetch turma by slug or ID
