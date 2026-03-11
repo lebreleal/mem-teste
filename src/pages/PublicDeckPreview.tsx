@@ -1105,61 +1105,185 @@ const PublicDeckPreview = () => {
         queryClient.invalidateQueries({ queryKey: ['turmas'] });
       }
 
-      // Create a linked deck in user's personal decks
-      const insertData: any = {
-        name: deck.name,
-        user_id: user.id,
-        is_public: false,
-        is_live_deck: true,
-      };
-      if (turmaDeck?.id) {
-        insertData.source_turma_deck_id = turmaDeck.id;
-        insertData.community_id = turmaDeck.turma_id;
-      }
-      // For non-turma public decks, check if there's a marketplace listing
-      if (!turmaDeck) {
-        const { data: listing } = await supabase
-          .from('marketplace_listings')
-          .select('id')
-          .eq('deck_id', deckId!)
-          .eq('is_published', true)
-          .maybeSingle();
-        if (listing) {
-          insertData.source_listing_id = listing.id;
+      // ── Resolve folder hierarchy (community folder → subject folders) ──
+      let targetFolderId: string | null = null;
+
+      if (turmaDeck?.turma_id) {
+        // Fetch turma name
+        const { data: turmaData } = await supabase
+          .from('turmas')
+          .select('name')
+          .eq('id', turmaDeck.turma_id)
+          .single();
+        const turmaName = turmaData?.name ?? 'Comunidade';
+
+        // Fetch user's existing folders
+        const { data: freshFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
+        const latestFolders = (freshFolders || []) as any[];
+
+        // Find or create linked turma root folder
+        let turmaFolder = latestFolders.find((f: any) => f.source_turma_id === turmaDeck.turma_id && !f.source_turma_subject_id && !f.parent_id);
+        if (!turmaFolder) {
+          turmaFolder = latestFolders.find((f: any) => f.name === turmaName && !f.parent_id && !f.source_turma_id);
+          if (turmaFolder) {
+            await supabase.from('folders').update({ source_turma_id: turmaDeck.turma_id } as any).eq('id', turmaFolder.id);
+            turmaFolder.source_turma_id = turmaDeck.turma_id;
+          }
+        }
+        if (turmaFolder && turmaFolder.is_archived) {
+          await supabase.from('folders').update({ is_archived: false } as any).eq('id', turmaFolder.id);
+        }
+        if (!turmaFolder) {
+          const { data: newFolder } = await supabase.from('folders').insert({
+            name: turmaName, user_id: user.id, source_turma_id: turmaDeck.turma_id,
+          } as any).select().single();
+          turmaFolder = newFolder;
+        }
+
+        targetFolderId = turmaFolder?.id ?? null;
+
+        // Resolve subject hierarchy: walk from the deck's subject up to the root, creating folders
+        if (turmaDeck.subject_id && turmaFolder) {
+          // Fetch ALL subjects of this turma to resolve the ancestor chain
+          const { data: allSubjects } = await supabase
+            .from('turma_subjects')
+            .select('id, name, parent_id')
+            .eq('turma_id', turmaDeck.turma_id);
+          const subjectsMap = new Map((allSubjects ?? []).map((s: any) => [s.id, s]));
+
+          // Build ancestor chain from leaf to root
+          const chain: { id: string; name: string }[] = [];
+          let currentSubjectId: string | null = turmaDeck.subject_id;
+          while (currentSubjectId) {
+            const subj = subjectsMap.get(currentSubjectId);
+            if (!subj) break;
+            chain.unshift({ id: subj.id, name: subj.name }); // prepend
+            currentSubjectId = subj.parent_id;
+          }
+
+          // Refresh folders list (in case we just created turma root)
+          const { data: updatedFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
+          const allUserFolders = (updatedFolders || []) as any[];
+
+          // Walk chain and create missing folders
+          let parentId = turmaFolder.id;
+          for (const subj of chain) {
+            let existing = allUserFolders.find((f: any) => f.source_turma_subject_id === subj.id && f.parent_id === parentId);
+            if (!existing) {
+              const { data: newSubFolder } = await supabase.from('folders').insert({
+                name: subj.name, user_id: user.id, parent_id: parentId,
+                source_turma_id: turmaDeck.turma_id, source_turma_subject_id: subj.id,
+              } as any).select().single();
+              existing = newSubFolder;
+              if (existing) allUserFolders.push(existing);
+            }
+            if (existing) parentId = existing.id;
+          }
+          targetFolderId = parentId;
         }
       }
 
-      const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-      if (error) throw error;
+      // ── Helper to copy a single deck with its cards ──
+      const copyDeck = async (sourceDeckId: string, deckName: string, parentDeckId: string | null, sourceTurmaDeckId: string | null, folderId: string | null) => {
+        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
+        const sd = srcDeck as any;
+        const insertData: any = {
+          name: deckName, user_id: user!.id, is_public: false, is_live_deck: true,
+          folder_id: folderId, parent_deck_id: parentDeckId,
+          algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
+          daily_new_limit: sd?.daily_new_limit ?? 20,
+          daily_review_limit: sd?.daily_review_limit ?? 9999,
+        };
+        if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
+        if (turmaDeck?.turma_id) insertData.community_id = turmaDeck.turma_id;
 
-      // Copy cards from source deck to the new linked deck
-      if (newDeck) {
-        const sourceDeckId = deckId!;
-        const BATCH = 500;
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data: cards } = await supabase
-            .from('cards')
-            .select('front_content, back_content, card_type')
-            .eq('deck_id', sourceDeckId)
-            .range(offset, offset + BATCH - 1)
-            .order('created_at', { ascending: true });
-          if (!cards || cards.length === 0) { hasMore = false; break; }
-          const newCards = cards.map((c: any) => ({
-            deck_id: newDeck.id,
-            front_content: c.front_content,
-            back_content: c.back_content,
-            card_type: c.card_type ?? 'basic',
-          }));
-          await supabase.from('cards').insert(newCards as any);
-          if (cards.length < BATCH) hasMore = false;
-          else offset += BATCH;
+        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+        if (error) throw error;
+
+        // Copy cards in batches
+        if (newDeck) {
+          const BATCH = 500;
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: cards } = await supabase
+              .from('cards')
+              .select('front_content, back_content, card_type')
+              .eq('deck_id', sourceDeckId)
+              .range(offset, offset + BATCH - 1)
+              .order('created_at', { ascending: true });
+            if (!cards || cards.length === 0) break;
+            await supabase.from('cards').insert(cards.map((c: any) => ({
+              deck_id: newDeck.id, front_content: c.front_content,
+              back_content: c.back_content, card_type: c.card_type ?? 'basic',
+            })) as any);
+            if (cards.length < BATCH) hasMore = false;
+            else offset += BATCH;
+          }
+        }
+        return newDeck;
+      };
+
+      // ── For non-turma public decks (marketplace), simpler flow ──
+      if (!turmaDeck) {
+        const insertData: any = {
+          name: deck.name, user_id: user.id, is_public: false, is_live_deck: true,
+        };
+        const { data: listing } = await supabase
+          .from('marketplace_listings').select('id')
+          .eq('deck_id', deckId!).eq('is_published', true).maybeSingle();
+        if (listing) insertData.source_listing_id = listing.id;
+
+        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+        if (error) throw error;
+        if (newDeck) {
+          const BATCH = 500;
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: cards } = await supabase
+              .from('cards').select('front_content, back_content, card_type')
+              .eq('deck_id', deckId!).range(offset, offset + BATCH - 1)
+              .order('created_at', { ascending: true });
+            if (!cards || cards.length === 0) break;
+            await supabase.from('cards').insert(cards.map((c: any) => ({
+              deck_id: newDeck.id, front_content: c.front_content,
+              back_content: c.back_content, card_type: c.card_type ?? 'basic',
+            })) as any);
+            if (cards.length < BATCH) hasMore = false;
+            else offset += BATCH;
+          }
+        }
+      } else {
+        // ── Turma deck: copy with hierarchy (parent + sub-decks) ──
+        const mainDeck = await copyDeck(deckId!, deck.name, null, turmaDeck.id, targetFolderId);
+
+        // Copy sub-decks (children in turma)
+        if (mainDeck) {
+          const { data: childTurmaDeckRows } = await supabase
+            .from('turma_decks')
+            .select('id, deck_id')
+            .eq('turma_id', turmaDeck.turma_id);
+
+          // Find children of the source deck in the decks table
+          const { data: childDecks } = await supabase
+            .from('decks')
+            .select('id, name, parent_deck_id')
+            .eq('parent_deck_id', deckId!);
+
+          if (childDecks?.length) {
+            for (const child of childDecks) {
+              // Find turma_deck entry for this child
+              const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
+              await copyDeck(child.id, child.name, mainDeck.id, childTd?.id ?? null, targetFolderId);
+            }
+          }
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
       toast({ title: '✅ Deck adicionado aos seus baralhos!' });
     } catch (err: any) {
       toast({ title: 'Erro ao seguir deck', description: err.message, variant: 'destructive' });
