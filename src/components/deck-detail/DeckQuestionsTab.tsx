@@ -441,20 +441,28 @@ const QuestionPractice = ({
     finally { setHintLoading(false); }
   }, [q, user, energy, spendEnergy, toast]);
 
-  const handleExplain = useCallback(async () => {
+  const handleExplainOption = useCallback(async (optIdx: number) => {
     if (!q || !user) return;
     if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
-    setExplainLoading(true);
+    setOptionExplainLoading(optIdx);
     try {
       spendEnergy.mutate(1);
+      const isCorrectOpt = q.correct_indices?.includes(optIdx);
       const { data, error } = await supabase.functions.invoke('ai-tutor', {
-        body: { type: 'question-explain', question: q.question_text, options: q.options, correctIndex: q.correct_indices?.[0] ?? 0, userAnswer: selected },
+        body: {
+          type: 'explain-option',
+          question: q.question_text,
+          options: q.options,
+          optionIndex: optIdx,
+          isCorrect: isCorrectOpt,
+          correctIndex: q.correct_indices?.[0] ?? 0,
+        },
       });
       if (error) throw error;
-      setExplainText(data?.response || 'Não foi possível gerar a explicação.');
-    } catch { toast({ title: 'Erro ao gerar explicação', variant: 'destructive' }); }
-    finally { setExplainLoading(false); }
-  }, [q, user, energy, selected, spendEnergy, toast]);
+      setOptionExplanations(prev => ({ ...prev, [optIdx]: data?.response || 'Explicação indisponível.' }));
+    } catch { toast({ title: 'Erro ao explicar alternativa', variant: 'destructive' }); }
+    finally { setOptionExplainLoading(null); }
+  }, [q, user, energy, spendEnergy, toast]);
 
   const handleGenerateConceptCards = useCallback(async (concept: string) => {
     if (!user || !q) return;
