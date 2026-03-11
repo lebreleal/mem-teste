@@ -90,7 +90,14 @@ const Dashboard = () => {
     textSample?: string;
   } | null>(null);
 
-  const activeSection = dashboardTab === 'community' ? 'community' : 'personal';
+  // Determine active section — if inside a folder, derive from folder's section
+  const activeSection = useMemo(() => {
+    if (state.currentFolderId) {
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      if (currentFolder) return (currentFolder.section ?? 'personal') as 'personal' | 'community';
+    }
+    return dashboardTab === 'community' ? 'community' : 'personal';
+  }, [state.currentFolderId, state.folders, dashboardTab]);
 
   // Extracted actions hook
   const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
@@ -278,7 +285,7 @@ const Dashboard = () => {
           onSearchChange={setSearchQuery}
         />
 
-        {/* Tab switcher */}
+        {/* Tab switcher — hidden when inside a folder */}
         {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
@@ -302,7 +309,7 @@ const Dashboard = () => {
         )}
 
         {/* Personal decks tab */}
-        {(dashboardTab === 'personal' || !!state.currentFolderId) && (
+        {activeSection === 'personal' && (
           <DeckList
             isLoading={state.isLoading}
             currentFolders={personalCurrentFolders}
@@ -339,7 +346,7 @@ const Dashboard = () => {
         )}
 
         {/* Community decks tab */}
-        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && communityRootFolders.length === 0 && (
+        {activeSection === 'community' && visibleDecks.length === 0 && visibleFolders.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
               <Users className="h-7 w-7 text-primary" />
@@ -351,12 +358,12 @@ const Dashboard = () => {
             </Button>
           </div>
         )}
-        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
+        {activeSection === 'community' && (visibleDecks.length > 0 || visibleFolders.length > 0) && (
           <DeckList
             isLoading={false}
-            currentFolders={communityRootFolders}
-            currentDecks={state.communityDecks}
-            currentFolderId={null}
+            currentFolders={visibleFolders}
+            currentDecks={visibleDecks}
+            currentFolderId={state.currentFolderId}
             searchQuery={searchQuery}
             deckSelectionMode={false}
             selectedDeckIds={new Set()}
@@ -370,14 +377,14 @@ const Dashboard = () => {
             getFolderDueCount={() => 0}
             getFolderCommunityLinkId={() => null}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onFolderClick={() => {}}
-            onRenameFolder={() => {}}
-            onMoveFolder={() => {}}
-            onArchiveFolder={() => {}}
-            onDeleteFolder={() => {}}
+            onFolderClick={state.setCurrentFolderId}
+            onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
+            onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
+            onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
+            onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
             onCreateSubDeck={() => {}}
             onRenameDeck={() => {}}
-            onMoveDeck={() => {}}
+            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}

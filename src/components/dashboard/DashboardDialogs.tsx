@@ -188,15 +188,15 @@ const MoveBrowser = ({
       </div>
 
       <div className="flex flex-col gap-2 pt-1">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
           {!isInsideDeck && onCreateFolderInMove ? (
-            <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0">
+            <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0 w-full sm:w-auto">
               <CirclePlus className="h-3.5 w-3.5" /> Nova pasta
             </Button>
           ) : <div />}
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-            <Button size="sm" onClick={onMoveSubmit} className="whitespace-nowrap">{submitLabel}</Button>
+          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+            <Button variant="outline" size="sm" onClick={onCancel} className="flex-1 sm:flex-none">Cancelar</Button>
+            <Button size="sm" onClick={onMoveSubmit} className="flex-1 sm:flex-none whitespace-nowrap truncate">{submitLabel}</Button>
           </div>
         </div>
       </div>
@@ -246,11 +246,11 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] w-full overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 min-w-0 overflow-hidden">
               <ArrowUpRight className="h-5 w-5 shrink-0" />
-              <span className="truncate block max-w-[calc(100%-2rem)]">Mover "{props.moveTarget?.name}"</span>
+              <span className="truncate block">{`Mover "${props.moveTarget?.name}"`}</span>
             </DialogTitle>
           </DialogHeader>
           <MoveBrowser
