@@ -238,6 +238,7 @@ const Dashboard = () => {
         )}
 
         <DashboardActions
+          mode={activeSection}
           currentFolderId={state.currentFolderId}
           breadcrumb={state.breadcrumb}
           onNavigateFolder={state.setCurrentFolderId}
@@ -245,14 +246,14 @@ const Dashboard = () => {
             const current = state.folders.find(f => f.id === state.currentFolderId);
             state.setCurrentFolderId(current?.parent_id ?? null);
           }}
-          hasDecks={state.currentDecks.length > 0}
-          deckSelectionMode={state.deckSelectionMode}
+          hasDecks={visibleDecks.length > 0}
+          deckSelectionMode={activeSection === 'personal' ? state.deckSelectionMode : false}
           selectedCount={state.selectedDeckIds.size}
-          isAllSelected={state.selectedDeckIds.size === state.currentDecks.length}
+          isAllSelected={visibleDecks.length > 0 && state.selectedDeckIds.size === visibleDecks.length}
           toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
           toggleSelectAll={() => {
-            if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
-            else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
+            if (state.selectedDeckIds.size === visibleDecks.length) state.setSelectedDeckIds(new Set());
+            else state.setSelectedDeckIds(new Set(visibleDecks.map(d => d.id)));
           }}
           onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
           onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
