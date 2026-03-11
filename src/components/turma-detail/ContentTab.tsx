@@ -921,6 +921,30 @@ const ContentTab = () => {
         deckName={trialDeck?.deckName || ''}
       />
 
+      {/* Deck Preview Sheet */}
+      {previewDeck && (
+        <DeckPreviewSheet
+          open={!!previewDeck}
+          onOpenChange={(open) => !open && setPreviewDeck(null)}
+          deckId={previewDeck.deck_id}
+          deckName={previewDeck.deck_name || 'Deck'}
+          cardCount={previewDeck.card_count || 0}
+          alreadyLinked={importLogic.isLinked(previewDeck.deck_id)}
+          alreadyOwns={importLogic.isLinked(previewDeck.deck_id)}
+          allowDownload={previewDeck.allow_download ?? true}
+          onAddToCollection={() => {
+            importLogic.importDeck(previewDeck);
+            setPreviewDeck(null);
+          }}
+          onDownload={() => {
+            importLogic.downloadDeck(previewDeck);
+            setPreviewDeck(null);
+          }}
+          isAdding={importLogic.isImporting}
+          isDownloading={importLogic.isDownloading}
+        />
+      )}
+
     </div>
   );
 };
