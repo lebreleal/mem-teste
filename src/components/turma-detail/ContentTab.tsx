@@ -500,7 +500,9 @@ const ContentTab = () => {
     const subscriberOnly = !importLogic.isDeckFree(td);
     const canImportDeck = importLogic.canAccessDeck(td);
     if (subscriberOnly && !canImportDeck) { setGateDeck(td); return; }
-    navigate(`/decks/${td.deck_id}/preview`, { state: { from: 'community', turmaId } });
+    const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
+    const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
+    setPreviewDeck({ td, alreadyLinked, alreadyOwns });
   };
 
   return (
