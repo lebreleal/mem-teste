@@ -285,10 +285,13 @@ const MemberCommunityView = () => {
     <div className="min-h-screen bg-background">
       <TurmaHeader />
 
-      <TurmaSubHeader
+        <TurmaSubHeader
         turmaId={turmaId}
         turmaName={turma.name}
+        ownerName={turma.owner_name}
+        createdAt={turma.created_at}
         inviteCode={turma.invite_code}
+        shareSlug={turma.share_slug}
         isAdmin={isAdmin}
         hasSubscription={hasSubscription}
         hasExclusiveContent={
@@ -315,10 +318,10 @@ const MemberCommunityView = () => {
         onOpenChange={setShowSettings}
         turma={turma}
         members={members.map(m => ({ user_id: m.user_id, user_name: m.user_name, role: m.role, is_subscriber: m.is_subscriber }))}
-        onSave={({ name, description, isPrivate, coverImageUrl, subscriptionPrice }) => {
-          updateTurma.mutate({ turmaId, name, description, isPrivate, coverImageUrl, subscriptionPrice }, {
+        onSave={({ name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }) => {
+          updateTurma.mutate({ turmaId, name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }, {
             onSuccess: () => { setShowSettings(false); toast({ title: 'Comunidade atualizada!' }); },
-            onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
+            onError: (e: any) => toast({ title: 'Erro ao atualizar', description: e?.message?.includes('turmas_share_slug_key') ? 'Esse link já está em uso por outra comunidade.' : undefined, variant: 'destructive' }),
           });
         }}
         isSaving={updateTurma.isPending}
@@ -357,7 +360,8 @@ const TurmaDetailInner = () => {
   // Auto-join public communities (no preview screen)
   useEffect(() => {
     if (isLoading || !turma || isMember || autoJoining || joinCompleted) return;
-    if (!user) { navigate('/auth'); return; }
+    // Unauthenticated users → public preview page
+    if (!user) { navigate(`/c/${turma.share_slug || turmaId}`, { replace: true }); return; }
     // Only auto-join public communities
     if (turma.is_private) return;
     setAutoJoining(true);
@@ -383,16 +387,34 @@ const TurmaDetailInner = () => {
   if (isLoading || !turma || autoJoining) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
-        <div className="container mx-auto px-4 max-w-2xl py-6 space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-72" />
-          <div className="grid grid-cols-2 gap-3 pt-4">
-            <Skeleton className="h-28 rounded-xl" />
-            <Skeleton className="h-28 rounded-xl" />
-            <Skeleton className="h-28 rounded-xl" />
-            <Skeleton className="h-28 rounded-xl" />
+        {/* Simulated header */}
+        <div className="sticky top-0 z-10 border-b border-border/50 bg-background/80 backdrop-blur-sm">
+          <div className="container mx-auto flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-16 rounded-full" />
+              <Skeleton className="h-8 w-16 rounded-full" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Skeleton className="h-9 w-9 rounded-full" />
+              <Skeleton className="h-9 w-9 rounded-full" />
+            </div>
           </div>
+        </div>
+        {/* Simulated sub-header */}
+        <div className="border-b border-border/30 bg-card/50">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-md" />
+              <Skeleton className="h-6 w-40" />
+              <div className="flex-1" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+            </div>
+          </div>
+        </div>
+        {/* Simulated content */}
+        <div className="container mx-auto px-4 max-w-2xl py-6 space-y-3">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
       </div>
     );

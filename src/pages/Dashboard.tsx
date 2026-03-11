@@ -11,6 +11,11 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -105,6 +110,8 @@ const Dashboard = () => {
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
+  const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
+  const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -112,6 +119,46 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+
+  const handleDetachDeck = useCallback(async () => {
+    if (!detachTarget) return;
+    setDetaching(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Not authenticated');
+
+      // Duplicate the deck as a personal copy (no community links)
+      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', detachTarget.id).single();
+      if (!originalDeck) throw new Error('Deck not found');
+
+      const { data: newDeck, error } = await supabase.from('decks').insert({
+        name: `${(originalDeck as any).name}`,
+        user_id: currentUser.id,
+        folder_id: null,
+      } as any).select().single();
+      if (error || !newDeck) throw error || new Error('Failed to create deck');
+
+      // Copy cards
+      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', detachTarget.id);
+      if (cards && cards.length > 0) {
+        const newCards = cards.map((c: any) => ({
+          deck_id: (newDeck as any).id,
+          front_content: c.front_content,
+          back_content: c.back_content,
+          card_type: c.card_type ?? 'basic',
+        }));
+        await supabase.from('cards').insert(newCards as any);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
+    } catch {
+      toast({ title: 'Erro ao copiar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+      setDetachTarget(null);
+    }
+  }, [detachTarget, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
@@ -255,6 +302,7 @@ const Dashboard = () => {
             onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
             onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
             onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
@@ -262,6 +310,18 @@ const Dashboard = () => {
         )}
 
         {/* Community decks tab */}
+        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Users className="h-7 w-7 text-primary" />
+            </div>
+            <h3 className="font-display text-lg font-bold text-foreground">Nenhum deck de comunidade</h3>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Explore comunidades e adicione baralhos à sua coleção.</p>
+            <Button variant="default" size="sm" className="mt-4 gap-1.5" onClick={() => navigate('/turmas')}>
+              <Users className="h-4 w-4" /> Explorar comunidades
+            </Button>
+          </div>
+        )}
         {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
           <DeckList
             isLoading={false}
@@ -291,6 +351,7 @@ const Dashboard = () => {
             onMoveDeck={() => {}}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
@@ -471,6 +532,30 @@ const Dashboard = () => {
           />
         )}
       </Suspense>
+
+      {/* Copy community deck dialog */}
+      <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copiar para meu deck pessoal</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Uma cópia independente de <strong>"{detachTarget?.name}"</strong> será criada no seu deck pessoal.</p>
+              <p>A cópia:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Será um deck <strong>pessoal e editável</strong></li>
+                <li><strong>Não receberá</strong> atualizações automáticas da comunidade</li>
+                <li>O deck original da comunidade <strong>permanecerá intacto</strong></li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Copiando...' : 'Confirmar cópia'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

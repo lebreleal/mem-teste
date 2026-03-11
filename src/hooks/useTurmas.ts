@@ -51,7 +51,7 @@ export const useTurmas = () => {
   });
 
   const updateTurma = useMutation({
-    mutationFn: ({ turmaId, ...updates }: { turmaId: string; name?: string; description?: string; isPrivate?: boolean; coverImageUrl?: string; subscriptionPrice?: number }) => {
+    mutationFn: ({ turmaId, ...updates }: { turmaId: string; name?: string; description?: string; isPrivate?: boolean; coverImageUrl?: string; subscriptionPrice?: number; shareSlug?: string }) => {
       if (!user) throw new Error('Not authenticated');
       return turmaService.updateTurma(turmaId, updates);
     },

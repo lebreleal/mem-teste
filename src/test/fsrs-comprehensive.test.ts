@@ -65,9 +65,10 @@ describe('FSRS-6 Mathematical Formulas', () => {
       expect(r.stability).toBeCloseTo(W[2], 3);
     });
 
-    it('Easy uses w[3]', () => {
+    it('Easy uses w[3] * w[16] (easy bonus applied)', () => {
       const r = fsrsSchedule(card(), 4, params);
-      expect(r.stability).toBeCloseTo(W[3], 3);
+      // Easy from new: initStability = w[3], then multiplied by w[16] (easy bonus)
+      expect(r.stability).toBeCloseTo(W[3] * W[16], 3);
     });
 
     it('Stability ordering: Again < Hard < Good < Easy', () => {

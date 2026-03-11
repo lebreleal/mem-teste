@@ -64,6 +64,7 @@ const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
 const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
+const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -96,7 +97,7 @@ const App = () => (
                 <Route path="/study/:deckId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/manage" element={<ProtectedRoute><ManageDeck /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/settings" element={<ProtectedRoute><DeckSettings /></ProtectedRoute>} />
-                <Route path="/decks/:deckId/preview" element={<ProtectedRoute><PublicDeckPreview /></ProtectedRoute>} />
+                <Route path="/decks/:deckId/preview" element={<PublicDeckPreview />} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
@@ -127,6 +128,7 @@ const App = () => (
                 <Route path="/install" element={<Install />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
                 <Route path="/termos-e-servicos" element={<TermsOfService />} />
+                <Route path="/c/:slugOrId" element={<PublicCommunity />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

@@ -47,7 +47,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // Batch source author lookup
+  // ── 1. Author via marketplace listing ──
   const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
   const authorMap = new Map<string, string | null>();
   if (listingIds.length > 0) {
@@ -57,10 +57,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       .in('id', listingIds);
     if (listings && listings.length > 0) {
       const sellerIds = [...new Set(listings.map((l: any) => l.seller_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .in('id', sellerIds);
+      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sellerIds);
       const profileMap = new Map<string, string>();
       if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
       for (const l of listings as any[]) {
@@ -69,8 +66,94 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
+  // ── 2. Author via turma_decks.shared_by + source deck updated_at ──
+  const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
+  const turmaAuthorMap = new Map<string, string | null>();
+  const sourceUpdatedAtMap = new Map<string, string>();
+  if (turmaDecksIds.length > 0) {
+    const { data: turmaDecks } = await supabase
+      .from('turma_decks')
+      .select('id, shared_by, deck_id')
+      .in('id', turmaDecksIds);
+    if (turmaDecks && turmaDecks.length > 0) {
+      // Resolve sharer names
+      const sharerIds = [...new Set(turmaDecks.map((td: any) => td.shared_by))];
+      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sharerIds);
+      const profileMap = new Map<string, string>();
+      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
+      for (const td of turmaDecks as any[]) {
+        turmaAuthorMap.set(td.id, profileMap.get(td.shared_by) || null);
+      }
+      // Resolve source deck updated_at
+      const sourceDeckIds = [...new Set(turmaDecks.map((td: any) => td.deck_id))];
+      const { data: sourceDecks } = await supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds);
+      const srcMap = new Map<string, string>();
+      if (sourceDecks) for (const sd of sourceDecks as any[]) srcMap.set(sd.id, sd.updated_at);
+      for (const td of turmaDecks as any[]) {
+        const ts = srcMap.get(td.deck_id);
+        if (ts) sourceUpdatedAtMap.set(td.id, ts);
+      }
+    }
+  }
+
+  // ── 3. For is_live_deck orphans (no source_turma_deck_id, no source_listing_id),
+  //       find the original public deck by name and resolve author + updated_at ──
+  const orphanLiveDecks = (decks || []).filter(
+    (d: any) => d.is_live_deck && !d.source_turma_deck_id && !d.source_listing_id
+  );
+  // Map: orphan deck name → { author, updated_at }
+  const orphanAuthorMap = new Map<string, { author: string | null; updatedAt: string | null }>();
+  if (orphanLiveDecks.length > 0) {
+    const orphanNames = [...new Set(orphanLiveDecks.map((d: any) => d.name))];
+    // Find original public decks with those names NOT owned by this user
+    const { data: originals } = await supabase
+      .from('decks')
+      .select('name, user_id, updated_at')
+      .in('name', orphanNames)
+      .neq('user_id', userId)
+      .eq('is_live_deck', false);
+    if (originals && originals.length > 0) {
+      const ownerIds = [...new Set(originals.map((o: any) => o.user_id))];
+      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', ownerIds);
+      const profileMap = new Map<string, string>();
+      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
+      // Use the first match per name
+      for (const o of originals as any[]) {
+        if (!orphanAuthorMap.has(o.name)) {
+          orphanAuthorMap.set(o.name, {
+            author: profileMap.get(o.user_id) || null,
+            updatedAt: o.updated_at,
+          });
+        }
+      }
+    }
+  }
+
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
+
+    // Resolve author with priority chain
+    let resolvedAuthor: string | null = null;
+    if (deck.source_listing_id) {
+      resolvedAuthor = authorMap.get(deck.source_listing_id) ?? null;
+    }
+    if (!resolvedAuthor && deck.source_turma_deck_id) {
+      resolvedAuthor = turmaAuthorMap.get(deck.source_turma_deck_id) ?? null;
+    }
+    // Fallback for orphan live decks: use original deck owner
+    if (!resolvedAuthor && deck.is_live_deck) {
+      resolvedAuthor = orphanAuthorMap.get(deck.name)?.author ?? null;
+    }
+
+    // Resolve source updated_at
+    let sourceUpdatedAt: string | null = null;
+    if (deck.source_turma_deck_id) {
+      sourceUpdatedAt = sourceUpdatedAtMap.get(deck.source_turma_deck_id) ?? null;
+    }
+    if (!sourceUpdatedAt && deck.is_live_deck) {
+      sourceUpdatedAt = orphanAuthorMap.get(deck.name)?.updatedAt ?? null;
+    }
+
     return {
       ...deck,
       folder_id: deck.folder_id ?? null,
@@ -85,8 +168,11 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       daily_new_limit: deck.daily_new_limit ?? 20,
       daily_review_limit: deck.daily_review_limit ?? 100,
       source_listing_id: deck.source_listing_id ?? null,
-      source_author: deck.source_listing_id ? (authorMap.get(deck.source_listing_id) ?? null) : null,
+      source_author: resolvedAuthor,
       source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,
+      community_id: (deck as any).community_id ?? null,
+      updated_at: deck.updated_at ?? deck.created_at,
+      source_updated_at: sourceUpdatedAt,
     };
   });
 }

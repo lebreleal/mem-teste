@@ -96,6 +96,7 @@ const DeckSettings = () => {
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
   const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
+  const [communityId, setCommunityId] = useState<string | null>(null);
 
   // Modals
   const [algorithmModal, setAlgorithmModal] = useState(false);
@@ -108,6 +109,8 @@ const DeckSettings = () => {
   const [exportModal, setExportModal] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingAnki, setExportingAnki] = useState(false);
+  const [detachConfirm, setDetachConfirm] = useState(false);
+  const [detaching, setDetaching] = useState(false);
   const [algorithmChangeTarget, setAlgorithmChangeTarget] = useState<'fsrs' | 'quick_review' | null>(null);
 
   const studyPlansQuery = useQuery({
@@ -181,6 +184,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setCommunityId((data as any).community_id ?? null);
       setBuryNewSiblings((data as any).bury_new_siblings !== false);
       setBuryReviewSiblings((data as any).bury_review_siblings !== false);
       setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
@@ -277,6 +281,47 @@ const DeckSettings = () => {
         if (data?.id) navigate(`/decks/${data.id}`);
       },
     });
+  };
+
+  const isCommunityDeck = !!(sourceTurmaDeckId || communityId);
+
+  const handleDetachDeck = async () => {
+    if (!deckId) return;
+    setDetaching(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Not authenticated');
+
+      const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', deckId).single();
+      if (!originalDeck) throw new Error('Deck not found');
+
+      const { data: newDeck, error } = await supabase.from('decks').insert({
+        name: `${(originalDeck as any).name}`,
+        user_id: currentUser.id,
+        folder_id: null,
+      } as any).select().single();
+      if (error || !newDeck) throw error || new Error('Failed');
+
+      const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', deckId);
+      if (cards && cards.length > 0) {
+        const newCards = cards.map((c: any) => ({
+          deck_id: (newDeck as any).id,
+          front_content: c.front_content,
+          back_content: c.back_content,
+          card_type: c.card_type ?? 'basic',
+        }));
+        await supabase.from('cards').insert(newCards as any);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck copiado!', description: 'Uma cópia pessoal independente foi criada.' });
+      setDetachConfirm(false);
+      navigate(`/decks/${(newDeck as any).id}`);
+    } catch {
+      toast({ title: 'Erro ao copiar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+    }
   };
 
   const handleArchive = () => {
@@ -558,11 +603,20 @@ const DeckSettings = () => {
                 label="Renomear baralho"
                 onClick={() => setRenameModal(true)}
               />
-              <SettingsRow
-                icon={<Copy className="h-5 w-5" />}
-                label="Duplicar baralho"
-                onClick={handleDuplicate}
-              />
+              {isCommunityDeck ? (
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Copiar para meu deck pessoal"
+                  subtitle="Criar cópia independente e editável"
+                  onClick={() => setDetachConfirm(true)}
+                />
+              ) : (
+                <SettingsRow
+                  icon={<Copy className="h-5 w-5" />}
+                  label="Duplicar baralho"
+                  onClick={handleDuplicate}
+                />
+              )}
               <SettingsRow
                 icon={<RotateCcw className="h-5 w-5" />}
                 label="Redefinir progresso"
@@ -660,6 +714,30 @@ const DeckSettings = () => {
         handleExportAnki={handleExportAnki}
         toast={toast}
       />
+
+      {/* Copy community deck dialog */}
+      <AlertDialog open={detachConfirm} onOpenChange={setDetachConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Copiar para meu deck pessoal</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Uma cópia independente de <strong>"{name}"</strong> será criada no seu deck pessoal.</p>
+              <p>A cópia:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Será um deck <strong>pessoal e editável</strong></li>
+                <li><strong>Não receberá</strong> atualizações automáticas da comunidade</li>
+                <li>O deck original da comunidade <strong>permanecerá intacto</strong></li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
+              {detaching ? 'Copiando...' : 'Confirmar cópia'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

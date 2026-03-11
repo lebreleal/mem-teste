@@ -30,12 +30,20 @@ import {
   Plus, FolderPlus, MoreVertical, ChevronRight,
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
-  Copy, Link2, ClipboardList, Clock, Import, LogIn,
-  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip,
+  Copy, Link2, ClipboardList, Clock, Import, LogIn, RefreshCw, Check,
+  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
-import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
 import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+const formatRelativeTime = (dateStr: string) => {
+  try {
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
+  } catch { return ''; }
+};
 
 /* ── Deck Card (compact list item for Drive style) ── */
 const DeckListItem = ({
@@ -73,40 +81,53 @@ const DeckListItem = ({
     className={`group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${td.is_published === false ? 'opacity-50' : ''}`}
     onClick={onClick}
   >
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-      <Layers className="h-4 w-4 text-primary" />
-    </div>
     <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-1.5">
-        <h3 className="font-medium text-sm text-foreground truncate">{td.deck_name}</h3>
-        {td.is_published === false && (isAdmin || isOwner) && <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
-        {subscriberOnly && <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />}
-        {inCollection && <Link2 className="h-3 w-3 shrink-0 text-primary" />}
+      <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
+      <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+        {td.shared_by_name && (
+          <p>por <span className="font-medium text-primary">{td.shared_by_name}</span></p>
+        )}
+        {td.created_at && (
+          <p className="flex items-center gap-1">
+            <RefreshCw className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
+          </p>
+        )}
+        {td.is_published === false && (isAdmin || isOwner) && (
+          <p className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Rascunho</p>
+        )}
+        {subscriberOnly && (
+          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" /> Assinantes</p>
+        )}
+        {inCollection && (
+          <p className="flex items-center gap-1 text-primary font-semibold">
+            <Check className="h-3 w-3" /> Inscrito
+          </p>
+        )}
       </div>
-      <div className="flex items-center gap-3 mt-0.5">
+      <div className="flex items-center gap-3 mt-1.5">
         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Layers className="h-3 w-3 text-foreground shrink-0" /> <span className="font-bold text-foreground">{td.card_count ?? 0}</span>
+          <Layers className="h-3 w-3 shrink-0" /> {td.card_count ?? 0}
         </span>
         {(fileCount ?? 0) > 0 && (
-          <span className="text-[11px] text-foreground flex items-center gap-1">
-            <Paperclip className="h-3 w-3 shrink-0" /> <span className="font-bold">{fileCount}</span>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Paperclip className="h-3 w-3 shrink-0" /> {fileCount}
           </span>
         )}
         {(examCount ?? 0) > 0 && (
-          <span className="text-[11px] text-foreground flex items-center gap-1">
-            <ClipboardList className="h-3 w-3 shrink-0" /> <span className="font-bold">{examCount}</span>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <ClipboardList className="h-3 w-3 shrink-0" /> {examCount}
+          </span>
+        )}
+        {(downloads ?? 0) > 0 && (
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Link2 className="h-3 w-3 shrink-0" /> {downloads}
           </span>
         )}
       </div>
     </div>
-    <div className="flex items-center gap-2 shrink-0">
-      {inCollection ? (
-        <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">✓ Inscrito</span>
-      ) : subscriberOnly && !canImport ? (
-        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-      ) : null}
+    <div className="flex items-center gap-1.5 shrink-0">
       {(isAdmin || isOwner) && (
-        <div onClick={e => e.stopPropagation()} className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <div onClick={e => e.stopPropagation()} className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -140,6 +161,8 @@ const DeckListItem = ({
 const FolderItem = ({
   folder,
   deckCount,
+  cardCount,
+  attachmentCount,
   canEdit,
   isAdmin,
   onClick,
@@ -148,6 +171,8 @@ const FolderItem = ({
 }: {
   folder: any;
   deckCount: number;
+  cardCount?: number;
+  attachmentCount?: number;
   canEdit: boolean;
   isAdmin: boolean;
   onClick: () => void;
@@ -163,7 +188,19 @@ const FolderItem = ({
     </div>
     <div className="flex-1 min-w-0">
       <h3 className="font-medium text-sm text-foreground truncate">{folder.name}</h3>
-      <span className="text-[11px] text-muted-foreground">{deckCount} decks</span>
+        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+          <span>{deckCount} decks</span>
+          {(cardCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Layers className="h-3 w-3 shrink-0" /> {cardCount}
+            </span>
+          )}
+          {(attachmentCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Paperclip className="h-3 w-3 shrink-0" /> {attachmentCount}
+            </span>
+          )}
+        </div>
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {canEdit && (
@@ -283,6 +320,7 @@ const ContentTab = () => {
   const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
+  
 
   // ── Batch tags for all community decks ──
   const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
@@ -371,6 +409,28 @@ const ContentTab = () => {
     const direct = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false)).length;
     const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
     return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
+  };
+
+  // ── Count cards recursively in a folder ──
+  const getFolderCardCount = (folderId: string): number => {
+    const directCards = turmaDecks
+      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+  };
+
+  // ── Count attachments (files + exams) recursively in a folder ──
+  const getFolderAttachmentCount = (folderId: string): number => {
+    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    let count = 0;
+    folderDecks.forEach((d: any) => {
+      if (d.lesson_id) {
+        count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
+      }
+    });
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
   };
 
   // ── Current folder's decks ──
@@ -519,6 +579,8 @@ const ContentTab = () => {
                   key={folder.id}
                   folder={folder}
                   deckCount={countDecksInFolder(folder.id)}
+                  cardCount={getFolderCardCount(folder.id)}
+                  attachmentCount={getFolderAttachmentCount(folder.id)}
                   canEdit={canEdit}
                   isAdmin={isAdmin}
                   onClick={() => setContentFolderId(folder.id)}
@@ -856,6 +918,7 @@ const ContentTab = () => {
         deckId={trialDeck?.deckId || ''}
         deckName={trialDeck?.deckName || ''}
       />
+
     </div>
   );
 };

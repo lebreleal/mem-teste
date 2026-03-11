@@ -11,8 +11,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, Pencil, RefreshCw,
+  ChevronRight, Pencil, Users, Copy, Download, Clock, RefreshCw,
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 
@@ -33,6 +35,7 @@ interface DeckRowProps {
   onMove: (deck: DeckWithStats) => void;
   onArchive: (id: string) => void;
   onDelete: (deck: DeckWithStats) => void;
+  onDetachCommunityDeck?: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
   hasPendingUpdate?: boolean;
 }
@@ -41,7 +44,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, depth = 0, deckSelectionMode, selectedDeckIds, expandedDecks,
   toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
   getCommunityLinkId, navigateToCommunity,
-  onCreateSubDeck, onRename, onMove, onArchive, onDelete, dragHandlers, hasPendingUpdate,
+  onCreateSubDeck, onRename, onMove, onArchive, onDelete, onDetachCommunityDeck,
+  dragHandlers, hasPendingUpdate,
 }, ref) => {
   const navigate = useNavigate();
   const subDecks = getSubDecks(deck.id);
@@ -50,7 +54,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const stats = getAggregateStats(deck);
   const totalDue = stats.new_count + stats.learning_count + stats.review_count;
   const isDeckSelected = selectedDeckIds.has(deck.id);
-  const isCommunityDeck = !!(deck.source_turma_deck_id || deck.source_listing_id);
+  const isCommunityDeck = !!(deck.source_turma_deck_id || deck.source_listing_id || deck.community_id || (deck as any).is_live_deck);
 
   const basePadding = depth === 0 ? 8 : 20 + depth * 24;
 
@@ -80,29 +84,40 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             {isExpanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           </button>
         )}
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            {(deck.source_turma_deck_id || deck.source_listing_id) && (
-              <span title="Deck sincronizado"><RefreshCw className="h-3.5 w-3.5 text-info shrink-0" /></span>
-            )}
             <h3 className="font-display font-semibold text-card-foreground truncate">{deck.name}</h3>
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
-            {(() => {
-              const linkId = getCommunityLinkId(deck);
-              return linkId ? (
-                <button className="shrink-0 text-info hover:text-info/70 transition-colors" onClick={(e) => { e.stopPropagation(); navigateToCommunity(linkId); }} title="Ver na comunidade">
-                  <Link2 className="h-3.5 w-3.5" />
-                </button>
-              ) : null;
-            })()}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {deck.source_author && <span className="text-primary font-medium">por {deck.source_author} · </span>}
-            {isCommunityDeck && !deck.source_author && <span className="text-primary font-medium">Deck da comunidade · </span>}
-            {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
-          </p>
+          {isCommunityDeck ? (
+            <div>
+              {deck.source_author && (
+                <p className="text-[11px] text-muted-foreground">
+                  por <span className="font-medium text-foreground">{deck.source_author}</span>
+                </p>
+              )}
+              {(deck as any).source_updated_at && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date((deck as any).source_updated_at), { addSuffix: true, locale: ptBR })}
+                </p>
+              )}
+              {!(deck as any).source_updated_at && deck.updated_at && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
+            </p>
+          )}
         </div>
 
         <div className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
@@ -121,21 +136,24 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   <Settings className="mr-2 h-4 w-4" /> Configurações
                 </DropdownMenuItem>
               )}
+              {isCommunityDeck && (
+                <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
+                  <Settings className="mr-2 h-4 w-4" /> Configurações
+                </DropdownMenuItem>
+              )}
+              {isCommunityDeck && onDetachCommunityDeck && (
+                <DropdownMenuItem onClick={() => onDetachCommunityDeck(deck)}>
+                  <Copy className="mr-2 h-4 w-4" /> Copiar para meu deck pessoal
+                </DropdownMenuItem>
+              )}
               {!isCommunityDeck && (
                 <DropdownMenuItem onClick={() => onCreateSubDeck(deck.id)}>
                   <CirclePlus className="mr-2 h-4 w-4" /> Adicionar sub-deck
                 </DropdownMenuItem>
               )}
-              {!isCommunityDeck ? (
-                <DropdownMenuItem onClick={() => onMove(deck)}>
-                  <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem className="opacity-40 pointer-events-none" disabled>
-                  <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                  <span className="ml-1 text-[10px]">(vinculado)</span>
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => onMove(deck)}>
+                <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onArchive(deck.id)}>
                 <Archive className="mr-2 h-4 w-4" /> Arquivar
               </DropdownMenuItem>
@@ -154,7 +172,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           deck: sub, depth: depth + 1, deckSelectionMode, selectedDeckIds, expandedDecks,
           toggleExpand, toggleDeckSelection, getSubDecks, getAggregateStats,
           getCommunityLinkId, navigateToCommunity,
-          onCreateSubDeck, onRename, onMove, onArchive, onDelete,
+          onCreateSubDeck, onRename, onMove, onArchive, onDelete, onDetachCommunityDeck,
         }} />
       ))}
     </>

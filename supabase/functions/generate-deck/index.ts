@@ -48,6 +48,78 @@ MÉTODO ATIVO (obrigatório):
 
 Responda APENAS com o JSON solicitado, sem texto adicional.`;
 
+// ── Prompt simplificado para modelos menores (flash-lite) ──
+const FLASH_SYSTEM_PROMPT = `Você é um criador de flashcards de alta qualidade.
+
+REGRAS:
+1. Cada cartão testa UMA informação. Resposta: MÁXIMO 15 palavras.
+2. NUNCA diga "segundo o texto", "de acordo com" ou referencie a fonte. Escreva como fato direto.
+3. Use APENAS informações do conteúdo fornecido. NÃO invente.
+4. Cada cartão deve ser autocontido, sem referências a figuras ou anexos.
+5. EVITE listas como resposta. Crie cartões separados para cada item.
+6. Pergunte "Por quê?" e "Como?" — NUNCA "O que é X?" com resposta de dicionário.
+7. Siga a ordem dos tópicos no conteúdo.
+
+FORMATOS:
+- type:"cloze" → Afirmação com {{c1::resposta}}. back DEVE ser "". NUNCA use formato de pergunta em cloze.
+  ✅ "O principal músculo da inspiração é o {{c1::diafragma}}."
+  ❌ "Qual é o principal músculo? {{c1::diafragma}}" (PROIBIDO: pergunta com cloze)
+- type:"basic" → Pergunta no front, resposta curta no back. Perguntas de raciocínio, não definição.
+- type:"multiple_choice" → Pergunta no front, back:"", options: exatamente 4, correctIndex: 0-3.
+
+Responda APENAS com o JSON solicitado.`;
+
+function getFlashFormatInstructions(formats: string[]): string {
+  const parts: string[] = [];
+  const forbiddenNames: string[] = [];
+
+  const allFormats = [
+    { key: "qa", aliases: ["definition", "qa"], typeName: "basic",
+      instruction: '- type:"basic": Pergunta de raciocínio no front. Resposta curta no back (max 15 palavras). Pergunte "Por quê?", "Como funciona?", "Qual a diferença?". PROIBIDO "O que é X?".' },
+    { key: "cloze", aliases: ["cloze"], typeName: "cloze",
+      instruction: `- type:"cloze": Afirmação declarativa com {{c1::conceito-chave}}. back DEVE ser "".
+  REGRA: cloze é SEMPRE afirmação, NUNCA pergunta. Se o front não contém {{c1::, o card será descartado.
+  ✅ "A {{c1::hematose}} ocorre nos {{c2::alvéolos pulmonares}}."
+  ❌ "Qual processo ocorre nos alvéolos? {{c1::hematose}}" (PROIBIDO)` },
+    { key: "multiple_choice", aliases: ["multiple_choice"], typeName: "multiple_choice",
+      instruction: '- type:"multiple_choice": Só quando existem 3+ conceitos similares para diferenciar. front: pergunta. back:"". options: EXATAMENTE 4 (max 8 palavras cada). correctIndex: 0-3. Distratores devem ser conceitos REAIS do material.' },
+  ];
+
+  for (const f of allFormats) {
+    if (f.aliases.some(a => formats.includes(a))) {
+      parts.push(f.instruction);
+    } else {
+      forbiddenNames.push(f.typeName);
+    }
+  }
+
+  if (parts.length === 0) parts.push(allFormats[0].instruction);
+
+  // Simple distribution rules
+  const hasCloze = formats.includes("cloze");
+  const hasBasic = formats.includes("qa") || formats.includes("definition");
+  const hasMC = formats.includes("multiple_choice");
+  const formatCount = [hasCloze, hasBasic, hasMC].filter(Boolean).length;
+
+  if (formatCount > 1) {
+    if (hasCloze && hasBasic && hasMC) {
+      parts.push("\nDISTRIBUIÇÃO: ~55% cloze, ~35% basic, ~10% multiple_choice.");
+    } else if (hasCloze && hasBasic) {
+      parts.push("\nDISTRIBUIÇÃO: ~60% cloze, ~40% basic.");
+    } else if (hasCloze && hasMC) {
+      parts.push("\nDISTRIBUIÇÃO: ~70% cloze, ~30% multiple_choice.");
+    } else {
+      parts.push("\nDISTRIBUIÇÃO: ~70% basic, ~30% multiple_choice.");
+    }
+  }
+
+  if (forbiddenNames.length > 0) {
+    parts.push(`\nPROIBIDO: NÃO gere tipo ${forbiddenNames.map(n => `"${n}"`).join(", ")}.`);
+  }
+
+  return parts.join("\n");
+}
+
 function getDetailInstruction(level: string): string {
   switch (level) {
     case "essential": return "Crie poucos cartões focados nos 3-5 conceitos mais fundamentais. Priorize o que cairia numa prova.";
@@ -232,6 +304,7 @@ Deno.serve(async (req) => {
     const promptConfig = await fetchPromptConfig(supabase, "generate_deck");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
+    const isFlashLite = selectedModel.includes("flash-lite");
     const temperature = promptConfig?.temperature ?? 0.5;
 
     const trimmedContent = textContent;
@@ -239,17 +312,40 @@ Deno.serve(async (req) => {
     const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
     const detail = detailLevel || "standard";
 
-    let systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
-
+    // Flash-lite uses simplified prompt; Pro/Flash use full prompt
+    let systemPrompt: string;
     if (customInstructions && /prova|exame|questões/i.test(customInstructions)) {
       systemPrompt = "Você é um gerador de questões de prova acadêmica de alta qualidade. Gere apenas o JSON solicitado, sem texto adicional.";
+    } else if (isFlashLite) {
+      systemPrompt = FLASH_SYSTEM_PROMPT;
+    } else {
+      systemPrompt = promptConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
     }
 
     const countInstruction = requestedCount > 0
       ? `Crie exatamente ${requestedCount} cartões.`
       : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
 
-    const prompt = `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
+    const formatInstructions = isFlashLite ? getFlashFormatInstructions(formats) : getFormatInstructions(formats);
+
+    const prompt = isFlashLite
+      ? `Crie flashcards para este conteúdo.
+
+- ${countInstruction}
+- ${getDetailInstruction(detail)}
+- Idioma: mesmo do conteúdo.
+${customInstructions ? `- INSTRUÇÃO DO USUÁRIO: ${customInstructions}` : ""}
+
+FORMATOS:
+${formatInstructions}
+
+CONTEÚDO:
+---
+${trimmedContent}
+---
+
+Verifique: cada seção do conteúdo tem pelo menos 1 cartão?`
+      : `Crie flashcards de alta qualidade para ajudar o estudante a DOMINAR este conteúdo.
 
 REGRAS OBRIGATÓRIAS:
 - ${countInstruction}
@@ -265,7 +361,7 @@ REGRAS OBRIGATÓRIAS:
 ${customInstructions ? `\nINSTRUÇÕES ESPECIAIS DO USUÁRIO (respeite obrigatoriamente):\n${customInstructions}` : ""}
 
 FORMATOS PERMITIDOS (use SOMENTE estes):
-${getFormatInstructions(formats)}
+${formatInstructions}
 
 CONTEÚDO-BASE (use APENAS isto para gerar os cartões):
 ---
@@ -309,9 +405,10 @@ ${getOutputExamples(formats)}`;
 3. Se algum parágrafo/conceito ficou sem cartão, ADICIONE os cartões faltantes.
 4. Só finalize quando 100% do conteúdo estiver coberto.`;
 
-    const fullPrompt = prompt + coverageChecklist;
+    // Flash-lite already has inline coverage check; full checklist only for Pro
+    const fullPrompt = isFlashLite ? prompt : prompt + coverageChecklist;
 
-    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
+    console.log(`Using model: ${selectedModel} (flashLite=${isFlashLite}), textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",

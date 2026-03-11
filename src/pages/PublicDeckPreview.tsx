@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import BottomNav from '@/components/BottomNav';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +14,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check, LogIn } from 'lucide-react';
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { charDiff, type DiffSegment } from '@/lib/charDiff';
@@ -44,13 +45,14 @@ const extractImages = (html: string): string[] => {
 };
 
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
-const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner }: {
+const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner, hideActions }: {
   cards: any[];
   initialIndex: number;
   open: boolean;
   onClose: () => void;
   deckId?: string;
   isOwner?: boolean;
+  hideActions?: boolean;
 }) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
   const isMobile = useIsMobile();
@@ -152,7 +154,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             </span>
           )}
         </div>
-        {!isOwner && vc?.card && deckId ? (
+        {!isOwner && !hideActions && vc?.card && deckId ? (
           <Button
             variant="outline"
             size="sm"
@@ -885,6 +887,7 @@ const PublicDeckPreview = () => {
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showDeckReport, setShowDeckReport] = useState(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
   const [joining, setJoining] = useState(false);
   const [following, setFollowing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1103,61 +1106,124 @@ const PublicDeckPreview = () => {
         queryClient.invalidateQueries({ queryKey: ['turmas'] });
       }
 
-      // Create a linked deck in user's personal decks
-      const insertData: any = {
-        name: deck.name,
-        user_id: user.id,
-        is_public: false,
-        is_live_deck: true,
-      };
-      if (turmaDeck?.id) {
-        insertData.source_turma_deck_id = turmaDeck.id;
-        insertData.community_id = turmaDeck.turma_id;
-      }
-      // For non-turma public decks, check if there's a marketplace listing
-      if (!turmaDeck) {
-        const { data: listing } = await supabase
-          .from('marketplace_listings')
-          .select('id')
-          .eq('deck_id', deckId!)
-          .eq('is_published', true)
-          .maybeSingle();
-        if (listing) {
-          insertData.source_listing_id = listing.id;
+      // ── No folder creation — decks go directly to root ──
+      let targetFolderId: string | null = null;
+
+      // ── Helper to copy a single deck with its cards ──
+      const copyDeck = async (sourceDeckId: string, deckName: string, parentDeckId: string | null, sourceTurmaDeckId: string | null, folderId: string | null) => {
+        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
+        const sd = srcDeck as any;
+        const insertData: any = {
+          name: deckName, user_id: user!.id, is_public: false, is_live_deck: true,
+          folder_id: folderId, parent_deck_id: parentDeckId,
+          algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
+          daily_new_limit: sd?.daily_new_limit ?? 20,
+          daily_review_limit: sd?.daily_review_limit ?? 9999,
+        };
+        if (sourceTurmaDeckId) insertData.source_turma_deck_id = sourceTurmaDeckId;
+        if (turmaDeck?.turma_id) insertData.community_id = turmaDeck.turma_id;
+
+        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+        if (error) throw error;
+
+        // Copy cards in batches
+        if (newDeck) {
+          const BATCH = 500;
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: cards } = await supabase
+              .from('cards')
+              .select('front_content, back_content, card_type')
+              .eq('deck_id', sourceDeckId)
+              .range(offset, offset + BATCH - 1)
+              .order('created_at', { ascending: true });
+            if (!cards || cards.length === 0) break;
+            await supabase.from('cards').insert(cards.map((c: any) => ({
+              deck_id: newDeck.id, front_content: c.front_content,
+              back_content: c.back_content, card_type: c.card_type ?? 'basic',
+            })) as any);
+            if (cards.length < BATCH) hasMore = false;
+            else offset += BATCH;
+          }
         }
-      }
+        return newDeck;
+      };
 
-      const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
-      if (error) throw error;
+      // ── For non-turma public decks (marketplace), simpler flow ──
+      if (!turmaDeck) {
+        const insertData: any = {
+          name: deck.name, user_id: user.id, is_public: false, is_live_deck: true,
+        };
+        const { data: listing } = await supabase
+          .from('marketplace_listings').select('id')
+          .eq('deck_id', deckId!).eq('is_published', true).maybeSingle();
+        if (listing) insertData.source_listing_id = listing.id;
 
-      // Copy cards from source deck to the new linked deck
-      if (newDeck) {
-        const sourceDeckId = deckId!;
-        const BATCH = 500;
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const { data: cards } = await supabase
-            .from('cards')
-            .select('front_content, back_content, card_type')
-            .eq('deck_id', sourceDeckId)
-            .range(offset, offset + BATCH - 1)
-            .order('created_at', { ascending: true });
-          if (!cards || cards.length === 0) { hasMore = false; break; }
-          const newCards = cards.map((c: any) => ({
-            deck_id: newDeck.id,
-            front_content: c.front_content,
-            back_content: c.back_content,
-            card_type: c.card_type ?? 'basic',
-          }));
-          await supabase.from('cards').insert(newCards as any);
-          if (cards.length < BATCH) hasMore = false;
-          else offset += BATCH;
+        // Try to resolve community_id from the source deck owner's turma membership
+        if (!listing) {
+          const { data: srcDeck } = await supabase.from('decks').select('user_id').eq('id', deckId!).single();
+          if (srcDeck) {
+            const { data: ownerMembership } = await supabase
+              .from('turma_members')
+              .select('turma_id')
+              .eq('user_id', (srcDeck as any).user_id)
+              .limit(1)
+              .maybeSingle();
+            if (ownerMembership) insertData.community_id = (ownerMembership as any).turma_id;
+          }
+        }
+
+        const { data: newDeck, error } = await supabase.from('decks').insert(insertData).select('id').single();
+        if (error) throw error;
+        if (newDeck) {
+          const BATCH = 500;
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: cards } = await supabase
+              .from('cards').select('front_content, back_content, card_type')
+              .eq('deck_id', deckId!).range(offset, offset + BATCH - 1)
+              .order('created_at', { ascending: true });
+            if (!cards || cards.length === 0) break;
+            await supabase.from('cards').insert(cards.map((c: any) => ({
+              deck_id: newDeck.id, front_content: c.front_content,
+              back_content: c.back_content, card_type: c.card_type ?? 'basic',
+            })) as any);
+            if (cards.length < BATCH) hasMore = false;
+            else offset += BATCH;
+          }
+        }
+      } else {
+        // ── Turma deck: copy with hierarchy (parent + sub-decks) ──
+        const mainDeck = await copyDeck(deckId!, deck.name, null, turmaDeck.id, targetFolderId);
+
+        // Copy sub-decks (children in turma)
+        if (mainDeck) {
+          const { data: childTurmaDeckRows } = await supabase
+            .from('turma_decks')
+            .select('id, deck_id')
+            .eq('turma_id', turmaDeck.turma_id);
+
+          // Find children of the source deck in the decks table
+          const { data: childDecks } = await supabase
+            .from('decks')
+            .select('id, name, parent_deck_id')
+            .eq('parent_deck_id', deckId!);
+
+          if (childDecks?.length) {
+            for (const child of childDecks) {
+              // Find turma_deck entry for this child
+              const childTd = (childTurmaDeckRows ?? []).find((r: any) => r.deck_id === child.id);
+              await copyDeck(child.id, child.name, mainDeck.id, childTd?.id ?? null, targetFolderId);
+            }
+          }
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ['deck-following', deckId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
       toast({ title: '✅ Deck adicionado aos seus baralhos!' });
     } catch (err: any) {
       toast({ title: 'Erro ao seguir deck', description: err.message, variant: 'destructive' });
@@ -1284,7 +1350,7 @@ const PublicDeckPreview = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${user ? 'pb-20' : ''}`}>
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center gap-3 px-4 py-3">
@@ -1295,19 +1361,17 @@ const PublicDeckPreview = () => {
             <h1 className="font-display text-base font-bold text-foreground truncate">
               {deck.name}
             </h1>
-            <p className="text-[11px] text-muted-foreground">
-              por <span className="font-semibold text-foreground">{deck.owner_name}</span>
-              <span className="mx-1.5 text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+            <div className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground">
+              <p>por <span className="font-medium text-primary">{deck.owner_name}</span></p>
+              <p className="flex items-center gap-1">
                 <Layers className="h-3 w-3" />
                 {allCards.length} cards
-              </span>
-              <span className="mx-1.5 text-border">·</span>
-              <span className="inline-flex items-center gap-1">
-                <RefreshCw className="h-2.5 w-2.5" />
+              </p>
+              <p className="flex items-center gap-1">
+                <RefreshCw className="h-3 w-3" />
                 {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-              </span>
-            </p>
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {!isOwner && (
@@ -1315,7 +1379,7 @@ const PublicDeckPreview = () => {
                 variant={isFollowing ? 'outline' : 'default'}
                 size="sm"
                 className="gap-1.5 text-xs h-8"
-                onClick={handleFollowDeck}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } handleFollowDeck(); }}
                 disabled={following || isFollowing}
               >
                 {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -1338,7 +1402,7 @@ const PublicDeckPreview = () => {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setShowDeckReport(true)}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } setShowDeckReport(true); }}
               >
                 <Pencil className="h-4 w-4 text-muted-foreground" />
               </Button>
@@ -1596,6 +1660,7 @@ const PublicDeckPreview = () => {
         onClose={() => setPreviewIndex(null)}
         deckId={deck?.id}
         isOwner={deck?.user_id === user?.id}
+        hideActions={!user}
       />
       {/* Edit warning dialog */}
       <AlertDialog open={showEditWarning} onOpenChange={setShowEditWarning}>
@@ -1627,6 +1692,27 @@ const PublicDeckPreview = () => {
           deckName={deck?.name}
         />
       )}
+
+      {/* Auth Gate for unauthenticated users */}
+      {showAuthGate && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowAuthGate(false)}>
+          <div className="w-full max-w-sm bg-card rounded-t-2xl sm:rounded-2xl p-6 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center space-y-2">
+              <h3 className="font-display text-lg font-bold text-foreground">Crie sua conta gratuita</h3>
+              <p className="text-sm text-muted-foreground">Para interagir com este deck, você precisa de uma conta.</p>
+            </div>
+            <Button className="w-full" onClick={() => navigate('/auth', { state: { from: `/decks/${deckId}/preview` } })}>
+              <LogIn className="mr-2 h-4 w-4" /> Criar conta / Entrar
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowAuthGate(false)}>
+              Continuar navegando
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Nav for authenticated users */}
+      {user && <BottomNav />}
     </div>
   );
 };
