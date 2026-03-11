@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
