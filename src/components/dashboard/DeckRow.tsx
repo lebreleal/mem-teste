@@ -94,19 +94,19 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             )}
           </div>
           {isCommunityDeck ? (
-            <div className="space-y-0">
+            <div>
               {(communitySourceName || deck.source_author) && (
                 <p className="text-[11px] text-muted-foreground">
-                  criado por <span className="font-medium text-foreground">{communitySourceName || deck.source_author}</span>
+                  por <span className="font-medium text-foreground">{communitySourceName || deck.source_author}</span>
                 </p>
               )}
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <span>{totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}</span>
-                {deck.updated_at && (
-                  <span className="flex items-center gap-0.5">
-                    · <Clock className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                )}
+              {deck.updated_at && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
               </p>
             </div>
           ) : (
