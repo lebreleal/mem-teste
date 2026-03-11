@@ -270,7 +270,7 @@ const Dashboard = () => {
         {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
-              onClick={() => { setDashboardTab('personal'); state.setCurrentFolderId(null); }}}
+              onClick={() => { setDashboardTab('personal'); state.setCurrentFolderId(null); }}
               className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 dashboardTab === 'personal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
