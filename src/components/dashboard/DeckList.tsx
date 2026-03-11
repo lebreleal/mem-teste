@@ -53,6 +53,7 @@ interface DeckListProps {
   onMoveDeck: (deck: DeckWithStats) => void;
   onArchiveDeck: (id: string) => void;
   onDeleteDeck: (deck: DeckWithStats) => void;
+  onDetachCommunityDeck?: (deck: DeckWithStats) => void;
 
   // Reorder callbacks
   onReorderFolders?: (reordered: Folder[]) => void;
