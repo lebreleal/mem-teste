@@ -128,6 +128,7 @@ const App = () => (
                 <Route path="/install" element={<Install />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
                 <Route path="/termos-e-servicos" element={<TermsOfService />} />
+                <Route path="/c/:slugOrId" element={<PublicCommunity />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
