@@ -11,7 +11,7 @@ import { useStudyUndo } from '@/hooks/useStudyUndo';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, Users } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import StudyCardActions from '@/components/StudyCardActions';
 import { useToast } from '@/hooks/use-toast';
