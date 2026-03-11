@@ -110,6 +110,8 @@ const Dashboard = () => {
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
+  const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
+  const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -117,6 +119,25 @@ const Dashboard = () => {
     folderId: string | null;
     textSample?: string;
   } | null>(null);
+
+  const handleDetachDeck = useCallback(async () => {
+    if (!detachTarget) return;
+    setDetaching(true);
+    try {
+      await supabase.from('decks').update({
+        source_turma_deck_id: null,
+        source_listing_id: null,
+        community_id: null,
+      } as any).eq('id', detachTarget.id);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+    } catch {
+      toast({ title: 'Erro ao importar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+      setDetachTarget(null);
+    }
+  }, [detachTarget, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
