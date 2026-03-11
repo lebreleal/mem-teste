@@ -285,10 +285,11 @@ const MemberCommunityView = () => {
     <div className="min-h-screen bg-background">
       <TurmaHeader />
 
-      <TurmaSubHeader
+        <TurmaSubHeader
         turmaId={turmaId}
         turmaName={turma.name}
         inviteCode={turma.invite_code}
+        shareSlug={turma.share_slug}
         isAdmin={isAdmin}
         hasSubscription={hasSubscription}
         hasExclusiveContent={

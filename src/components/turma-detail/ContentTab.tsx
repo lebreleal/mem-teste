@@ -589,13 +589,6 @@ const ContentTab = () => {
                     downloads={downloadCounts[td.id] || 0}
                     fileCount={getDeckFilesCount(td)}
                     examCount={getDeckExamsCount(td)}
-                    onShare={() => {
-                      const link = turma?.share_slug
-                        ? `${window.location.origin}/c/${turma.share_slug}`
-                        : `${window.location.origin}/c/${turmaId}`;
-                      navigator.clipboard.writeText(link);
-                      toast({ title: 'Link copiado!' });
-                    }}
                   />
                 );
               })}

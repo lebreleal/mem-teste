@@ -110,6 +110,15 @@ const TurmaSubHeader = ({
                   </Button>
                 </>
               )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                const link = shareSlug
+                  ? `${window.location.origin}/c/${shareSlug}`
+                  : `${window.location.origin}/c/${turmaId}`;
+                navigator.clipboard.writeText(link);
+                toast({ title: 'Link público copiado!', description: link });
+              }} title="Compartilhar comunidade">
+                <Share2 className="h-4 w-4 text-muted-foreground" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
                 <Users className="h-4 w-4 text-muted-foreground" />
               </Button>
