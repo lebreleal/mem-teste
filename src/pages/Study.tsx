@@ -500,7 +500,7 @@ const Study = () => {
             <p className="flex items-start gap-1.5">
               <RefreshCw className="h-3.5 w-3.5 mt-0.5 shrink-0 text-foreground" />
               <span>
-                A data de atualização indica quando o <strong className="text-foreground">conteúdo do baralho</strong> foi editado pelo criador — seja uma edição direta ou uma sugestão aceita da comunidade. Não inclui revisões ou estudos.
+                A data de atualização indica quando o <strong className="text-foreground">conteúdo do baralho</strong> foi editado pelo criador — seja uma edição direta ou uma sugestão aceita da comunidade.
               </span>
             </p>
           </div>
