@@ -360,7 +360,8 @@ const TurmaDetailInner = () => {
   // Auto-join public communities (no preview screen)
   useEffect(() => {
     if (isLoading || !turma || isMember || autoJoining || joinCompleted) return;
-    if (!user) { navigate('/auth'); return; }
+    // Unauthenticated users → public preview page
+    if (!user) { navigate(`/c/${turma.share_slug || turmaId}`, { replace: true }); return; }
     // Only auto-join public communities
     if (turma.is_private) return;
     setAutoJoining(true);
