@@ -496,13 +496,14 @@ const Study = () => {
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
-              Este cartão pertence a um baralho de comunidade{sourceInfo?.authorName ? ` criado por <span class="font-medium text-foreground">${sourceInfo.authorName}</span>` : ''}.
+              Este cartão pertence a um baralho de comunidade
+              {sourceInfo?.authorName && <> criado por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></>}.
             </p>
-            <p>
-              A data de atualização (<RefreshCw className="inline h-3 w-3 mb-0.5" />) indica quando <strong className="text-foreground">este cartão específico</strong> foi editado pelo criador original. Cada cartão pode ter sua própria data de atualização.
-            </p>
-            <p>
-              Para sugerir correções, use o botão de edição (<span className="text-foreground">✏️</span>) que abrirá o formulário de sugestão.
+            <p className="flex items-start gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5 mt-0.5 shrink-0 text-foreground" />
+              <span>
+                A data de atualização indica quando <strong className="text-foreground">este cartão específico</strong> foi editado pelo criador. Cada cartão tem sua própria data — o deck pode ter sido atualizado recentemente mesmo que este cartão não tenha mudado.
+              </span>
             </p>
           </div>
         </DialogContent>
