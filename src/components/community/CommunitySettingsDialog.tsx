@@ -32,6 +32,7 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
   const [coverUrl, setCoverUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [subscriptionPrice, setSubscriptionPrice] = useState('');
+  const [shareSlug, setShareSlug] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
