@@ -98,7 +98,9 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
       hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
     } else {
-      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
+      const siblingFolders = state.folders.filter(
+        f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === state.dashboardSection
+      );
       hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
     }
     if (hasDuplicate) {
