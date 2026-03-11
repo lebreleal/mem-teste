@@ -715,25 +715,25 @@ const DeckSettings = () => {
         toast={toast}
       />
 
-      {/* Detach community deck dialog */}
+      {/* Copy community deck dialog */}
       <AlertDialog open={detachConfirm} onOpenChange={setDetachConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Importar para meu deck</AlertDialogTitle>
+            <AlertDialogTitle>Copiar para meu deck pessoal</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>O baralho <strong>"{name}"</strong> será convertido em um deck pessoal independente.</p>
-              <p>Isso significa que:</p>
+              <p>Uma cópia independente de <strong>"{name}"</strong> será criada no seu deck pessoal.</p>
+              <p>A cópia:</p>
               <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Deixará de ser um <strong>deck vivo</strong> da comunidade</li>
-                <li>Não receberá mais <strong>atualizações automáticas</strong> de novos cartões</li>
-                <li>Você poderá <strong>editar, renomear e reorganizar</strong> livremente</li>
+                <li>Será um deck <strong>pessoal e editável</strong></li>
+                <li><strong>Não receberá</strong> atualizações automáticas da comunidade</li>
+                <li>O deck original da comunidade <strong>permanecerá intacto</strong></li>
               </ul>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={detaching}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDetachDeck} disabled={detaching}>
-              {detaching ? 'Importando...' : 'Confirmar importação'}
+              {detaching ? 'Copiando...' : 'Confirmar cópia'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
