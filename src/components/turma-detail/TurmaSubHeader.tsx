@@ -13,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -21,6 +21,7 @@ interface TurmaSubHeaderProps {
   turmaId: string;
   turmaName: string;
   inviteCode: string;
+  shareSlug?: string;
   isAdmin: boolean;
   hasSubscription: boolean;
   hasExclusiveContent: boolean;
@@ -36,7 +37,7 @@ interface TurmaSubHeaderProps {
 }
 
 const TurmaSubHeader = ({
-  turmaId, turmaName, inviteCode, isAdmin,
+  turmaId, turmaName, inviteCode, shareSlug, isAdmin,
   hasSubscription, hasExclusiveContent, isSubscriber, activeSubscription, subscriptionPrice, subscribing,
   onSubscribe, onShowSettings, members, userId, mutations,
 }: TurmaSubHeaderProps) => {
@@ -109,6 +110,15 @@ const TurmaSubHeader = ({
                   </Button>
                 </>
               )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                const link = shareSlug
+                  ? `${window.location.origin}/c/${shareSlug}`
+                  : `${window.location.origin}/c/${turmaId}`;
+                navigator.clipboard.writeText(link);
+                toast({ title: 'Link público copiado!', description: link });
+              }} title="Compartilhar comunidade">
+                <Share2 className="h-4 w-4 text-muted-foreground" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
                 <Users className="h-4 w-4 text-muted-foreground" />
               </Button>
