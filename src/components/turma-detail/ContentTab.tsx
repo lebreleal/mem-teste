@@ -36,7 +36,6 @@ import {
 
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
 import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
-import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -320,7 +319,6 @@ const ContentTab = () => {
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
   const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
-  const [previewDeck, setPreviewDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
@@ -502,7 +500,7 @@ const ContentTab = () => {
     const subscriberOnly = !importLogic.isDeckFree(td);
     const canImportDeck = importLogic.canAccessDeck(td);
     if (subscriberOnly && !canImportDeck) { setGateDeck(td); return; }
-    setPreviewDeck(td);
+    navigate(`/decks/${td.deck_id}/preview`, { state: { from: 'community', turmaId } });
   };
 
   return (
@@ -920,37 +918,6 @@ const ContentTab = () => {
         deckId={trialDeck?.deckId || ''}
         deckName={trialDeck?.deckName || ''}
       />
-
-      {/* Deck Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck}
-          onOpenChange={(open) => !open && setPreviewDeck(null)}
-          deckId={previewDeck.deck_id}
-          deckName={previewDeck.deck_name || 'Deck'}
-          cardCount={previewDeck.card_count || 0}
-          alreadyLinked={importLogic.userHasLinkedDeck(previewDeck.id)}
-          alreadyOwns={importLogic.userOwnsDeck(previewDeck.deck_id)}
-          allowDownload={previewDeck.allow_download ?? true}
-          onAddToCollection={() => {
-            const children = turmaDecks?.filter((d: any) => d.parent_deck_id === previewDeck.deck_id) || [];
-            importLogic.addToCollection.mutate(
-              { ...previewDeck, _importMode: 'hierarchy', _childTds: children },
-              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
-            );
-            setPreviewDeck(null);
-          }}
-          onDownload={() => {
-            importLogic.addToCollection.mutate(
-              { ...previewDeck, _importMode: 'flat', _childTds: [] },
-              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
-            );
-            setPreviewDeck(null);
-          }}
-          isAdding={importLogic.addToCollection.isPending}
-          isDownloading={importLogic.addToCollection.isPending}
-        />
-      )}
 
     </div>
   );
