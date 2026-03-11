@@ -339,7 +339,7 @@ const Dashboard = () => {
         )}
 
         {/* Community decks tab */}
-        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && communityRootFolders.length === 0 && (
+        {activeSection === 'community' && visibleDecks.length === 0 && visibleFolders.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
               <Users className="h-7 w-7 text-primary" />
