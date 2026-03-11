@@ -923,30 +923,6 @@ const ContentTab = () => {
         deckName={trialDeck?.deckName || ''}
       />
 
-      {/* Deck Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck}
-          onOpenChange={v => { if (!v) setPreviewDeck(null); }}
-          deckId={previewDeck.td.deck_id}
-          deckName={previewDeck.td.deck_name}
-          cardCount={previewDeck.td.card_count ?? 0}
-          alreadyLinked={previewDeck.alreadyLinked}
-          alreadyOwns={previewDeck.alreadyOwns}
-          allowDownload={previewDeck.td.allow_download ?? false}
-          onAddToCollection={() => {
-            const children = turmaDecks.filter((d: any) => d.parent_deck_id === previewDeck.td.deck_id);
-            setConfirmImportItem({ type: 'deck', data: { ...previewDeck.td, _childTds: children } });
-            setPreviewDeck(null);
-          }}
-          onDownload={() => {
-            importLogic.downloadDeck.mutate(previewDeck.td);
-            setPreviewDeck(null);
-          }}
-          isAdding={importLogic.addToCollection.isPending}
-          isDownloading={importLogic.downloadDeck.isPending}
-        />
-      )}
     </div>
   );
 };
