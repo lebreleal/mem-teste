@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, RefreshCw } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
@@ -79,7 +79,6 @@ const Dashboard = () => {
 
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
   const [searchQuery, setSearchQuery] = useState('');
-  const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
@@ -90,43 +89,10 @@ const Dashboard = () => {
     textSample?: string;
   } | null>(null);
 
-  // Determine active section — if inside a folder, derive from folder's section
-  const activeSection = useMemo(() => {
-    if (state.currentFolderId) {
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-      if (currentFolder) return (currentFolder.section ?? 'personal') as 'personal' | 'community';
-    }
-    return dashboardTab === 'community' ? 'community' : 'personal';
-  }, [state.currentFolderId, state.folders, dashboardTab]);
+  const activeSection = 'personal' as const;
 
   // Extracted actions hook
   const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
-
-  const visibleFolders = useMemo(
-    () => state.folders
-      .filter(f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === activeSection)
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [state.folders, state.currentFolderId, activeSection]
-  );
-
-  const visibleDecks = useMemo(
-    () => activeSection === 'community'
-      ? state.communityDecks.filter(d => d.folder_id === state.currentFolderId)
-      : state.currentDecks,
-    [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
-  );
-
-  const personalCurrentFolders = useMemo(
-    () => state.currentFolders.filter(f => (f.section ?? 'personal') === 'personal'),
-    [state.currentFolders]
-  );
-
-  const communityRootFolders = useMemo(
-    () => state.folders
-      .filter(f => !f.parent_id && !f.is_archived && (f.section ?? 'personal') === 'community')
-      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [state.folders]
-  );
 
   // Carousel helpers
   const hasPlan = plans.length > 0;
@@ -257,7 +223,7 @@ const Dashboard = () => {
         )}
 
         <DashboardActions
-          mode={activeSection}
+          mode="personal"
           currentFolderId={state.currentFolderId}
           breadcrumb={state.breadcrumb}
           onNavigateFolder={state.setCurrentFolderId}
@@ -265,14 +231,14 @@ const Dashboard = () => {
             const current = state.folders.find(f => f.id === state.currentFolderId);
             state.setCurrentFolderId(current?.parent_id ?? null);
           }}
-          hasDecks={visibleDecks.length > 0}
-          deckSelectionMode={activeSection === 'personal' ? state.deckSelectionMode : false}
+          hasDecks={state.currentDecks.length > 0}
+          deckSelectionMode={state.deckSelectionMode}
           selectedCount={state.selectedDeckIds.size}
-          isAllSelected={visibleDecks.length > 0 && state.selectedDeckIds.size === visibleDecks.length}
+          isAllSelected={state.currentDecks.length > 0 && state.selectedDeckIds.size === state.currentDecks.length}
           toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
           toggleSelectAll={() => {
-            if (state.selectedDeckIds.size === visibleDecks.length) state.setSelectedDeckIds(new Set());
-            else state.setSelectedDeckIds(new Set(visibleDecks.map(d => d.id)));
+            if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
+            else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
           }}
           onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
           onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
@@ -285,112 +251,40 @@ const Dashboard = () => {
           onSearchChange={setSearchQuery}
         />
 
-        {/* Tab switcher — hidden when inside a folder */}
-        {!state.currentFolderId && (
-          <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
-            <button
-              onClick={() => { setDashboardTab('personal'); state.setCurrentFolderId(null); }}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                dashboardTab === 'personal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Meus Decks
-            </button>
-            <button
-              onClick={() => { setDashboardTab('community'); state.setCurrentFolderId(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <RefreshCw className="h-3 w-3" />
-              Comunidade
-            </button>
-          </div>
-        )}
-
-        {/* Personal decks tab */}
-        {activeSection === 'personal' && (
-          <DeckList
-            isLoading={state.isLoading}
-            currentFolders={personalCurrentFolders}
-            currentDecks={state.currentDecks}
-            currentFolderId={state.currentFolderId}
-            searchQuery={searchQuery}
-            deckSelectionMode={state.deckSelectionMode}
-            selectedDeckIds={state.selectedDeckIds}
-            expandedDecks={state.expandedDecks}
-            toggleExpand={state.toggleExpand}
-            toggleDeckSelection={state.toggleDeckSelection}
-            getSubDecks={state.getSubDecks}
-            getAggregateStats={state.getAggregateStats}
-            getCommunityLinkId={state.getCommunityLinkId}
-            folderHasCommunityLink={state.folderHasCommunityLink}
-            getFolderDueCount={state.getFolderDueCount}
-            getFolderCommunityLinkId={state.getFolderCommunityLinkId}
-            navigateToCommunity={actions.handleNavigateCommunity}
-            onFolderClick={state.setCurrentFolderId}
-            onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
-            onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
-            onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
-            onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
-            onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-            onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-            onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-            onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
-            onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
-            onPendingClick={handlePendingClick}
-          />
-        )}
-
-        {/* Community decks tab */}
-        {activeSection === 'community' && visibleDecks.length === 0 && visibleFolders.length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <Users className="h-7 w-7 text-primary" />
-            </div>
-            <h3 className="font-display text-lg font-bold text-foreground">Nenhum deck de comunidade</h3>
-            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Explore comunidades e adicione baralhos à sua coleção.</p>
-            <Button variant="default" size="sm" className="mt-4 gap-1.5" onClick={() => navigate('/turmas')}>
-              <Users className="h-4 w-4" /> Explorar comunidades
-            </Button>
-          </div>
-        )}
-        {activeSection === 'community' && (visibleDecks.length > 0 || visibleFolders.length > 0) && (
-          <DeckList
-            isLoading={false}
-            currentFolders={visibleFolders}
-            currentDecks={visibleDecks}
-            currentFolderId={state.currentFolderId}
-            searchQuery={searchQuery}
-            deckSelectionMode={false}
-            selectedDeckIds={new Set()}
-            expandedDecks={state.expandedDecks}
-            toggleExpand={state.toggleExpand}
-            toggleDeckSelection={() => {}}
-            getSubDecks={state.getSubDecks}
-            getAggregateStats={state.getAggregateStats}
-            getCommunityLinkId={state.getCommunityLinkId}
-            folderHasCommunityLink={() => false}
-            getFolderDueCount={() => 0}
-            getFolderCommunityLinkId={() => null}
-            navigateToCommunity={actions.handleNavigateCommunity}
-            onFolderClick={state.setCurrentFolderId}
-            onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
-            onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
-            onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
-            onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
-            onCreateSubDeck={() => {}}
-            onRenameDeck={() => {}}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-            onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-            decksWithPendingUpdates={state.decksWithPendingUpdates}
-          />
-        )}
+        <DeckList
+          isLoading={state.isLoading}
+          currentFolders={state.currentFolders}
+          currentDecks={state.currentDecks}
+          currentFolderId={state.currentFolderId}
+          searchQuery={searchQuery}
+          deckSelectionMode={state.deckSelectionMode}
+          selectedDeckIds={state.selectedDeckIds}
+          expandedDecks={state.expandedDecks}
+          toggleExpand={state.toggleExpand}
+          toggleDeckSelection={state.toggleDeckSelection}
+          getSubDecks={state.getSubDecks}
+          getAggregateStats={state.getAggregateStats}
+          getCommunityLinkId={state.getCommunityLinkId}
+          folderHasCommunityLink={state.folderHasCommunityLink}
+          getFolderDueCount={state.getFolderDueCount}
+          getFolderCommunityLinkId={state.getFolderCommunityLinkId}
+          navigateToCommunity={actions.handleNavigateCommunity}
+          onFolderClick={state.setCurrentFolderId}
+          onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
+          onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
+          onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
+          onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
+          onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+          onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+          onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+          onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+          onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
+          onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
+          onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+          onPendingClick={handlePendingClick}
+          decksWithPendingUpdates={state.decksWithPendingUpdates}
+        />
 
         {/* Archived section */}
         {state.totalArchived > 0 && (
