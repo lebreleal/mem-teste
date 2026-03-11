@@ -920,37 +920,6 @@ const ContentTab = () => {
         deckName={trialDeck?.deckName || ''}
       />
 
-      {/* Deck Preview Sheet */}
-      {previewDeck && (
-        <DeckPreviewSheet
-          open={!!previewDeck}
-          onOpenChange={(open) => !open && setPreviewDeck(null)}
-          deckId={previewDeck.deck_id}
-          deckName={previewDeck.deck_name || 'Deck'}
-          cardCount={previewDeck.card_count || 0}
-          alreadyLinked={importLogic.userHasLinkedDeck(previewDeck.id)}
-          alreadyOwns={importLogic.userOwnsDeck(previewDeck.deck_id)}
-          allowDownload={previewDeck.allow_download ?? true}
-          onAddToCollection={() => {
-            const children = turmaDecks?.filter((d: any) => d.parent_deck_id === previewDeck.deck_id) || [];
-            importLogic.addToCollection.mutate(
-              { ...previewDeck, _importMode: 'hierarchy', _childTds: children },
-              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
-            );
-            setPreviewDeck(null);
-          }}
-          onDownload={() => {
-            importLogic.addToCollection.mutate(
-              { ...previewDeck, _importMode: 'flat', _childTds: [] },
-              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
-            );
-            setPreviewDeck(null);
-          }}
-          isAdding={importLogic.addToCollection.isPending}
-          isDownloading={importLogic.addToCollection.isPending}
-        />
-      )}
-
     </div>
   );
 };
