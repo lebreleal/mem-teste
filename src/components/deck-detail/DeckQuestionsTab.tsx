@@ -609,6 +609,7 @@ const CreateQuestionDialog = ({
   const [showExplanations, setShowExplanations] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiCustomInstructions, setAiCustomInstructions] = useState('');
+  const [aiModel, setAiModel] = useState<'flash' | 'pro'>('flash');
 
   // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
@@ -621,8 +622,9 @@ const CreateQuestionDialog = ({
     staleTime: 60_000,
   });
 
-  // Cost based on card count: 1 credit per 5 cards, min 2
-  const aiCost = Math.max(2, Math.ceil(cardCount / 5));
+  // Cost based on card count: 1 credit per 5 cards, min 2, multiplied by model
+  const baseCost = Math.max(2, Math.ceil(cardCount / 5));
+  const aiCost = aiModel === 'pro' ? baseCost * 5 : baseCost;
 
   const resetForm = () => {
     setQuestionText(''); setOptions(['', '', '', '']); setCorrectIdx(null);
