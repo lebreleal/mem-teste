@@ -1295,19 +1295,17 @@ const PublicDeckPreview = () => {
             <h1 className="font-display text-base font-bold text-foreground truncate">
               {deck.name}
             </h1>
-            <p className="text-[11px] text-muted-foreground">
-              por <span className="font-semibold text-foreground">{deck.owner_name}</span>
-              <span className="mx-1.5 text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+            <div className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground">
+              <p>por <span className="font-medium text-primary">{deck.owner_name}</span></p>
+              <p className="flex items-center gap-1">
                 <Layers className="h-3 w-3" />
                 {allCards.length} cards
-              </span>
-              <span className="mx-1.5 text-border">·</span>
-              <span className="inline-flex items-center gap-1">
-                <RefreshCw className="h-2.5 w-2.5" />
+              </p>
+              <p className="flex items-center gap-1">
+                <RefreshCw className="h-3 w-3" />
                 {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
-              </span>
-            </p>
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {!isOwner && (

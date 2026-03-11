@@ -30,7 +30,7 @@ import {
   Plus, FolderPlus, MoreVertical, ChevronRight,
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
-  Copy, Link2, ClipboardList, Clock, Import, LogIn,
+  Copy, Link2, ClipboardList, Clock, Import, LogIn, RefreshCw, Check,
   Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
@@ -83,21 +83,25 @@ const DeckListItem = ({
   >
     <div className="flex-1 min-w-0">
       <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
-      <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground flex-wrap">
+      <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
         {td.shared_by_name && (
-          <span>por <span className="font-medium text-foreground">{td.shared_by_name}</span></span>
+          <p>por <span className="font-medium text-primary">{td.shared_by_name}</span></p>
         )}
         {td.created_at && (
-          <span className="flex items-center gap-0.5">
-            <Clock className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
-          </span>
+          <p className="flex items-center gap-1">
+            <RefreshCw className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
+          </p>
         )}
         {td.is_published === false && (isAdmin || isOwner) && (
-          <span className="flex items-center gap-0.5"><EyeOff className="h-3 w-3" /> Rascunho</span>
+          <p className="flex items-center gap-1"><EyeOff className="h-3 w-3" /> Rascunho</p>
         )}
-        {subscriberOnly && <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />}
+        {subscriberOnly && (
+          <p className="flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" /> Assinantes</p>
+        )}
         {inCollection && (
-          <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">✓ Inscrito</span>
+          <p className="flex items-center gap-1 text-primary font-semibold">
+            <Check className="h-3 w-3" /> Inscrito
+          </p>
         )}
       </div>
       <div className="flex items-center gap-3 mt-1.5">
