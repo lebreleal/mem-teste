@@ -57,7 +57,6 @@ const DeckListItem = ({
   onEditPricing,
   onRemove,
   onTogglePublish,
-  onShare,
   tags,
   downloads,
   fileCount,
@@ -73,7 +72,6 @@ const DeckListItem = ({
   onEditPricing: () => void;
   onRemove: () => void;
   onTogglePublish?: () => void;
-  onShare?: () => void;
   tags?: Tag[];
   downloads?: number;
   fileCount?: number;
