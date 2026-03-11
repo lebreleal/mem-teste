@@ -145,86 +145,172 @@ const QuestionStatsBar = ({
 
 /* ════════════════════════════════════════════════════════════
    Concept Self-Assessment (after answering)
-   User answers Yes/No for each comprehension question.
-   If "No" → can request AI to create flashcards for that concept.
+   - If concept cards exist in deck → show preview
+   - If not → offer to create or explain via AI
    ════════════════════════════════════════════════════════════ */
 const ConceptMasterySection = ({
-  concepts, mastery, onGenerateCards, generating,
+  concepts, deckId, questionId, onGenerateCards, generating,
 }: {
   concepts: string[];
-  mastery: ConceptMastery[];
+  deckId: string;
+  questionId: string;
   onGenerateCards: (concept: string) => void;
   generating: string | null;
 }) => {
   const [feedback, setFeedback] = useState<Record<string, 'yes' | 'no'>>({});
+  const [conceptExplaining, setConceptExplaining] = useState<string | null>(null);
+  const [conceptExplanations, setConceptExplanations] = useState<Record<string, string>>({});
+  const [previewCards, setPreviewCards] = useState<Record<string, any[]>>({});
+  const [loadingCards, setLoadingCards] = useState<Record<string, boolean>>({});
+  const { energy, spendEnergy } = useEnergy();
+  const { toast } = useToast();
 
   if (!concepts || concepts.length === 0) return null;
 
   const handleFeedback = (concept: string, value: 'yes' | 'no') => {
     setFeedback(prev => ({ ...prev, [concept]: value }));
+    if (value === 'no') {
+      // Search for existing cards related to this concept in the deck
+      searchExistingCards(concept);
+    }
+  };
+
+  const searchExistingCards = async (concept: string) => {
+    setLoadingCards(prev => ({ ...prev, [concept]: true }));
+    try {
+      // Search cards whose front or back contains keywords from the concept
+      const keywords = concept
+        .replace(/^(Você conseguiu|Você entendeu|Você sabe).*?\??\s*/i, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3)
+        .slice(0, 4);
+
+      if (keywords.length === 0) { setLoadingCards(prev => ({ ...prev, [concept]: false })); return; }
+
+      const { data } = await supabase
+        .from('cards')
+        .select('id, front_content, back_content, card_type')
+        .eq('deck_id', deckId)
+        .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
+        .limit(5);
+
+      setPreviewCards(prev => ({ ...prev, [concept]: data || [] }));
+    } catch { /* ignore */ }
+    finally { setLoadingCards(prev => ({ ...prev, [concept]: false })); }
+  };
+
+  const handleExplainConcept = async (concept: string) => {
+    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    setConceptExplaining(concept);
+    try {
+      spendEnergy.mutate(1);
+      const { data, error } = await supabase.functions.invoke('ai-tutor', {
+        body: { type: 'explain-concept', concept, deckId },
+      });
+      if (error) throw error;
+      setConceptExplanations(prev => ({ ...prev, [concept]: data?.response || 'Explicação indisponível.' }));
+    } catch { toast({ title: 'Erro ao explicar conceito', variant: 'destructive' }); }
+    finally { setConceptExplaining(null); }
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
+    <div className="mt-5 rounded-xl border border-border/50 bg-card/50 p-4 space-y-3">
       <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-        <Brain className="h-3.5 w-3.5 text-primary" />
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
         Autoavaliação
       </p>
       <p className="text-[11px] text-muted-foreground">
-        Avalie sua compreensão sobre os conceitos testados nesta questão:
+        Avalie sua compreensão sobre os conceitos testados:
       </p>
       <div className="space-y-3">
         {concepts.map((c, i) => {
           const answer = feedback[c];
+          const existingCards = previewCards[c] || [];
+          const isLoadingConcept = loadingCards[c];
+          const explanation = conceptExplanations[c];
+
           return (
-            <div key={i} className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2">
+            <div key={i} className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-2.5">
               <p className="text-sm text-foreground leading-relaxed">{c}</p>
-              <div className="flex items-center gap-2">
-                {!answer ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                      onClick={() => handleFeedback(c, 'yes')}
+
+              {!answer ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm"
+                    className="h-7 px-3 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    onClick={() => handleFeedback(c, 'yes')}>
+                    <Check className="h-3 w-3" /> Sim, entendi
+                  </Button>
+                  <Button variant="outline" size="sm"
+                    className="h-7 px-3 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={() => handleFeedback(c, 'no')}>
+                    <X className="h-3 w-3" /> Não entendi
+                  </Button>
+                </div>
+              ) : answer === 'yes' ? (
+                <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="h-3 w-3" /> Conceito compreendido ✓
+                </span>
+              ) : (
+                <div className="space-y-2.5">
+                  {isLoadingConcept ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Buscando cards relacionados...
+                    </div>
+                  ) : existingCards.length > 0 ? (
+                    /* Show existing cards from deck */
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Check className="h-3 w-3 text-primary" />
+                        <span><span className="font-bold text-foreground">{existingCards.length}</span> cards relacionados encontrados no seu baralho:</span>
+                      </p>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        {existingCards.map(card => (
+                          <div key={card.id} className="rounded-lg border border-border/30 bg-muted/30 px-3 py-2">
+                            <div className="text-xs text-foreground line-clamp-2"
+                              dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Revise esses cards na próxima sessão de estudo para reforçar o conceito.
+                      </p>
+                    </div>
+                  ) : (
+                    /* No existing cards — offer to create */
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-xs text-destructive font-medium">
+                        <AlertCircle className="h-3 w-3" /> Nenhum card encontrado.
+                      </span>
+                      <Button variant="default" size="sm" className="h-7 px-3 text-xs gap-1.5"
+                        onClick={() => onGenerateCards(c)} disabled={generating === c}>
+                        {generating === c ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                        Criar cards (2 créditos)
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* AI explanation for concept */}
+                  {!explanation ? (
+                    <button
+                      onClick={() => handleExplainConcept(c)}
+                      disabled={conceptExplaining === c}
+                      className="flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-50"
                     >
-                      <Check className="h-3 w-3" /> Sim, entendi
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleFeedback(c, 'no')}
-                    >
-                      <X className="h-3 w-3" /> Não entendi
-                    </Button>
-                  </>
-                ) : answer === 'yes' ? (
-                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    <Check className="h-3 w-3" /> Ótimo! Conceito compreendido.
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-xs text-destructive font-medium">
-                      <AlertCircle className="h-3 w-3" /> Vamos reforçar!
-                    </span>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-7 px-3 text-xs gap-1.5"
-                      onClick={() => onGenerateCards(c)}
-                      disabled={generating === c}
-                    >
-                      {generating === c ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Zap className="h-3 w-3" />
-                      )}
-                      Criar cards para estudar
-                    </Button>
-                  </div>
-                )}
-              </div>
+                      {conceptExplaining === c ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
+                      Explicar conceito com IA (1 crédito)
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="text-[11px] font-bold text-primary mb-1 flex items-center gap-1">
+                        <MessageSquareText className="h-3 w-3" /> Explicação do conceito
+                      </p>
+                      <div className="text-xs text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown>{explanation}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
