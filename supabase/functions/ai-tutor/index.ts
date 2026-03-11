@@ -47,6 +47,50 @@ Deno.serve(async (req) => {
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
     const temperature = promptConfig?.temperature ?? 0.5;
+
+    // ─── Question Hint / Explain (non-streaming, returns JSON) ───
+    if (isQuestionMode) {
+      const qText = (question || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+      const qCIdx = qCorrectIndex ?? 0;
+
+      let qPrompt: string;
+      let qMax = 600;
+      if (type === 'question-hint') {
+        qPrompt = `O aluno está resolvendo uma questão de múltipla escolha e pediu uma DICA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + qCIdx)}.\n\nDê uma dica que AJUDE o aluno a raciocinar e chegar na resposta correta, mas SEM revelar diretamente qual é a alternativa correta. Use pistas conceituais, elimine caminhos errados de forma sutil, ou dê uma analogia. Máximo 3 frases. Responda na mesma língua da questão.`;
+      } else {
+        const userIdx = userAnswer !== undefined ? userAnswer : null;
+        qPrompt = `O aluno respondeu uma questão de múltipla escolha e quer entender TODAS as alternativas.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é: ${String.fromCharCode(65 + qCIdx)}\n${userIdx !== null ? `O aluno marcou: ${String.fromCharCode(65 + userIdx)}` : ""}\n\nExplique detalhadamente:\n1. Por que a alternativa correta está certa (2-3 frases)\n2. Para CADA alternativa incorreta, explique por que está errada (1-2 frases cada)\n3. Uma dica prática para lembrar\n\nUse Markdown. Responda na mesma língua da questão. Máximo 400 palavras.`;
+        qMax = 2000;
+      }
+
+      const antiPreamble = `COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto.`;
+
+      const qResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: antiPreamble },
+            { role: "user", content: qPrompt },
+          ],
+          max_tokens: qMax,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!qResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const qData = await qResponse.json();
+      const responseText = qData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: responseText });
+    }
+
+    // ─── Flashcard tutor (streaming) ───
     const cleanFront = frontContent.replace(/<[^>]*>/g, "").trim();
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
 
