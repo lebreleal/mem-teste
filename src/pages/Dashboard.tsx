@@ -121,16 +121,19 @@ const Dashboard = () => {
   } | null>(null);
 
   const handleDetachDeck = useCallback(async () => {
-    if (!detachTarget || !user) return;
+    if (!detachTarget) return;
     setDetaching(true);
     try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Not authenticated');
+
       // Duplicate the deck as a personal copy (no community links)
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', detachTarget.id).single();
       if (!originalDeck) throw new Error('Deck not found');
 
       const { data: newDeck, error } = await supabase.from('decks').insert({
         name: `${(originalDeck as any).name}`,
-        user_id: user.id,
+        user_id: currentUser.id,
         folder_id: null,
       } as any).select().single();
       if (error || !newDeck) throw error || new Error('Failed to create deck');
@@ -155,7 +158,7 @@ const Dashboard = () => {
       setDetaching(false);
       setDetachTarget(null);
     }
-  }, [detachTarget, user, queryClient, toast]);
+  }, [detachTarget, queryClient, toast]);
 
   const handlePendingClick = useCallback((pending: PendingDeck) => {
     if (pending.status === 'review_ready' && pending.cards) {
