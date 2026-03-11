@@ -82,54 +82,14 @@ export const useContentImport = () => {
       if (!isDeckFree(td) && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) throw new Error('SUBSCRIBER_ONLY');
       const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
-      // Refresh folders to get latest linked data
-      const { data: freshFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
-      const latestFolders = (freshFolders || []) as any[];
-
-      // Find or create linked turma root folder
-      let turmaFolder = latestFolders.find((f: any) => f.source_turma_id === turmaId && !f.source_turma_subject_id && !f.parent_id);
-      if (!turmaFolder) {
-        // Fallback: check by name (old folders without linking)
-        turmaFolder = latestFolders.find((f: any) => f.name === turma.name && !f.parent_id && !f.source_turma_id);
-        if (turmaFolder) {
-          // Link existing folder to turma
-          await supabase.from('folders').update({ source_turma_id: turmaId } as any).eq('id', turmaFolder.id);
-          turmaFolder.source_turma_id = turmaId;
-        }
-      }
-      if (turmaFolder && turmaFolder.is_archived) await supabase.from('folders').update({ is_archived: false } as any).eq('id', turmaFolder.id);
-      if (!turmaFolder) {
-        const { data: newFolder } = await supabase.from('folders').insert({
-          name: turma.name, user_id: user.id, source_turma_id: turmaId,
-        } as any).select().single();
-        turmaFolder = newFolder;
-      }
-
       const importMode: 'hierarchy' | 'flat' = td._importMode ?? 'hierarchy';
       const childTds: any[] = td._childTds ?? [];
-
-      // Resolve subject from the turma deck's subject_id
-      const subjectId = td.subject_id || contentFolderId;
-      const subjectName = subjectId ? subjects.find(s => s.id === subjectId)?.name : null;
 
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
 
-      // Find or create linked subject sub-folder inside turma folder
-      let targetFolderId = turmaFolder?.id ?? null;
-      if (subjectId && subjectName && turmaFolder) {
-        let subjectFolder = latestFolders.find((f: any) => f.source_turma_subject_id === subjectId && f.parent_id === turmaFolder.id);
-        if (!subjectFolder) {
-          const { data: newSubFolder } = await supabase.from('folders').insert({
-            name: subjectName, user_id: user.id, parent_id: turmaFolder.id,
-            source_turma_id: turmaId, source_turma_subject_id: subjectId,
-          } as any).select().single();
-          subjectFolder = newSubFolder;
-        }
-        if (subjectFolder) targetFolderId = subjectFolder.id;
-      }
-
+      const targetFolderId: string | null = null;
       let parentDeckId: string | null = null;
 
       // Helper to copy a single deck
