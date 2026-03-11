@@ -184,6 +184,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setCommunityId((data as any).community_id ?? null);
       setBuryNewSiblings((data as any).bury_new_siblings !== false);
       setBuryReviewSiblings((data as any).bury_review_siblings !== false);
       setBuryLearningSiblings((data as any).bury_learning_siblings !== false);
