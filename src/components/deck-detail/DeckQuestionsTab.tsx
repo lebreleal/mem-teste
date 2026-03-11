@@ -570,6 +570,7 @@ const DeckQuestionsTab = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
   const [practicing, setPracticing] = useState(false);
 
   // For linked decks, fetch questions from the source deck
@@ -610,14 +611,22 @@ const DeckQuestionsTab = ({
 
   return (
     <div className="space-y-4">
-      {/* Actions (only for deck owners) */}
+      {/* Actions (only for deck owners) — aligned right */}
       {!isReadOnly && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => { setCreateMode('ai'); setCreateOpen(true); }}
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Gerar com IA
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}
           >
             <PenLine className="h-3.5 w-3.5" /> Criar questão
           </Button>
@@ -698,6 +707,7 @@ const DeckQuestionsTab = ({
           open={createOpen}
           onOpenChange={setCreateOpen}
           deckId={deckId}
+          mode={createMode}
         />
       )}
     </div>
