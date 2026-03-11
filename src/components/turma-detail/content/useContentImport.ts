@@ -154,38 +154,12 @@ export const useContentImport = () => {
       if (!user || !turma) throw new Error('Not authenticated');
       const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
       const latestDecks = (freshDecks || []) as any[];
-      const { data: freshFolders } = await supabase.from('folders').select('*').eq('user_id', user.id);
-      const latestFolders = (freshFolders || []) as any[];
-
-      // Find or create linked turma root folder
-      let turmaFolder = latestFolders.find((f: any) => f.source_turma_id === turmaId && !f.source_turma_subject_id && !f.parent_id);
-      if (!turmaFolder) {
-        turmaFolder = latestFolders.find((f: any) => f.name === turma.name && !f.parent_id && !f.source_turma_id);
-        if (turmaFolder) await supabase.from('folders').update({ source_turma_id: turmaId } as any).eq('id', turmaFolder.id);
-      }
-      if (!turmaFolder) {
-        const { data: nf } = await supabase.from('folders').insert({ name: turma.name, user_id: user.id, source_turma_id: turmaId } as any).select().single();
-        turmaFolder = nf;
-      }
-
-      // Find or create linked subject sub-folder
-      const subjectId = td.subject_id || contentFolderId;
-      const subjectName = subjectId ? subjects.find(s => s.id === subjectId)?.name : null;
-      let targetFolderId = turmaFolder?.id ?? null;
-      if (subjectId && subjectName && turmaFolder) {
-        let subjectFolder = latestFolders.find((f: any) => f.source_turma_subject_id === subjectId && f.parent_id === turmaFolder.id);
-        if (!subjectFolder) {
-          const { data: nsf } = await supabase.from('folders').insert({ name: subjectName, user_id: user.id, parent_id: turmaFolder.id, source_turma_id: turmaId, source_turma_subject_id: subjectId } as any).select().single();
-          subjectFolder = nsf;
-        }
-        if (subjectFolder) targetFolderId = subjectFolder.id;
-      }
 
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
-      const existingChildNames = latestDecks.filter((d: any) => d.folder_id === targetFolderId).map((d: any) => d.name);
-      const childName = resolveNameConflict(od.name, existingChildNames);
+      const existingNames = latestDecks.filter((d: any) => !d.parent_deck_id && !d.folder_id).map((d: any) => d.name);
+      const childName = resolveNameConflict(od.name, existingNames);
       const { data: newDeck } = await supabase.from('decks').insert({
         name: childName, user_id: user.id, folder_id: targetFolderId,
         algorithm_mode: od.algorithm_mode, daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
