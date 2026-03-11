@@ -406,6 +406,28 @@ const ContentTab = () => {
     return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
   };
 
+  // ── Count cards recursively in a folder ──
+  const getFolderCardCount = (folderId: string): number => {
+    const directCards = turmaDecks
+      .filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false))
+      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+  };
+
+  // ── Count attachments (files + exams) recursively in a folder ──
+  const getFolderAttachmentCount = (folderId: string): number => {
+    const folderDecks = turmaDecks.filter((d: any) => d.subject_id === folderId && (isAdmin || d.is_published !== false));
+    let count = 0;
+    folderDecks.forEach((d: any) => {
+      if (d.lesson_id) {
+        count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
+      }
+    });
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+  };
+
   // ── Current folder's decks ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
