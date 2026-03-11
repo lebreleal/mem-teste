@@ -75,9 +75,17 @@ const DeckListItem = ({
   >
     <div className="flex-1 min-w-0">
       <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
-      <div className="flex items-center gap-2 mt-1 flex-wrap">
+      <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground flex-wrap">
+        {td.shared_by_name && (
+          <span>por <span className="font-medium text-foreground">{td.shared_by_name}</span></span>
+        )}
+        {td.created_at && (
+          <span className="flex items-center gap-0.5">
+            <Clock className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
+          </span>
+        )}
         {td.is_published === false && (isAdmin || isOwner) && (
-          <span className="text-[11px] text-muted-foreground flex items-center gap-0.5"><EyeOff className="h-3 w-3" /> Rascunho</span>
+          <span className="flex items-center gap-0.5"><EyeOff className="h-3 w-3" /> Rascunho</span>
         )}
         {subscriberOnly && <Crown className="h-3.5 w-3.5 shrink-0 text-purple-500 fill-purple-500/20" />}
         {inCollection && (
