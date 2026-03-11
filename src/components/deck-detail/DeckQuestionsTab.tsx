@@ -673,7 +673,6 @@ const CreateQuestionDialog = ({
       const { data, error } = await supabase.functions.invoke('generate-questions', {
         body: {
           deckId,
-          count: aiCount,
           optionsCount: 4,
           aiModel: 'flash',
           energyCost: aiCost,
