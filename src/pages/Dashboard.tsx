@@ -78,6 +78,27 @@ const Dashboard = () => {
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
 
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
+
+  // Error notebook count
+  const { data: errorCount = 0 } = useQuery({
+    queryKey: ['error-notebook-count', state.user?.id],
+    queryFn: async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return 0;
+      const { data: attempts } = await supabase
+        .from('deck_question_attempts' as any)
+        .select('question_id, is_correct, answered_at')
+        .eq('user_id', u.id)
+        .order('answered_at', { ascending: false });
+      if (!attempts) return 0;
+      const latestByQ = new Map<string, boolean>();
+      for (const a of attempts as any[]) {
+        if (!latestByQ.has(a.question_id)) latestByQ.set(a.question_id, a.is_correct);
+      }
+      return [...latestByQ.values()].filter(v => !v).length;
+    },
+    staleTime: 60_000,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
