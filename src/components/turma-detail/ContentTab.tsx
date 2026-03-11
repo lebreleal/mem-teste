@@ -574,6 +574,8 @@ const ContentTab = () => {
                   key={folder.id}
                   folder={folder}
                   deckCount={countDecksInFolder(folder.id)}
+                  cardCount={getFolderCardCount(folder.id)}
+                  attachmentCount={getFolderAttachmentCount(folder.id)}
                   canEdit={canEdit}
                   isAdmin={isAdmin}
                   onClick={() => setContentFolderId(folder.id)}
