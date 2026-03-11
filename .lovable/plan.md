@@ -1,204 +1,110 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
 
-## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+# Sistema Inteligente de Questões com Aprendizagem Adaptativa
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+## Análise: Como as grandes plataformas fazem?
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+Plataformas como Estratégia Concursos, QConcursos e sistemas de estudo ativo usam abordagens diferentes de flashcards para questões:
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+- **Flashcards**: Repetição espaçada pura (FSRS/SM-2) — foca em **recall** de informação
+- **Questões**: Foca em **aplicação** de conceitos — o importante não é "repetir a mesma questão", mas sim **dominar os conceitos** necessários para resolver questões similares
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+A repetição espaçada "pura" em questões não funciona bem porque:
+1. O usuário decora a resposta da questão específica, não aprende o conceito
+2. Questões testam múltiplos conceitos ao mesmo tempo
+3. O valor está em resolver questões **novas** sobre o mesmo tema, não repetir as mesmas
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+## Proposta: Sistema de Conceitos + Caderno de Erros + IA Adaptativa
 
----
+### 1. Barra de Estatísticas (como a screenshot)
+Seção visual na aba Questões mostrando:
+- Total de questões no banco
+- Questões respondidas / não respondidas / acertadas / erradas
+- Barra de progresso colorida (verde = acertou, vermelho = errou, cinza = não respondida)
+- Taxa de acerto geral
 
-# Refatoração de Monolitos (Fase 1)
+### 2. Caderno de Erros (Error Notebook)
+- Questões erradas ficam automaticamente no "Caderno de Erros"
+- Filtro rápido para revisar apenas questões erradas
+- Quando o usuário acerta uma questão que antes errou, ela sai do caderno
+- Badge visual mostrando quantas questões pendentes no caderno de erros
 
-## Implementado
+### 3. Mapeamento de Conceitos por IA (o diferencial)
+Ao criar/gerar questões, a IA identifica os **conceitos-chave** necessários:
+- Nova coluna `concepts` (jsonb) na tabela `deck_questions` — ex: `["Princípio da Legalidade", "Art. 37 CF"]`
+- Quando o usuário **erra** uma questão, a IA:
+  - Mostra quais conceitos ele precisava dominar
+  - Verifica se já existem cards no deck sobre esses conceitos
+  - **Sugere criar cards** para os conceitos que faltam (com 1 clique)
+- Isso cria um ciclo: Errou questão → IA cria cards → Estuda cards → Volta e acerta questões similares
 
-### StudyPlan.tsx: 1.580 → ~500 linhas
-Extraídos 3 módulos:
-- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
-- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
-- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+### 4. Repetição Inteligente (não espaçada pura)
+Em vez de FSRS nas questões, usamos um sistema de **prioridade por conceito fraco**:
+- Cada conceito tem um "score" baseado nas respostas (acertou/errou questões com aquele conceito)
+- Na próxima sessão de questões, prioriza questões com conceitos fracos
+- Nova tabela `deck_question_concepts` para trackear domínio por conceito
 
-### ManageDeck.tsx: 1.169 → ~900 linhas
-Extraído:
-- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+## Mudanças Técnicas
 
-### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
-Extraído:
-- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+### Database (nova migration)
+```sql
+-- Adicionar coluna de conceitos nas questões
+ALTER TABLE deck_questions ADD COLUMN concepts text[] DEFAULT '{}';
 
-### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
-Extraído:
-- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+-- Tabela de domínio de conceitos por usuário
+CREATE TABLE deck_concept_mastery (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  deck_id uuid NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+  concept text NOT NULL,
+  correct_count int DEFAULT 0,
+  wrong_count int DEFAULT 0,
+  mastery_level text DEFAULT 'weak', -- weak, learning, strong
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, deck_id, concept)
+);
+```
 
-### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
-Extraído:
-- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
+### Frontend — DeckQuestionsTab.tsx
+1. **Stats bar** no topo (igual screenshot): total, respondidas, acertadas, erradas com barra colorida
+2. **Filtros**: Todas | Não respondidas | Caderno de Erros | Por conceito
+3. **Após errar**: seção "Conceitos desta questão" com status de domínio + botão "Criar cards para este conceito"
+4. **Badge "Caderno de Erros"** com contador
 
----
+### Edge Function — ai-tutor (novo type: `question-concepts`)
+- Recebe a questão + alternativas
+- Retorna lista de conceitos-chave necessários
+- Executado automaticamente na criação de questões
 
-# Rebalanceamento da Economia de Créditos IA
+### Edge Function — ai-tutor (novo type: `generate-concept-cards`)
+- Recebe conceito + contexto do deck
+- Gera 2-3 flashcards focados naquele conceito específico
+- Adicionados ao deck automaticamente
 
-## Implementado
+## Fluxo do Usuário
 
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
+```text
+Aba Questões
+├── Stats Bar: "42 questões · 28 respondidas · 71% acerto · 8 no caderno de erros"
+├── Filtros: [Todas] [Não respondidas] [Caderno de Erros ⑧]
+├── Lista de questões (preview com cor: verde/vermelho/cinza)
+└── [Estudar Questões] → Modo prática
+    ├── Responde questão
+    ├── Se ERROU:
+    │   ├── Mostra explicação
+    │   ├── "Conceitos necessários: [Princípio X] [Art. Y]"
+    │   ├── Score do conceito: "Fraco — você errou 3/4 questões sobre isso"
+    │   └── [🤖 Criar cards para este conceito] → IA gera cards no deck
+    └── Se ACERTOU:
+        ├── Atualiza mastery do conceito
+        └── Remove do caderno de erros (se estava lá)
+```
 
-Total mensal free: ~1.500 → ~270 créditos.
+## Resumo: 5 entregas
 
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+1. **Stats bar** com contadores e barra de progresso na aba Questões
+2. **Caderno de Erros** com filtro e badge
+3. **Conceitos por questão** (coluna `concepts` + extração por IA)
+4. **Mastery tracking** por conceito (tabela + UI mostrando domínio)
+5. **Geração de cards por conceito** (IA cria cards quando o usuário erra)
 
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
-
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
-
----
-
-# Transação com Rollback de Créditos em Edge Functions
-
-## Implementado
-
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
-
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
-
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
-
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
-
----
-
-# Dashboard Performance & Bug Fixes
-
-## Implementado
-
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
-
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
-
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
-
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
-
-## Resumo de impacto
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
-
----
-
-# Otimização de Requisições do Dashboard
-
-## Implementado
-
-### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
-- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
-- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
-
-### Fase B: deck-hierarchy via cache (economia: -1 query)
-- Removida query separada `['deck-hierarchy']`
-- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
-
-### Fase C: Missões com cache (economia: -2 queries)
-- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
-- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
-
-### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
-- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
-
-### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
-- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
-
-### Fase F: Aggregate stats memoizado (economia: CPU)
-- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
-- Build O(n) uma vez, lookup O(1) por deck
-
-## Resumo de impacto
-| Otimização | Economia |
-|------------|----------|
-| useStudyPlan split (A) | -3 queries |
-| deck-hierarchy cache (B) | -1 query |
-| Missões com cache (C) | -2 queries |
-| useIsAdmin useQuery (D) | cache 10min |
-| Subscription polling (E) | -80% calls |
-| AggregateStats memo (F) | O(n²) → O(1) |
-| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
-
----
-
-# Métricas Reais de Repetições por Sessão
-
-## Implementado
-
-### 1. RPC `get_user_real_study_metrics` atualizada
-Adicionados 2 novos campos:
-- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
-- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
-
-### 2. `calculateRealStudyTime` reescrita
-- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
-- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
-- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
-
-### 3. Interface `RealStudyMetrics` expandida
-- `avgReviewsPerNewCard: number` (mediana do histórico real)
-- `avgLapseRate: number` (taxa de erro em revisões)
-
-### 4. `useStudyPlan` mapeia novos campos da RPC
-- Fallbacks para contas sem histórico suficiente
