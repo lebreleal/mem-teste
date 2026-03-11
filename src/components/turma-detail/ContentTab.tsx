@@ -36,6 +36,14 @@ import {
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
 import TrialStudyModal from '@/components/turma-detail/TrialStudyModal';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+const formatRelativeTime = (dateStr: string) => {
+  try {
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
+  } catch { return ''; }
+};
 
 /* ── Deck Card (compact list item for Drive style) ── */
 const DeckListItem = ({
