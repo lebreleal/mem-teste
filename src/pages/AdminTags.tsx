@@ -122,7 +122,7 @@ const TagEditDialog = ({
 /* ── Main Admin Tags Page ── */
 const AdminTags = () => {
   const navigate = useNavigate();
-  const isAdmin = useIsAdmin();
+  const { isAdmin } = useIsAdmin();
   const { data: tags = [], isLoading } = useAllTags();
   const { updateTag, deleteTag, mergeTags } = useTagAdminMutations();
 
