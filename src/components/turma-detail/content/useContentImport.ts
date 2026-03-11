@@ -161,7 +161,7 @@ export const useContentImport = () => {
       const existingNames = latestDecks.filter((d: any) => !d.parent_deck_id && !d.folder_id).map((d: any) => d.name);
       const childName = resolveNameConflict(od.name, existingNames);
       const { data: newDeck } = await supabase.from('decks').insert({
-        name: childName, user_id: user.id, folder_id: targetFolderId,
+        name: childName, user_id: user.id,
         algorithm_mode: od.algorithm_mode, daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
         source_turma_deck_id: td.id,
       } as any).select().single();
