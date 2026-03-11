@@ -25,63 +25,6 @@ const formatRelativeTime = (dateStr: string) => {
   try { return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR }); } catch { return ''; }
 };
 
-/* ── Card Preview Sheet (read-only) ── */
-const CardPreviewSheet = ({ open, onOpenChange, deckId, deckName }: {
-  open: boolean; onOpenChange: (v: boolean) => void; deckId: string; deckName: string;
-}) => {
-  const isMobile = useIsMobile();
-  const { data: cards = [], isLoading } = useQuery({
-    queryKey: ['public-deck-cards', deckId],
-    queryFn: async () => {
-      const { data } = await supabase.from('cards').select('id, front_content, back_content, card_type').eq('deck_id', deckId).limit(50);
-      return data ?? [];
-    },
-    enabled: open && !!deckId,
-  });
-
-  const content = (
-    <div className="space-y-3 p-1">
-      {isLoading ? (
-        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : cards.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground py-8">Nenhum cartão neste deck</p>
-      ) : (
-        cards.map((card: any) => (
-          <div key={card.id} className="rounded-xl border border-border bg-card p-4 space-y-2">
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Frente</p>
-              <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front_content) }} />
-            </div>
-            <div className="border-t border-border/50 pt-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Verso</p>
-              <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader><DrawerTitle className="truncate">{deckName}</DrawerTitle></DrawerHeader>
-          <ScrollArea className="flex-1 px-4 pb-6">{content}</ScrollArea>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col">
-        <SheetHeader><SheetTitle className="truncate">{deckName}</SheetTitle></SheetHeader>
-        <ScrollArea className="flex-1 mt-4">{content}</ScrollArea>
-      </SheetContent>
-    </Sheet>
-  );
-};
 
 /* ── Auth Gate Dialog ── */
 const AuthGatePrompt = ({ open, onOpenChange, slugOrId }: {
