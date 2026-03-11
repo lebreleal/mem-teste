@@ -11,6 +11,11 @@ import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { useDecks } from '@/hooks/useDecks';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
