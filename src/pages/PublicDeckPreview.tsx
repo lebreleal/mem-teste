@@ -885,6 +885,7 @@ const PublicDeckPreview = () => {
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showDeckReport, setShowDeckReport] = useState(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
   const [joining, setJoining] = useState(false);
   const [following, setFollowing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
