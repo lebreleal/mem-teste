@@ -320,6 +320,7 @@ const ContentTab = () => {
   const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
+  const [previewDeck, setPreviewDeck] = useState<{ td: any; alreadyLinked: boolean; alreadyOwns: boolean } | null>(null);
 
   // ── Batch tags for all community decks ──
   const allDeckIds = useMemo(() => turmaDecks.map((d: any) => d.deck_id), [turmaDecks]);
@@ -499,7 +500,9 @@ const ContentTab = () => {
     const subscriberOnly = !importLogic.isDeckFree(td);
     const canImportDeck = importLogic.canAccessDeck(td);
     if (subscriberOnly && !canImportDeck) { setGateDeck(td); return; }
-    navigate(`/decks/${td.deck_id}/preview`, { state: { from: 'community', turmaId } });
+    const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
+    const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
+    setPreviewDeck({ td, alreadyLinked, alreadyOwns });
   };
 
   return (
@@ -917,6 +920,31 @@ const ContentTab = () => {
         deckId={trialDeck?.deckId || ''}
         deckName={trialDeck?.deckName || ''}
       />
+
+      {/* Deck Preview Sheet */}
+      {previewDeck && (
+        <DeckPreviewSheet
+          open={!!previewDeck}
+          onOpenChange={v => { if (!v) setPreviewDeck(null); }}
+          deckId={previewDeck.td.deck_id}
+          deckName={previewDeck.td.deck_name}
+          cardCount={previewDeck.td.card_count ?? 0}
+          alreadyLinked={previewDeck.alreadyLinked}
+          alreadyOwns={previewDeck.alreadyOwns}
+          allowDownload={previewDeck.td.allow_download ?? false}
+          onAddToCollection={() => {
+            const children = turmaDecks.filter((d: any) => d.parent_deck_id === previewDeck.td.deck_id);
+            setConfirmImportItem({ type: 'deck', data: { ...previewDeck.td, _childTds: children } });
+            setPreviewDeck(null);
+          }}
+          onDownload={() => {
+            importLogic.downloadDeck.mutate(previewDeck.td);
+            setPreviewDeck(null);
+          }}
+          isAdding={importLogic.addToCollection.isPending}
+          isDownloading={importLogic.downloadDeck.isPending}
+        />
+      )}
     </div>
   );
 };
