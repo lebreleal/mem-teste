@@ -299,6 +299,7 @@ const FlashCard = ({
           )}
           {actions}
         </div>
+        {communityMeta}
       </div>
 
       {/* Scrollable content area */}
