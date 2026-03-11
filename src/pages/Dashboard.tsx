@@ -1,11 +1,12 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -78,6 +79,27 @@ const Dashboard = () => {
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
 
   const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
+
+  // Error notebook count
+  const { data: errorCount = 0 } = useQuery({
+    queryKey: ['error-notebook-count'],
+    queryFn: async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return 0;
+      const { data: attempts } = await supabase
+        .from('deck_question_attempts' as any)
+        .select('question_id, is_correct, answered_at')
+        .eq('user_id', u.id)
+        .order('answered_at', { ascending: false });
+      if (!attempts) return 0;
+      const latestByQ = new Map<string, boolean>();
+      for (const a of attempts as any[]) {
+        if (!latestByQ.has(a.question_id)) latestByQ.set(a.question_id, a.is_correct);
+      }
+      return [...latestByQ.values()].filter(v => !v).length;
+    },
+    staleTime: 60_000,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
@@ -206,6 +228,23 @@ const Dashboard = () => {
             </button>
           ))}
         </div>
+
+        {/* Caderno de Erros shortcut */}
+        {errorCount > 0 && (
+          <button
+            onClick={() => navigate('/caderno-de-erros')}
+            className="mb-6 w-full flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 hover:bg-destructive/10 transition-colors"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+              <BookX className="h-5 w-5 text-destructive" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-bold text-foreground">Caderno de Erros</p>
+              <p className="text-[11px] text-muted-foreground">{errorCount} {errorCount === 1 ? 'questão errada' : 'questões erradas'} para revisar</p>
+            </div>
+            <Badge variant="destructive" className="text-xs">{errorCount}</Badge>
+          </button>
+        )}
 
         {/* Study deck carousel */}
         {allDecks && (
