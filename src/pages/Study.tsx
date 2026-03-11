@@ -118,9 +118,11 @@ const Study = () => {
   const { data: sourceInfo } = useQuery({
     queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
-      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck').eq('id', currentCardDeckId!).single();
+      console.log('[sourceInfo] fetching for deck:', currentCardDeckId);
+      const { data: deck, error } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck').eq('id', currentCardDeckId!).single();
+      console.log('[sourceInfo] deck result:', deck, 'error:', error);
       if (!deck) return null;
-      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) return null;
+      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) { console.log('[sourceInfo] not a community deck'); return null; }
       let authorName: string | null = null;
       let updatedAt: string | null = null;
       if (deck.source_turma_deck_id) {
