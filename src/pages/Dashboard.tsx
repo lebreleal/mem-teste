@@ -108,14 +108,33 @@ const Dashboard = () => {
       : state.currentDecks,
     [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
   );
-  const [detaching, setDetaching] = useState(false);
-  const [pendingReviewData, setPendingReviewData] = useState<{
-    pendingId: string;
-    cards: GeneratedCard[];
-    deckName: string;
-    folderId: string | null;
-    textSample?: string;
-  } | null>(null);
+
+  // Carousel helpers
+  const hasPlan = plans.length > 0;
+  const planDeckIds = allDeckIds;
+  const plansByDeckId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of plans) {
+      for (const id of (p.deck_ids ?? [])) {
+        if (!map[id]) map[id] = p.name;
+      }
+    }
+    return map;
+  }, [plans]);
+
+  // Handle payment return
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (payment === 'success') {
+      toast({ title: '🎉 Pagamento realizado!', description: 'Seu status será atualizado em instantes.' });
+      refreshStatus();
+      setTimeout(refreshStatus, 5000);
+      setSearchParams({}, { replace: true });
+    } else if (payment === 'canceled') {
+      toast({ title: 'Pagamento cancelado', description: 'Nenhuma cobrança foi feita.' });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, refreshStatus, setSearchParams, toast]);
 
   const handleDetachDeck = useCallback(async () => {
     if (!detachTarget) return;
