@@ -13,8 +13,9 @@ import {
 } from '@/services/deckService';
 
 interface DashboardState {
+  dashboardSection: 'personal' | 'community';
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null; is_archived: boolean }[];
-  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean }[];
+  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean; section?: 'personal' | 'community' }[];
   currentFolderId: string | null;
   currentDecks: { id: string }[];
 
@@ -80,7 +81,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         }
       );
     } else {
-      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
+      state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
         onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
         onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
       });
@@ -97,7 +98,9 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
       hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
     } else {
-      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
+      const siblingFolders = state.folders.filter(
+        f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === state.dashboardSection
+      );
       hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
     }
     if (hasDuplicate) {

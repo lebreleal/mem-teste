@@ -77,8 +77,49 @@ const Dashboard = () => {
   const { isAdmin } = useIsAdmin();
   const defaultAlgorithm = isPremium ? 'fsrs' : 'sm2';
 
+  const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
+  const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
+  const [detaching, setDetaching] = useState(false);
+  const [pendingReviewData, setPendingReviewData] = useState<{
+    pendingId: string;
+    cards: GeneratedCard[];
+    deckName: string;
+    folderId: string | null;
+    textSample?: string;
+  } | null>(null);
+
+  const activeSection = dashboardTab === 'community' ? 'community' : 'personal';
+
   // Extracted actions hook
-  const actions = useDashboardActions(state, defaultAlgorithm);
+  const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
+
+  const visibleFolders = useMemo(
+    () => state.folders
+      .filter(f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === activeSection)
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+    [state.folders, state.currentFolderId, activeSection]
+  );
+
+  const visibleDecks = useMemo(
+    () => activeSection === 'community'
+      ? state.communityDecks.filter(d => d.folder_id === state.currentFolderId)
+      : state.currentDecks,
+    [activeSection, state.communityDecks, state.currentDecks, state.currentFolderId]
+  );
+
+  const personalCurrentFolders = useMemo(
+    () => state.currentFolders.filter(f => (f.section ?? 'personal') === 'personal'),
+    [state.currentFolders]
+  );
+
+  const communityRootFolders = useMemo(
+    () => state.folders
+      .filter(f => !f.parent_id && !f.is_archived && (f.section ?? 'personal') === 'community')
+      .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
+    [state.folders]
+  );
 
   // Carousel helpers
   const hasPlan = plans.length > 0;
@@ -105,20 +146,7 @@ const Dashboard = () => {
       toast({ title: 'Pagamento cancelado', description: 'Nenhuma cobrança foi feita.' });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams]);
-
-  const claimableCount = missions.filter(m => m.isCompleted && !m.isClaimed).length;
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dashboardTab, setDashboardTab] = useState<'personal' | 'community'>('personal');
-  const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
-  const [detaching, setDetaching] = useState(false);
-  const [pendingReviewData, setPendingReviewData] = useState<{
-    pendingId: string;
-    cards: GeneratedCard[];
-    deckName: string;
-    folderId: string | null;
-    textSample?: string;
-  } | null>(null);
+  }, [searchParams, refreshStatus, setSearchParams, toast]);
 
   const handleDetachDeck = useCallback(async () => {
     if (!detachTarget) return;
@@ -222,6 +250,7 @@ const Dashboard = () => {
         )}
 
         <DashboardActions
+          mode={activeSection}
           currentFolderId={state.currentFolderId}
           breadcrumb={state.breadcrumb}
           onNavigateFolder={state.setCurrentFolderId}
@@ -229,14 +258,14 @@ const Dashboard = () => {
             const current = state.folders.find(f => f.id === state.currentFolderId);
             state.setCurrentFolderId(current?.parent_id ?? null);
           }}
-          hasDecks={state.currentDecks.length > 0}
-          deckSelectionMode={state.deckSelectionMode}
+          hasDecks={visibleDecks.length > 0}
+          deckSelectionMode={activeSection === 'personal' ? state.deckSelectionMode : false}
           selectedCount={state.selectedDeckIds.size}
-          isAllSelected={state.selectedDeckIds.size === state.currentDecks.length}
+          isAllSelected={visibleDecks.length > 0 && state.selectedDeckIds.size === visibleDecks.length}
           toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
           toggleSelectAll={() => {
-            if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
-            else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
+            if (state.selectedDeckIds.size === visibleDecks.length) state.setSelectedDeckIds(new Set());
+            else state.setSelectedDeckIds(new Set(visibleDecks.map(d => d.id)));
           }}
           onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
           onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
@@ -253,7 +282,7 @@ const Dashboard = () => {
         {!state.currentFolderId && (
           <div className="flex gap-1 mb-3 rounded-lg bg-muted p-1">
             <button
-              onClick={() => setDashboardTab('personal')}
+              onClick={() => { setDashboardTab('personal'); state.setCurrentFolderId(null); }}
               className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 dashboardTab === 'personal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -261,7 +290,7 @@ const Dashboard = () => {
               Meus Decks
             </button>
             <button
-              onClick={() => setDashboardTab('community')}
+              onClick={() => { setDashboardTab('community'); state.setCurrentFolderId(null); }}}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -276,7 +305,7 @@ const Dashboard = () => {
         {(dashboardTab === 'personal' || !!state.currentFolderId) && (
           <DeckList
             isLoading={state.isLoading}
-            currentFolders={state.currentFolders}
+            currentFolders={personalCurrentFolders}
             currentDecks={state.currentDecks}
             currentFolderId={state.currentFolderId}
             searchQuery={searchQuery}
@@ -310,7 +339,7 @@ const Dashboard = () => {
         )}
 
         {/* Community decks tab */}
-        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && (
+        {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length === 0 && communityRootFolders.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
               <Users className="h-7 w-7 text-primary" />
@@ -325,7 +354,7 @@ const Dashboard = () => {
         {dashboardTab === 'community' && !state.currentFolderId && state.communityDecks.length > 0 && (
           <DeckList
             isLoading={false}
-            currentFolders={[]}
+            currentFolders={communityRootFolders}
             currentDecks={state.communityDecks}
             currentFolderId={null}
             searchQuery={searchQuery}
