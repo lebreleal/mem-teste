@@ -264,25 +264,34 @@ const ConceptMasterySection = ({
                         <span><span className="font-bold text-foreground">{existingCards.length}</span> cards relacionados encontrados no seu baralho:</span>
                       </p>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {existingCards.map(card => (
-                          <div key={card.id} className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
-                            <div className="px-3.5 py-2.5 border-b border-border/30 bg-muted/20">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Badge variant="outline" className="text-[9px] h-4 px-1.5">
-                                  {card.card_type === 'cloze' ? 'Cloze' : card.card_type === 'multiple_choice' ? 'MC' : 'Básico'}
-                                </Badge>
-                                <span className="text-[10px] text-muted-foreground">Frente</span>
+                        {existingCards.map(card => {
+                          // Check if back_content is actual content or just cloze metadata
+                          const backRaw = (card.back_content || '').trim();
+                          const isClozeMetadata = backRaw.startsWith('{') && (backRaw.includes('clozeTarget') || backRaw.includes('"extra":""'));
+                          const hasRealBack = backRaw.length > 0 && !isClozeMetadata;
+
+                          return (
+                            <div key={card.id} className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
+                              <div className={`px-3.5 py-2.5 ${hasRealBack ? 'border-b border-border/30' : ''} bg-muted/20`}>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <Badge variant="outline" className="text-[9px] h-4 px-1.5">
+                                    {card.card_type === 'cloze' ? 'Cloze' : card.card_type === 'multiple_choice' ? 'MC' : 'Básico'}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">Frente</span>
+                                </div>
+                                <div className="text-xs text-foreground leading-relaxed line-clamp-3"
+                                  dangerouslySetInnerHTML={{ __html: card.front_content }} />
                               </div>
-                              <div className="text-xs text-foreground leading-relaxed line-clamp-3"
-                                dangerouslySetInnerHTML={{ __html: card.front_content }} />
+                              {hasRealBack && (
+                                <div className="px-3.5 py-2 bg-primary/[0.02]">
+                                  <span className="text-[10px] text-muted-foreground">Verso</span>
+                                  <div className="text-xs text-foreground leading-relaxed line-clamp-2 mt-0.5"
+                                    dangerouslySetInnerHTML={{ __html: card.back_content }} />
+                                </div>
+                              )}
                             </div>
-                            <div className="px-3.5 py-2 bg-primary/[0.02]">
-                              <span className="text-[10px] text-muted-foreground">Verso</span>
-                              <div className="text-xs text-foreground leading-relaxed line-clamp-2 mt-0.5"
-                                dangerouslySetInnerHTML={{ __html: card.back_content }} />
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <PlayCircle className="h-3 w-3" />
