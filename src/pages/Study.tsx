@@ -409,69 +409,67 @@ const Study = () => {
               tutor.handleTutorRequest(currentCard, options || { action: 'explain' });
             }}
             actions={
-              <>
-                <StudyCardActions
-                  card={currentCard}
-                  isLiveDeck={isLiveDeck}
-                  onCardUpdated={(updatedFields) => {
-                    setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
-                    setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
-                  }}
-                  onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
-                  onCardBuried={() => {
-                    setLocalQueue(prev => {
-                      let filtered = prev.filter(c => c.id !== currentCard.id);
-                      if (currentCard.card_type === 'cloze') {
-                        const sibIds = getSiblingIds(currentCard, filtered);
-                        if (sibIds.length > 0) {
-                          const tomorrow = new Date();
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          tomorrow.setHours(0, 0, 0, 0);
-                          sibIds.forEach(sid => {
-                            supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
-                          });
-                          filtered = filtered.filter(c => !sibIds.includes(c.id));
-                        }
+              <StudyCardActions
+                card={currentCard}
+                isLiveDeck={isLiveDeck}
+                onCardUpdated={(updatedFields) => {
+                  setLocalQueue(prev => prev.map(c => c.id === currentCard.id ? { ...c, ...updatedFields } : c));
+                  setDisplayedCard(prev => prev && prev.id === currentCard.id ? { ...prev, ...updatedFields } : prev);
+                }}
+                onCardFrozen={() => { setLocalQueue(prev => prev.filter(c => c.id !== currentCard.id)); setCardKey(prev => prev + 1); }}
+                onCardBuried={() => {
+                  setLocalQueue(prev => {
+                    let filtered = prev.filter(c => c.id !== currentCard.id);
+                    if (currentCard.card_type === 'cloze') {
+                      const sibIds = getSiblingIds(currentCard, filtered);
+                      if (sibIds.length > 0) {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        tomorrow.setHours(0, 0, 0, 0);
+                        sibIds.forEach(sid => {
+                          supabase.from('cards').update({ scheduled_date: tomorrow.toISOString() }).eq('id', sid).then(() => {});
+                        });
+                        filtered = filtered.filter(c => !sibIds.includes(c.id));
                       }
-                      return filtered;
+                    }
+                    return filtered;
+                  });
+                  setCardKey(prev => prev + 1);
+                }}
+                onSiblingsUpdated={(updates, deletedIds) => {
+                  setLocalQueue(prev => {
+                    let q = prev.map(c => {
+                      const upd = updates.find(u => u.id === c.id);
+                      return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
                     });
-                    setCardKey(prev => prev + 1);
-                  }}
-                  onSiblingsUpdated={(updates, deletedIds) => {
-                    setLocalQueue(prev => {
-                      let q = prev.map(c => {
-                        const upd = updates.find(u => u.id === c.id);
-                        return upd ? { ...c, front_content: upd.front_content, back_content: upd.back_content } : c;
-                      });
-                      if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id));
-                      return q;
-                    });
-                  }}
-                  onOpenChat={() => setChatOpen(true)}
-                  chatHasMessages={chatHasMessages}
-                />
-                {sourceInfo && (
-                  <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
-                    {sourceInfo.authorName && (
-                      <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
-                    )}
-                    {currentCard?.updated_at && (
-                      <span className="flex items-center gap-0.5">
-                        <RefreshCw className="h-2.5 w-2.5" />
-                        {formatDistanceToNow(new Date(currentCard.updated_at), { addSuffix: true, locale: ptBR })}
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setCommunityInfoOpen(true)}
-                      className="flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Informações do card de comunidade"
-                    >
-                      <Info className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-              </>
+                    if (deletedIds.length > 0) q = q.filter(c => !deletedIds.includes(c.id));
+                    return q;
+                  });
+                }}
+                onOpenChat={() => setChatOpen(true)}
+                chatHasMessages={chatHasMessages}
+              />
             }
+            communityMeta={sourceInfo ? (
+              <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground mt-1">
+                {sourceInfo.authorName && (
+                  <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
+                )}
+                {sourceInfo.updatedAt && (
+                  <span className="flex items-center gap-0.5">
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    {formatDistanceToNow(new Date(sourceInfo.updatedAt), { addSuffix: true, locale: ptBR })}
+                  </span>
+                )}
+                <button
+                  onClick={() => setCommunityInfoOpen(true)}
+                  className="flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Informações do card de comunidade"
+                >
+                  <Info className="h-3 w-3" />
+                </button>
+              </div>
+            ) : undefined}
           />
         </div>
       </main>
@@ -502,7 +500,7 @@ const Study = () => {
             <p className="flex items-start gap-1.5">
               <RefreshCw className="h-3.5 w-3.5 mt-0.5 shrink-0 text-foreground" />
               <span>
-                A data de atualização indica quando <strong className="text-foreground">este cartão específico</strong> foi editado pelo criador. Cada cartão tem sua própria data — o deck pode ter sido atualizado recentemente mesmo que este cartão não tenha mudado.
+                A data de atualização indica quando o <strong className="text-foreground">conteúdo do baralho</strong> foi editado pelo criador — seja uma edição direta ou uma sugestão aceita da comunidade. Não inclui revisões ou estudos.
               </span>
             </p>
           </div>

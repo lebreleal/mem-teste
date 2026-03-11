@@ -59,6 +59,7 @@ interface FlashCardProps {
   explainResponse?: string | null;
   mcExplainResponse?: string | null;
   actions?: React.ReactNode;
+  communityMeta?: React.ReactNode;
   canUndo?: boolean;
   onUndo?: () => void;
   onOpenExplainChat?: (options?: { action?: string; mcOptions?: string[]; correctIndex?: number; selectedIndex?: number }) => void;
@@ -136,7 +137,7 @@ function renderOcclusion(frontContent: string, revealed: boolean, fallbackCanvas
 const FlashCard = ({
   frontContent, backContent, cardId, stability, difficulty, state, scheduledDate, lastReviewedAt, cardType, learningStep = 0,
   onRate, isSubmitting, quickReview, algorithmMode = 'fsrs', deckConfig,
-  energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions,
+  energy = 0, tutorCost = 2, onTutorRequest, isTutorLoading, hintResponse, explainResponse, mcExplainResponse, actions, communityMeta,
   canUndo, onUndo, onOpenExplainChat,
 }: FlashCardProps) => {
   const [flipped, setFlipped] = useState(false);
@@ -210,6 +211,7 @@ const FlashCard = ({
         algorithmMode={algorithmMode}
         deckConfig={deckConfig}
         actions={actions}
+        communityMeta={communityMeta}
         stability={stability}
         difficulty={difficulty}
         state={state}
@@ -298,6 +300,7 @@ const FlashCard = ({
           )}
           {actions}
         </div>
+        {communityMeta}
       </div>
 
       {/* Scrollable content area */}
