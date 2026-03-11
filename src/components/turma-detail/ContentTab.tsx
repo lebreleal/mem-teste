@@ -184,7 +184,19 @@ const FolderItem = ({
     </div>
     <div className="flex-1 min-w-0">
       <h3 className="font-medium text-sm text-foreground truncate">{folder.name}</h3>
-      <span className="text-[11px] text-muted-foreground">{deckCount} decks</span>
+        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+          <span>{deckCount} decks</span>
+          {(cardCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Layers className="h-3 w-3 shrink-0" /> {cardCount}
+            </span>
+          )}
+          {(attachmentCount ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5">
+              <Paperclip className="h-3 w-3 shrink-0" /> {attachmentCount}
+            </span>
+          )}
+        </div>
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {canEdit && (
