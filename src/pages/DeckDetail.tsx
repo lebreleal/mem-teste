@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 /** Detect if a deck is linked to a community/marketplace source */
 function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
