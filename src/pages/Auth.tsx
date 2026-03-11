@@ -16,7 +16,7 @@ const Auth = () => {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -41,15 +41,6 @@ const Auth = () => {
       }
     }
     setLoading(false);
-  };
-
-  const handleGoogle = async () => {
-    const { error } = await signInWithGoogle();
-    if (error === 'popup_blocked') {
-      toast({ title: 'Popup bloqueado', description: 'Permita popups neste site para entrar com Google.', variant: 'destructive' });
-    } else if (error) {
-      toast({ title: 'Erro', description: error, variant: 'destructive' });
-    }
   };
 
   return (
