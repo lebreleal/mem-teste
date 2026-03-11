@@ -630,6 +630,7 @@ const CreateQuestionDialog = ({
     setQuestionText(''); setOptions(['', '', '', '']); setCorrectIdx(null);
     setCorrectExplanation(''); setWrongExplanations({}); setShowExplanations(false);
     setAiCustomInstructions('');
+    setAiModel('flash');
   };
 
   const canAddE = options.length < 5;
