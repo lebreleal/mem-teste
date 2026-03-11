@@ -99,7 +99,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   por <span className="font-medium text-foreground">{deck.source_author}</span>
                 </p>
               )}
-              {deck.updated_at && (
+              {(deck as any).source_updated_at && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date((deck as any).source_updated_at), { addSuffix: true, locale: ptBR })}
+                </p>
+              )}
+              {!(deck as any).source_updated_at && deck.updated_at && (
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 shrink-0" /> {formatDistanceToNow(new Date(deck.updated_at), { addSuffix: true, locale: ptBR })}
                 </p>
