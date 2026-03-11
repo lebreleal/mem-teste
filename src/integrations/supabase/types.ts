@@ -354,6 +354,47 @@ export type Database = {
           },
         ]
       }
+      deck_concept_mastery: {
+        Row: {
+          concept: string
+          correct_count: number
+          deck_id: string
+          id: string
+          mastery_level: string
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          concept: string
+          correct_count?: number
+          deck_id: string
+          id?: string
+          mastery_level?: string
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          concept?: string
+          correct_count?: number
+          deck_id?: string
+          id?: string
+          mastery_level?: string
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_concept_mastery_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deck_question_attempts: {
         Row: {
           answered_at: string
@@ -394,6 +435,7 @@ export type Database = {
       }
       deck_questions: {
         Row: {
+          concepts: string[] | null
           correct_answer: string
           correct_indices: number[] | null
           created_at: string
@@ -408,6 +450,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          concepts?: string[] | null
           correct_answer?: string
           correct_indices?: number[] | null
           created_at?: string
@@ -422,6 +465,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          concepts?: string[] | null
           correct_answer?: string
           correct_indices?: number[] | null
           created_at?: string
