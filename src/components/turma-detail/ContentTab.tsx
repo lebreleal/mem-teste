@@ -320,6 +320,7 @@ const ContentTab = () => {
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
   const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
+  const [previewDeck, setPreviewDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
 
