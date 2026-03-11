@@ -8,6 +8,7 @@
 export {
   fetchUserTurmas,
   fetchTurma,
+  fetchTurmaBySlug,
   createTurma,
   joinTurmaByCode,
   joinTurmaById,
