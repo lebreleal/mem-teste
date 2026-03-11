@@ -279,6 +279,7 @@ const DeckList = ({
             onMove={onMoveDeck}
             onArchive={onArchiveDeck}
             onDelete={onDeleteDeck}
+            onDetachCommunityDeck={onDetachCommunityDeck}
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
             hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
