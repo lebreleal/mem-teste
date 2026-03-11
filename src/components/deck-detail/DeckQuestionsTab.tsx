@@ -737,17 +737,14 @@ const CreateQuestionDialog = ({
         </DialogHeader>
         {mode === 'ai' ? (
           <div className="space-y-4">
-            {/* Card count info */}
-            <div className="rounded-xl border border-border/50 bg-muted/30 p-3 flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Brain className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground">Geração baseada nos cards</p>
-                <p className="text-[11px] text-muted-foreground">
-                  A IA vai analisar os <span className="font-bold text-foreground">{cardCount} cards</span> do baralho e criar questões que correlacionam múltiplos conceitos
-                </p>
-              </div>
+            {/* Card count header */}
+            <div className="rounded-xl border border-border/50 bg-muted/30 p-3.5">
+              <p className="text-sm font-bold text-foreground">
+                A IA vai analisar os <span className="text-primary">{cardCount} cards</span> do baralho
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Cards com conceitos relacionados serão agrupados em questões integradas de raciocínio.
+              </p>
             </div>
 
             {cardCount === 0 && (
@@ -757,10 +754,53 @@ const CreateQuestionDialog = ({
               </div>
             )}
 
-
-            {/* Concept-cluster info */}
-            <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
-              A IA vai analisar todos os cards, agrupar por conceitos relacionados e criar <span className="font-bold text-foreground">uma questão por grupo conceitual</span>. Cards que compartilham temas serão combinados em questões integradas.
+            {/* Model selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground">Modelo de IA</label>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Flash */}
+                <button
+                  type="button"
+                  onClick={() => setAiModel('flash')}
+                  className={`rounded-xl border-2 p-3 text-left transition-all ${
+                    aiModel === 'flash'
+                      ? 'border-warning bg-warning/5'
+                      : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Zap className="h-4 w-4 text-warning" />
+                    <span className="text-sm font-bold text-foreground">Flash</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-2">Rápido e econômico</p>
+                  <p className="text-xs font-bold text-foreground tabular-nums">
+                    {baseCost} créditos
+                  </p>
+                </button>
+                {/* Pro */}
+                <button
+                  type="button"
+                  onClick={() => setAiModel('pro')}
+                  className={`rounded-xl border-2 p-3 text-left transition-all relative overflow-hidden ${
+                    aiModel === 'pro'
+                      ? 'border-primary bg-primary/5 shadow-[0_0_20px_-4px_hsl(var(--primary)/0.3)]'
+                      : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg uppercase tracking-wider">
+                    5x
+                  </div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold text-foreground">Pro</span>
+                    <Crown className="h-3 w-3 text-warning" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-2">Raciocínio avançado</p>
+                  <p className="text-xs font-bold text-foreground tabular-nums">
+                    {baseCost * 5} créditos
+                  </p>
+                </button>
+              </div>
             </div>
 
             {/* Custom instructions */}
@@ -776,7 +816,7 @@ const CreateQuestionDialog = ({
               />
             </div>
 
-            {/* Cost info */}
+            {/* Cost + balance bar */}
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-sm">
                 <Zap className="h-4 w-4 text-primary" />
