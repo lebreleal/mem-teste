@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
+
 import {
   Layers, Star, ArrowLeft, LogIn, Loader2,
   ChevronRight, Clock, Folder, FolderOpen, Crown, Globe,
