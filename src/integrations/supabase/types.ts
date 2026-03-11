@@ -919,6 +919,7 @@ export type Database = {
           is_archived: boolean
           name: string
           parent_id: string | null
+          section: string
           sort_order: number
           source_turma_id: string | null
           source_turma_subject_id: string | null
@@ -931,6 +932,7 @@ export type Database = {
           is_archived?: boolean
           name: string
           parent_id?: string | null
+          section?: string
           sort_order?: number
           source_turma_id?: string | null
           source_turma_subject_id?: string | null
@@ -943,6 +945,7 @@ export type Database = {
           is_archived?: boolean
           name?: string
           parent_id?: string | null
+          section?: string
           sort_order?: number
           source_turma_id?: string | null
           source_turma_subject_id?: string | null
