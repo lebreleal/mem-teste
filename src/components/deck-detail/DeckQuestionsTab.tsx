@@ -916,9 +916,6 @@ const CreateQuestionDialog = ({
               </Button>
             </DialogFooter>
           </div>
-          )
-            </DialogFooter>
-          </div>
         ) : (
           <div className="space-y-4">
             <div>
