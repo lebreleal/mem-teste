@@ -81,25 +81,31 @@ const TurmaSubHeader = ({
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate('/turmas')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="flex-1 min-w-0 flex items-center gap-1.5">
-              <h1 className="font-display text-lg font-bold text-foreground truncate">{turmaName}</h1>
-              <button
-                onClick={openRatingDialog}
-                className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
-                title={myRating ? 'Sua avaliação' : 'Avaliar comunidade'}
-              >
-                <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
-              </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-display text-lg font-bold text-foreground truncate">{turmaName}</h1>
+                <button
+                  onClick={openRatingDialog}
+                  className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
+                  title={myRating ? 'Sua avaliação' : 'Avaliar comunidade'}
+                >
+                  <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                {ownerName && <span>por {ownerName}</span>}
+                {createdAt && <span>· {formatDistanceToNow(new Date(createdAt), { addSuffix: true, locale: ptBR })}</span>}
+                {isSubscriber && (
+                  <span className="flex items-center gap-0.5 text-[hsl(270,70%,55%)]">
+                    · <Crown className="h-3 w-3 fill-current" /> Inscrito
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {showCrown && !isSubscriber && !isAdmin && (
                 <button onClick={() => setShowSubscribeModal(true)} className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" title="Seja assinante">
                   <Crown className="h-4 w-4 text-[hsl(270,70%,55%)]" />
-                </button>
-              )}
-              {showCrown && isSubscriber && (
-                <button onClick={() => setShowSubscribeModal(true)} className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" title="Assinatura ativa">
-                  <Crown className="h-4 w-4 fill-[hsl(270,70%,55%)]" style={{ color: 'hsl(270, 70%, 55%)' }} />
                 </button>
               )}
               {isAdmin && (
