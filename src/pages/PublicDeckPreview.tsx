@@ -13,7 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check } from 'lucide-react';
+import { Layers, RefreshCw, ArrowLeft, MessageSquare, Clock, ChevronLeft, ChevronRight, X, FileText, GraduationCap, Download, Paperclip, Plus, Pencil, AlertTriangle, Loader2, Trash2, UserPlus, BookmarkPlus, Check, LogIn } from 'lucide-react';
 
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
 import { charDiff, type DiffSegment } from '@/lib/charDiff';
@@ -44,13 +44,14 @@ const extractImages = (html: string): string[] => {
 };
 
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
-const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner }: {
+const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner, hideActions }: {
   cards: any[];
   initialIndex: number;
   open: boolean;
   onClose: () => void;
   deckId?: string;
   isOwner?: boolean;
+  hideActions?: boolean;
 }) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
   const isMobile = useIsMobile();
@@ -152,7 +153,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
             </span>
           )}
         </div>
-        {!isOwner && vc?.card && deckId ? (
+        {!isOwner && !hideActions && vc?.card && deckId ? (
           <Button
             variant="outline"
             size="sm"
@@ -885,6 +886,7 @@ const PublicDeckPreview = () => {
   const [showEditWarning, setShowEditWarning] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showDeckReport, setShowDeckReport] = useState(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
   const [joining, setJoining] = useState(false);
   const [following, setFollowing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1313,7 +1315,7 @@ const PublicDeckPreview = () => {
                 variant={isFollowing ? 'outline' : 'default'}
                 size="sm"
                 className="gap-1.5 text-xs h-8"
-                onClick={handleFollowDeck}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } handleFollowDeck(); }}
                 disabled={following || isFollowing}
               >
                 {following ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -1336,7 +1338,7 @@ const PublicDeckPreview = () => {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setShowDeckReport(true)}
+                onClick={() => { if (!user) { setShowAuthGate(true); return; } setShowDeckReport(true); }}
               >
                 <Pencil className="h-4 w-4 text-muted-foreground" />
               </Button>
@@ -1594,6 +1596,7 @@ const PublicDeckPreview = () => {
         onClose={() => setPreviewIndex(null)}
         deckId={deck?.id}
         isOwner={deck?.user_id === user?.id}
+        hideActions={!user}
       />
       {/* Edit warning dialog */}
       <AlertDialog open={showEditWarning} onOpenChange={setShowEditWarning}>
@@ -1624,6 +1627,24 @@ const PublicDeckPreview = () => {
           deckId={deckId}
           deckName={deck?.name}
         />
+      )}
+
+      {/* Auth Gate for unauthenticated users */}
+      {showAuthGate && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowAuthGate(false)}>
+          <div className="w-full max-w-sm bg-card rounded-t-2xl sm:rounded-2xl p-6 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center space-y-2">
+              <h3 className="font-display text-lg font-bold text-foreground">Crie sua conta gratuita</h3>
+              <p className="text-sm text-muted-foreground">Para interagir com este deck, você precisa de uma conta.</p>
+            </div>
+            <Button className="w-full" onClick={() => navigate('/auth', { state: { from: `/decks/${deckId}/preview` } })}>
+              <LogIn className="mr-2 h-4 w-4" /> Criar conta / Entrar
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowAuthGate(false)}>
+              Continuar navegando
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
