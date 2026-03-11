@@ -118,14 +118,14 @@ const Study = () => {
   const { data: sourceInfo } = useQuery({
     queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
-      console.log('[sourceInfo] fetching for deck:', currentCardDeckId);
-      const { data: deck, error } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck').eq('id', currentCardDeckId!).single();
-      console.log('[sourceInfo] deck result:', deck, 'error:', error);
+      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck').eq('id', currentCardDeckId!).single();
       if (!deck) return null;
-      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) { console.log('[sourceInfo] not a community deck'); return null; }
+      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) return null;
       let authorName: string | null = null;
       let updatedAt: string | null = null;
+
       if (deck.source_turma_deck_id) {
+        // Deck was copied from a turma_deck entry
         const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
         if (td) {
           const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
@@ -141,7 +141,17 @@ const Study = () => {
           const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
           updatedAt = srcDeck?.updated_at ?? null;
         }
+      } else if (deck.is_live_deck) {
+        // Live deck without source IDs — look up turma_decks by deck_id
+        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('deck_id', currentCardDeckId!).maybeSingle();
+        if (td) {
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
+          authorName = profile?.name ?? null;
+          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
+          updatedAt = srcDeck?.updated_at ?? null;
+        }
       }
+
       if (!authorName && !updatedAt) return null;
       return { authorName, updatedAt };
     },
