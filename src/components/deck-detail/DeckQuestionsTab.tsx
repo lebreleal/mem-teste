@@ -635,7 +635,7 @@ const CreateQuestionDialog = ({
             .select('id').eq('deck_id', deckId).eq('created_by', user.id)
             .order('created_at', { ascending: false }).limit(1);
           if (latest?.[0]) {
-            await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', latest[0].id);
+            await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', (latest[0] as any).id);
             queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
           }
         }
