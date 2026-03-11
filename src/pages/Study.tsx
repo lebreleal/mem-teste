@@ -113,63 +113,14 @@ const Study = () => {
   }, [cardKey, isTransitioning, queueInitialized]);
   const currentCard = displayedCard ?? nextCard;
 
-  // Fetch community deck source info based on current card's deck
-  const currentCardDeckId = currentCard?.deck_id ?? null;
+  // Fetch community deck source info via RPC (SECURITY DEFINER bypasses RLS)
+  const currentCardDeckId = currentCard?.deck_id ?? deckId ?? null;
   const { data: sourceInfo } = useQuery({
     queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
-      const deckIdToCheck = currentCardDeckId!;
-      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', deckIdToCheck).single();
-      if (!deck) return null;
-      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) return null;
-      let authorName: string | null = null;
-      let updatedAt: string | null = null;
-
-      if (deck.source_turma_deck_id) {
-        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('id', deck.source_turma_deck_id).maybeSingle();
-        if (td) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
-          authorName = profile?.name ?? null;
-          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
-          updatedAt = srcDeck?.updated_at ?? null;
-        }
-      } else if (deck.source_listing_id) {
-        const { data: listing } = await supabase.from('marketplace_listings').select('seller_id, deck_id').eq('id', deck.source_listing_id).maybeSingle();
-        if (listing) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', listing.seller_id).single();
-          authorName = profile?.name ?? null;
-          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', listing.deck_id).single();
-          updatedAt = srcDeck?.updated_at ?? null;
-        }
-      } else if (deck.is_live_deck) {
-        // Live deck without source IDs — try turma_decks lookup first
-        const { data: td } = await supabase.from('turma_decks').select('shared_by, deck_id').eq('deck_id', deckIdToCheck).maybeSingle();
-        if (td) {
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', td.shared_by).single();
-          authorName = profile?.name ?? null;
-          const { data: srcDeck } = await supabase.from('decks').select('updated_at').eq('id', td.deck_id).single();
-          updatedAt = srcDeck?.updated_at ?? null;
-        } else {
-          // Orphan live deck — find the original by matching name from a different owner
-          const { data: originals } = await supabase
-            .from('decks')
-            .select('user_id, updated_at')
-            .eq('name', deck.name)
-            .neq('user_id', deck.user_id)
-            .eq('is_live_deck', false)
-            .order('created_at', { ascending: true })
-            .limit(1);
-          if (originals && originals.length > 0) {
-            const orig = originals[0];
-            const { data: profile } = await supabase.from('profiles').select('name').eq('id', orig.user_id).single();
-            authorName = profile?.name ?? null;
-            updatedAt = orig.updated_at ?? null;
-          }
-        }
-      }
-
-      if (!authorName && !updatedAt) return null;
-      return { authorName, updatedAt };
+      const { data } = await supabase.rpc('resolve_community_deck_source', { p_deck_id: currentCardDeckId! });
+      if (!data) return null;
+      return { authorName: data.authorName as string | null, updatedAt: data.updatedAt as string | null };
     },
     enabled: !!currentCardDeckId,
     staleTime: 5 * 60_000,
