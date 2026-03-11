@@ -739,16 +739,10 @@ const CreateQuestionDialog = ({
               </div>
             )}
 
-            {/* Question count */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Quantidade de questões</label>
-              <div className="flex gap-2">
-                {[3, 5, 10, 15].map(n => (
-                  <Button key={n} variant={aiCount === n ? 'default' : 'outline'} size="sm" onClick={() => setAiCount(n)}>
-                    {n}
-                  </Button>
-                ))}
-              </div>
+
+            {/* Auto-calculated question info */}
+            <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
+              A IA vai gerar automaticamente <span className="font-bold text-foreground">{aiCount} questões</span> correlacionando múltiplos cards por questão.
             </div>
 
             {/* Custom instructions */}
