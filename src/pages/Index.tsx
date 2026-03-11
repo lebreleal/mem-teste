@@ -6,18 +6,9 @@ import MemoCardsLogo from '@/components/MemoCardsLogo';
 import {
   ChevronDown, Plus, GraduationCap, Globe, Stethoscope, Scale,
   Star, Download, Users, Brain, FileText, ClipboardList, Sparkles,
-  BarChart3, Layers, ImageIcon, RefreshCw, BookOpen, Shield, Zap,
+  BarChart3, Layers, RefreshCw, BookOpen, Shield, Zap,
+  CheckCircle2, ArrowRight, TrendingUp,
 } from 'lucide-react';
-
-/* ─── Placeholder image block ─── */
-const Placeholder = ({ label, className = '' }: { label: string; className?: string }) => (
-  <div className={`flex items-center justify-center rounded-2xl bg-muted border border-border ${className}`}>
-    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-      <ImageIcon className="h-10 w-10" />
-      <span className="text-xs font-medium text-center px-2">{label}</span>
-    </div>
-  </div>
-);
 
 /* ─── FAQ Item ─── */
 const FaqItem = ({ q, a }: { q: string; a: string }) => {
@@ -44,6 +35,30 @@ const TestimonialCard = ({ name, handle, text }: { name: string; handle: string;
   </div>
 );
 
+/* ─── Stat pill ─── */
+const StatPill = ({ icon: Icon, value, label }: { icon: React.ElementType; value: string; label: string }) => (
+  <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+      <Icon className="h-5 w-5 text-primary" />
+    </div>
+    <div>
+      <p className="text-lg font-black text-foreground leading-tight">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  </div>
+);
+
+/* ─── Feature card (icon-driven, no image) ─── */
+const FeatureCard = ({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) => (
+  <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4 hover:shadow-lg transition-shadow">
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+      <Icon className="h-6 w-6 text-primary" />
+    </div>
+    <h3 className="font-extrabold text-lg text-foreground">{title}</h3>
+    <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+  </div>
+);
+
 /* ─── Objective tabs ─── */
 const objectives = [
   {
@@ -53,6 +68,7 @@ const objectives = [
     quote: 'Uso o MemoCards para estudar patologia e nunca mais esqueci nenhum conceito na hora da prova.',
     author: 'Estudante de Medicina',
     cards: '3.155 cartões',
+    highlights: ['Simulados com correção por IA', 'Repetição espaçada FSRS-6', 'Gráficos de desempenho'],
   },
   {
     key: 'idiomas', label: 'Aprendizado de idiomas', icon: Globe,
@@ -61,6 +77,7 @@ const objectives = [
     quote: 'Aprendi mais vocabulário em 3 meses com MemoCards do que em 1 ano com outros apps.',
     author: 'Estudante de Inglês',
     cards: '1.240 cartões',
+    highlights: ['TTS para pronúncia', 'Cards com imagens', 'Cloze para gramática'],
   },
   {
     key: 'concurso', label: 'Concursos', icon: Scale,
@@ -69,6 +86,7 @@ const objectives = [
     quote: 'As comunidades do MemoCards me deram acesso a baralhos incríveis feitos por outros concurseiros.',
     author: 'Concurseiro aprovado',
     cards: '4.320 cartões',
+    highlights: ['Comunidades colaborativas', 'Importação de PDFs', 'Cards Vivos sincronizados'],
   },
   {
     key: 'saude', label: 'Área da saúde', icon: Stethoscope,
@@ -77,6 +95,7 @@ const objectives = [
     quote: 'A oclusão de imagem para estudar anatomia é perfeita. Consigo criar cards a partir dos meus atlas em segundos!',
     author: 'Acadêmico de Medicina',
     cards: '5.880 cartões',
+    highlights: ['Oclusão de imagem', 'Editor rico com formatação', 'Geração por IA a partir de PDFs'],
   },
 ];
 
@@ -125,122 +144,68 @@ const Index = () => {
 
       {/* ══════════ HERO ══════════ */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-[480px] md:h-[520px] bg-gradient-to-b from-[hsl(12,90%,95%)] to-background dark:from-[hsl(12,30%,12%)] dark:to-background" />
+        <div className="absolute inset-x-0 top-0 h-[520px] md:h-[600px] bg-gradient-to-b from-[hsl(207,80%,95%)] to-background dark:from-[hsl(207,30%,12%)] dark:to-background" />
 
-        <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-8 md:pt-20 md:pb-12">
-          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            <div className="flex-1 text-center md:text-left">
-              <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl tracking-tight text-foreground leading-[1.1]">
-                MemoCards:<br />
-                <span className="text-primary">Aprenda Mais,</span><br />
-                <span className="text-primary">Estresse Menos</span>
-              </h1>
-              <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
-                Arrase nas provas, domine matérias difíceis e muito mais com a mágica da{' '}
-                <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência. Junte-se à nossa comunidade!
-              </p>
-              <Button
-                size="lg"
-                className="mt-6 rounded-full text-lg font-bold px-10 py-6 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
-                onClick={() => navigate('/auth')}
-              >
-                Começar a aprender
-              </Button>
-            </div>
-            <div className="flex-1 max-w-md w-full">
-              <Placeholder label="Imagem hero — app screenshot" className="aspect-square w-full" />
-            </div>
+        <div className="relative mx-auto max-w-5xl px-4 pt-16 pb-10 md:pt-28 md:pb-16 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary mb-6">
+            <Sparkles className="h-4 w-4" />
+            Repetição espaçada com FSRS-6
           </div>
-        </div>
-      </section>
-
-      {/* ══════════ SOCIAL PROOF BAR ══════════ */}
-      <section className="border-y border-border bg-card">
-        <div className="mx-auto max-w-6xl px-4 py-8 md:py-10 flex flex-col md:flex-row items-center gap-6 md:gap-12">
-          <div className="flex-1">
-            <p className="text-lg md:text-xl font-extrabold text-foreground">
-              Estudantes que usam <span className="text-primary">repetição espaçada</span> melhoram suas notas significativamente
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              De acordo com estudos científicos sobre aprendizagem ativa.
-            </p>
+          <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl lg:text-7xl tracking-tight text-foreground leading-[1.08]">
+            Aprenda Mais,<br />
+            <span className="text-primary">Estresse Menos</span>
+          </h1>
+          <p className="mt-5 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            Arrase nas provas, domine matérias difíceis e muito mais com a mágica da{' '}
+            <strong className="text-foreground">repetição espaçada</strong>, respaldada pela ciência. Crie flashcards, estude com IA e junte-se à comunidade.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Button
-              variant="outline"
-              className="mt-4 rounded-full border-primary text-primary hover:bg-primary/5 font-bold"
+              size="lg"
+              className="rounded-full text-lg font-bold px-10 py-6 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
               onClick={() => navigate('/auth')}
             >
-              Experimente grátis
+              Começar a aprender
+              <ArrowRight className="h-5 w-5 ml-2" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="rounded-full text-lg font-bold px-8 py-6"
+              onClick={() => { const el = document.getElementById('features'); el?.scrollIntoView({ behavior: 'smooth' }); }}
+            >
+              Ver recursos
             </Button>
           </div>
-          <div className="flex-1 max-w-xs w-full">
-            <Placeholder label="Gráfico — curva de esquecimento vs repetição espaçada" className="aspect-[4/3] w-full" />
+
+          {/* Stats row */}
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
+            <StatPill icon={Brain} value="FSRS-6" label="Algoritmo avançado" />
+            <StatPill icon={Sparkles} value="IA" label="Geração automática" />
+            <StatPill icon={Users} value="∞" label="Comunidades" />
+            <StatPill icon={Download} value="PWA" label="Instale no celular" />
           </div>
         </div>
       </section>
 
-      {/* ══════════ FEATURES 2x2 GRID ══════════ */}
+      {/* ══════════ FEATURES GRID ══════════ */}
       <section id="features" className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
-          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-14">
-            Estude de forma inteligente com o MemoCards
+          <p className="text-center text-sm font-bold uppercase tracking-widest text-primary mb-3">Recursos</p>
+          <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-4">
+            Tudo que você precisa para estudar melhor
           </h2>
+          <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-14">
+            Flashcards inteligentes, IA generativa, simulados e comunidades — em uma única plataforma.
+          </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
-            {/* Feature 1 — Flashcards */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Layers className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Crie flashcards do jeito que você quiser</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Cards básicos, cloze, oclusão de imagem, TTS — com editor rico e anexos.</p>
-                </div>
-              </div>
-              <Placeholder label="Screenshot — editor de cards" className="aspect-[16/10] w-full" />
-            </div>
-
-            {/* Feature 2 — IA */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Gere cards com IA a partir de PDFs</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Envie PDF, PPTX ou cole texto — a IA cria um baralho completo em segundos.</p>
-                </div>
-              </div>
-              <Placeholder label="Screenshot — geração por IA" className="aspect-[16/10] w-full" />
-            </div>
-
-            {/* Feature 3 — Repetição Espaçada FSRS-6 */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Brain className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Repetição espaçada com FSRS-6</h3>
-                  <p className="text-sm text-muted-foreground mt-1">O mesmo algoritmo do Anki — com 21 parâmetros otimizados, calcula o momento ideal de cada revisão para máxima retenção.</p>
-                </div>
-              </div>
-              <Placeholder label="Screenshot — sessão de estudo" className="aspect-[16/10] w-full" />
-            </div>
-
-            {/* Feature 4 — Simulados */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <ClipboardList className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-foreground">Simulados e provas integradas</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Crie provas com questões objetivas e dissertativas, com correção por IA. Perfeito para testar seu conhecimento.</p>
-                </div>
-              </div>
-              <Placeholder label="Screenshot — simulados" className="aspect-[16/10] w-full" />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <FeatureCard icon={Layers} title="Flashcards personalizáveis" description="Cards básicos, cloze, oclusão de imagem e TTS — com editor rico, anexos e formatação completa." />
+            <FeatureCard icon={Sparkles} title="Geração com IA" description="Envie PDF, PPTX ou cole texto — a IA cria um baralho completo em segundos, pronto para estudar." />
+            <FeatureCard icon={Brain} title="FSRS-6 — Repetição espaçada" description="O algoritmo mais avançado do mercado com 21 parâmetros. Calcula o momento ideal de cada revisão." />
+            <FeatureCard icon={ClipboardList} title="Simulados integrados" description="Crie provas com questões objetivas e dissertativas, com correção automática por IA." />
+            <FeatureCard icon={BarChart3} title="Estatísticas detalhadas" description="Gráficos de retenção, streaks, previsão de revisões e análise por baralho para focar seus estudos." />
+            <FeatureCard icon={FileText} title="Importação do Anki" description="Importe seus baralhos .apkg do Anki mantendo todos os cards, mídia e formatação original." />
           </div>
         </div>
       </section>
@@ -248,6 +213,7 @@ const Index = () => {
       {/* ══════════ COMMUNITY & LIVE DECKS ══════════ */}
       <section id="community" className="bg-muted/30 px-4 py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
+          <p className="text-center text-sm font-bold uppercase tracking-widest text-primary mb-3">Colaboração</p>
           <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-4">
             Comunidades & Cards Vivos
           </h2>
@@ -255,62 +221,23 @@ const Index = () => {
             Compartilhe baralhos, materiais e provas em comunidades colaborativas. Com os <strong className="text-foreground">Cards Vivos</strong>, todos ficam sincronizados automaticamente.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
-            {/* Community card 1 */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
-              <div className="flex-1 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  <h3 className="font-extrabold text-lg text-foreground">Crie comunidades de estudo</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[
+              { icon: Users, title: 'Crie comunidades de estudo', text: 'Organize disciplinas, semestres, aulas e materiais em um só lugar. Compartilhe baralhos, PDFs e provas com seus colegas ou alunos.' },
+              { icon: RefreshCw, title: 'Cards Vivos — sempre atualizados', text: 'Baralhos mantêm vínculo com o criador. Quando o professor corrige um card, todos recebem a atualização sem perder o progresso.' },
+              { icon: Shield, title: 'Sugira correções colaborativas', text: 'Encontrou um erro? Envie uma sugestão. O proprietário modera e, ao aceitar, todos os assinantes recebem a melhoria.' },
+              { icon: TrendingUp, title: 'Painel do Criador', text: 'Acompanhe estatísticas de uso, gerencie sugestões e monetize seus baralhos com assinaturas dentro das comunidades.' },
+            ].map(item => (
+              <div key={item.title} className="rounded-3xl border border-border bg-card p-6 md:p-8 space-y-3 hover:shadow-lg transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <item.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-extrabold text-lg text-foreground">{item.title}</h3>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Organize disciplinas, semestres, aulas e materiais em um só lugar. Compartilhe baralhos, PDFs e provas com seus colegas de turma ou alunos.
-                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.text}</p>
               </div>
-              <Placeholder label="Screenshot — comunidade" className="aspect-square w-full max-w-[200px] shrink-0" />
-            </div>
-
-            {/* Community card 2 — Live Decks */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
-              <div className="flex-1 space-y-3">
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="h-5 w-5 text-primary" />
-                  <h3 className="font-extrabold text-lg text-foreground">Cards Vivos — sempre atualizados</h3>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Baralhos da comunidade mantêm vínculo de sincronização com o criador. Quando o professor corrige ou melhora um card, todos os alunos recebem a atualização — sem perder o progresso de estudo.
-                </p>
-              </div>
-              <Placeholder label="Screenshot — cards vivos" className="aspect-square w-full max-w-[200px] shrink-0" />
-            </div>
-
-            {/* Community card 3 — Sugestões */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
-              <div className="flex-1 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  <h3 className="font-extrabold text-lg text-foreground">Sugira correções colaborativas</h3>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Encontrou um erro em um card? Envie uma sugestão de correção diretamente. O proprietário modera as sugestões no Painel do Criador e, ao aceitar, todos os assinantes recebem a melhoria automaticamente.
-                </p>
-              </div>
-              <Placeholder label="Screenshot — sugestão de correção" className="aspect-square w-full max-w-[200px] shrink-0" />
-            </div>
-
-            {/* Community card 4 — Performance */}
-            <div className="rounded-3xl border border-border bg-card p-6 md:p-8 flex flex-col md:flex-row items-start gap-6">
-              <div className="flex-1 space-y-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  <h3 className="font-extrabold text-lg text-foreground">Estatísticas e desempenho</h3>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Acompanhe seu progresso com gráficos de retenção, streaks, previsão de revisões e análise detalhada de cada baralho. Saiba exatamente onde focar seus estudos.
-                </p>
-              </div>
-              <Placeholder label="Screenshot — estatísticas" className="aspect-square w-full max-w-[200px] shrink-0" />
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -318,6 +245,7 @@ const Index = () => {
       {/* ══════════ OBJECTIVES TABS ══════════ */}
       <section id="objectives" className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-5xl">
+          <p className="text-center text-sm font-bold uppercase tracking-widest text-primary mb-3">Para você</p>
           <h2 className="text-center text-3xl md:text-4xl font-extrabold text-foreground mb-10">
             Alcance seus objetivos!
           </h2>
@@ -342,18 +270,24 @@ const Index = () => {
 
           {/* content */}
           <div className="rounded-3xl bg-card border border-border shadow-sm overflow-hidden">
-            <div className="flex flex-col md:flex-row">
-              <div className="flex-1 p-6 md:p-10">
-                <h3 className="text-2xl font-extrabold text-foreground mb-3">{obj.title}</h3>
-                <p className="text-muted-foreground leading-relaxed mb-6">{obj.text}</p>
-                <div className="rounded-2xl bg-muted/50 border border-border p-5">
-                  <p className="text-sm text-foreground italic leading-relaxed">"{obj.quote}"</p>
-                  <p className="mt-3 text-xs font-bold text-muted-foreground">— {obj.author}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{obj.cards}</p>
-                </div>
+            <div className="p-6 md:p-10 space-y-6">
+              <h3 className="text-2xl font-extrabold text-foreground">{obj.title}</h3>
+              <p className="text-muted-foreground leading-relaxed max-w-2xl">{obj.text}</p>
+
+              {/* Highlights */}
+              <div className="flex flex-wrap gap-3">
+                {obj.highlights.map(h => (
+                  <span key={h} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {h}
+                  </span>
+                ))}
               </div>
-              <div className="flex-1 p-6 md:p-10 flex items-center justify-center">
-                <Placeholder label={`Imagem — ${obj.title}`} className="aspect-square w-full max-w-xs" />
+
+              {/* Quote */}
+              <div className="rounded-2xl bg-muted/50 border border-border p-5 max-w-xl">
+                <p className="text-sm text-foreground italic leading-relaxed">"{obj.quote}"</p>
+                <p className="mt-3 text-xs font-bold text-muted-foreground">— {obj.author} · {obj.cards}</p>
               </div>
             </div>
           </div>
@@ -363,37 +297,35 @@ const Index = () => {
       {/* ══════════ APP / INSTALL SECTION ══════════ */}
       <section className="px-4 py-16 md:py-24">
         <div className="mx-auto max-w-5xl">
-          <div className="rounded-3xl bg-gradient-to-br from-primary/5 to-accent/10 border border-border p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
-            <div className="flex-1 text-center md:text-left">
-              <h2 className="text-3xl md:text-4xl font-extrabold text-foreground">
-                Instale o App
-              </h2>
-              <p className="text-muted-foreground mt-2 mb-6">
-                MemoCards é um PWA — instale direto no seu celular sem precisar de loja.
-              </p>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 mb-6">
-                {[
-                  { value: '4.8+', label: 'Classificação' },
-                  { value: 'PWA', label: 'Instalável' },
-                  { value: '∞', label: 'Cards' },
-                ].map(s => (
-                  <div key={s.label} className="text-center">
-                    <p className="text-2xl font-black text-foreground">{s.value}</p>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="rounded-full px-8 font-bold"
-                onClick={() => navigate('/install')}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Como instalar
-              </Button>
+          <div className="rounded-3xl bg-gradient-to-br from-primary/5 to-accent/10 border border-border p-8 md:p-12 text-center">
+            <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary/10 mb-6">
+              <Download className="h-8 w-8 text-primary" />
             </div>
-            <div className="flex-1 max-w-xs w-full">
-              <Placeholder label="Imagem — app no celular" className="aspect-[9/16] w-full max-w-[200px] mx-auto" />
+            <h2 className="text-3xl md:text-4xl font-extrabold text-foreground">
+              Instale o App
+            </h2>
+            <p className="text-muted-foreground mt-2 mb-8 max-w-lg mx-auto">
+              MemoCards é um PWA — instale direto no seu celular sem precisar de loja. Acesso rápido, offline e com notificações.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-8 mb-8">
+              {[
+                { value: '4.8+', label: 'Classificação' },
+                { value: 'PWA', label: 'Instalável' },
+                { value: '∞', label: 'Cards ilimitados' },
+              ].map(s => (
+                <div key={s.label} className="text-center">
+                  <p className="text-3xl font-black text-foreground">{s.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+                </div>
+              ))}
             </div>
+            <Button
+              className="rounded-full px-8 font-bold"
+              onClick={() => navigate('/install')}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Como instalar
+            </Button>
           </div>
         </div>
       </section>
@@ -401,6 +333,7 @@ const Index = () => {
       {/* ══════════ TESTIMONIALS ══════════ */}
       <section className="bg-card border-y border-border px-4 py-16 md:py-24">
         <div className="mx-auto max-w-6xl">
+          <p className="text-sm font-bold uppercase tracking-widest text-primary mb-3">Depoimentos</p>
           <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-10">
             Nossos Estudantes = Nossa Inspiração
           </h2>
