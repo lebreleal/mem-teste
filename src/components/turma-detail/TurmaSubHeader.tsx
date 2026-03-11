@@ -96,7 +96,7 @@ const TurmaSubHeader = ({
                 {ownerName && <p>por <span className="font-medium text-primary">{ownerName}</span></p>}
                 {createdAt && (
                   <p className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
+                    <RefreshCw className="h-3 w-3" />
                     {formatDistanceToNow(new Date(createdAt), { addSuffix: true, locale: ptBR })}
                   </p>
                 )}
