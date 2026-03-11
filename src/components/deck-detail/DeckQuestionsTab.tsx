@@ -590,24 +590,22 @@ const CreateQuestionDialog = ({
   const [correctExplanation, setCorrectExplanation] = useState('');
   const [wrongExplanations, setWrongExplanations] = useState<Record<number, string>>({});
   const [showExplanations, setShowExplanations] = useState(false);
-  const [aiCount, setAiCount] = useState(5);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiCustomInstructions, setAiCustomInstructions] = useState('');
 
-  // Fetch card count for the deck
+  // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
     queryKey: ['deck-card-count', deckId],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('cards')
-        .select('id', { count: 'exact', head: true })
-        .eq('deck_id', deckId);
-      return count ?? 0;
+      const { data } = await supabase.rpc('count_descendant_cards_by_state', { p_deck_id: deckId });
+      return (data as any)?.total ?? 0;
     },
-    enabled: !!deckId && mode === 'ai',
+    enabled: !!deckId,
     staleTime: 60_000,
   });
 
+  // Auto-calculate question count: ~1 question per 4 cards, min 3, max 20
+  const aiCount = Math.max(3, Math.min(20, Math.ceil(cardCount / 4)));
   const aiCost = aiCount * 2; // 2 credits per question
 
   const resetForm = () => {
@@ -741,16 +739,10 @@ const CreateQuestionDialog = ({
               </div>
             )}
 
-            {/* Question count */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Quantidade de questões</label>
-              <div className="flex gap-2">
-                {[3, 5, 10, 15].map(n => (
-                  <Button key={n} variant={aiCount === n ? 'default' : 'outline'} size="sm" onClick={() => setAiCount(n)}>
-                    {n}
-                  </Button>
-                ))}
-              </div>
+
+            {/* Auto-calculated question info */}
+            <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm text-muted-foreground">
+              A IA vai gerar automaticamente <span className="font-bold text-foreground">{aiCount} questões</span> correlacionando múltiplos cards por questão.
             </div>
 
             {/* Custom instructions */}
@@ -787,9 +779,9 @@ const CreateQuestionDialog = ({
                 className="gap-1.5"
               >
                 {aiGenerating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</>
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando {aiCount} questões...</>
                 ) : (
-                  <><Sparkles className="h-3.5 w-3.5" /> Gerar {aiCount} questões</>
+                  <><Sparkles className="h-3.5 w-3.5" /> Gerar questões</>
                 )}
               </Button>
             </DialogFooter>
