@@ -368,9 +368,9 @@ const QuestionPractice = ({
     setEliminated(new Set());
     setScissorsMode(false);
     setHintText(null);
-    setExplainText(null);
+    setOptionExplanations({});
+    setOptionExplainLoading(null);
     setHintLoading(false);
-    setExplainLoading(false);
   }, []);
 
   const handleConfirm = useCallback(async () => {
