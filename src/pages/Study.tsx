@@ -466,7 +466,7 @@ const Study = () => {
                   onOpenChat={() => setChatOpen(true)}
                   chatHasMessages={chatHasMessages}
                 />
-                {isLiveDeck && sourceInfo && (
+                {sourceInfo && (
                   <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground mt-1">
                     {sourceInfo.authorName && (
                       <span>por <span className="font-medium text-foreground">{sourceInfo.authorName}</span></span>
