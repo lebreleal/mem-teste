@@ -80,6 +80,7 @@ const Study = () => {
   const [explainInChat, setExplainInChat] = useState<string | false>(false);
   const [chatHasMessages, setChatHasMessages] = useState(false);
   const chatClearRef = useRef<(() => void) | null>(null);
+  const [communityInfoOpen, setCommunityInfoOpen] = useState(false);
 
   // Initialize local queue from fetched data (once)
   useEffect(() => {
