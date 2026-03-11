@@ -20,6 +20,8 @@ import MembersTab from '@/components/turma-detail/MembersTab';
 interface TurmaSubHeaderProps {
   turmaId: string;
   turmaName: string;
+  ownerName?: string;
+  createdAt?: string;
   inviteCode: string;
   shareSlug?: string;
   isAdmin: boolean;
