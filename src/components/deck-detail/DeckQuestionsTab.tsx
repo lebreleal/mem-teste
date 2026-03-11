@@ -4,6 +4,7 @@
  * option elimination (scissors), AI concept card generation.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
