@@ -820,7 +820,7 @@ const DeckQuestionsTab = ({
         .from('deck_question_attempts' as any).select('*')
         .eq('user_id', user.id)
         .in('question_id', questionIds);
-      return (data ?? []) as QuestionAttempt[];
+      return (data ?? []) as unknown as QuestionAttempt[];
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
