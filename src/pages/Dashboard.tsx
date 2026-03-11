@@ -330,6 +330,7 @@ const Dashboard = () => {
             onMoveDeck={() => {}}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
