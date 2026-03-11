@@ -1655,6 +1655,12 @@ const PublicDeckPreview = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="questions" className="mt-4">
+            <Suspense fallback={null}>
+              <DeckQuestionsTab deckId={deck.id} isReadOnly sourceDeckId={deck.id} />
+            </Suspense>
+          </TabsContent>
+
           <TabsContent value="suggestions" className="mt-3">
             <CommunitySuggestions deckId={deck.id} />
           </TabsContent>
