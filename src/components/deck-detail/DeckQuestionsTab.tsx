@@ -682,6 +682,16 @@ const CreateQuestionDialog = ({
     onError: (err: any) => toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' }),
   });
 
+  const [generationStep, setGenerationStep] = useState(0);
+
+  const GENERATION_STEPS = [
+    { label: 'Lendo os cards do baralho...', icon: '📖' },
+    { label: 'Identificando conceitos relacionados...', icon: '🔗' },
+    { label: 'Agrupando por clusters temáticos...', icon: '🧩' },
+    { label: 'Gerando questões integradas...', icon: '✍️' },
+    { label: 'Salvando questões...', icon: '💾' },
+  ];
+
   const aiGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
@@ -689,42 +699,58 @@ const CreateQuestionDialog = ({
       if (energy < aiCost) throw new Error(`Créditos insuficientes (necessário: ${aiCost})`);
 
       setAiGenerating(true);
+      setGenerationStep(0);
 
-      const { data, error } = await supabase.functions.invoke('generate-questions', {
-        body: {
-          deckId,
-          optionsCount: 4,
-          aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-          energyCost: aiCost,
-          customInstructions: aiCustomInstructions.trim() || undefined,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Simulate progress steps while waiting for AI
+      const stepInterval = setInterval(() => {
+        setGenerationStep(prev => Math.min(prev + 1, 3));
+      }, 3000);
 
-      const qs = data?.questions ?? [];
-      if (qs.length === 0) throw new Error('Nenhuma questão gerada');
-
-      for (const qi of qs) {
-        await supabase.from('deck_questions' as any).insert({
-          deck_id: deckId, created_by: user.id,
-          question_text: qi.question_text || '',
-          question_type: 'multiple_choice',
-          options: qi.options || [],
-          correct_indices: [qi.correct_index ?? 0],
-          explanation: qi.explanation || '',
-          concepts: qi.concepts || [],
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-questions', {
+          body: {
+            deckId,
+            optionsCount: 4,
+            aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            energyCost: aiCost,
+            customInstructions: aiCustomInstructions.trim() || undefined,
+          },
         });
+
+        clearInterval(stepInterval);
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        const qs = data?.questions ?? [];
+        if (qs.length === 0) throw new Error('Nenhuma questão gerada');
+
+        setGenerationStep(4); // Saving step
+
+        for (const qi of qs) {
+          await supabase.from('deck_questions' as any).insert({
+            deck_id: deckId, created_by: user.id,
+            question_text: qi.question_text || '',
+            question_type: 'multiple_choice',
+            options: qi.options || [],
+            correct_indices: [qi.correct_index ?? 0],
+            explanation: qi.explanation || '',
+            concepts: qi.concepts || [],
+          });
+        }
+        return qs.length;
+      } catch (err) {
+        clearInterval(stepInterval);
+        throw err;
       }
-      return qs.length;
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
       toast({ title: `${count} questões geradas por IA!` });
-      onOpenChange(false); resetForm(); setAiGenerating(false);
+      onOpenChange(false); resetForm(); setAiGenerating(false); setGenerationStep(0);
     },
     onError: (err: any) => {
-      setAiGenerating(false);
+      setAiGenerating(false); setGenerationStep(0);
       toast({ title: err.message || 'Erro ao gerar questões', variant: 'destructive' });
     },
   });
