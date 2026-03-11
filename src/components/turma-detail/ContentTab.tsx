@@ -500,9 +500,11 @@ const ContentTab = () => {
     const subscriberOnly = !importLogic.isDeckFree(td);
     const canImportDeck = importLogic.canAccessDeck(td);
     if (subscriberOnly && !canImportDeck) { setGateDeck(td); return; }
-    const alreadyLinked = importLogic.userHasLinkedDeck(td.id);
-    const alreadyOwns = importLogic.userOwnsDeck(td.deck_id);
-    setPreviewDeck({ td, alreadyLinked, alreadyOwns });
+    if (td.lesson_id) {
+      navigate(`/turmas/${turmaId}/lessons/${td.lesson_id}`);
+    } else {
+      navigate(`/turmas/${turmaId}`);
+    }
   };
 
   return (
