@@ -157,6 +157,8 @@ const DeckListItem = ({
 const FolderItem = ({
   folder,
   deckCount,
+  cardCount,
+  attachmentCount,
   canEdit,
   isAdmin,
   onClick,
@@ -165,6 +167,8 @@ const FolderItem = ({
 }: {
   folder: any;
   deckCount: number;
+  cardCount?: number;
+  attachmentCount?: number;
   canEdit: boolean;
   isAdmin: boolean;
   onClick: () => void;
