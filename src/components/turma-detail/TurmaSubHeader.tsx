@@ -39,7 +39,7 @@ interface TurmaSubHeaderProps {
 }
 
 const TurmaSubHeader = ({
-  turmaId, turmaName, inviteCode, shareSlug, isAdmin,
+  turmaId, turmaName, ownerName, createdAt, inviteCode, shareSlug, isAdmin,
   hasSubscription, hasExclusiveContent, isSubscriber, activeSubscription, subscriptionPrice, subscribing,
   onSubscribe, onShowSettings, members, userId, mutations,
 }: TurmaSubHeaderProps) => {
