@@ -50,7 +50,7 @@ const CommunityCard = ({
   onClick,
   isMine,
 }: {
-  turma: Turma & { member_count?: number; owner_name?: string };
+  turma: Turma & { member_count?: number; card_count?: number; owner_name?: string };
   onClick: () => void;
   isMine?: boolean;
 }) => (
