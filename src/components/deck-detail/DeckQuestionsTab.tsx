@@ -777,7 +777,7 @@ const CreateQuestionDialog = ({
                 className="gap-1.5"
               >
                 {aiGenerating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando {aiCount} questões...</>
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando conceitos...</>
                 ) : (
                   <><Sparkles className="h-3.5 w-3.5" /> Gerar questões</>
                 )}
