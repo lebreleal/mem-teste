@@ -686,9 +686,6 @@ const QuestionPractice = ({
         {!confirmed ? (
           <>
             <div className="flex items-center gap-2 mb-2">
-              <Button variant={scissorsMode ? 'default' : 'outline'} size="sm" className="gap-1.5 text-xs" onClick={() => setScissorsMode(!scissorsMode)}>
-                <Scissors className="h-3.5 w-3.5" /> {scissorsMode ? 'Saindo' : 'Eliminar'}
-              </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleHint} disabled={hintLoading || !!hintText}>
                 {hintLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
                 Dica <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
