@@ -169,12 +169,10 @@ const DeckDetailContent = () => {
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
-        <DeckStatsCard />
-        <DeckTagsSection deckId={deckId!} isLinkedDeck={isLinkedDeck} />
         {isLinkedDeck ? (
-          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} />
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
         ) : (
-          <PersonalDeckTabs deckId={deckId!} />
+          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
         )}
       </main>
 
