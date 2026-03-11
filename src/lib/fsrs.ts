@@ -296,5 +296,13 @@ function formatInterval(output: FSRSOutput): string {
     return `${Math.round(mins / 60)}h`;
   }
   if (output.interval_days === 1) return '1d';
+  if (output.interval_days >= 365) {
+    const years = output.interval_days / 365;
+    return years >= 10 ? `${Math.round(years)}a` : `${years.toFixed(1).replace(/\.0$/, '')}a`;
+  }
+  if (output.interval_days >= 30) {
+    const months = output.interval_days / 30;
+    return months >= 10 ? `${Math.round(months)}m` : `${months.toFixed(1).replace(/\.0$/, '')}m`;
+  }
   return `${output.interval_days}d`;
 }
