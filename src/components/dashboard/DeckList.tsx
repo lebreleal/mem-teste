@@ -253,12 +253,10 @@ const DeckList = ({
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className={hasCommunityItems ? 'opacity-40 pointer-events-none' : 'text-destructive focus:text-destructive'}
-                    disabled={hasCommunityItems}
-                    onClick={() => !hasCommunityItems && onDeleteFolder(folder)}
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onDeleteFolder(folder)}
                   >
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                    {hasCommunityItems && <span className="ml-1 text-[10px]">(remova itens vinculados)</span>}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
