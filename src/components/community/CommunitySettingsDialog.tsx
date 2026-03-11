@@ -121,7 +121,7 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general" className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 mt-4">
+          <TabsContent value="general" className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 mt-4">
             {/* Cover Image */}
             <div className="space-y-1.5">
               <Label>Foto da comunidade</Label>
