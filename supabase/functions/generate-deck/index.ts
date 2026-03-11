@@ -405,9 +405,10 @@ ${getOutputExamples(formats)}`;
 3. Se algum parágrafo/conceito ficou sem cartão, ADICIONE os cartões faltantes.
 4. Só finalize quando 100% do conteúdo estiver coberto.`;
 
-    const fullPrompt = prompt + coverageChecklist;
+    // Flash-lite already has inline coverage check; full checklist only for Pro
+    const fullPrompt = isFlashLite ? prompt : prompt + coverageChecklist;
 
-    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
+    console.log(`Using model: ${selectedModel} (flashLite=${isFlashLite}), textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
 
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
