@@ -13,8 +13,9 @@ import {
 } from '@/services/deckService';
 
 interface DashboardState {
+  dashboardSection: 'personal' | 'community';
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null; is_archived: boolean }[];
-  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean }[];
+  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean; section?: 'personal' | 'community' }[];
   currentFolderId: string | null;
   currentDecks: { id: string }[];
 
