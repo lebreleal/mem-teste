@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, Pencil, RefreshCw,
+  ChevronRight, Pencil, Users,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
