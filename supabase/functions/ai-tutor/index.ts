@@ -18,13 +18,15 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer } = body;
+    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer, concept, deckId } = body;
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
 
-    // Support both flashcard tutor and question hint/explain modes
+    // Support flashcard tutor, question hint/explain, concept extraction, and concept card generation
     const isQuestionMode = type === 'question-hint' || type === 'question-explain';
-    if (!isQuestionMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
+    const isConceptMode = type === 'question-concepts';
+    const isConceptCardMode = type === 'generate-concept-cards';
+    if (!isQuestionMode && !isConceptMode && !isConceptCardMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
@@ -46,7 +48,104 @@ Deno.serve(async (req) => {
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
-    const temperature = promptConfig?.temperature ?? 0.5;
+
+    // ─── Concept Extraction (non-streaming, returns JSON) ───
+    if (isConceptMode) {
+      const qText = (question || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+
+      const cPrompt = `Analise esta questão de múltipla escolha e extraia os CONCEITOS-CHAVE que o aluno precisa dominar para acertá-la.
+
+QUESTÃO: ${qText}
+
+ALTERNATIVAS:
+${qOpts}
+
+Retorne APENAS um JSON array de strings com os conceitos (2-5 conceitos). Cada conceito deve ser curto (2-6 palavras) e representar um tópico específico.
+Exemplo: ["Princípio da Legalidade", "Art. 37 CF", "Administração Pública Direta"]
+
+Responda SOMENTE o JSON array, sem markdown, sem explicação.`;
+
+      const cResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "Você extrai conceitos de questões. Responda APENAS JSON." },
+            { role: "user", content: cPrompt },
+          ],
+          max_tokens: 300,
+          temperature: 0.2,
+        }),
+      });
+
+      if (!cResponse.ok) return jsonResponse({ concepts: [] });
+
+      const cData = await cResponse.json();
+      const rawText = cData.choices?.[0]?.message?.content || "[]";
+      try {
+        const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const concepts = JSON.parse(cleaned);
+        return jsonResponse({ concepts: Array.isArray(concepts) ? concepts.slice(0, 5) : [] });
+      } catch {
+        return jsonResponse({ concepts: [] });
+      }
+    }
+
+    // ─── Concept Card Generation (non-streaming, returns JSON) ───
+    if (isConceptCardMode) {
+      const conceptName = concept || "";
+      if (!conceptName) return jsonResponse({ error: "concept is required" }, 400);
+
+      const gcPrompt = `Crie 2-3 flashcards para ajudar um aluno a DOMINAR este conceito:
+
+CONCEITO: ${conceptName}
+
+Para cada card, forneça:
+- front: pergunta clara e direta (pode usar formato Cloze com {{c1::...}} se apropriado)
+- back: resposta completa e didática
+- card_type: "basic" ou "cloze"
+
+Retorne APENAS um JSON array, sem markdown:
+[{"front": "...", "back": "...", "card_type": "basic"}]
+
+Regras:
+- Cards devem ser ESPECÍFICOS sobre o conceito
+- Responda na mesma língua do conceito
+- Frente do card: min 10 palavras para contexto
+- Verso: explicação completa com 20-50 palavras`;
+
+      const gcResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "Você cria flashcards educacionais. Responda APENAS JSON." },
+            { role: "user", content: gcPrompt },
+          ],
+          max_tokens: 1000,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!gcResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const gcData = await gcResponse.json();
+      const gcRaw = gcData.choices?.[0]?.message?.content || "[]";
+      try {
+        const cleaned = gcRaw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const cards = JSON.parse(cleaned);
+        return jsonResponse({ cards: Array.isArray(cards) ? cards : [] });
+      } catch {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ cards: [] });
+      }
+    }
 
     // ─── Question Hint / Explain (non-streaming, returns JSON) ───
     if (isQuestionMode) {
@@ -93,6 +192,7 @@ Deno.serve(async (req) => {
     // ─── Flashcard tutor (streaming) ───
     const cleanFront = frontContent.replace(/<[^>]*>/g, "").trim();
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
+    const temperature = promptConfig?.temperature ?? 0.5;
 
     let prompt: string;
     let maxTokens = 800;
