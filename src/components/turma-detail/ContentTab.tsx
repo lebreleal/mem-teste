@@ -929,19 +929,26 @@ const ContentTab = () => {
           deckId={previewDeck.deck_id}
           deckName={previewDeck.deck_name || 'Deck'}
           cardCount={previewDeck.card_count || 0}
-          alreadyLinked={importLogic.isLinked(previewDeck.deck_id)}
-          alreadyOwns={importLogic.isLinked(previewDeck.deck_id)}
+          alreadyLinked={importLogic.userHasLinkedDeck(previewDeck.id)}
+          alreadyOwns={importLogic.userOwnsDeck(previewDeck.deck_id)}
           allowDownload={previewDeck.allow_download ?? true}
           onAddToCollection={() => {
-            importLogic.importDeck(previewDeck);
+            const children = turmaDecks?.filter((d: any) => d.parent_deck_id === previewDeck.deck_id) || [];
+            importLogic.addToCollection.mutate(
+              { ...previewDeck, _importMode: 'hierarchy', _childTds: children },
+              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+            );
             setPreviewDeck(null);
           }}
           onDownload={() => {
-            importLogic.downloadDeck(previewDeck);
+            importLogic.addToCollection.mutate(
+              { ...previewDeck, _importMode: 'flat', _childTds: [] },
+              { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
+            );
             setPreviewDeck(null);
           }}
-          isAdding={importLogic.isImporting}
-          isDownloading={importLogic.isDownloading}
+          isAdding={importLogic.addToCollection.isPending}
+          isDownloading={importLogic.addToCollection.isPending}
         />
       )}
 
