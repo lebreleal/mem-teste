@@ -1350,7 +1350,7 @@ const PublicDeckPreview = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${user ? 'pb-20' : ''}`}>
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center gap-3 px-4 py-3">
