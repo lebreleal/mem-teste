@@ -148,6 +148,54 @@ Regras:
       }
     }
 
+    // ─── Concept Explanation (non-streaming, returns text) ───
+    if (isConceptExplainMode) {
+      const conceptName = concept || "";
+      if (!conceptName) return jsonResponse({ error: "concept is required" }, 400);
+
+      const cePrompt = `Explique de forma didática e completa o seguinte conceito para um aluno que está estudando:
+
+CONCEITO: ${conceptName}
+
+Use a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:
+
+## Explicação
+Explique o conceito de forma clara e didática, como uma aula particular.
+- Use analogias e exemplos práticos
+- Destaque termos-chave em **negrito**
+- Se relevante, use listas para organizar sub-conceitos
+
+---
+
+## Dica de Estudo
+Uma dica prática para fixar este conceito.
+
+Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objetivo.`;
+
+      const ceResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto. Você é um tutor educacional." },
+            { role: "user", content: cePrompt },
+          ],
+          max_tokens: 1500,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!ceResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const ceData = await ceResponse.json();
+      const ceText = ceData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: ceText });
+    }
+
     // ─── Question Hint / Explain (non-streaming, returns JSON) ───
     if (isQuestionMode) {
       const qText = (question || "").replace(/<[^>]*>/g, "").trim();
