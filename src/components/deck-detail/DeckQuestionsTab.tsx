@@ -248,19 +248,54 @@ const CreateQuestionDialog = ({
   open,
   onOpenChange,
   deckId,
+  mode,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   deckId: string;
+  mode: 'manual' | 'ai';
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [questionText, setQuestionText] = useState('');
-  const [options, setOptions] = useState(['', '', '', '', '']);
-  const [correctIdx, setCorrectIdx] = useState(0);
-  const [explanation, setExplanation] = useState('');
+  const [options, setOptions] = useState(['', '', '', '']);
+  const [correctIdx, setCorrectIdx] = useState<number | null>(null);
+  const [correctExplanation, setCorrectExplanation] = useState('');
+  const [wrongExplanations, setWrongExplanations] = useState<Record<number, string>>({});
+  const [showExplanations, setShowExplanations] = useState(false);
+
+  // AI mode state
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiCount, setAiCount] = useState(5);
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  const resetForm = () => {
+    setQuestionText('');
+    setOptions(['', '', '', '']);
+    setCorrectIdx(null);
+    setCorrectExplanation('');
+    setWrongExplanations({});
+    setShowExplanations(false);
+    setAiTopic('');
+  };
+
+  const canAddE = options.length < 5;
+
+  const buildExplanation = () => {
+    const parts: string[] = [];
+    if (correctExplanation.trim()) {
+      parts.push(`<strong>Resposta correta (${LETTERS[correctIdx ?? 0]}):</strong> ${correctExplanation.trim()}`);
+    }
+    Object.entries(wrongExplanations).forEach(([idxStr, text]) => {
+      const idx = Number(idxStr);
+      if (text.trim() && idx !== correctIdx) {
+        parts.push(`<strong>${LETTERS[idx]} (incorreta):</strong> ${text.trim()}`);
+      }
+    });
+    return parts.join('<br/><br/>');
+  };
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -268,6 +303,8 @@ const CreateQuestionDialog = ({
       const validOptions = options.filter(o => o.trim());
       if (validOptions.length < 2) throw new Error('Mínimo 2 alternativas');
       if (!questionText.trim()) throw new Error('Enunciado obrigatório');
+      if (correctIdx === null) throw new Error('Marque a alternativa correta');
+      if (correctIdx >= validOptions.length) throw new Error('A alternativa correta foi removida');
 
       const { error } = await supabase.from('deck_questions' as any).insert({
         deck_id: deckId,
@@ -276,7 +313,7 @@ const CreateQuestionDialog = ({
         question_type: 'multiple_choice',
         options: validOptions,
         correct_indices: [correctIdx],
-        explanation: explanation.trim(),
+        explanation: buildExplanation(),
       });
       if (error) throw error;
     },
@@ -284,13 +321,56 @@ const CreateQuestionDialog = ({
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
       toast({ title: 'Questão criada!' });
       onOpenChange(false);
-      setQuestionText('');
-      setOptions(['', '', '', '', '']);
-      setCorrectIdx(0);
-      setExplanation('');
+      resetForm();
     },
     onError: (err: any) => {
       toast({ title: err.message || 'Erro ao criar questão', variant: 'destructive' });
+    },
+  });
+
+  const aiGenerateMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Not authenticated');
+      if (!aiTopic.trim()) throw new Error('Informe o tema');
+      setAiGenerating(true);
+
+      const { data, error } = await supabase.functions.invoke('generate-deck', {
+        body: {
+          type: 'questions',
+          topic: aiTopic.trim(),
+          count: aiCount,
+          deckId,
+        },
+      });
+      if (error) throw error;
+
+      // Insert generated questions
+      const questions = data?.questions ?? [];
+      if (questions.length === 0) throw new Error('Nenhuma questão gerada');
+
+      for (const q of questions) {
+        await supabase.from('deck_questions' as any).insert({
+          deck_id: deckId,
+          created_by: user.id,
+          question_text: q.question_text || q.question || '',
+          question_type: 'multiple_choice',
+          options: q.options || [],
+          correct_indices: q.correct_indices ?? [q.correct_index ?? 0],
+          explanation: q.explanation || '',
+        });
+      }
+      return questions.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
+      toast({ title: `${count} questões geradas por IA!` });
+      onOpenChange(false);
+      resetForm();
+      setAiGenerating(false);
+    },
+    onError: (err: any) => {
+      setAiGenerating(false);
+      toast({ title: err.message || 'Erro ao gerar questões', variant: 'destructive' });
     },
   });
 
@@ -298,71 +378,179 @@ const CreateQuestionDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova Questão</DialogTitle>
+          <DialogTitle>{mode === 'ai' ? 'Gerar Questões com IA' : 'Nova Questão'}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Enunciado</label>
-            <Textarea
-              value={questionText}
-              onChange={(e) => setQuestionText(e.target.value)}
-              placeholder="Digite o enunciado da questão..."
-              className="min-h-[80px]"
-            />
-          </div>
 
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Alternativas (marque a correta)
-            </label>
-            <div className="space-y-2">
-              {options.map((opt, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCorrectIdx(i)}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-                      correctIdx === i
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    {LETTERS[i]}
-                  </button>
-                  <Input
-                    value={opt}
-                    onChange={(e) => {
-                      const next = [...options];
-                      next[i] = e.target.value;
-                      setOptions(next);
-                    }}
-                    placeholder={`Alternativa ${LETTERS[i]}`}
-                    className="text-sm"
-                  />
-                </div>
-              ))}
+        {mode === 'ai' ? (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Tema / Assunto</label>
+              <Textarea
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
+                placeholder="Ex: Direito Constitucional - Princípios Fundamentais"
+                className="min-h-[60px]"
+              />
             </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantidade</label>
+              <div className="flex gap-2">
+                {[3, 5, 10].map(n => (
+                  <Button
+                    key={n}
+                    variant={aiCount === n ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAiCount(n)}
+                  >
+                    {n} questões
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button
+                onClick={() => aiGenerateMutation.mutate()}
+                disabled={aiGenerating || !aiTopic.trim()}
+                className="gap-1.5"
+              >
+                {aiGenerating ? 'Gerando...' : <><Sparkles className="h-3.5 w-3.5" /> Gerar</>}
+              </Button>
+            </DialogFooter>
           </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Enunciado</label>
+              <Textarea
+                value={questionText}
+                onChange={(e) => setQuestionText(e.target.value)}
+                placeholder="Digite o enunciado da questão..."
+                className="min-h-[80px]"
+              />
+            </div>
 
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Explicação (opcional)</label>
-            <Textarea
-              value={explanation}
-              onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Explique por que a resposta correta é a certa..."
-              className="min-h-[60px]"
-            />
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Alternativas <span className="text-[10px] text-muted-foreground/60">(toque na letra para marcar a correta)</span>
+              </label>
+              <div className="space-y-2">
+                {options.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCorrectIdx(i)}
+                      title={correctIdx === i ? 'Alternativa correta' : 'Marcar como correta'}
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
+                        correctIdx === i
+                          ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                          : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                      }`}
+                    >
+                      {correctIdx === i ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
+                    </button>
+                    <Input
+                      value={opt}
+                      onChange={(e) => {
+                        const next = [...options];
+                        next[i] = e.target.value;
+                        setOptions(next);
+                      }}
+                      placeholder={`Alternativa ${LETTERS[i]}`}
+                      className="text-sm"
+                    />
+                    {/* Remove 5th option */}
+                    {i === 4 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          setOptions(options.slice(0, 4));
+                          if (correctIdx === 4) setCorrectIdx(null);
+                          const newWrong = { ...wrongExplanations };
+                          delete newWrong[4];
+                          setWrongExplanations(newWrong);
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {canAddE && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 gap-1 text-xs text-muted-foreground"
+                  onClick={() => setOptions([...options, ''])}
+                >
+                  <Plus className="h-3 w-3" /> Adicionar alternativa E
+                </Button>
+              )}
+            </div>
+
+            {/* Explanations toggle */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowExplanations(!showExplanations)}
+                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                {showExplanations ? 'Ocultar explicações' : 'Adicionar explicações (opcional)'}
+              </button>
+
+              {showExplanations && (
+                <div className="mt-3 space-y-3 rounded-xl border border-border/50 bg-muted/30 p-3">
+                  {/* Correct answer explanation */}
+                  <div>
+                    <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1">
+                      <Check className="h-3 w-3" />
+                      Por que a alternativa {correctIdx !== null ? LETTERS[correctIdx] : '?'} está correta?
+                    </label>
+                    <Textarea
+                      value={correctExplanation}
+                      onChange={(e) => setCorrectExplanation(e.target.value)}
+                      placeholder="Explique por que essa é a resposta certa..."
+                      className="min-h-[50px] text-xs"
+                    />
+                  </div>
+
+                  {/* Wrong answers explanations */}
+                  {options.map((opt, i) => {
+                    if (i === correctIdx || !opt.trim()) return null;
+                    return (
+                      <div key={i}>
+                        <label className="text-[11px] font-bold text-destructive/80 mb-1 flex items-center gap-1">
+                          <X className="h-3 w-3" />
+                          Por que a alternativa {LETTERS[i]} está errada?
+                        </label>
+                        <Textarea
+                          value={wrongExplanations[i] || ''}
+                          onChange={(e) => setWrongExplanations(prev => ({ ...prev, [i]: e.target.value }))}
+                          placeholder={`Explique por que "${opt.slice(0, 30)}${opt.length > 30 ? '...' : ''}" está errada...`}
+                          className="min-h-[40px] text-xs"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button
+                onClick={() => createMutation.mutate()}
+                disabled={createMutation.isPending}
+              >
+                {createMutation.isPending ? 'Criando...' : 'Criar Questão'}
+              </Button>
+            </DialogFooter>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-          >
-            {createMutation.isPending ? 'Criando...' : 'Criar Questão'}
-          </Button>
-        </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -382,6 +570,7 @@ const DeckQuestionsTab = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
   const [practicing, setPracticing] = useState(false);
 
   // For linked decks, fetch questions from the source deck
@@ -422,14 +611,22 @@ const DeckQuestionsTab = ({
 
   return (
     <div className="space-y-4">
-      {/* Actions (only for deck owners) */}
+      {/* Actions (only for deck owners) — aligned right */}
       {!isReadOnly && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => { setCreateMode('ai'); setCreateOpen(true); }}
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Gerar com IA
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}
           >
             <PenLine className="h-3.5 w-3.5" /> Criar questão
           </Button>
@@ -510,6 +707,7 @@ const DeckQuestionsTab = ({
           open={createOpen}
           onOpenChange={setCreateOpen}
           deckId={deckId}
+          mode={createMode}
         />
       )}
     </div>
