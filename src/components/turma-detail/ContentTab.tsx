@@ -30,7 +30,7 @@ import {
   Plus, FolderPlus, MoreVertical, ChevronRight,
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
-  Copy, Link2, ClipboardList, Clock, Import, LogIn,
+  Copy, Link2, ClipboardList, Clock, Import, LogIn, RefreshCw, Check,
   Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
