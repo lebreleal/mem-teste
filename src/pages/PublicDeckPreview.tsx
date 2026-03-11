@@ -1557,6 +1557,12 @@ const PublicDeckPreview = () => {
               <Layers className="h-3.5 w-3.5" /> Cards ({allCards.length})
             </TabsTrigger>
             <TabsTrigger
+              value="questions"
+              className="flex-1 text-xs gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+            >
+              <HelpCircle className="h-3.5 w-3.5" /> Questões
+            </TabsTrigger>
+            <TabsTrigger
               value="suggestions"
               className="flex-1 text-xs gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
             >
