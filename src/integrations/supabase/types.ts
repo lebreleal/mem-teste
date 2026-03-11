@@ -354,6 +354,97 @@ export type Database = {
           },
         ]
       }
+      deck_question_attempts: {
+        Row: {
+          answered_at: string
+          id: string
+          is_correct: boolean
+          question_id: string
+          selected_indices: number[] | null
+          user_answer: string | null
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id: string
+          selected_indices?: number[] | null
+          user_answer?: string | null
+          user_id: string
+        }
+        Update: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          selected_indices?: number[] | null
+          user_answer?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_question_attempts_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "deck_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_questions: {
+        Row: {
+          correct_answer: string
+          correct_indices: number[] | null
+          created_at: string
+          created_by: string
+          deck_id: string
+          explanation: string
+          id: string
+          options: Json | null
+          question_text: string
+          question_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by: string
+          deck_id: string
+          explanation?: string
+          id?: string
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by?: string
+          deck_id?: string
+          explanation?: string
+          id?: string
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_questions_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deck_reviews: {
         Row: {
           comment: string | null
