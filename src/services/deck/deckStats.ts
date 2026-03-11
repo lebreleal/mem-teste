@@ -69,7 +69,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // Batch source author lookup (turma/community decks)
+  // Batch source author lookup (turma/community decks via source_turma_deck_id)
   const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
   const turmaAuthorMap = new Map<string, string | null>();
   if (turmaDecksIds.length > 0) {
@@ -91,14 +91,41 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
+  // Batch source author lookup (community_id only — turma owner)
+  const communityOnlyIds = (decks || [])
+    .filter((d: any) => d.community_id && !d.source_turma_deck_id && !d.source_listing_id)
+    .map((d: any) => d.community_id);
+  const communityOwnerMap = new Map<string, string | null>();
+  if (communityOnlyIds.length > 0) {
+    const uniqueCommunityIds = [...new Set(communityOnlyIds)];
+    const { data: turmas } = await supabase
+      .from('turmas')
+      .select('id, created_by')
+      .in('id', uniqueCommunityIds);
+    if (turmas && turmas.length > 0) {
+      const ownerIds = [...new Set(turmas.map((t: any) => t.created_by))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', ownerIds);
+      const profileMap = new Map<string, string>();
+      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
+      for (const t of turmas as any[]) {
+        communityOwnerMap.set(t.id, profileMap.get(t.created_by) || null);
+      }
+    }
+  }
+
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
-    // Resolve author: marketplace listing author OR turma sharer
+    // Resolve author: marketplace listing author OR turma sharer OR community owner
     let resolvedAuthor: string | null = null;
     if (deck.source_listing_id) {
       resolvedAuthor = authorMap.get(deck.source_listing_id) ?? null;
     } else if (deck.source_turma_deck_id) {
       resolvedAuthor = turmaAuthorMap.get(deck.source_turma_deck_id) ?? null;
+    } else if (deck.community_id) {
+      resolvedAuthor = communityOwnerMap.get(deck.community_id) ?? null;
     }
     return {
       ...deck,
