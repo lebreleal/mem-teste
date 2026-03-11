@@ -22,11 +22,12 @@ Deno.serve(async (req) => {
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
 
-    // Support flashcard tutor, question hint/explain, concept extraction, and concept card generation
+    // Support flashcard tutor, question hint/explain, concept extraction, concept card generation, and concept explanation
     const isQuestionMode = type === 'question-hint' || type === 'question-explain';
     const isConceptMode = type === 'question-concepts';
     const isConceptCardMode = type === 'generate-concept-cards';
-    if (!isQuestionMode && !isConceptMode && !isConceptCardMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
+    const isConceptExplainMode = type === 'explain-concept';
+    if (!isQuestionMode && !isConceptMode && !isConceptCardMode && !isConceptExplainMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
