@@ -10,15 +10,26 @@ export async function fetchUserTurmas(userId: string): Promise<Turma[]> {
   const { data: memberships } = await supabase
     .from('turma_members').select('turma_id').eq('user_id', userId);
 
+  let turmas: any[];
   if (!memberships || memberships.length === 0) {
     const { data: owned } = await supabase.from('turmas').select('*').eq('owner_id', userId);
-    return (owned ?? []) as Turma[];
+    turmas = owned ?? [];
+  } else {
+    const turmaIds = memberships.map(m => (m as any).turma_id);
+    const { data } = await supabase
+      .from('turmas').select('*').or(`id.in.(${turmaIds.join(',')}),owner_id.eq.${userId}`);
+    turmas = data ?? [];
   }
 
-  const turmaIds = memberships.map(m => (m as any).turma_id);
-  const { data: turmas } = await supabase
-    .from('turmas').select('*').or(`id.in.(${turmaIds.join(',')}),owner_id.eq.${userId}`);
-  return (turmas ?? []) as Turma[];
+  // Enrich with owner names
+  const ownerIds = [...new Set(turmas.map(t => t.owner_id))];
+  if (ownerIds.length > 0) {
+    const { data: profiles } = await supabase.rpc('get_public_profiles', { p_user_ids: ownerIds });
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.name || 'Anônimo']));
+    turmas = turmas.map(t => ({ ...t, owner_name: profileMap.get(t.owner_id) ?? 'Anônimo' }));
+  }
+
+  return turmas as Turma[];
 }
 
 export async function fetchTurma(turmaId: string): Promise<Turma | null> {
