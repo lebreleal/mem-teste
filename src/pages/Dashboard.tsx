@@ -290,7 +290,7 @@ const Dashboard = () => {
               Meus Decks
             </button>
             <button
-              onClick={() => { setDashboardTab('community'); state.setCurrentFolderId(null); }}}
+              onClick={() => { setDashboardTab('community'); state.setCurrentFolderId(null); }}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
                 dashboardTab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}

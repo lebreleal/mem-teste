@@ -31,7 +31,7 @@ export function useExamCreateFlow() {
   const { decks } = useDecks();
   const { createExam, updateExam } = useExams();
   const { energy, spendEnergy } = useEnergy();
-  const { model, setModel, getCost } = useAIModel();
+  const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { data: studyStats } = useStudyStats();
   const { addNotification, updateNotification } = useExamNotifications();
   const [creditsOpen, setCreditsOpen] = useState(false);
@@ -39,6 +39,8 @@ export function useExamCreateFlow() {
   const { exam: existingExam, questions: existingQuestions, isLoading: examLoading } = useExamDetail(examId ?? '');
 
   const preselectedDeckId = searchParams.get('deckId') || '';
+  const preselectedMode = searchParams.get('mode');
+  const preselectedModel = searchParams.get('model');
   const [creationMode, setCreationMode] = useState<CreationMode>('manual');
 
   // AI mode state
@@ -99,8 +101,19 @@ export function useExamCreateFlow() {
 
   // Populate form when editing
   useEffect(() => {
+    if (isEditing) return;
+
     if (preselectedDeckId && !selectedDeckId) setSelectedDeckId(preselectedDeckId);
-  }, [preselectedDeckId]);
+
+    if (preselectedMode === 'ai' || preselectedMode === 'file' || preselectedMode === 'manual') {
+      setCreationMode(preselectedMode);
+      if (preselectedMode === 'file') setFileStep('upload');
+    }
+
+    if (preselectedModel === 'flash' || preselectedModel === 'pro') {
+      setModel(preselectedModel);
+    }
+  }, [isEditing, preselectedDeckId, selectedDeckId, preselectedMode, preselectedModel, setModel]);
 
   useEffect(() => {
     if (isEditing && existingExam && existingQuestions.length > 0) {
@@ -394,6 +407,9 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     
     // Stats
     studyStats,
+    pendingPro,
+    confirmPro,
+    cancelPro,
     
     // Navigation
     handleBack,

@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
+const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
 /** Detect if a deck is linked to a community/marketplace source */
 function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
@@ -181,7 +182,7 @@ const DeckDetailContent = () => {
         {isLinkedDeck ? (
           <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} />
         ) : (
-          <CardList />
+          <PersonalDeckTabs deckId={deckId!} />
         )}
       </main>
 
@@ -242,6 +243,38 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId }: { deckId: string; reso
       </TabsContent>
       <TabsContent value="suggestions" className="mt-4">
         <SuggestionsList deckId={effectiveDeckId} />
+      </TabsContent>
+    </Tabs>
+  );
+};
+
+const PersonalDeckTabs = ({ deckId }: { deckId: string }) => {
+  const { cardCounts } = useDeckDetail();
+  const totalCards = cardCounts?.total ?? 0;
+
+  return (
+    <Tabs defaultValue="cards" className="w-full">
+      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger
+          value="cards"
+          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+        >
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger
+          value="questions"
+          className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+        >
+          <MessageSquare className="h-4 w-4" /> Questões
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab deckId={deckId} />
+        </Suspense>
       </TabsContent>
     </Tabs>
   );
