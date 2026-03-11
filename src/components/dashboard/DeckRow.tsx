@@ -54,7 +54,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const stats = getAggregateStats(deck);
   const totalDue = stats.new_count + stats.learning_count + stats.review_count;
   const isDeckSelected = selectedDeckIds.has(deck.id);
-  const isCommunityDeck = !!(deck.source_turma_deck_id || deck.source_listing_id || deck.community_id);
+  const isCommunityDeck = !!(deck.source_turma_deck_id || deck.source_listing_id || deck.community_id || (deck as any).is_live_deck);
 
   const basePadding = depth === 0 ? 8 : 20 + depth * 24;
 
