@@ -13,7 +13,7 @@ import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2, Clock,
+  ArrowLeft, Crown, Settings, Users, UserPlus, Check, Star, BarChart3, Share2, RefreshCw,
 } from 'lucide-react';
 import MembersTab from '@/components/turma-detail/MembersTab';
 
@@ -96,7 +96,7 @@ const TurmaSubHeader = ({
                 {ownerName && <p>por <span className="font-medium text-primary">{ownerName}</span></p>}
                 {createdAt && (
                   <p className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
+                    <RefreshCw className="h-3 w-3" />
                     {formatDistanceToNow(new Date(createdAt), { addSuffix: true, locale: ptBR })}
                   </p>
                 )}
