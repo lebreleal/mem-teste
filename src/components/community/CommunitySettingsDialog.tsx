@@ -42,6 +42,7 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
       setIsPrivate(turma.is_private ?? false);
       setCoverUrl(turma.cover_image_url || '');
       setSubscriptionPrice(turma.subscription_price ? String(turma.subscription_price) : '');
+      setShareSlug(turma.share_slug || '');
     }
   }, [open, turma]);
 
