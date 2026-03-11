@@ -17,9 +17,9 @@ export const useFolders = () => {
   });
 
   const createFolder = useMutation({
-    mutationFn: ({ name, parentId }: { name: string; parentId?: string | null }) => {
+    mutationFn: ({ name, parentId, section }: { name: string; parentId?: string | null; section?: Folder['section'] }) => {
       if (!user) throw new Error('Not authenticated');
-      return folderService.createFolder(user.id, name, parentId);
+      return folderService.createFolder(user.id, name, parentId, section ?? 'personal');
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
   });
