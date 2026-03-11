@@ -51,6 +51,7 @@ const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOw
   onClose: () => void;
   deckId?: string;
   isOwner?: boolean;
+  hideActions?: boolean;
 }) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
   const isMobile = useIsMobile();
