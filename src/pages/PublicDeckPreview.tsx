@@ -1596,6 +1596,7 @@ const PublicDeckPreview = () => {
         onClose={() => setPreviewIndex(null)}
         deckId={deck?.id}
         isOwner={deck?.user_id === user?.id}
+        hideActions={!user}
       />
       {/* Edit warning dialog */}
       <AlertDialog open={showEditWarning} onOpenChange={setShowEditWarning}>
