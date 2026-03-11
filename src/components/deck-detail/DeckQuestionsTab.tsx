@@ -581,6 +581,7 @@ const CreateQuestionDialog = ({
   open: boolean; onOpenChange: (v: boolean) => void; deckId: string; mode: 'manual' | 'ai';
 }) => {
   const { user } = useAuth();
+  const { energy, spendEnergy } = useEnergy();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [questionText, setQuestionText] = useState('');
@@ -589,13 +590,30 @@ const CreateQuestionDialog = ({
   const [correctExplanation, setCorrectExplanation] = useState('');
   const [wrongExplanations, setWrongExplanations] = useState<Record<number, string>>({});
   const [showExplanations, setShowExplanations] = useState(false);
-  const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(5);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiCustomInstructions, setAiCustomInstructions] = useState('');
+
+  // Fetch card count for the deck
+  const { data: cardCount = 0 } = useQuery({
+    queryKey: ['deck-card-count', deckId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('cards')
+        .select('id', { count: 'exact', head: true })
+        .eq('deck_id', deckId);
+      return count ?? 0;
+    },
+    enabled: !!deckId && mode === 'ai',
+    staleTime: 60_000,
+  });
+
+  const aiCost = aiCount * 2; // 2 credits per question
 
   const resetForm = () => {
     setQuestionText(''); setOptions(['', '', '', '']); setCorrectIdx(null);
-    setCorrectExplanation(''); setWrongExplanations({}); setShowExplanations(false); setAiTopic('');
+    setCorrectExplanation(''); setWrongExplanations({}); setShowExplanations(false);
+    setAiCustomInstructions('');
   };
 
   const canAddE = options.length < 5;
@@ -630,7 +648,6 @@ const CreateQuestionDialog = ({
         body: { type: 'question-concepts', question: questionText.trim(), options: validOptions },
       }).then(async ({ data }) => {
         if (data?.concepts?.length > 0) {
-          // Get latest question to update
           const { data: latest } = await supabase.from('deck_questions' as any)
             .select('id').eq('deck_id', deckId).eq('created_by', user.id)
             .order('created_at', { ascending: false }).limit(1);
@@ -651,20 +668,34 @@ const CreateQuestionDialog = ({
   const aiGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
-      if (!aiTopic.trim()) throw new Error('Informe o tema');
+      if (cardCount === 0) throw new Error('Este baralho não tem cards para gerar questões');
+      if (energy < aiCost) throw new Error(`Créditos insuficientes (necessário: ${aiCost})`);
+
       setAiGenerating(true);
-      const { data, error } = await supabase.functions.invoke('generate-deck', {
-        body: { type: 'questions', topic: aiTopic.trim(), count: aiCount, deckId },
+
+      const { data, error } = await supabase.functions.invoke('generate-questions', {
+        body: {
+          deckId,
+          count: aiCount,
+          optionsCount: 4,
+          aiModel: 'flash',
+          energyCost: aiCost,
+          customInstructions: aiCustomInstructions.trim() || undefined,
+        },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
       const qs = data?.questions ?? [];
       if (qs.length === 0) throw new Error('Nenhuma questão gerada');
+
       for (const qi of qs) {
         await supabase.from('deck_questions' as any).insert({
           deck_id: deckId, created_by: user.id,
-          question_text: qi.question_text || qi.question || '',
-          question_type: 'multiple_choice', options: qi.options || [],
-          correct_indices: qi.correct_indices ?? [qi.correct_index ?? 0],
+          question_text: qi.question_text || '',
+          question_type: 'multiple_choice',
+          options: qi.options || [],
+          correct_indices: [qi.correct_index ?? 0],
           explanation: qi.explanation || '',
           concepts: qi.concepts || [],
         });
@@ -673,9 +704,13 @@ const CreateQuestionDialog = ({
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
-      toast({ title: `${count} questões geradas por IA!` }); onOpenChange(false); resetForm(); setAiGenerating(false);
+      toast({ title: `${count} questões geradas por IA!` });
+      onOpenChange(false); resetForm(); setAiGenerating(false);
     },
-    onError: (err: any) => { setAiGenerating(false); toast({ title: err.message || 'Erro ao gerar questões', variant: 'destructive' }); },
+    onError: (err: any) => {
+      setAiGenerating(false);
+      toast({ title: err.message || 'Erro ao gerar questões', variant: 'destructive' });
+    },
   });
 
   return (
@@ -686,22 +721,76 @@ const CreateQuestionDialog = ({
         </DialogHeader>
         {mode === 'ai' ? (
           <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Tema / Assunto</label>
-              <Textarea value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="Ex: Direito Constitucional - Princípios Fundamentais" className="min-h-[60px]" />
+            {/* Card count info */}
+            <div className="rounded-xl border border-border/50 bg-muted/30 p-3 flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Brain className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-foreground">Geração baseada nos cards</p>
+                <p className="text-[11px] text-muted-foreground">
+                  A IA vai analisar os <span className="font-bold text-foreground">{cardCount} cards</span> do baralho e criar questões que correlacionam múltiplos conceitos
+                </p>
+              </div>
             </div>
+
+            {cardCount === 0 && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                <AlertCircle className="inline h-4 w-4 mr-1" />
+                Este baralho não tem cards. Adicione cards antes de gerar questões.
+              </div>
+            )}
+
+            {/* Question count */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Quantidade</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Quantidade de questões</label>
               <div className="flex gap-2">
-                {[3, 5, 10].map(n => (
-                  <Button key={n} variant={aiCount === n ? 'default' : 'outline'} size="sm" onClick={() => setAiCount(n)}>{n} questões</Button>
+                {[3, 5, 10, 15].map(n => (
+                  <Button key={n} variant={aiCount === n ? 'default' : 'outline'} size="sm" onClick={() => setAiCount(n)}>
+                    {n}
+                  </Button>
                 ))}
               </div>
             </div>
+
+            {/* Custom instructions */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Instruções extras <span className="text-muted-foreground/60">(opcional)</span>
+              </label>
+              <Textarea
+                value={aiCustomInstructions}
+                onChange={(e) => setAiCustomInstructions(e.target.value)}
+                placeholder="Ex: Foque nos cards sobre anatomia, crie questões de caso clínico..."
+                className="min-h-[50px] text-sm"
+              />
+            </div>
+
+            {/* Cost info */}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-sm">
+                <Zap className="h-4 w-4 text-primary" />
+                <span className="text-muted-foreground">Custo:</span>
+                <span className="font-bold text-foreground">{aiCost} créditos</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="text-muted-foreground">Saldo:</span>
+                <span className={`font-bold ${energy >= aiCost ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{energy}</span>
+              </div>
+            </div>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={() => aiGenerateMutation.mutate()} disabled={aiGenerating || !aiTopic.trim()} className="gap-1.5">
-                {aiGenerating ? 'Gerando...' : <><Sparkles className="h-3.5 w-3.5" /> Gerar</>}
+              <Button
+                onClick={() => aiGenerateMutation.mutate()}
+                disabled={aiGenerating || cardCount === 0 || energy < aiCost}
+                className="gap-1.5"
+              >
+                {aiGenerating ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</>
+                ) : (
+                  <><Sparkles className="h-3.5 w-3.5" /> Gerar {aiCount} questões</>
+                )}
               </Button>
             </DialogFooter>
           </div>
