@@ -407,6 +407,9 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     
     // Stats
     studyStats,
+    pendingPro,
+    confirmPro,
+    cancelPro,
     
     // Navigation
     handleBack,

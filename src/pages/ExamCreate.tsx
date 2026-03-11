@@ -107,6 +107,7 @@ const ExamCreate = () => {
       </div>
 
       <BuyCreditsDialog open={flow.creditsOpen} onOpenChange={flow.setCreditsOpen} currentBalance={flow.energy} />
+      <ProModelConfirmDialog open={flow.pendingPro} onConfirm={flow.confirmPro} onCancel={flow.cancelPro} baseCost={flow.totalQuestions * 2} />
     </div>
   );
 };
