@@ -21,7 +21,7 @@ export interface StudyQueueResult {
   isLiveDeck: boolean;
 }
 
-const DECK_SELECT_COLS = 'id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
+const DECK_SELECT_COLS = 'id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
 
 /** Fetch the study queue for a deck or folder. */
 export async function fetchStudyQueue(
@@ -73,7 +73,10 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
+    const isLiveDeck = deckIds.some(id => {
+      const d = activeDecks.find(dd => dd.id === id);
+      return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+    });
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
@@ -223,7 +226,10 @@ export async function fetchStudyQueue(
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   const queue = [...allLearning, ...orderedNonLearning];
 
-  const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
+  const isLiveDeck = deckIds.some(id => {
+    const d = activeDecks.find(dd => dd.id === id);
+    return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+  });
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
