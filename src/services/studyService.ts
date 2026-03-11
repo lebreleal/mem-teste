@@ -226,7 +226,10 @@ export async function fetchStudyQueue(
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   const queue = [...allLearning, ...orderedNonLearning];
 
-  const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
+  const isLiveDeck = deckIds.some(id => {
+    const d = activeDecks.find(dd => dd.id === id);
+    return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+  });
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
 
