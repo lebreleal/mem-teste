@@ -17,10 +17,14 @@ Deno.serve(async (req) => {
   let userId = "";
 
   try {
-    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost } = await req.json();
+    const body = await req.json();
+    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer } = body;
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
-    if (!frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
+
+    // Support both flashcard tutor and question hint/explain modes
+    const isQuestionMode = type === 'question-hint' || type === 'question-explain';
+    if (!isQuestionMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
