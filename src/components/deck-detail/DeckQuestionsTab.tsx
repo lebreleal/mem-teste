@@ -562,6 +562,7 @@ const QuestionPractice = ({
             const isEliminated = eliminated.has(i);
             const isSelected = selected === i;
             const isCorrectOpt = i === correctIdx;
+            const optExplanation = optionExplanations[i];
 
             if (isEliminated && !confirmed) {
               return (
@@ -584,21 +585,50 @@ const QuestionPractice = ({
             }
 
             return (
-              <button key={i}
-                onClick={() => { if (confirmed) return; scissorsMode ? handleEliminate(i) : setSelected(i); }}
-                disabled={confirmed}
-                className={`w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all ${optClass}`}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                  confirmed && isCorrectOpt ? 'bg-emerald-500 text-white'
-                    : confirmed && isSelected && !isCorrectOpt ? 'bg-destructive text-white'
-                    : isSelected ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
-                  {confirmed && isCorrectOpt ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
-                </span>
-                <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
-                {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
-              </button>
+              <div key={i} className="space-y-0">
+                <button
+                  onClick={() => { if (confirmed) return; scissorsMode ? handleEliminate(i) : setSelected(i); }}
+                  disabled={confirmed}
+                  className={`w-full text-left flex items-start gap-3 rounded-xl border p-3.5 transition-all ${optClass}`}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                    confirmed && isCorrectOpt ? 'bg-emerald-500 text-white'
+                      : confirmed && isSelected && !isCorrectOpt ? 'bg-destructive text-white'
+                      : isSelected ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {confirmed && isCorrectOpt ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
+                  </span>
+                  <span className="text-sm leading-relaxed pt-0.5 flex-1">{opt}</span>
+                  {scissorsMode && !confirmed && <Scissors className="h-4 w-4 text-destructive/60 shrink-0 mt-1" />}
+                </button>
+
+                {/* Per-option "Explicar alternativa" link — shown after confirming for correct & user-selected wrong */}
+                {confirmed && (isCorrectOpt || (isSelected && !isCorrectOpt)) && !optExplanation && (
+                  <button
+                    onClick={() => handleExplainOption(i)}
+                    disabled={optionExplainLoading === i}
+                    className="ml-10 mt-1 flex items-center gap-1 text-xs font-medium hover:underline disabled:opacity-50"
+                    style={{ color: isCorrectOpt ? 'hsl(142, 71%, 45%)' : 'hsl(var(--destructive))' }}
+                  >
+                    {optionExplainLoading === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
+                    {isCorrectOpt ? 'Por que está correta?' : 'Por que está errada?'}
+                    <span className="text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
+                  </button>
+                )}
+
+                {/* Inline explanation for this option */}
+                {optExplanation && (
+                  <div className={`ml-10 mt-1.5 mb-1 rounded-lg border p-3 ${
+                    isCorrectOpt
+                      ? 'border-emerald-500/20 bg-emerald-500/5'
+                      : 'border-destructive/20 bg-destructive/5'
+                  }`}>
+                    <div className="text-xs text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{optExplanation}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -615,33 +645,12 @@ const QuestionPractice = ({
           </div>
         )}
 
-        {/* Static explanation */}
-        {confirmed && q.explanation && (
-          <div className="mt-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <p className="text-xs font-bold text-primary mb-1.5 flex items-center gap-1">
-              <AlertCircle className="h-3.5 w-3.5" /> Explicação
-            </p>
-            <div className="text-sm text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation }} />
-          </div>
-        )}
-
-        {/* AI Explanation */}
-        {confirmed && explainText && (
-          <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1">
-              <Brain className="h-3.5 w-3.5" /> Explicação da IA
-            </p>
-            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{explainText}</ReactMarkdown>
-            </div>
-          </div>
-        )}
-
         {/* Concept Mastery (after confirming, if question has concepts) */}
         {confirmed && q.concepts && q.concepts.length > 0 && (
           <ConceptMasterySection
             concepts={q.concepts}
-            mastery={conceptMastery}
+            deckId={deckId}
+            questionId={q.id}
             onGenerateCards={handleGenerateConceptCards}
             generating={generatingConcept}
           />
@@ -658,7 +667,7 @@ const QuestionPractice = ({
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleHint} disabled={hintLoading || !!hintText}>
                 {hintLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
-                Dica <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 <Brain className="inline h-2.5 w-2.5" />)</span>
+                Dica <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
               </Button>
             </div>
             <Button onClick={handleConfirm} disabled={selected === null} className="w-full gap-1.5">
@@ -666,17 +675,9 @@ const QuestionPractice = ({
             </Button>
           </>
         ) : (
-          <div className="space-y-2">
-            {!explainText && (
-              <Button variant="outline" className="w-full gap-1.5 text-sm" onClick={handleExplain} disabled={explainLoading}>
-                {explainLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
-                Pedir IA para explicar <span className="text-[10px] text-muted-foreground font-normal ml-0.5">(1 <Brain className="inline h-2.5 w-2.5" />)</span>
-              </Button>
-            )}
-            <Button onClick={handleNext} className="w-full gap-1.5">
-              {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button onClick={handleNext} className="w-full gap-1.5">
+            {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
+          </Button>
         )}
       </div>
     </div>
