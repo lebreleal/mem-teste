@@ -31,7 +31,7 @@ import {
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
   Copy, Link2, ClipboardList, Clock, Import, LogIn,
-  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip,
+  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
