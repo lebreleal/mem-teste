@@ -47,7 +47,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // Batch source author lookup
+  // Batch source author lookup (marketplace)
   const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
   const authorMap = new Map<string, string | null>();
   if (listingIds.length > 0) {
@@ -69,8 +69,37 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
+  // Batch source author lookup (turma/community decks)
+  const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
+  const turmaAuthorMap = new Map<string, string | null>();
+  if (turmaDecksIds.length > 0) {
+    const { data: turmaDecks } = await supabase
+      .from('turma_decks')
+      .select('id, shared_by')
+      .in('id', turmaDecksIds);
+    if (turmaDecks && turmaDecks.length > 0) {
+      const sharerIds = [...new Set(turmaDecks.map((td: any) => td.shared_by))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', sharerIds);
+      const profileMap = new Map<string, string>();
+      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
+      for (const td of turmaDecks as any[]) {
+        turmaAuthorMap.set(td.id, profileMap.get(td.shared_by) || null);
+      }
+    }
+  }
+
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
+    // Resolve author: marketplace listing author OR turma sharer
+    let resolvedAuthor: string | null = null;
+    if (deck.source_listing_id) {
+      resolvedAuthor = authorMap.get(deck.source_listing_id) ?? null;
+    } else if (deck.source_turma_deck_id) {
+      resolvedAuthor = turmaAuthorMap.get(deck.source_turma_deck_id) ?? null;
+    }
     return {
       ...deck,
       folder_id: deck.folder_id ?? null,
@@ -85,7 +114,7 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       daily_new_limit: deck.daily_new_limit ?? 20,
       daily_review_limit: deck.daily_review_limit ?? 100,
       source_listing_id: deck.source_listing_id ?? null,
-      source_author: deck.source_listing_id ? (authorMap.get(deck.source_listing_id) ?? null) : null,
+      source_author: resolvedAuthor,
       source_turma_deck_id: (deck as any).source_turma_deck_id ?? null,
       community_id: (deck as any).community_id ?? null,
       updated_at: deck.updated_at ?? deck.created_at,
