@@ -1709,6 +1709,9 @@ const PublicDeckPreview = () => {
           </div>
         </div>
       )}
+
+      {/* Bottom Nav for authenticated users */}
+      {user && <BottomNav />}
     </div>
   );
 };
