@@ -283,6 +283,29 @@ const DeckSettings = () => {
     });
   };
 
+  const isCommunityDeck = !!(sourceTurmaDeckId || communityId);
+
+  const handleDetachDeck = async () => {
+    if (!deckId) return;
+    setDetaching(true);
+    try {
+      await supabase.from('decks').update({
+        source_turma_deck_id: null,
+        source_listing_id: null,
+        community_id: null,
+      } as any).eq('id', deckId);
+      setSourceTurmaDeckId(null);
+      setCommunityId(null);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Deck importado!', description: 'Agora é um deck pessoal independente.' });
+      setDetachConfirm(false);
+    } catch {
+      toast({ title: 'Erro ao importar', variant: 'destructive' });
+    } finally {
+      setDetaching(false);
+    }
+  };
+
   const handleArchive = () => {
     if (!deckId) return;
     archiveDeck.mutate(deckId, {
