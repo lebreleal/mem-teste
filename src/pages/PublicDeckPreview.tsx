@@ -44,7 +44,7 @@ const extractImages = (html: string): string[] => {
 };
 
 /* ─── Read-only Card Preview Sheet (reuses CardContent from CardPreviewSheet) ─── */
-const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner }: {
+const ReadOnlyPreviewSheet = ({ cards, initialIndex, open, onClose, deckId, isOwner, hideActions }: {
   cards: any[];
   initialIndex: number;
   open: boolean;
