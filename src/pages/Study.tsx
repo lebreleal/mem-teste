@@ -51,12 +51,16 @@ const Study = () => {
   }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  // Fetch community deck source info (author + updated_at)
+  // Track the current card's deck_id to fetch source info for community cards
+  const currentCardDeckId = currentCard?.deck_id ?? null;
+
+  // Fetch community deck source info (author + updated_at) based on current card's deck
   const { data: sourceInfo } = useQuery({
-    queryKey: ['study-source-info', deckId],
+    queryKey: ['study-source-info', currentCardDeckId],
     queryFn: async () => {
-      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', deckId!).single();
+      const { data: deck } = await supabase.from('decks').select('source_turma_deck_id, source_listing_id, is_live_deck, name, user_id').eq('id', currentCardDeckId!).single();
       if (!deck) return null;
+      if (!deck.source_turma_deck_id && !deck.source_listing_id && !deck.is_live_deck) return null;
       let authorName: string | null = null;
       let updatedAt: string | null = null;
       if (deck.source_turma_deck_id) {
@@ -79,7 +83,7 @@ const Study = () => {
       if (!authorName && !updatedAt) return null;
       return { authorName, updatedAt };
     },
-    enabled: !!deckId && isLiveDeck,
+    enabled: !!currentCardDeckId,
     staleTime: 5 * 60_000,
   });
 
