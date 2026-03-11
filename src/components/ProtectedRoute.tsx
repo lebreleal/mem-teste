@@ -19,8 +19,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/', '/preview'];
+  const isExactTurmasRoute = location.pathname === '/turmas';
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
-    && !hideNavPatterns.some(p => location.pathname.includes(p));
+    && !hideNavPatterns.some(p => location.pathname.includes(p))
+    && (isExactTurmasRoute || !location.pathname.startsWith('/turmas/'));
   const { toast } = useToast();
 
   // Pomodoro state
