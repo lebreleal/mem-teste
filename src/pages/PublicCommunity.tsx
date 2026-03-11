@@ -88,6 +88,13 @@ const PublicCommunity = () => {
     enabled: !!slugOrId,
   });
 
+  // If user is authenticated and turma loaded, redirect to the real community page
+  useEffect(() => {
+    if (user && turma?.id) {
+      navigate(`/turmas/${turma.id}`, { replace: true });
+    }
+  }, [user, turma?.id, navigate]);
+
   // Fetch owner name
   const { data: ownerProfile } = useQuery({
     queryKey: ['public-community-owner', turma?.owner_id],
