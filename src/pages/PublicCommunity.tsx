@@ -13,26 +13,20 @@ import { sanitizeHtml } from '@/lib/sanitize';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
-  Layers, Users, Star, BookOpen, ArrowLeft, LogIn, Loader2,
+  Layers, Star, ArrowLeft, LogIn, Loader2,
   ChevronRight, Clock, Folder, FolderOpen, Crown, Globe,
-  UserPlus, Lock, Sparkles,
+  UserPlus, Paperclip,
 } from 'lucide-react';
 import MemoCardsLogo from '@/components/MemoCardsLogo';
 
 const formatRelativeTime = (dateStr: string) => {
   try { return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR }); } catch { return ''; }
-};
-
-const stripHtml = (html: string) => {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
 };
 
 /* ── Card Preview Sheet (read-only) ── */
@@ -118,6 +112,21 @@ const AuthGatePrompt = ({ open, onOpenChange, slugOrId }: {
   );
 };
 
+/* ── Loading Skeleton ── */
+const PublicCommunitySkeleton = () => (
+  <div className="min-h-screen bg-background">
+    <div className="h-40 sm:h-52 bg-muted/30 animate-pulse" />
+    <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="h-12 w-full rounded-xl" />
+      <div className="space-y-2 pt-2">
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+      </div>
+    </div>
+  </div>
+);
+
 /* ── Main Page ── */
 const PublicCommunity = () => {
   const { slugOrId } = useParams<{ slugOrId: string }>();
@@ -129,7 +138,7 @@ const PublicCommunity = () => {
   const [showAuthGate, setShowAuthGate] = useState(false);
 
   // Fetch turma by slug or ID
-  const { data: turma, isLoading } = useQuery({
+  const { data: turma, isLoading: turmaLoading } = useQuery({
     queryKey: ['public-community', slugOrId],
     queryFn: async () => {
       const { data: bySlug } = await supabase.from('turmas').select('*').eq('share_slug', slugOrId!).maybeSingle();
@@ -150,13 +159,13 @@ const PublicCommunity = () => {
     enabled: !!turma?.owner_id,
   });
 
-  // Fetch published decks
-  const { data: decks = [] } = useQuery({
+  // Fetch published decks (with lesson_id for file/exam counts)
+  const { data: decks = [], isLoading: decksLoading } = useQuery({
     queryKey: ['public-community-decks', turma?.id],
     queryFn: async () => {
       const { data: tDecks } = await supabase
         .from('turma_decks')
-        .select('id, deck_id, created_at, shared_by, is_published, subject_id')
+        .select('id, deck_id, created_at, shared_by, is_published, subject_id, lesson_id')
         .eq('turma_id', turma!.id)
         .eq('is_published', true);
       if (!tDecks || tDecks.length === 0) return [];
@@ -183,7 +192,7 @@ const PublicCommunity = () => {
   });
 
   // Fetch subjects (folders)
-  const { data: subjects = [] } = useQuery({
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
     queryKey: ['public-community-subjects', turma?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -196,18 +205,38 @@ const PublicCommunity = () => {
     enabled: !!turma?.id,
   });
 
-  // Member count
-  const { data: memberCount = 0 } = useQuery({
-    queryKey: ['public-community-members', turma?.id],
+  // Fetch file counts per lesson
+  const { data: fileCountsByLesson = {} } = useQuery({
+    queryKey: ['public-community-file-counts', turma?.id],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('turma_members')
-        .select('id', { count: 'exact', head: true })
+      const { data } = await supabase
+        .from('turma_lesson_files' as any)
+        .select('lesson_id')
         .eq('turma_id', turma!.id);
-      return count ?? 0;
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((f: any) => { counts[f.lesson_id] = (counts[f.lesson_id] || 0) + 1; });
+      return counts;
     },
     enabled: !!turma?.id,
   });
+
+  // Fetch exam counts per lesson (exams count as attachments)
+  const { data: examCountsByLesson = {} } = useQuery({
+    queryKey: ['public-community-exam-counts', turma?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('turma_exams' as any)
+        .select('lesson_id')
+        .eq('turma_id', turma!.id)
+        .eq('is_published', true);
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((e: any) => { if (e.lesson_id) counts[e.lesson_id] = (counts[e.lesson_id] || 0) + 1; });
+      return counts;
+    },
+    enabled: !!turma?.id,
+  });
+
+  const contentLoading = decksLoading || subjectsLoading;
 
   // Navigation
   const currentFolders = useMemo(() => {
@@ -231,18 +260,31 @@ const PublicCommunity = () => {
     return [...trail, ...items];
   }, [currentFolderId, subjects]);
 
+  // Recursive folder stats
+  const getFolderCardCount = (folderId: string): number => {
+    const directCards = decks
+      .filter((d: any) => d.subject_id === folderId)
+      .reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return directCards + childFolders.reduce((sum: number, cf: any) => sum + getFolderCardCount(cf.id), 0);
+  };
+
+  const getFolderAttachmentCount = (folderId: string): number => {
+    const folderDecks = decks.filter((d: any) => d.subject_id === folderId);
+    let count = 0;
+    folderDecks.forEach((d: any) => {
+      if (d.lesson_id) {
+        count += (fileCountsByLesson[d.lesson_id] || 0) + (examCountsByLesson[d.lesson_id] || 0);
+      }
+    });
+    const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
+    return count + childFolders.reduce((sum: number, cf: any) => sum + getFolderAttachmentCount(cf.id), 0);
+  };
+
   const countDecksInFolder = (folderId: string): number => {
     const direct = decks.filter((d: any) => d.subject_id === folderId).length;
     const childFolders = subjects.filter((s: any) => s.parent_id === folderId);
     return direct + childFolders.reduce((sum: number, cf: any) => sum + countDecksInFolder(cf.id), 0);
-  };
-
-  const totalDecks = decks.length;
-  const totalCards = decks.reduce((sum: number, d: any) => sum + (d.card_count || 0), 0);
-
-  const handleInteraction = () => {
-    if (!user) { setShowAuthGate(true); return false; }
-    return true;
   };
 
   const handleDeckClick = (td: any) => {
@@ -254,13 +296,7 @@ const PublicCommunity = () => {
     navigate(`/turmas/${turma!.id}`);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (turmaLoading) return <PublicCommunitySkeleton />;
 
   if (!turma) {
     return (
@@ -304,7 +340,6 @@ const PublicCommunity = () => {
                 {ownerProfile?.name && (
                   <span className="flex items-center gap-1"><Crown className="h-3 w-3 text-warning" /> {ownerProfile.name}</span>
                 )}
-                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {memberCount} membros</span>
                 {turma.avg_rating > 0 && (
                   <span className="flex items-center gap-1">
                     <Star className="h-3 w-3 text-warning fill-warning" /> {Number(turma.avg_rating).toFixed(1)}
@@ -331,31 +366,6 @@ const PublicCommunity = () => {
             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
           </div>
         )}
-
-        {/* Stats cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="border-border/50">
-            <CardContent className="p-4 text-center">
-              <Layers className="h-5 w-5 mx-auto text-primary mb-1" />
-              <p className="text-xl font-bold text-foreground">{totalDecks}</p>
-              <p className="text-[11px] text-muted-foreground">Decks</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50">
-            <CardContent className="p-4 text-center">
-              <BookOpen className="h-5 w-5 mx-auto text-primary mb-1" />
-              <p className="text-xl font-bold text-foreground">{totalCards}</p>
-              <p className="text-[11px] text-muted-foreground">Cartões</p>
-            </CardContent>
-          </Card>
-          <Card className="border-border/50">
-            <CardContent className="p-4 text-center">
-              <Users className="h-5 w-5 mx-auto text-primary mb-1" />
-              <p className="text-xl font-bold text-foreground">{memberCount}</p>
-              <p className="text-[11px] text-muted-foreground">Membros</p>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Breadcrumb */}
         {!isRoot && (
@@ -384,71 +394,95 @@ const PublicCommunity = () => {
           </Button>
         )}
 
-        {/* Folders */}
-        {currentFolders.length > 0 && (
-          <div className="space-y-1.5">
-            {currentFolders.map((s: any) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
-                onClick={() => setCurrentFolderId(s.id)}
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
-                  <Folder className="h-4 w-4 text-warning" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm text-foreground truncate">{s.name}</h3>
-                  <span className="text-[11px] text-muted-foreground">{countDecksInFolder(s.id)} decks</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        {/* Loading skeleton for content */}
+        {contentLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+          </div>
+        ) : (
+          <>
+            {/* Folders */}
+            {currentFolders.length > 0 && (
+              <div className="space-y-1.5">
+                {currentFolders.map((s: any) => {
+                  const folderDeckCount = countDecksInFolder(s.id);
+                  const folderCardCount = getFolderCardCount(s.id);
+                  const folderAttachments = getFolderAttachmentCount(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                      onClick={() => setCurrentFolderId(s.id)}
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+                        <Folder className="h-4 w-4 text-warning" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm text-foreground truncate">{s.name}</h3>
+                        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                          <span>{folderDeckCount} decks</span>
+                          {folderCardCount > 0 && (
+                            <span className="flex items-center gap-0.5">
+                              <Layers className="h-3 w-3 shrink-0" /> {folderCardCount}
+                            </span>
+                          )}
+                          {folderAttachments > 0 && (
+                            <span className="flex items-center gap-0.5">
+                              <Paperclip className="h-3 w-3 shrink-0" /> {folderAttachments}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* Decks */}
-        {currentDecks.length > 0 && (
-          <div className="space-y-1.5">
-            {!isRoot && <h2 className="font-display text-sm font-bold text-foreground">Decks</h2>}
-            {isRoot && <h2 className="font-display text-lg font-bold text-foreground">Decks disponíveis</h2>}
-            {currentDecks.map((td: any) => (
-              <div
-                key={td.id}
-                className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
-                onClick={() => handleDeckClick(td)}
-              >
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
-                  <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
-                    {td.shared_by_name && (
-                      <span>por <span className="font-medium text-foreground">{td.shared_by_name}</span></span>
-                    )}
-                    {td.created_at && (
-                      <span className="flex items-center gap-0.5">
-                        <Clock className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
-                      </span>
-                    )}
+            {/* Decks */}
+            {currentDecks.length > 0 && (
+              <div className="space-y-1.5">
+                {currentDecks.map((td: any) => (
+                  <div
+                    key={td.id}
+                    className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                    onClick={() => handleDeckClick(td)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm text-foreground line-clamp-2 leading-snug">{td.deck_name}</h3>
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+                        {td.shared_by_name && (
+                          <span>por <span className="font-medium text-foreground">{td.shared_by_name}</span></span>
+                        )}
+                        {td.created_at && (
+                          <span className="flex items-center gap-0.5">
+                            <Clock className="h-3 w-3 shrink-0" /> {formatRelativeTime(td.created_at)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Layers className="h-3 w-3 shrink-0" /> {td.card_count} cartões
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <Layers className="h-3 w-3 shrink-0" /> {td.card_count} cartões
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* Empty state */}
-        {currentFolders.length === 0 && currentDecks.length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
-            <FolderOpen className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {isRoot ? 'Nenhum conteúdo nesta comunidade ainda' : 'Pasta vazia'}
-            </p>
-          </div>
+            {/* Empty state */}
+            {currentFolders.length === 0 && currentDecks.length === 0 && (
+              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
+                <FolderOpen className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {isRoot ? 'Nenhum conteúdo nesta comunidade ainda' : 'Pasta vazia'}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </main>
 
