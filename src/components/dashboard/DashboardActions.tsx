@@ -12,6 +12,7 @@ import {
 import type { BreadcrumbItem } from './useDashboardState';
 
 interface DashboardActionsProps {
+  mode: 'personal' | 'community';
   currentFolderId: string | null;
   breadcrumb: BreadcrumbItem[];
   onNavigateFolder: (id: string | null) => void;
@@ -38,6 +39,7 @@ interface DashboardActionsProps {
 }
 
 const DashboardActions = ({
+  mode,
   currentFolderId, breadcrumb, onNavigateFolder, onNavigateUp,
   hasDecks, deckSelectionMode, selectedCount, isAllSelected,
   toggleSelectionMode, toggleSelectAll,
