@@ -31,7 +31,7 @@ import {
   Layers, Pencil, Trash2, Eye, EyeOff,
   Upload, Download, Lock, Crown, Globe, Folder, FolderOpen,
   Copy, Link2, ClipboardList, Clock, Import, LogIn,
-  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip,
+  Search, Sparkles, ArrowLeft, TrendingUp, Paperclip, Share2,
 } from 'lucide-react';
 import DeckPreviewSheet from '@/components/community/DeckPreviewSheet';
 import SubscriberGateDialog from '@/components/turma-detail/SubscriberGateDialog';
@@ -57,6 +57,7 @@ const DeckListItem = ({
   onEditPricing,
   onRemove,
   onTogglePublish,
+  onShare,
   tags,
   downloads,
   fileCount,
@@ -72,6 +73,7 @@ const DeckListItem = ({
   onEditPricing: () => void;
   onRemove: () => void;
   onTogglePublish?: () => void;
+  onShare?: () => void;
   tags?: Tag[];
   downloads?: number;
   fileCount?: number;
@@ -122,8 +124,12 @@ const DeckListItem = ({
       </div>
     </div>
     <div className="flex items-center gap-1.5 shrink-0">
-      {!inCollection && subscriberOnly && !canImport && (
-        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+      {onShare && (
+        <div onClick={e => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={onShare} title="Compartilhar">
+            <Share2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       )}
       {(isAdmin || isOwner) && (
         <div onClick={e => e.stopPropagation()} className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -592,6 +598,13 @@ const ContentTab = () => {
                     downloads={downloadCounts[td.id] || 0}
                     fileCount={getDeckFilesCount(td)}
                     examCount={getDeckExamsCount(td)}
+                    onShare={() => {
+                      const link = turma?.share_slug
+                        ? `${window.location.origin}/c/${turma.share_slug}`
+                        : `${window.location.origin}/c/${turmaId}`;
+                      navigator.clipboard.writeText(link);
+                      toast({ title: 'Link copiado!' });
+                    }}
                   />
                 );
               })}

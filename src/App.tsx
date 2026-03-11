@@ -64,6 +64,7 @@ const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazyRetry(() => import("./pages/TermsOfService"));
 const PublicDeckPreview = lazyRetry(() => import("./pages/PublicDeckPreview"));
+const PublicCommunity = lazyRetry(() => import("./pages/PublicCommunity"));
 const NotFound = lazyRetry(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -127,6 +128,7 @@ const App = () => (
                 <Route path="/install" element={<Install />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
                 <Route path="/termos-e-servicos" element={<TermsOfService />} />
+                <Route path="/c/:slugOrId" element={<PublicCommunity />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

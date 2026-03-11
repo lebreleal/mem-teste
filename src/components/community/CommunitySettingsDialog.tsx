@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Settings, Lock, Globe, ImageIcon, Loader2, Trash2, Crown, CreditCard, Users, Brain, Info } from 'lucide-react';
+import { Copy, Settings, Lock, Globe, ImageIcon, Loader2, Trash2, Crown, CreditCard, Users, Brain, Info, Share2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -18,8 +18,8 @@ const DESC_MAX = 2000;
 interface CommunitySettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  turma: { id: string; name: string; description: string; invite_code: string; is_private?: boolean; cover_image_url?: string; subscription_price?: number };
-  onSave: (data: { name: string; description: string; isPrivate: boolean; coverImageUrl?: string; subscriptionPrice?: number }) => void;
+  turma: { id: string; name: string; description: string; invite_code: string; is_private?: boolean; cover_image_url?: string; subscription_price?: number; share_slug?: string };
+  onSave: (data: { name: string; description: string; isPrivate: boolean; coverImageUrl?: string; subscriptionPrice?: number; shareSlug?: string }) => void;
   isSaving: boolean;
   members?: { user_id: string; user_name: string; role: string; is_subscriber: boolean }[];
 }
@@ -32,6 +32,7 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
   const [coverUrl, setCoverUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [subscriptionPrice, setSubscriptionPrice] = useState('');
+  const [shareSlug, setShareSlug] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,6 +42,7 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
       setIsPrivate(turma.is_private ?? false);
       setCoverUrl(turma.cover_image_url || '');
       setSubscriptionPrice(turma.subscription_price ? String(turma.subscription_price) : '');
+      setShareSlug(turma.share_slug || '');
     }
   }, [open, turma]);
 
@@ -203,10 +205,38 @@ const CommunitySettingsDialog = ({ open, onOpenChange, turma, onSave, isSaving, 
               </div>
             </div>
 
+            <div className="rounded-xl border border-border/50 p-3 space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Share2 className="h-3.5 w-3.5" /> Link público</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Defina um slug personalizado para compartilhar sua comunidade (ex: "minha-turma").
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+                <Input
+                  value={shareSlug}
+                  onChange={e => setShareSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="meu-link"
+                  className="flex-1"
+                  maxLength={40}
+                />
+              </div>
+              {shareSlug && (
+                <button
+                  className="text-[11px] text-primary hover:underline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/c/${shareSlug}`);
+                    toast({ title: 'Link copiado!' });
+                  }}
+                >
+                  Copiar link: {window.location.origin}/c/{shareSlug}
+                </button>
+              )}
+            </div>
+
             <Button
               className="w-full"
               disabled={!name.trim() || isSaving}
-              onClick={() => onSave({ name: name.trim(), description: description.trim(), isPrivate, coverImageUrl: coverUrl, subscriptionPrice: Number(subscriptionPrice) || 0 })}
+              onClick={() => onSave({ name: name.trim(), description: description.trim(), isPrivate, coverImageUrl: coverUrl, subscriptionPrice: Number(subscriptionPrice) || 0, shareSlug: shareSlug.trim() || undefined })}
             >
               {isSaving ? 'Salvando...' : 'Salvar Configurações'}
             </Button>

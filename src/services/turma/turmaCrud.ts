@@ -54,15 +54,21 @@ export async function leaveTurma(turmaId: string) {
   if (error) throw error;
 }
 
-export async function updateTurma(turmaId: string, updates: { name?: string; description?: string; isPrivate?: boolean; coverImageUrl?: string; subscriptionPrice?: number }) {
+export async function updateTurma(turmaId: string, updates: { name?: string; description?: string; isPrivate?: boolean; coverImageUrl?: string; subscriptionPrice?: number; shareSlug?: string }) {
   const data: Record<string, any> = {};
   if (updates.name !== undefined) data.name = updates.name;
   if (updates.description !== undefined) data.description = updates.description;
   if (updates.isPrivate !== undefined) data.is_private = updates.isPrivate;
   if (updates.coverImageUrl !== undefined) data.cover_image_url = updates.coverImageUrl;
   if (updates.subscriptionPrice !== undefined) data.subscription_price = updates.subscriptionPrice;
+  if (updates.shareSlug !== undefined) data.share_slug = updates.shareSlug || null;
   const { error } = await supabase.from('turmas').update(data as any).eq('id', turmaId);
   if (error) throw error;
+}
+
+export async function fetchTurmaBySlug(slug: string): Promise<Turma | null> {
+  const { data } = await supabase.from('turmas').select('*').eq('share_slug', slug).single();
+  return data as Turma | null;
 }
 
 // ── Discover ──
