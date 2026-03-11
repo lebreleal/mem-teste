@@ -81,7 +81,7 @@ const Dashboard = () => {
 
   // Error notebook count
   const { data: errorCount = 0 } = useQuery({
-    queryKey: ['error-notebook-count', state.user?.id],
+    queryKey: ['error-notebook-count'],
     queryFn: async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
       if (!u) return 0;
