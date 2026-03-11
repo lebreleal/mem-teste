@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus, Minus, MoreVertical, Settings, CirclePlus, ArrowUpRight, Archive, Trash2,
-  ChevronRight, Link2, Pencil, RefreshCw,
+  ChevronRight, Pencil, Users,
 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -82,25 +82,15 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            {(deck.source_turma_deck_id || deck.source_listing_id) && (
-              <span title="Deck sincronizado"><RefreshCw className="h-3.5 w-3.5 text-info shrink-0" /></span>
+            {isCommunityDeck && (
+              <span title="Comunidade"><Users className="h-3.5 w-3.5 text-primary shrink-0" /></span>
             )}
             <h3 className="font-display font-semibold text-card-foreground truncate">{deck.name}</h3>
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
-            {(() => {
-              const linkId = getCommunityLinkId(deck);
-              return linkId ? (
-                <button className="shrink-0 text-info hover:text-info/70 transition-colors" onClick={(e) => { e.stopPropagation(); navigateToCommunity(linkId); }} title="Ver na comunidade">
-                  <Link2 className="h-3.5 w-3.5" />
-                </button>
-              ) : null;
-            })()}
           </div>
           <p className="text-xs text-muted-foreground">
-            {deck.source_author && <span className="text-primary font-medium">por {deck.source_author} · </span>}
-            {isCommunityDeck && !deck.source_author && <span className="text-primary font-medium">Deck da comunidade · </span>}
             {totalDue > 0 ? `Cartões para hoje: ${totalDue}` : 'Nenhum cartão para hoje'}
           </p>
         </div>
@@ -131,9 +121,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem className="opacity-40 pointer-events-none" disabled>
+                <DropdownMenuItem onClick={() => onMove(deck)}>
                   <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                  <span className="ml-1 text-[10px]">(vinculado)</span>
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => onArchive(deck.id)}>
