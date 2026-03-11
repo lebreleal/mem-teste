@@ -4,7 +4,7 @@
  * Users can browse decks, preview cards, but interactions prompt login.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,6 +87,13 @@ const PublicCommunity = () => {
     },
     enabled: !!slugOrId,
   });
+
+  // If user is authenticated and turma loaded, redirect to the real community page
+  useEffect(() => {
+    if (user && turma?.id) {
+      navigate(`/turmas/${turma.id}`, { replace: true });
+    }
+  }, [user, turma?.id, navigate]);
 
   // Fetch owner name
   const { data: ownerProfile } = useQuery({
