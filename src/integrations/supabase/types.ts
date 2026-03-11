@@ -2802,6 +2802,10 @@ export type Database = {
         Args: { p_cost: number; p_user_id: string }
         Returns: undefined
       }
+      resolve_community_deck_source: {
+        Args: { p_deck_id: string }
+        Returns: Json
+      }
       restore_subscription_status: {
         Args: { p_turma_id: string }
         Returns: boolean
