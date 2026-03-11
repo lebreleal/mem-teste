@@ -631,10 +631,10 @@ const QuestionPractice = ({
                   <button
                     onClick={() => handleExplainOption(i)}
                     disabled={optionExplainLoading === i}
-                    className="ml-10 mt-1 flex items-center gap-1 text-xs font-medium underline underline-offset-2 disabled:opacity-50"
+                    className="ml-10 mt-1 flex items-center gap-1 text-xs font-medium disabled:opacity-50"
                     style={{ color: isCorrectOpt ? 'hsl(142, 71%, 45%)' : 'hsl(var(--destructive))' }}
                   >
-                    {optionExplainLoading === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquareText className="h-3 w-3" />}
+                    {optionExplainLoading === i && <Loader2 className="h-3 w-3 animate-spin" />}
                     {isCorrectOpt ? 'Por que está correta?' : 'Por que está errada?'}
                     <span className="text-muted-foreground font-normal ml-0.5">(1 crédito)</span>
                   </button>
