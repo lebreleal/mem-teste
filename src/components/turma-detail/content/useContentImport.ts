@@ -141,8 +141,7 @@ export const useContentImport = () => {
     },
     onSuccess: (newDeck: any) => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: '✅ Baralho adicionado à sua coleção!', description: `Na pasta "${turma?.name}".` });
+      toast({ title: '✅ Baralho adicionado à sua coleção!' });
     },
     onError: (err: any) => {
       if (err?.message === 'SUBSCRIBER_ONLY') toast({ title: 'Conteúdo exclusivo para assinantes', variant: 'destructive' });
