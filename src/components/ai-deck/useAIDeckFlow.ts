@@ -129,7 +129,11 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     setFileName(file.name);
     setInputMode('file');
 
-    if (file.type === 'application/pdf') {
+    const ext = file.name.toLowerCase().split('.').pop() || '';
+    const isPdf = file.type === 'application/pdf' || ext === 'pdf';
+    const isText = file.type.startsWith('text/') || ['txt', 'md', 'csv'].includes(ext);
+
+    if (isPdf) {
       setStep('loading-pages');
       try {
         const pdfPages = await extractPDFPages(file, (cur, tot) => setLoadProgress({ current: cur, total: tot }));
@@ -140,7 +144,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         toast({ title: 'Erro ao processar PDF', description: 'Tente colar o texto diretamente.', variant: 'destructive' });
         setStep('upload'); setInputMode(null); setFileName('');
       }
-    } else if (file.type.startsWith('text/')) {
+    } else if (isText) {
       const text = await file.text();
       const textPages = splitTextIntoPages(text);
       setPages(textPages.map(p => ({ ...p, selected: true })));
