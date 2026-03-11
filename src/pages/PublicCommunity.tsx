@@ -427,11 +427,19 @@ const PublicCommunity = () => {
 
       {/* Card Preview Sheet */}
       {previewDeck && (
-        <CardPreviewSheet
+        <DeckPreviewSheet
           open={!!previewDeck}
           onOpenChange={v => { if (!v) setPreviewDeck(null); }}
           deckId={previewDeck.id}
           deckName={previewDeck.name}
+          cardCount={previewDeck.cardCount}
+          alreadyLinked={false}
+          alreadyOwns={false}
+          allowDownload={false}
+          onAddToCollection={() => { if (!user) setShowAuthGate(true); }}
+          onDownload={() => {}}
+          isAdding={false}
+          isDownloading={false}
         />
       )}
 
