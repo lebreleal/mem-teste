@@ -123,10 +123,17 @@ const ConceptMasterySection = ({
 
       if (keywords.length === 0) { setLoadingCards(prev => ({ ...prev, [concept]: false })); return; }
 
+      // Search across all user's decks (not just parent) to find related cards in sub-decks
+      const { data: userDecks } = await supabase
+        .from('decks')
+        .select('id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '');
+      const userDeckIds = (userDecks ?? []).map(d => d.id);
+      
       const { data } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type')
-        .eq('deck_id', deckId)
+        .in('deck_id', userDeckIds.length > 0 ? userDeckIds : [deckId])
         .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
         .limit(5);
 
