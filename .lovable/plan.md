@@ -1,204 +1,132 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
 
-## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+# Analise: O que e um "Conceito" segundo a Ciencia da Aprendizagem
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+## O que o sistema faz HOJE (errado)
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+O prompt atual (linhas 113-136 do edge function) diz explicitamente:
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+```
+O campo "concepts" NÃO deve conter nomes de conceitos soltos.
+Em vez disso, cada item deve ser uma PERGUNTA DE COMPREENSÃO:
+- "Você conseguiu identificar que uma coleção de pus localizada é um abscesso?"
+```
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+Isso NAO e um conceito. Isso e uma pergunta de autoavaliacao. O campo se chama "concepts" mas gera perguntas. E o user prompt (linha 153) contradiz pedindo "2-5 conceitos-chave testados". O sistema esta confuso consigo mesmo.
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+## O que a ciencia diz que um conceito DEVE ser
 
----
+Na teoria de **Knowledge Components** (Koedinger, Corbett, Ritter — Carnegie Learning, 1998) e nos trabalhos de **Bjork sobre desirable difficulties**, um conceito e um **componente de conhecimento** — a menor unidade que pode ter sua propria trajetoria de dominio.
 
-# Refatoração de Monolitos (Fase 1)
+### Definicao correta:
+> Um conceito e uma unidade atomica de conhecimento que pode ser avaliada independentemente e que o aprendiz pode dominar ou nao dominar.
 
-## Implementado
+### Exemplos por granularidade:
 
-### StudyPlan.tsx: 1.580 → ~500 linhas
-Extraídos 3 módulos:
-- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
-- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
-- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+```text
+MUITO AMPLO (inutil):
+  "Cardiologia"
+  "Farmacologia"
+  → Nao da pra medir dominio de algo tao vago
 
-### ManageDeck.tsx: 1.169 → ~900 linhas
-Extraído:
-- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+GRANULARIDADE CORRETA (Knowledge Component):
+  "Mecanismo de acao dos IECA"
+  "Diferenca entre abscesso e flegmao"
+  "Criterios de Light para derrame pleural"
+  "Fisiopatologia da insuficiencia cardiaca"
+  → Pode ser avaliado: o aluno domina ou nao
+  → Pode ter multiplas questoes testando angulos diferentes
+  → E reutilizavel entre disciplinas
 
-### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
-Extraído:
-- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+MUITO ESTREITO (ruido):
+  "Dose de Captopril 25mg"
+  "pH normal do sangue = 7.35-7.45"
+  → Isso e um FATO, nao um conceito
+  → Pertence a um card, nao a um conceito
+```
 
-### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
-Extraído:
-- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+### Taxonomia de Bloom aplicada:
 
-### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
-Extraído:
-- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
+Um conceito correto vive nos niveis **Compreender** e **Aplicar**. Fatos isolados vivem em **Lembrar** (e sao cards). Conceitos NAO sao:
+- Perguntas ("Voce entendeu X?") — isso e metacognicao, nao conceito
+- Fatos ("A pressao normal e 120/80") — isso e um card
+- Disciplinas ("Cardiologia") — isso e uma pasta/folder
 
----
+### Bjork (1994) — Desirable Difficulties:
 
-# Rebalanceamento da Economia de Créditos IA
+Para que spacing e interleaving funcionem, o aprendiz precisa de unidades de conhecimento com **granularidade intermediaria**. Se o conceito e muito amplo, spacing nao tem efeito (tudo e "pratica de cardiologia"). Se e muito estreito, interleaving nao faz sentido (nao ha o que misturar).
 
-## Implementado
+A granularidade ideal e: **algo que pode ser testado por 3-10 questoes diferentes, de angulos diferentes**.
 
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
+## O que deve mudar
 
-Total mensal free: ~1.500 → ~270 créditos.
+### No prompt da IA:
 
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+O campo `concepts` deve conter **nomes de Knowledge Components** com estas regras:
 
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
+1. **2-6 palavras** — substantivo + qualificador (ex: "Fisiopatologia da ICC", "Criterios de Light")
+2. **Nivel Compreender/Aplicar** de Bloom — nao fatos, nao disciplinas
+3. **Testavel por multiplas questoes** — se so cabe 1 questao, e estreito demais
+4. **Reutilizavel** — o mesmo conceito pode aparecer em questoes de decks diferentes
+5. **1-3 conceitos por questao** (nao 4-5) — cada conceito deve ser relevante, nao decorativo
 
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
+### Exemplo concreto:
 
----
+```text
+QUESTAO: "Paciente com dispneia, edema de MMII e PVC elevada.
+Qual mecanismo explica a congestao sistemica?"
 
-# Transação com Rollback de Créditos em Edge Functions
+ERRADO (atual):
+  concepts: [
+    "Voce conseguiu identificar que a ICC direita causa congestao sistemica?",
+    "Voce entendeu o papel da PVC elevada?",
+    "Voce diferenciou ICC esquerda de direita?",
+    "Voce sabe o que e edema de MMII?"
+  ]
 
-## Implementado
+CORRETO (Knowledge Components):
+  concepts: [
+    "Fisiopatologia da ICC direita",
+    "Semiologia da congestao sistemica"
+  ]
+```
 
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
+## Resumo: Conceito ≠ Pergunta ≠ Fato ≠ Disciplina
 
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
+| Tipo | Exemplo | Onde vive |
+|------|---------|-----------|
+| Fato | "PA normal = 120/80" | Card (FSRS) |
+| Conceito (KC) | "Fisiopatologia da hipertensao" | Conceito (mastery dashboard) |
+| Pergunta de autoavaliacao | "Voce entendeu X?" | Nenhum lugar (eliminar) |
+| Disciplina | "Cardiologia" | Pasta/Folder |
 
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
+## Plano de implementacao
 
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
+### 1. Corrigir o prompt do edge function `generate-questions`
 
----
+Substituir a secao "CONCEPTS — PERGUNTAS DE AUTOAVALIAÇÃO" (linhas 113-136) por:
 
-# Dashboard Performance & Bug Fixes
+```
+CONCEPTS — KNOWLEDGE COMPONENTS:
+O campo "concepts" deve conter NOMES de componentes de conhecimento (Knowledge Components).
+Regras:
+- 2-6 palavras: substantivo + qualificador
+- Nivel Compreender/Aplicar de Bloom (nao fatos isolados, nao disciplinas amplas)
+- Cada conceito deve ser testavel por multiplas questoes de angulos diferentes
+- 1-3 conceitos por questao (apenas os CENTRAIS, nao todos tangenciais)
+- Reutilizavel entre disciplinas
 
-## Implementado
+Exemplos CORRETOS: "Mecanismo de acao dos IECA", "Criterios de Light", "Diferenca abscesso vs flegmao"
+Exemplos ERRADOS: "Cardiologia" (amplo demais), "Dose de Captopril" (fato isolado), "Voce entendeu X?" (pergunta)
+```
 
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
+Tambem atualizar o tool schema (linha 175-179) para refletir isso.
 
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
+### 2. Atualizar o user prompt (linha 153)
 
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
+Mudar de "2-5 conceitos-chave testados" para "1-3 Knowledge Components centrais testados nesta questao".
 
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
+### 3. Atualizar o edge function e re-deploy
 
-## Resumo de impacto
+Unica mudanca: o prompt. Nenhuma mudanca de schema ou frontend necessaria neste momento — os conceitos continuam sendo strings no campo `concepts[]`, mas agora serao nomes curtos e corretos em vez de perguntas.
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
-
----
-
-# Otimização de Requisições do Dashboard
-
-## Implementado
-
-### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
-- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
-- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
-
-### Fase B: deck-hierarchy via cache (economia: -1 query)
-- Removida query separada `['deck-hierarchy']`
-- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
-
-### Fase C: Missões com cache (economia: -2 queries)
-- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
-- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
-
-### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
-- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
-
-### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
-- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
-
-### Fase F: Aggregate stats memoizado (economia: CPU)
-- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
-- Build O(n) uma vez, lookup O(1) por deck
-
-## Resumo de impacto
-| Otimização | Economia |
-|------------|----------|
-| useStudyPlan split (A) | -3 queries |
-| deck-hierarchy cache (B) | -1 query |
-| Missões com cache (C) | -2 queries |
-| useIsAdmin useQuery (D) | cache 10min |
-| Subscription polling (E) | -80% calls |
-| AggregateStats memo (F) | O(n²) → O(1) |
-| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
-
----
-
-# Métricas Reais de Repetições por Sessão
-
-## Implementado
-
-### 1. RPC `get_user_real_study_metrics` atualizada
-Adicionados 2 novos campos:
-- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
-- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
-
-### 2. `calculateRealStudyTime` reescrita
-- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
-- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
-- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
-
-### 3. Interface `RealStudyMetrics` expandida
-- `avgReviewsPerNewCard: number` (mediana do histórico real)
-- `avgLapseRate: number` (taxa de erro em revisões)
-
-### 4. `useStudyPlan` mapeia novos campos da RPC
-- Fallbacks para contas sem histórico suficiente
