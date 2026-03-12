@@ -63,7 +63,7 @@ interface ConceptMastery {
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
-type QuestionFilter = 'all' | 'unanswered' | 'errors';
+type QuestionFilter = 'all' | 'unanswered' | 'errors' | 'correct';
 
 /* ════════════════════════════════════════════════════════════
    Concept Self-Assessment (after answering)
