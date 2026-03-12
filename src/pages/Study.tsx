@@ -632,7 +632,6 @@ const Study = () => {
     const {
       concept,
       reinforceCards,
-      retryCards,
       currentIndex,
       round,
       flipped,
