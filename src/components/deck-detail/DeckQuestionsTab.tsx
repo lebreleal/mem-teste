@@ -282,7 +282,7 @@ const ConceptMasterySection = ({
                                   <span className="text-[10px] text-muted-foreground">Frente</span>
                                 </div>
                                 <div className="text-xs text-foreground leading-relaxed line-clamp-3"
-                                  dangerouslySetInnerHTML={{ __html: card.card_type === 'cloze' ? renderClozePreview(card.front_content, true) : card.front_content }} />
+                                  dangerouslySetInnerHTML={{ __html: card.card_type === 'cloze' ? sanitizeHtml(renderClozePreview(card.front_content, true)) : sanitizeHtml(card.front_content) }} />
                               </div>
                               {hasRealBack && (
                                 <div className="px-3.5 py-2 bg-primary/[0.02]">
