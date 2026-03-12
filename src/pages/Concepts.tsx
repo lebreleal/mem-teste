@@ -401,10 +401,26 @@ const ConceptsPage = () => {
     submitConceptReview, updateMeta, deleteConcept, unlinkQuestion,
   } = useGlobalConcepts();
 
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState('meus');
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Map prerequisites
+  const [mappingPrereqs, setMappingPrereqs] = useState(false);
+
+  // Diagnostic mode
+  const [diagnosticMode, setDiagnosticMode] = useState(false);
+  const [diagnosticQueue, setDiagnosticQueue] = useState<GlobalConcept[]>([]);
+  const [diagnosticIndex, setDiagnosticIndex] = useState(0);
+  const [diagnosticQuestion, setDiagnosticQuestion] = useState<any>(null);
+  const [diagnosticSelected, setDiagnosticSelected] = useState<number | null>(null);
+  const [diagnosticConfirmed, setDiagnosticConfirmed] = useState(false);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticResults, setDiagnosticResults] = useState<{ correct: number; wrong: number }>({ correct: 0, wrong: 0 });
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
