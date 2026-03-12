@@ -12,6 +12,7 @@ export interface GlobalConcept {
   slug: string;
   category: string | null;
   subcategory: string | null;
+  parent_concept_id: string | null;
   state: number;
   stability: number;
   difficulty: number;
