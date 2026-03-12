@@ -86,6 +86,20 @@ const Study = () => {
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
+  const leechFailStorageKey = useMemo(
+    () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    [deckId, folderId],
+  );
+  const persistLeechFailCounts = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const entries = Array.from(failCountRef.current.entries());
+    if (entries.length === 0) {
+      window.sessionStorage.removeItem(leechFailStorageKey);
+      return;
+    }
+    window.sessionStorage.setItem(leechFailStorageKey, JSON.stringify(entries));
+  }, [leechFailStorageKey]);
+
   const [leechMode, setLeechMode] = useState<{
     leechCard: any;
     concept: GlobalConcept | null;
@@ -116,6 +130,23 @@ const Study = () => {
       setQueueInitialized(true);
     }
   }, [queue, queueInitialized]);
+
+  // Restore leech fail counters for this study context (survives leave/re-enter in same browser session)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.sessionStorage.getItem(leechFailStorageKey);
+    if (!raw) {
+      failCountRef.current = new Map();
+      return;
+    }
+    try {
+      const entries = JSON.parse(raw) as [string, number][];
+      failCountRef.current = new Map(entries.filter((entry): entry is [string, number] => Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number'));
+    } catch {
+      failCountRef.current = new Map();
+      window.sessionStorage.removeItem(leechFailStorageKey);
+    }
+  }, [leechFailStorageKey]);
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
@@ -212,6 +243,7 @@ const Study = () => {
     if (rating === 1) {
       const count = (failCountRef.current.get(leechKey) ?? 0) + 1;
       failCountRef.current.set(leechKey, count);
+      persistLeechFailCounts();
       if (count >= LEECH_THRESHOLD && user) {
         // Trigger leech mode — fetch concepts async
         submittingRef.current = null;
@@ -258,6 +290,7 @@ const Study = () => {
     } else {
       // Reset fail count on non-Again rating
       failCountRef.current.delete(leechKey);
+      persistLeechFailCounts();
     }
 
     undo.saveSnapshot({
@@ -356,20 +389,21 @@ const Study = () => {
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user, persistLeechFailCounts]);
 
   // ─── Leech Mode: Mini Reinforcement Session ───
   const exitLeechMode = useCallback(() => {
     if (!leechMode) return;
     // Reset fail count for the leech card/group and put it back with learning_step 0
     failCountRef.current.delete(getLeechKey(leechMode.leechCard));
+    persistLeechFailCounts();
     setLocalQueue(prev => prev.map(c =>
       c.id === leechMode.leechCard.id ? { ...c, learning_step: 0 } : c,
     ));
     setLeechMode(null);
     setCardKey(prev => prev + 1);
     cardShownAt.current = Date.now();
-  }, [leechMode]);
+  }, [leechMode, persistLeechFailCounts]);
 
   if (leechMode) {
     const { concept, reinforceCards, currentIndex, flipped, leechCard, loading } = leechMode;
