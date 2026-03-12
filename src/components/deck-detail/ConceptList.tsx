@@ -2,7 +2,7 @@
  * ConceptList — list of concepts with CRUD actions and card preview.
  */
 import { useState, useMemo } from 'react';
-import { Network, Lightbulb, CheckCircle2, MoreVertical, Pencil, Trash2, Layers, ChevronDown, ChevronUp, Search, RotateCcw, BookOpen } from 'lucide-react';
+import { BrainCircuit, Lightbulb, CheckCircle2, MoreVertical, Pencil, Trash2, Layers, ChevronDown, ChevronUp, Search, RotateCcw, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
