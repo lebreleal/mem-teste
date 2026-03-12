@@ -15,17 +15,20 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
   ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
-  BookX, Zap, Crown,
+  BookX, Zap, Crown, Search, Filter, CheckCheck, MoreVertical, Eye, ArrowUpRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
-
 interface DeckQuestion {
   id: string;
   deck_id: string;
@@ -60,7 +63,7 @@ interface ConceptMastery {
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
-type QuestionFilter = 'all' | 'unanswered' | 'errors';
+type QuestionFilter = 'all' | 'unanswered' | 'errors' | 'correct';
 
 /* ════════════════════════════════════════════════════════════
    Concept Self-Assessment (after answering)
@@ -1163,8 +1166,21 @@ const DeckQuestionsTab = ({
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
   const [practicing, setPracticing] = useState(!!autoStart);
   const [filter, setFilter] = useState<QuestionFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
+  const [previewQuestion, setPreviewQuestion] = useState<DeckQuestion | null>(null);
+  const [editQuestion, setEditQuestion] = useState<DeckQuestion | null>(null);
+  const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
 
   const effectiveDeckId = sourceDeckId || deckId;
+
+  // Check if deck is linked to community
+  const isLinkedDeck = useMemo(() => {
+    // If sourceDeckId is provided and different from deckId, it's a linked deck
+    return !!sourceDeckId && sourceDeckId !== deckId;
+  }, [sourceDeckId, deckId]);
 
   const { data: questions = [], isLoading } = useQuery({
     queryKey: ['deck-questions', effectiveDeckId],
@@ -1202,7 +1218,6 @@ const DeckQuestionsTab = ({
   // Compute stats
   const statsData = useMemo(() => {
     const total = questions.length;
-    // Group attempts by question — take latest attempt per question
     const latestByQ = new Map<string, QuestionAttempt>();
     for (const a of attempts) {
       const prev = latestByQ.get(a.question_id);
@@ -1221,12 +1236,23 @@ const DeckQuestionsTab = ({
     return { total, answered, correct, wrong, errorQuestionIds, answeredQuestionIds };
   }, [questions, attempts]);
 
-  // Filter questions
+  // Filter + search questions
   const filteredQuestions = useMemo(() => {
-    if (filter === 'unanswered') return questions.filter(q => !statsData.answeredQuestionIds.has(q.id));
-    if (filter === 'errors') return questions.filter(q => statsData.errorQuestionIds.has(q.id));
-    return questions;
-  }, [questions, filter, statsData]);
+    let filtered = questions;
+    if (filter === 'unanswered') filtered = filtered.filter(q => !statsData.answeredQuestionIds.has(q.id));
+    if (filter === 'errors') filtered = filtered.filter(q => statsData.errorQuestionIds.has(q.id));
+    if (filter === 'correct') filtered = filtered.filter(q => statsData.answeredQuestionIds.has(q.id) && !statsData.errorQuestionIds.has(q.id));
+    if (searchQuery.trim()) {
+      const lq = searchQuery.toLowerCase();
+      filtered = filtered.filter(q => {
+        const plain = (q.question_text ?? '').replace(/<[^>]+>/g, '').toLowerCase();
+        const optsText = (q.options ?? []).join(' ').toLowerCase();
+        const conceptsText = (q.concepts ?? []).join(' ').toLowerCase();
+        return plain.includes(lq) || optsText.includes(lq) || conceptsText.includes(lq);
+      });
+    }
+    return filtered;
+  }, [questions, filter, statsData, searchQuery]);
 
   const deleteMutation = useMutation({
     mutationFn: async (questionId: string) => {
@@ -1239,91 +1265,202 @@ const DeckQuestionsTab = ({
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        const { error } = await supabase.from('deck_questions' as any).delete().eq('id', id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
+      setSelectedQuestions(new Set());
+      setSelectionMode(false);
+      toast({ title: `${selectedQuestions.size} questões removidas` });
+    },
+  });
+
+  const toggleSelection = (id: string) => {
+    setSelectedQuestions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Check if a question is from community (created_by !== current user)
+  const isCommunityQuestion = (q: DeckQuestion) => {
+    return isLinkedDeck || (q.created_by !== user?.id);
+  };
+
   if (practicing && filteredQuestions.length > 0) {
     return <QuestionPractice questions={filteredQuestions} deckId={deckId} onClose={() => setPracticing(false)} />;
   }
 
   const correctPct = statsData.total > 0 ? (statsData.correct / statsData.total) * 100 : 0;
   const wrongPct = statsData.total > 0 ? (statsData.wrong / statsData.total) * 100 : 0;
-  const unansweredPct = 100 - correctPct - wrongPct;
+  const hasActiveFilter = filter !== 'all';
 
   return (
-    <div className="space-y-4">
-      {/* Header with title + actions — matches CardList "Cartões na coleção" */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-base font-bold text-foreground">
-          {filter === 'errors' ? 'Caderno de Erros' : filter === 'unanswered' ? 'Não Respondidas' : 'Banco de Questões'}
-          {' '}({filteredQuestions.length})
-        </h3>
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">
+          Banco de Questões ({filteredQuestions.length})
+        </h2>
         <div className="flex items-center gap-2">
-          {/* Filter dropdown pills */}
-          {([
-            { key: 'all' as const, label: 'Todas' },
-            { key: 'unanswered' as const, label: 'A responder' },
-            { key: 'errors' as const, label: 'Erros', count: statsData.errorQuestionIds.size },
-          ]).map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
-                filter === f.key
-                  ? 'border-primary bg-primary/10 text-primary font-bold'
-                  : 'border-border/50 text-muted-foreground hover:border-primary/30'
-              }`}
-            >
-              {f.label}
-              {f.count !== undefined && f.count > 0 && (
-                <span className="bg-destructive text-white text-[9px] font-bold rounded-full h-3.5 min-w-[14px] px-1 flex items-center justify-center">
-                  {f.count}
-                </span>
-              )}
-            </button>
-          ))}
-          {!isReadOnly && (
-            <Button variant="default" size="sm" className="gap-1 text-xs h-7" onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}>
-              <Plus className="h-3 w-3" /> Adicionar
-            </Button>
+          {questions.length > 0 && (
+            <>
+              <Button
+                variant={hasActiveFilter ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8 relative"
+                onClick={() => setShowFilters(!showFilters)}
+                title="Filtrar"
+              >
+                <Filter className="h-4 w-4" />
+                {hasActiveFilter && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
+                )}
+              </Button>
+              <Button
+                variant={selectionMode ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => { setSelectionMode(!selectionMode); setSelectedQuestions(new Set()); }}
+                title={selectionMode ? 'Cancelar seleção' : 'Selecionar'}
+              >
+                {selectionMode ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
+              </Button>
+            </>
+          )}
+          {!selectionMode && !isReadOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="h-8 gap-1.5 px-3 text-xs" title="Adicionar">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Adicionar</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}>
+                  <PenLine className="mr-2 h-4 w-4" /> Criar manualmente
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setCreateMode('ai'); setCreateOpen(true); }}>
+                  <Sparkles className="mr-2 h-4 w-4" /> Gerar com IA
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
 
-      {/* Progress bar — matches CardList style */}
-      {statsData.total > 0 && (
-        <>
-          <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden flex">
-            {correctPct > 0 && (
-              <div className="h-full transition-all duration-500" style={{ width: `${correctPct}%`, background: 'hsl(142 71% 45%)' }} />
-            )}
-            {wrongPct > 0 && (
-              <div className="h-full transition-all duration-500" style={{ width: `${wrongPct}%`, background: 'hsl(var(--destructive))' }} />
+      {/* Selection action bar */}
+      {selectionMode && selectedQuestions.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+          <span className="text-sm font-medium text-foreground">
+            {selectedQuestions.size} selecionada{selectedQuestions.size > 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSelectedQuestions(new Set())}>
+              <CheckCheck className="h-3.5 w-3.5" /> Desmarcar
+            </Button>
+            {!isReadOnly && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-8 text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (selectedQuestions.size > 0) bulkDeleteMutation.mutate([...selectedQuestions]);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Excluir
+              </Button>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        </div>
+      )}
+
+      {/* Progress bar */}
+      {statsData.total > 0 && !selectionMode && (
+        <div>
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="transition-all" style={{ width: `${correctPct}%`, backgroundColor: 'hsl(142 71% 45%)' }} />
+            <div className="transition-all bg-destructive" style={{ width: `${wrongPct}%` }} />
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
-              {statsData.total - statsData.answered} A responder
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{statsData.total - statsData.answered}</strong> A responder
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full" style={{ background: 'hsl(142 71% 45%)' }} />
-              {statsData.correct} Corretas
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} /> <strong className="text-foreground">{statsData.correct}</strong> Corretas
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-destructive" />
-              {statsData.wrong} Erradas
+              <span className="h-2 w-2 rounded-full bg-destructive" /> <strong className="text-foreground">{statsData.wrong}</strong> Erradas
             </span>
           </div>
-        </>
+        </div>
+      )}
+
+      {/* Search + Filters */}
+      {questions.length > 0 && (
+        <div className="space-y-2">
+          {questions.length > 3 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Pesquisar questões..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
+            </div>
+          )}
+
+          {showFilters && (
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Status</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { key: 'all' as const, label: 'Todas', count: statsData.total },
+                    { key: 'unanswered' as const, label: 'A responder', count: statsData.total - statsData.answered },
+                    { key: 'correct' as const, label: 'Corretas', count: statsData.correct },
+                    { key: 'errors' as const, label: 'Erradas', count: statsData.wrong },
+                  ]).map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => setFilter(f.key)}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        filter === f.key
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-background text-muted-foreground hover:bg-accent border border-border/50'
+                      }`}
+                    >
+                      {f.label} ({f.count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {hasActiveFilter && (
+                <button onClick={() => setFilter('all')} className="text-xs text-primary hover:underline">
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Question list */}
       {isLoading ? (
         <div className="py-6 text-center text-sm text-muted-foreground">Carregando questões...</div>
       ) : filteredQuestions.length === 0 ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">
-          {filter === 'errors' ? 'Nenhuma questão no caderno de erros 🎉' : filter === 'unanswered' ? 'Todas as questões foram respondidas!' : 'Nenhuma questão criada para este deck ainda.'}
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            {hasActiveFilter || searchQuery ? 'Nenhuma questão encontrada' : 'Nenhuma questão ainda'}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {hasActiveFilter || searchQuery ? 'Tente ajustar os filtros ou busca.' : 'Adicione questões para praticar.'}
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {filteredQuestions.map((q, idx) => {
             const opts: string[] = q.options ?? [];
             const cIdx = q.correct_indices?.[0] ?? 0;
@@ -1331,28 +1468,83 @@ const DeckQuestionsTab = ({
             const isError = statsData.errorQuestionIds.has(q.id);
             const isAnswered = statsData.answeredQuestionIds.has(q.id);
             const isCorrectlyAnswered = isAnswered && !isError;
+            const isSelected = selectedQuestions.has(q.id);
+            const isCommunity = isCommunityQuestion(q);
+            const conceptCount = q.concepts?.length ?? 0;
+
+            // Status badge
+            const statusColor = isError
+              ? 'bg-destructive/15 text-destructive border-destructive/30'
+              : isCorrectlyAnswered
+              ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
+              : 'bg-muted text-muted-foreground border-border';
+            const statusLabel = isError ? 'Errada' : isCorrectlyAnswered ? 'Correta' : 'Não respondida';
+
             return (
-              <div key={q.id} className={`rounded-xl border px-3 py-2.5 hover:border-primary/30 transition-colors ${
-                isError ? 'border-destructive/30 bg-destructive/5' : isCorrectlyAnswered ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/50 bg-background'
-              }`}>
-                <div className="flex items-start justify-between gap-2">
+              <div
+                key={q.id}
+                className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer ${
+                  isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                }`}
+                onClick={() => {
+                  if (selectionMode) {
+                    if (isCommunity) {
+                      setCommunityWarningOpen(true);
+                      return;
+                    }
+                    toggleSelection(q.id);
+                    return;
+                  }
+                  setPreviewQuestion(q);
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  {selectionMode && (
+                    <div className="pt-0.5 shrink-0">
+                      <Checkbox
+                        checked={isSelected}
+                        disabled={isCommunity}
+                        onCheckedChange={() => {
+                          if (isCommunity) { setCommunityWarningOpen(true); return; }
+                          toggleSelection(q.id);
+                        }}
+                        onClick={(e: any) => e.stopPropagation()}
+                        className={isCommunity ? 'opacity-40 cursor-not-allowed' : ''}
+                      />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      {isError && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
-                      {isCorrectlyAnswered && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
-                      <p className="text-sm font-semibold text-foreground line-clamp-2">
-                        {idx + 1}. {plainText}
-                      </p>
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {opts.slice(0, 5).map((opt, oi) => (
-                        <span key={oi} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          oi === cIdx ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
+                    {/* Status + type badges */}
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                      {conceptCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          <Brain className="h-2.5 w-2.5" /> {conceptCount} conceito{conceptCount > 1 ? 's' : ''}
                         </span>
-                      ))}
+                      )}
                     </div>
+
+                    {/* Question text */}
+                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                      {idx + 1}. {plainText}
+                    </p>
+
+                    {/* Options preview - MC style */}
+                    {opts.length > 0 && (
+                      <div className="mt-2 space-y-0.5">
+                        {opts.slice(0, 5).map((opt, oi) => (
+                          <p key={oi} className={`text-xs leading-snug ${
+                            oi === cIdx ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'
+                          }`}>
+                            {oi === cIdx ? '✓ ' : '  '}{LETTERS[oi]}. {opt.length > 60 ? opt.slice(0, 60) + '…' : opt}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Concepts */}
                     {q.concepts && q.concepts.length > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {q.concepts.map(c => (
@@ -1363,11 +1555,40 @@ const DeckQuestionsTab = ({
                       </div>
                     )}
                   </div>
-                  {!isReadOnly && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(q.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+
+                  {/* Right side: type badge + 3-dot menu */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400">
+                      MÚLTIPLA
+                    </span>
+                    {!selectionMode && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: any) => e.stopPropagation()}>
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[140px]">
+                          <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); setPreviewQuestion(q); }}>
+                            <Eye className="mr-2 h-4 w-4" /> Ver
+                          </DropdownMenuItem>
+                          {!isReadOnly && !isCommunity && (
+                            <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); setEditQuestion(q); }}>
+                              <PenLine className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                          )}
+                          {!isReadOnly && !isCommunity && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e: any) => { e.stopPropagation(); deleteMutation.mutate(q.id); }}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -1375,10 +1596,164 @@ const DeckQuestionsTab = ({
         </div>
       )}
 
+      {/* Question Preview Dialog */}
+      <Dialog open={!!previewQuestion} onOpenChange={(v) => { if (!v) setPreviewQuestion(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pré-visualização</DialogTitle>
+          </DialogHeader>
+          {previewQuestion && (() => {
+            const opts = previewQuestion.options ?? [];
+            const cIdx = previewQuestion.correct_indices?.[0] ?? 0;
+            return (
+              <div className="space-y-4">
+                <div className="text-sm leading-relaxed text-foreground" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewQuestion.question_text) }} />
+                <div className="space-y-2">
+                  {opts.map((opt, i) => {
+                    const isCorrect = i === cIdx;
+                    return (
+                      <div key={i} className={`flex items-start gap-3 rounded-xl border p-3.5 ${
+                        isCorrect ? 'border-emerald-500 bg-emerald-500/10' : 'border-border/60 bg-card'
+                      }`}>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                          isCorrect ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {isCorrect ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
+                        </span>
+                        <span className="text-sm leading-relaxed pt-0.5">{opt}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {previewQuestion.explanation && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <p className="text-xs font-bold text-primary mb-1">Explicação</p>
+                    <div className="text-xs text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewQuestion.explanation) }} />
+                  </div>
+                )}
+                {previewQuestion.concepts && previewQuestion.concepts.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {previewQuestion.concepts.map(c => (
+                      <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Question Dialog */}
+      {editQuestion && !isReadOnly && (
+        <EditQuestionDialog
+          question={editQuestion}
+          open={!!editQuestion}
+          onOpenChange={(v) => { if (!v) setEditQuestion(null); }}
+          deckId={deckId}
+          effectiveDeckId={effectiveDeckId}
+        />
+      )}
+
+      {/* Community warning dialog */}
+      <Dialog open={communityWarningOpen} onOpenChange={setCommunityWarningOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Conteúdo da comunidade</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Questões vindas da comunidade não podem ser selecionadas para mover ou excluir.
+            Apenas questões criadas por você podem ser gerenciadas.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => setCommunityWarningOpen(false)}>Entendi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {!isReadOnly && (
         <CreateQuestionDialog open={createOpen} onOpenChange={setCreateOpen} deckId={deckId} mode={createMode} />
       )}
     </div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
+   Edit Question Dialog
+   ════════════════════════════════════════════════════════════ */
+const EditQuestionDialog = ({
+  question, open, onOpenChange, deckId, effectiveDeckId,
+}: {
+  question: DeckQuestion; open: boolean; onOpenChange: (v: boolean) => void; deckId: string; effectiveDeckId: string;
+}) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [questionText, setQuestionText] = useState(question.question_text);
+  const [options, setOptions] = useState<string[]>(question.options.length > 0 ? [...question.options] : ['', '', '', '']);
+  const [correctIdx, setCorrectIdx] = useState<number | null>(question.correct_indices?.[0] ?? null);
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const validOptions = options.filter(o => o.trim());
+      if (validOptions.length < 2) throw new Error('Mínimo 2 alternativas');
+      if (!questionText.trim()) throw new Error('Enunciado obrigatório');
+      if (correctIdx === null) throw new Error('Marque a alternativa correta');
+
+      const { error } = await supabase.from('deck_questions' as any).update({
+        question_text: questionText.trim(),
+        options: validOptions,
+        correct_indices: [correctIdx],
+      }).eq('id', question.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
+      toast({ title: 'Questão atualizada!' });
+      onOpenChange(false);
+    },
+    onError: (err: any) => toast({ title: err.message || 'Erro ao atualizar', variant: 'destructive' }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Editar Questão</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Enunciado</label>
+            <Textarea value={questionText} onChange={(e) => setQuestionText(e.target.value)} placeholder="Digite o enunciado..." className="min-h-[80px]" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Alternativas <span className="text-[10px] text-muted-foreground/60">(toque na letra para marcar a correta)</span>
+            </label>
+            <div className="space-y-2">
+              {options.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <button type="button" onClick={() => setCorrectIdx(i)}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
+                      correctIdx === i ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                    }`}>
+                    {correctIdx === i ? <Check className="h-3.5 w-3.5" /> : LETTERS[i]}
+                  </button>
+                  <Input value={opt} onChange={(e) => { const next = [...options]; next[i] = e.target.value; setOptions(next); }} placeholder={`Alternativa ${LETTERS[i]}`} className="text-sm" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
