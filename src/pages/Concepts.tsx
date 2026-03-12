@@ -722,6 +722,97 @@ const ConceptsPage = () => {
     setLoadingQuestion(false);
   }, [studyQueue, studyIndex, currentQuestion, selectedOption, submitConceptReview, user]);
 
+  // ═══ Diagnostic Mode UI ═══
+  if (diagnosticMode) {
+    const concept = diagnosticQueue[diagnosticIndex];
+    const isCorrect = diagnosticQuestion?.correctIndices?.includes(diagnosticSelected) ?? false;
+    const progress = diagnosticQueue.length > 0 ? ((diagnosticIndex + 1) / diagnosticQueue.length) * 100 : 0;
+
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/40 bg-card/95 backdrop-blur-md px-4 py-3">
+          <Button variant="ghost" size="icon" onClick={() => setDiagnosticMode(false)}>
+            <XIcon className="h-5 w-5" />
+          </Button>
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Diagnóstico {diagnosticIndex + 1}/{diagnosticQueue.length}</p>
+            <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
+          </div>
+          <Badge variant="outline" className="text-[10px]">
+            <Stethoscope className="h-3 w-3 mr-1" /> Knowledge Check
+          </Badge>
+        </header>
+
+        <div className="px-4 py-2">
+          <Progress value={progress} className="h-1.5" />
+        </div>
+
+        <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
+          {diagnosticLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          ) : !diagnosticQuestion ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Sem questão para este conceito.</p>
+                <Button variant="outline" className="mt-4" onClick={() => handleDiagnosticNext(false)}>Pular (marcar como fraco)</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card className="border-border/50">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{diagnosticQuestion.questionText}</p>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-2">
+                {(diagnosticQuestion.options ?? []).map((opt: string, i: number) => {
+                  const isSelected = diagnosticSelected === i;
+                  const isCorrectOpt = diagnosticQuestion.correctIndices?.includes(i);
+                  let optClasses = 'border-border/50 bg-card hover:bg-accent/30';
+                  if (diagnosticConfirmed) {
+                    if (isCorrectOpt) optClasses = 'border-emerald-500 bg-emerald-500/10';
+                    else if (isSelected && !isCorrectOpt) optClasses = 'border-destructive bg-destructive/10';
+                  } else if (isSelected) {
+                    optClasses = 'border-primary bg-primary/5';
+                  }
+                  return (
+                    <button
+                      key={i}
+                      disabled={diagnosticConfirmed}
+                      onClick={() => setDiagnosticSelected(i)}
+                      className={`w-full text-left rounded-xl border-2 px-4 py-3 text-sm transition-all ${optClasses}`}
+                    >
+                      <span className="font-medium text-muted-foreground mr-2">{String.fromCharCode(65 + i)}.</span>
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!diagnosticConfirmed ? (
+                <Button className="w-full" disabled={diagnosticSelected === null} onClick={handleDiagnosticAnswer}>Confirmar</Button>
+              ) : (
+                <div className="space-y-3">
+                  <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
+                    {isCorrect ? '✅ Correto — conceito dominado!' : '❌ Incorreto — conceito marcado para revisão'}
+                  </div>
+                  <Button className="w-full" onClick={() => handleDiagnosticNext(isCorrect)}>
+                    {diagnosticIndex + 1 >= diagnosticQueue.length ? 'Finalizar Diagnóstico' : 'Próximo Conceito'}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ═══ Study Mode UI ═══
   if (studyMode) {
     const concept = studyQueue[studyIndex];
