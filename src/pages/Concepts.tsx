@@ -743,6 +743,18 @@ const ConceptsPage = () => {
                   </div>
                 )}
 
+                {/* Ready-to-Learn Frontier (ALEKS) */}
+                <ReadyToLearnSection onStartStudy={(concept) => {
+                  setStudyQueue([concept]);
+                  setStudyIndex(0);
+                  setStudyMode(true);
+                  setLoadingQuestion(true);
+                  getVariedQuestion(concept.id, user!.id).then(q => {
+                    setCurrentQuestion(q);
+                    setLoadingQuestion(false);
+                  }).catch(() => { setCurrentQuestion(null); setLoadingQuestion(false); });
+                }} />
+
                 {/* Concept list */}
                 <div className="space-y-2.5">
                   {filtered.length === 0 ? (
