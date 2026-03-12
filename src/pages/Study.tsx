@@ -94,6 +94,7 @@ const Study = () => {
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
   const leechBypassOnceRef = useRef<Set<string>>(new Set());
+  const leechAdvanceLockRef = useRef(false);
   const leechFailStorageKey = useMemo(
     () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
