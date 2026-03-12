@@ -502,7 +502,81 @@ const ConceptsPage = () => {
     return result;
   }, [concepts, search, stateFilter, categoryFilter, isDue]);
 
-  const hasActiveFilter = stateFilter !== 'all';
+  const hasActiveFilter = stateFilter !== 'all' || !!categoryFilter;
+
+  // Map prerequisites handler
+  const handleMapPrerequisites = async () => {
+    if (!user) return;
+    setMappingPrereqs(true);
+    try {
+      const count = await mapPrerequisitesViaAI(user.id);
+      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao mapear pré-requisitos');
+    }
+    setMappingPrereqs(false);
+  };
+
+  // Diagnostic flow
+  const handleStartDiagnostic = async () => {
+    if (!user) return;
+    setDiagnosticLoading(true);
+    try {
+      const queue = await fetchDiagnosticConcepts(user.id);
+      if (queue.length === 0) {
+        toast.error('Nenhum conceito disponível para diagnóstico');
+        setDiagnosticLoading(false);
+        return;
+      }
+      setDiagnosticQueue(queue);
+      setDiagnosticIndex(0);
+      setDiagnosticResults({ correct: 0, wrong: 0 });
+      setDiagnosticMode(true);
+      const q = await getVariedQuestion(queue[0].id, user.id);
+      setDiagnosticQuestion(q);
+    } catch { toast.error('Erro ao iniciar diagnóstico'); }
+    setDiagnosticLoading(false);
+  };
+
+  const handleDiagnosticAnswer = async () => {
+    if (diagnosticSelected === null || !diagnosticQuestion) return;
+    setDiagnosticConfirmed(true);
+  };
+
+  const handleDiagnosticNext = async (wasCorrect: boolean) => {
+    const concept = diagnosticQueue[diagnosticIndex];
+    if (!concept || !user) return;
+
+    // Mark concept based on answer
+    if (wasCorrect) {
+      await markConceptMastered(concept.id);
+      setDiagnosticResults(r => ({ ...r, correct: r.correct + 1 }));
+    } else {
+      await markConceptWeak(concept.id);
+      setDiagnosticResults(r => ({ ...r, wrong: r.wrong + 1 }));
+    }
+
+    const nextIdx = diagnosticIndex + 1;
+    if (nextIdx >= diagnosticQueue.length) {
+      setDiagnosticMode(false);
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
+      toast.success(`Diagnóstico concluído: ${diagnosticResults.correct + (wasCorrect ? 1 : 0)} acertos, ${diagnosticResults.wrong + (wasCorrect ? 0 : 1)} erros`);
+      return;
+    }
+
+    setDiagnosticIndex(nextIdx);
+    setDiagnosticSelected(null);
+    setDiagnosticConfirmed(false);
+    setDiagnosticLoading(true);
+    try {
+      const q = await getVariedQuestion(diagnosticQueue[nextIdx].id, user.id);
+      setDiagnosticQuestion(q);
+    } catch { setDiagnosticQuestion(null); }
+    setDiagnosticLoading(false);
+  };
   const newPct = counts.total > 0 ? (counts.new / counts.total) * 100 : 0;
   const learningPct = counts.total > 0 ? (counts.learning / counts.total) * 100 : 0;
   const masteredPct = counts.total > 0 ? (counts.mastered / counts.total) * 100 : 0;
