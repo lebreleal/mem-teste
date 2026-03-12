@@ -966,13 +966,12 @@ const Study = () => {
             <Button
               variant="destructive"
               onClick={() => {
-                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
-                  clearLeechInterruption();
-                  return;
+                // Review was already submitted when leech triggered.
+                // Just clear the interruption and let the user continue.
+                if (leechInterruption) {
+                  leechBypassOnceRef.current.add(leechInterruption.leechKey);
                 }
-                leechBypassOnceRef.current.add(leechInterruption.leechKey);
                 clearLeechInterruption();
-                void handleRate(1);
               }}
             >
               Continuar mesmo assim
