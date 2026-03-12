@@ -147,15 +147,22 @@ export async function ensureGlobalConcepts(
 // ─── Link questions to global concepts ──────────
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[] }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[],
 ) {
-  // Collect all unique concept names
+  // Collect all unique concept names + meta
   const allNames = new Set<string>();
+  const metaMap = new Map<string, { category?: string; subcategory?: string }>();
   for (const pair of questionConceptPairs) {
-    for (const name of pair.conceptNames) allNames.add(name);
+    for (const name of pair.conceptNames) {
+      allNames.add(name);
+      const slug = conceptSlug(name);
+      if (pair.category && !metaMap.has(slug)) {
+        metaMap.set(slug, { category: pair.category, subcategory: pair.subcategory });
+      }
+    }
   }
 
-  const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames));
+  const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames), metaMap);
 
   // Build junction rows
   const rows: { question_id: string; concept_id: string }[] = [];

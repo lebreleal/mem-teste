@@ -66,6 +66,8 @@ REGRAS:
    - correct_index: índice (0-based) da alternativa correta. Se o gabarito estiver no texto, use-o. Se não houver gabarito, use -1
    - explanation: se houver explicação/justificativa no texto, extraia-a. Senão, gere uma explicação breve e precisa
    - concepts: 1-3 Knowledge Components centrais testados pela questão
+   - category: a Grande Área da Medicina a que pertence (EXATAMENTE uma das 5 abaixo)
+   - subcategory: a especialidade/tema específico dentro da Grande Área
 
 3. Mantenha o texto ORIGINAL da questão e alternativas — não reescreva nem modifique
 4. Se houver gabarito no final (ex: "Gabarito: 1-A, 2-C, 3-B"), use-o para determinar correct_index
@@ -75,6 +77,22 @@ REGRAS:
    - "1. / 2. / 3. / 4." como alternativas
    - Questões numeradas: "1. / 2. / 3." ou "Questão 1 / Questão 2"
 6. Se o texto contiver questões dissertativas (sem alternativas), IGNORE-as
+
+AS 5 GRANDES ÁREAS (use EXATAMENTE estes nomes para "category"):
+- "Clínica Médica"
+- "Cirurgia"
+- "Ginecologia e Obstetrícia"
+- "Pediatria"
+- "Medicina Preventiva"
+
+SUBCATEGORIAS POR ÁREA (use como referência para "subcategory"):
+• Clínica Médica: Cardiologia, Pneumologia, Gastroenterologia, Endocrinologia, Nefrologia, Reumatologia, Hematologia, Infectologia, Neurologia, Dermatologia, Psiquiatria, Geriatria, Medicina Intensiva, Emergência Clínica
+• Cirurgia: Cirurgia Geral, Cirurgia do Trauma, Cirurgia Vascular, Urologia, Ortopedia, Neurocirurgia, Cirurgia Torácica, Otorrinolaringologia, Oftalmologia, Anestesiologia, Cirurgia do Aparelho Digestivo
+• Ginecologia e Obstetrícia: Obstetrícia, Ginecologia, Pré-natal, Parto, Puerpério, Oncologia Ginecológica, Reprodução Humana, Mastologia, Planejamento Familiar
+• Pediatria: Neonatologia, Puericultura, Infectologia Pediátrica, Pneumologia Pediátrica, Gastroenterologia Pediátrica, Cardiologia Pediátrica, Neurologia Pediátrica, Imunizações, Emergência Pediátrica, Nutrologia Pediátrica
+• Medicina Preventiva: Epidemiologia, Bioestatística, SUS, Políticas de Saúde, Saúde do Trabalhador, Vigilância Epidemiológica, Atenção Primária, Saúde da Família, Ética Médica, Medicina Legal, Medicina Baseada em Evidências
+
+Se o conteúdo NÃO for médico, use "Outras" como category e o tema mais adequado como subcategory.
 
 REGRAS PARA CONCEPTS (Knowledge Components):
 - São unidades atômicas de conhecimento com 2-6 palavras
@@ -102,7 +120,9 @@ Formato:
     "options": ["...", "...", "...", "..."],
     "correct_index": 0,
     "explanation": "...",
-    "concepts": ["Conceito A", "Conceito B"]
+    "concepts": ["Conceito A", "Conceito B"],
+    "category": "Clínica Médica",
+    "subcategory": "Cardiologia"
   }
 ]`;
 
