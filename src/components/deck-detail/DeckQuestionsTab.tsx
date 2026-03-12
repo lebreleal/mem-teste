@@ -977,6 +977,7 @@ const CreateQuestionDialog = ({
             questionConceptPairs.push({
               questionId: (inserted as any).id,
               conceptNames: qi.concepts,
+              prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
               subcategory: qi.subcategory ?? undefined,
             });
