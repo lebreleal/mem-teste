@@ -931,12 +931,18 @@ const Study = () => {
             </Button>
             <Button
               onClick={() => {
-                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
+                if (!leechInterruption) {
+                  clearLeechInterruption();
+                  return;
+                }
+                // Find the card by ID in the queue (it may have moved after the review was submitted)
+                const targetCard = localQueue.find(c => c.id === leechInterruption.cardId) ?? currentCard;
+                if (!targetCard) {
                   clearLeechInterruption();
                   return;
                 }
                 clearLeechInterruption();
-                void startLeechModeForCard(currentCard);
+                void startLeechModeForCard(targetCard);
               }}
             >
               Fazer mini-reforço
