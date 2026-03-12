@@ -1464,7 +1464,7 @@ const DeckQuestionsTab = ({
           {filteredQuestions.map((q, idx) => {
             const opts: string[] = q.options ?? [];
             const cIdx = q.correct_indices?.[0] ?? 0;
-            const plainText = (q.question_text ?? '').replace(/<[^>]+>/g, '');
+            const plainText = (q.question_text ?? '').replace(/<[^>]+>/g, '').trim();
             const isError = statsData.errorQuestionIds.has(q.id);
             const isAnswered = statsData.answeredQuestionIds.has(q.id);
             const isCorrectlyAnswered = isAnswered && !isError;
@@ -1472,19 +1472,17 @@ const DeckQuestionsTab = ({
             const isCommunity = isCommunityQuestion(q);
             const conceptCount = q.concepts?.length ?? 0;
 
-            // Status badge
-            const statusColor = isError
-              ? 'bg-destructive/15 text-destructive border-destructive/30'
+            const borderClass = isError
+              ? 'border-destructive/40'
               : isCorrectlyAnswered
-              ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
-              : 'bg-muted text-muted-foreground border-border';
-            const statusLabel = isError ? 'Errada' : isCorrectlyAnswered ? 'Correta' : 'Não respondida';
+              ? 'border-emerald-500/40'
+              : 'border-border/60';
 
             return (
               <div
                 key={q.id}
                 className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer ${
-                  isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                  isSelected ? 'border-primary/50 bg-primary/5' : `${borderClass} hover:border-border hover:shadow-sm`
                 }`}
                 onClick={() => {
                   if (selectionMode) {
@@ -1514,21 +1512,18 @@ const DeckQuestionsTab = ({
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    {/* Status + type badges */}
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor}`}>
-                        {statusLabel}
-                      </span>
-                      {conceptCount > 0 && (
+                    {/* Concept count badge */}
+                    {conceptCount > 0 && (
+                      <div className="flex items-center gap-1.5 mb-1">
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                           <Brain className="h-2.5 w-2.5" /> {conceptCount} conceito{conceptCount > 1 ? 's' : ''}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Question text */}
                     <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
-                      {idx + 1}. {plainText}
+                      {idx + 1}. {plainText || '(Sem enunciado)'}
                     </p>
 
                     {/* Options preview - MC style */}
@@ -1543,25 +1538,11 @@ const DeckQuestionsTab = ({
                         ))}
                       </div>
                     )}
-
-                    {/* Concepts */}
-                    {q.concepts && q.concepts.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {q.concepts.map(c => (
-                          <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Right side: type badge + 3-dot menu */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400">
-                      MÚLTIPLA
-                    </span>
-                    {!selectionMode && (
+                  {/* Right side: 3-dot menu only */}
+                  {!selectionMode && (
+                    <div className="flex items-center shrink-0">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e: any) => e.stopPropagation()}>
@@ -1587,8 +1568,8 @@ const DeckQuestionsTab = ({
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
