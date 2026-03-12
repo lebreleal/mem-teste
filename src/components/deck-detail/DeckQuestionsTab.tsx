@@ -3,7 +3,7 @@
  * Features: stats bar, error notebook, concept mastery, AI hints/explanations,
  * option elimination (scissors), AI concept card generation.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -123,10 +123,17 @@ const ConceptMasterySection = ({
 
       if (keywords.length === 0) { setLoadingCards(prev => ({ ...prev, [concept]: false })); return; }
 
+      // Search across all user's decks (not just parent) to find related cards in sub-decks
+      const { data: userDecks } = await supabase
+        .from('decks')
+        .select('id')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '');
+      const userDeckIds = (userDecks ?? []).map(d => d.id);
+      
       const { data } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type')
-        .eq('deck_id', deckId)
+        .in('deck_id', userDeckIds.length > 0 ? userDeckIds : [deckId])
         .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
         .limit(5);
 
@@ -1245,6 +1252,18 @@ const DeckQuestionsTab = ({
   const [createOpen, setCreateOpen] = useState(!!autoCreate);
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
   const [practicing, setPracticing] = useState(!!autoStart);
+
+  // Sync autoStart/autoCreate prop changes (component may already be mounted)
+  useEffect(() => {
+    if (autoStart) setPracticing(true);
+  }, [autoStart]);
+
+  useEffect(() => {
+    if (autoCreate) {
+      setCreateOpen(true);
+      setCreateMode(autoCreate === 'manual' ? 'manual' : 'ai');
+    }
+  }, [autoCreate]);
   const [filter, setFilter] = useState<QuestionFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
