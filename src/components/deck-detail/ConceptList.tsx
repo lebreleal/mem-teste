@@ -2,7 +2,7 @@
  * ConceptList — list of concepts with CRUD actions and card preview.
  */
 import { useState, useMemo } from 'react';
-import { Network, Lightbulb, CheckCircle2, MoreVertical, Pencil, Trash2, Layers, ChevronDown, ChevronUp, Search, RotateCcw, BookOpen } from 'lucide-react';
+import { BrainCircuit, Lightbulb, CheckCircle2, MoreVertical, Pencil, Trash2, Layers, ChevronDown, ChevronUp, Search, RotateCcw, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -28,7 +28,7 @@ type FilterType = 'all' | 'new' | 'learning' | 'mastered';
 const stateLabel = (state: number) => {
   switch (state) {
     case 0: return { label: 'Novo', icon: Lightbulb, color: 'text-muted-foreground' };
-    case 1: case 3: return { label: 'Aprendendo', icon: Network, color: 'text-orange-500' };
+    case 1: case 3: return { label: 'Aprendendo', icon: BrainCircuit, color: 'text-orange-500' };
     case 2: return { label: 'Dominado', icon: CheckCircle2, color: 'text-primary' };
     default: return { label: 'Novo', icon: Lightbulb, color: 'text-muted-foreground' };
   }
@@ -57,7 +57,7 @@ const ConceptList = ({ deckId, concepts, onRename, onDelete, onEditCards, onStud
   if (concepts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
-        <Network className="h-10 w-10 text-muted-foreground/30 mb-3" />
+        <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mb-3" />
         <h3 className="font-display text-base font-semibold text-foreground">Nenhum conceito</h3>
         <p className="mt-1 text-sm text-muted-foreground">Crie conceitos para agrupar seus cards por tema.</p>
       </div>

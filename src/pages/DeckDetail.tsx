@@ -13,7 +13,7 @@ import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, Network } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, BrainCircuit } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
@@ -345,7 +345,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
             value="concepts"
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
           >
-            <Network className="h-4 w-4" /> Conceitos ({concepts.length})
+            <BrainCircuit className="h-4 w-4" /> Conceitos ({concepts.length})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="cards" className="mt-4">
