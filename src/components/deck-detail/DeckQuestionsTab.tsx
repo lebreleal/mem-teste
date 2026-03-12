@@ -579,7 +579,7 @@ const QuestionPractice = ({
           <Badge variant="outline" className="text-xs font-bold">Questão {index + 1}</Badge>
         </div>
 
-        <div className="text-sm leading-relaxed text-foreground mb-6" dangerouslySetInnerHTML={{ __html: q.question_text }} />
+        <div className="text-sm leading-relaxed text-foreground mb-6" dangerouslySetInnerHTML={{ __html: sanitizeHtml(q.question_text) }} />
 
         {/* Options */}
         <div className="space-y-2.5">
