@@ -1214,6 +1214,7 @@ export type Database = {
           last_reviewed_at: string | null
           learning_step: number
           name: string
+          parent_concept_id: string | null
           scheduled_date: string
           slug: string
           stability: number
@@ -1233,6 +1234,7 @@ export type Database = {
           last_reviewed_at?: string | null
           learning_step?: number
           name: string
+          parent_concept_id?: string | null
           scheduled_date?: string
           slug: string
           stability?: number
@@ -1252,6 +1254,7 @@ export type Database = {
           last_reviewed_at?: string | null
           learning_step?: number
           name?: string
+          parent_concept_id?: string | null
           scheduled_date?: string
           slug?: string
           stability?: number
@@ -1267,6 +1270,13 @@ export type Database = {
             columns: ["concept_tag_id"]
             isOneToOne: false
             referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_concepts_parent_concept_id_fkey"
+            columns: ["parent_concept_id"]
+            isOneToOne: false
+            referencedRelation: "global_concepts"
             referencedColumns: ["id"]
           },
         ]
