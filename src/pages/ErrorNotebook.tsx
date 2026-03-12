@@ -1,6 +1,7 @@
 /**
  * ErrorNotebook — Global "Caderno de Erros" page.
  * Shows wrong questions with linked concepts and related cards for review.
+ * Includes "Aprofundar" (deepening) for the weakest theme per question.
  */
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, BookX, PlayCircle, ChevronRight, BrainCircuit, Layers } from 'lucide-react';
+import ConceptDrillQuiz from '@/components/ConceptDrillQuiz';
 
 interface ErrorQuestion {
   id: string;
@@ -20,7 +22,7 @@ interface ErrorQuestion {
   explanation: string;
   concepts: string[];
   deck_name: string;
-  linkedConcepts: { id: string; name: string; state: number }[];
+  linkedConcepts: { id: string; name: string; state: number; stability: number }[];
   relatedCardCount: number;
 }
 
@@ -35,6 +37,7 @@ const STATE_COLORS: Record<number, string> = {
 const ErrorNotebook = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [drillTarget, setDrillTarget] = useState<{ id: string; name: string; state: number } | null>(null);
 
   const { data: errorQuestions = [], isLoading } = useQuery({
     queryKey: ['error-notebook', user?.id],
@@ -86,22 +89,22 @@ const ErrorNotebook = () => {
         .in('question_id', wrongIds);
 
       const conceptIds = [...new Set((conceptLinks ?? []).map((l: any) => l.concept_id))];
-      let conceptMap = new Map<string, { id: string; name: string; state: number }>();
+      let conceptMap = new Map<string, { id: string; name: string; state: number; stability: number }>();
       if (conceptIds.length > 0) {
         const { data: gc } = await supabase
           .from('global_concepts' as any)
-          .select('id, name, state')
+          .select('id, name, state, stability')
           .eq('user_id', user.id)
           .in('id', conceptIds);
         if (gc) {
           for (const c of gc as any[]) {
-            conceptMap.set(c.id, { id: c.id, name: c.name, state: c.state });
+            conceptMap.set(c.id, { id: c.id, name: c.name, state: c.state, stability: c.stability ?? 0 });
           }
         }
       }
 
       // Build question → concepts map
-      const qConceptMap = new Map<string, { id: string; name: string; state: number }[]>();
+      const qConceptMap = new Map<string, { id: string; name: string; state: number; stability: number }[]>();
       for (const link of (conceptLinks ?? []) as any[]) {
         const concept = conceptMap.get(link.concept_id);
         if (concept) {
@@ -130,7 +133,7 @@ const ErrorNotebook = () => {
         explanation: q.explanation || '',
         concepts: Array.isArray(q.concepts) ? q.concepts : [],
         deck_name: deckMap.get(q.deck_id) || 'Baralho',
-        linkedConcepts: qConceptMap.get(q.id) ?? [],
+        linkedConcepts: (qConceptMap.get(q.id) ?? []).sort((a, b) => a.stability - b.stability),
         relatedCardCount: cardCountMap.get(q.deck_id) ?? 0,
       })) as ErrorQuestion[];
     },
@@ -146,6 +149,20 @@ const ErrorNotebook = () => {
       map.get(q.deck_id)!.questions.push(q);
     }
     return [...map.entries()];
+  }, [errorQuestions]);
+
+  // Find the single weakest concept across all errors
+  const weakestConcept = useMemo(() => {
+    let weakest: { id: string; name: string; state: number; stability: number } | null = null;
+    for (const q of errorQuestions) {
+      if (q.linkedConcepts.length > 0) {
+        const first = q.linkedConcepts[0]; // already sorted by stability asc
+        if (!weakest || first.stability < weakest.stability) {
+          weakest = first;
+        }
+      }
+    }
+    return weakest;
   }, [errorQuestions]);
 
   return (
@@ -187,7 +204,8 @@ const ErrorNotebook = () => {
           </div>
         ) : (
           <>
-            <div className="rounded-2xl border border-border/50 bg-card p-4">
+            {/* Summary card with weakest concept deepening */}
+            <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
                   <span className="font-bold text-destructive text-lg">{errorQuestions.length}</span>{' '}
@@ -197,6 +215,36 @@ const ErrorNotebook = () => {
               <div className="mt-3 h-2 w-full rounded-full bg-muted/60 overflow-hidden">
                 <div className="h-full rounded-full bg-destructive/80 transition-all" style={{ width: '100%' }} />
               </div>
+
+              {/* Weakest concept — single Aprofundar button */}
+              {weakestConcept && !drillTarget && (
+                <div className="pt-2 border-t border-border/30">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Tema mais fraco identificado:
+                  </p>
+                  <ConceptDrillQuiz
+                    conceptId={weakestConcept.id}
+                    conceptName={weakestConcept.name}
+                    conceptState={weakestConcept.state}
+                    depth={1}
+                    maxDepth={2}
+                  />
+                </div>
+              )}
+
+              {/* Active drill */}
+              {drillTarget && (
+                <div className="pt-2 border-t border-border/30">
+                  <ConceptDrillQuiz
+                    conceptId={drillTarget.id}
+                    conceptName={drillTarget.name}
+                    conceptState={drillTarget.state}
+                    depth={1}
+                    maxDepth={2}
+                    onComplete={() => setDrillTarget(null)}
+                  />
+                </div>
+              )}
             </div>
 
             {groupedByDeck.map(([deckId, { name, questions }]) => (
@@ -229,30 +277,35 @@ const ErrorNotebook = () => {
                 <div className="space-y-2">
                   {questions.slice(0, 5).map((q, idx) => {
                     const plainText = q.question_text.replace(/<[^>]+>/g, '');
+                    // Show only the weakest linked concept per question
+                    const weakest = q.linkedConcepts.length > 0 ? q.linkedConcepts[0] : null;
+
                     return (
                       <div key={q.id} className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 space-y-1.5">
                         <p className="text-xs text-foreground line-clamp-2">
                           {idx + 1}. {plainText}
                         </p>
 
-                        {/* Linked concepts with mastery */}
-                        {q.linkedConcepts.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {q.linkedConcepts.map(c => (
-                              <span
-                                key={c.id}
-                                className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${STATE_COLORS[c.state] ?? STATE_COLORS[0]}`}
-                              >
-                                <BrainCircuit className="h-2.5 w-2.5" />
-                                {c.name}
-                                <span className="opacity-60">({STATE_LABELS[c.state] ?? 'Novo'})</span>
+                        {/* Weakest linked concept with drill button */}
+                        {weakest && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${STATE_COLORS[weakest.state] ?? STATE_COLORS[0]}`}
+                            >
+                              <BrainCircuit className="h-2.5 w-2.5" />
+                              {weakest.name}
+                              <span className="opacity-60">({STATE_LABELS[weakest.state] ?? 'Novo'})</span>
+                            </span>
+                            {q.linkedConcepts.length > 1 && (
+                              <span className="text-[9px] text-muted-foreground">
+                                +{q.linkedConcepts.length - 1} tema{q.linkedConcepts.length - 1 > 1 ? 's' : ''}
                               </span>
-                            ))}
+                            )}
                           </div>
                         )}
 
                         {/* Fallback: text-based concepts */}
-                        {q.linkedConcepts.length === 0 && q.concepts.length > 0 && (
+                        {!weakest && q.concepts.length > 0 && (
                           <div className="flex flex-wrap gap-1">
                             {q.concepts.map(c => (
                               <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{c}</span>
