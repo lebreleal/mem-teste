@@ -294,7 +294,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
-  const [conceptFilter, setConceptFilter] = useState<string | undefined>(undefined);
+  const [conceptFilter, setConceptFilter] = useState<string | string[] | undefined>(undefined);
 
   // Concept mastery from question performance
   const { concepts, summary, isLoading: conceptsLoading } = useConceptMastery(deckId);
