@@ -51,6 +51,13 @@ function getLeechKey(card: { id: string; card_type: string; front_content: strin
   return `card:${card.id}`;
 }
 
+type LeechInterruptionState = {
+  cardId: string;
+  leechKey: string;
+  failCount: number;
+  interruptedAt: string;
+};
+
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
   const { user } = useAuth();
