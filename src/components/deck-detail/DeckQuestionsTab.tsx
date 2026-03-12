@@ -940,7 +940,7 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
-        const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+        const questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[] = [];
 
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
@@ -967,7 +967,12 @@ const CreateQuestionDialog = ({
 
           // Collect for global concept linking
           if (inserted && qi.concepts?.length > 0) {
-            questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: qi.concepts });
+            questionConceptPairs.push({
+              questionId: (inserted as any).id,
+              conceptNames: qi.concepts,
+              category: qi.category ?? undefined,
+              subcategory: qi.subcategory ?? undefined,
+            });
           }
         }
 
@@ -1860,7 +1865,7 @@ const PasteQuestionsDialog = ({
     setSaving(true);
     try {
       const toSave = parsedQuestions.filter((_, i) => selectedIds.has(i));
-      const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+      const questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[] = [];
 
       for (const q of toSave) {
         const { data: inserted } = await supabase.from('deck_questions' as any).insert({
@@ -1875,7 +1880,12 @@ const PasteQuestionsDialog = ({
         }).select('id').single();
 
         if (inserted && q.concepts?.length > 0) {
-          questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: q.concepts });
+          questionConceptPairs.push({
+            questionId: (inserted as any).id,
+            conceptNames: q.concepts,
+            category: (q as any).category ?? undefined,
+            subcategory: (q as any).subcategory ?? undefined,
+          });
         }
       }
 

@@ -1,15 +1,15 @@
 /**
  * ConceptsPage — Global concept mastery dashboard with FSRS-based study.
- * Shows all concepts, due concepts, and allows studying via varied questions.
+ * Groups concepts by Grande Área (Estratégia MED / Medway / SanarFlix taxonomy).
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
+import { MEDICAL_CATEGORIES } from '@/services/globalConceptService';
 import { getVariedQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, CheckCircle2, AlertCircle,
   X as XIcon, Clock, ChevronDown, ChevronUp, Zap, BookOpen,
+  Stethoscope, Syringe, Baby, Heart, ShieldCheck, Folder,
 } from 'lucide-react';
 import type { Rating } from '@/lib/fsrs';
 
@@ -35,6 +36,28 @@ const stateLabel = (state: number) => {
   }
 };
 
+const categoryIcon = (cat: string) => {
+  switch (cat) {
+    case 'Clínica Médica': return <Stethoscope className="h-4 w-4" />;
+    case 'Cirurgia': return <Syringe className="h-4 w-4" />;
+    case 'Ginecologia e Obstetrícia': return <Heart className="h-4 w-4" />;
+    case 'Pediatria': return <Baby className="h-4 w-4" />;
+    case 'Medicina Preventiva': return <ShieldCheck className="h-4 w-4" />;
+    default: return <Folder className="h-4 w-4" />;
+  }
+};
+
+const categoryColor = (cat: string) => {
+  switch (cat) {
+    case 'Clínica Médica': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+    case 'Cirurgia': return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
+    case 'Ginecologia e Obstetrícia': return 'text-pink-500 bg-pink-500/10 border-pink-500/20';
+    case 'Pediatria': return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+    case 'Medicina Preventiva': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+    default: return 'text-muted-foreground bg-muted/50 border-border';
+  }
+};
+
 const ConceptsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -44,6 +67,7 @@ const ConceptsPage = () => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   // Study mode state
   const [studyMode, setStudyMode] = useState(false);
@@ -62,13 +86,51 @@ const ConceptsPage = () => {
     let result = concepts;
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(c => c.name.toLowerCase().includes(q));
+      result = result.filter(c => c.name.toLowerCase().includes(q) || (c.subcategory ?? '').toLowerCase().includes(q));
     }
     if (filter === 'due') result = result.filter(isDue);
     if (filter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
     if (filter === 'strong') result = result.filter(c => c.state === 2);
     return result;
   }, [concepts, search, filter, isDue]);
+
+  // Group by category → subcategory
+  const grouped = useMemo(() => {
+    const map = new Map<string, Map<string, GlobalConcept[]>>();
+
+    for (const c of filtered) {
+      const cat = c.category || 'Sem categoria';
+      const sub = c.subcategory || 'Geral';
+      if (!map.has(cat)) map.set(cat, new Map());
+      const subMap = map.get(cat)!;
+      if (!subMap.has(sub)) subMap.set(sub, []);
+      subMap.get(sub)!.push(c);
+    }
+
+    // Sort: medical categories first in standard order, then others
+    const ordered: { category: string; subcategories: { name: string; concepts: GlobalConcept[] }[] }[] = [];
+    const catOrder = [...MEDICAL_CATEGORIES, 'Outras', 'Sem categoria'];
+
+    for (const cat of catOrder) {
+      if (map.has(cat)) {
+        const subMap = map.get(cat)!;
+        const subs = Array.from(subMap.entries())
+          .map(([name, concepts]) => ({ name, concepts }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        ordered.push({ category: cat, subcategories: subs });
+        map.delete(cat);
+      }
+    }
+    // Any remaining categories
+    for (const [cat, subMap] of map) {
+      const subs = Array.from(subMap.entries())
+        .map(([name, concepts]) => ({ name, concepts }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      ordered.push({ category: cat, subcategories: subs });
+    }
+
+    return ordered;
+  }, [filtered]);
 
   const summary = useMemo(() => ({
     total: concepts.length,
@@ -77,6 +139,14 @@ const ConceptsPage = () => {
     learning: concepts.filter(c => c.state === 1 || c.state === 3).length,
     mastered: concepts.filter(c => c.state === 2).length,
   }), [concepts, isDue]);
+
+  const toggleCategory = (cat: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
+  };
 
   // Start study mode
   const handleStartStudy = useCallback(async () => {
@@ -106,7 +176,6 @@ const ConceptsPage = () => {
     const isCorrect = currentQuestion?.correctIndices?.includes(selectedOption) ?? false;
     await submitConceptReview.mutateAsync({ concept, rating, isCorrect });
 
-    // Move to next
     const nextIdx = studyIndex + 1;
     if (nextIdx >= studyQueue.length) {
       setStudyMode(false);
@@ -143,6 +212,9 @@ const ConceptsPage = () => {
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">Conceito {studyIndex + 1}/{studyQueue.length}</p>
             <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
+            {concept?.category && (
+              <p className="text-[10px] text-muted-foreground">{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</p>
+            )}
           </div>
           <Progress value={((studyIndex + 1) / studyQueue.length) * 100} className="w-20 h-1.5" />
         </header>
@@ -166,14 +238,12 @@ const ConceptsPage = () => {
             </Card>
           ) : (
             <>
-              {/* Question */}
               <Card className="border-border/50">
                 <CardContent className="pt-4 pb-3">
                   <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{currentQuestion.questionText}</p>
                 </CardContent>
               </Card>
 
-              {/* Options */}
               <div className="space-y-2">
                 {(currentQuestion.options ?? []).map((opt: string, i: number) => {
                   const isSelected = selectedOption === i;
@@ -201,26 +271,18 @@ const ConceptsPage = () => {
                 })}
               </div>
 
-              {/* Confirm / Rate */}
               {!confirmed ? (
-                <Button
-                  className="w-full"
-                  disabled={selectedOption === null}
-                  onClick={handleAnswer}
-                >
+                <Button className="w-full" disabled={selectedOption === null} onClick={handleAnswer}>
                   Confirmar
                 </Button>
               ) : (
                 <div className="space-y-3">
-                  {/* Feedback */}
                   <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
                     {isCorrect ? '✅ Correto!' : '❌ Incorreto'}
                     {currentQuestion.explanation && (
                       <p className="mt-2 text-xs text-muted-foreground">{currentQuestion.explanation}</p>
                     )}
                   </div>
-
-                  {/* FSRS rating buttons */}
                   <div className="grid grid-cols-3 gap-2">
                     <Button variant="outline" className="text-xs border-destructive/30 text-destructive" onClick={() => handleRate(1)}>
                       Errei
@@ -321,7 +383,7 @@ const ConceptsPage = () => {
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Buscar conceito..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+                <Input placeholder="Buscar conceito ou tema..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
               </div>
             </div>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -343,69 +405,112 @@ const ConceptsPage = () => {
               ))}
             </div>
 
-            {/* Concept list */}
-            <div className="space-y-2">
-              {filtered.map(concept => {
-                const sl = stateLabel(concept.state);
-                const isExpanded = expandedId === concept.id;
-                const totalAttempts = concept.correct_count + concept.wrong_count;
-                const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
-                const due = isDue(concept);
+            {/* Grouped concept list */}
+            <div className="space-y-3">
+              {grouped.map(group => {
+                const isCollapsed = collapsedCategories.has(group.category);
+                const catConceptCount = group.subcategories.reduce((acc, s) => acc + s.concepts.length, 0);
+                const catDueCount = group.subcategories.reduce((acc, s) => acc + s.concepts.filter(isDue).length, 0);
 
                 return (
-                  <div key={concept.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div key={group.category} className="rounded-xl border border-border bg-card overflow-hidden">
+                    {/* Category header */}
                     <button
-                      className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/30 transition-colors"
-                      onClick={() => setExpandedId(isExpanded ? null : concept.id)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors"
+                      onClick={() => toggleCategory(group.category)}
                     >
-                      {concept.state === 2 ? (
-                        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-                      ) : concept.state === 1 || concept.state === 3 ? (
-                        <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-                      ) : (
-                        <BookOpen className="h-5 w-5 shrink-0 text-blue-500" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{concept.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${sl.bg}`}>
-                            {sl.label}
-                          </Badge>
-                          {totalAttempts > 0 && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {concept.correct_count}/{totalAttempts} ({accuracy}%)
-                            </span>
-                          )}
-                          {due && concept.state !== 0 && (
-                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border border-primary/30 bg-primary/5 text-primary">
-                              <Clock className="h-2.5 w-2.5 mr-0.5" /> Revisar
-                            </Badge>
-                          )}
-                        </div>
+                      <span className={`flex items-center justify-center h-8 w-8 rounded-lg border ${categoryColor(group.category)}`}>
+                        {categoryIcon(group.category)}
+                      </span>
+                      <div className="flex-1 text-left min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{group.category}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {catConceptCount} conceito{catConceptCount !== 1 ? 's' : ''}
+                          {catDueCount > 0 && <span className="text-primary font-medium"> · {catDueCount} para revisar</span>}
+                        </p>
                       </div>
-                      {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+                      {isCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />}
                     </button>
 
-                    {isExpanded && (
-                      <div className="border-t border-border/50 px-3 pb-3 pt-2 space-y-2">
-                        {totalAttempts > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] text-muted-foreground">
-                              <span>Taxa de acerto</span>
-                              <span className="font-medium text-foreground">{accuracy}%</span>
-                            </div>
-                            <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
-                                style={{ width: `${accuracy}%` }}
-                              />
-                            </div>
+                    {!isCollapsed && (
+                      <div className="border-t border-border/50">
+                        {group.subcategories.map(sub => (
+                          <div key={sub.name}>
+                            {/* Subcategory label */}
+                            {sub.name !== 'Geral' && (
+                              <div className="px-4 pt-2 pb-1">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{sub.name}</p>
+                              </div>
+                            )}
+                            {/* Concepts in this subcategory */}
+                            {sub.concepts.map(concept => {
+                              const sl = stateLabel(concept.state);
+                              const isExpanded = expandedId === concept.id;
+                              const totalAttempts = concept.correct_count + concept.wrong_count;
+                              const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
+                              const due = isDue(concept);
+
+                              return (
+                                <div key={concept.id} className="border-t border-border/30">
+                                  <button
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/20 transition-colors"
+                                    onClick={() => setExpandedId(isExpanded ? null : concept.id)}
+                                  >
+                                    {concept.state === 2 ? (
+                                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                                    ) : concept.state === 1 || concept.state === 3 ? (
+                                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                                    ) : (
+                                      <BookOpen className="h-4 w-4 shrink-0 text-blue-500" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-foreground truncate">{concept.name}</p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${sl.bg}`}>
+                                          {sl.label}
+                                        </Badge>
+                                        {totalAttempts > 0 && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            {concept.correct_count}/{totalAttempts} ({accuracy}%)
+                                          </span>
+                                        )}
+                                        {due && concept.state !== 0 && (
+                                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border border-primary/30 bg-primary/5 text-primary">
+                                            <Clock className="h-2.5 w-2.5 mr-0.5" /> Revisar
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="border-t border-border/30 px-4 pb-3 pt-2 space-y-2 bg-muted/10">
+                                      {totalAttempts > 0 && (
+                                        <div className="space-y-1">
+                                          <div className="flex justify-between text-[10px] text-muted-foreground">
+                                            <span>Taxa de acerto</span>
+                                            <span className="font-medium text-foreground">{accuracy}%</span>
+                                          </div>
+                                          <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
+                                            <div
+                                              className={`h-full rounded-full transition-all ${accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
+                                              style={{ width: `${accuracy}%` }}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                      <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                                        <div>Acertos: <span className="font-medium text-foreground">{concept.correct_count}</span></div>
+                                        <div>Erros: <span className="font-medium text-foreground">{concept.wrong_count}</span></div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                          <div>Acertos: <span className="font-medium text-foreground">{concept.correct_count}</span></div>
-                          <div>Erros: <span className="font-medium text-foreground">{concept.wrong_count}</span></div>
-                        </div>
+                        ))}
                       </div>
                     )}
                   </div>

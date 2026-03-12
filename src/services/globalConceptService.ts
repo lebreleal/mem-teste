@@ -10,6 +10,8 @@ export interface GlobalConcept {
   user_id: string;
   name: string;
   slug: string;
+  category: string | null;
+  subcategory: string | null;
   state: number;
   stability: number;
   difficulty: number;
@@ -22,6 +24,49 @@ export interface GlobalConcept {
   updated_at: string;
 }
 
+// ─── Medical taxonomy (Estratégia MED / Medway / SanarFlix standard) ───
+export const MEDICAL_CATEGORIES = [
+  'Clínica Médica',
+  'Cirurgia',
+  'Ginecologia e Obstetrícia',
+  'Pediatria',
+  'Medicina Preventiva',
+] as const;
+
+export type MedicalCategory = typeof MEDICAL_CATEGORIES[number];
+
+export const CATEGORY_SUBCATEGORIES: Record<string, string[]> = {
+  'Clínica Médica': [
+    'Cardiologia', 'Pneumologia', 'Gastroenterologia', 'Endocrinologia',
+    'Nefrologia', 'Reumatologia', 'Hematologia', 'Infectologia',
+    'Neurologia', 'Dermatologia', 'Psiquiatria', 'Geriatria',
+    'Medicina Intensiva', 'Emergência Clínica',
+  ],
+  'Cirurgia': [
+    'Cirurgia Geral', 'Cirurgia do Trauma', 'Cirurgia Vascular',
+    'Urologia', 'Ortopedia', 'Neurocirurgia', 'Cirurgia Torácica',
+    'Cirurgia Plástica', 'Otorrinolaringologia', 'Oftalmologia',
+    'Anestesiologia', 'Cirurgia do Aparelho Digestivo',
+  ],
+  'Ginecologia e Obstetrícia': [
+    'Obstetrícia', 'Ginecologia', 'Pré-natal', 'Parto',
+    'Puerpério', 'Oncologia Ginecológica', 'Reprodução Humana',
+    'Mastologia', 'Planejamento Familiar',
+  ],
+  'Pediatria': [
+    'Neonatologia', 'Puericultura', 'Infectologia Pediátrica',
+    'Pneumologia Pediátrica', 'Gastroenterologia Pediátrica',
+    'Cardiologia Pediátrica', 'Neurologia Pediátrica',
+    'Imunizações', 'Emergência Pediátrica', 'Nutrologia Pediátrica',
+  ],
+  'Medicina Preventiva': [
+    'Epidemiologia', 'Bioestatística', 'SUS', 'Políticas de Saúde',
+    'Saúde do Trabalhador', 'Vigilância Epidemiológica',
+    'Atenção Primária', 'Saúde da Família', 'Ética Médica',
+    'Medicina Legal', 'Medicina Baseada em Evidências',
+  ],
+};
+
 // ─── Slug normalization ─────────────────────────
 export function conceptSlug(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
@@ -32,6 +77,7 @@ export function conceptSlug(name: string): string {
 export async function ensureGlobalConcepts(
   userId: string,
   conceptNames: string[],
+  conceptMetaMap?: Map<string, { category?: string; subcategory?: string }>,
 ): Promise<Map<string, string>> {
   const slugMap = new Map<string, string>(); // slug → id
   if (conceptNames.length === 0) return slugMap;
@@ -58,11 +104,17 @@ export async function ensureGlobalConcepts(
   // Insert missing
   const missingSlugs = slugs.filter(s => !slugMap.has(s));
   if (missingSlugs.length > 0) {
-    const rows = missingSlugs.map(s => ({
-      user_id: userId,
-      name: uniqueBySlug.get(s)!,
-      slug: s,
-    }));
+    const rows = missingSlugs.map(s => {
+      const name = uniqueBySlug.get(s)!;
+      const meta = conceptMetaMap?.get(s);
+      return {
+        user_id: userId,
+        name,
+        slug: s,
+        ...(meta?.category ? { category: meta.category } : {}),
+        ...(meta?.subcategory ? { subcategory: meta.subcategory } : {}),
+      };
+    });
 
     const { data: inserted, error } = await supabase
       .from('global_concepts' as any)
@@ -95,15 +147,22 @@ export async function ensureGlobalConcepts(
 // ─── Link questions to global concepts ──────────
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[] }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[],
 ) {
-  // Collect all unique concept names
+  // Collect all unique concept names + meta
   const allNames = new Set<string>();
+  const metaMap = new Map<string, { category?: string; subcategory?: string }>();
   for (const pair of questionConceptPairs) {
-    for (const name of pair.conceptNames) allNames.add(name);
+    for (const name of pair.conceptNames) {
+      allNames.add(name);
+      const slug = conceptSlug(name);
+      if (pair.category && !metaMap.has(slug)) {
+        metaMap.set(slug, { category: pair.category, subcategory: pair.subcategory });
+      }
+    }
   }
 
-  const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames));
+  const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames), metaMap);
 
   // Build junction rows
   const rows: { question_id: string; concept_id: string }[] = [];
