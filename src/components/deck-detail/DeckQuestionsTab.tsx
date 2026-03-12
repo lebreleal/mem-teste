@@ -967,7 +967,12 @@ const CreateQuestionDialog = ({
 
           // Collect for global concept linking
           if (inserted && qi.concepts?.length > 0) {
-            questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: qi.concepts });
+            questionConceptPairs.push({
+              questionId: (inserted as any).id,
+              conceptNames: qi.concepts,
+              category: qi.category ?? undefined,
+              subcategory: qi.subcategory ?? undefined,
+            });
           }
         }
 
