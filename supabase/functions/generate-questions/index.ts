@@ -278,7 +278,7 @@ Para cada questão, retorne:
       options: Array.isArray(q.options) ? q.options.slice(0, optionsCount) : [],
       correct_index: typeof q.correct_index === "number" ? q.correct_index : 0,
       explanation: q.explanation || "",
-      concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 5) : [],
+      concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3) : [],
       source_card_ids: Array.isArray(q.source_card_ids)
         ? q.source_card_ids.filter((id: string) => validCardIds.has(id))
         : [],
