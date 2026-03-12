@@ -59,6 +59,15 @@ export const useGlobalConcepts = () => {
       // Update mastery counts
       await globalConceptService.updateConceptMastery(concept.id, isCorrect);
 
+      // CASCADE: If rating = 1 (Again), check ancestors and reschedule weak ones
+      if (rating === 1 && concept.parent_concept_id) {
+        try {
+          await globalConceptService.cascadeOnError(concept.id, user!.id);
+        } catch (err) {
+          console.error('Cascade on error failed (non-blocking):', err);
+        }
+      }
+
       return result;
     },
     onSettled: () => {

@@ -175,6 +175,7 @@ Para cada questão, retorne:
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
 - concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
+- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados (ex: se testando "Tratamento de IC", o pré-requisito é "Fisiologia Cardíaca"). Conceitos mais básicos que o aluno precisa dominar ANTES.
 - source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
 
     // ─── Tool schema for structured output ───
@@ -201,13 +202,18 @@ Para cada questão, retorne:
                 items: { type: "string" },
                 description: "1-3 Knowledge Components centrais testados nesta questão. Nomes curtos de 2-6 palavras no nível Compreender/Aplicar de Bloom (ex: 'Fisiopatologia da ICC direita', 'Critérios de Light'). NÃO use perguntas, fatos isolados ou disciplinas amplas.",
               },
+              prerequisites: {
+                type: "array",
+                items: { type: "string" },
+                description: "0-2 Knowledge Components que são PRÉ-REQUISITOS dos conceitos desta questão. São conceitos mais básicos que o aluno precisa dominar ANTES de entender os conceitos testados. Mesmo formato: 2-6 palavras. Exemplo: se o conceito é 'Tratamento de IC', o pré-requisito poderia ser 'Fisiologia Cardíaca'. Deixe vazio se não houver pré-requisito claro.",
+              },
               source_card_ids: {
                 type: "array",
                 items: { type: "string" },
                 description: "IDs dos cartões usados para esta questão",
               },
             },
-            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "source_card_ids"],
+            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "prerequisites", "source_card_ids"],
             additionalProperties: false,
           },
         },
@@ -298,6 +304,7 @@ Para cada questão, retorne:
       correct_index: typeof q.correct_index === "number" ? q.correct_index : 0,
       explanation: q.explanation || "",
       concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3) : [],
+      prerequisites: Array.isArray(q.prerequisites) ? q.prerequisites.slice(0, 2) : [],
       source_card_ids: Array.isArray(q.source_card_ids)
         ? q.source_card_ids.filter((id: string) => validCardIds.has(id))
         : [],

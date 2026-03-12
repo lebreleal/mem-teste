@@ -12,6 +12,7 @@ export interface GlobalConcept {
   slug: string;
   category: string | null;
   subcategory: string | null;
+  parent_concept_id: string | null;
   state: number;
   stability: number;
   difficulty: number;
@@ -77,7 +78,7 @@ export function conceptSlug(name: string): string {
 export async function ensureGlobalConcepts(
   userId: string,
   conceptNames: string[],
-  conceptMetaMap?: Map<string, { category?: string; subcategory?: string }>,
+  conceptMetaMap?: Map<string, { category?: string; subcategory?: string; parentConceptSlug?: string }>,
 ): Promise<Map<string, string>> {
   const slugMap = new Map<string, string>(); // slug → id
   if (conceptNames.length === 0) return slugMap;
@@ -144,14 +145,16 @@ export async function ensureGlobalConcepts(
   return slugMap;
 }
 
-// ─── Link questions to global concepts ──────────
+// ─── Link questions to global concepts (with prerequisite support) ──────────
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[],
 ) {
-  // Collect all unique concept names + meta
+  // Collect all unique concept names + meta (concepts + prerequisites)
   const allNames = new Set<string>();
   const metaMap = new Map<string, { category?: string; subcategory?: string }>();
+  const prerequisiteMap = new Map<string, string[]>(); // conceptSlug → prerequisiteNames[]
+
   for (const pair of questionConceptPairs) {
     for (const name of pair.conceptNames) {
       allNames.add(name);
@@ -160,9 +163,46 @@ export async function linkQuestionsToConcepts(
         metaMap.set(slug, { category: pair.category, subcategory: pair.subcategory });
       }
     }
+    // Collect prerequisites
+    if (pair.prerequisites && pair.prerequisites.length > 0) {
+      for (const prereq of pair.prerequisites) {
+        allNames.add(prereq);
+      }
+      // Map each concept to its prerequisites
+      for (const name of pair.conceptNames) {
+        const slug = conceptSlug(name);
+        const existing = prerequisiteMap.get(slug) ?? [];
+        prerequisiteMap.set(slug, [...existing, ...pair.prerequisites]);
+      }
+    }
   }
 
   const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames), metaMap);
+
+  // Set parent_concept_id for concepts that have prerequisites
+  for (const [conceptSlugKey, prereqNames] of prerequisiteMap.entries()) {
+    const conceptId = slugToId.get(conceptSlugKey);
+    if (!conceptId || prereqNames.length === 0) continue;
+
+    // Use the first prerequisite as parent (tree model, not DAG)
+    const parentSlug = conceptSlug(prereqNames[0]);
+    const parentId = slugToId.get(parentSlug);
+    if (parentId && parentId !== conceptId) {
+      // Only set if not already set (don't overwrite manual edits)
+      const { data: existing } = await supabase
+        .from('global_concepts' as any)
+        .select('parent_concept_id')
+        .eq('id', conceptId)
+        .maybeSingle();
+
+      if (existing && !(existing as any).parent_concept_id) {
+        await supabase
+          .from('global_concepts' as any)
+          .update({ parent_concept_id: parentId } as any)
+          .eq('id', conceptId);
+      }
+    }
+  }
 
   // Build junction rows
   const rows: { question_id: string; concept_id: string }[] = [];
@@ -340,10 +380,10 @@ export async function getConceptQuestionCounts(
   return counts;
 }
 
-// ─── Update concept metadata (name, category, subcategory) ───
+// ─── Update concept metadata (name, category, subcategory, parent) ───
 export async function updateConceptMeta(
   conceptId: string,
-  fields: { name?: string; category?: string | null; subcategory?: string | null },
+  fields: { name?: string; category?: string | null; subcategory?: string | null; parent_concept_id?: string | null },
 ) {
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   if (fields.name !== undefined) {
@@ -352,12 +392,77 @@ export async function updateConceptMeta(
   }
   if (fields.category !== undefined) updates.category = fields.category;
   if (fields.subcategory !== undefined) updates.subcategory = fields.subcategory;
+  if (fields.parent_concept_id !== undefined) updates.parent_concept_id = fields.parent_concept_id;
 
   const { error } = await supabase
     .from('global_concepts' as any)
     .update(updates as any)
     .eq('id', conceptId);
   if (error) throw error;
+}
+
+// ─── Cascade on error: reschedule weak ancestor concepts ───
+export async function cascadeOnError(conceptId: string, userId: string): Promise<number> {
+  let rescheduled = 0;
+  let currentId: string | null = conceptId;
+  const visited = new Set<string>();
+
+  // Walk up parent_concept_id
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const { data } = await supabase
+      .from('global_concepts' as any)
+      .select('id, parent_concept_id, state, stability')
+      .eq('id', currentId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!data) break;
+    const row = data as any;
+
+    // Skip the original concept itself
+    if (row.id !== conceptId) {
+      // If ancestor is weak (new/relearning or low stability), reschedule it to now
+      if (row.state === 0 || row.state === 3 || row.stability < 5) {
+        await supabase
+          .from('global_concepts' as any)
+          .update({
+            scheduled_date: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as any)
+          .eq('id', row.id);
+        rescheduled++;
+      }
+    }
+
+    currentId = row.parent_concept_id;
+  }
+
+  return rescheduled;
+}
+
+// ─── Fetch "ready to learn" concepts (prerequisites mastered, concept is new) ───
+export async function fetchReadyToLearnConcepts(userId: string): Promise<GlobalConcept[]> {
+  // Get all user concepts
+  const { data: all } = await supabase
+    .from('global_concepts' as any)
+    .select('*')
+    .eq('user_id', userId);
+
+  if (!all || all.length === 0) return [];
+
+  const concepts = all as unknown as GlobalConcept[];
+  const byId = new Map(concepts.map(c => [c.id, c]));
+
+  // A concept is "ready to learn" if:
+  // 1. Its state is 0 (new) 
+  // 2. Its parent_concept_id is null (no prereq) OR its parent is in state 2 (mastered)
+  return concepts.filter(c => {
+    if (c.state !== 0) return false;
+    if (!c.parent_concept_id) return true; // no prereq → always ready
+    const parent = byId.get(c.parent_concept_id);
+    return parent && parent.state === 2; // parent mastered
+  });
 }
 
 // ─── Delete concept ─────────────────────────────

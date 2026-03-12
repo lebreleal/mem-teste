@@ -947,7 +947,7 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
-        const questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[] = [];
+        const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
 
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
@@ -977,6 +977,7 @@ const CreateQuestionDialog = ({
             questionConceptPairs.push({
               questionId: (inserted as any).id,
               conceptNames: qi.concepts,
+              prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
               subcategory: qi.subcategory ?? undefined,
             });
@@ -1884,7 +1885,7 @@ const PasteQuestionsDialog = ({
     setSaving(true);
     try {
       const toSave = parsedQuestions.filter((_, i) => selectedIds.has(i));
-      const questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[] = [];
+      const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
 
       for (const q of toSave) {
         const { data: inserted } = await supabase.from('deck_questions' as any).insert({

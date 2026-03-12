@@ -10,6 +10,7 @@ import type { GlobalConcept } from '@/services/globalConceptService';
 import {
   MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts,
   getVariedQuestion, fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
+  fetchReadyToLearnConcepts,
 } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,7 @@ import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
   X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
-  CheckCheck, Filter, Plus, Download, Users, ShieldCheck,
+  CheckCheck, Filter, Plus, Download, Users, ShieldCheck, Unlock,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -243,6 +244,52 @@ const ComunidadeTab = () => {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// Ready-to-Learn Frontier (ALEKS-style)
+// ═══════════════════════════════════════════════════
+const ReadyToLearnSection = ({ onStartStudy }: { onStartStudy: (concept: GlobalConcept) => void }) => {
+  const { user } = useAuth();
+
+  const { data: readyConcepts = [], isLoading } = useQuery({
+    queryKey: ['ready-to-learn', user?.id],
+    queryFn: () => fetchReadyToLearnConcepts(user!.id),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+
+  if (isLoading || readyConcepts.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Unlock className="h-4 w-4 text-primary" />
+        <p className="text-xs font-semibold text-primary">Prontos para aprender</p>
+        <Badge variant="secondary" className="text-[9px] ml-auto">{readyConcepts.length}</Badge>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Conceitos cujos pré-requisitos já foram dominados — a fronteira do seu conhecimento.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {readyConcepts.slice(0, 8).map(c => (
+          <button
+            key={c.id}
+            onClick={() => onStartStudy(c)}
+            className="flex items-center gap-1 rounded-full border border-primary/30 bg-background px-2.5 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            <Play className="h-2.5 w-2.5" />
+            {c.name}
+          </button>
+        ))}
+        {readyConcepts.length > 8 && (
+          <span className="text-[10px] text-muted-foreground self-center">
+            +{readyConcepts.length - 8} mais
+          </span>
+        )}
       </div>
     </div>
   );
@@ -741,6 +788,18 @@ const ConceptsPage = () => {
                     )}
                   </div>
                 )}
+
+                {/* Ready-to-Learn Frontier (ALEKS) */}
+                <ReadyToLearnSection onStartStudy={(concept) => {
+                  setStudyQueue([concept]);
+                  setStudyIndex(0);
+                  setStudyMode(true);
+                  setLoadingQuestion(true);
+                  getVariedQuestion(concept.id, user!.id).then(q => {
+                    setCurrentQuestion(q);
+                    setLoadingQuestion(false);
+                  }).catch(() => { setCurrentQuestion(null); setLoadingQuestion(false); });
+                }} />
 
                 {/* Concept list */}
                 <div className="space-y-2.5">
