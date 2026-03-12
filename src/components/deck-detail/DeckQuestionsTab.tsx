@@ -1248,6 +1248,7 @@ const DeckQuestionsTab = ({
   const [previewQuestion, setPreviewQuestion] = useState<DeckQuestion | null>(null);
   const [editQuestion, setEditQuestion] = useState<DeckQuestion | null>(null);
   const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
 
   const effectiveDeckId = sourceDeckId || deckId;
 
