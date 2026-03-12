@@ -1298,9 +1298,9 @@ const DeckQuestionsTab = ({
     });
   };
 
-  // Check if a question is from community (created_by !== current user)
-  const isCommunityQuestion = (q: DeckQuestion) => {
-    return isLinkedDeck || (q.created_by !== user?.id);
+  // Only treat as community content if the deck itself is linked to a community source
+  const isCommunityQuestion = (_q: DeckQuestion) => {
+    return isLinkedDeck;
   };
 
   if (practicing && filteredQuestions.length > 0) {
