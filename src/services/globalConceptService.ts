@@ -644,9 +644,11 @@ export async function getConceptRelatedCards(
   return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
 }
 
-// ─── Generate reinforcement cards via AI (Pro, zero cost) ───
+// ─── Generate reinforcement cards via AI (Flash, zero cost) ───
 // Used when leech trigger fires and no existing cards are found for the concept.
 // Creates a permanent "Reforço: {name}" deck so future lookups find them.
+// Cards should be SIMPLER and MORE DIDACTIC than normal — they explain the concept
+// in accessible ways to rebuild the student's foundation.
 export async function generateReinforcementCards(
   conceptNameOrContent: string,
   userId: string,
@@ -674,18 +676,34 @@ export async function generateReinforcementCards(
     }
   }
 
-  const prompt = `Explique detalhadamente o seguinte tema médico: "${normalizedConcept}". ` +
-    `Cubra: definição, fisiopatologia/mecanismo, etiologia, quadro clínico, diagnóstico e tratamento. ` +
-    `Foque nos pontos mais cobrados em provas de residência médica.`;
+  // IMPORTANT: The prompt asks for SIMPLE, didactic cards — not complex medical content.
+  // The goal is to rebuild the student's foundation, not test advanced knowledge.
+  const prompt = `Você é um professor paciente explicando para um aluno que está com dificuldade no tema: "${normalizedConcept}".
 
-  // generate-deck expects textContent/cardFormats/detailLevel (not content/formats/density)
+Crie cartões de estudo SIMPLES e DIDÁTICOS que expliquem esse tema de formas diferentes e acessíveis.
+
+REGRAS OBRIGATÓRIAS:
+- Use linguagem SIMPLES e direta, como se explicasse para um iniciante
+- Cada card deve explicar um aspecto diferente do tema
+- Use analogias do dia-a-dia quando possível
+- Foque em "o que é" e "por que acontece", não em detalhes decoreba
+- Cards devem ser do tipo "pergunta simples → explicação clara"
+- Respostas devem ter no máximo 2-3 frases, focando na compreensão
+- NÃO use cloze deletion — apenas formato pergunta/resposta básico
+- NÃO crie questões de múltipla escolha
+- Evite jargão desnecessário — se usar termo técnico, explique entre parênteses
+
+Exemplo de bom card:
+Frente: "O que acontece no corpo quando há [tema]?"
+Verso: "Explicação simples com analogia, em 2 frases."`;
+
   const { data, error } = await supabase.functions.invoke('generate-deck', {
     body: {
       textContent: prompt,
-      cardCount: 10,
+      cardCount: 5,
       detailLevel: 'standard',
-      cardFormats: ['cloze', 'qa'],
-      aiModel: 'pro',
+      cardFormats: ['qa'],
+      aiModel: 'flash',
       energyCost: 0,
     },
   });
@@ -719,7 +737,7 @@ export async function generateReinforcementCards(
       deck_id: reinforcementDeckId,
       front_content: card?.front?.trim() || '',
       back_content: (card?.back ?? '').trim(),
-      card_type: card?.type === 'cloze' ? 'cloze' : 'basic',
+      card_type: 'basic',
     }))
     .filter((card: any) => card.front_content.length > 0);
 
