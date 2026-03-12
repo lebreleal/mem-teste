@@ -73,6 +73,16 @@ const Study = () => {
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
 
+  // Leech trigger state
+  const failCountRef = useRef<Map<string, number>>(new Map());
+  const [leechMode, setLeechMode] = useState<{
+    leechCard: any;
+    concept: GlobalConcept | null;
+    reinforceCards: { id: string; front_content: string; back_content: string; deck_id: string }[];
+    currentIndex: number;
+    flipped: boolean;
+  } | null>(null);
+
   // Reset scroll on card change
   useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
 
