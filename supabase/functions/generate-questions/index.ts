@@ -110,14 +110,19 @@ Crie UMA questão por grupo conceitual. A questão deve exigir que o aluno INTEG
 ✅ source_card_ids deve conter os IDs EXATOS dos cartões usados
 ✅ Questões na mesma língua dos cartões
 
-## CONCEPTS — PERGUNTAS DE AUTOAVALIAÇÃO:
-O campo "concepts" NÃO deve conter nomes de conceitos soltos (ex: "Abscesso", "Flegmão").
-Em vez disso, cada item deve ser uma PERGUNTA DE COMPREENSÃO que o aluno usa para se autoavaliar.
-Exemplos:
-- "Você conseguiu identificar que uma coleção de pus localizada e confinada é um abscesso?"
-- "Você conseguiu distinguir a diferença entre flegmão e abscesso?"
-- "Você entendeu por que a inflamação purulenta difusa caracteriza o flegmão?"
-Cada pergunta deve testar um micro-conceito específico da questão (2-4 perguntas por questão).
+## CONCEPTS — KNOWLEDGE COMPONENTS:
+O campo "concepts" deve conter NOMES de componentes de conhecimento (Knowledge Components).
+Um Knowledge Component é a menor unidade atômica de conhecimento que pode ser avaliada independentemente.
+
+Regras:
+- 2-6 palavras: substantivo + qualificador (ex: "Fisiopatologia da ICC direita", "Critérios de Light")
+- Nível Compreender/Aplicar de Bloom — NÃO fatos isolados, NÃO disciplinas amplas
+- Cada conceito deve ser testável por múltiplas questões de ângulos diferentes
+- 1-3 conceitos por questão (apenas os CENTRAIS, não todos os tangenciais)
+- Reutilizável entre disciplinas — use terminologia padronizada
+
+Exemplos CORRETOS: "Mecanismo de ação dos IECA", "Critérios de Light", "Diferença abscesso vs flegmão"
+Exemplos ERRADOS: "Cardiologia" (amplo demais), "Dose de Captopril 25mg" (fato isolado), "Você entendeu X?" (pergunta, não conceito)
 
 ## EXPLICAÇÃO:
 A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
