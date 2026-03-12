@@ -10,6 +10,7 @@ import type { GlobalConcept } from '@/services/globalConceptService';
 import {
   MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts,
   getVariedQuestion, fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
+  fetchReadyToLearnConcepts,
 } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
