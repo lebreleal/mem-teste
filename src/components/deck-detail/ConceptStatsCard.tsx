@@ -49,7 +49,7 @@ const ConceptStatsCard = ({ concepts, onStudyWeak, onCreate }: ConceptStatsCardP
         </div>
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1.5">
-            <Brain className="h-4 w-4 text-orange-500" />
+            <Network className="h-4 w-4 text-orange-500" />
             <span className="text-lg sm:text-2xl font-bold text-foreground">{stats.learning}</span>
           </div>
           <span className="text-[10px] sm:text-xs text-muted-foreground">Aprendendo</span>
