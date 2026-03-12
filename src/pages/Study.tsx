@@ -90,14 +90,54 @@ const Study = () => {
     () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
   );
+  const readLeechFailCounts = useCallback(() => {
+    if (typeof window === 'undefined') return new Map<string, number>();
+    const parseEntries = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const entries = JSON.parse(raw) as unknown;
+        if (!Array.isArray(entries)) return null;
+        return new Map(
+          entries.filter(
+            (entry): entry is [string, number] =>
+              Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number',
+          ),
+        );
+      } catch {
+        return null;
+      }
+    };
+
+    const sessionMap = parseEntries(window.sessionStorage.getItem(leechFailStorageKey));
+    if (sessionMap) return sessionMap;
+
+    const localMap = parseEntries(window.localStorage.getItem(leechFailStorageKey));
+    if (localMap) return localMap;
+
+    return new Map<string, number>();
+  }, [leechFailStorageKey]);
   const persistLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return;
+
+    const write = (storage: Storage, value: string | null) => {
+      try {
+        if (value === null) storage.removeItem(leechFailStorageKey);
+        else storage.setItem(leechFailStorageKey, value);
+      } catch {
+        // no-op: storage can be unavailable in some browser contexts
+      }
+    };
+
     const entries = Array.from(failCountRef.current.entries());
     if (entries.length === 0) {
-      window.sessionStorage.removeItem(leechFailStorageKey);
+      write(window.sessionStorage, null);
+      write(window.localStorage, null);
       return;
     }
-    window.sessionStorage.setItem(leechFailStorageKey, JSON.stringify(entries));
+
+    const serialized = JSON.stringify(entries);
+    write(window.sessionStorage, serialized);
+    write(window.localStorage, serialized);
   }, [leechFailStorageKey]);
 
   const [leechMode, setLeechMode] = useState<{
@@ -131,22 +171,10 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
-  // Restore leech fail counters for this study context (survives leave/re-enter in same browser session)
+  // Restore leech fail counters for this study context
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const raw = window.sessionStorage.getItem(leechFailStorageKey);
-    if (!raw) {
-      failCountRef.current = new Map();
-      return;
-    }
-    try {
-      const entries = JSON.parse(raw) as [string, number][];
-      failCountRef.current = new Map(entries.filter((entry): entry is [string, number] => Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number'));
-    } catch {
-      failCountRef.current = new Map();
-      window.sessionStorage.removeItem(leechFailStorageKey);
-    }
-  }, [leechFailStorageKey]);
+    failCountRef.current = readLeechFailCounts();
+  }, [readLeechFailCounts]);
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
@@ -231,9 +259,46 @@ const Study = () => {
     return () => { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); };
   }, []);
 
+  // Fallback hydration: if in-memory/storage count is missing, recover streak from recent review logs.
+  // This prevents losing leech progress after navigation/reload.
+  useEffect(() => {
+    if (!currentCard || !user || leechMode) return;
+
+    const leechKey = getLeechKey(currentCard);
+    if ((failCountRef.current.get(leechKey) ?? 0) > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('review_logs')
+        .select('rating')
+        .eq('user_id', user.id)
+        .eq('card_id', currentCard.id)
+        .order('reviewed_at', { ascending: false })
+        .limit(LEECH_THRESHOLD - 1);
+
+      if (cancelled || error || !data?.length) return;
+
+      let streak = 0;
+      for (const row of data) {
+        if (row.rating === 1) streak += 1;
+        else break;
+      }
+
+      if (streak > 0) {
+        failCountRef.current.set(leechKey, streak);
+        persistLeechFailCounts();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCard, user, leechMode, persistLeechFailCounts]);
+
   const submittingRef = useRef<string | null>(null);
 
-  const handleRate = useCallback((rating: Rating) => {
+  const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
@@ -241,7 +306,31 @@ const Study = () => {
     // Leech detection: track consecutive fails per card/group
     const leechKey = getLeechKey(currentCard);
     if (rating === 1) {
-      const count = (failCountRef.current.get(leechKey) ?? 0) + 1;
+      let previousFails = failCountRef.current.get(leechKey) ?? 0;
+
+      // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
+      if (previousFails === 0 && user) {
+        const { data } = await supabase
+          .from('review_logs')
+          .select('rating')
+          .eq('user_id', user.id)
+          .eq('card_id', currentCard.id)
+          .order('reviewed_at', { ascending: false })
+          .limit(LEECH_THRESHOLD - 1);
+
+        let recoveredStreak = 0;
+        for (const row of data ?? []) {
+          if (row.rating === 1) recoveredStreak += 1;
+          else break;
+        }
+
+        if (recoveredStreak > 0) {
+          previousFails = recoveredStreak;
+          failCountRef.current.set(leechKey, recoveredStreak);
+        }
+      }
+
+      const count = previousFails + 1;
       failCountRef.current.set(leechKey, count);
       persistLeechFailCounts();
       if (count >= LEECH_THRESHOLD && user) {
