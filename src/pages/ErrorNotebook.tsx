@@ -74,21 +74,21 @@ const ConceptNodeCard = ({
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="text-xs font-semibold truncate">{node.name}</span>
         </div>
-        <Badge variant="outline" className="text-[9px] shrink-0 border-current/30">
-          {config.label}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          {node.depth > 0 && (
+            <span className="text-[9px] opacity-50">nível {node.depth}</span>
+          )}
+          <Badge variant="outline" className="text-[9px] shrink-0 border-current/30">
+            {config.label}
+          </Badge>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 text-[10px] opacity-70">
         <span className="flex items-center gap-0.5">
-          <Layers className="h-2.5 w-2.5" />
-          {node.cardCount} cards
-        </span>
-        <span className="flex items-center gap-0.5">
           <Target className="h-2.5 w-2.5" />
           {node.questionCount} questões
         </span>
-        <span>{node.deckName}</span>
       </div>
 
       {/* Accuracy bar */}
