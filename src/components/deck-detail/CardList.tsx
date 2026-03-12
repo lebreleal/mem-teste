@@ -674,6 +674,22 @@ const CardListContent = ({
         deckId={deckId}
       />
     )}
+
+    {/* Community warning dialog */}
+    <Dialog open={communityWarningOpen} onOpenChange={setCommunityWarningOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Conteúdo da comunidade</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Cartões vindos da comunidade não podem ser selecionados para mover ou excluir.
+          Apenas cartões criados por você podem ser gerenciados.
+        </p>
+        <DialogFooter>
+          <Button onClick={() => setCommunityWarningOpen(false)}>Entendi</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };
