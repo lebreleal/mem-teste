@@ -469,6 +469,19 @@ const ConceptsPage = () => {
     mastered: concepts.filter(c => c.state === 2).length,
   }), [concepts, isDue]);
 
+  // Build locked-concept set (parent not mastered)
+  const lockedIds = useMemo(() => {
+    const byId = new Map(concepts.map(c => [c.id, c]));
+    const locked = new Set<string>();
+    for (const c of concepts) {
+      if (c.parent_concept_id) {
+        const parent = byId.get(c.parent_concept_id);
+        if (parent && parent.state !== 2) locked.add(c.id);
+      }
+    }
+    return locked;
+  }, [concepts]);
+
   const filtered = useMemo(() => {
     let result = concepts;
     if (search) {
@@ -479,12 +492,15 @@ const ConceptsPage = () => {
         (c.subcategory ?? '').toLowerCase().includes(q)
       );
     }
+    if (categoryFilter) {
+      result = result.filter(c => c.category === categoryFilter);
+    }
     if (stateFilter === 'due') result = result.filter(isDue);
     if (stateFilter === 'new') result = result.filter(c => c.state === 0);
     if (stateFilter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
     if (stateFilter === 'mastered') result = result.filter(c => c.state === 2);
     return result;
-  }, [concepts, search, stateFilter, isDue]);
+  }, [concepts, search, stateFilter, categoryFilter, isDue]);
 
   const hasActiveFilter = stateFilter !== 'all';
   const newPct = counts.total > 0 ? (counts.new / counts.total) * 100 : 0;
