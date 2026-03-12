@@ -360,7 +360,7 @@ const Study = () => {
   }, [leechMode]);
 
   if (leechMode) {
-    const { concept, reinforceCards, currentIndex, flipped, leechCard } = leechMode;
+    const { concept, reinforceCards, currentIndex, flipped, leechCard, loading } = leechMode;
     const hasCards = reinforceCards.length > 0;
     const currentReinforceCard = hasCards ? reinforceCards[currentIndex] : null;
     const isLastCard = currentIndex >= reinforceCards.length - 1;
