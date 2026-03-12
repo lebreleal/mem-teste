@@ -180,7 +180,7 @@ Para cada questão, retorne:
               concepts: {
                 type: "array",
                 items: { type: "string" },
-                description: "2-4 perguntas de autoavaliação sobre os micro-conceitos testados nesta questão. Cada item é uma pergunta como 'Você conseguiu identificar que X é Y?'",
+                description: "1-3 Knowledge Components centrais testados nesta questão. Nomes curtos de 2-6 palavras no nível Compreender/Aplicar de Bloom (ex: 'Fisiopatologia da ICC direita', 'Critérios de Light'). NÃO use perguntas, fatos isolados ou disciplinas amplas.",
               },
               source_card_ids: {
                 type: "array",
