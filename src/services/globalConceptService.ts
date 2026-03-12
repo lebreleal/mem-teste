@@ -339,3 +339,77 @@ export async function getConceptQuestionCounts(
   }
   return counts;
 }
+
+// ─── Update concept metadata (name, category, subcategory) ───
+export async function updateConceptMeta(
+  conceptId: string,
+  fields: { name?: string; category?: string | null; subcategory?: string | null },
+) {
+  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (fields.name !== undefined) {
+    updates.name = fields.name.trim();
+    updates.slug = conceptSlug(fields.name);
+  }
+  if (fields.category !== undefined) updates.category = fields.category;
+  if (fields.subcategory !== undefined) updates.subcategory = fields.subcategory;
+
+  const { error } = await supabase
+    .from('global_concepts' as any)
+    .update(updates as any)
+    .eq('id', conceptId);
+  if (error) throw error;
+}
+
+// ─── Delete concept ─────────────────────────────
+export async function deleteConcept(conceptId: string) {
+  // Remove question links first
+  await supabase.from('question_concepts' as any).delete().eq('concept_id', conceptId);
+  const { error } = await supabase.from('global_concepts' as any).delete().eq('id', conceptId);
+  if (error) throw error;
+}
+
+// ─── Get linked questions for a concept ─────────
+export async function getConceptQuestions(
+  conceptId: string,
+): Promise<{ id: string; questionText: string; deckId: string; deckName?: string }[]> {
+  const { data: links } = await supabase
+    .from('question_concepts' as any)
+    .select('question_id')
+    .eq('concept_id', conceptId);
+
+  if (!links || links.length === 0) return [];
+
+  const qIds = (links as any[]).map(l => l.question_id);
+
+  const { data: questions } = await supabase
+    .from('deck_questions' as any)
+    .select('id, question_text, deck_id')
+    .in('id', qIds);
+
+  if (!questions) return [];
+
+  // Get deck names
+  const deckIds = [...new Set((questions as any[]).map(q => q.deck_id))];
+  const { data: decks } = await supabase
+    .from('decks')
+    .select('id, name')
+    .in('id', deckIds);
+
+  const deckMap = new Map((decks ?? []).map(d => [d.id, d.name]));
+
+  return (questions as any[]).map(q => ({
+    id: q.id,
+    questionText: q.question_text,
+    deckId: q.deck_id,
+    deckName: deckMap.get(q.deck_id),
+  }));
+}
+
+// ─── Unlink a question from a concept ───────────
+export async function unlinkQuestion(conceptId: string, questionId: string) {
+  await supabase
+    .from('question_concepts' as any)
+    .delete()
+    .eq('concept_id', conceptId)
+    .eq('question_id', questionId);
+}
