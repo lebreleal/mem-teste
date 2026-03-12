@@ -145,14 +145,16 @@ export async function ensureGlobalConcepts(
   return slugMap;
 }
 
-// ─── Link questions to global concepts ──────────
+// ─── Link questions to global concepts (with prerequisite support) ──────────
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[],
 ) {
-  // Collect all unique concept names + meta
+  // Collect all unique concept names + meta (concepts + prerequisites)
   const allNames = new Set<string>();
   const metaMap = new Map<string, { category?: string; subcategory?: string }>();
+  const prerequisiteMap = new Map<string, string[]>(); // conceptSlug → prerequisiteNames[]
+
   for (const pair of questionConceptPairs) {
     for (const name of pair.conceptNames) {
       allNames.add(name);
@@ -161,9 +163,46 @@ export async function linkQuestionsToConcepts(
         metaMap.set(slug, { category: pair.category, subcategory: pair.subcategory });
       }
     }
+    // Collect prerequisites
+    if (pair.prerequisites && pair.prerequisites.length > 0) {
+      for (const prereq of pair.prerequisites) {
+        allNames.add(prereq);
+      }
+      // Map each concept to its prerequisites
+      for (const name of pair.conceptNames) {
+        const slug = conceptSlug(name);
+        const existing = prerequisiteMap.get(slug) ?? [];
+        prerequisiteMap.set(slug, [...existing, ...pair.prerequisites]);
+      }
+    }
   }
 
   const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames), metaMap);
+
+  // Set parent_concept_id for concepts that have prerequisites
+  for (const [conceptSlugKey, prereqNames] of prerequisiteMap.entries()) {
+    const conceptId = slugToId.get(conceptSlugKey);
+    if (!conceptId || prereqNames.length === 0) continue;
+
+    // Use the first prerequisite as parent (tree model, not DAG)
+    const parentSlug = conceptSlug(prereqNames[0]);
+    const parentId = slugToId.get(parentSlug);
+    if (parentId && parentId !== conceptId) {
+      // Only set if not already set (don't overwrite manual edits)
+      const { data: existing } = await supabase
+        .from('global_concepts' as any)
+        .select('parent_concept_id')
+        .eq('id', conceptId)
+        .maybeSingle();
+
+      if (existing && !(existing as any).parent_concept_id) {
+        await supabase
+          .from('global_concepts' as any)
+          .update({ parent_concept_id: parentId } as any)
+          .eq('id', conceptId);
+      }
+    }
+  }
 
   // Build junction rows
   const rows: { question_id: string; concept_id: string }[] = [];
