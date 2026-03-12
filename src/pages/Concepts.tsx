@@ -4,13 +4,13 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import {
   MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts,
   getVariedQuestion, fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
-  fetchReadyToLearnConcepts,
+  fetchReadyToLearnConcepts, mapPrerequisitesViaAI, fetchDiagnosticConcepts, markConceptMastered, markConceptWeak,
 } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -25,11 +25,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
   X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
   CheckCheck, Filter, Plus, Download, Users, ShieldCheck, Unlock,
+  Lock, Wand2, Stethoscope, PieChart,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -38,6 +40,7 @@ import { toast } from 'sonner';
 import type { Rating } from '@/lib/fsrs';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 type StateFilter = 'all' | 'due' | 'new' | 'learning' | 'mastered';
 
