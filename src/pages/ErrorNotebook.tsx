@@ -139,35 +139,38 @@ const HierarchyTreeView = ({
   onCascade: (node: ConceptNode) => void;
   cascadingNodeId: string | null;
 }) => {
-  const { sourceConcept, weakFoundations, allConcepts, deckPath } = diagnostic;
+  const { sourceConcepts, weakFoundations, allConcepts, conceptPath } = diagnostic;
 
   return (
     <div className="space-y-4">
-      {/* Deck path breadcrumb */}
-      {deckPath.length > 1 && (
+      {/* Concept prerequisite path */}
+      {conceptPath.length > 1 && (
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground overflow-x-auto pb-1">
           <GitBranch className="h-3 w-3 shrink-0" />
-          {deckPath.map((d, i) => (
+          {conceptPath.map((d, i) => (
             <span key={d.id} className="flex items-center gap-1 whitespace-nowrap">
               {i > 0 && <ChevronRight className="h-2.5 w-2.5" />}
-              <span className={i === deckPath.length - 1 ? 'font-semibold text-foreground' : ''}>{d.name}</span>
+              <span className={i === conceptPath.length - 1 ? 'font-semibold text-foreground' : ''}>{d.name}</span>
             </span>
           ))}
         </div>
       )}
 
-      {/* Source concept (the error) */}
-      {sourceConcept && (
+      {/* Source concepts (the error) */}
+      {sourceConcepts.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold text-destructive uppercase tracking-wider flex items-center gap-1">
-            <XCircle className="h-3 w-3" /> Conceito do Erro
+            <XCircle className="h-3 w-3" /> Conceito{sourceConcepts.length > 1 ? 's' : ''} do Erro
           </p>
-          <ConceptNodeCard
-            node={sourceConcept}
-            isSource
-            onCascade={onCascade}
-            isCascading={cascadingNodeId === sourceConcept.id}
-          />
+          {sourceConcepts.map(node => (
+            <ConceptNodeCard
+              key={node.id}
+              node={node}
+              isSource
+              onCascade={onCascade}
+              isCascading={cascadingNodeId === node.id}
+            />
+          ))}
         </div>
       )}
 
@@ -175,10 +178,10 @@ const HierarchyTreeView = ({
       {weakFoundations.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Lacunas Fundacionais ({weakFoundations.length})
+            <AlertTriangle className="h-3 w-3" /> Pré-requisitos Fracos ({weakFoundations.length})
           </p>
           <p className="text-[10px] text-muted-foreground">
-            Conceitos da hierarquia abaixo do erro com FSRS fraco — preencha para corrigir a base.
+            Conceitos pré-requisitos com FSRS fraco — preencha para corrigir a base.
           </p>
           <div className="space-y-2 pl-3 border-l-2 border-amber-500/30">
             {weakFoundations.map(node => (
