@@ -62,7 +62,46 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
 type QuestionFilter = 'all' | 'unanswered' | 'errors';
 
-/* QuestionStatsHero moved to QuestionStatsCard.tsx */
+/* ════════════════════════════════════════════════════════════
+   Concept Self-Assessment (after answering)
+   3-level confidence scale: strong / learning / weak
+   ════════════════════════════════════════════════════════════ */
+type MasteryLevel = 'strong' | 'learning' | 'weak';
+
+const ConceptMasterySection = ({
+  concepts, deckId, questionId, onGenerateCards, generating,
+}: {
+  concepts: string[];
+  deckId: string;
+  questionId: string;
+  onGenerateCards: (concept: string) => void;
+  generating: string | null;
+}) => {
+  const [feedback, setFeedback] = useState<Record<string, MasteryLevel>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [conceptExplaining, setConceptExplaining] = useState<string | null>(null);
+  const [conceptExplanations, setConceptExplanations] = useState<Record<string, string>>({});
+  const [previewCards, setPreviewCards] = useState<Record<string, any[]>>({});
+  const [loadingCards, setLoadingCards] = useState<Record<string, boolean>>({});
+  const { energy, spendEnergy } = useEnergy();
+  const { toast } = useToast();
+
+  if (!concepts || concepts.length === 0) return null;
+
+  const evaluatedCount = Object.keys(feedback).length;
+  const strongCount = Object.values(feedback).filter(v => v === 'strong').length;
+  const learningCount = Object.values(feedback).filter(v => v === 'learning').length;
+  const weakCount = Object.values(feedback).filter(v => v === 'weak').length;
+
+  const handleFeedback = (concept: string, value: MasteryLevel) => {
+    setFeedback(prev => ({ ...prev, [concept]: value }));
+    if (value === 'strong') {
+      setTimeout(() => setExpanded(prev => ({ ...prev, [concept]: false })), 300);
+    }
+    if (value === 'learning' || value === 'weak') {
+      searchExistingCards(concept);
+    }
+  };
 
   const toggleExpand = (concept: string) => {
     setExpanded(prev => ({ ...prev, [concept]: !prev[concept] }));
