@@ -1,11 +1,11 @@
 /**
  * QuestionBank — Browse questions across 3 sources with advanced filters.
- * Inspired by Estratégia MED: category chips, subcategory drill-down, concept cloud,
- * type filter, and full-text search.
+ * Concepts are resolved from question_concepts junction, NOT free-text.
+ * Own questions can be edited inline.
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,21 +13,22 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import BottomNav from '@/components/BottomNav';
 import {
   ArrowLeft, Library, Search, Download, CheckSquare, X, Filter,
   SlidersHorizontal, BookOpen, Users, ShieldCheck, ChevronRight,
-  BrainCircuit, FileText, HelpCircle,
+  BrainCircuit, FileText, HelpCircle, Pencil, Trash2, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   fetchMyQuestions, fetchPublicQuestions, importQuestionsToDecks,
-  filterQuestions, getQuestionStats,
+  filterQuestions, getQuestionStats, updateQuestion, updateQuestionConcepts,
   type BankQuestion, type QuestionSource, type QuestionFilters,
 } from '@/services/questionBankService';
 import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES } from '@/services/globalConceptService';
@@ -99,7 +100,7 @@ const FilterPanel = ({ questions, filters, onFiltersChange, onClose }: FilterPan
         </div>
       </div>
 
-      {/* ─── Subcategoria (drill-down) ─── */}
+      {/* ─── Subcategoria ─── */}
       {subcategories.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-foreground mb-2">Especialidade</p>
@@ -221,16 +222,231 @@ const FilterPanel = ({ questions, filters, onFiltersChange, onClose }: FilterPan
 };
 
 // ═══════════════════════════════════════════════
+// Question Edit Dialog
+// ═══════════════════════════════════════════════
+interface QuestionEditDialogProps {
+  question: BankQuestion | null;
+  open: boolean;
+  onClose: () => void;
+  userId: string;
+}
+
+const QuestionEditDialog = ({ question, open, onClose, userId }: QuestionEditDialogProps) => {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState('');
+  const [explanation, setExplanation] = useState('');
+  const [options, setOptions] = useState<string[]>([]);
+  const [correctIndices, setCorrectIndices] = useState<number[]>([]);
+  const [conceptInput, setConceptInput] = useState('');
+  const [concepts, setConcepts] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Sync state when question changes
+  useState(() => {
+    if (question) {
+      setText(question.question_text);
+      setExplanation(question.explanation);
+      const opts = Array.isArray(question.options)
+        ? question.options.map((o: any) => typeof o === 'string' ? o : JSON.stringify(o))
+        : [];
+      setOptions(opts);
+      setCorrectIndices(question.correct_indices ?? []);
+      setConcepts([...question.concepts]);
+    }
+  });
+
+  // Re-sync when dialog opens with new question
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen && question) {
+      setText(question.question_text);
+      setExplanation(question.explanation);
+      const opts = Array.isArray(question.options)
+        ? question.options.map((o: any) => typeof o === 'string' ? o : JSON.stringify(o))
+        : [];
+      setOptions(opts);
+      setCorrectIndices(question.correct_indices ?? []);
+      setConcepts([...question.concepts]);
+    }
+    if (!isOpen) onClose();
+  };
+
+  const addConcept = () => {
+    const trimmed = conceptInput.trim();
+    if (trimmed && !concepts.includes(trimmed)) {
+      setConcepts([...concepts, trimmed]);
+      setConceptInput('');
+    }
+  };
+
+  const removeConcept = (name: string) => {
+    setConcepts(concepts.filter(c => c !== name));
+  };
+
+  const toggleCorrect = (idx: number) => {
+    setCorrectIndices(prev =>
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
+
+  const updateOption = (idx: number, value: string) => {
+    setOptions(prev => prev.map((o, i) => i === idx ? value : o));
+  };
+
+  const addOption = () => setOptions([...options, '']);
+
+  const removeOption = (idx: number) => {
+    setOptions(prev => prev.filter((_, i) => i !== idx));
+    setCorrectIndices(prev => prev.filter(i => i !== idx).map(i => i > idx ? i - 1 : i));
+  };
+
+  const handleSave = async () => {
+    if (!question) return;
+    setSaving(true);
+    try {
+      await updateQuestion(question.id, {
+        question_text: text,
+        explanation,
+        options: question.question_type === 'multiple_choice' ? options : undefined,
+        correct_indices: question.question_type === 'multiple_choice' ? correctIndices : undefined,
+      });
+
+      await updateQuestionConcepts(
+        userId,
+        question.id,
+        concepts,
+        question.category ?? undefined,
+        question.subcategory ?? undefined,
+      );
+
+      toast.success('Questão atualizada');
+      queryClient.invalidateQueries({ queryKey: ['question-bank'] });
+      onClose();
+    } catch {
+      toast.error('Erro ao salvar questão');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-primary" />
+            Editar Questão
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Question text */}
+          <div>
+            <Label className="text-xs font-semibold">Enunciado</Label>
+            <Textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              rows={4}
+              className="mt-1"
+            />
+          </div>
+
+          {/* Options (multiple choice) */}
+          {question?.question_type === 'multiple_choice' && (
+            <div>
+              <Label className="text-xs font-semibold">Alternativas</Label>
+              <div className="space-y-2 mt-1">
+                {options.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={correctIndices.includes(i)}
+                      onCheckedChange={() => toggleCorrect(i)}
+                      className="shrink-0"
+                    />
+                    <span className="text-xs font-bold text-muted-foreground w-5">{String.fromCharCode(65 + i)}.</span>
+                    <Input
+                      value={opt}
+                      onChange={e => updateOption(i, e.target.value)}
+                      className="flex-1 h-8 text-sm"
+                    />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeOption(i)}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addOption}>
+                  <Plus className="h-3 w-3" /> Alternativa
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Marque as alternativas corretas.</p>
+            </div>
+          )}
+
+          {/* Explanation */}
+          <div>
+            <Label className="text-xs font-semibold">Explicação / Comentário</Label>
+            <Textarea
+              value={explanation}
+              onChange={e => setExplanation(e.target.value)}
+              rows={3}
+              className="mt-1"
+            />
+          </div>
+
+          {/* Concepts */}
+          <div>
+            <Label className="text-xs font-semibold flex items-center gap-1.5">
+              <BrainCircuit className="h-3.5 w-3.5 text-primary" />
+              Conceitos vinculados
+            </Label>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {concepts.map(c => (
+                <Badge key={c} variant="secondary" className="gap-1 text-[10px]">
+                  {c}
+                  <button onClick={() => removeConcept(c)}>
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </Badge>
+              ))}
+              {concepts.length === 0 && (
+                <span className="text-[10px] text-muted-foreground italic">Nenhum conceito vinculado</span>
+              )}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Input
+                value={conceptInput}
+                onChange={e => setConceptInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addConcept())}
+                placeholder="Nome do conceito..."
+                className="h-8 text-sm flex-1"
+              />
+              <Button variant="outline" size="sm" className="h-8" onClick={addConcept} disabled={!conceptInput.trim()}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ═══════════════════════════════════════════════
 // Question List Item
 // ═══════════════════════════════════════════════
 const QuestionItem = ({
-  question, isSelected, onToggle,
-}: { question: BankQuestion; isSelected: boolean; onToggle: () => void }) => {
+  question, isSelected, onToggle, onEdit,
+}: { question: BankQuestion; isSelected: boolean; onToggle: () => void; onEdit?: () => void }) => {
   const plainText = question.question_text.replace(/<[^>]+>/g, '');
 
   return (
-    <button
-      onClick={onToggle}
+    <div
       className={`w-full text-left rounded-xl border p-3.5 space-y-2 transition-colors ${
         isSelected
           ? 'border-primary/50 bg-primary/5'
@@ -243,10 +459,10 @@ const QuestionItem = ({
           className="mt-0.5 shrink-0"
           onCheckedChange={onToggle}
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-foreground line-clamp-3 leading-relaxed">{plainText}</p>
+        <div className="flex-1 min-w-0" onClick={onToggle}>
+          <p className="text-sm text-foreground line-clamp-3 leading-relaxed cursor-pointer">{plainText}</p>
 
-          {/* Options preview for multiple choice */}
+          {/* Options preview */}
           {question.question_type === 'multiple_choice' && Array.isArray(question.options) && question.options.length > 0 && (
             <div className="mt-2 space-y-0.5">
               {(question.options as string[]).slice(0, 4).map((opt, i) => (
@@ -279,7 +495,7 @@ const QuestionItem = ({
             )}
           </div>
 
-          {/* Concepts */}
+          {/* Concepts (only real linked ones) */}
           {question.concepts.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {question.concepts.slice(0, 4).map(c => (
@@ -291,8 +507,20 @@ const QuestionItem = ({
             </div>
           )}
         </div>
+
+        {/* Edit button for own questions */}
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        )}
       </div>
-    </button>
+    </div>
   );
 };
 
@@ -307,6 +535,7 @@ const QuestionTabContent = ({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<BankQuestion | null>(null);
 
   const filtered = useMemo(() => filterQuestions(questions, filters), [questions, filters]);
   const stats = useMemo(() => getQuestionStats(questions), [questions]);
@@ -497,12 +726,13 @@ const QuestionTabContent = ({
               question={q}
               isSelected={selectedIds.has(q.id)}
               onToggle={() => toggleSelect(q.id)}
+              onEdit={q.is_own ? () => setEditingQuestion(q) : undefined}
             />
           ))}
         </div>
       )}
 
-      {/* Filter Sheet (advanced) */}
+      {/* Filter Sheet */}
       <Sheet open={showFilters} onOpenChange={setShowFilters}>
         <SheetContent side="bottom" className="max-h-[80vh]">
           <SheetHeader>
@@ -521,6 +751,14 @@ const QuestionTabContent = ({
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      {/* Edit Dialog */}
+      <QuestionEditDialog
+        question={editingQuestion}
+        open={!!editingQuestion}
+        onClose={() => setEditingQuestion(null)}
+        userId={userId}
+      />
     </div>
   );
 };

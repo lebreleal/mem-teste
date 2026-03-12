@@ -1,6 +1,8 @@
 /**
  * questionBankService — Fetches questions from 3 sources (my, official, community)
  * and imports them to user decks with auto-hierarchy + concept linking.
+ * Concepts are resolved from question_concepts junction → global_concepts table,
+ * NOT from the free-text concepts[] column on deck_questions.
  */
 import { supabase } from '@/integrations/supabase/client';
 import { linkQuestionsToConcepts, CATEGORY_SUBCATEGORIES } from './globalConceptService';
@@ -12,6 +14,7 @@ export interface BankQuestion {
   options: any;
   correct_indices: number[] | null;
   explanation: string;
+  /** Real concept names resolved from question_concepts → global_concepts */
   concepts: string[];
   question_type: string;
   deck_name: string;
@@ -20,6 +23,8 @@ export interface BankQuestion {
   subcategory: string | null;
   correct_answer: string;
   created_at: string;
+  /** Whether the current user owns this question (can edit) */
+  is_own: boolean;
 }
 
 export type QuestionSource = 'my' | 'official' | 'community';
@@ -53,9 +58,57 @@ async function batchedInFetch<T>(
   return results;
 }
 
+// ─── Resolve real concept names from question_concepts junction ───
+async function resolveQuestionConcepts(
+  questionIds: string[],
+): Promise<{
+  conceptNames: Map<string, string[]>;
+  categoryMap: Map<string, { category: string; subcategory: string | null }>;
+}> {
+  const conceptNames = new Map<string, string[]>();
+  const categoryMap = new Map<string, { category: string; subcategory: string | null }>();
+
+  if (questionIds.length === 0) return { conceptNames, categoryMap };
+
+  // 1. Get question → concept links
+  const links = await batchedInFetch<any>(
+    'question_concepts', 'question_id', questionIds, 'question_id, concept_id',
+  );
+  if (links.length === 0) return { conceptNames, categoryMap };
+
+  // 2. Get unique concept details
+  const conceptIds = [...new Set(links.map(l => l.concept_id))];
+  const concepts = await batchedInFetch<any>(
+    'global_concepts', 'id', conceptIds, 'id, name, category, subcategory',
+  );
+  const conceptMap = new Map(concepts.map(c => [c.id, c]));
+
+  // 3. Build per-question concept names + category
+  const grouped = new Map<string, string[]>();
+  for (const link of links) {
+    if (!grouped.has(link.question_id)) grouped.set(link.question_id, []);
+    grouped.get(link.question_id)!.push(link.concept_id);
+  }
+
+  for (const [qId, cIds] of grouped) {
+    const names: string[] = [];
+    for (const cId of cIds) {
+      const c = conceptMap.get(cId);
+      if (c) {
+        names.push(c.name);
+        if (c.category && !categoryMap.has(qId)) {
+          categoryMap.set(qId, { category: c.category, subcategory: c.subcategory });
+        }
+      }
+    }
+    conceptNames.set(qId, names);
+  }
+
+  return { conceptNames, categoryMap };
+}
+
 // ─── Fetch user's own questions ───
 export async function fetchMyQuestions(userId: string): Promise<BankQuestion[]> {
-  // Get user's decks
   const { data: decks } = await supabase
     .from('decks')
     .select('id, name')
@@ -67,16 +120,14 @@ export async function fetchMyQuestions(userId: string): Promise<BankQuestion[]> 
   const deckIds = decks.map(d => d.id);
   const deckNameMap = new Map(decks.map(d => [d.id, d.name]));
 
-  // Fetch questions in batches
   const questions = await batchedInFetch<any>(
     'deck_questions', 'deck_id', deckIds,
-    'id, deck_id, question_text, options, correct_indices, explanation, concepts, question_type, correct_answer, created_at',
+    'id, deck_id, question_text, options, correct_indices, explanation, question_type, correct_answer, created_at',
   );
 
   if (questions.length === 0) return [];
 
-  // Enrich with concept categories
-  const categoryMap = await getQuestionCategoryMap(questions.map(q => q.id));
+  const { conceptNames, categoryMap } = await resolveQuestionConcepts(questions.map(q => q.id));
 
   return questions.map(q => ({
     id: q.id,
@@ -85,7 +136,7 @@ export async function fetchMyQuestions(userId: string): Promise<BankQuestion[]> 
     options: q.options ?? [],
     correct_indices: q.correct_indices,
     explanation: q.explanation ?? '',
-    concepts: Array.isArray(q.concepts) ? q.concepts : [],
+    concepts: conceptNames.get(q.id) ?? [],
     question_type: q.question_type,
     correct_answer: q.correct_answer ?? '',
     deck_name: deckNameMap.get(q.deck_id) ?? 'Baralho',
@@ -93,12 +144,12 @@ export async function fetchMyQuestions(userId: string): Promise<BankQuestion[]> 
     category: categoryMap.get(q.id)?.category ?? null,
     subcategory: categoryMap.get(q.id)?.subcategory ?? null,
     created_at: q.created_at,
+    is_own: true,
   }));
 }
 
 // ─── Fetch public questions from community/official turma decks ───
 export async function fetchPublicQuestions(type: QuestionSource): Promise<BankQuestion[]> {
-  // Get published turma_decks with their turmas
   const { data: turmaDecks } = await supabase
     .from('turma_decks')
     .select('deck_id, turma_id, turmas!inner(name, is_private)')
@@ -106,27 +157,23 @@ export async function fetchPublicQuestions(type: QuestionSource): Promise<BankQu
 
   if (!turmaDecks || turmaDecks.length === 0) return [];
 
-  // Filter public turmas
   const publicTd = (turmaDecks as any[]).filter(td => !td.turmas?.is_private);
   if (publicTd.length === 0) return [];
 
   const deckIds = publicTd.map(td => td.deck_id);
   const turmaByDeck = new Map(publicTd.map(td => [td.deck_id, td.turmas?.name ?? 'Comunidade']));
 
-  // Fetch deck names in batches
   const decks = await batchedInFetch<any>('decks', 'id', deckIds, 'id, name');
   const deckNameMap = new Map(decks.map((d: any) => [d.id, d.name]));
 
-  // Fetch questions in batches
   const questions = await batchedInFetch<any>(
     'deck_questions', 'deck_id', deckIds,
-    'id, deck_id, question_text, options, correct_indices, explanation, concepts, question_type, correct_answer, created_at',
+    'id, deck_id, question_text, options, correct_indices, explanation, question_type, correct_answer, created_at',
   );
 
   if (questions.length === 0) return [];
 
-  // Enrich with concept categories
-  const categoryMap = await getQuestionCategoryMap(questions.map(q => q.id));
+  const { conceptNames, categoryMap } = await resolveQuestionConcepts(questions.map(q => q.id));
 
   return questions.map(q => ({
     id: q.id,
@@ -135,7 +182,7 @@ export async function fetchPublicQuestions(type: QuestionSource): Promise<BankQu
     options: q.options ?? [],
     correct_indices: q.correct_indices,
     explanation: q.explanation ?? '',
-    concepts: Array.isArray(q.concepts) ? q.concepts : [],
+    concepts: conceptNames.get(q.id) ?? [],
     question_type: q.question_type,
     correct_answer: q.correct_answer ?? '',
     deck_name: deckNameMap.get(q.deck_id) ?? 'Baralho',
@@ -143,38 +190,8 @@ export async function fetchPublicQuestions(type: QuestionSource): Promise<BankQu
     category: categoryMap.get(q.id)?.category ?? null,
     subcategory: categoryMap.get(q.id)?.subcategory ?? null,
     created_at: q.created_at ?? '',
+    is_own: false,
   }));
-}
-
-// ─── Helper: get category/subcategory for questions via question_concepts ───
-async function getQuestionCategoryMap(
-  questionIds: string[],
-): Promise<Map<string, { category: string; subcategory: string | null }>> {
-  const result = new Map<string, { category: string; subcategory: string | null }>();
-  if (questionIds.length === 0) return result;
-
-  const links = await batchedInFetch<any>(
-    'question_concepts', 'question_id', questionIds, 'question_id, concept_id',
-  );
-
-  if (links.length === 0) return result;
-
-  const conceptIds = [...new Set(links.map(l => l.concept_id))];
-  const concepts = await batchedInFetch<any>(
-    'global_concepts', 'id', conceptIds, 'id, category, subcategory',
-  );
-
-  const conceptMap = new Map(concepts.map(c => [c.id, { category: c.category, subcategory: c.subcategory }]));
-
-  for (const link of links) {
-    if (result.has(link.question_id)) continue;
-    const c = conceptMap.get(link.concept_id);
-    if (c?.category) {
-      result.set(link.question_id, { category: c.category, subcategory: c.subcategory });
-    }
-  }
-
-  return result;
 }
 
 // ─── Client-side filtering ───
@@ -231,7 +248,6 @@ export function getQuestionStats(questions: BankQuestion[]) {
     }
   }
 
-  // Sort concepts by frequency (most used first)
   const topConcepts = Array.from(conceptFrequency.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 30);
@@ -246,12 +262,55 @@ export function getQuestionStats(questions: BankQuestion[]) {
   };
 }
 
+// ─── Update a question (own only) ───
+export async function updateQuestion(
+  questionId: string,
+  fields: {
+    question_text?: string;
+    options?: any;
+    correct_indices?: number[] | null;
+    correct_answer?: string;
+    explanation?: string;
+    question_type?: string;
+  },
+) {
+  const { error } = await supabase
+    .from('deck_questions' as any)
+    .update({ ...fields, updated_at: new Date().toISOString() } as any)
+    .eq('id', questionId);
+  if (error) throw error;
+}
+
+// ─── Update question concepts (replace all links) ───
+export async function updateQuestionConcepts(
+  userId: string,
+  questionId: string,
+  conceptNames: string[],
+  category?: string,
+  subcategory?: string,
+) {
+  // Remove existing links
+  await supabase
+    .from('question_concepts' as any)
+    .delete()
+    .eq('question_id', questionId);
+
+  // Re-link with new concepts
+  if (conceptNames.length > 0) {
+    await linkQuestionsToConcepts(userId, [{
+      questionId,
+      conceptNames,
+      category,
+      subcategory,
+    }]);
+  }
+}
+
 // ─── Import selected questions into user's decks with auto-hierarchy ───
 export async function importQuestionsToDecks(
   userId: string,
   questions: BankQuestion[],
 ): Promise<{ deckCount: number; questionCount: number; cardCount: number }> {
-  // Group by category > subcategory for hierarchical deck creation
   const groups = new Map<string, BankQuestion[]>();
   for (const q of questions) {
     const key = q.category
@@ -266,7 +325,6 @@ export async function importQuestionsToDecks(
   let totalCards = 0;
 
   for (const [deckName, qs] of groups) {
-    // Create or find deck
     const { data: existingDeck } = await supabase
       .from('decks')
       .select('id')
@@ -288,7 +346,6 @@ export async function importQuestionsToDecks(
       totalDecks++;
     }
 
-    // Insert questions
     const questionRows = qs.map((q, i) => ({
       deck_id: deckId,
       created_by: userId,
@@ -310,7 +367,6 @@ export async function importQuestionsToDecks(
     if (inserted) {
       totalQuestions += inserted.length;
 
-      // Link concepts
       const pairs = (inserted as any[])
         .filter(q => q.concepts?.length > 0)
         .map(q => ({
@@ -324,7 +380,6 @@ export async function importQuestionsToDecks(
         await linkQuestionsToConcepts(userId, pairs);
       }
 
-      // Create basic review cards
       const conceptNames = new Set<string>();
       for (const q of qs) {
         for (const c of q.concepts) conceptNames.add(c);
