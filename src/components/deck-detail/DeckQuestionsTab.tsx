@@ -404,6 +404,9 @@ const QuestionPractice = ({
   const [optionExplanations, setOptionExplanations] = useState<Record<number, string>>({});
   const [optionExplainLoading, setOptionExplainLoading] = useState<number | null>(null);
   const [generatingConcept, setGeneratingConcept] = useState<string | null>(null);
+  // Elaborative interrogation (Craik & Lockhart, 1972)
+  const [elaborativeText, setElaborativeText] = useState('');
+  const [elaborativeSubmitted, setElaborativeSubmitted] = useState(false);
 
   // Concept mastery for current deck
   const { data: conceptMastery = [] } = useQuery({
@@ -432,6 +435,8 @@ const QuestionPractice = ({
     setOptionExplanations({});
     setOptionExplainLoading(null);
     setHintLoading(false);
+    setElaborativeText('');
+    setElaborativeSubmitted(false);
   }, []);
 
   const handleConfirm = useCallback(async () => {
@@ -705,8 +710,47 @@ const QuestionPractice = ({
           </div>
         )}
 
+        {/* Elaborative Interrogation — shown after wrong answer, before explanation */}
+        {confirmed && !wasCorrect && !elaborativeSubmitted && (
+          <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5">
+            <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+              <Brain className="h-3.5 w-3.5" /> Interrogação Elaborativa
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Antes de ver a explicação: por que você acha que a alternativa <span className="font-bold text-foreground">{LETTERS[correctIdx]}</span> está correta?
+            </p>
+            <Textarea
+              value={elaborativeText}
+              onChange={(e) => setElaborativeText(e.target.value)}
+              placeholder="Escreva sua hipótese (isso ativa processamento profundo)..."
+              className="min-h-[60px] text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="gap-1.5 text-xs" onClick={() => setElaborativeSubmitted(true)}>
+                <Check className="h-3.5 w-3.5" /> Ver explicação
+              </Button>
+              <button
+                onClick={() => setElaborativeSubmitted(true)}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                Pular
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Explanation — shown after correct OR after elaborative submitted */}
+        {confirmed && q.explanation && (wasCorrect || elaborativeSubmitted) && (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <p className="text-xs font-bold text-primary mb-1.5">Explicação</p>
+            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{q.explanation}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
         {/* Concept Mastery (after confirming, if question has concepts) */}
-        {confirmed && q.concepts && q.concepts.length > 0 && (
+        {confirmed && (wasCorrect || elaborativeSubmitted) && q.concepts && q.concepts.length > 0 && (
           <ConceptMasterySection
             concepts={q.concepts}
             deckId={deckId}
@@ -732,7 +776,7 @@ const QuestionPractice = ({
             </Button>
           </>
         ) : (
-          <Button onClick={handleNext} className="w-full gap-1.5">
+          <Button onClick={handleNext} disabled={!wasCorrect && !elaborativeSubmitted} className="w-full gap-1.5">
             {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
           </Button>
         )}
@@ -1158,7 +1202,7 @@ const DeckQuestionsTab = ({
   deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate, conceptFilter,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
-  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string | string[];
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1263,12 +1307,21 @@ const DeckQuestionsTab = ({
   // Filter + search questions
   const filteredQuestions = useMemo(() => {
     let filtered = questions;
-    // Apply concept filter from Concepts tab
+    // Apply concept filter from Concepts tab (single string or array for interleaving)
     if (conceptFilter) {
-      const cf = conceptFilter.toLocaleLowerCase('pt-BR');
-      filtered = filtered.filter(q =>
-        (q.concepts ?? []).some(c => c.toLocaleLowerCase('pt-BR') === cf)
-      );
+      if (Array.isArray(conceptFilter)) {
+        const cfSet = new Set(conceptFilter.map(c => c.toLocaleLowerCase('pt-BR')));
+        filtered = filtered.filter(q =>
+          (q.concepts ?? []).some(c => cfSet.has(c.toLocaleLowerCase('pt-BR')))
+        );
+        // Shuffle for interleaving (Bjork, 2001)
+        filtered = [...filtered].sort(() => Math.random() - 0.5);
+      } else {
+        const cf = conceptFilter.toLocaleLowerCase('pt-BR');
+        filtered = filtered.filter(q =>
+          (q.concepts ?? []).some(c => c.toLocaleLowerCase('pt-BR') === cf)
+        );
+      }
     }
     if (filter === 'unanswered') filtered = filtered.filter(q => !statsData.answeredQuestionIds.has(q.id));
     if (filter === 'errors') filtered = filtered.filter(q => statsData.errorQuestionIds.has(q.id));

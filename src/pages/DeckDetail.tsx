@@ -294,7 +294,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
-  const [conceptFilter, setConceptFilter] = useState<string | undefined>(undefined);
+  const [conceptFilter, setConceptFilter] = useState<string | string[] | undefined>(undefined);
 
   // Concept mastery from question performance
   const { concepts, summary, isLoading: conceptsLoading } = useConceptMastery(deckId);
@@ -306,8 +306,9 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   };
 
   const handlePracticeWeak = () => {
-    // Practice all weak/learning concepts — switch to questions tab
-    setConceptFilter(undefined);
+    // Interleaving: pass all weak+learning concepts as array for mixed practice
+    const weakAndLearning = summary.weakAndLearningConcepts;
+    setConceptFilter(weakAndLearning.length > 0 ? weakAndLearning : undefined);
     setActiveTab('questions');
     setQuestionAction('practice');
   };
