@@ -90,14 +90,54 @@ const Study = () => {
     () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
   );
+  const readLeechFailCounts = useCallback(() => {
+    if (typeof window === 'undefined') return new Map<string, number>();
+    const parseEntries = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const entries = JSON.parse(raw) as unknown;
+        if (!Array.isArray(entries)) return null;
+        return new Map(
+          entries.filter(
+            (entry): entry is [string, number] =>
+              Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number',
+          ),
+        );
+      } catch {
+        return null;
+      }
+    };
+
+    const sessionMap = parseEntries(window.sessionStorage.getItem(leechFailStorageKey));
+    if (sessionMap) return sessionMap;
+
+    const localMap = parseEntries(window.localStorage.getItem(leechFailStorageKey));
+    if (localMap) return localMap;
+
+    return new Map<string, number>();
+  }, [leechFailStorageKey]);
   const persistLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return;
+
+    const write = (storage: Storage, value: string | null) => {
+      try {
+        if (value === null) storage.removeItem(leechFailStorageKey);
+        else storage.setItem(leechFailStorageKey, value);
+      } catch {
+        // no-op: storage can be unavailable in some browser contexts
+      }
+    };
+
     const entries = Array.from(failCountRef.current.entries());
     if (entries.length === 0) {
-      window.sessionStorage.removeItem(leechFailStorageKey);
+      write(window.sessionStorage, null);
+      write(window.localStorage, null);
       return;
     }
-    window.sessionStorage.setItem(leechFailStorageKey, JSON.stringify(entries));
+
+    const serialized = JSON.stringify(entries);
+    write(window.sessionStorage, serialized);
+    write(window.localStorage, serialized);
   }, [leechFailStorageKey]);
 
   const [leechMode, setLeechMode] = useState<{
@@ -131,22 +171,10 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
-  // Restore leech fail counters for this study context (survives leave/re-enter in same browser session)
+  // Restore leech fail counters for this study context
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const raw = window.sessionStorage.getItem(leechFailStorageKey);
-    if (!raw) {
-      failCountRef.current = new Map();
-      return;
-    }
-    try {
-      const entries = JSON.parse(raw) as [string, number][];
-      failCountRef.current = new Map(entries.filter((entry): entry is [string, number] => Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number'));
-    } catch {
-      failCountRef.current = new Map();
-      window.sessionStorage.removeItem(leechFailStorageKey);
-    }
-  }, [leechFailStorageKey]);
+    failCountRef.current = readLeechFailCounts();
+  }, [readLeechFailCounts]);
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
