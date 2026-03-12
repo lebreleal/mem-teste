@@ -333,7 +333,7 @@ const Study = () => {
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user]);
 
   if (isLoading || (!queueInitialized && isFetching)) {
     return (
