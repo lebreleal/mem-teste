@@ -1325,9 +1325,9 @@ const DeckQuestionsTab = ({
       ) : (
         <div className="space-y-2">
           {filteredQuestions.map((q, idx) => {
-            const opts: string[] = q.options;
+            const opts: string[] = q.options ?? [];
             const cIdx = q.correct_indices?.[0] ?? 0;
-            const plainText = q.question_text.replace(/<[^>]+>/g, '');
+            const plainText = (q.question_text ?? '').replace(/<[^>]+>/g, '');
             const isError = statsData.errorQuestionIds.has(q.id);
             const isAnswered = statsData.answeredQuestionIds.has(q.id);
             const isCorrectlyAnswered = isAnswered && !isError;
