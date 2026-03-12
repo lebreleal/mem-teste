@@ -86,6 +86,20 @@ const Study = () => {
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
+  const leechFailStorageKey = useMemo(
+    () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    [deckId, folderId],
+  );
+  const persistLeechFailCounts = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const entries = Array.from(failCountRef.current.entries());
+    if (entries.length === 0) {
+      window.sessionStorage.removeItem(leechFailStorageKey);
+      return;
+    }
+    window.sessionStorage.setItem(leechFailStorageKey, JSON.stringify(entries));
+  }, [leechFailStorageKey]);
+
   const [leechMode, setLeechMode] = useState<{
     leechCard: any;
     concept: GlobalConcept | null;
