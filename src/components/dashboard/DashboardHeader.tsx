@@ -38,6 +38,8 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
 
   const [notifOpen, setNotifOpen] = useState(false);
   const { notifications, hasUnread, markRead } = useExamNotifications();
+  const { dueConcepts } = useGlobalConcepts();
+  const dueConceptCount = dueConcepts.length;
 
   // Crown: gold when any premium is active (including trial)
   const showCrownActive = isPremium;
