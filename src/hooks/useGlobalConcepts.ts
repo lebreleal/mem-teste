@@ -41,8 +41,8 @@ export const useGlobalConcepts = () => {
       };
 
       const result = fsrsSchedule(card, rating, {
-        requestedRetention: 0.85,
-        learningSteps: [10, 1440], // 10min, 1day
+        ...DEFAULT_FSRS_PARAMS,
+        learningSteps: [10, 1440],
         relearningSteps: [10],
       });
 
