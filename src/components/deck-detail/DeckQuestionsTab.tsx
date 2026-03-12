@@ -1252,6 +1252,18 @@ const DeckQuestionsTab = ({
   const [createOpen, setCreateOpen] = useState(!!autoCreate);
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
   const [practicing, setPracticing] = useState(!!autoStart);
+
+  // Sync autoStart/autoCreate prop changes (component may already be mounted)
+  useEffect(() => {
+    if (autoStart) setPracticing(true);
+  }, [autoStart]);
+
+  useEffect(() => {
+    if (autoCreate) {
+      setCreateOpen(true);
+      setCreateMode(autoCreate === 'manual' ? 'manual' : 'ai');
+    }
+  }, [autoCreate]);
   const [filter, setFilter] = useState<QuestionFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
