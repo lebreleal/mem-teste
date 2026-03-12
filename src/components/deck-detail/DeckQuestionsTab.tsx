@@ -1155,10 +1155,10 @@ const CreateQuestionDialog = ({
    Main Tab Component
    ════════════════════════════════════════════════════════════ */
 const DeckQuestionsTab = ({
-  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate,
+  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate, conceptFilter,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
-  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string;
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1263,6 +1263,13 @@ const DeckQuestionsTab = ({
   // Filter + search questions
   const filteredQuestions = useMemo(() => {
     let filtered = questions;
+    // Apply concept filter from Concepts tab
+    if (conceptFilter) {
+      const cf = conceptFilter.toLocaleLowerCase('pt-BR');
+      filtered = filtered.filter(q =>
+        (q.concepts ?? []).some(c => c.toLocaleLowerCase('pt-BR') === cf)
+      );
+    }
     if (filter === 'unanswered') filtered = filtered.filter(q => !statsData.answeredQuestionIds.has(q.id));
     if (filter === 'errors') filtered = filtered.filter(q => statsData.errorQuestionIds.has(q.id));
     if (filter === 'correct') filtered = filtered.filter(q => statsData.answeredQuestionIds.has(q.id) && !statsData.errorQuestionIds.has(q.id));
@@ -1276,7 +1283,7 @@ const DeckQuestionsTab = ({
       });
     }
     return filtered;
-  }, [questions, filter, statsData, searchQuery]);
+  }, [questions, filter, statsData, searchQuery, conceptFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: async (questionId: string) => {

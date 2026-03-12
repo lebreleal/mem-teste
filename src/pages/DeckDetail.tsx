@@ -6,8 +6,7 @@ import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
 import ConceptStatsCard from '@/components/deck-detail/ConceptStatsCard';
 import ConceptList from '@/components/deck-detail/ConceptList';
-import { CreateConceptDialog, EditConceptCardsDialog } from '@/components/deck-detail/ConceptDialogs';
-import { useDeckConcepts } from '@/hooks/useDeckConcepts';
+import { useConceptMastery } from '@/hooks/useConceptMastery';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
@@ -291,18 +290,32 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
 };
 
 const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
-  const { cardCounts, navigate } = useDeckDetail();
+  const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
+  const [conceptFilter, setConceptFilter] = useState<string | undefined>(undefined);
 
-  // Concepts state
-  const { concepts, createConcept, renameConcept, deleteConcept, updateConceptCards, isLoading: conceptsLoading } = useDeckConcepts(deckId);
-  const [createConceptOpen, setCreateConceptOpen] = useState(false);
-  const [editCardsTarget, setEditCardsTarget] = useState<{ id: string; name: string } | null>(null);
+  // Concept mastery from question performance
+  const { concepts, summary, isLoading: conceptsLoading } = useConceptMastery(deckId);
 
-  const handleStudyConcept = (conceptId: string) => {
-    navigate(`/study/${deckId}?conceptId=${conceptId}`);
+  const handlePracticeConcept = (concept: string) => {
+    setConceptFilter(concept);
+    setActiveTab('questions');
+    setQuestionAction('practice');
+  };
+
+  const handlePracticeWeak = () => {
+    // Practice all weak/learning concepts — switch to questions tab
+    setConceptFilter(undefined);
+    setActiveTab('questions');
+    setQuestionAction('practice');
+  };
+
+  const handleGenerateQuestions = (concept: string) => {
+    setConceptFilter(concept);
+    setActiveTab('questions');
+    setQuestionAction('ai');
   };
 
   return (
@@ -317,17 +330,12 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
       )}
       {activeTab === 'concepts' && (
         <ConceptStatsCard
-          concepts={concepts}
-          onStudyWeak={() => {
-            // Find first due concept to study
-            const due = concepts.find(c => new Date(c.scheduled_date) <= new Date() || c.state === 0);
-            if (due) handleStudyConcept(due.id);
-          }}
-          onCreate={() => setCreateConceptOpen(true)}
+          summary={summary}
+          onPracticeWeak={handlePracticeWeak}
         />
       )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); setConceptFilter(undefined); }} className="w-full">
         <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
             value="cards"
@@ -345,7 +353,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
             value="concepts"
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
           >
-            <BrainCircuit className="h-4 w-4" /> Conceitos ({concepts.length})
+            <BrainCircuit className="h-4 w-4" /> Conceitos ({summary.total})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="cards" className="mt-4">
@@ -357,41 +365,18 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
               deckId={deckId}
               autoStart={questionAction === 'practice'}
               autoCreate={questionAction === 'ai' ? 'ai' : null}
+              conceptFilter={conceptFilter}
             />
           </Suspense>
         </TabsContent>
         <TabsContent value="concepts" className="mt-4">
           <ConceptList
-            deckId={deckId}
             concepts={concepts}
-            onRename={(id, name) => renameConcept.mutate({ conceptId: id, newName: name })}
-            onDelete={(id) => deleteConcept.mutate(id)}
-            onEditCards={(id) => {
-              const c = concepts.find(c => c.id === id);
-              if (c) setEditCardsTarget({ id: c.id, name: c.name });
-            }}
-            onStudyConcept={handleStudyConcept}
+            onPracticeConcept={handlePracticeConcept}
+            onGenerateQuestions={handleGenerateQuestions}
           />
         </TabsContent>
       </Tabs>
-
-      <CreateConceptDialog
-        open={createConceptOpen}
-        onOpenChange={setCreateConceptOpen}
-        deckId={deckId}
-        onConfirm={(name, cardIds) => createConcept.mutate({ name, cardIds })}
-      />
-
-      {editCardsTarget && (
-        <EditConceptCardsDialog
-          open={!!editCardsTarget}
-          onOpenChange={(o) => !o && setEditCardsTarget(null)}
-          deckId={deckId}
-          conceptId={editCardsTarget.id}
-          conceptName={editCardsTarget.name}
-          onConfirm={(cardIds) => updateConceptCards.mutate({ conceptId: editCardsTarget.id, cardIds })}
-        />
-      )}
     </>
   );
 };
