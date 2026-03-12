@@ -5,6 +5,7 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
