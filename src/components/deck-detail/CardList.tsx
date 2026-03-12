@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Search, Plus, Trash2, X, CheckCheck, ArrowUpRight, PenLine, Sparkles, Download, Filter,
   MoreVertical, Eye, Flame, ChevronDown,
 } from 'lucide-react';
@@ -20,6 +23,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { shortDisplayId } from '@/lib/shortId';
 
 const PAGE_SIZE_UI = 50;
 
