@@ -20,15 +20,37 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
   const { user } = useAuth();
   const effectiveDeckId = sourceDeckId || deckId;
 
+  // Fetch hierarchy deck IDs
+  const { data: hierarchyDeckIds = [effectiveDeckId] } = useQuery({
+    queryKey: ['deck-hierarchy-ids', effectiveDeckId],
+    queryFn: async () => {
+      const allIds: string[] = [effectiveDeckId];
+      let frontier = [effectiveDeckId];
+      while (frontier.length > 0) {
+        const { data: children } = await supabase
+          .from('decks')
+          .select('id')
+          .in('parent_deck_id', frontier);
+        if (!children || children.length === 0) break;
+        const childIds = children.map((d: any) => d.id);
+        allIds.push(...childIds);
+        frontier = childIds;
+      }
+      return allIds;
+    },
+    enabled: !!effectiveDeckId,
+    staleTime: 120_000,
+  });
+
   const { data: questions = [] } = useQuery({
-    queryKey: ['deck-questions-ids', effectiveDeckId],
+    queryKey: ['deck-questions-ids', effectiveDeckId, hierarchyDeckIds],
     queryFn: async () => {
       const { data } = await supabase
         .from('deck_questions' as any).select('id')
-        .eq('deck_id', effectiveDeckId);
+        .in('deck_id', hierarchyDeckIds);
       return (data ?? []) as unknown as { id: string }[];
     },
-    enabled: !!effectiveDeckId,
+    enabled: !!effectiveDeckId && hierarchyDeckIds.length > 0,
     staleTime: 30_000,
   });
 

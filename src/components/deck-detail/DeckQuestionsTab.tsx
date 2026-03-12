@@ -1258,31 +1258,44 @@ const DeckQuestionsTab = ({
     return !!sourceDeckId && sourceDeckId !== deckId;
   }, [sourceDeckId, deckId]);
 
+  // Fetch all deck IDs in hierarchy (this deck + all descendants)
+  const { data: hierarchyDeckIds = [effectiveDeckId] } = useQuery({
+    queryKey: ['deck-hierarchy-ids', effectiveDeckId],
+    queryFn: async () => {
+      // BFS to collect all descendant deck IDs
+      const allIds: string[] = [effectiveDeckId];
+      let frontier = [effectiveDeckId];
+      while (frontier.length > 0) {
+        const { data: children } = await supabase
+          .from('decks')
+          .select('id')
+          .in('parent_deck_id', frontier);
+        if (!children || children.length === 0) break;
+        const childIds = children.map((d: any) => d.id);
+        allIds.push(...childIds);
+        frontier = childIds;
+      }
+      return allIds;
+    },
+    enabled: !!effectiveDeckId,
+    staleTime: 120_000,
+  });
+
   const { data: questions = [], isLoading } = useQuery({
-    queryKey: ['deck-questions', effectiveDeckId],
+    queryKey: ['deck-questions', effectiveDeckId, hierarchyDeckIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deck_questions' as any).select('*')
-        .eq('deck_id', effectiveDeckId)
+        .in('deck_id', hierarchyDeckIds)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      console.log('[DeckQuestionsTab] Raw questions data sample:', data?.slice(0, 2)?.map((q: any) => ({
-        id: q.id,
-        question_text: q.question_text?.slice(0, 100),
-        options_type: typeof q.options,
-        options_isArray: Array.isArray(q.options),
-        options_length: Array.isArray(q.options) ? q.options.length : 'N/A',
-        options_sample: JSON.stringify(q.options)?.slice(0, 200),
-      })));
       return (data ?? []).map((q: any) => {
         let opts: string[] = [];
         if (Array.isArray(q.options)) {
-          // options could be array of strings or array of objects
           opts = q.options.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
         } else if (typeof q.options === 'string') {
           try { const parsed = JSON.parse(q.options); if (Array.isArray(parsed)) opts = parsed.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o))); } catch {}
         } else if (q.options && typeof q.options === 'object') {
-          // jsonb might come as object with numeric keys
           const values = Object.values(q.options);
           if (values.length > 0) opts = values.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
         }
@@ -1293,7 +1306,7 @@ const DeckQuestionsTab = ({
         };
       }) as DeckQuestion[];
     },
-    enabled: !!effectiveDeckId,
+    enabled: !!effectiveDeckId && hierarchyDeckIds.length > 0,
     staleTime: 30_000,
   });
 
