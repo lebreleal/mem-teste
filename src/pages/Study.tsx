@@ -360,6 +360,67 @@ const Study = () => {
     };
   }, [currentCard, user, leechMode, persistLeechFailCounts]);
 
+  // Restore interruption modal when user closes/reopens app mid-leech flow
+  useEffect(() => {
+    if (!currentCard || leechMode || leechInterruption) return;
+    const saved = readLeechInterruption();
+    if (!saved) return;
+
+    if (saved.cardId !== currentCard.id) {
+      persistLeechInterruption(null);
+      return;
+    }
+
+    setLeechInterruption(saved);
+  }, [currentCard, leechMode, leechInterruption, readLeechInterruption, persistLeechInterruption]);
+
+  const clearLeechInterruption = useCallback(() => {
+    setLeechInterruption(null);
+    setLeechSkipConfirmOpen(false);
+    persistLeechInterruption(null);
+  }, [persistLeechInterruption]);
+
+  const startLeechModeForCard = useCallback(async (card: any) => {
+    if (!user) return;
+
+    setLeechMode({
+      leechCard: card,
+      concept: null,
+      reinforceCards: [],
+      currentIndex: 0,
+      flipped: false,
+      loading: true,
+    });
+
+    try {
+      const concepts = await getCardConcepts(card.id, user.id);
+      const weakest = concepts.length > 0 ? concepts[0] : null;
+      let reinforceCards: any[] = [];
+
+      if (weakest) {
+        reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
+        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+      }
+
+      if (reinforceCards.length === 0) {
+        const conceptName = weakest?.name ?? `${card.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
+        reinforceCards = await generateReinforcementCards(conceptName, user.id);
+        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+      }
+
+      setLeechMode({
+        leechCard: card,
+        concept: weakest,
+        reinforceCards,
+        currentIndex: 0,
+        flipped: false,
+        loading: false,
+      });
+    } catch {
+      setLeechMode(prev => prev ? { ...prev, loading: false } : null);
+    }
+  }, [user]);
+
   const submittingRef = useRef<string | null>(null);
 
   const handleRate = useCallback(async (rating: Rating) => {
