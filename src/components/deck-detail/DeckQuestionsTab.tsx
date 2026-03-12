@@ -940,7 +940,7 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
-        const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+        const questionConceptPairs: { questionId: string; conceptNames: string[]; category?: string; subcategory?: string }[] = [];
 
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
