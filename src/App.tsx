@@ -61,6 +61,7 @@ const AdminTags = lazyRetry(() => import("./pages/AdminTags"));
 const AdminUsageReport = lazyRetry(() => import("./pages/AdminUsageReport"));
 const ErrorNotebook = lazyRetry(() => import("./pages/ErrorNotebook"));
 const Concepts = lazyRetry(() => import("./pages/Concepts"));
+const QuestionBank = lazyRetry(() => import("./pages/QuestionBank"));
 
 const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
