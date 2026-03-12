@@ -1389,6 +1389,7 @@ const DeckQuestionsTab = ({
         wrong={statsData.wrong}
         unanswered={statsData.total - statsData.answered}
         errorCount={statsData.errorQuestionIds.size}
+        filteredCount={filteredQuestions.length}
         filter={filter}
         onFilterChange={setFilter}
         onPractice={() => setPracticing(true)}
