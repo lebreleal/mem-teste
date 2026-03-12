@@ -404,6 +404,9 @@ const QuestionPractice = ({
   const [optionExplanations, setOptionExplanations] = useState<Record<number, string>>({});
   const [optionExplainLoading, setOptionExplainLoading] = useState<number | null>(null);
   const [generatingConcept, setGeneratingConcept] = useState<string | null>(null);
+  // Elaborative interrogation (Craik & Lockhart, 1972)
+  const [elaborativeText, setElaborativeText] = useState('');
+  const [elaborativeSubmitted, setElaborativeSubmitted] = useState(false);
 
   // Concept mastery for current deck
   const { data: conceptMastery = [] } = useQuery({
