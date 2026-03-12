@@ -1,13 +1,14 @@
 /**
  * ConceptList — mastery dashboard list derived from question performance.
- * No CRUD, no FSRS. Shows mastery level, accuracy, and question count.
+ * Shows decay indicators, cross-deck badges, accuracy bars.
  */
 import { useState, useMemo } from 'react';
-import { BrainCircuit, CheckCircle2, AlertCircle, X as XIcon, Search, BookOpen, Sparkles, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, AlertCircle, X as XIcon, Search, BookOpen, Sparkles, ChevronDown, ChevronUp, HelpCircle, Clock, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { ConceptMasteryItem } from '@/hooks/useConceptMastery';
+import { useGlobalConceptMastery } from '@/hooks/useConceptMastery';
 
 interface ConceptListProps {
   concepts: ConceptMasteryItem[];
@@ -27,6 +28,18 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { globalConcepts } = useGlobalConceptMastery();
+
+  // Build cross-deck lookup
+  const crossDeckMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const gc of globalConcepts) {
+      if (gc.deckCount > 1) {
+        map.set(gc.concept.toLocaleLowerCase('pt-BR'), gc.deckCount);
+      }
+    }
+    return map;
+  }, [globalConcepts]);
 
   const filtered = useMemo(() => {
     let result = concepts;
@@ -90,6 +103,7 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
         const config = masteryConfig[item.masteryLevel];
         const Icon = config.icon;
         const isExpanded = expandedId === item.concept;
+        const crossDeckCount = crossDeckMap.get(item.concept.toLocaleLowerCase('pt-BR'));
 
         return (
           <div key={item.concept} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -99,7 +113,17 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
             >
               <Icon className={`h-5 w-5 shrink-0 ${config.color}`} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{item.concept}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-foreground truncate">{item.concept}</p>
+                  {item.decayed && (
+                    <Clock className="h-3 w-3 text-amber-500 shrink-0" title="Nível rebaixado por inatividade" />
+                  )}
+                  {crossDeckCount && crossDeckCount > 1 && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] text-primary font-medium shrink-0" title={`Presente em ${crossDeckCount} baralhos`}>
+                      <Globe className="h-2.5 w-2.5" /> {crossDeckCount}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <HelpCircle className="h-3 w-3" /> {item.questionCount} questões
@@ -111,6 +135,7 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
                   )}
                   <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${config.badgeBg}`}>
                     {config.label}
+                    {item.decayed && ' ⏳'}
                   </Badge>
                 </div>
               </div>
@@ -121,6 +146,26 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
 
             {isExpanded && (
               <div className="border-t border-border/50 px-3 pb-3 pt-2 space-y-2">
+                {/* Decay warning */}
+                {item.decayed && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 flex items-center gap-1.5">
+                    <Clock className="h-3 w-3 text-amber-500 shrink-0" />
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                      Nível rebaixado de <span className="font-bold">{item.rawMasteryLevel === 'strong' ? 'Forte' : 'Parcial'}</span> por {item.daysSinceUpdate}d sem prática
+                    </p>
+                  </div>
+                )}
+
+                {/* Cross-deck info */}
+                {crossDeckCount && crossDeckCount > 1 && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 flex items-center gap-1.5">
+                    <Globe className="h-3 w-3 text-primary shrink-0" />
+                    <p className="text-[10px] text-foreground">
+                      Conceito presente em <span className="font-bold">{crossDeckCount} baralhos</span> — domínio é agregado
+                    </p>
+                  </div>
+                )}
+
                 {/* Accuracy bar */}
                 {item.totalAttempts > 0 && (
                   <div className="space-y-1">
