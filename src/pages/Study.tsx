@@ -626,6 +626,7 @@ const Study = () => {
     setLocalQueue(prev => prev.map(c =>
       c.id === leechMode.leechCard.id ? { ...c, learning_step: 0 } : c,
     ));
+    leechAdvanceLockRef.current = false;
     setLeechMode(null);
     setCardKey(prev => prev + 1);
     cardShownAt.current = Date.now();
@@ -644,6 +645,7 @@ const Study = () => {
       isAdvancing = false,
       correctCount = 0,
       wrongCount = 0,
+      retryCards,
     } = leechMode;
 
     const hasCards = reinforceCards.length > 0;
@@ -652,7 +654,11 @@ const Study = () => {
     const isRetryRound = round > 1;
 
     const advanceCard = (wasCorrect: boolean) => {
-      if (!currentReinforceCard || isAdvancing) return;
+      if (!currentReinforceCard || isAdvancing || leechAdvanceLockRef.current) return;
+
+      leechAdvanceLockRef.current = true;
+      const isLastCardInRound = currentIndex >= totalCards - 1;
+      const shouldExitAfterThisAnswer = wasCorrect && isLastCardInRound && retryCards.length === 0;
 
       setLeechMode(prev => prev ? {
         ...prev,
@@ -665,14 +671,19 @@ const Study = () => {
       const delayMs = wasCorrect ? 650 : 120;
 
       setTimeout(() => {
-        let shouldExit = false;
+        if (shouldExitAfterThisAnswer) {
+          exitLeechMode();
+          return;
+        }
 
         setLeechMode(prev => {
           if (!prev) return null;
 
           const activeCard = prev.reinforceCards[prev.currentIndex];
           const nextRetryCards = !wasCorrect && activeCard
-            ? [...prev.retryCards, activeCard]
+            ? (prev.retryCards.some(card => card.id === activeCard.id)
+              ? prev.retryCards
+              : [...prev.retryCards, activeCard])
             : prev.retryCards;
           const atEndOfRound = prev.currentIndex >= prev.reinforceCards.length - 1;
 
@@ -687,29 +698,19 @@ const Study = () => {
             };
           }
 
-          if (nextRetryCards.length > 0) {
-            return {
-              ...prev,
-              reinforceCards: nextRetryCards,
-              retryCards: [],
-              currentIndex: 0,
-              round: (prev.round ?? 1) + 1,
-              flipped: false,
-              feedback: null,
-              isAdvancing: false,
-            };
-          }
-
-          shouldExit = true;
           return {
             ...prev,
+            reinforceCards: nextRetryCards,
+            retryCards: [],
+            currentIndex: 0,
+            round: (prev.round ?? 1) + 1,
+            flipped: false,
             feedback: null,
             isAdvancing: false,
-            retryCards: [],
           };
         });
 
-        if (shouldExit) exitLeechMode();
+        leechAdvanceLockRef.current = false;
       }, delayMs);
     };
 
