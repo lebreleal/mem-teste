@@ -1,6 +1,6 @@
 /**
  * ErrorNotebook — Global "Caderno de Erros" page.
- * Shows all wrong questions across all decks with practice mode.
+ * Shows wrong questions with linked concepts and related cards for review.
  */
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,10 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, BookX, PlayCircle, ChevronRight } from 'lucide-react';
-import { lazy, Suspense } from 'react';
-
-const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
+import { ArrowLeft, BookX, PlayCircle, ChevronRight, BrainCircuit, Layers } from 'lucide-react';
 
 interface ErrorQuestion {
   id: string;
@@ -23,15 +20,22 @@ interface ErrorQuestion {
   explanation: string;
   concepts: string[];
   deck_name: string;
+  linkedConcepts: { id: string; name: string; state: number }[];
+  relatedCardCount: number;
 }
 
-const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+const STATE_LABELS: Record<number, string> = { 0: 'Novo', 1: 'Aprendendo', 2: 'Dominado', 3: 'Reaprendendo' };
+const STATE_COLORS: Record<number, string> = {
+  0: 'bg-muted text-muted-foreground',
+  1: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  2: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  3: 'bg-destructive/15 text-destructive',
+};
 
 const ErrorNotebook = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Get all user's wrong attempts (latest per question)
   const { data: errorQuestions = [], isLoading } = useQuery({
     queryKey: ['error-notebook', user?.id],
     queryFn: async () => {
@@ -46,7 +50,7 @@ const ErrorNotebook = () => {
 
       if (!attempts || attempts.length === 0) return [];
 
-      // 2. Get latest attempt per question
+      // 2. Latest attempt per question
       const latestByQ = new Map<string, any>();
       for (const a of attempts as any[]) {
         if (!latestByQ.has(a.question_id)) latestByQ.set(a.question_id, a);
@@ -73,8 +77,49 @@ const ErrorNotebook = () => {
         .from('decks')
         .select('id, name')
         .in('id', deckIds);
-
       const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
+
+      // 6. Fetch linked concepts via question_concepts
+      const { data: conceptLinks } = await supabase
+        .from('question_concepts' as any)
+        .select('question_id, concept_id')
+        .in('question_id', wrongIds);
+
+      const conceptIds = [...new Set((conceptLinks ?? []).map((l: any) => l.concept_id))];
+      let conceptMap = new Map<string, { id: string; name: string; state: number }>();
+      if (conceptIds.length > 0) {
+        const { data: gc } = await supabase
+          .from('global_concepts' as any)
+          .select('id, name, state')
+          .eq('user_id', user.id)
+          .in('id', conceptIds);
+        if (gc) {
+          for (const c of gc as any[]) {
+            conceptMap.set(c.id, { id: c.id, name: c.name, state: c.state });
+          }
+        }
+      }
+
+      // Build question → concepts map
+      const qConceptMap = new Map<string, { id: string; name: string; state: number }[]>();
+      for (const link of (conceptLinks ?? []) as any[]) {
+        const concept = conceptMap.get(link.concept_id);
+        if (concept) {
+          if (!qConceptMap.has(link.question_id)) qConceptMap.set(link.question_id, []);
+          qConceptMap.get(link.question_id)!.push(concept);
+        }
+      }
+
+      // 7. Count related cards per deck
+      const { data: cardCounts } = await supabase
+        .from('cards')
+        .select('deck_id')
+        .in('deck_id', deckIds);
+
+      const cardCountMap = new Map<string, number>();
+      for (const c of (cardCounts ?? []) as any[]) {
+        cardCountMap.set(c.deck_id, (cardCountMap.get(c.deck_id) ?? 0) + 1);
+      }
 
       return (questions as any[]).map((q: any) => ({
         id: q.id,
@@ -85,6 +130,8 @@ const ErrorNotebook = () => {
         explanation: q.explanation || '',
         concepts: Array.isArray(q.concepts) ? q.concepts : [],
         deck_name: deckMap.get(q.deck_id) || 'Baralho',
+        linkedConcepts: qConceptMap.get(q.id) ?? [],
+        relatedCardCount: cardCountMap.get(q.deck_id) ?? 0,
       })) as ErrorQuestion[];
     },
     enabled: !!user,
@@ -140,7 +187,6 @@ const ErrorNotebook = () => {
           </div>
         ) : (
           <>
-            {/* Summary stats */}
             <div className="rounded-2xl border border-border/50 bg-card p-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
@@ -153,7 +199,6 @@ const ErrorNotebook = () => {
               </div>
             </div>
 
-            {/* Grouped by deck */}
             {groupedByDeck.map(([deckId, { name, questions }]) => (
               <div key={deckId} className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -161,30 +206,65 @@ const ErrorNotebook = () => {
                   <Badge variant="destructive" className="text-[10px]">{questions.length} erros</Badge>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-1.5"
-                  onClick={() => navigate(`/decks/${deckId}`, { state: { tab: 'questions', filter: 'errors' } })}
-                >
-                  <PlayCircle className="h-4 w-4" /> Revisar erros deste baralho
-                  <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={() => navigate(`/decks/${deckId}`, { state: { tab: 'questions', filter: 'errors' } })}
+                  >
+                    <PlayCircle className="h-4 w-4" /> Revisar erros
+                    <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => navigate(`/study/${deckId}`)}
+                  >
+                    <Layers className="h-4 w-4" /> Estudar cards
+                  </Button>
+                </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {questions.slice(0, 5).map((q, idx) => {
                     const plainText = q.question_text.replace(/<[^>]+>/g, '');
                     return (
-                      <div key={q.id} className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2">
+                      <div key={q.id} className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 space-y-1.5">
                         <p className="text-xs text-foreground line-clamp-2">
                           {idx + 1}. {plainText}
                         </p>
-                        {q.concepts.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
+
+                        {/* Linked concepts with mastery */}
+                        {q.linkedConcepts.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {q.linkedConcepts.map(c => (
+                              <span
+                                key={c.id}
+                                className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${STATE_COLORS[c.state] ?? STATE_COLORS[0]}`}
+                              >
+                                <BrainCircuit className="h-2.5 w-2.5" />
+                                {c.name}
+                                <span className="opacity-60">({STATE_LABELS[c.state] ?? 'Novo'})</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Fallback: text-based concepts */}
+                        {q.linkedConcepts.length === 0 && q.concepts.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
                             {q.concepts.map(c => (
                               <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{c}</span>
                             ))}
                           </div>
+                        )}
+
+                        {/* Related cards count */}
+                        {q.relatedCardCount > 0 && (
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Layers className="h-2.5 w-2.5" /> {q.relatedCardCount} cards neste baralho para revisão
+                          </p>
                         )}
                       </div>
                     );
