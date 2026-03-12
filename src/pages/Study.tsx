@@ -209,6 +209,9 @@ const Study = () => {
     currentIndex: number;
     flipped: boolean;
     loading?: boolean;
+    feedback?: 'correct' | 'wrong' | null;
+    correctCount?: number;
+    wrongCount?: number;
   } | null>(null);
   const [leechInterruption, setLeechInterruption] = useState<LeechInterruptionState | null>(null);
   const [leechSkipConfirmOpen, setLeechSkipConfirmOpen] = useState(false);
@@ -608,30 +611,76 @@ const Study = () => {
   }, [leechMode, persistLeechFailCounts]);
 
   if (leechMode) {
-    const { concept, reinforceCards, currentIndex, flipped, leechCard, loading } = leechMode;
+    const { concept, reinforceCards, currentIndex, flipped, leechCard, loading, feedback, correctCount = 0, wrongCount = 0 } = leechMode;
     const hasCards = reinforceCards.length > 0;
     const currentReinforceCard = hasCards ? reinforceCards[currentIndex] : null;
     const isLastCard = currentIndex >= reinforceCards.length - 1;
+    const totalCards = reinforceCards.length;
+
+    const advanceCard = (wasCorrect: boolean) => {
+      // Show feedback briefly, then advance
+      setLeechMode(prev => prev ? {
+        ...prev,
+        feedback: wasCorrect ? 'correct' : 'wrong',
+        correctCount: (prev.correctCount ?? 0) + (wasCorrect ? 1 : 0),
+        wrongCount: (prev.wrongCount ?? 0) + (wasCorrect ? 0 : 1),
+      } : null);
+
+      setTimeout(() => {
+        if (isLastCard) {
+          exitLeechMode();
+        } else {
+          setLeechMode(prev => prev ? {
+            ...prev,
+            currentIndex: prev.currentIndex + 1,
+            flipped: false,
+            feedback: null,
+          } : null);
+        }
+      }, 800);
+    };
 
     return (
       <div className="flex h-[100dvh] flex-col bg-background overflow-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-20 bg-background flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-destructive/20">
+        <header className="sticky top-0 z-20 bg-background flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-primary/20">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+              <Brain className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-destructive">Reforço de Base</p>
+              <p className="text-xs font-semibold text-primary">Reforço de Base</p>
               {concept && <p className="text-[10px] text-muted-foreground">{concept.name}</p>}
             </div>
           </div>
-          {hasCards && (
-            <span className="text-xs font-bold text-muted-foreground tabular-nums">
-              {currentIndex + 1}/{reinforceCards.length}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {hasCards && totalCards > 0 && (
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <span className="text-green-500 font-bold">{correctCount}✓</span>
+                <span className="text-destructive font-bold">{wrongCount}✗</span>
+              </div>
+            )}
+            {hasCards && (
+              <span className="text-xs font-bold text-muted-foreground tabular-nums">
+                {currentIndex + 1}/{totalCards}
+              </span>
+            )}
+          </div>
         </header>
+
+        {/* Progress bar */}
+        {hasCards && totalCards > 0 && (
+          <div className="h-1 w-full bg-muted/40">
+            <div
+              className="h-full transition-all duration-500 ease-out"
+              style={{
+                width: `${((currentIndex + (feedback ? 1 : 0)) / totalCards) * 100}%`,
+                background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`,
+                borderRadius: '0 4px 4px 0',
+              }}
+            />
+          </div>
+        )}
 
         <main className="flex flex-1 min-h-0 flex-col items-center justify-center px-4 py-6 overflow-y-auto">
           {loading ? (
@@ -639,40 +688,56 @@ const Study = () => {
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <Brain className="h-8 w-8 text-primary animate-pulse" />
               </div>
-              <p className="text-sm text-muted-foreground">Buscando conteúdo de reforço...</p>
+              <p className="text-sm text-muted-foreground">Gerando conteúdo de reforço simplificado...</p>
+              <p className="text-[10px] text-muted-foreground">Vamos explicar de um jeito mais fácil</p>
             </div>
           ) : (
-          <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
-            {/* Intro message */}
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Você errou este card <span className="font-bold text-destructive">{LEECH_THRESHOLD} vezes</span>.
-                {concept
-                  ? <> Vamos reforçar o tema <span className="font-semibold text-foreground">"{concept.name}"</span> antes de continuar.</>
-                  : <> Revise o conteúdo antes de continuar.</>
-                }
-              </p>
-            </div>
+          <div className="animate-fade-in w-full max-w-lg space-y-5 text-center">
+            {/* Intro message — only on first card before flip */}
+            {currentIndex === 0 && !flipped && !feedback && (
+              <div className="space-y-1.5 px-2">
+                <p className="text-sm text-muted-foreground">
+                  Você errou este card <span className="font-bold text-destructive">{LEECH_THRESHOLD}×</span>.
+                  {hasCards
+                    ? <> Vamos revisar o tema com cards mais simples para reforçar a base.</>
+                    : <> Revise o conteúdo abaixo antes de continuar.</>
+                  }
+                </p>
+              </div>
+            )}
 
-            {/* Reinforcement card or fallback */}
-            {hasCards && currentReinforceCard ? (
+            {/* Feedback overlay */}
+            {feedback && (
+              <div className={`rounded-xl py-3 px-4 text-sm font-medium transition-all animate-fade-in ${
+                feedback === 'correct'
+                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                  : 'bg-destructive/10 text-destructive'
+              }`}>
+                {feedback === 'correct' ? '✓ Boa! Você lembrou.' : '✗ Não lembrou — tudo bem, é por isso que estamos revisando.'}
+              </div>
+            )}
+
+            {/* Reinforcement card */}
+            {hasCards && currentReinforceCard && !feedback ? (
               <div
-                className="cursor-pointer rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:shadow-md min-h-[200px] flex items-center justify-center"
-                onClick={() => setLeechMode(prev => prev ? { ...prev, flipped: !prev.flipped } : null)}
+                className={`cursor-pointer rounded-2xl border-2 bg-card p-6 shadow-sm transition-all hover:shadow-md min-h-[200px] flex items-center justify-center ${
+                  flipped ? 'border-primary/30' : 'border-border'
+                }`}
+                onClick={() => !flipped && setLeechMode(prev => prev ? { ...prev, flipped: true } : null)}
               >
                 <div className="w-full">
                   {!flipped ? (
                     <div className="space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Frente</p>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Pergunta</p>
                       <div
                         className="text-base text-foreground leading-relaxed"
                         dangerouslySetInnerHTML={{ __html: currentReinforceCard.front_content }}
                       />
-                      <p className="text-[10px] text-muted-foreground mt-4">Toque para ver o verso</p>
+                      <p className="text-[10px] text-muted-foreground mt-4 opacity-60">Tente lembrar, depois toque para ver</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <p className="text-xs font-medium text-primary uppercase tracking-wider">Verso</p>
+                      <p className="text-[10px] font-medium text-primary uppercase tracking-wider">Resposta</p>
                       <div
                         className="text-base text-foreground leading-relaxed"
                         dangerouslySetInnerHTML={{ __html: currentReinforceCard.back_content }}
@@ -681,10 +746,10 @@ const Study = () => {
                   )}
                 </div>
               </div>
-            ) : (
-              /* Fallback: show the leech card's back content */
+            ) : !feedback && (
+              /* Fallback: show the leech card's back content as study material */
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <p className="text-xs font-medium text-primary uppercase tracking-wider mb-3">Conteúdo para revisão</p>
+                <p className="text-[10px] font-medium text-primary uppercase tracking-wider mb-3">Revise o conteúdo</p>
                 <div
                   className="text-base text-foreground leading-relaxed text-left"
                   dangerouslySetInnerHTML={{ __html: leechCard.back_content }}
@@ -692,22 +757,32 @@ const Study = () => {
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex gap-3 justify-center pt-2">
-              {hasCards && flipped && !isLastCard ? (
-                <Button
-                  onClick={() => setLeechMode(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1, flipped: false } : null)}
-                  className="gap-2"
-                >
-                  Próximo <ChevronRight className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button onClick={exitLeechMode} className="gap-2">
-                  {hasCards && !flipped ? 'Pular reforço' : 'Voltar à sessão'}
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            {/* Action buttons — only show after flipping */}
+            {!feedback && (
+              <div className="flex gap-3 justify-center pt-2">
+                {hasCards && flipped ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => advanceCard(false)}
+                      className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                    >
+                      Não lembrei
+                    </Button>
+                    <Button
+                      onClick={() => advanceCard(true)}
+                      className="gap-2"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Lembrei
+                    </Button>
+                  </>
+                ) : !hasCards ? (
+                  <Button onClick={exitLeechMode} className="gap-2">
+                    Entendi, voltar à sessão <ChevronRight className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            )}
           </div>
           )}
         </main>
