@@ -21,7 +21,7 @@ import {
 import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
   ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
-  BookX, Filter, Zap, Crown, CircleDot, CheckCircle2, XCircle, HelpCircle,
+  BookX, Zap, Crown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
