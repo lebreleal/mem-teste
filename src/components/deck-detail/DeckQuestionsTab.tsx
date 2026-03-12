@@ -1801,21 +1801,32 @@ const PasteQuestionsDialog = ({
   const [parsedQuestions, setParsedQuestions] = useState<any[] | null>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Track which questions to import (all selected by default)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [aiModel, setAiModel] = useState<'flash' | 'pro'>('flash');
+
+  const cost = aiModel === 'pro' ? 5 : 1;
 
   const resetForm = () => {
     setPastedText(''); setParsedQuestions(null); setParsing(false); setSaving(false);
-    setSelectedIds(new Set());
+    setSelectedIds(new Set()); setAiModel('flash');
   };
 
   const handleParse = async () => {
     if (!user || !pastedText.trim()) return;
-    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    if (energy < cost) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
     setParsing(true);
     try {
+      // Fetch existing global concepts for reuse
+      const { data: existingConcepts } = await supabase
+        .from('global_concepts' as any)
+        .select('name')
+        .eq('user_id', user.id)
+        .limit(200);
+
+      const conceptNames = (existingConcepts ?? []).map((c: any) => c.name);
+
       const { data, error } = await supabase.functions.invoke('parse-questions', {
-        body: { text: pastedText },
+        body: { text: pastedText, aiModel, existingConcepts: conceptNames },
       });
       if (error) throw error;
       if (!data?.questions?.length) {
