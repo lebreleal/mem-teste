@@ -4,16 +4,21 @@ import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/Deck
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
+import ConceptStatsCard from '@/components/deck-detail/ConceptStatsCard';
+import ConceptList from '@/components/deck-detail/ConceptList';
+import { CreateConceptDialog, EditConceptCardsDialog } from '@/components/deck-detail/ConceptDialogs';
+import { useDeckConcepts } from '@/hooks/useDeckConcepts';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, Brain } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
