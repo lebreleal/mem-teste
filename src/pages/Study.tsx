@@ -8,10 +8,11 @@ import { useAIModel } from '@/hooks/useAIModel';
 import { invalidateStudyQueries } from '@/lib/queryKeys';
 import { useTutorStream } from '@/hooks/useTutorStream';
 import { useStudyUndo } from '@/hooks/useStudyUndo';
+import { useAuth } from '@/hooks/useAuth';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -22,12 +23,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
+import { getCardConcepts, getConceptRelatedCards, type GlobalConcept } from '@/services/globalConceptService';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
 
 const FAST_THRESHOLD_MS = 3000;
 const BASE_TUTOR_COST = 2;
+const LEECH_THRESHOLD = 3;
 
 /** Get IDs of cloze siblings (same front_content, different card) from queue */
 function getSiblingIds(card: any, queue: any[]): string[] {
