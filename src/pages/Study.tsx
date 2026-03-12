@@ -390,9 +390,15 @@ const Study = () => {
       leechCard: card,
       concept: null,
       reinforceCards: [],
+      retryCards: [],
       currentIndex: 0,
+      round: 1,
       flipped: false,
       loading: true,
+      isAdvancing: false,
+      feedback: null,
+      correctCount: 0,
+      wrongCount: 0,
     });
 
     try {
@@ -407,7 +413,10 @@ const Study = () => {
 
       if (reinforceCards.length === 0) {
         const conceptName = weakest?.name ?? `${card.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
-        reinforceCards = await generateReinforcementCards(conceptName, user.id);
+        reinforceCards = await generateReinforcementCards(conceptName, user.id, {
+          front_content: card.front_content,
+          back_content: card.back_content,
+        });
         reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
       }
 
@@ -415,9 +424,15 @@ const Study = () => {
         leechCard: card,
         concept: weakest,
         reinforceCards,
+        retryCards: [],
         currentIndex: 0,
+        round: 1,
         flipped: false,
         loading: false,
+        isAdvancing: false,
+        feedback: null,
+        correctCount: 0,
+        wrongCount: 0,
       });
     } catch {
       setLeechMode(prev => prev ? { ...prev, loading: false } : null);
