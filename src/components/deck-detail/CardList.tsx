@@ -473,18 +473,28 @@ const CardListContent = ({
                 isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
               }`}
               onClick={() => {
-                if (selectionMode) { toggleCardSelection(card.id); return; }
+                if (selectionMode) {
+                  if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
+                  toggleCardSelection(card.id);
+                  return;
+                }
                 const flatIdx = filteredCards.findIndex((c: any) => c.id === card.id);
                 setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
               }}
             >
               <div className="flex items-start gap-3">
                 {selectionMode && (
-                  <div className="pt-0.5 shrink-0">
+                  <div
+                    className="pt-0.5 shrink-0"
+                    onClick={(e: any) => {
+                      e.stopPropagation();
+                      if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
+                      toggleCardSelection(card.id);
+                    }}
+                  >
                     <Checkbox
                       checked={isSelected}
-                      onCheckedChange={() => toggleCardSelection(card.id)}
-                      onClick={(e: any) => e.stopPropagation()}
+                      className={isLinkedDeck ? 'opacity-40 cursor-not-allowed' : ''}
                     />
                   </div>
                 )}
