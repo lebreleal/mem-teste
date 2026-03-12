@@ -103,11 +103,17 @@ export async function ensureGlobalConcepts(
   // Insert missing
   const missingSlugs = slugs.filter(s => !slugMap.has(s));
   if (missingSlugs.length > 0) {
-    const rows = missingSlugs.map(s => ({
-      user_id: userId,
-      name: uniqueBySlug.get(s)!,
-      slug: s,
-    }));
+    const rows = missingSlugs.map(s => {
+      const name = uniqueBySlug.get(s)!;
+      const meta = conceptMetaMap?.get(s);
+      return {
+        user_id: userId,
+        name,
+        slug: s,
+        ...(meta?.category ? { category: meta.category } : {}),
+        ...(meta?.subcategory ? { subcategory: meta.subcategory } : {}),
+      };
+    });
 
     const { data: inserted, error } = await supabase
       .from('global_concepts' as any)
