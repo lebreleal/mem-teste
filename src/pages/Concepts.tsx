@@ -1038,6 +1038,37 @@ const ConceptsPage = () => {
                   </div>
                 )}
 
+                {/* Donut Chart */}
+                {!selectionMode && concepts.length >= 3 && (
+                  <CategoryDonutChart concepts={concepts} onCategoryClick={(cat) => setCategoryFilter(cat)} />
+                )}
+
+                {/* Action Buttons */}
+                {!selectionMode && concepts.length >= 2 && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleMapPrerequisites} disabled={mappingPrereqs}>
+                      <Wand2 className="h-3.5 w-3.5" />
+                      {mappingPrereqs ? 'Mapeando...' : 'Mapear pré-requisitos com IA'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleStartDiagnostic} disabled={diagnosticLoading}>
+                      <Stethoscope className="h-3.5 w-3.5" />
+                      {diagnosticLoading ? 'Preparando...' : 'Diagnóstico Inicial'}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Category filter active */}
+                {categoryFilter && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs gap-1">
+                      {categoryFilter}
+                      <button onClick={() => setCategoryFilter(null)} className="ml-0.5 hover:text-destructive">
+                        <XIcon className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  </div>
+                )}
+
                 {/* Search */}
                 {counts.total > 5 && (
                   <div className="relative">
@@ -1074,7 +1105,7 @@ const ConceptsPage = () => {
                       </div>
                     </div>
                     {hasActiveFilter && (
-                      <button onClick={() => setStateFilter('all')} className="text-xs text-primary hover:underline">
+                      <button onClick={() => { setStateFilter('all'); setCategoryFilter(null); }} className="text-xs text-primary hover:underline">
                         Limpar filtros
                       </button>
                     )}
