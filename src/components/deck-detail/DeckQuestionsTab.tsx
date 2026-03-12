@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
+import { linkQuestionsToConcepts, ensureGlobalConcepts, updateConceptMastery, conceptSlug } from '@/services/globalConceptService';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -451,8 +452,24 @@ const QuestionPractice = ({
       question_id: q.id, user_id: user.id, selected_indices: [selected], is_correct: isCorrect,
     });
 
-    // Update concept mastery
+    // Update concept mastery (both legacy deck_concept_mastery and global_concepts)
     if (q.concepts && q.concepts.length > 0) {
+      // Ensure global concepts exist and update their mastery
+      ensureGlobalConcepts(user.id, q.concepts).then(slugToId => {
+        for (const concept of q.concepts) {
+          const slug = conceptSlug(concept);
+          const conceptId = slugToId.get(slug);
+          if (conceptId) {
+            updateConceptMastery(conceptId, isCorrect).catch(console.error);
+          }
+        }
+        // Also link this question to global concepts if not already linked
+        linkQuestionsToConcepts(user.id, [{ questionId: q.id, conceptNames: q.concepts }]).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+        queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
+      }).catch(console.error);
+
+      // Legacy: still update deck_concept_mastery for backward compat
       for (const concept of q.concepts) {
         const existing = conceptMastery.find(m => m.concept === concept);
         const newCorrect = (existing?.correct_count || 0) + (isCorrect ? 1 : 0);
@@ -923,6 +940,8 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
+        const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
           const opts = qi.options || [];
@@ -936,7 +955,7 @@ const CreateQuestionDialog = ({
           const shuffledOpts = indices.map((i: number) => opts[i]);
           const newCorrectIdx = indices.indexOf(correctIdx);
 
-          await supabase.from('deck_questions' as any).insert({
+          const { data: inserted } = await supabase.from('deck_questions' as any).insert({
             deck_id: deckId, created_by: user.id,
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
@@ -944,8 +963,19 @@ const CreateQuestionDialog = ({
             correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
-          });
+          }).select('id').single();
+
+          // Collect for global concept linking
+          if (inserted && qi.concepts?.length > 0) {
+            questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: qi.concepts });
+          }
         }
+
+        // Link all questions to global concepts (fire-and-forget)
+        if (questionConceptPairs.length > 0) {
+          linkQuestionsToConcepts(user.id, questionConceptPairs).catch(console.error);
+        }
+
         return qs.length;
       } catch (err) {
         clearInterval(stepInterval);

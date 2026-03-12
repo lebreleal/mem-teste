@@ -1203,6 +1203,57 @@ export type Database = {
           },
         ]
       }
+      global_concepts: {
+        Row: {
+          correct_count: number
+          created_at: string
+          difficulty: number
+          id: string
+          last_reviewed_at: string | null
+          learning_step: number
+          name: string
+          scheduled_date: string
+          slug: string
+          stability: number
+          state: number
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          correct_count?: number
+          created_at?: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name: string
+          scheduled_date?: string
+          slug: string
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          correct_count?: number
+          created_at?: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name?: string
+          scheduled_date?: string
+          slug?: string
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: []
+      }
       lesson_content_folders: {
         Row: {
           created_at: string
@@ -1521,6 +1572,42 @@ export type Database = {
             columns: ["selected_plan_id"]
             isOneToOne: false
             referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      question_concepts: {
+        Row: {
+          concept_id: string
+          created_at: string
+          id: string
+          question_id: string
+        }
+        Insert: {
+          concept_id: string
+          created_at?: string
+          id?: string
+          question_id: string
+        }
+        Update: {
+          concept_id?: string
+          created_at?: string
+          id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_concepts_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "global_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_concepts_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "deck_questions"
             referencedColumns: ["id"]
           },
         ]
