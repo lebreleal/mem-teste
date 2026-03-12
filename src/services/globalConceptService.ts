@@ -644,6 +644,64 @@ export async function getConceptRelatedCards(
   return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
 }
 
+// ─── Generate reinforcement cards via AI (Pro, zero cost) ───
+// Used when leech trigger fires and no existing cards are found for the concept.
+// Creates a permanent "Reforço: {name}" deck so future lookups find them.
+export async function generateReinforcementCards(
+  conceptNameOrContent: string,
+  userId: string,
+): Promise<{ id: string; front_content: string; back_content: string; deck_id: string }[]> {
+  const deckName = `Reforço: ${conceptNameOrContent.slice(0, 60)}`;
+
+  // Check if we already have a reinforcement deck for this concept
+  const { data: existingDeck } = await supabase
+    .from('decks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', deckName)
+    .maybeSingle();
+
+  if (existingDeck) {
+    // Deck already exists — return its cards
+    const { data: cards } = await supabase
+      .from('cards')
+      .select('id, front_content, back_content, deck_id')
+      .eq('deck_id', existingDeck.id)
+      .limit(10);
+    return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+  }
+
+  // Generate via edge function — Pro model, zero energy cost (system-funded)
+  const prompt = `Explique detalhadamente o seguinte tema médico: "${conceptNameOrContent}". ` +
+    `Cubra: definição, fisiopatologia/mecanismo, etiologia, quadro clínico, diagnóstico e tratamento. ` +
+    `Foque nos pontos mais cobrados em provas de residência médica.`;
+
+  const { data, error } = await supabase.functions.invoke('generate-deck', {
+    body: {
+      content: prompt,
+      deckName,
+      aiModel: 'pro',
+      energyCost: 0,
+      formats: ['cloze', 'qa'],
+      density: 'standard',
+    },
+  });
+
+  if (error || !data?.deckId) {
+    console.error('generateReinforcementCards error:', error ?? data?.error);
+    return [];
+  }
+
+  // Fetch the newly created cards
+  const { data: newCards } = await supabase
+    .from('cards')
+    .select('id, front_content, back_content, deck_id')
+    .eq('deck_id', data.deckId)
+    .limit(10);
+
+  return (newCards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+}
+
 // ─── Generate concept-focused questions via edge function ───
 export async function generateConceptQuestions(
   cardIds: string[],

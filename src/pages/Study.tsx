@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
-import { getCardConcepts, getConceptRelatedCards, type GlobalConcept } from '@/services/globalConceptService';
+import { getCardConcepts, getConceptRelatedCards, generateReinforcementCards, type GlobalConcept } from '@/services/globalConceptService';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
@@ -81,6 +81,7 @@ const Study = () => {
     reinforceCards: { id: string; front_content: string; back_content: string; deck_id: string }[];
     currentIndex: number;
     flipped: boolean;
+    loading?: boolean;
   } | null>(null);
 
   // Reset scroll on card change
@@ -202,32 +203,42 @@ const Study = () => {
       if (count >= LEECH_THRESHOLD && user) {
         // Trigger leech mode — fetch concepts async
         submittingRef.current = null;
+        // Show loading state immediately
+        setLeechMode({
+          leechCard: currentCard,
+          concept: null,
+          reinforceCards: [],
+          currentIndex: 0,
+          flipped: false,
+          loading: true,
+        });
         (async () => {
           try {
             const concepts = await getCardConcepts(currentCard.id, user.id);
-            const weakest = concepts.length > 0 ? concepts[0] : null; // already sorted by stability ASC
+            const weakest = concepts.length > 0 ? concepts[0] : null;
             let reinforceCards: any[] = [];
             if (weakest) {
               reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
-              // Exclude the leech card itself
               reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
             }
+
+            // If no cards found, generate with AI (Pro, free)
+            if (reinforceCards.length === 0) {
+              const conceptName = weakest?.name ?? `${currentCard.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
+              reinforceCards = await generateReinforcementCards(conceptName, user.id);
+              reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
+            }
+
             setLeechMode({
               leechCard: currentCard,
               concept: weakest,
               reinforceCards,
               currentIndex: 0,
               flipped: false,
+              loading: false,
             });
           } catch {
-            // Fallback: show card back content
-            setLeechMode({
-              leechCard: currentCard,
-              concept: null,
-              reinforceCards: [],
-              currentIndex: 0,
-              flipped: false,
-            });
+            setLeechMode(prev => prev ? { ...prev, loading: false } : null);
           }
         })();
         return; // Don't proceed with normal review
@@ -349,7 +360,7 @@ const Study = () => {
   }, [leechMode]);
 
   if (leechMode) {
-    const { concept, reinforceCards, currentIndex, flipped, leechCard } = leechMode;
+    const { concept, reinforceCards, currentIndex, flipped, leechCard, loading } = leechMode;
     const hasCards = reinforceCards.length > 0;
     const currentReinforceCard = hasCards ? reinforceCards[currentIndex] : null;
     const isLastCard = currentIndex >= reinforceCards.length - 1;
@@ -375,6 +386,14 @@ const Study = () => {
         </header>
 
         <main className="flex flex-1 min-h-0 flex-col items-center justify-center px-4 py-6 overflow-y-auto">
+          {loading ? (
+            <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Brain className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+              <p className="text-sm text-muted-foreground">Buscando conteúdo de reforço...</p>
+            </div>
+          ) : (
           <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
             {/* Intro message */}
             <div className="space-y-2">
@@ -442,6 +461,7 @@ const Study = () => {
               )}
             </div>
           </div>
+          )}
         </main>
       </div>
     );
