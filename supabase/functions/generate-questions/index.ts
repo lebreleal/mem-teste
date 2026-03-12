@@ -155,7 +155,7 @@ Para cada questão, retorne:
 - options: array com exatamente ${optionsCount} alternativas
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
-- concepts: 2-5 conceitos-chave testados
+- concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
 - source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
 
     // ─── Tool schema for structured output ───
