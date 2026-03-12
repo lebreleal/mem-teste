@@ -362,17 +362,14 @@ const Study = () => {
 
   // Restore interruption modal when user closes/reopens app mid-leech flow
   useEffect(() => {
-    if (!currentCard || leechMode || leechInterruption) return;
+    if (leechMode || leechInterruption) return;
     const saved = readLeechInterruption();
     if (!saved) return;
 
-    if (saved.cardId !== currentCard.id) {
-      persistLeechInterruption(null);
-      return;
-    }
-
+    // The interruption is valid — show modal regardless of current card
+    // (the review was already submitted, this is just the modal prompt)
     setLeechInterruption(saved);
-  }, [currentCard, leechMode, leechInterruption, readLeechInterruption, persistLeechInterruption]);
+  }, [leechMode, leechInterruption, readLeechInterruption]);
 
   const clearLeechInterruption = useCallback(() => {
     setLeechInterruption(null);
