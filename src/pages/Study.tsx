@@ -403,7 +403,7 @@ const Study = () => {
     setLeechMode(null);
     setCardKey(prev => prev + 1);
     cardShownAt.current = Date.now();
-  }, [leechMode]);
+  }, [leechMode, persistLeechFailCounts]);
 
   if (leechMode) {
     const { concept, reinforceCards, currentIndex, flipped, leechCard, loading } = leechMode;
