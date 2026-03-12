@@ -21,7 +21,7 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
   const effectiveDeckId = sourceDeckId || deckId;
 
   const { data: questions = [] } = useQuery({
-    queryKey: ['deck-questions', effectiveDeckId],
+    queryKey: ['deck-questions-ids', effectiveDeckId],
     queryFn: async () => {
       const { data } = await supabase
         .from('deck_questions' as any).select('id')
