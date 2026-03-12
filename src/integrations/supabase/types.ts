@@ -1205,6 +1205,7 @@ export type Database = {
       }
       global_concepts: {
         Row: {
+          category: string | null
           correct_count: number
           created_at: string
           difficulty: number
@@ -1216,11 +1217,13 @@ export type Database = {
           slug: string
           stability: number
           state: number
+          subcategory: string | null
           updated_at: string
           user_id: string
           wrong_count: number
         }
         Insert: {
+          category?: string | null
           correct_count?: number
           created_at?: string
           difficulty?: number
@@ -1232,11 +1235,13 @@ export type Database = {
           slug: string
           stability?: number
           state?: number
+          subcategory?: string | null
           updated_at?: string
           user_id: string
           wrong_count?: number
         }
         Update: {
+          category?: string | null
           correct_count?: number
           created_at?: string
           difficulty?: number
@@ -1248,6 +1253,7 @@ export type Database = {
           slug?: string
           stability?: number
           state?: number
+          subcategory?: string | null
           updated_at?: string
           user_id?: string
           wrong_count?: number
