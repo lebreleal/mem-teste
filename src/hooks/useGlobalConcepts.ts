@@ -40,7 +40,7 @@ export const useGlobalConcepts = () => {
         last_reviewed_at: concept.last_reviewed_at ?? undefined,
       };
 
-      const result = reviewCard(card, rating, {
+      const result = fsrsSchedule(card, rating, {
         requestedRetention: 0.85,
         learningSteps: ['10m', '1d'],
         relearningSteps: ['10m'],
