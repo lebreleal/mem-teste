@@ -6,7 +6,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions } from '@/services/globalConceptService';
+import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts } from '@/services/globalConceptService';
 import { getVariedQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
