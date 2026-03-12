@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
+import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
@@ -226,11 +227,22 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
 
   const totalCards = cardCounts?.total ?? 0;
 
+  const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
+
   return (
     <>
       {activeTab === 'cards' && <DeckStatsCard />}
+      {activeTab === 'questions' && (
+        <QuestionStatsCard
+          deckId={deckId}
+          sourceDeckId={resolvedSourceDeckId}
+          isReadOnly
+          onPractice={() => setQuestionAction('practice')}
+          onCreateAI={() => setQuestionAction('ai')}
+        />
+      )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
             value="cards"
@@ -256,7 +268,13 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
         </TabsContent>
         <TabsContent value="questions" className="mt-4">
           <Suspense fallback={null}>
-            <DeckQuestionsTab deckId={deckId} isReadOnly sourceDeckId={effectiveDeckId} />
+            <DeckQuestionsTab
+              deckId={deckId}
+              isReadOnly
+              sourceDeckId={effectiveDeckId}
+              autoStart={questionAction === 'practice'}
+              autoCreate={questionAction === 'ai' ? 'ai' : null}
+            />
           </Suspense>
         </TabsContent>
         <TabsContent value="suggestions" className="mt-4">
@@ -271,12 +289,20 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
+  const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
   return (
     <>
       {activeTab === 'cards' && <DeckStatsCard />}
+      {activeTab === 'questions' && (
+        <QuestionStatsCard
+          deckId={deckId}
+          onPractice={() => setQuestionAction('practice')}
+          onCreateAI={() => setQuestionAction('ai')}
+        />
+      )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
             value="cards"
@@ -296,7 +322,11 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
         </TabsContent>
         <TabsContent value="questions" className="mt-4">
           <Suspense fallback={null}>
-            <DeckQuestionsTab deckId={deckId} />
+            <DeckQuestionsTab
+              deckId={deckId}
+              autoStart={questionAction === 'practice'}
+              autoCreate={questionAction === 'ai' ? 'ai' : null}
+            />
           </Suspense>
         </TabsContent>
       </Tabs>

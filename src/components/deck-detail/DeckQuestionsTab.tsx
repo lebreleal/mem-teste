@@ -21,7 +21,7 @@ import {
 import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
   ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
-  BookX, Filter, Zap, Crown, CircleDot, CheckCircle2, XCircle, HelpCircle,
+  BookX, Zap, Crown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
@@ -63,141 +63,6 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 type QuestionFilter = 'all' | 'unanswered' | 'errors';
 
 /* ════════════════════════════════════════════════════════════
-   Question Stats Hero Card (matches DeckStatsCard layout exactly)
-   ════════════════════════════════════════════════════════════ */
-const QuestionStatsHero = ({
-  total, answered, correct, wrong, unanswered, errorCount,
-  filter, onFilterChange, onPractice, onCreateAI, onCreateManual,
-  isReadOnly, filteredCount,
-}: {
-  total: number; answered: number; correct: number; wrong: number; unanswered: number;
-  errorCount: number; filteredCount: number;
-  filter: QuestionFilter; onFilterChange: (f: QuestionFilter) => void;
-  onPractice: () => void; onCreateAI: () => void; onCreateManual: () => void;
-  isReadOnly: boolean;
-}) => {
-  const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
-  const correctPct = total > 0 ? (correct / total) * 100 : 0;
-  const wrongPct = total > 0 ? (wrong / total) * 100 : 0;
-
-  return (
-    <>
-      {/* Hero card — same structure as DeckStatsCard */}
-      <div className="rounded-2xl border border-border/50 bg-card p-4 sm:p-6 shadow-sm">
-        {/* Big number */}
-        <div className="flex items-center justify-center mb-4">
-          <div className="text-center">
-            <span className="font-display text-4xl sm:text-5xl font-bold text-foreground">
-              {total}
-            </span>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              questões no banco
-            </p>
-          </div>
-        </div>
-
-        {/* 3-column stats — same spacing as DeckStatsCard */}
-        <div className="flex items-center justify-center gap-6 sm:gap-8 mb-4 sm:mb-6">
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-lg sm:text-2xl font-bold text-foreground">{unanswered}</span>
-            </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">A responder</span>
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" style={{ color: 'hsl(142 71% 45%)' }} />
-              <span className="text-lg sm:text-2xl font-bold text-foreground">{correct}</span>
-            </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">Corretas</span>
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <XCircle className="h-4 w-4 text-destructive" />
-              <span className="text-lg sm:text-2xl font-bold text-foreground">{wrong}</span>
-            </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">Erradas</span>
-          </div>
-        </div>
-
-        {/* Buttons row — Estudar (wide) + Gerar (outline) like Estudar + Prova */}
-        <div className="flex gap-3">
-          <Button
-            onClick={onPractice}
-            className="flex-1 h-12 text-base font-semibold gap-2"
-            disabled={filteredCount === 0}
-          >
-            <PlayCircle className="h-5 w-5" />
-            {filter === 'errors' ? 'Revisar Erros' : 'Estudar'}
-          </Button>
-          {!isReadOnly && (
-            <Button
-              variant="outline"
-              onClick={onCreateAI}
-              className="h-12 gap-2 px-4"
-              title="Gerar questões com IA"
-            >
-              <Sparkles className="h-5 w-5" />
-              <span className="hidden sm:inline">Gerar</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter pills + progress — OUTSIDE the card, below it */}
-      {total > 0 && (
-        <div className="space-y-3">
-          {/* Multi-color progress bar */}
-          {answered > 0 && (
-            <div className="space-y-1">
-              <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden flex">
-                {correctPct > 0 && (
-                  <div className="h-full transition-all duration-500" style={{ width: `${correctPct}%`, background: 'hsl(142 71% 45%)' }} />
-                )}
-                {wrongPct > 0 && (
-                  <div className="h-full transition-all duration-500" style={{ width: `${wrongPct}%`, background: 'hsl(var(--destructive))' }} />
-                )}
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground px-0.5">
-                <span>{answered}/{total} respondidas</span>
-                <span>{pct}% de aproveitamento</span>
-              </div>
-            </div>
-          )}
-
-          {/* Filter pills */}
-          <div className="flex items-center gap-1.5">
-            {([
-              { key: 'all' as const, label: 'Todas', icon: CircleDot },
-              { key: 'unanswered' as const, label: 'A responder', icon: HelpCircle },
-              { key: 'errors' as const, label: 'Caderno de Erros', icon: BookX, count: errorCount },
-            ]).map(f => (
-              <button
-                key={f.key}
-                onClick={() => onFilterChange(f.key)}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
-                  filter === f.key
-                    ? 'border-primary bg-primary/10 text-primary font-bold'
-                    : 'border-border/50 text-muted-foreground hover:border-primary/30'
-                }`}
-              >
-                <f.icon className="h-3 w-3" />
-                {f.label}
-                {f.count !== undefined && f.count > 0 && (
-                  <span className="ml-0.5 bg-destructive text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">
-                    {f.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
-/* ════════════════════════════════════════════════════════════
    Concept Self-Assessment (after answering)
    3-level confidence scale: strong / learning / weak
    ════════════════════════════════════════════════════════════ */
@@ -227,12 +92,10 @@ const ConceptMasterySection = ({
   const strongCount = Object.values(feedback).filter(v => v === 'strong').length;
   const learningCount = Object.values(feedback).filter(v => v === 'learning').length;
   const weakCount = Object.values(feedback).filter(v => v === 'weak').length;
-  const progressPct = concepts.length > 0 ? (evaluatedCount / concepts.length) * 100 : 0;
 
   const handleFeedback = (concept: string, value: MasteryLevel) => {
     setFeedback(prev => ({ ...prev, [concept]: value }));
     if (value === 'strong') {
-      // Auto-collapse after marking as mastered
       setTimeout(() => setExpanded(prev => ({ ...prev, [concept]: false })), 300);
     }
     if (value === 'learning' || value === 'weak') {
@@ -1288,16 +1151,17 @@ const CreateQuestionDialog = ({
    Main Tab Component
    ════════════════════════════════════════════════════════════ */
 const DeckQuestionsTab = ({
-  deckId, isReadOnly = false, sourceDeckId,
+  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null;
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
-  const [practicing, setPracticing] = useState(false);
+  const [createOpen, setCreateOpen] = useState(!!autoCreate);
+  const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
+  const [practicing, setPracticing] = useState(!!autoStart);
   const [filter, setFilter] = useState<QuestionFilter>('all');
 
   const effectiveDeckId = sourceDeckId || deckId;
@@ -1379,93 +1243,135 @@ const DeckQuestionsTab = ({
     return <QuestionPractice questions={filteredQuestions} deckId={deckId} onClose={() => setPracticing(false)} />;
   }
 
+  const correctPct = statsData.total > 0 ? (statsData.correct / statsData.total) * 100 : 0;
+  const wrongPct = statsData.total > 0 ? (statsData.wrong / statsData.total) * 100 : 0;
+  const unansweredPct = 100 - correctPct - wrongPct;
+
   return (
     <div className="space-y-4">
-      {/* Hero Stats Card */}
-      <QuestionStatsHero
-        total={statsData.total}
-        answered={statsData.answered}
-        correct={statsData.correct}
-        wrong={statsData.wrong}
-        unanswered={statsData.total - statsData.answered}
-        errorCount={statsData.errorQuestionIds.size}
-        filteredCount={filteredQuestions.length}
-        filter={filter}
-        onFilterChange={setFilter}
-        onPractice={() => setPracticing(true)}
-        onCreateAI={() => { setCreateMode('ai'); setCreateOpen(true); }}
-        onCreateManual={() => { setCreateMode('manual'); setCreateOpen(true); }}
-        isReadOnly={isReadOnly}
-      />
+      {/* Header with title + actions — matches CardList "Cartões na coleção" */}
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-base font-bold text-foreground">
+          {filter === 'errors' ? 'Caderno de Erros' : filter === 'unanswered' ? 'Não Respondidas' : 'Banco de Questões'}
+          {' '}({filteredQuestions.length})
+        </h3>
+        <div className="flex items-center gap-2">
+          {/* Filter dropdown pills */}
+          {([
+            { key: 'all' as const, label: 'Todas' },
+            { key: 'unanswered' as const, label: 'A responder' },
+            { key: 'errors' as const, label: 'Erros', count: statsData.errorQuestionIds.size },
+          ]).map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                filter === f.key
+                  ? 'border-primary bg-primary/10 text-primary font-bold'
+                  : 'border-border/50 text-muted-foreground hover:border-primary/30'
+              }`}
+            >
+              {f.label}
+              {f.count !== undefined && f.count > 0 && (
+                <span className="bg-destructive text-white text-[9px] font-bold rounded-full h-3.5 min-w-[14px] px-1 flex items-center justify-center">
+                  {f.count}
+                </span>
+              )}
+            </button>
+          ))}
+          {!isReadOnly && (
+            <Button variant="default" size="sm" className="gap-1 text-xs h-7" onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}>
+              <Plus className="h-3 w-3" /> Adicionar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar — matches CardList style */}
+      {statsData.total > 0 && (
+        <>
+          <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden flex">
+            {correctPct > 0 && (
+              <div className="h-full transition-all duration-500" style={{ width: `${correctPct}%`, background: 'hsl(142 71% 45%)' }} />
+            )}
+            {wrongPct > 0 && (
+              <div className="h-full transition-all duration-500" style={{ width: `${wrongPct}%`, background: 'hsl(var(--destructive))' }} />
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+              {statsData.total - statsData.answered} A responder
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: 'hsl(142 71% 45%)' }} />
+              {statsData.correct} Corretas
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-destructive" />
+              {statsData.wrong} Erradas
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Question list */}
-      {questions.length > 0 && (
-        <div className="rounded-2xl border border-border/50 bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-sm font-bold text-foreground">
-              {filter === 'errors' ? 'Caderno de Erros' : filter === 'unanswered' ? 'Não Respondidas' : 'Banco de Questões'}
-            </h3>
-            <Badge variant="secondary">{filteredQuestions.length}</Badge>
-          </div>
-
-          {isLoading ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">Carregando questões...</div>
-          ) : filteredQuestions.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              {filter === 'errors' ? 'Nenhuma questão no caderno de erros 🎉' : filter === 'unanswered' ? 'Todas as questões foram respondidas!' : 'Nenhuma questão criada para este deck ainda.'}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredQuestions.map((q, idx) => {
-                const opts: string[] = q.options;
-                const cIdx = q.correct_indices?.[0] ?? 0;
-                const plainText = q.question_text.replace(/<[^>]+>/g, '');
-                const isError = statsData.errorQuestionIds.has(q.id);
-                const isAnswered = statsData.answeredQuestionIds.has(q.id);
-                const isCorrectlyAnswered = isAnswered && !isError;
-                return (
-                  <div key={q.id} className={`rounded-xl border px-3 py-2.5 hover:border-primary/30 transition-colors ${
-                    isError ? 'border-destructive/30 bg-destructive/5' : isCorrectlyAnswered ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/50 bg-background'
-                  }`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {isError && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
-                          {isCorrectlyAnswered && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
-                          <p className="text-sm font-semibold text-foreground line-clamp-2">
-                            {idx + 1}. {plainText}
-                          </p>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {opts.slice(0, 5).map((opt, oi) => (
-                            <span key={oi} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              oi === cIdx ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
-                            </span>
-                          ))}
-                        </div>
-                        {q.concepts && q.concepts.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {q.concepts.map(c => (
-                              <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                {c}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {!isReadOnly && (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(q.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+      {isLoading ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">Carregando questões...</div>
+      ) : filteredQuestions.length === 0 ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">
+          {filter === 'errors' ? 'Nenhuma questão no caderno de erros 🎉' : filter === 'unanswered' ? 'Todas as questões foram respondidas!' : 'Nenhuma questão criada para este deck ainda.'}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredQuestions.map((q, idx) => {
+            const opts: string[] = q.options;
+            const cIdx = q.correct_indices?.[0] ?? 0;
+            const plainText = q.question_text.replace(/<[^>]+>/g, '');
+            const isError = statsData.errorQuestionIds.has(q.id);
+            const isAnswered = statsData.answeredQuestionIds.has(q.id);
+            const isCorrectlyAnswered = isAnswered && !isError;
+            return (
+              <div key={q.id} className={`rounded-xl border px-3 py-2.5 hover:border-primary/30 transition-colors ${
+                isError ? 'border-destructive/30 bg-destructive/5' : isCorrectlyAnswered ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/50 bg-background'
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {isError && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
+                      {isCorrectlyAnswered && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                      <p className="text-sm font-semibold text-foreground line-clamp-2">
+                        {idx + 1}. {plainText}
+                      </p>
                     </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {opts.slice(0, 5).map((opt, oi) => (
+                        <span key={oi} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          oi === cIdx ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
+                        </span>
+                      ))}
+                    </div>
+                    {q.concepts && q.concepts.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {q.concepts.map(c => (
+                          <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  {!isReadOnly && (
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(q.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
