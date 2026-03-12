@@ -389,7 +389,7 @@ const Study = () => {
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user]);
+  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user, persistLeechFailCounts]);
 
   // ─── Leech Mode: Mini Reinforcement Session ───
   const exitLeechMode = useCallback(() => {
