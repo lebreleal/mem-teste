@@ -116,7 +116,7 @@ const ConceptList = ({ concepts, onPracticeConcept, onGenerateQuestions }: Conce
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-medium text-foreground truncate">{item.concept}</p>
                   {item.decayed && (
-                    <Clock className="h-3 w-3 text-amber-500 shrink-0" title="Nível rebaixado por inatividade" />
+                    <span title="Nível rebaixado por inatividade"><Clock className="h-3 w-3 text-amber-500 shrink-0" /></span>
                   )}
                   {crossDeckCount && crossDeckCount > 1 && (
                     <span className="inline-flex items-center gap-0.5 text-[9px] text-primary font-medium shrink-0" title={`Presente em ${crossDeckCount} baralhos`}>
