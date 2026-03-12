@@ -6,7 +6,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions } from '@/services/globalConceptService';
+import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts } from '@/services/globalConceptService';
 import { getVariedQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
   X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
-  CheckCheck, Filter,
+  CheckCheck, Filter, Plus,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -78,6 +78,14 @@ const ConceptsPage = () => {
   const [questionsConceptId, setQuestionsConceptId] = useState<string | null>(null);
   const [linkedQuestions, setLinkedQuestions] = useState<{ id: string; questionText: string; deckId: string; deckName?: string }[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  // Add concept to question dialog
+  const [addConceptOpen, setAddConceptOpen] = useState(false);
+  const [addConceptQuestionId, setAddConceptQuestionId] = useState<string | null>(null);
+  const [addConceptName, setAddConceptName] = useState('');
+  const [addConceptCategory, setAddConceptCategory] = useState('');
+  const [addConceptSubcategory, setAddConceptSubcategory] = useState('');
+  const [addConceptSaving, setAddConceptSaving] = useState(false);
 
   // Delete confirm (single or bulk)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -209,6 +217,32 @@ const ConceptsPage = () => {
     await unlinkQuestion.mutateAsync({ conceptId: questionsConceptId, questionId });
     setLinkedQuestions(prev => prev.filter(q => q.id !== questionId));
     toast.success('Questão desvinculada');
+  };
+
+  const openAddConcept = (questionId: string) => {
+    setAddConceptQuestionId(questionId);
+    setAddConceptName('');
+    setAddConceptCategory('');
+    setAddConceptSubcategory('');
+    setAddConceptOpen(true);
+  };
+
+  const handleAddConcept = async () => {
+    if (!user || !addConceptQuestionId || !addConceptName.trim()) return;
+    setAddConceptSaving(true);
+    try {
+      await linkQuestionsToConcepts(user.id, [{
+        questionId: addConceptQuestionId,
+        conceptNames: [addConceptName.trim()],
+        category: addConceptCategory || undefined,
+        subcategory: addConceptSubcategory || undefined,
+      }]);
+      toast.success(`Conceito "${addConceptName.trim()}" vinculado`);
+      setAddConceptOpen(false);
+    } catch {
+      toast.error('Erro ao vincular conceito');
+    }
+    setAddConceptSaving(false);
   };
 
   // Study mode
@@ -642,10 +676,10 @@ const ConceptsPage = () => {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Grande Área</label>
-              <Select value={editCategory} onValueChange={v => { setEditCategory(v); setEditSubcategory(''); }}>
+              <Select value={editCategory || '__none__'} onValueChange={v => { setEditCategory(v === '__none__' ? '' : v); setEditSubcategory(''); }}>
                 <SelectTrigger><SelectValue placeholder="Selecionar área..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem categoria</SelectItem>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
                   {MEDICAL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -653,10 +687,10 @@ const ConceptsPage = () => {
             {editCategory && CATEGORY_SUBCATEGORIES[editCategory] && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Especialidade</label>
-                <Select value={editSubcategory} onValueChange={setEditSubcategory}>
+                <Select value={editSubcategory || '__none__'} onValueChange={v => setEditSubcategory(v === '__none__' ? '' : v)}>
                   <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Geral</SelectItem>
+                    <SelectItem value="__none__">Geral</SelectItem>
                     {CATEGORY_SUBCATEGORIES[editCategory].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -725,7 +759,17 @@ const ConceptsPage = () => {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                      title="Adicionar conceito a esta questão"
+                      onClick={() => openAddConcept(q.id)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      title="Desvincular"
                       onClick={() => handleUnlink(q.id)}
                     >
                       <Unlink className="h-3.5 w-3.5" />
@@ -737,6 +781,57 @@ const ConceptsPage = () => {
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      {/* ─── Add Concept to Question Dialog ─── */}
+      <Dialog open={addConceptOpen} onOpenChange={o => { if (!o) setAddConceptOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular conceito à questão</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Adicione esta questão a um conceito adicional (ex: uma questão de Clínica Médica que também serve para Oftalmologia).
+          </p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do conceito</label>
+              <Input
+                value={addConceptName}
+                onChange={e => setAddConceptName(e.target.value)}
+                placeholder="Ex: Hipertensão intracraniana"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Grande Área (opcional)</label>
+              <Select value={addConceptCategory || '__none__'} onValueChange={v => { setAddConceptCategory(v === '__none__' ? '' : v); setAddConceptSubcategory(''); }}>
+                <SelectTrigger><SelectValue placeholder="Selecionar área..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
+                  {MEDICAL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {addConceptCategory && CATEGORY_SUBCATEGORIES[addConceptCategory] && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Especialidade</label>
+                <Select value={addConceptSubcategory || '__none__'} onValueChange={v => setAddConceptSubcategory(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Geral</SelectItem>
+                    {CATEGORY_SUBCATEGORIES[addConceptCategory].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddConceptOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddConcept} disabled={!addConceptName.trim() || addConceptSaving}>
+              {addConceptSaving ? 'Vinculando...' : 'Vincular'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BottomNav />
     </div>
