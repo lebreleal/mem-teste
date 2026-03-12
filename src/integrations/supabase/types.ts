@@ -1206,6 +1206,7 @@ export type Database = {
       global_concepts: {
         Row: {
           category: string | null
+          concept_tag_id: string | null
           correct_count: number
           created_at: string
           difficulty: number
@@ -1224,6 +1225,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          concept_tag_id?: string | null
           correct_count?: number
           created_at?: string
           difficulty?: number
@@ -1242,6 +1244,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          concept_tag_id?: string | null
           correct_count?: number
           created_at?: string
           difficulty?: number
@@ -1258,7 +1261,15 @@ export type Database = {
           user_id?: string
           wrong_count?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "global_concepts_concept_tag_id_fkey"
+            columns: ["concept_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lesson_content_folders: {
         Row: {
@@ -1782,6 +1793,7 @@ export type Database = {
           created_by: string | null
           description: string
           id: string
+          is_concept: boolean
           is_official: boolean
           merged_into_id: string | null
           name: string
@@ -1796,6 +1808,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_concept?: boolean
           is_official?: boolean
           merged_into_id?: string | null
           name: string
@@ -1810,6 +1823,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_concept?: boolean
           is_official?: boolean
           merged_into_id?: string | null
           name?: string
