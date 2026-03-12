@@ -387,6 +387,8 @@ const Study = () => {
   const startLeechModeForCard = useCallback(async (card: any) => {
     if (!user) return;
 
+    leechAdvanceLockRef.current = false;
+
     setLeechMode({
       leechCard: card,
       concept: null,
