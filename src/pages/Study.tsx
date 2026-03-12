@@ -81,6 +81,7 @@ const Study = () => {
     reinforceCards: { id: string; front_content: string; back_content: string; deck_id: string }[];
     currentIndex: number;
     flipped: boolean;
+    loading?: boolean;
   } | null>(null);
 
   // Reset scroll on card change
