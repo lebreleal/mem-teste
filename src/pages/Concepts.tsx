@@ -79,6 +79,14 @@ const ConceptsPage = () => {
   const [linkedQuestions, setLinkedQuestions] = useState<{ id: string; questionText: string; deckId: string; deckName?: string }[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
+  // Add concept to question dialog
+  const [addConceptOpen, setAddConceptOpen] = useState(false);
+  const [addConceptQuestionId, setAddConceptQuestionId] = useState<string | null>(null);
+  const [addConceptName, setAddConceptName] = useState('');
+  const [addConceptCategory, setAddConceptCategory] = useState('');
+  const [addConceptSubcategory, setAddConceptSubcategory] = useState('');
+  const [addConceptSaving, setAddConceptSaving] = useState(false);
+
   // Delete confirm (single or bulk)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSingleTarget, setDeleteSingleTarget] = useState<GlobalConcept | null>(null);
