@@ -5,6 +5,7 @@ import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
 import { TagInput } from '@/components/TagInput';
+import DeckConceptsSection from '@/components/deck-detail/DeckConceptsSection';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
@@ -243,6 +244,7 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
         />
       )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
+      <DeckConceptsSection deckId={deckId} sourceDeckId={resolvedSourceDeckId} />
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
@@ -303,6 +305,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
         />
       )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
+      <DeckConceptsSection deckId={deckId} />
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger

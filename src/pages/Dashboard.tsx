@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
@@ -205,14 +205,15 @@ const Dashboard = () => {
 
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Quick Nav */}
-        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-3">
+        <div className="mb-6 grid grid-cols-5 gap-2 sm:gap-3">
           <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
             <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
+            <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
           </button>
           {[
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
+            { label: 'Questões', icon: Library, path: '/banco-questoes', badge: 0 },
             { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
@@ -224,7 +225,7 @@ const Dashboard = () => {
                   </span>
                 )}
               </div>
-              <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-foreground">{item.label}</span>
+              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-foreground">{item.label}</span>
             </button>
           ))}
         </div>
