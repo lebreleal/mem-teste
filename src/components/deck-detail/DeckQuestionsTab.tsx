@@ -1158,7 +1158,7 @@ const DeckQuestionsTab = ({
   deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate, conceptFilter,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
-  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string | string[];
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
