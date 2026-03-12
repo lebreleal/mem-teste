@@ -42,7 +42,7 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
         .from('deck_question_attempts' as any).select('question_id, is_correct, answered_at')
         .eq('user_id', user.id)
         .in('question_id', questionIds);
-      return (data ?? []) as { question_id: string; is_correct: boolean; answered_at: string }[];
+      return (data ?? []) as unknown as { question_id: string; is_correct: boolean; answered_at: string }[];
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
