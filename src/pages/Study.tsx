@@ -259,6 +259,43 @@ const Study = () => {
     return () => { if (fastWarningTimer.current) clearTimeout(fastWarningTimer.current); };
   }, []);
 
+  // Fallback hydration: if in-memory/storage count is missing, recover streak from recent review logs.
+  // This prevents losing leech progress after navigation/reload.
+  useEffect(() => {
+    if (!currentCard || !user || leechMode) return;
+
+    const leechKey = getLeechKey(currentCard);
+    if ((failCountRef.current.get(leechKey) ?? 0) > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('review_logs')
+        .select('rating')
+        .eq('user_id', user.id)
+        .eq('card_id', currentCard.id)
+        .order('reviewed_at', { ascending: false })
+        .limit(LEECH_THRESHOLD - 1);
+
+      if (cancelled || error || !data?.length) return;
+
+      let streak = 0;
+      for (const row of data) {
+        if (row.rating === 1) streak += 1;
+        else break;
+      }
+
+      if (streak > 0) {
+        failCountRef.current.set(leechKey, streak);
+        persistLeechFailCounts();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCard, user, leechMode, persistLeechFailCounts]);
+
   const submittingRef = useRef<string | null>(null);
 
   const handleRate = useCallback((rating: Rating) => {
