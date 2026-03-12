@@ -191,9 +191,51 @@ const Study = () => {
   const submittingRef = useRef<string | null>(null);
 
   const handleRate = useCallback((rating: Rating) => {
-    if (!currentCard || isTransitioning) return;
+    if (!currentCard || isTransitioning || leechMode) return;
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
+
+    // Leech detection: track consecutive fails per card
+    if (rating === 1) {
+      const count = (failCountRef.current.get(currentCard.id) ?? 0) + 1;
+      failCountRef.current.set(currentCard.id, count);
+      if (count >= LEECH_THRESHOLD && user) {
+        // Trigger leech mode — fetch concepts async
+        submittingRef.current = null;
+        (async () => {
+          try {
+            const concepts = await getCardConcepts(currentCard.id, user.id);
+            const weakest = concepts.length > 0 ? concepts[0] : null; // already sorted by stability ASC
+            let reinforceCards: any[] = [];
+            if (weakest) {
+              reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
+              // Exclude the leech card itself
+              reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
+            }
+            setLeechMode({
+              leechCard: currentCard,
+              concept: weakest,
+              reinforceCards,
+              currentIndex: 0,
+              flipped: false,
+            });
+          } catch {
+            // Fallback: show card back content
+            setLeechMode({
+              leechCard: currentCard,
+              concept: null,
+              reinforceCards: [],
+              currentIndex: 0,
+              flipped: false,
+            });
+          }
+        })();
+        return; // Don't proceed with normal review
+      }
+    } else {
+      // Reset fail count on non-Again rating
+      failCountRef.current.delete(currentCard.id);
+    }
 
     undo.saveSnapshot({
       queue: [...localQueue],
