@@ -1464,6 +1464,10 @@ const DeckQuestionsTab = ({
                 <DropdownMenuItem onClick={() => { setCreateMode('ai'); setCreateOpen(true); }}>
                   <Sparkles className="mr-2 h-4 w-4" /> Gerar com IA
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setPasteOpen(true)}>
+                  <ArrowUpRight className="mr-2 h-4 w-4" /> Colar questões
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
