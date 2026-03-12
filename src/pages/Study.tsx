@@ -898,6 +898,75 @@ const Study = () => {
           />
         </div>
       </main>
+
+      <Dialog open={!!leechInterruption} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-base">Sessão pausada para reforço</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Você errou este card <strong className="text-destructive">{leechInterruption?.failCount ?? LEECH_THRESHOLD} vezes</strong> seguidas,
+              então pausamos para evitar consolidar o erro.
+            </p>
+            <p>Se você fechar o app agora, vamos lembrar essa pausa e retomar este aviso quando voltar.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setLeechSkipConfirmOpen(true)}
+            >
+              Continuar sem reforço
+            </Button>
+            <Button
+              onClick={() => {
+                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
+                  clearLeechInterruption();
+                  return;
+                }
+                clearLeechInterruption();
+                void startLeechModeForCard(currentCard);
+              }}
+            >
+              Fazer mini-reforço
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leechSkipConfirmOpen} onOpenChange={setLeechSkipConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Tem certeza que quer pular?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Pular o reforço pode manter a lacuna de base e aumentar a chance de erro repetido nesse mesmo tema.
+            </p>
+            <p>Se mesmo assim você quiser, liberamos continuar normalmente agora.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setLeechSkipConfirmOpen(false)}>
+              Voltar e revisar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
+                  clearLeechInterruption();
+                  return;
+                }
+                leechBypassOnceRef.current.add(leechInterruption.leechKey);
+                clearLeechInterruption();
+                void handleRate(1);
+              }}
+            >
+              Continuar mesmo assim
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Suspense fallback={null}>
         <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
         <StudyChatModal
