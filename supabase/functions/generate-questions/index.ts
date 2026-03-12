@@ -13,7 +13,8 @@ import { handleCors, jsonResponse, getModelMap, deductEnergy, refundEnergy, logT
  * Multiple cards can map to one question when they share a concept.
  *
  * Body params:
- *   deckId: string (required)
+ *   deckId: string (required unless cardIds provided)
+ *   cardIds?: string[] (alternative to deckId — fetch specific cards)
  *   optionsCount: 4 | 5 (default 4)
  *   aiModel: string (default 'flash')
  *   energyCost: number (default 0)
