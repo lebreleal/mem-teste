@@ -4,16 +4,21 @@ import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/Deck
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
+import ConceptStatsCard from '@/components/deck-detail/ConceptStatsCard';
+import ConceptList from '@/components/deck-detail/ConceptList';
+import { CreateConceptDialog, EditConceptCardsDialog } from '@/components/deck-detail/ConceptDialogs';
+import { useDeckConcepts } from '@/hooks/useDeckConcepts';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, Brain } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
@@ -286,10 +291,19 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
 };
 
 const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
-  const { cardCounts } = useDeckDetail();
+  const { cardCounts, navigate } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
+
+  // Concepts state
+  const { concepts, createConcept, renameConcept, deleteConcept, updateConceptCards, isLoading: conceptsLoading } = useDeckConcepts(deckId);
+  const [createConceptOpen, setCreateConceptOpen] = useState(false);
+  const [editCardsTarget, setEditCardsTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const handleStudyConcept = (conceptId: string) => {
+    navigate(`/study/${deckId}?conceptId=${conceptId}`);
+  };
 
   return (
     <>
@@ -301,9 +315,20 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
           onCreateAI={() => setQuestionAction('ai')}
         />
       )}
+      {activeTab === 'concepts' && (
+        <ConceptStatsCard
+          concepts={concepts}
+          onStudyWeak={() => {
+            // Find first due concept to study
+            const due = concepts.find(c => new Date(c.scheduled_date) <= new Date() || c.state === 0);
+            if (due) handleStudyConcept(due.id);
+          }}
+          onCreate={() => setCreateConceptOpen(true)}
+        />
+      )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
             value="cards"
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
@@ -315,6 +340,12 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
           >
             <HelpCircle className="h-4 w-4" /> Questões
+          </TabsTrigger>
+          <TabsTrigger
+            value="concepts"
+            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
+          >
+            <Brain className="h-4 w-4" /> Conceitos ({concepts.length})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="cards" className="mt-4">
@@ -329,7 +360,38 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
             />
           </Suspense>
         </TabsContent>
+        <TabsContent value="concepts" className="mt-4">
+          <ConceptList
+            deckId={deckId}
+            concepts={concepts}
+            onRename={(id, name) => renameConcept.mutate({ conceptId: id, newName: name })}
+            onDelete={(id) => deleteConcept.mutate(id)}
+            onEditCards={(id) => {
+              const c = concepts.find(c => c.id === id);
+              if (c) setEditCardsTarget({ id: c.id, name: c.name });
+            }}
+            onStudyConcept={handleStudyConcept}
+          />
+        </TabsContent>
       </Tabs>
+
+      <CreateConceptDialog
+        open={createConceptOpen}
+        onOpenChange={setCreateConceptOpen}
+        deckId={deckId}
+        onConfirm={(name, cardIds) => createConcept.mutate({ name, cardIds })}
+      />
+
+      {editCardsTarget && (
+        <EditConceptCardsDialog
+          open={!!editCardsTarget}
+          onOpenChange={(o) => !o && setEditCardsTarget(null)}
+          deckId={deckId}
+          conceptId={editCardsTarget.id}
+          conceptName={editCardsTarget.name}
+          onConfirm={(cardIds) => updateConceptCards.mutate({ conceptId: editCardsTarget.id, cardIds })}
+        />
+      )}
     </>
   );
 };
