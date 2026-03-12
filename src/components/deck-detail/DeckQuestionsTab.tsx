@@ -452,8 +452,24 @@ const QuestionPractice = ({
       question_id: q.id, user_id: user.id, selected_indices: [selected], is_correct: isCorrect,
     });
 
-    // Update concept mastery
+    // Update concept mastery (both legacy deck_concept_mastery and global_concepts)
     if (q.concepts && q.concepts.length > 0) {
+      // Ensure global concepts exist and update their mastery
+      ensureGlobalConcepts(user.id, q.concepts).then(slugToId => {
+        for (const concept of q.concepts) {
+          const slug = conceptSlug(concept);
+          const conceptId = slugToId.get(slug);
+          if (conceptId) {
+            updateConceptMastery(conceptId, isCorrect).catch(console.error);
+          }
+        }
+        // Also link this question to global concepts if not already linked
+        linkQuestionsToConcepts(user.id, [{ questionId: q.id, conceptNames: q.concepts }]).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+        queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
+      }).catch(console.error);
+
+      // Legacy: still update deck_concept_mastery for backward compat
       for (const concept of q.concepts) {
         const existing = conceptMastery.find(m => m.concept === concept);
         const newCorrect = (existing?.correct_count || 0) + (isCorrect ? 1 : 0);
