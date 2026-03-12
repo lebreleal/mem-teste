@@ -662,7 +662,7 @@ export async function generateReinforcementCards(
   const limitToThreeSentences = (value: string) => {
     const clean = value.replace(/\s+/g, ' ').trim();
     if (!clean) return '';
-    const sentences = clean.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const sentences = clean.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) ?? [clean];
     return sentences.slice(0, 3).join(' ');
   };
 
