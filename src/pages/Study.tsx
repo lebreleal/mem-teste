@@ -51,6 +51,13 @@ function getLeechKey(card: { id: string; card_type: string; front_content: strin
   return `card:${card.id}`;
 }
 
+type LeechInterruptionState = {
+  cardId: string;
+  leechKey: string;
+  failCount: number;
+  interruptedAt: string;
+};
+
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
   const { user } = useAuth();
@@ -86,10 +93,16 @@ const Study = () => {
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
+  const leechBypassOnceRef = useRef<Set<string>>(new Set());
   const leechFailStorageKey = useMemo(
     () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
   );
+  const leechInterruptionStorageKey = useMemo(
+    () => `study-leech-interruption:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    [deckId, folderId],
+  );
+
   const readLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return new Map<string, number>();
     const parseEntries = (raw: string | null) => {
@@ -116,6 +129,36 @@ const Study = () => {
 
     return new Map<string, number>();
   }, [leechFailStorageKey]);
+
+  const readLeechInterruption = useCallback((): LeechInterruptionState | null => {
+    if (typeof window === 'undefined') return null;
+    const parseValue = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as Partial<LeechInterruptionState>;
+        if (
+          typeof parsed?.cardId === 'string'
+          && typeof parsed?.leechKey === 'string'
+          && typeof parsed?.failCount === 'number'
+          && typeof parsed?.interruptedAt === 'string'
+        ) {
+          return parsed as LeechInterruptionState;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    };
+
+    const sessionValue = parseValue(window.sessionStorage.getItem(leechInterruptionStorageKey));
+    if (sessionValue) return sessionValue;
+
+    const localValue = parseValue(window.localStorage.getItem(leechInterruptionStorageKey));
+    if (localValue) return localValue;
+
+    return null;
+  }, [leechInterruptionStorageKey]);
+
   const persistLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return;
 
@@ -140,6 +183,25 @@ const Study = () => {
     write(window.localStorage, serialized);
   }, [leechFailStorageKey]);
 
+  const persistLeechInterruption = useCallback((value: LeechInterruptionState | null) => {
+    if (typeof window === 'undefined') return;
+
+    const write = (storage: Storage) => {
+      try {
+        if (!value) {
+          storage.removeItem(leechInterruptionStorageKey);
+          return;
+        }
+        storage.setItem(leechInterruptionStorageKey, JSON.stringify(value));
+      } catch {
+        // no-op: storage can be unavailable in some browser contexts
+      }
+    };
+
+    write(window.sessionStorage);
+    write(window.localStorage);
+  }, [leechInterruptionStorageKey]);
+
   const [leechMode, setLeechMode] = useState<{
     leechCard: any;
     concept: GlobalConcept | null;
@@ -148,6 +210,8 @@ const Study = () => {
     flipped: boolean;
     loading?: boolean;
   } | null>(null);
+  const [leechInterruption, setLeechInterruption] = useState<LeechInterruptionState | null>(null);
+  const [leechSkipConfirmOpen, setLeechSkipConfirmOpen] = useState(false);
 
   // Reset scroll on card change
   useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
@@ -296,6 +360,67 @@ const Study = () => {
     };
   }, [currentCard, user, leechMode, persistLeechFailCounts]);
 
+  // Restore interruption modal when user closes/reopens app mid-leech flow
+  useEffect(() => {
+    if (!currentCard || leechMode || leechInterruption) return;
+    const saved = readLeechInterruption();
+    if (!saved) return;
+
+    if (saved.cardId !== currentCard.id) {
+      persistLeechInterruption(null);
+      return;
+    }
+
+    setLeechInterruption(saved);
+  }, [currentCard, leechMode, leechInterruption, readLeechInterruption, persistLeechInterruption]);
+
+  const clearLeechInterruption = useCallback(() => {
+    setLeechInterruption(null);
+    setLeechSkipConfirmOpen(false);
+    persistLeechInterruption(null);
+  }, [persistLeechInterruption]);
+
+  const startLeechModeForCard = useCallback(async (card: any) => {
+    if (!user) return;
+
+    setLeechMode({
+      leechCard: card,
+      concept: null,
+      reinforceCards: [],
+      currentIndex: 0,
+      flipped: false,
+      loading: true,
+    });
+
+    try {
+      const concepts = await getCardConcepts(card.id, user.id);
+      const weakest = concepts.length > 0 ? concepts[0] : null;
+      let reinforceCards: any[] = [];
+
+      if (weakest) {
+        reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
+        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+      }
+
+      if (reinforceCards.length === 0) {
+        const conceptName = weakest?.name ?? `${card.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
+        reinforceCards = await generateReinforcementCards(conceptName, user.id);
+        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+      }
+
+      setLeechMode({
+        leechCard: card,
+        concept: weakest,
+        reinforceCards,
+        currentIndex: 0,
+        flipped: false,
+        loading: false,
+      });
+    } catch {
+      setLeechMode(prev => prev ? { ...prev, loading: false } : null);
+    }
+  }, [user]);
+
   const submittingRef = useRef<string | null>(null);
 
   const handleRate = useCallback(async (rating: Rating) => {
@@ -305,6 +430,11 @@ const Study = () => {
 
     // Leech detection: track consecutive fails per card/group
     const leechKey = getLeechKey(currentCard);
+    const bypassLeechInterruption = leechBypassOnceRef.current.has(leechKey);
+    if (bypassLeechInterruption) {
+      leechBypassOnceRef.current.delete(leechKey);
+    }
+
     if (rating === 1) {
       let previousFails = failCountRef.current.get(leechKey) ?? 0;
 
@@ -333,48 +463,20 @@ const Study = () => {
       const count = previousFails + 1;
       failCountRef.current.set(leechKey, count);
       persistLeechFailCounts();
-      if (count >= LEECH_THRESHOLD && user) {
-        // Trigger leech mode — fetch concepts async
+
+      if (count >= LEECH_THRESHOLD && user && !bypassLeechInterruption) {
+        const interruption: LeechInterruptionState = {
+          cardId: currentCard.id,
+          leechKey,
+          failCount: count,
+          interruptedAt: new Date().toISOString(),
+        };
+
+        setLeechInterruption(interruption);
+        setLeechSkipConfirmOpen(false);
+        persistLeechInterruption(interruption);
         submittingRef.current = null;
-        // Show loading state immediately
-        setLeechMode({
-          leechCard: currentCard,
-          concept: null,
-          reinforceCards: [],
-          currentIndex: 0,
-          flipped: false,
-          loading: true,
-        });
-        (async () => {
-          try {
-            const concepts = await getCardConcepts(currentCard.id, user.id);
-            const weakest = concepts.length > 0 ? concepts[0] : null;
-            let reinforceCards: any[] = [];
-            if (weakest) {
-              reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
-              reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
-            }
-
-            // If no cards found, generate with AI (Pro, free)
-            if (reinforceCards.length === 0) {
-              const conceptName = weakest?.name ?? `${currentCard.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
-              reinforceCards = await generateReinforcementCards(conceptName, user.id);
-              reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
-            }
-
-            setLeechMode({
-              leechCard: currentCard,
-              concept: weakest,
-              reinforceCards,
-              currentIndex: 0,
-              flipped: false,
-              loading: false,
-            });
-          } catch {
-            setLeechMode(prev => prev ? { ...prev, loading: false } : null);
-          }
-        })();
-        return; // Don't proceed with normal review
+        return; // pause session until user decides
       }
     } else {
       // Reset fail count on non-Again rating
@@ -796,6 +898,75 @@ const Study = () => {
           />
         </div>
       </main>
+
+      <Dialog open={!!leechInterruption} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-base">Sessão pausada para reforço</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Você errou este card <strong className="text-destructive">{leechInterruption?.failCount ?? LEECH_THRESHOLD} vezes</strong> seguidas,
+              então pausamos para evitar consolidar o erro.
+            </p>
+            <p>Se você fechar o app agora, vamos lembrar essa pausa e retomar este aviso quando voltar.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setLeechSkipConfirmOpen(true)}
+            >
+              Continuar sem reforço
+            </Button>
+            <Button
+              onClick={() => {
+                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
+                  clearLeechInterruption();
+                  return;
+                }
+                clearLeechInterruption();
+                void startLeechModeForCard(currentCard);
+              }}
+            >
+              Fazer mini-reforço
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leechSkipConfirmOpen} onOpenChange={setLeechSkipConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Tem certeza que quer pular?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Pular o reforço pode manter a lacuna de base e aumentar a chance de erro repetido nesse mesmo tema.
+            </p>
+            <p>Se mesmo assim você quiser, liberamos continuar normalmente agora.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setLeechSkipConfirmOpen(false)}>
+              Voltar e revisar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!currentCard || !leechInterruption || currentCard.id !== leechInterruption.cardId) {
+                  clearLeechInterruption();
+                  return;
+                }
+                leechBypassOnceRef.current.add(leechInterruption.leechKey);
+                clearLeechInterruption();
+                void handleRate(1);
+              }}
+            >
+              Continuar mesmo assim
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Suspense fallback={null}>
         <ProModelConfirmDialog open={pendingPro} onConfirm={confirmPro} onCancel={cancelPro} baseCost={BASE_TUTOR_COST} />
         <StudyChatModal

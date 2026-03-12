@@ -651,9 +651,10 @@ export async function generateReinforcementCards(
   conceptNameOrContent: string,
   userId: string,
 ): Promise<{ id: string; front_content: string; back_content: string; deck_id: string }[]> {
-  const deckName = `Reforço: ${conceptNameOrContent.slice(0, 60)}`;
+  const normalizedConcept = conceptNameOrContent.trim() || 'Conceito';
+  const deckName = `Reforço: ${normalizedConcept.slice(0, 60)}`;
 
-  // Check if we already have a reinforcement deck for this concept
+  // Reuse deck if it already exists
   const { data: existingDeck } = await supabase
     .from('decks')
     .select('id')
@@ -662,44 +663,80 @@ export async function generateReinforcementCards(
     .maybeSingle();
 
   if (existingDeck) {
-    // Deck already exists — return its cards
     const { data: cards } = await supabase
       .from('cards')
       .select('id, front_content, back_content, deck_id')
       .eq('deck_id', existingDeck.id)
       .limit(10);
-    return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+
+    if ((cards?.length ?? 0) > 0) {
+      return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+    }
   }
 
-  // Generate via edge function — Pro model, zero energy cost (system-funded)
-  const prompt = `Explique detalhadamente o seguinte tema médico: "${conceptNameOrContent}". ` +
+  const prompt = `Explique detalhadamente o seguinte tema médico: "${normalizedConcept}". ` +
     `Cubra: definição, fisiopatologia/mecanismo, etiologia, quadro clínico, diagnóstico e tratamento. ` +
     `Foque nos pontos mais cobrados em provas de residência médica.`;
 
+  // generate-deck expects textContent/cardFormats/detailLevel (not content/formats/density)
   const { data, error } = await supabase.functions.invoke('generate-deck', {
     body: {
-      content: prompt,
-      deckName,
+      textContent: prompt,
+      cardCount: 10,
+      detailLevel: 'standard',
+      cardFormats: ['cloze', 'qa'],
       aiModel: 'pro',
       energyCost: 0,
-      formats: ['cloze', 'qa'],
-      density: 'standard',
     },
   });
 
-  if (error || !data?.deckId) {
+  if (error || data?.error) {
     console.error('generateReinforcementCards error:', error ?? data?.error);
     return [];
   }
 
-  // Fetch the newly created cards
-  const { data: newCards } = await supabase
+  const generatedCards = Array.isArray(data?.cards) ? data.cards : [];
+  if (generatedCards.length === 0) return [];
+
+  let reinforcementDeckId = existingDeck?.id;
+  if (!reinforcementDeckId) {
+    const { data: createdDeck, error: deckError } = await supabase
+      .from('decks')
+      .insert({ user_id: userId, name: deckName })
+      .select('id')
+      .single();
+
+    if (deckError || !createdDeck) {
+      console.error('generateReinforcementCards deck create error:', deckError);
+      return [];
+    }
+
+    reinforcementDeckId = createdDeck.id;
+  }
+
+  const cardRows = generatedCards
+    .map((card: any) => ({
+      deck_id: reinforcementDeckId,
+      front_content: card?.front?.trim() || '',
+      back_content: (card?.back ?? '').trim(),
+      card_type: card?.type === 'cloze' ? 'cloze' : 'basic',
+    }))
+    .filter((card: any) => card.front_content.length > 0);
+
+  if (cardRows.length === 0) return [];
+
+  const { data: insertedCards, error: insertError } = await supabase
     .from('cards')
+    .insert(cardRows as any)
     .select('id, front_content, back_content, deck_id')
-    .eq('deck_id', data.deckId)
     .limit(10);
 
-  return (newCards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+  if (insertError) {
+    console.error('generateReinforcementCards card insert error:', insertError);
+    return [];
+  }
+
+  return (insertedCards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
 }
 
 // ─── Generate concept-focused questions via edge function ───
