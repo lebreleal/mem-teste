@@ -40,6 +40,17 @@ function getSiblingIds(card: any, queue: any[]): string[] {
     .map(c => c.id);
 }
 
+/**
+ * Key used for leech fail counting.
+ * For cloze siblings, count by shared front so repeated misses aggregate naturally.
+ */
+function getLeechKey(card: { id: string; card_type: string; front_content: string }): string {
+  if (card.card_type === 'cloze') {
+    return `cloze:${card.front_content ?? ''}`;
+  }
+  return `card:${card.id}`;
+}
+
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
   const { user } = useAuth();
