@@ -413,3 +413,151 @@ export async function unlinkQuestion(conceptId: string, questionId: string) {
     .eq('concept_id', conceptId)
     .eq('question_id', questionId);
 }
+
+// ─── Fetch official concept-tags (is_concept = true, is_official = true) ───
+export async function fetchOfficialConcepts(): Promise<{ id: string; name: string; slug: string; description: string; parent_id: string | null }[]> {
+  const { data, error } = await supabase
+    .from('tags')
+    .select('id, name, slug, description, parent_id')
+    .eq('is_official', true)
+    .eq('is_concept', true)
+    .order('name');
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+// ─── Fetch community concepts (from public turma decks via question_concepts) ───
+export async function fetchCommunityConcepts(userId: string): Promise<GlobalConcept[]> {
+  // Get concepts from other users that are linked to questions in public community decks
+  const { data, error } = await supabase
+    .from('global_concepts' as any)
+    .select('*')
+    .neq('user_id', userId)
+    .order('name')
+    .limit(200);
+
+  if (error) throw error;
+  return (data ?? []) as unknown as GlobalConcept[];
+}
+
+// ─── Import a concept (official tag or community) into user's personal collection ───
+export async function importConcept(
+  userId: string,
+  source: { name: string; category?: string; subcategory?: string; conceptTagId?: string },
+): Promise<string> {
+  const slug = conceptSlug(source.name);
+
+  // Check if already exists
+  const { data: existing } = await supabase
+    .from('global_concepts' as any)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (existing) return (existing as any).id;
+
+  const { data: inserted, error } = await supabase
+    .from('global_concepts' as any)
+    .insert({
+      user_id: userId,
+      name: source.name.trim(),
+      slug,
+      category: source.category ?? null,
+      subcategory: source.subcategory ?? null,
+      concept_tag_id: source.conceptTagId ?? null,
+    } as any)
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return (inserted as any).id;
+}
+
+// ─── Import concept with its linked questions and cards ───
+export async function importConceptWithContent(
+  userId: string,
+  sourceConceptId: string,
+  sourceConcept: { name: string; category?: string; subcategory?: string; conceptTagId?: string },
+): Promise<{ conceptId: string; questionCount: number; cardCount: number }> {
+  // 1. Create personal concept
+  const conceptId = await importConcept(userId, sourceConcept);
+
+  // 2. Get questions linked to the source concept
+  const { data: links } = await supabase
+    .from('question_concepts' as any)
+    .select('question_id')
+    .eq('concept_id', sourceConceptId);
+
+  if (!links || links.length === 0) return { conceptId, questionCount: 0, cardCount: 0 };
+
+  const questionIds = (links as any[]).map(l => l.question_id);
+
+  // 3. Get the actual questions
+  const { data: questions } = await supabase
+    .from('deck_questions' as any)
+    .select('id, deck_id, question_text, options, correct_indices, correct_answer, explanation, concepts, question_type')
+    .in('id', questionIds);
+
+  if (!questions || questions.length === 0) return { conceptId, questionCount: 0, cardCount: 0 };
+
+  // 4. Create a deck for imported content
+  const deckName = `Importado: ${sourceConcept.name}`;
+  const { data: deck, error: deckError } = await supabase
+    .from('decks')
+    .insert({ user_id: userId, name: deckName })
+    .select('id')
+    .single();
+
+  if (deckError || !deck) return { conceptId, questionCount: 0, cardCount: 0 };
+
+  // 5. Copy questions to the new deck
+  const questionRows = (questions as any[]).map((q, i) => ({
+    deck_id: deck.id,
+    created_by: userId,
+    question_text: q.question_text,
+    options: q.options,
+    correct_indices: q.correct_indices,
+    correct_answer: q.correct_answer,
+    explanation: q.explanation,
+    concepts: q.concepts,
+    question_type: q.question_type,
+    sort_order: i,
+  }));
+
+  const { data: insertedQs } = await supabase
+    .from('deck_questions' as any)
+    .insert(questionRows as any)
+    .select('id');
+
+  // 6. Link new questions to user's concept
+  if (insertedQs && insertedQs.length > 0) {
+    const junctionRows = (insertedQs as any[]).map(q => ({
+      question_id: q.id,
+      concept_id: conceptId,
+    }));
+    await supabase
+      .from('question_concepts' as any)
+      .upsert(junctionRows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
+  }
+
+  // 7. Create basic review cards
+  const cardRows = (questions as any[]).map(q => ({
+    deck_id: deck.id,
+    front_content: sourceConcept.name,
+    back_content: q.explanation || q.question_text,
+    card_type: 'basic',
+  }));
+
+  const { data: insertedCards } = await supabase
+    .from('cards')
+    .insert(cardRows)
+    .select('id');
+
+  return {
+    conceptId,
+    questionCount: insertedQs?.length ?? 0,
+    cardCount: insertedCards?.length ?? 0,
+  };
+}
