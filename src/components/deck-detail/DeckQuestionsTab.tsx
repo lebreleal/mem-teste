@@ -1190,9 +1190,18 @@ const DeckQuestionsTab = ({
         .eq('deck_id', effectiveDeckId)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((q: any) => ({
-        ...q, options: Array.isArray(q.options) ? q.options : [], concepts: Array.isArray(q.concepts) ? q.concepts : [],
-      })) as DeckQuestion[];
+      return (data ?? []).map((q: any) => {
+        let opts: string[] = [];
+        if (Array.isArray(q.options)) opts = q.options;
+        else if (typeof q.options === 'string') {
+          try { const parsed = JSON.parse(q.options); if (Array.isArray(parsed)) opts = parsed; } catch {}
+        }
+        return {
+          ...q,
+          options: opts,
+          concepts: Array.isArray(q.concepts) ? q.concepts : [],
+        };
+      }) as DeckQuestion[];
     },
     enabled: !!effectiveDeckId,
     staleTime: 30_000,
