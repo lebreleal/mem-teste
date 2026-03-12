@@ -710,8 +710,47 @@ const QuestionPractice = ({
           </div>
         )}
 
+        {/* Elaborative Interrogation — shown after wrong answer, before explanation */}
+        {confirmed && !wasCorrect && !elaborativeSubmitted && (
+          <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5">
+            <p className="text-xs font-bold text-primary flex items-center gap-1.5">
+              <Brain className="h-3.5 w-3.5" /> Interrogação Elaborativa
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Antes de ver a explicação: por que você acha que a alternativa <span className="font-bold text-foreground">{LETTERS[correctIdx]}</span> está correta?
+            </p>
+            <Textarea
+              value={elaborativeText}
+              onChange={(e) => setElaborativeText(e.target.value)}
+              placeholder="Escreva sua hipótese (isso ativa processamento profundo)..."
+              className="min-h-[60px] text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="gap-1.5 text-xs" onClick={() => setElaborativeSubmitted(true)}>
+                <Check className="h-3.5 w-3.5" /> Ver explicação
+              </Button>
+              <button
+                onClick={() => setElaborativeSubmitted(true)}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                Pular
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Explanation — shown after correct OR after elaborative submitted */}
+        {confirmed && q.explanation && (wasCorrect || elaborativeSubmitted) && (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <p className="text-xs font-bold text-primary mb-1.5">Explicação</p>
+            <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{q.explanation}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
         {/* Concept Mastery (after confirming, if question has concepts) */}
-        {confirmed && q.concepts && q.concepts.length > 0 && (
+        {confirmed && (wasCorrect || elaborativeSubmitted) && q.concepts && q.concepts.length > 0 && (
           <ConceptMasterySection
             concepts={q.concepts}
             deckId={deckId}
