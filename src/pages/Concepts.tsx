@@ -219,6 +219,32 @@ const ConceptsPage = () => {
     toast.success('Questão desvinculada');
   };
 
+  const openAddConcept = (questionId: string) => {
+    setAddConceptQuestionId(questionId);
+    setAddConceptName('');
+    setAddConceptCategory('');
+    setAddConceptSubcategory('');
+    setAddConceptOpen(true);
+  };
+
+  const handleAddConcept = async () => {
+    if (!user || !addConceptQuestionId || !addConceptName.trim()) return;
+    setAddConceptSaving(true);
+    try {
+      await linkQuestionsToConcepts(user.id, [{
+        questionId: addConceptQuestionId,
+        conceptNames: [addConceptName.trim()],
+        category: addConceptCategory || undefined,
+        subcategory: addConceptSubcategory || undefined,
+      }]);
+      toast.success(`Conceito "${addConceptName.trim()}" vinculado`);
+      setAddConceptOpen(false);
+    } catch {
+      toast.error('Erro ao vincular conceito');
+    }
+    setAddConceptSaving(false);
+  };
+
   // Study mode
   const handleStartStudy = useCallback(async () => {
     if (!user) return;
