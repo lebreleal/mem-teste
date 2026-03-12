@@ -354,6 +354,42 @@ export type Database = {
           },
         ]
       }
+      concept_cards: {
+        Row: {
+          card_id: string
+          concept_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          card_id: string
+          concept_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          card_id?: string
+          concept_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_cards_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "deck_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deck_concept_mastery: {
         Row: {
           concept: string
@@ -388,6 +424,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deck_concept_mastery_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_concepts: {
+        Row: {
+          created_at: string
+          deck_id: string
+          difficulty: number
+          id: string
+          last_reviewed_at: string | null
+          learning_step: number
+          name: string
+          scheduled_date: string
+          sort_order: number
+          stability: number
+          state: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deck_id: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name: string
+          scheduled_date?: string
+          sort_order?: number
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deck_id?: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name?: string
+          scheduled_date?: string
+          sort_order?: number
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_concepts_deck_id_fkey"
             columns: ["deck_id"]
             isOneToOne: false
             referencedRelation: "decks"
