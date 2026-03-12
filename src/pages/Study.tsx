@@ -209,6 +209,9 @@ const Study = () => {
     currentIndex: number;
     flipped: boolean;
     loading?: boolean;
+    feedback?: 'correct' | 'wrong' | null;
+    correctCount?: number;
+    wrongCount?: number;
   } | null>(null);
   const [leechInterruption, setLeechInterruption] = useState<LeechInterruptionState | null>(null);
   const [leechSkipConfirmOpen, setLeechSkipConfirmOpen] = useState(false);
