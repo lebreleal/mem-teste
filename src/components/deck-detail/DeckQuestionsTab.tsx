@@ -1880,7 +1880,12 @@ const PasteQuestionsDialog = ({
         }).select('id').single();
 
         if (inserted && q.concepts?.length > 0) {
-          questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: q.concepts });
+          questionConceptPairs.push({
+            questionId: (inserted as any).id,
+            conceptNames: q.concepts,
+            category: (q as any).category ?? undefined,
+            subcategory: (q as any).subcategory ?? undefined,
+          });
         }
       }
 
