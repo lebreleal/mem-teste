@@ -243,6 +243,7 @@ const Study = () => {
     if (rating === 1) {
       const count = (failCountRef.current.get(leechKey) ?? 0) + 1;
       failCountRef.current.set(leechKey, count);
+      persistLeechFailCounts();
       if (count >= LEECH_THRESHOLD && user) {
         // Trigger leech mode — fetch concepts async
         submittingRef.current = null;
@@ -289,6 +290,7 @@ const Study = () => {
     } else {
       // Reset fail count on non-Again rating
       failCountRef.current.delete(leechKey);
+      persistLeechFailCounts();
     }
 
     undo.saveSnapshot({
