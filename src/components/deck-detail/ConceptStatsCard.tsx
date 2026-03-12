@@ -3,7 +3,7 @@
  */
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Plus, Brain, Lightbulb, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Plus, Network, Lightbulb, CheckCircle2 } from 'lucide-react';
 import type { ConceptRow } from '@/services/conceptService';
 
 interface ConceptStatsCardProps {
