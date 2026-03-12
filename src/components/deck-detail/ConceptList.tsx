@@ -28,7 +28,7 @@ type FilterType = 'all' | 'new' | 'learning' | 'mastered';
 const stateLabel = (state: number) => {
   switch (state) {
     case 0: return { label: 'Novo', icon: Lightbulb, color: 'text-muted-foreground' };
-    case 1: case 3: return { label: 'Aprendendo', icon: Network, color: 'text-orange-500' };
+    case 1: case 3: return { label: 'Aprendendo', icon: BrainCircuit, color: 'text-orange-500' };
     case 2: return { label: 'Dominado', icon: CheckCircle2, color: 'text-primary' };
     default: return { label: 'Novo', icon: Lightbulb, color: 'text-muted-foreground' };
   }
