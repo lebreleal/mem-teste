@@ -207,13 +207,12 @@ const Study = () => {
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
 
-    // Leech detection: track consecutive fails per card
+    // Leech detection: track consecutive fails per card/group
+    const leechKey = getLeechKey(currentCard);
     if (rating === 1) {
-      const count = (failCountRef.current.get(currentCard.id) ?? 0) + 1;
-      failCountRef.current.set(currentCard.id, count);
-      console.log(`[Leech] Card ${currentCard.id} fail count: ${count}/${LEECH_THRESHOLD}`);
+      const count = (failCountRef.current.get(leechKey) ?? 0) + 1;
+      failCountRef.current.set(leechKey, count);
       if (count >= LEECH_THRESHOLD && user) {
-        console.log('[Leech] TRIGGERED — entering leech mode');
         // Trigger leech mode — fetch concepts async
         submittingRef.current = null;
         // Show loading state immediately
@@ -227,24 +226,19 @@ const Study = () => {
         });
         (async () => {
           try {
-            console.log('[Leech] Fetching card concepts...');
             const concepts = await getCardConcepts(currentCard.id, user.id);
-            console.log('[Leech] Concepts found:', concepts.length);
             const weakest = concepts.length > 0 ? concepts[0] : null;
             let reinforceCards: any[] = [];
             if (weakest) {
               reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
               reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
-              console.log('[Leech] Related cards found:', reinforceCards.length);
             }
 
             // If no cards found, generate with AI (Pro, free)
             if (reinforceCards.length === 0) {
               const conceptName = weakest?.name ?? `${currentCard.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
-              console.log('[Leech] No cards found, generating AI reinforcement for:', conceptName);
               reinforceCards = await generateReinforcementCards(conceptName, user.id);
               reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
-              console.log('[Leech] AI generated cards:', reinforceCards.length);
             }
 
             setLeechMode({
@@ -255,8 +249,7 @@ const Study = () => {
               flipped: false,
               loading: false,
             });
-          } catch (err) {
-            console.error('[Leech] Error:', err);
+          } catch {
             setLeechMode(prev => prev ? { ...prev, loading: false } : null);
           }
         })();
@@ -264,7 +257,7 @@ const Study = () => {
       }
     } else {
       // Reset fail count on non-Again rating
-      failCountRef.current.delete(currentCard.id);
+      failCountRef.current.delete(leechKey);
     }
 
     undo.saveSnapshot({
