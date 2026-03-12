@@ -122,6 +122,7 @@ const App = () => (
                 <Route path="/ia" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
                 <Route path="/desempenho" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
                 <Route path="/caderno-de-erros" element={<ProtectedRoute><ErrorNotebook /></ProtectedRoute>} />
+                <Route path="/conceitos" element={<ProtectedRoute><Concepts /></ProtectedRoute>} />
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
