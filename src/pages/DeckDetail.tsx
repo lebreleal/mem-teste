@@ -4,15 +4,12 @@ import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/Deck
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
-import ConceptStatsCard from '@/components/deck-detail/ConceptStatsCard';
-import ConceptList from '@/components/deck-detail/ConceptList';
-import { useConceptMastery } from '@/hooks/useConceptMastery';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle, BrainCircuit } from 'lucide-react';
+import { ArrowLeft, Settings, Layers, RefreshCw, Pencil, Check, MessageSquare, HelpCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery } from '@tanstack/react-query';
@@ -294,30 +291,6 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   const totalCards = cardCounts?.total ?? 0;
   const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
-  const [conceptFilter, setConceptFilter] = useState<string | string[] | undefined>(undefined);
-
-  // Concept mastery from question performance
-  const { concepts, summary, isLoading: conceptsLoading } = useConceptMastery(deckId);
-
-  const handlePracticeConcept = (concept: string) => {
-    setConceptFilter(concept);
-    setActiveTab('questions');
-    setQuestionAction('practice');
-  };
-
-  const handlePracticeWeak = () => {
-    // Interleaving: pass all weak+learning concepts as array for mixed practice
-    const weakAndLearning = summary.weakAndLearningConcepts;
-    setConceptFilter(weakAndLearning.length > 0 ? weakAndLearning : undefined);
-    setActiveTab('questions');
-    setQuestionAction('practice');
-  };
-
-  const handleGenerateQuestions = (concept: string) => {
-    setConceptFilter(concept);
-    setActiveTab('questions');
-    setQuestionAction('ai');
-  };
 
   return (
     <>
@@ -329,15 +302,9 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
           onCreateAI={() => setQuestionAction('ai')}
         />
       )}
-      {activeTab === 'concepts' && (
-        <ConceptStatsCard
-          summary={summary}
-          onPracticeWeak={handlePracticeWeak}
-        />
-      )}
       <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); setConceptFilter(undefined); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
             value="cards"
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
@@ -350,12 +317,6 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
           >
             <HelpCircle className="h-4 w-4" /> Questões
           </TabsTrigger>
-          <TabsTrigger
-            value="concepts"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <BrainCircuit className="h-4 w-4" /> Conceitos ({summary.total})
-          </TabsTrigger>
         </TabsList>
         <TabsContent value="cards" className="mt-4">
           <CardList />
@@ -366,16 +327,8 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
               deckId={deckId}
               autoStart={questionAction === 'practice'}
               autoCreate={questionAction === 'ai' ? 'ai' : null}
-              conceptFilter={conceptFilter}
             />
           </Suspense>
-        </TabsContent>
-        <TabsContent value="concepts" className="mt-4">
-          <ConceptList
-            concepts={concepts}
-            onPracticeConcept={handlePracticeConcept}
-            onGenerateQuestions={handleGenerateQuestions}
-          />
         </TabsContent>
       </Tabs>
     </>
