@@ -776,7 +776,7 @@ const QuestionPractice = ({
             </Button>
           </>
         ) : (
-          <Button onClick={handleNext} className="w-full gap-1.5">
+          <Button onClick={handleNext} disabled={!wasCorrect && !elaborativeSubmitted} className="w-full gap-1.5">
             {index >= questions.length - 1 ? 'Ver Resultado' : 'Próxima'} <ChevronRight className="h-4 w-4" />
           </Button>
         )}
