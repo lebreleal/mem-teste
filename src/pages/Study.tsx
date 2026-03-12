@@ -361,8 +361,8 @@ const Study = () => {
   // ─── Leech Mode: Mini Reinforcement Session ───
   const exitLeechMode = useCallback(() => {
     if (!leechMode) return;
-    // Reset fail count for the leech card and put it back with learning_step 0
-    failCountRef.current.delete(leechMode.leechCard.id);
+    // Reset fail count for the leech card/group and put it back with learning_step 0
+    failCountRef.current.delete(getLeechKey(leechMode.leechCard));
     setLocalQueue(prev => prev.map(c =>
       c.id === leechMode.leechCard.id ? { ...c, learning_step: 0 } : c,
     ));
