@@ -924,6 +924,8 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
+        const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
           const opts = qi.options || [];
@@ -937,7 +939,7 @@ const CreateQuestionDialog = ({
           const shuffledOpts = indices.map((i: number) => opts[i]);
           const newCorrectIdx = indices.indexOf(correctIdx);
 
-          await supabase.from('deck_questions' as any).insert({
+          const { data: inserted } = await supabase.from('deck_questions' as any).insert({
             deck_id: deckId, created_by: user.id,
             question_text: qi.question_text || '',
             question_type: 'multiple_choice',
@@ -945,8 +947,19 @@ const CreateQuestionDialog = ({
             correct_indices: [newCorrectIdx],
             explanation: qi.explanation || '',
             concepts: qi.concepts || [],
-          });
+          }).select('id').single();
+
+          // Collect for global concept linking
+          if (inserted && qi.concepts?.length > 0) {
+            questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: qi.concepts });
+          }
         }
+
+        // Link all questions to global concepts (fire-and-forget)
+        if (questionConceptPairs.length > 0) {
+          linkQuestionsToConcepts(user.id, questionConceptPairs).catch(console.error);
+        }
+
         return qs.length;
       } catch (err) {
         clearInterval(stepInterval);
