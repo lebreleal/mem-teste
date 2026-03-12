@@ -1288,16 +1288,17 @@ const CreateQuestionDialog = ({
    Main Tab Component
    ════════════════════════════════════════════════════════════ */
 const DeckQuestionsTab = ({
-  deckId, isReadOnly = false, sourceDeckId,
+  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null;
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
-  const [practicing, setPracticing] = useState(false);
+  const [createOpen, setCreateOpen] = useState(!!autoCreate);
+  const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
+  const [practicing, setPracticing] = useState(!!autoStart);
   const [filter, setFilter] = useState<QuestionFilter>('all');
 
   const effectiveDeckId = sourceDeckId || deckId;
