@@ -10,6 +10,8 @@ export interface GlobalConcept {
   user_id: string;
   name: string;
   slug: string;
+  category: string | null;
+  subcategory: string | null;
   state: number;
   stability: number;
   difficulty: number;
@@ -21,6 +23,49 @@ export interface GlobalConcept {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Medical taxonomy (Estratégia MED / Medway / SanarFlix standard) ───
+export const MEDICAL_CATEGORIES = [
+  'Clínica Médica',
+  'Cirurgia',
+  'Ginecologia e Obstetrícia',
+  'Pediatria',
+  'Medicina Preventiva',
+] as const;
+
+export type MedicalCategory = typeof MEDICAL_CATEGORIES[number];
+
+export const CATEGORY_SUBCATEGORIES: Record<string, string[]> = {
+  'Clínica Médica': [
+    'Cardiologia', 'Pneumologia', 'Gastroenterologia', 'Endocrinologia',
+    'Nefrologia', 'Reumatologia', 'Hematologia', 'Infectologia',
+    'Neurologia', 'Dermatologia', 'Psiquiatria', 'Geriatria',
+    'Medicina Intensiva', 'Emergência Clínica',
+  ],
+  'Cirurgia': [
+    'Cirurgia Geral', 'Cirurgia do Trauma', 'Cirurgia Vascular',
+    'Urologia', 'Ortopedia', 'Neurocirurgia', 'Cirurgia Torácica',
+    'Cirurgia Plástica', 'Otorrinolaringologia', 'Oftalmologia',
+    'Anestesiologia', 'Cirurgia do Aparelho Digestivo',
+  ],
+  'Ginecologia e Obstetrícia': [
+    'Obstetrícia', 'Ginecologia', 'Pré-natal', 'Parto',
+    'Puerpério', 'Oncologia Ginecológica', 'Reprodução Humana',
+    'Mastologia', 'Planejamento Familiar',
+  ],
+  'Pediatria': [
+    'Neonatologia', 'Puericultura', 'Infectologia Pediátrica',
+    'Pneumologia Pediátrica', 'Gastroenterologia Pediátrica',
+    'Cardiologia Pediátrica', 'Neurologia Pediátrica',
+    'Imunizações', 'Emergência Pediátrica', 'Nutrologia Pediátrica',
+  ],
+  'Medicina Preventiva': [
+    'Epidemiologia', 'Bioestatística', 'SUS', 'Políticas de Saúde',
+    'Saúde do Trabalhador', 'Vigilância Epidemiológica',
+    'Atenção Primária', 'Saúde da Família', 'Ética Médica',
+    'Medicina Legal', 'Medicina Baseada em Evidências',
+  ],
+};
 
 // ─── Slug normalization ─────────────────────────
 export function conceptSlug(name: string): string {
