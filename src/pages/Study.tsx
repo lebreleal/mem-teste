@@ -93,10 +93,16 @@ const Study = () => {
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
+  const leechBypassOnceRef = useRef<Set<string>>(new Set());
   const leechFailStorageKey = useMemo(
     () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
   );
+  const leechInterruptionStorageKey = useMemo(
+    () => `study-leech-interruption:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    [deckId, folderId],
+  );
+
   const readLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return new Map<string, number>();
     const parseEntries = (raw: string | null) => {
@@ -123,6 +129,36 @@ const Study = () => {
 
     return new Map<string, number>();
   }, [leechFailStorageKey]);
+
+  const readLeechInterruption = useCallback((): LeechInterruptionState | null => {
+    if (typeof window === 'undefined') return null;
+    const parseValue = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as Partial<LeechInterruptionState>;
+        if (
+          typeof parsed?.cardId === 'string'
+          && typeof parsed?.leechKey === 'string'
+          && typeof parsed?.failCount === 'number'
+          && typeof parsed?.interruptedAt === 'string'
+        ) {
+          return parsed as LeechInterruptionState;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    };
+
+    const sessionValue = parseValue(window.sessionStorage.getItem(leechInterruptionStorageKey));
+    if (sessionValue) return sessionValue;
+
+    const localValue = parseValue(window.localStorage.getItem(leechInterruptionStorageKey));
+    if (localValue) return localValue;
+
+    return null;
+  }, [leechInterruptionStorageKey]);
+
   const persistLeechFailCounts = useCallback(() => {
     if (typeof window === 'undefined') return;
 
@@ -147,6 +183,25 @@ const Study = () => {
     write(window.localStorage, serialized);
   }, [leechFailStorageKey]);
 
+  const persistLeechInterruption = useCallback((value: LeechInterruptionState | null) => {
+    if (typeof window === 'undefined') return;
+
+    const write = (storage: Storage) => {
+      try {
+        if (!value) {
+          storage.removeItem(leechInterruptionStorageKey);
+          return;
+        }
+        storage.setItem(leechInterruptionStorageKey, JSON.stringify(value));
+      } catch {
+        // no-op: storage can be unavailable in some browser contexts
+      }
+    };
+
+    write(window.sessionStorage);
+    write(window.localStorage);
+  }, [leechInterruptionStorageKey]);
+
   const [leechMode, setLeechMode] = useState<{
     leechCard: any;
     concept: GlobalConcept | null;
@@ -155,6 +210,8 @@ const Study = () => {
     flipped: boolean;
     loading?: boolean;
   } | null>(null);
+  const [leechInterruption, setLeechInterruption] = useState<LeechInterruptionState | null>(null);
+  const [leechSkipConfirmOpen, setLeechSkipConfirmOpen] = useState(false);
 
   // Reset scroll on card change
   useEffect(() => { mainScrollRef.current && (mainScrollRef.current.scrollTop = 0); }, [cardKey]);
