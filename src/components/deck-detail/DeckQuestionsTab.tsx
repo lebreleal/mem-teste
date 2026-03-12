@@ -1890,9 +1890,9 @@ const PasteQuestionsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <ArrowUpRight className="h-5 w-5 text-primary" />
             Colar Questões
           </DialogTitle>
@@ -1900,8 +1900,8 @@ const PasteQuestionsDialog = ({
 
         {!parsedQuestions ? (
           /* ── Step 1: Paste text ── */
-          <div className="space-y-4">
-            <div className="rounded-xl border border-border/50 bg-muted/30 p-3.5">
+          <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
+            <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
               <p className="text-sm font-bold text-foreground">
                 Cole o texto com as questões
               </p>
@@ -1914,9 +1914,8 @@ const PasteQuestionsDialog = ({
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
               placeholder={"Cole aqui o texto com as questões...\n\nExemplo:\n1. Qual é a principal função do coração?\na) Filtrar sangue\nb) Bombear sangue ✓\nc) Produzir hormônios\nd) Digerir alimentos"}
-              className="min-h-[200px] text-sm font-mono"
+              className="min-h-[180px] text-sm font-mono"
               onPaste={(e) => {
-                // Allow paste and auto-fill
                 const pasted = e.clipboardData.getData('text');
                 if (pasted && !pastedText) {
                   setPastedText(pasted);
@@ -1925,16 +1924,46 @@ const PasteQuestionsDialog = ({
               }}
             />
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Zap className="h-3.5 w-3.5 text-primary" />
-              <span>Custo: <strong className="text-foreground">1 crédito</strong> · Saldo: <strong className={energy >= 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{energy}</strong></span>
+            {/* Model selector + cost */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Modelo:</span>
+                <div className="flex items-center rounded-lg border border-border/60 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setAiModel('flash')}
+                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      aiModel === 'flash'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ⚡ Flash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiModel('pro')}
+                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors flex items-center gap-1 ${
+                      aiModel === 'pro'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Crown className="h-3 w-3" /> Pro
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Zap className="h-3.5 w-3.5 text-primary" />
+                <span>Custo: <strong className="text-foreground">{cost} crédito{cost > 1 ? 's' : ''}</strong> · Saldo: <strong className={energy >= cost ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{energy}</strong></span>
+              </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="shrink-0 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button
                 onClick={handleParse}
-                disabled={!pastedText.trim() || parsing || energy < 1}
+                disabled={!pastedText.trim() || parsing || energy < cost}
                 className="gap-1.5"
               >
                 {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
@@ -1944,8 +1973,8 @@ const PasteQuestionsDialog = ({
           </div>
         ) : (
           /* ── Step 2: Review parsed questions ── */
-          <div className="space-y-4">
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <div className="flex flex-col flex-1 min-h-0 space-y-3">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 shrink-0">
               <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
                 <Check className="h-4 w-4 text-emerald-500" />
                 {parsedQuestions.length} questões encontradas
@@ -1955,7 +1984,7 @@ const PasteQuestionsDialog = ({
               </p>
             </div>
 
-            <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-2.5 pr-1">
               {parsedQuestions.map((q, i) => {
                 const isSelected = selectedIds.has(i);
                 const hasCorrect = q.correct_index >= 0;
@@ -1971,20 +2000,20 @@ const PasteQuestionsDialog = ({
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleQuestion(i)}
-                        className="mt-0.5"
+                        className="mt-0.5 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground line-clamp-2">{q.question_text}</p>
+                        <p className="text-xs font-medium text-foreground leading-relaxed">{q.question_text}</p>
                         <div className="mt-1.5 space-y-0.5">
                           {q.options.map((opt: string, j: number) => (
-                            <p key={j} className={`text-[11px] flex items-center gap-1 ${
+                            <p key={j} className={`text-[11px] flex items-start gap-1 ${
                               hasCorrect && j === q.correct_index
                                 ? 'text-emerald-600 dark:text-emerald-400 font-medium'
                                 : 'text-muted-foreground'
                             }`}>
                               <span className="font-bold w-4 shrink-0">{LETTERS[j]}.</span>
-                              <span className="truncate">{opt}</span>
-                              {hasCorrect && j === q.correct_index && <Check className="h-3 w-3 shrink-0" />}
+                              <span className="break-words">{opt}</span>
+                              {hasCorrect && j === q.correct_index && <Check className="h-3 w-3 shrink-0 mt-0.5" />}
                             </p>
                           ))}
                         </div>
@@ -2007,7 +2036,7 @@ const PasteQuestionsDialog = ({
               })}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="shrink-0 pt-2">
               <Button variant="outline" onClick={() => setParsedQuestions(null)}>
                 Voltar
               </Button>
