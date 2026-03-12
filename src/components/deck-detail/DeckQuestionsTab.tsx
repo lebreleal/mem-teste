@@ -1786,6 +1786,237 @@ const DeckQuestionsTab = ({
 };
 
 /* ════════════════════════════════════════════════════════════
+   Paste Questions Dialog — parse pasted text via AI
+   ════════════════════════════════════════════════════════════ */
+const PasteQuestionsDialog = ({
+  open, onOpenChange, deckId,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void; deckId: string;
+}) => {
+  const { user } = useAuth();
+  const { energy } = useEnergy();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [pastedText, setPastedText] = useState('');
+  const [parsedQuestions, setParsedQuestions] = useState<any[] | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Track which questions to import (all selected by default)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  const resetForm = () => {
+    setPastedText(''); setParsedQuestions(null); setParsing(false); setSaving(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleParse = async () => {
+    if (!user || !pastedText.trim()) return;
+    if (energy < 1) { toast({ title: 'Créditos insuficientes', variant: 'destructive' }); return; }
+    setParsing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('parse-questions', {
+        body: { text: pastedText },
+      });
+      if (error) throw error;
+      if (!data?.questions?.length) {
+        toast({ title: 'Nenhuma questão encontrada no texto', variant: 'destructive' });
+        setParsing(false);
+        return;
+      }
+      setParsedQuestions(data.questions);
+      setSelectedIds(new Set(data.questions.map((_: any, i: number) => i)));
+    } catch (err: any) {
+      toast({ title: err.message || 'Erro ao processar texto', variant: 'destructive' });
+    }
+    setParsing(false);
+  };
+
+  const handleSave = async () => {
+    if (!user || !parsedQuestions) return;
+    setSaving(true);
+    try {
+      const toSave = parsedQuestions.filter((_, i) => selectedIds.has(i));
+      const questionConceptPairs: { questionId: string; conceptNames: string[] }[] = [];
+
+      for (const q of toSave) {
+        const { data: inserted } = await supabase.from('deck_questions' as any).insert({
+          deck_id: deckId,
+          created_by: user.id,
+          question_text: q.question_text,
+          question_type: 'multiple_choice',
+          options: q.options,
+          correct_indices: q.correct_index >= 0 ? [q.correct_index] : [],
+          explanation: q.explanation || '',
+          concepts: q.concepts || [],
+        }).select('id').single();
+
+        if (inserted && q.concepts?.length > 0) {
+          questionConceptPairs.push({ questionId: (inserted as any).id, conceptNames: q.concepts });
+        }
+      }
+
+      if (questionConceptPairs.length > 0) {
+        linkQuestionsToConcepts(user.id, questionConceptPairs).catch(console.error);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
+      toast({ title: `${toSave.length} questões importadas!` });
+      onOpenChange(false);
+      resetForm();
+    } catch (err: any) {
+      toast({ title: err.message || 'Erro ao salvar', variant: 'destructive' });
+    }
+    setSaving(false);
+  };
+
+  const toggleQuestion = (idx: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowUpRight className="h-5 w-5 text-primary" />
+            Colar Questões
+          </DialogTitle>
+        </DialogHeader>
+
+        {!parsedQuestions ? (
+          /* ── Step 1: Paste text ── */
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border/50 bg-muted/30 p-3.5">
+              <p className="text-sm font-bold text-foreground">
+                Cole o texto com as questões
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                A IA vai identificar e extrair as questões automaticamente. Suporta diferentes formatos (a/b/c/d, 1/2/3/4, gabarito, etc).
+              </p>
+            </div>
+
+            <Textarea
+              value={pastedText}
+              onChange={(e) => setPastedText(e.target.value)}
+              placeholder={"Cole aqui o texto com as questões...\n\nExemplo:\n1. Qual é a principal função do coração?\na) Filtrar sangue\nb) Bombear sangue ✓\nc) Produzir hormônios\nd) Digerir alimentos"}
+              className="min-h-[200px] text-sm font-mono"
+              onPaste={(e) => {
+                // Allow paste and auto-fill
+                const pasted = e.clipboardData.getData('text');
+                if (pasted && !pastedText) {
+                  setPastedText(pasted);
+                  e.preventDefault();
+                }
+              }}
+            />
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Zap className="h-3.5 w-3.5 text-primary" />
+              <span>Custo: <strong className="text-foreground">1 crédito</strong> · Saldo: <strong className={energy >= 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{energy}</strong></span>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button
+                onClick={handleParse}
+                disabled={!pastedText.trim() || parsing || energy < 1}
+                className="gap-1.5"
+              >
+                {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                {parsing ? 'Processando...' : 'Extrair questões'}
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          /* ── Step 2: Review parsed questions ── */
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+              <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <Check className="h-4 w-4 text-emerald-500" />
+                {parsedQuestions.length} questões encontradas
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Revise e desmarque as que não deseja importar.
+              </p>
+            </div>
+
+            <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+              {parsedQuestions.map((q, i) => {
+                const isSelected = selectedIds.has(i);
+                const hasCorrect = q.correct_index >= 0;
+                return (
+                  <div
+                    key={i}
+                    className={`rounded-xl border p-3 transition-all cursor-pointer ${
+                      isSelected ? 'border-primary/30 bg-primary/5' : 'border-border/30 bg-muted/20 opacity-50'
+                    }`}
+                    onClick={() => toggleQuestion(i)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleQuestion(i)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground line-clamp-2">{q.question_text}</p>
+                        <div className="mt-1.5 space-y-0.5">
+                          {q.options.map((opt: string, j: number) => (
+                            <p key={j} className={`text-[11px] flex items-center gap-1 ${
+                              hasCorrect && j === q.correct_index
+                                ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                                : 'text-muted-foreground'
+                            }`}>
+                              <span className="font-bold w-4 shrink-0">{LETTERS[j]}.</span>
+                              <span className="truncate">{opt}</span>
+                              {hasCorrect && j === q.correct_index && <Check className="h-3 w-3 shrink-0" />}
+                            </p>
+                          ))}
+                        </div>
+                        {!hasCorrect && (
+                          <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" /> Gabarito não identificado
+                          </p>
+                        )}
+                        {q.concepts?.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {q.concepts.map((c: string, k: number) => (
+                              <Badge key={k} variant="outline" className="text-[9px] h-4 px-1.5">{c}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setParsedQuestions(null)}>
+                Voltar
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={selectedIds.size === 0 || saving}
+                className="gap-1.5"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                {saving ? 'Salvando...' : `Importar ${selectedIds.size} questões`}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
    Edit Question Dialog
    ════════════════════════════════════════════════════════════ */
 const EditQuestionDialog = ({
