@@ -187,6 +187,8 @@ Formato:
         correct_index: typeof q.correct_index === "number" ? q.correct_index : -1,
         explanation: String(q.explanation || "").trim(),
         concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3).map((c: any) => String(c).trim()) : [],
+        category: typeof q.category === "string" ? q.category.trim() : null,
+        subcategory: typeof q.subcategory === "string" ? q.subcategory.trim() : null,
       }));
 
     await logTokenUsage(supabase, user.id, "parse_questions", selectedModel, usage, cost);
