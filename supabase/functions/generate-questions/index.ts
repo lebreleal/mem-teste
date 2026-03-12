@@ -110,14 +110,19 @@ Crie UMA questão por grupo conceitual. A questão deve exigir que o aluno INTEG
 ✅ source_card_ids deve conter os IDs EXATOS dos cartões usados
 ✅ Questões na mesma língua dos cartões
 
-## CONCEPTS — PERGUNTAS DE AUTOAVALIAÇÃO:
-O campo "concepts" NÃO deve conter nomes de conceitos soltos (ex: "Abscesso", "Flegmão").
-Em vez disso, cada item deve ser uma PERGUNTA DE COMPREENSÃO que o aluno usa para se autoavaliar.
-Exemplos:
-- "Você conseguiu identificar que uma coleção de pus localizada e confinada é um abscesso?"
-- "Você conseguiu distinguir a diferença entre flegmão e abscesso?"
-- "Você entendeu por que a inflamação purulenta difusa caracteriza o flegmão?"
-Cada pergunta deve testar um micro-conceito específico da questão (2-4 perguntas por questão).
+## CONCEPTS — KNOWLEDGE COMPONENTS:
+O campo "concepts" deve conter NOMES de componentes de conhecimento (Knowledge Components).
+Um Knowledge Component é a menor unidade atômica de conhecimento que pode ser avaliada independentemente.
+
+Regras:
+- 2-6 palavras: substantivo + qualificador (ex: "Fisiopatologia da ICC direita", "Critérios de Light")
+- Nível Compreender/Aplicar de Bloom — NÃO fatos isolados, NÃO disciplinas amplas
+- Cada conceito deve ser testável por múltiplas questões de ângulos diferentes
+- 1-3 conceitos por questão (apenas os CENTRAIS, não todos os tangenciais)
+- Reutilizável entre disciplinas — use terminologia padronizada
+
+Exemplos CORRETOS: "Mecanismo de ação dos IECA", "Critérios de Light", "Diferença abscesso vs flegmão"
+Exemplos ERRADOS: "Cardiologia" (amplo demais), "Dose de Captopril 25mg" (fato isolado), "Você entendeu X?" (pergunta, não conceito)
 
 ## EXPLICAÇÃO:
 A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
@@ -133,7 +138,7 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 ❌ Usar "todas as alternativas" ou "nenhuma das alternativas"
 ❌ Dizer "de acordo com o material", "segundo os cards" etc.
 ❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem
-❌ Colocar nomes de conceitos soltos no campo concepts — SEMPRE usar perguntas de autoavaliação`;
+❌ Colocar perguntas de autoavaliação no campo concepts — use APENAS nomes de Knowledge Components`;
 
     const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
 
@@ -150,7 +155,7 @@ Para cada questão, retorne:
 - options: array com exatamente ${optionsCount} alternativas
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
-- concepts: 2-5 conceitos-chave testados
+- concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
 - source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
 
     // ─── Tool schema for structured output ───
@@ -175,7 +180,7 @@ Para cada questão, retorne:
               concepts: {
                 type: "array",
                 items: { type: "string" },
-                description: "2-4 perguntas de autoavaliação sobre os micro-conceitos testados nesta questão. Cada item é uma pergunta como 'Você conseguiu identificar que X é Y?'",
+                description: "1-3 Knowledge Components centrais testados nesta questão. Nomes curtos de 2-6 palavras no nível Compreender/Aplicar de Bloom (ex: 'Fisiopatologia da ICC direita', 'Critérios de Light'). NÃO use perguntas, fatos isolados ou disciplinas amplas.",
               },
               source_card_ids: {
                 type: "array",
@@ -273,7 +278,7 @@ Para cada questão, retorne:
       options: Array.isArray(q.options) ? q.options.slice(0, optionsCount) : [],
       correct_index: typeof q.correct_index === "number" ? q.correct_index : 0,
       explanation: q.explanation || "",
-      concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 5) : [],
+      concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3) : [],
       source_card_ids: Array.isArray(q.source_card_ids)
         ? q.source_card_ids.filter((id: string) => validCardIds.has(id))
         : [],
