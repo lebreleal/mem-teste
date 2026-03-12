@@ -288,7 +288,7 @@ const ConceptMasterySection = ({
                                 <div className="px-3.5 py-2 bg-primary/[0.02]">
                                   <span className="text-[10px] text-muted-foreground">Verso</span>
                                   <div className="text-xs text-foreground leading-relaxed line-clamp-2 mt-0.5"
-                                    dangerouslySetInnerHTML={{ __html: card.back_content }} />
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.back_content) }} />
                                 </div>
                               )}
                             </div>
