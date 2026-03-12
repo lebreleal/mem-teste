@@ -345,7 +345,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
             value="concepts"
             className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
           >
-            <Network className="h-4 w-4" /> Conceitos ({concepts.length})
+            <BrainCircuit className="h-4 w-4" /> Conceitos ({concepts.length})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="cards" className="mt-4">

@@ -24,8 +24,75 @@ export interface ConceptCardRow {
   created_at: string;
 }
 
+// ─── Internal helpers ────────────────────────────
+const normalizeConceptName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+export async function syncConceptsFromQuestions(deckId: string, userId: string) {
+  const { data: questionRows, error: questionError } = await supabase
+    .from('deck_questions' as any)
+    .select('concepts')
+    .eq('deck_id', deckId);
+
+  if (questionError) throw questionError;
+
+  const conceptsFromQuestions = new Map<string, string>();
+  for (const row of (questionRows ?? []) as any[]) {
+    const concepts = Array.isArray(row.concepts) ? row.concepts : [];
+    for (const rawConcept of concepts) {
+      if (typeof rawConcept !== 'string') continue;
+      const normalized = normalizeConceptName(rawConcept);
+      if (!normalized) continue;
+      const key = normalized.toLocaleLowerCase('pt-BR');
+      if (!conceptsFromQuestions.has(key)) conceptsFromQuestions.set(key, normalized);
+    }
+  }
+
+  if (conceptsFromQuestions.size === 0) return;
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('deck_concepts' as any)
+    .select('name, sort_order')
+    .eq('deck_id', deckId)
+    .eq('user_id', userId);
+
+  if (existingError) throw existingError;
+
+  const existingConceptKeys = new Set(
+    ((existingRows ?? []) as any[])
+      .map((row: any) => normalizeConceptName(row.name || ''))
+      .filter(Boolean)
+      .map((name: string) => name.toLocaleLowerCase('pt-BR')),
+  );
+
+  const nextSortOrder = ((existingRows ?? []) as any[]).reduce(
+    (max, row: any) => Math.max(max, Number(row.sort_order) || 0),
+    -1,
+  ) + 1;
+
+  const missingConcepts = Array.from(conceptsFromQuestions.entries())
+    .filter(([key]) => !existingConceptKeys.has(key))
+    .map(([, name]) => name);
+
+  if (missingConcepts.length === 0) return;
+
+  const rowsToInsert = missingConcepts.map((name, index) => ({
+    deck_id: deckId,
+    user_id: userId,
+    name,
+    sort_order: nextSortOrder + index,
+  }));
+
+  const { error: insertError } = await supabase
+    .from('deck_concepts' as any)
+    .upsert(rowsToInsert as any, { onConflict: 'deck_id,user_id,name', ignoreDuplicates: true });
+
+  if (insertError) throw insertError;
+}
+
 // ─── Fetch concepts for a deck ────────────────────
 export async function fetchConcepts(deckId: string, userId: string): Promise<ConceptRow[]> {
+  await syncConceptsFromQuestions(deckId, userId);
+
   const { data: concepts, error } = await supabase
     .from('deck_concepts' as any)
     .select('*')
