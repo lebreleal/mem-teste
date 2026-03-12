@@ -386,6 +386,14 @@ const Study = () => {
         </header>
 
         <main className="flex flex-1 min-h-0 flex-col items-center justify-center px-4 py-6 overflow-y-auto">
+          {loading ? (
+            <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Brain className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+              <p className="text-sm text-muted-foreground">Buscando conteúdo de reforço...</p>
+            </div>
+          ) : (
           <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
             {/* Intro message */}
             <div className="space-y-2">
