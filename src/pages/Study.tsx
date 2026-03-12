@@ -203,32 +203,42 @@ const Study = () => {
       if (count >= LEECH_THRESHOLD && user) {
         // Trigger leech mode — fetch concepts async
         submittingRef.current = null;
+        // Show loading state immediately
+        setLeechMode({
+          leechCard: currentCard,
+          concept: null,
+          reinforceCards: [],
+          currentIndex: 0,
+          flipped: false,
+          loading: true,
+        });
         (async () => {
           try {
             const concepts = await getCardConcepts(currentCard.id, user.id);
-            const weakest = concepts.length > 0 ? concepts[0] : null; // already sorted by stability ASC
+            const weakest = concepts.length > 0 ? concepts[0] : null;
             let reinforceCards: any[] = [];
             if (weakest) {
               reinforceCards = await getConceptRelatedCards(weakest.id, user.id);
-              // Exclude the leech card itself
               reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
             }
+
+            // If no cards found, generate with AI (Pro, free)
+            if (reinforceCards.length === 0) {
+              const conceptName = weakest?.name ?? `${currentCard.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
+              reinforceCards = await generateReinforcementCards(conceptName, user.id);
+              reinforceCards = reinforceCards.filter(c => c.id !== currentCard.id).slice(0, 10);
+            }
+
             setLeechMode({
               leechCard: currentCard,
               concept: weakest,
               reinforceCards,
               currentIndex: 0,
               flipped: false,
+              loading: false,
             });
           } catch {
-            // Fallback: show card back content
-            setLeechMode({
-              leechCard: currentCard,
-              concept: null,
-              reinforceCards: [],
-              currentIndex: 0,
-              flipped: false,
-            });
+            setLeechMode(prev => prev ? { ...prev, loading: false } : null);
           }
         })();
         return; // Don't proceed with normal review
