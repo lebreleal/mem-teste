@@ -642,10 +642,10 @@ const ConceptsPage = () => {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Grande Área</label>
-              <Select value={editCategory} onValueChange={v => { setEditCategory(v); setEditSubcategory(''); }}>
+              <Select value={editCategory || '__none__'} onValueChange={v => { setEditCategory(v === '__none__' ? '' : v); setEditSubcategory(''); }}>
                 <SelectTrigger><SelectValue placeholder="Selecionar área..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem categoria</SelectItem>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
                   {MEDICAL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -653,10 +653,10 @@ const ConceptsPage = () => {
             {editCategory && CATEGORY_SUBCATEGORIES[editCategory] && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Especialidade</label>
-                <Select value={editSubcategory} onValueChange={setEditSubcategory}>
+                <Select value={editSubcategory || '__none__'} onValueChange={v => setEditSubcategory(v === '__none__' ? '' : v)}>
                   <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Geral</SelectItem>
+                    <SelectItem value="__none__">Geral</SelectItem>
                     {CATEGORY_SUBCATEGORIES[editCategory].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
