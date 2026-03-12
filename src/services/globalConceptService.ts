@@ -644,19 +644,34 @@ export async function getConceptRelatedCards(
   return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
 }
 
-// ─── Generate reinforcement cards via AI (Flash, zero cost) ───
+// ─── Generate reinforcement cards via AI (Pro, zero cost) ───
 // Used when leech trigger fires and no existing cards are found for the concept.
-// Creates a permanent "Reforço: {name}" deck so future lookups find them.
-// Cards should be SIMPLER and MORE DIDACTIC than normal — they explain the concept
-// in accessible ways to rebuild the student's foundation.
+// Creates/updates a permanent "Reforço: {name}" deck so future sessions stay consistent.
+// Cards are generated as didactic scaffolding to help answer the original difficult card.
 export async function generateReinforcementCards(
   conceptNameOrContent: string,
   userId: string,
+  targetCard?: { front_content?: string; back_content?: string },
 ): Promise<{ id: string; front_content: string; back_content: string; deck_id: string }[]> {
+  const normalizeText = (value?: string) =>
+    (value ?? '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const limitToThreeSentences = (value: string) => {
+    const clean = value.replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    const sentences = clean.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) ?? [clean];
+    return sentences.slice(0, 3).join(' ');
+  };
+
   const normalizedConcept = conceptNameOrContent.trim() || 'Conceito';
   const deckName = `Reforço: ${normalizedConcept.slice(0, 60)}`;
+  const targetFront = normalizeText(targetCard?.front_content).slice(0, 280);
+  const targetBack = normalizeText(targetCard?.back_content).slice(0, 380);
 
-  // Reuse deck if it already exists
+  // Reuse deck identity (content will be refreshed to avoid stale/weak cards).
   const { data: existingDeck } = await supabase
     .from('decks')
     .select('id')
@@ -664,46 +679,46 @@ export async function generateReinforcementCards(
     .eq('name', deckName)
     .maybeSingle();
 
-  if (existingDeck) {
-    const { data: cards } = await supabase
-      .from('cards')
-      .select('id, front_content, back_content, deck_id')
-      .eq('deck_id', existingDeck.id)
-      .limit(10);
+  const textContent = [
+    `Tema com dificuldade: ${normalizedConcept}.`,
+    targetFront ? `Pergunta difícil alvo: ${targetFront}` : '',
+    targetBack ? `Resposta esperada do card difícil: ${targetBack}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
-    if ((cards?.length ?? 0) > 0) {
-      return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
-    }
-  }
+  const customInstructions = `
+Você é um professor especialista em recuperação de aprendizagem.
 
-  // IMPORTANT: The prompt asks for SIMPLE, didactic cards — not complex medical content.
-  // The goal is to rebuild the student's foundation, not test advanced knowledge.
-  const prompt = `Você é um professor paciente explicando para um aluno que está com dificuldade no tema: "${normalizedConcept}".
+OBJETIVO OBRIGATÓRIO:
+Depois destes cards, o aluno deve conseguir responder a PERGUNTA DIFÍCIL alvo com segurança.
 
-Crie cartões de estudo SIMPLES e DIDÁTICOS que expliquem esse tema de formas diferentes e acessíveis.
+COMO GERAR:
+- Crie cards em sequência didática (degraus): pré-requisito → mecanismo → pista de diferenciação → aplicação curta.
+- Cada pergunta deve ser útil para destravar a pergunta difícil alvo (evite perguntas genéricas).
+- Escreva em português simples, sem jargão desnecessário.
+- Se usar termo técnico, explique entre parênteses.
+- Proibido cloze e múltipla escolha: use APENAS type "basic" (qa).
 
-REGRAS OBRIGATÓRIAS:
-- Use linguagem SIMPLES e direta, como se explicasse para um iniciante
-- Cada card deve explicar um aspecto diferente do tema
-- Use analogias do dia-a-dia quando possível
-- Foque em "o que é" e "por que acontece", não em detalhes decoreba
-- Cards devem ser do tipo "pergunta simples → explicação clara"
-- Respostas devem ter no máximo 2-3 frases, focando na compreensão
-- NÃO use cloze deletion — apenas formato pergunta/resposta básico
-- NÃO crie questões de múltipla escolha
-- Evite jargão desnecessário — se usar termo técnico, explique entre parênteses
+FORMATO DO VERSO (obrigatório):
+1) Resposta direta (1 frase)
+2) Explicação didática (máximo 2 frases)
+3) Frase final: "Conexão com o card difícil: ..."
 
-Exemplo de bom card:
-Frente: "O que acontece no corpo quando há [tema]?"
-Verso: "Explicação simples com analogia, em 2 frases."`;
+LIMITES:
+- Front curto e claro.
+- Back com no máximo 3 frases.
+- Não invente conteúdo fora do contexto fornecido.
+`.trim();
 
   const { data, error } = await supabase.functions.invoke('generate-deck', {
     body: {
-      textContent: prompt,
-      cardCount: 5,
-      detailLevel: 'standard',
+      textContent,
+      customInstructions,
+      cardCount: 6,
+      detailLevel: 'essential',
       cardFormats: ['qa'],
-      aiModel: 'flash',
+      aiModel: 'pro',
       energyCost: 0,
     },
   });
@@ -732,14 +747,24 @@ Verso: "Explicação simples com analogia, em 2 frases."`;
     reinforcementDeckId = createdDeck.id;
   }
 
+  // Refresh deck content so previously weak generations are replaced.
+  const { error: deleteError } = await supabase
+    .from('cards')
+    .delete()
+    .eq('deck_id', reinforcementDeckId);
+
+  if (deleteError) {
+    console.error('generateReinforcementCards card cleanup error:', deleteError);
+  }
+
   const cardRows = generatedCards
     .map((card: any) => ({
       deck_id: reinforcementDeckId,
-      front_content: card?.front?.trim() || '',
-      back_content: (card?.back ?? '').trim(),
+      front_content: normalizeText(card?.front),
+      back_content: limitToThreeSentences(normalizeText(card?.back)),
       card_type: 'basic',
     }))
-    .filter((card: any) => card.front_content.length > 0);
+    .filter((card: any) => card.front_content.length > 0 && card.back_content.length > 0);
 
   if (cardRows.length === 0) return [];
 
