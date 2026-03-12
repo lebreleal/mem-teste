@@ -1263,12 +1263,21 @@ const DeckQuestionsTab = ({
   // Filter + search questions
   const filteredQuestions = useMemo(() => {
     let filtered = questions;
-    // Apply concept filter from Concepts tab
+    // Apply concept filter from Concepts tab (single string or array for interleaving)
     if (conceptFilter) {
-      const cf = conceptFilter.toLocaleLowerCase('pt-BR');
-      filtered = filtered.filter(q =>
-        (q.concepts ?? []).some(c => c.toLocaleLowerCase('pt-BR') === cf)
-      );
+      if (Array.isArray(conceptFilter)) {
+        const cfSet = new Set(conceptFilter.map(c => c.toLocaleLowerCase('pt-BR')));
+        filtered = filtered.filter(q =>
+          (q.concepts ?? []).some(c => cfSet.has(c.toLocaleLowerCase('pt-BR')))
+        );
+        // Shuffle for interleaving (Bjork, 2001)
+        filtered = [...filtered].sort(() => Math.random() - 0.5);
+      } else {
+        const cf = conceptFilter.toLocaleLowerCase('pt-BR');
+        filtered = filtered.filter(q =>
+          (q.concepts ?? []).some(c => c.toLocaleLowerCase('pt-BR') === cf)
+        );
+      }
     }
     if (filter === 'unanswered') filtered = filtered.filter(q => !statsData.answeredQuestionIds.has(q.id));
     if (filter === 'errors') filtered = filtered.filter(q => statsData.errorQuestionIds.has(q.id));
