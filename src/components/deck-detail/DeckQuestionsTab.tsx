@@ -435,6 +435,8 @@ const QuestionPractice = ({
     setOptionExplanations({});
     setOptionExplainLoading(null);
     setHintLoading(false);
+    setElaborativeText('');
+    setElaborativeSubmitted(false);
   }, []);
 
   const handleConfirm = useCallback(async () => {
