@@ -392,6 +392,7 @@ const CardListContent = ({
   isLinkedDeck, deckId,
 }: any) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
+  const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
   // Only show first N cards from already-loaded set
   const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
   const hasMoreVisible = visibleCount < filteredCards.length;

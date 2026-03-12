@@ -1507,15 +1507,16 @@ const DeckQuestionsTab = ({
               >
                 <div className="flex items-start gap-3">
                   {selectionMode && (
-                    <div className="pt-0.5 shrink-0">
+                    <div
+                      className="pt-0.5 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isCommunity) { setCommunityWarningOpen(true); return; }
+                        toggleSelection(q.id);
+                      }}
+                    >
                       <Checkbox
                         checked={isSelected}
-                        disabled={isCommunity}
-                        onCheckedChange={() => {
-                          if (isCommunity) { setCommunityWarningOpen(true); return; }
-                          toggleSelection(q.id);
-                        }}
-                        onClick={(e: any) => e.stopPropagation()}
                         className={isCommunity ? 'opacity-40 cursor-not-allowed' : ''}
                       />
                     </div>
