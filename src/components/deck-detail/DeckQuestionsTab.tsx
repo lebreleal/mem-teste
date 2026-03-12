@@ -3,7 +3,7 @@
  * Features: stats bar, error notebook, concept mastery, AI hints/explanations,
  * option elimination (scissors), AI concept card generation.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
