@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as globalConceptService from '@/services/globalConceptService';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { fsrsSchedule, type FSRSCard, type Rating } from '@/lib/fsrs';
+import { fsrsSchedule, DEFAULT_FSRS_PARAMS, type FSRSCard, type Rating } from '@/lib/fsrs';
 
 export type { GlobalConcept } from '@/services/globalConceptService';
 
