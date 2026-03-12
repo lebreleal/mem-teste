@@ -1,8 +1,8 @@
 /**
  * ConceptsPage — Global concept mastery with FSRS spaced repetition.
- * Clean card-based layout with inline editing for name, category, linked questions.
+ * Layout mirrors CardList: title + count, selection toggle, search, filters, item rows.
  */
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,7 +24,7 @@ import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
   X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
-  CheckCircle2, ChevronDown, ChevronUp,
+  CheckCheck, Filter,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -33,22 +34,22 @@ import type { Rating } from '@/lib/fsrs';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-type FilterType = 'all' | 'due' | 'learning' | 'mastered' | 'new';
+type StateFilter = 'all' | 'due' | 'new' | 'learning' | 'mastered';
 
-const stateLabel = (state: number) => {
+const stateInfo = (state: number) => {
   switch (state) {
-    case 0: return { label: 'Novo', class: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
-    case 1: return { label: 'Aprendendo', class: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
-    case 2: return { label: 'Dominado', class: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
-    case 3: return { label: 'Reaprendendo', class: 'bg-destructive/10 text-destructive border-destructive/20' };
-    default: return { label: 'Novo', class: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
+    case 0: return { label: 'Novo', color: 'bg-muted-foreground/20 text-muted-foreground' };
+    case 1: return { label: 'Aprendendo', color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' };
+    case 2: return { label: 'Dominado', color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' };
+    case 3: return { label: 'Reaprendendo', color: 'bg-destructive/15 text-destructive' };
+    default: return { label: 'Novo', color: 'bg-muted-foreground/20 text-muted-foreground' };
   }
 };
 
 const nextReviewLabel = (scheduledDate: string) => {
   const d = new Date(scheduledDate);
-  if (d <= new Date()) return 'Agora';
-  return formatDistanceToNow(d, { locale: ptBR, addSuffix: true });
+  if (d <= new Date()) return 'Revisão agora';
+  return `Próx: ${formatDistanceToNow(d, { locale: ptBR, addSuffix: false })}`;
 };
 
 const ConceptsPage = () => {
@@ -60,7 +61,12 @@ const ConceptsPage = () => {
   } = useGlobalConcepts();
 
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Selection mode (like CardList)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Edit dialog
   const [editConcept, setEditConcept] = useState<GlobalConcept | null>(null);
@@ -73,8 +79,9 @@ const ConceptsPage = () => {
   const [linkedQuestions, setLinkedQuestions] = useState<{ id: string; questionText: string; deckId: string; deckName?: string }[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
-  // Delete confirm
-  const [deleteTarget, setDeleteTarget] = useState<GlobalConcept | null>(null);
+  // Delete confirm (single or bulk)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteSingleTarget, setDeleteSingleTarget] = useState<GlobalConcept | null>(null);
 
   // Study mode
   const [studyMode, setStudyMode] = useState(false);
@@ -88,6 +95,16 @@ const ConceptsPage = () => {
   const now = useMemo(() => new Date(), []);
   const isDue = useCallback((c: GlobalConcept) => new Date(c.scheduled_date) <= now, [now]);
 
+  // Counts
+  const counts = useMemo(() => ({
+    total: concepts.length,
+    due: concepts.filter(isDue).length,
+    new: concepts.filter(c => c.state === 0).length,
+    learning: concepts.filter(c => c.state === 1 || c.state === 3).length,
+    mastered: concepts.filter(c => c.state === 2).length,
+  }), [concepts, isDue]);
+
+  // Filter
   const filtered = useMemo(() => {
     let result = concepts;
     if (search) {
@@ -98,22 +115,63 @@ const ConceptsPage = () => {
         (c.subcategory ?? '').toLowerCase().includes(q)
       );
     }
-    if (filter === 'due') result = result.filter(isDue);
-    if (filter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
-    if (filter === 'mastered') result = result.filter(c => c.state === 2);
-    if (filter === 'new') result = result.filter(c => c.state === 0);
+    if (stateFilter === 'due') result = result.filter(isDue);
+    if (stateFilter === 'new') result = result.filter(c => c.state === 0);
+    if (stateFilter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
+    if (stateFilter === 'mastered') result = result.filter(c => c.state === 2);
     return result;
-  }, [concepts, search, filter, isDue]);
+  }, [concepts, search, stateFilter, isDue]);
 
-  const summary = useMemo(() => ({
-    total: concepts.length,
-    due: concepts.filter(isDue).length,
-    new: concepts.filter(c => c.state === 0).length,
-    learning: concepts.filter(c => c.state === 1 || c.state === 3).length,
-    mastered: concepts.filter(c => c.state === 2).length,
-  }), [concepts, isDue]);
+  const hasActiveFilter = stateFilter !== 'all';
 
-  // ─── Edit handlers ───
+  // Progress bar percentages
+  const newPct = counts.total > 0 ? (counts.new / counts.total) * 100 : 0;
+  const learningPct = counts.total > 0 ? (counts.learning / counts.total) * 100 : 0;
+  const masteredPct = counts.total > 0 ? (counts.mastered / counts.total) * 100 : 0;
+
+  // Selection helpers
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  };
+
+  // Bulk delete
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    setDeleteSingleTarget(null);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteSingleTarget) {
+      await deleteConcept.mutateAsync(deleteSingleTarget.id);
+      toast.success('Conceito excluído');
+    } else {
+      // Bulk
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await deleteConcept.mutateAsync(id);
+      }
+      toast.success(`${ids.length} conceito${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    }
+    setDeleteConfirmOpen(false);
+    setDeleteSingleTarget(null);
+  };
+
+  // Edit handlers
   const openEdit = (c: GlobalConcept) => {
     setEditConcept(c);
     setEditName(c.name);
@@ -135,14 +193,7 @@ const ConceptsPage = () => {
     setEditConcept(null);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    await deleteConcept.mutateAsync(deleteTarget.id);
-    toast.success('Conceito excluído');
-    setDeleteTarget(null);
-  };
-
-  // ─── Questions sheet ───
+  // Questions sheet
   const openQuestions = async (conceptId: string) => {
     setQuestionsConceptId(conceptId);
     setLoadingQuestions(true);
@@ -160,7 +211,7 @@ const ConceptsPage = () => {
     toast.success('Questão desvinculada');
   };
 
-  // ─── Study mode ───
+  // Study mode
   const handleStartStudy = useCallback(async () => {
     if (!user) return;
     const queue = dueConcepts.length > 0 ? dueConcepts : concepts.filter(c => c.state === 0).slice(0, 10);
@@ -303,7 +354,7 @@ const ConceptsPage = () => {
     );
   }
 
-  // ═══ Main Dashboard ═══
+  // ═══ Main Page ═══
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/40 bg-card/95 backdrop-blur-md px-4 py-3">
@@ -317,85 +368,171 @@ const ConceptsPage = () => {
           </h1>
           <p className="text-xs text-muted-foreground">Repetição espaçada por tema</p>
         </div>
+        {counts.due > 0 && (
+          <Button size="sm" className="gap-1.5" onClick={handleStartStudy}>
+            <Play className="h-4 w-4" />
+            Revisar {counts.due}
+          </Button>
+        )}
+        {counts.due === 0 && counts.new > 0 && (
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={handleStartStudy}>
+            <Zap className="h-4 w-4" />
+            Estudar novos
+          </Button>
+        )}
       </header>
 
-      <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
+      <div className="px-4 py-4 max-w-lg mx-auto space-y-3">
         {isLoading ? (
           <div className="space-y-3">
-            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-10 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
             <Skeleton className="h-16 w-full rounded-xl" />
           </div>
         ) : concepts.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <BrainCircuit className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-              <h3 className="font-semibold text-foreground">Nenhum conceito ainda</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Gere questões nos seus baralhos para que os conceitos apareçam aqui automaticamente.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
+            <BrainCircuit className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
+            <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito ainda</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Gere questões nos seus baralhos para que os conceitos apareçam aqui automaticamente.
+            </p>
+          </div>
         ) : (
           <>
-            {/* Summary card */}
-            <Card className="border-primary/20 bg-primary/5">
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{summary.total}</p>
-                    <p className="text-xs text-muted-foreground">conceitos totais</p>
-                  </div>
-                  {summary.due > 0 && (
-                    <Button size="sm" className="gap-1.5" onClick={handleStartStudy}>
-                      <Play className="h-4 w-4" />
-                      Revisar {summary.due}
-                    </Button>
-                  )}
-                  {summary.due === 0 && summary.new > 0 && (
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={handleStartStudy}>
-                      <Zap className="h-4 w-4" />
-                      Estudar novos
-                    </Button>
-                  )}
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div><p className="text-lg font-bold text-blue-500">{summary.new}</p><p className="text-[10px] text-muted-foreground">Novos</p></div>
-                  <div><p className="text-lg font-bold text-amber-500">{summary.learning}</p><p className="text-[10px] text-muted-foreground">Aprendendo</p></div>
-                  <div><p className="text-lg font-bold text-emerald-500">{summary.mastered}</p><p className="text-[10px] text-muted-foreground">Dominados</p></div>
-                  <div><p className="text-lg font-bold text-primary">{summary.due}</p><p className="text-[10px] text-muted-foreground">Para revisar</p></div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Search + Filters */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar conceito..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
-            </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {([
-                { key: 'all' as FilterType, label: `Todos (${summary.total})` },
-                { key: 'due' as FilterType, label: `Revisar (${summary.due})` },
-                { key: 'new' as FilterType, label: `Novos (${summary.new})` },
-                { key: 'learning' as FilterType, label: `Aprendendo (${summary.learning})` },
-                { key: 'mastered' as FilterType, label: `Dominados (${summary.mastered})` },
-              ]).map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    filter === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
+            {/* ─── Title bar (mirrors CardList) ─── */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">
+                Conceitos ({counts.total})
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={hasActiveFilter ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 relative"
+                  onClick={() => setShowFilters(!showFilters)}
+                  title="Filtrar"
                 >
-                  {f.label}
-                </button>
-              ))}
+                  <Filter className="h-4 w-4" />
+                  {hasActiveFilter && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
+                  )}
+                </Button>
+                <Button
+                  variant={selectionMode ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => { setSelectionMode(!selectionMode); setSelectedIds(new Set()); }}
+                  title={selectionMode ? 'Cancelar seleção' : 'Selecionar'}
+                >
+                  {selectionMode ? <XIcon className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
-            {/* Concept list — flat, card-based like cards/questions */}
-            <div className="space-y-2">
-              {filtered.map(concept => {
-                const sl = stateLabel(concept.state);
+            {/* ─── Selection action bar ─── */}
+            {selectionMode && selectedIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+                <span className="text-sm font-medium text-foreground">
+                  {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={selectAll}>
+                    <CheckCheck className="h-3.5 w-3.5" /> {selectedIds.size === filtered.length ? 'Desmarcar' : 'Todos'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Progress bar ─── */}
+            {!selectionMode && (
+              <div>
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="bg-muted-foreground/30 transition-all" style={{ width: `${newPct}%` }} />
+                  <div className="transition-all" style={{ width: `${learningPct}%`, backgroundColor: '#47c700' }} />
+                  <div className="bg-primary transition-all" style={{ width: `${masteredPct}%` }} />
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{counts.new}</strong> Novos
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#47c700' }} /> <strong className="text-foreground">{counts.learning}</strong> Aprendendo
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-primary" /> <strong className="text-foreground">{counts.mastered}</strong> Dominados
+                  </span>
+                  {counts.due > 0 && (
+                    <span className="flex items-center gap-1 text-primary font-medium">
+                      <Clock className="h-2.5 w-2.5" /> {counts.due} para revisar
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Search ─── */}
+            {counts.total > 5 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input placeholder="Pesquisar conceitos" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+              </div>
+            )}
+
+            {/* ─── Filter panel ─── */}
+            {showFilters && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Estado de domínio</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { value: 'all' as StateFilter, label: 'Todos', count: counts.total },
+                      { value: 'due' as StateFilter, label: 'Para revisar', count: counts.due },
+                      { value: 'new' as StateFilter, label: 'Novos', count: counts.new },
+                      { value: 'learning' as StateFilter, label: 'Aprendendo', count: counts.learning },
+                      { value: 'mastered' as StateFilter, label: 'Dominados', count: counts.mastered },
+                    ]).map(f => (
+                      <button
+                        key={f.value}
+                        onClick={() => setStateFilter(f.value)}
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                          stateFilter === f.value
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-background text-muted-foreground hover:bg-accent border border-border/50'
+                        }`}
+                      >
+                        {f.label} ({f.count})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {hasActiveFilter && (
+                  <button
+                    onClick={() => setStateFilter('all')}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ─── Concept list (mirrors card rows) ─── */}
+            <div className="space-y-2.5">
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
+                  <h3 className="font-display text-lg font-semibold text-foreground">
+                    {hasActiveFilter ? 'Nenhum conceito encontrado' : 'Nenhum conceito'}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {hasActiveFilter ? 'Tente ajustar os filtros.' : ''}
+                  </p>
+                </div>
+              ) : filtered.map(concept => {
+                const si = stateInfo(concept.state);
+                const isSelected = selectedIds.has(concept.id);
                 const totalAttempts = concept.correct_count + concept.wrong_count;
                 const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
                 const due = isDue(concept);
@@ -403,80 +540,90 @@ const ConceptsPage = () => {
                 return (
                   <div
                     key={concept.id}
-                    className="rounded-xl border border-border/60 bg-card p-3 space-y-2"
+                    className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
+                      isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                    }`}
+                    onClick={() => {
+                      if (selectionMode) {
+                        toggleSelection(concept.id);
+                        return;
+                      }
+                    }}
                   >
-                    {/* Top row: name + actions */}
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-3">
+                      {selectionMode && (
+                        <div
+                          className="pt-0.5 shrink-0"
+                          onClick={e => { e.stopPropagation(); toggleSelection(concept.id); }}
+                        >
+                          <Checkbox checked={isSelected} />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground leading-tight">{concept.name}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${sl.class}`}>
-                            {sl.label}
-                          </Badge>
-                          {concept.category && (
+                        {/* State + review schedule */}
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${si.color}`}>
+                            {si.label}
+                          </span>
+                          {concept.state !== 0 && (
                             <span className="text-[10px] text-muted-foreground">
-                              {concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}
+                              {nextReviewLabel(concept.scheduled_date)}
                             </span>
                           )}
-                          {!concept.category && (
-                            <span className="text-[10px] text-muted-foreground italic">Sem categoria</span>
+                        </div>
+
+                        {/* Name */}
+                        <p className="text-sm font-semibold text-foreground leading-snug">{concept.name}</p>
+
+                        {/* Category + stats */}
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                          {concept.category ? (
+                            <span>{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</span>
+                          ) : (
+                            <span className="italic">Sem categoria</span>
+                          )}
+                          {totalAttempts > 0 && (
+                            <>
+                              <span>·</span>
+                              <span>{accuracy}% acerto ({concept.correct_count}/{totalAttempts})</span>
+                            </>
                           )}
                         </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onClick={() => openEdit(concept)}>
-                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openQuestions(concept.id)}>
-                            <Link2 className="h-3.5 w-3.5 mr-2" /> Questões vinculadas
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(concept)}>
-                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
 
-                    {/* Stats row */}
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      {totalAttempts > 0 && (
-                        <>
-                          <span>Acerto: <span className="font-medium text-foreground">{accuracy}%</span> ({concept.correct_count}/{totalAttempts})</span>
-                          <span>·</span>
-                        </>
+                      {/* Actions menu (hidden in selection mode) */}
+                      {!selectionMode && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => openEdit(concept)}>
+                              <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openQuestions(concept.id)}>
+                              <Link2 className="h-3.5 w-3.5 mr-2" /> Questões vinculadas
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => { setDeleteSingleTarget(concept); setDeleteConfirmOpen(true); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
-                      <span className="flex items-center gap-0.5">
-                        <Clock className="h-2.5 w-2.5" />
-                        {due && concept.state !== 0
-                          ? <span className="text-primary font-medium">Revisar agora</span>
-                          : concept.state === 0
-                            ? 'Nunca estudado'
-                            : `Próxima ${nextReviewLabel(concept.scheduled_date)}`
-                        }
-                      </span>
                     </div>
-
-                    {/* Accuracy bar */}
-                    {totalAttempts > 0 && (
-                      <div className="h-1 w-full rounded-full bg-muted/60 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
-                          style={{ width: `${accuracy}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                 );
               })}
-              {filtered.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground py-8">Nenhum conceito encontrado.</p>
-              )}
             </div>
           </>
         )}
@@ -526,17 +673,21 @@ const ConceptsPage = () => {
       </Dialog>
 
       {/* ─── Delete Confirm ─── */}
-      <Dialog open={!!deleteTarget} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
+      <Dialog open={deleteConfirmOpen} onOpenChange={o => { if (!o) { setDeleteConfirmOpen(false); setDeleteSingleTarget(null); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Excluir conceito</DialogTitle>
+            <DialogTitle>Excluir {deleteSingleTarget ? 'conceito' : `${selectedIds.size} conceitos`}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja excluir <span className="font-semibold text-foreground">"{deleteTarget?.name}"</span>?
-            Os vínculos com questões serão removidos, mas as questões não serão afetadas.
+            {deleteSingleTarget ? (
+              <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">"{deleteSingleTarget.name}"</span>?</>
+            ) : (
+              <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selectedIds.size} conceitos</span> selecionados?</>
+            )}
+            {' '}Os vínculos com questões serão removidos, mas as questões não serão afetadas.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setDeleteConfirmOpen(false); setDeleteSingleTarget(null); }}>Cancelar</Button>
             <Button variant="destructive" onClick={confirmDelete} disabled={deleteConcept.isPending}>
               {deleteConcept.isPending ? 'Excluindo...' : 'Excluir'}
             </Button>
