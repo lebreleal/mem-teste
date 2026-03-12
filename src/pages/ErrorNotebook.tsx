@@ -7,22 +7,30 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  ArrowLeft, BookX, PlayCircle, ChevronRight, ChevronDown,
-  BrainCircuit, Layers, Zap, AlertTriangle, CheckCircle2,
-  XCircle, Loader2, GitBranch, Target, Shield,
-} from 'lucide-react';
-import ConceptDrillQuiz from '@/components/ConceptDrillQuiz';
-import {
-  buildHierarchyDiagnostic,
-  generateCascadeContent,
-  type ConceptNode,
-  type HierarchyDiagnostic,
-} from '@/services/conceptHierarchyService';
-import { toast } from 'sonner';
+export interface ConceptNode {
+  id: string;
+  name: string;
+  slug: string;
+  state: number;
+  stability: number;
+  difficulty: number;
+  correct_count: number;
+  wrong_count: number;
+  parent_concept_id: string | null;
+  isErrorSource: boolean;
+  health: 'weak' | 'learning' | 'strong';
+  questionCount: number;
+  depth: number;
+}
+
+export interface HierarchyDiagnostic {
+  errorQuestionId: string;
+  errorQuestionText: string;
+  sourceConcepts: ConceptNode[];
+  weakFoundations: ConceptNode[];
+  allConcepts: ConceptNode[];
+  conceptPath: { id: string; name: string }[];
+}
 
 interface ErrorQuestion {
   id: string;
