@@ -1534,6 +1534,7 @@ const DeckQuestionsTab = ({
 
                     {/* Question text */}
                     <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                      <span className="text-[10px] font-mono text-muted-foreground/60 mr-1.5">{shortDisplayId(q.id)}</span>
                       {idx + 1}. {plainText || '(Sem enunciado)'}
                     </p>
 
