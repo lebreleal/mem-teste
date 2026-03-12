@@ -1155,10 +1155,10 @@ const CreateQuestionDialog = ({
    Main Tab Component
    ════════════════════════════════════════════════════════════ */
 const DeckQuestionsTab = ({
-  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate,
+  deckId, isReadOnly = false, sourceDeckId, autoStart, autoCreate, conceptFilter,
 }: {
   deckId: string; isReadOnly?: boolean; sourceDeckId?: string | null;
-  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null;
+  autoStart?: boolean; autoCreate?: 'ai' | 'manual' | null; conceptFilter?: string;
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
