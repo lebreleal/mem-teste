@@ -507,6 +507,7 @@ const CardListContent = ({
                     const stateInfo = getStateInfo(card);
                     return (
                       <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-mono text-muted-foreground/60">{shortDisplayId(card.id)}</span>
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
                           {stateInfo.label}
                         </span>
