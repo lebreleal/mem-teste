@@ -298,7 +298,7 @@ const Study = () => {
 
   const submittingRef = useRef<string | null>(null);
 
-  const handleRate = useCallback((rating: Rating) => {
+  const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;
     if (submittingRef.current === currentCard.id) return;
     submittingRef.current = currentCard.id;
@@ -306,7 +306,31 @@ const Study = () => {
     // Leech detection: track consecutive fails per card/group
     const leechKey = getLeechKey(currentCard);
     if (rating === 1) {
-      const count = (failCountRef.current.get(leechKey) ?? 0) + 1;
+      let previousFails = failCountRef.current.get(leechKey) ?? 0;
+
+      // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
+      if (previousFails === 0 && user) {
+        const { data } = await supabase
+          .from('review_logs')
+          .select('rating')
+          .eq('user_id', user.id)
+          .eq('card_id', currentCard.id)
+          .order('reviewed_at', { ascending: false })
+          .limit(LEECH_THRESHOLD - 1);
+
+        let recoveredStreak = 0;
+        for (const row of data ?? []) {
+          if (row.rating === 1) recoveredStreak += 1;
+          else break;
+        }
+
+        if (recoveredStreak > 0) {
+          previousFails = recoveredStreak;
+          failCountRef.current.set(leechKey, recoveredStreak);
+        }
+      }
+
+      const count = previousFails + 1;
       failCountRef.current.set(leechKey, count);
       persistLeechFailCounts();
       if (count >= LEECH_THRESHOLD && user) {
