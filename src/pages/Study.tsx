@@ -423,78 +423,19 @@ const Study = () => {
 
   const submittingRef = useRef<string | null>(null);
 
-  const handleRate = useCallback(async (rating: Rating) => {
-    if (!currentCard || isTransitioning || leechMode) return;
-    if (submittingRef.current === currentCard.id) return;
-    submittingRef.current = currentCard.id;
-
-    // Leech detection: track consecutive fails per card/group
-    const leechKey = getLeechKey(currentCard);
-    const bypassLeechInterruption = leechBypassOnceRef.current.has(leechKey);
-    if (bypassLeechInterruption) {
-      leechBypassOnceRef.current.delete(leechKey);
-    }
-
-    if (rating === 1) {
-      let previousFails = failCountRef.current.get(leechKey) ?? 0;
-
-      // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
-      if (previousFails === 0 && user) {
-        const { data } = await supabase
-          .from('review_logs')
-          .select('rating')
-          .eq('user_id', user.id)
-          .eq('card_id', currentCard.id)
-          .order('reviewed_at', { ascending: false })
-          .limit(LEECH_THRESHOLD - 1);
-
-        let recoveredStreak = 0;
-        for (const row of data ?? []) {
-          if (row.rating === 1) recoveredStreak += 1;
-          else break;
-        }
-
-        if (recoveredStreak > 0) {
-          previousFails = recoveredStreak;
-          failCountRef.current.set(leechKey, recoveredStreak);
-        }
-      }
-
-      const count = previousFails + 1;
-      failCountRef.current.set(leechKey, count);
-      persistLeechFailCounts();
-
-      if (count >= LEECH_THRESHOLD && user && !bypassLeechInterruption) {
-        const interruption: LeechInterruptionState = {
-          cardId: currentCard.id,
-          leechKey,
-          failCount: count,
-          interruptedAt: new Date().toISOString(),
-        };
-
-        setLeechInterruption(interruption);
-        setLeechSkipConfirmOpen(false);
-        persistLeechInterruption(interruption);
-        submittingRef.current = null;
-        return; // pause session until user decides
-      }
-    } else {
-      // Reset fail count on non-Again rating
-      failCountRef.current.delete(leechKey);
-      persistLeechFailCounts();
-    }
-
+  /** Submit the review to backend + update local queue. Extracted so leech path can reuse it. */
+  const executeReview = useCallback((card: any, rating: Rating) => {
     undo.saveSnapshot({
       queue: [...localQueue],
       reviewCount,
       cardKey,
-      cardId: currentCard.id,
+      cardId: card.id,
       prevCardState: {
-        stability: currentCard.stability,
-        difficulty: currentCard.difficulty,
-        state: currentCard.state,
-        scheduled_date: currentCard.scheduled_date,
-        last_reviewed_at: currentCard.last_reviewed_at ?? null,
+        stability: card.stability,
+        difficulty: card.difficulty,
+        state: card.state,
+        scheduled_date: card.scheduled_date,
+        last_reviewed_at: card.last_reviewed_at ?? null,
       },
     });
     tutor.abortTutor();
@@ -507,21 +448,21 @@ const Study = () => {
 
     if (rating > 2) addSuccessfulCard.mutate({ flowMultiplier: 1.0 });
 
-    const shouldKeep = rating === 1 || (rating === 2 && currentCard.state !== 2);
-    reviewedCardIdsRef.current.add(currentCard.id);
+    const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2);
+    reviewedCardIdsRef.current.add(card.id);
     setReviewCount(prev => prev + 1);
 
     if (shouldKeep) {
       const steps = deckConfig?.learning_steps ?? ['1', '10'];
-      const currentStep = currentCard.learning_step ?? 0;
+      const currentStep = card.learning_step ?? 0;
       const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
       const stepStr = steps[stepIdx] ?? '1';
       const stepMinutes = parseStepToMinutes(stepStr);
       const estimatedDate = new Date(Date.now() + stepMinutes * 60 * 1000).toISOString();
-      const estimatedState = rating === 1 && currentCard.state === 2 ? 3 : (currentCard.state === 0 ? 1 : currentCard.state);
+      const estimatedState = rating === 1 && card.state === 2 ? 3 : (card.state === 0 ? 1 : card.state);
 
       setLocalQueue(prev => {
-        const idx = prev.findIndex(c => c.id === currentCard.id);
+        const idx = prev.findIndex(c => c.id === card.id);
         if (idx < 0) return prev;
         const updatedCard = { ...prev[idx], state: estimatedState, scheduled_date: estimatedDate, learning_step: stepIdx };
         const without = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
@@ -530,13 +471,13 @@ const Study = () => {
     } else {
       const buriedSiblingIds: string[] = [];
       setLocalQueue(prev => {
-        let filtered = prev.filter(c => c.id !== currentCard.id);
-        if (currentCard.card_type === 'cloze') {
+        let filtered = prev.filter(c => c.id !== card.id);
+        if (card.card_type === 'cloze') {
           const buryNew = deckConfig?.bury_new_siblings !== false;
           const buryReview = deckConfig?.bury_review_siblings !== false;
           const buryLearning = deckConfig?.bury_learning_siblings !== false;
           if (buryNew || buryReview || buryLearning) {
-            const siblingIds = getSiblingIds(currentCard, filtered);
+            const siblingIds = getSiblingIds(card, filtered);
             if (siblingIds.length > 0) {
               filtered = filtered.filter(c => {
                 if (!siblingIds.includes(c.id)) return true;
@@ -567,12 +508,12 @@ const Study = () => {
     }, 200);
 
     submitReview.mutate(
-      { card: currentCard, rating, elapsedMs: elapsed },
+      { card, rating, elapsedMs: elapsed },
       {
         onSuccess: (result) => {
           if (shouldKeep && result.interval_days === 0) {
             setLocalQueue(prev => prev.map(c =>
-              c.id === currentCard.id
+              c.id === card.id
                 ? { ...c, state: result.state, stability: result.stability, difficulty: result.difficulty, scheduled_date: result.scheduled_date, learning_step: result.learning_step ?? 0 }
                 : c
             ));
@@ -580,7 +521,80 @@ const Study = () => {
         },
       }
     );
-  }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user, persistLeechFailCounts]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview]);
+
+  const handleRate = useCallback(async (rating: Rating) => {
+    if (!currentCard || isTransitioning || leechMode) return;
+    if (submittingRef.current === currentCard.id) return;
+    submittingRef.current = currentCard.id;
+
+    // Leech detection: track consecutive fails per card/group
+    const leechKey = getLeechKey(currentCard);
+    const bypassLeechInterruption = leechBypassOnceRef.current.has(leechKey);
+    if (bypassLeechInterruption) {
+      leechBypassOnceRef.current.delete(leechKey);
+    }
+
+    if (rating === 1) {
+      let previousFails = failCountRef.current.get(leechKey) ?? 0;
+
+      // Extra fallback for resumed sessions: recover previous streak from DB if local count was lost.
+      if (previousFails === 0 && user) {
+        try {
+          const { data } = await supabase
+            .from('review_logs')
+            .select('rating')
+            .eq('user_id', user.id)
+            .eq('card_id', currentCard.id)
+            .order('reviewed_at', { ascending: false })
+            .limit(LEECH_THRESHOLD - 1);
+
+          let recoveredStreak = 0;
+          for (const row of data ?? []) {
+            if (row.rating === 1) recoveredStreak += 1;
+            else break;
+          }
+
+          if (recoveredStreak > 0) {
+            previousFails = recoveredStreak;
+            failCountRef.current.set(leechKey, recoveredStreak);
+          }
+        } catch {
+          // DB recovery failed, continue with local count
+        }
+      }
+
+      const count = previousFails + 1;
+      failCountRef.current.set(leechKey, count);
+      persistLeechFailCounts();
+
+      if (count >= LEECH_THRESHOLD && user && !bypassLeechInterruption) {
+        // IMPORTANT: Submit the review BEFORE pausing — so the "Again" is recorded
+        executeReview(currentCard, rating);
+
+        const interruption: LeechInterruptionState = {
+          cardId: currentCard.id,
+          leechKey,
+          failCount: count,
+          interruptedAt: new Date().toISOString(),
+        };
+
+        // Small delay to let the transition finish before showing modal
+        setTimeout(() => {
+          setLeechInterruption(interruption);
+          setLeechSkipConfirmOpen(false);
+          persistLeechInterruption(interruption);
+        }, 300);
+        return;
+      }
+    } else {
+      // Reset fail count on non-Again rating
+      failCountRef.current.delete(leechKey);
+      persistLeechFailCounts();
+    }
+
+    executeReview(currentCard, rating);
+  }, [currentCard, isTransitioning, leechMode, user, persistLeechFailCounts, persistLeechInterruption, executeReview]);
 
   // ─── Leech Mode: Mini Reinforcement Session ───
   const exitLeechMode = useCallback(() => {
