@@ -1191,11 +1191,25 @@ const DeckQuestionsTab = ({
         .eq('deck_id', effectiveDeckId)
         .order('sort_order', { ascending: true });
       if (error) throw error;
+      console.log('[DeckQuestionsTab] Raw questions data sample:', data?.slice(0, 2)?.map((q: any) => ({
+        id: q.id,
+        question_text: q.question_text?.slice(0, 100),
+        options_type: typeof q.options,
+        options_isArray: Array.isArray(q.options),
+        options_length: Array.isArray(q.options) ? q.options.length : 'N/A',
+        options_sample: JSON.stringify(q.options)?.slice(0, 200),
+      })));
       return (data ?? []).map((q: any) => {
         let opts: string[] = [];
-        if (Array.isArray(q.options)) opts = q.options;
-        else if (typeof q.options === 'string') {
-          try { const parsed = JSON.parse(q.options); if (Array.isArray(parsed)) opts = parsed; } catch {}
+        if (Array.isArray(q.options)) {
+          // options could be array of strings or array of objects
+          opts = q.options.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
+        } else if (typeof q.options === 'string') {
+          try { const parsed = JSON.parse(q.options); if (Array.isArray(parsed)) opts = parsed.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o))); } catch {}
+        } else if (q.options && typeof q.options === 'object') {
+          // jsonb might come as object with numeric keys
+          const values = Object.values(q.options);
+          if (values.length > 0) opts = values.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
         }
         return {
           ...q,
