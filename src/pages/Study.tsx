@@ -335,7 +335,119 @@ const Study = () => {
     );
   }, [currentCard, isTransitioning, submitReview, addSuccessfulCard, localQueue, reviewCount, cardKey, deckConfig, undo, tutor, leechMode, user]);
 
-  if (isLoading || (!queueInitialized && isFetching)) {
+  // ─── Leech Mode: Mini Reinforcement Session ───
+  const exitLeechMode = useCallback(() => {
+    if (!leechMode) return;
+    // Reset fail count for the leech card and put it back with learning_step 0
+    failCountRef.current.delete(leechMode.leechCard.id);
+    setLocalQueue(prev => prev.map(c =>
+      c.id === leechMode.leechCard.id ? { ...c, learning_step: 0 } : c,
+    ));
+    setLeechMode(null);
+    setCardKey(prev => prev + 1);
+    cardShownAt.current = Date.now();
+  }, [leechMode]);
+
+  if (leechMode) {
+    const { concept, reinforceCards, currentIndex, flipped, leechCard } = leechMode;
+    const hasCards = reinforceCards.length > 0;
+    const currentReinforceCard = hasCards ? reinforceCards[currentIndex] : null;
+    const isLastCard = currentIndex >= reinforceCards.length - 1;
+
+    return (
+      <div className="flex h-[100dvh] flex-col bg-background overflow-hidden">
+        {/* Header */}
+        <header className="sticky top-0 z-20 bg-background flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 border-b border-destructive/20">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-destructive">Reforço de Base</p>
+              {concept && <p className="text-[10px] text-muted-foreground">{concept.name}</p>}
+            </div>
+          </div>
+          {hasCards && (
+            <span className="text-xs font-bold text-muted-foreground tabular-nums">
+              {currentIndex + 1}/{reinforceCards.length}
+            </span>
+          )}
+        </header>
+
+        <main className="flex flex-1 min-h-0 flex-col items-center justify-center px-4 py-6 overflow-y-auto">
+          <div className="animate-fade-in w-full max-w-lg space-y-6 text-center">
+            {/* Intro message */}
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Você errou este card <span className="font-bold text-destructive">{LEECH_THRESHOLD} vezes</span>.
+                {concept
+                  ? <> Vamos reforçar o tema <span className="font-semibold text-foreground">"{concept.name}"</span> antes de continuar.</>
+                  : <> Revise o conteúdo antes de continuar.</>
+                }
+              </p>
+            </div>
+
+            {/* Reinforcement card or fallback */}
+            {hasCards && currentReinforceCard ? (
+              <div
+                className="cursor-pointer rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:shadow-md min-h-[200px] flex items-center justify-center"
+                onClick={() => setLeechMode(prev => prev ? { ...prev, flipped: !prev.flipped } : null)}
+              >
+                <div className="w-full">
+                  {!flipped ? (
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Frente</p>
+                      <div
+                        className="text-base text-foreground leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: currentReinforceCard.front_content }}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-4">Toque para ver o verso</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-primary uppercase tracking-wider">Verso</p>
+                      <div
+                        className="text-base text-foreground leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: currentReinforceCard.back_content }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Fallback: show the leech card's back content */
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <p className="text-xs font-medium text-primary uppercase tracking-wider mb-3">Conteúdo para revisão</p>
+                <div
+                  className="text-base text-foreground leading-relaxed text-left"
+                  dangerouslySetInnerHTML={{ __html: leechCard.back_content }}
+                />
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 justify-center pt-2">
+              {hasCards && flipped && !isLastCard ? (
+                <Button
+                  onClick={() => setLeechMode(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1, flipped: false } : null)}
+                  className="gap-2"
+                >
+                  Próximo <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button onClick={exitLeechMode} className="gap-2">
+                  {hasCards && !flipped ? 'Pular reforço' : 'Voltar à sessão'}
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
