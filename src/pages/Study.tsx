@@ -461,6 +461,7 @@ const Study = () => {
               )}
             </div>
           </div>
+          )}
         </main>
       </div>
     );
