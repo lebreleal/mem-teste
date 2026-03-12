@@ -306,8 +306,9 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
   };
 
   const handlePracticeWeak = () => {
-    // Practice all weak/learning concepts — switch to questions tab
-    setConceptFilter(undefined);
+    // Interleaving: pass all weak+learning concepts as array for mixed practice
+    const weakAndLearning = summary.weakAndLearningConcepts;
+    setConceptFilter(weakAndLearning.length > 0 ? weakAndLearning : undefined);
     setActiveTab('questions');
     setQuestionAction('practice');
   };
