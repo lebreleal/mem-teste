@@ -175,6 +175,7 @@ Para cada questão, retorne:
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
 - concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
+- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados (ex: se testando "Tratamento de IC", o pré-requisito é "Fisiologia Cardíaca"). Conceitos mais básicos que o aluno precisa dominar ANTES.
 - source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
 
     // ─── Tool schema for structured output ───
