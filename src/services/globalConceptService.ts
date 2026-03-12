@@ -562,6 +562,52 @@ export async function importConceptWithContent(
   };
 }
 
+// ─── Get concepts linked to a specific card ────
+// Path: card.deck_id → deck_questions (same deck) → question_concepts → global_concepts
+export async function getCardConcepts(
+  cardId: string,
+  userId: string,
+): Promise<GlobalConcept[]> {
+  // 1. Get the card's deck_id
+  const { data: card } = await supabase
+    .from('cards')
+    .select('deck_id')
+    .eq('id', cardId)
+    .maybeSingle();
+
+  if (!card) return [];
+
+  // 2. Get all questions from the same deck
+  const { data: questions } = await supabase
+    .from('deck_questions' as any)
+    .select('id')
+    .eq('deck_id', (card as any).deck_id);
+
+  if (!questions || questions.length === 0) return [];
+
+  const questionIds = (questions as any[]).map(q => q.id);
+
+  // 3. Get concept IDs linked to those questions
+  const { data: links } = await supabase
+    .from('question_concepts' as any)
+    .select('concept_id')
+    .in('question_id', questionIds);
+
+  if (!links || links.length === 0) return [];
+
+  const conceptIds = [...new Set((links as any[]).map(l => l.concept_id))];
+
+  // 4. Fetch the user's global concepts
+  const { data: concepts } = await supabase
+    .from('global_concepts' as any)
+    .select('*')
+    .eq('user_id', userId)
+    .in('id', conceptIds)
+    .order('stability', { ascending: true });
+
+  return (concepts ?? []) as unknown as GlobalConcept[];
+}
+
 // ─── Get cards related to a concept across ALL user decks ───
 // Looks up question_concepts → deck_questions → cards in those decks
 export async function getConceptRelatedCards(
