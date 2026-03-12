@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
+import { shortDisplayId } from '@/lib/shortId';
 interface DeckQuestion {
   id: string;
   deck_id: string;
