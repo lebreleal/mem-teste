@@ -26,7 +26,7 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
       const { data } = await supabase
         .from('deck_questions' as any).select('id')
         .eq('deck_id', effectiveDeckId);
-      return (data ?? []) as { id: string }[];
+      return (data ?? []) as unknown as { id: string }[];
     },
     enabled: !!effectiveDeckId,
     staleTime: 30_000,
