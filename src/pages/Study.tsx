@@ -42,6 +42,7 @@ function getSiblingIds(card: any, queue: any[]): string[] {
 
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
