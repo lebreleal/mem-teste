@@ -206,10 +206,13 @@ const Study = () => {
     leechCard: any;
     concept: GlobalConcept | null;
     reinforceCards: { id: string; front_content: string; back_content: string; deck_id: string }[];
+    retryCards: { id: string; front_content: string; back_content: string; deck_id: string }[];
     currentIndex: number;
+    round: number;
     flipped: boolean;
     loading?: boolean;
-    feedback?: 'correct' | 'wrong' | null;
+    isAdvancing?: boolean;
+    feedback?: 'correct' | null;
     correctCount?: number;
     wrongCount?: number;
   } | null>(null);
