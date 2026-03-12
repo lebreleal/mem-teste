@@ -1776,7 +1776,10 @@ const DeckQuestionsTab = ({
       </Dialog>
 
       {!isReadOnly && (
-        <CreateQuestionDialog open={createOpen} onOpenChange={setCreateOpen} deckId={deckId} mode={createMode} />
+        <>
+          <CreateQuestionDialog open={createOpen} onOpenChange={setCreateOpen} deckId={deckId} mode={createMode} />
+          <PasteQuestionsDialog open={pasteOpen} onOpenChange={setPasteOpen} deckId={deckId} />
+        </>
       )}
     </div>
   );
