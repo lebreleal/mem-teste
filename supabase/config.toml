@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.generate-questions]
 verify_jwt = false
+
+[functions.parse-questions]
+verify_jwt = false
