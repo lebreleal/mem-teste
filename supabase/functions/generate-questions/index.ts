@@ -138,7 +138,7 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 ❌ Usar "todas as alternativas" ou "nenhuma das alternativas"
 ❌ Dizer "de acordo com o material", "segundo os cards" etc.
 ❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem
-❌ Colocar nomes de conceitos soltos no campo concepts — SEMPRE usar perguntas de autoavaliação`;
+❌ Colocar perguntas de autoavaliação no campo concepts — use APENAS nomes de Knowledge Components`;
 
     const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
 
