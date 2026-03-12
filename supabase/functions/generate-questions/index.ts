@@ -47,26 +47,44 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       deckId,
+      cardIds: rawCardIds,
       optionsCount = 4,
       aiModel = "flash",
       energyCost = 0,
       customInstructions = "",
     } = body;
 
-    if (!deckId) return jsonResponse({ error: "deckId é obrigatório" }, 400);
+    if (!deckId && (!rawCardIds || rawCardIds.length === 0)) {
+      return jsonResponse({ error: "deckId ou cardIds é obrigatório" }, 400);
+    }
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "AI key não configurada" }, 500);
 
-    // ─── Fetch deck cards (including sub-decks via RPC) ───
-    const { data: cards, error: cardsError } = await supabase
-      .rpc('get_descendant_cards_page', { p_deck_id: deckId, p_limit: 300, p_offset: 0 });
-
-    if (cardsError) {
-      console.error("Cards fetch error:", cardsError);
-      return jsonResponse({ error: "Erro ao buscar cards" }, 500);
+    // ─── Fetch cards: by cardIds or by deckId ───
+    let cards: any[];
+    if (rawCardIds && rawCardIds.length > 0) {
+      // Fetch specific cards by IDs (cross-deck deepening)
+      const { data, error: cardsError } = await supabase
+        .from('cards')
+        .select('id, front_content, back_content, card_type, deck_id')
+        .in('id', rawCardIds.slice(0, 300));
+      if (cardsError) {
+        console.error("Cards fetch error:", cardsError);
+        return jsonResponse({ error: "Erro ao buscar cards" }, 500);
+      }
+      cards = data || [];
+    } else {
+      const { data, error: cardsError } = await supabase
+        .rpc('get_descendant_cards_page', { p_deck_id: deckId, p_limit: 300, p_offset: 0 });
+      if (cardsError) {
+        console.error("Cards fetch error:", cardsError);
+        return jsonResponse({ error: "Erro ao buscar cards" }, 500);
+      }
+      cards = data || [];
     }
-    if (!cards || cards.length === 0) return jsonResponse({ error: "Nenhum card encontrado neste baralho" }, 400);
+
+    if (!cards || cards.length === 0) return jsonResponse({ error: "Nenhum card encontrado" }, 400);
 
     // ─── Deduct energy ───
     const cost = energyCost || 0;
