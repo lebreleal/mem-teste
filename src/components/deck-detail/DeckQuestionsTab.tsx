@@ -1380,93 +1380,135 @@ const DeckQuestionsTab = ({
     return <QuestionPractice questions={filteredQuestions} deckId={deckId} onClose={() => setPracticing(false)} />;
   }
 
+  const correctPct = statsData.total > 0 ? (statsData.correct / statsData.total) * 100 : 0;
+  const wrongPct = statsData.total > 0 ? (statsData.wrong / statsData.total) * 100 : 0;
+  const unansweredPct = 100 - correctPct - wrongPct;
+
   return (
     <div className="space-y-4">
-      {/* Hero Stats Card */}
-      <QuestionStatsHero
-        total={statsData.total}
-        answered={statsData.answered}
-        correct={statsData.correct}
-        wrong={statsData.wrong}
-        unanswered={statsData.total - statsData.answered}
-        errorCount={statsData.errorQuestionIds.size}
-        filteredCount={filteredQuestions.length}
-        filter={filter}
-        onFilterChange={setFilter}
-        onPractice={() => setPracticing(true)}
-        onCreateAI={() => { setCreateMode('ai'); setCreateOpen(true); }}
-        onCreateManual={() => { setCreateMode('manual'); setCreateOpen(true); }}
-        isReadOnly={isReadOnly}
-      />
+      {/* Header with title + actions — matches CardList "Cartões na coleção" */}
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-base font-bold text-foreground">
+          {filter === 'errors' ? 'Caderno de Erros' : filter === 'unanswered' ? 'Não Respondidas' : 'Banco de Questões'}
+          {' '}({filteredQuestions.length})
+        </h3>
+        <div className="flex items-center gap-2">
+          {/* Filter dropdown pills */}
+          {([
+            { key: 'all' as const, label: 'Todas' },
+            { key: 'unanswered' as const, label: 'A responder' },
+            { key: 'errors' as const, label: 'Erros', count: statsData.errorQuestionIds.size },
+          ]).map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                filter === f.key
+                  ? 'border-primary bg-primary/10 text-primary font-bold'
+                  : 'border-border/50 text-muted-foreground hover:border-primary/30'
+              }`}
+            >
+              {f.label}
+              {f.count !== undefined && f.count > 0 && (
+                <span className="bg-destructive text-white text-[9px] font-bold rounded-full h-3.5 min-w-[14px] px-1 flex items-center justify-center">
+                  {f.count}
+                </span>
+              )}
+            </button>
+          ))}
+          {!isReadOnly && (
+            <Button variant="default" size="sm" className="gap-1 text-xs h-7" onClick={() => { setCreateMode('manual'); setCreateOpen(true); }}>
+              <Plus className="h-3 w-3" /> Adicionar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar — matches CardList style */}
+      {statsData.total > 0 && (
+        <>
+          <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden flex">
+            {correctPct > 0 && (
+              <div className="h-full transition-all duration-500" style={{ width: `${correctPct}%`, background: 'hsl(142 71% 45%)' }} />
+            )}
+            {wrongPct > 0 && (
+              <div className="h-full transition-all duration-500" style={{ width: `${wrongPct}%`, background: 'hsl(var(--destructive))' }} />
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+              {statsData.total - statsData.answered} A responder
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: 'hsl(142 71% 45%)' }} />
+              {statsData.correct} Corretas
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-destructive" />
+              {statsData.wrong} Erradas
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Question list */}
-      {questions.length > 0 && (
-        <div className="rounded-2xl border border-border/50 bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-sm font-bold text-foreground">
-              {filter === 'errors' ? 'Caderno de Erros' : filter === 'unanswered' ? 'Não Respondidas' : 'Banco de Questões'}
-            </h3>
-            <Badge variant="secondary">{filteredQuestions.length}</Badge>
-          </div>
-
-          {isLoading ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">Carregando questões...</div>
-          ) : filteredQuestions.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              {filter === 'errors' ? 'Nenhuma questão no caderno de erros 🎉' : filter === 'unanswered' ? 'Todas as questões foram respondidas!' : 'Nenhuma questão criada para este deck ainda.'}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredQuestions.map((q, idx) => {
-                const opts: string[] = q.options;
-                const cIdx = q.correct_indices?.[0] ?? 0;
-                const plainText = q.question_text.replace(/<[^>]+>/g, '');
-                const isError = statsData.errorQuestionIds.has(q.id);
-                const isAnswered = statsData.answeredQuestionIds.has(q.id);
-                const isCorrectlyAnswered = isAnswered && !isError;
-                return (
-                  <div key={q.id} className={`rounded-xl border px-3 py-2.5 hover:border-primary/30 transition-colors ${
-                    isError ? 'border-destructive/30 bg-destructive/5' : isCorrectlyAnswered ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/50 bg-background'
-                  }`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {isError && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
-                          {isCorrectlyAnswered && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
-                          <p className="text-sm font-semibold text-foreground line-clamp-2">
-                            {idx + 1}. {plainText}
-                          </p>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {opts.slice(0, 5).map((opt, oi) => (
-                            <span key={oi} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              oi === cIdx ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
-                            </span>
-                          ))}
-                        </div>
-                        {q.concepts && q.concepts.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {q.concepts.map(c => (
-                              <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                {c}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {!isReadOnly && (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(q.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+      {isLoading ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">Carregando questões...</div>
+      ) : filteredQuestions.length === 0 ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">
+          {filter === 'errors' ? 'Nenhuma questão no caderno de erros 🎉' : filter === 'unanswered' ? 'Todas as questões foram respondidas!' : 'Nenhuma questão criada para este deck ainda.'}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredQuestions.map((q, idx) => {
+            const opts: string[] = q.options;
+            const cIdx = q.correct_indices?.[0] ?? 0;
+            const plainText = q.question_text.replace(/<[^>]+>/g, '');
+            const isError = statsData.errorQuestionIds.has(q.id);
+            const isAnswered = statsData.answeredQuestionIds.has(q.id);
+            const isCorrectlyAnswered = isAnswered && !isError;
+            return (
+              <div key={q.id} className={`rounded-xl border px-3 py-2.5 hover:border-primary/30 transition-colors ${
+                isError ? 'border-destructive/30 bg-destructive/5' : isCorrectlyAnswered ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/50 bg-background'
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {isError && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
+                      {isCorrectlyAnswered && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                      <p className="text-sm font-semibold text-foreground line-clamp-2">
+                        {idx + 1}. {plainText}
+                      </p>
                     </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {opts.slice(0, 5).map((opt, oi) => (
+                        <span key={oi} className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          oi === cIdx ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {LETTERS[oi]}: {opt.length > 25 ? opt.slice(0, 25) + '…' : opt}
+                        </span>
+                      ))}
+                    </div>
+                    {q.concepts && q.concepts.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {q.concepts.map(c => (
+                          <span key={c} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  {!isReadOnly && (
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(q.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
