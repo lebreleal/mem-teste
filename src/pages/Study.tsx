@@ -131,6 +131,23 @@ const Study = () => {
     }
   }, [queue, queueInitialized]);
 
+  // Restore leech fail counters for this study context (survives leave/re-enter in same browser session)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.sessionStorage.getItem(leechFailStorageKey);
+    if (!raw) {
+      failCountRef.current = new Map();
+      return;
+    }
+    try {
+      const entries = JSON.parse(raw) as [string, number][];
+      failCountRef.current = new Map(entries.filter((entry): entry is [string, number] => Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'number'));
+    } catch {
+      failCountRef.current = new Map();
+      window.sessionStorage.removeItem(leechFailStorageKey);
+    }
+  }, [leechFailStorageKey]);
+
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
     () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
