@@ -919,3 +919,137 @@ export async function generateConceptQuestions(
 
   return data;
 }
+
+// ─── Map prerequisites via AI (batch) ───────────
+export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
+  const { data: all } = await supabase
+    .from('global_concepts' as any)
+    .select('id, name, slug, parent_concept_id')
+    .eq('user_id', userId);
+
+  if (!all || all.length < 2) return 0;
+
+  const concepts = all as any[];
+  const names = concepts.map((c: any) => c.name);
+
+  const { data, error } = await supabase.functions.invoke('map-prerequisites', {
+    body: { conceptNames: names },
+  });
+
+  if (error || data?.error) {
+    console.error('mapPrerequisitesViaAI error:', error ?? data?.error);
+    throw new Error(data?.error ?? 'Failed to map prerequisites');
+  }
+
+  const pairs: { concept: string; prerequisite: string }[] = data?.pairs ?? [];
+  if (pairs.length === 0) return 0;
+
+  // Build name→id map (case-insensitive)
+  const nameToId = new Map<string, string>();
+  for (const c of concepts) {
+    nameToId.set(c.name.toLowerCase(), c.id);
+  }
+
+  let updated = 0;
+  for (const pair of pairs) {
+    const conceptId = nameToId.get(pair.concept.toLowerCase());
+    const prereqId = nameToId.get(pair.prerequisite.toLowerCase());
+    if (!conceptId || !prereqId || conceptId === prereqId) continue;
+
+    // Only set if not already set
+    const existing = concepts.find((c: any) => c.id === conceptId);
+    if (existing?.parent_concept_id) continue;
+
+    await supabase
+      .from('global_concepts' as any)
+      .update({ parent_concept_id: prereqId, updated_at: new Date().toISOString() } as any)
+      .eq('id', conceptId);
+    updated++;
+  }
+
+  return updated;
+}
+
+// ─── Fetch concepts for diagnostic assessment ───
+// Selects ~20 concepts distributed across different depths
+export async function fetchDiagnosticConcepts(userId: string): Promise<GlobalConcept[]> {
+  const { data: all } = await supabase
+    .from('global_concepts' as any)
+    .select('*')
+    .eq('user_id', userId);
+
+  if (!all || all.length === 0) return [];
+
+  const concepts = all as unknown as GlobalConcept[];
+  const byId = new Map(concepts.map(c => [c.id, c]));
+
+  // Calculate depth for each concept
+  const getDepth = (c: GlobalConcept): number => {
+    let depth = 0;
+    let current = c;
+    const visited = new Set<string>();
+    while (current.parent_concept_id && !visited.has(current.id)) {
+      visited.add(current.id);
+      const parent = byId.get(current.parent_concept_id);
+      if (!parent) break;
+      depth++;
+      current = parent;
+    }
+    return depth;
+  };
+
+  // Group by depth
+  const byDepth = new Map<number, GlobalConcept[]>();
+  for (const c of concepts) {
+    const d = getDepth(c);
+    if (!byDepth.has(d)) byDepth.set(d, []);
+    byDepth.get(d)!.push(c);
+  }
+
+  // Sample evenly across depths, target ~20
+  const target = Math.min(20, concepts.length);
+  const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
+  const perDepth = Math.max(1, Math.ceil(target / depths.length));
+
+  const selected: GlobalConcept[] = [];
+  for (const d of depths) {
+    const pool = byDepth.get(d)!;
+    // Shuffle and take perDepth
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    selected.push(...shuffled.slice(0, perDepth));
+    if (selected.length >= target) break;
+  }
+
+  return selected.slice(0, target);
+}
+
+// ─── Mark concept as mastered (for diagnostic) ───
+export async function markConceptMastered(conceptId: string) {
+  await supabase
+    .from('global_concepts' as any)
+    .update({
+      state: 2,
+      stability: 10,
+      difficulty: 0.3,
+      scheduled_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      learning_step: 0,
+      last_reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq('id', conceptId);
+}
+
+// ─── Mark concept as weak (for diagnostic) ───
+export async function markConceptWeak(conceptId: string) {
+  await supabase
+    .from('global_concepts' as any)
+    .update({
+      state: 0,
+      stability: 0,
+      difficulty: 0,
+      scheduled_date: new Date().toISOString(),
+      learning_step: 0,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq('id', conceptId);
+}
