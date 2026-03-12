@@ -1,75 +1,82 @@
 /**
- * ConceptsPage — Global concept mastery dashboard with FSRS-based study.
- * Groups concepts by Grande Área (Estratégia MED / Medway / SanarFlix taxonomy).
+ * ConceptsPage — Global concept mastery with FSRS spaced repetition.
+ * Clean card-based layout with inline editing for name, category, linked questions.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { MEDICAL_CATEGORIES } from '@/services/globalConceptService';
+import { MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions } from '@/services/globalConceptService';
 import { getVariedQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import BottomNav from '@/components/BottomNav';
 import {
-  BrainCircuit, ArrowLeft, Search, Play, CheckCircle2, AlertCircle,
-  X as XIcon, Clock, ChevronDown, ChevronUp, Zap, BookOpen,
-  Stethoscope, Syringe, Baby, Heart, ShieldCheck, Folder,
+  BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
+  X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
+  CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import type { Rating } from '@/lib/fsrs';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-type FilterType = 'all' | 'due' | 'learning' | 'strong';
+type FilterType = 'all' | 'due' | 'learning' | 'mastered' | 'new';
 
 const stateLabel = (state: number) => {
   switch (state) {
-    case 0: return { label: 'Novo', color: 'text-blue-500', bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
-    case 1: return { label: 'Aprendendo', color: 'text-amber-500', bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
-    case 2: return { label: 'Dominado', color: 'text-emerald-500', bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
-    case 3: return { label: 'Reaprendendo', color: 'text-destructive', bg: 'bg-destructive/10 text-destructive border-destructive/20' };
-    default: return { label: 'Novo', color: 'text-blue-500', bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
+    case 0: return { label: 'Novo', class: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
+    case 1: return { label: 'Aprendendo', class: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
+    case 2: return { label: 'Dominado', class: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
+    case 3: return { label: 'Reaprendendo', class: 'bg-destructive/10 text-destructive border-destructive/20' };
+    default: return { label: 'Novo', class: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
   }
 };
 
-const categoryIcon = (cat: string) => {
-  switch (cat) {
-    case 'Clínica Médica': return <Stethoscope className="h-4 w-4" />;
-    case 'Cirurgia': return <Syringe className="h-4 w-4" />;
-    case 'Ginecologia e Obstetrícia': return <Heart className="h-4 w-4" />;
-    case 'Pediatria': return <Baby className="h-4 w-4" />;
-    case 'Medicina Preventiva': return <ShieldCheck className="h-4 w-4" />;
-    default: return <Folder className="h-4 w-4" />;
-  }
-};
-
-const categoryColor = (cat: string) => {
-  switch (cat) {
-    case 'Clínica Médica': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
-    case 'Cirurgia': return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
-    case 'Ginecologia e Obstetrícia': return 'text-pink-500 bg-pink-500/10 border-pink-500/20';
-    case 'Pediatria': return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-    case 'Medicina Preventiva': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-    default: return 'text-muted-foreground bg-muted/50 border-border';
-  }
+const nextReviewLabel = (scheduledDate: string) => {
+  const d = new Date(scheduledDate);
+  if (d <= new Date()) return 'Agora';
+  return formatDistanceToNow(d, { locale: ptBR, addSuffix: true });
 };
 
 const ConceptsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const { concepts, dueConcepts, isLoading, submitConceptReview } = useGlobalConcepts();
+  const {
+    concepts, dueConcepts, isLoading,
+    submitConceptReview, updateMeta, deleteConcept, unlinkQuestion,
+  } = useGlobalConcepts();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
-  // Study mode state
+  // Edit dialog
+  const [editConcept, setEditConcept] = useState<GlobalConcept | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editSubcategory, setEditSubcategory] = useState('');
+
+  // Questions sheet
+  const [questionsConceptId, setQuestionsConceptId] = useState<string | null>(null);
+  const [linkedQuestions, setLinkedQuestions] = useState<{ id: string; questionText: string; deckId: string; deckName?: string }[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<GlobalConcept | null>(null);
+
+  // Study mode
   const [studyMode, setStudyMode] = useState(false);
   const [studyQueue, setStudyQueue] = useState<GlobalConcept[]>([]);
   const [studyIndex, setStudyIndex] = useState(0);
@@ -79,58 +86,24 @@ const ConceptsPage = () => {
   const [loadingQuestion, setLoadingQuestion] = useState(false);
 
   const now = useMemo(() => new Date(), []);
-
   const isDue = useCallback((c: GlobalConcept) => new Date(c.scheduled_date) <= now, [now]);
 
   const filtered = useMemo(() => {
     let result = concepts;
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(c => c.name.toLowerCase().includes(q) || (c.subcategory ?? '').toLowerCase().includes(q));
+      result = result.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        (c.category ?? '').toLowerCase().includes(q) ||
+        (c.subcategory ?? '').toLowerCase().includes(q)
+      );
     }
     if (filter === 'due') result = result.filter(isDue);
     if (filter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
-    if (filter === 'strong') result = result.filter(c => c.state === 2);
+    if (filter === 'mastered') result = result.filter(c => c.state === 2);
+    if (filter === 'new') result = result.filter(c => c.state === 0);
     return result;
   }, [concepts, search, filter, isDue]);
-
-  // Group by category → subcategory
-  const grouped = useMemo(() => {
-    const map = new Map<string, Map<string, GlobalConcept[]>>();
-
-    for (const c of filtered) {
-      const cat = c.category || 'Sem categoria';
-      const sub = c.subcategory || 'Geral';
-      if (!map.has(cat)) map.set(cat, new Map());
-      const subMap = map.get(cat)!;
-      if (!subMap.has(sub)) subMap.set(sub, []);
-      subMap.get(sub)!.push(c);
-    }
-
-    // Sort: medical categories first in standard order, then others
-    const ordered: { category: string; subcategories: { name: string; concepts: GlobalConcept[] }[] }[] = [];
-    const catOrder = [...MEDICAL_CATEGORIES, 'Outras', 'Sem categoria'];
-
-    for (const cat of catOrder) {
-      if (map.has(cat)) {
-        const subMap = map.get(cat)!;
-        const subs = Array.from(subMap.entries())
-          .map(([name, concepts]) => ({ name, concepts }))
-          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-        ordered.push({ category: cat, subcategories: subs });
-        map.delete(cat);
-      }
-    }
-    // Any remaining categories
-    for (const [cat, subMap] of map) {
-      const subs = Array.from(subMap.entries())
-        .map(([name, concepts]) => ({ name, concepts }))
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-      ordered.push({ category: cat, subcategories: subs });
-    }
-
-    return ordered;
-  }, [filtered]);
 
   const summary = useMemo(() => ({
     total: concepts.length,
@@ -140,15 +113,54 @@ const ConceptsPage = () => {
     mastered: concepts.filter(c => c.state === 2).length,
   }), [concepts, isDue]);
 
-  const toggleCategory = (cat: string) => {
-    setCollapsedCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat); else next.add(cat);
-      return next;
-    });
+  // ─── Edit handlers ───
+  const openEdit = (c: GlobalConcept) => {
+    setEditConcept(c);
+    setEditName(c.name);
+    setEditCategory(c.category || '');
+    setEditSubcategory(c.subcategory || '');
   };
 
-  // Start study mode
+  const saveEdit = async () => {
+    if (!editConcept || !editName.trim()) return;
+    await updateMeta.mutateAsync({
+      conceptId: editConcept.id,
+      fields: {
+        name: editName.trim(),
+        category: editCategory || null,
+        subcategory: editSubcategory || null,
+      },
+    });
+    toast.success('Conceito atualizado');
+    setEditConcept(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteConcept.mutateAsync(deleteTarget.id);
+    toast.success('Conceito excluído');
+    setDeleteTarget(null);
+  };
+
+  // ─── Questions sheet ───
+  const openQuestions = async (conceptId: string) => {
+    setQuestionsConceptId(conceptId);
+    setLoadingQuestions(true);
+    try {
+      const qs = await getConceptQuestions(conceptId);
+      setLinkedQuestions(qs);
+    } catch { setLinkedQuestions([]); }
+    setLoadingQuestions(false);
+  };
+
+  const handleUnlink = async (questionId: string) => {
+    if (!questionsConceptId) return;
+    await unlinkQuestion.mutateAsync({ conceptId: questionsConceptId, questionId });
+    setLinkedQuestions(prev => prev.filter(q => q.id !== questionId));
+    toast.success('Questão desvinculada');
+  };
+
+  // ─── Study mode ───
   const handleStartStudy = useCallback(async () => {
     if (!user) return;
     const queue = dueConcepts.length > 0 ? dueConcepts : concepts.filter(c => c.state === 0).slice(0, 10);
@@ -164,15 +176,14 @@ const ConceptsPage = () => {
     setLoadingQuestion(false);
   }, [user, dueConcepts, concepts]);
 
-  const handleAnswer = useCallback(async () => {
+  const handleAnswer = () => {
     if (selectedOption === null || !currentQuestion) return;
     setConfirmed(true);
-  }, [selectedOption, currentQuestion]);
+  };
 
   const handleRate = useCallback(async (rating: Rating) => {
     const concept = studyQueue[studyIndex];
     if (!concept) return;
-
     const isCorrect = currentQuestion?.correctIndices?.includes(selectedOption) ?? false;
     await submitConceptReview.mutateAsync({ concept, rating, isCorrect });
 
@@ -198,7 +209,7 @@ const ConceptsPage = () => {
     setLoadingQuestion(false);
   }, [studyQueue, studyIndex, currentQuestion, selectedOption, submitConceptReview, user]);
 
-  // ─── Study Mode UI ───
+  // ═══ Study Mode UI ═══
   if (studyMode) {
     const concept = studyQueue[studyIndex];
     const isCorrect = currentQuestion?.correctIndices?.includes(selectedOption) ?? false;
@@ -231,9 +242,7 @@ const ConceptsPage = () => {
               <CardContent className="py-8 text-center">
                 <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">Nenhuma questão vinculada a este conceito.</p>
-                <Button variant="outline" className="mt-4" onClick={() => handleRate(3)}>
-                  Pular
-                </Button>
+                <Button variant="outline" className="mt-4" onClick={() => handleRate(3)}>Pular</Button>
               </CardContent>
             </Card>
           ) : (
@@ -248,7 +257,6 @@ const ConceptsPage = () => {
                 {(currentQuestion.options ?? []).map((opt: string, i: number) => {
                   const isSelected = selectedOption === i;
                   const isCorrectOpt = currentQuestion.correctIndices?.includes(i);
-
                   let optClasses = 'border-border/50 bg-card hover:bg-accent/30';
                   if (confirmed) {
                     if (isCorrectOpt) optClasses = 'border-emerald-500 bg-emerald-500/10';
@@ -272,9 +280,7 @@ const ConceptsPage = () => {
               </div>
 
               {!confirmed ? (
-                <Button className="w-full" disabled={selectedOption === null} onClick={handleAnswer}>
-                  Confirmar
-                </Button>
+                <Button className="w-full" disabled={selectedOption === null} onClick={handleAnswer}>Confirmar</Button>
               ) : (
                 <div className="space-y-3">
                   <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
@@ -284,15 +290,9 @@ const ConceptsPage = () => {
                     )}
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="outline" className="text-xs border-destructive/30 text-destructive" onClick={() => handleRate(1)}>
-                      Errei
-                    </Button>
-                    <Button variant="outline" className="text-xs" onClick={() => handleRate(3)}>
-                      Bom
-                    </Button>
-                    <Button variant="outline" className="text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400" onClick={() => handleRate(4)}>
-                      Fácil
-                    </Button>
+                    <Button variant="outline" className="text-xs border-destructive/30 text-destructive" onClick={() => handleRate(1)}>Errei</Button>
+                    <Button variant="outline" className="text-xs" onClick={() => handleRate(3)}>Bom</Button>
+                    <Button variant="outline" className="text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400" onClick={() => handleRate(4)}>Fácil</Button>
                   </div>
                 </div>
               )}
@@ -303,7 +303,7 @@ const ConceptsPage = () => {
     );
   }
 
-  // ─── Main Dashboard UI ───
+  // ═══ Main Dashboard ═══
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/40 bg-card/95 backdrop-blur-md px-4 py-3">
@@ -315,6 +315,7 @@ const ConceptsPage = () => {
             <BrainCircuit className="h-5 w-5 text-primary" />
             Conceitos
           </h1>
+          <p className="text-xs text-muted-foreground">Repetição espaçada por tema</p>
         </div>
       </header>
 
@@ -322,7 +323,6 @@ const ConceptsPage = () => {
         {isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
             <Skeleton className="h-16 w-full rounded-xl" />
           </div>
         ) : concepts.length === 0 ? (
@@ -337,7 +337,7 @@ const ConceptsPage = () => {
           </Card>
         ) : (
           <>
-            {/* Summary */}
+            {/* Summary card */}
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="py-4">
                 <div className="flex items-center justify-between mb-3">
@@ -359,39 +359,26 @@ const ConceptsPage = () => {
                   )}
                 </div>
                 <div className="grid grid-cols-4 gap-2 text-center">
-                  <div>
-                    <p className="text-lg font-bold text-blue-500">{summary.new}</p>
-                    <p className="text-[10px] text-muted-foreground">Novos</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-amber-500">{summary.learning}</p>
-                    <p className="text-[10px] text-muted-foreground">Aprendendo</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-emerald-500">{summary.mastered}</p>
-                    <p className="text-[10px] text-muted-foreground">Dominados</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-primary">{summary.due}</p>
-                    <p className="text-[10px] text-muted-foreground">Para revisar</p>
-                  </div>
+                  <div><p className="text-lg font-bold text-blue-500">{summary.new}</p><p className="text-[10px] text-muted-foreground">Novos</p></div>
+                  <div><p className="text-lg font-bold text-amber-500">{summary.learning}</p><p className="text-[10px] text-muted-foreground">Aprendendo</p></div>
+                  <div><p className="text-lg font-bold text-emerald-500">{summary.mastered}</p><p className="text-[10px] text-muted-foreground">Dominados</p></div>
+                  <div><p className="text-lg font-bold text-primary">{summary.due}</p><p className="text-[10px] text-muted-foreground">Para revisar</p></div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Search + Filters */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Buscar conceito ou tema..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar conceito..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
             </div>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {([
-                { key: 'all' as FilterType, label: 'Todos' },
-                { key: 'due' as FilterType, label: `Para revisar (${summary.due})` },
-                { key: 'learning' as FilterType, label: 'Aprendendo' },
-                { key: 'strong' as FilterType, label: 'Dominados' },
+                { key: 'all' as FilterType, label: `Todos (${summary.total})` },
+                { key: 'due' as FilterType, label: `Revisar (${summary.due})` },
+                { key: 'new' as FilterType, label: `Novos (${summary.new})` },
+                { key: 'learning' as FilterType, label: `Aprendendo (${summary.learning})` },
+                { key: 'mastered' as FilterType, label: `Dominados (${summary.mastered})` },
               ]).map(f => (
                 <button
                   key={f.key}
@@ -405,112 +392,83 @@ const ConceptsPage = () => {
               ))}
             </div>
 
-            {/* Grouped concept list */}
-            <div className="space-y-3">
-              {grouped.map(group => {
-                const isCollapsed = collapsedCategories.has(group.category);
-                const catConceptCount = group.subcategories.reduce((acc, s) => acc + s.concepts.length, 0);
-                const catDueCount = group.subcategories.reduce((acc, s) => acc + s.concepts.filter(isDue).length, 0);
+            {/* Concept list — flat, card-based like cards/questions */}
+            <div className="space-y-2">
+              {filtered.map(concept => {
+                const sl = stateLabel(concept.state);
+                const totalAttempts = concept.correct_count + concept.wrong_count;
+                const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
+                const due = isDue(concept);
 
                 return (
-                  <div key={group.category} className="rounded-xl border border-border bg-card overflow-hidden">
-                    {/* Category header */}
-                    <button
-                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors"
-                      onClick={() => toggleCategory(group.category)}
-                    >
-                      <span className={`flex items-center justify-center h-8 w-8 rounded-lg border ${categoryColor(group.category)}`}>
-                        {categoryIcon(group.category)}
-                      </span>
-                      <div className="flex-1 text-left min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{group.category}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {catConceptCount} conceito{catConceptCount !== 1 ? 's' : ''}
-                          {catDueCount > 0 && <span className="text-primary font-medium"> · {catDueCount} para revisar</span>}
-                        </p>
+                  <div
+                    key={concept.id}
+                    className="rounded-xl border border-border/60 bg-card p-3 space-y-2"
+                  >
+                    {/* Top row: name + actions */}
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground leading-tight">{concept.name}</p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${sl.class}`}>
+                            {sl.label}
+                          </Badge>
+                          {concept.category && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}
+                            </span>
+                          )}
+                          {!concept.category && (
+                            <span className="text-[10px] text-muted-foreground italic">Sem categoria</span>
+                          )}
+                        </div>
                       </div>
-                      {isCollapsed ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />}
-                    </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => openEdit(concept)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openQuestions(concept.id)}>
+                            <Link2 className="h-3.5 w-3.5 mr-2" /> Questões vinculadas
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(concept)}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
 
-                    {!isCollapsed && (
-                      <div className="border-t border-border/50">
-                        {group.subcategories.map(sub => (
-                          <div key={sub.name}>
-                            {/* Subcategory label */}
-                            {sub.name !== 'Geral' && (
-                              <div className="px-4 pt-2 pb-1">
-                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{sub.name}</p>
-                              </div>
-                            )}
-                            {/* Concepts in this subcategory */}
-                            {sub.concepts.map(concept => {
-                              const sl = stateLabel(concept.state);
-                              const isExpanded = expandedId === concept.id;
-                              const totalAttempts = concept.correct_count + concept.wrong_count;
-                              const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
-                              const due = isDue(concept);
+                    {/* Stats row */}
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                      {totalAttempts > 0 && (
+                        <>
+                          <span>Acerto: <span className="font-medium text-foreground">{accuracy}%</span> ({concept.correct_count}/{totalAttempts})</span>
+                          <span>·</span>
+                        </>
+                      )}
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="h-2.5 w-2.5" />
+                        {due && concept.state !== 0
+                          ? <span className="text-primary font-medium">Revisar agora</span>
+                          : concept.state === 0
+                            ? 'Nunca estudado'
+                            : `Próxima ${nextReviewLabel(concept.scheduled_date)}`
+                        }
+                      </span>
+                    </div>
 
-                              return (
-                                <div key={concept.id} className="border-t border-border/30">
-                                  <button
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/20 transition-colors"
-                                    onClick={() => setExpandedId(isExpanded ? null : concept.id)}
-                                  >
-                                    {concept.state === 2 ? (
-                                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                                    ) : concept.state === 1 || concept.state === 3 ? (
-                                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
-                                    ) : (
-                                      <BookOpen className="h-4 w-4 shrink-0 text-blue-500" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-foreground truncate">{concept.name}</p>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <Badge variant="outline" className={`text-[9px] h-4 px-1.5 border ${sl.bg}`}>
-                                          {sl.label}
-                                        </Badge>
-                                        {totalAttempts > 0 && (
-                                          <span className="text-[10px] text-muted-foreground">
-                                            {concept.correct_count}/{totalAttempts} ({accuracy}%)
-                                          </span>
-                                        )}
-                                        {due && concept.state !== 0 && (
-                                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border border-primary/30 bg-primary/5 text-primary">
-                                            <Clock className="h-2.5 w-2.5 mr-0.5" /> Revisar
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                                  </button>
-
-                                  {isExpanded && (
-                                    <div className="border-t border-border/30 px-4 pb-3 pt-2 space-y-2 bg-muted/10">
-                                      {totalAttempts > 0 && (
-                                        <div className="space-y-1">
-                                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                                            <span>Taxa de acerto</span>
-                                            <span className="font-medium text-foreground">{accuracy}%</span>
-                                          </div>
-                                          <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
-                                            <div
-                                              className={`h-full rounded-full transition-all ${accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
-                                              style={{ width: `${accuracy}%` }}
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
-                                      <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                                        <div>Acertos: <span className="font-medium text-foreground">{concept.correct_count}</span></div>
-                                        <div>Erros: <span className="font-medium text-foreground">{concept.wrong_count}</span></div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
+                    {/* Accuracy bar */}
+                    {totalAttempts > 0 && (
+                      <div className="h-1 w-full rounded-full bg-muted/60 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 40 ? 'bg-amber-500' : 'bg-destructive'}`}
+                          style={{ width: `${accuracy}%` }}
+                        />
                       </div>
                     )}
                   </div>
@@ -523,6 +481,112 @@ const ConceptsPage = () => {
           </>
         )}
       </div>
+
+      {/* ─── Edit Dialog ─── */}
+      <Dialog open={!!editConcept} onOpenChange={o => { if (!o) setEditConcept(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar conceito</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome</label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Grande Área</label>
+              <Select value={editCategory} onValueChange={v => { setEditCategory(v); setEditSubcategory(''); }}>
+                <SelectTrigger><SelectValue placeholder="Selecionar área..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sem categoria</SelectItem>
+                  {MEDICAL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {editCategory && CATEGORY_SUBCATEGORIES[editCategory] && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Especialidade</label>
+                <Select value={editSubcategory} onValueChange={setEditSubcategory}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Geral</SelectItem>
+                    {CATEGORY_SUBCATEGORIES[editCategory].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditConcept(null)}>Cancelar</Button>
+            <Button onClick={saveEdit} disabled={!editName.trim() || updateMeta.isPending}>
+              {updateMeta.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Confirm ─── */}
+      <Dialog open={!!deleteTarget} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir conceito</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir <span className="font-semibold text-foreground">"{deleteTarget?.name}"</span>?
+            Os vínculos com questões serão removidos, mas as questões não serão afetadas.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteConcept.isPending}>
+              {deleteConcept.isPending ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Questions Sheet ─── */}
+      <Sheet open={!!questionsConceptId} onOpenChange={o => { if (!o) { setQuestionsConceptId(null); setLinkedQuestions([]); } }}>
+        <SheetContent side="bottom" className="max-h-[70vh]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" />
+              Questões vinculadas
+            </SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="mt-3 max-h-[50vh]">
+            {loadingQuestions ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-12 w-full rounded-lg" />
+                <Skeleton className="h-12 w-full rounded-lg" />
+              </div>
+            ) : linkedQuestions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma questão vinculada.</p>
+            ) : (
+              <div className="space-y-2 p-1">
+                {linkedQuestions.map(q => (
+                  <div key={q.id} className="flex items-start gap-2 rounded-lg border border-border/50 bg-card p-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground line-clamp-2">{q.questionText}</p>
+                      {q.deckName && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Baralho: {q.deckName}</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleUnlink(q.id)}
+                    >
+                      <Unlink className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
       <BottomNav />
     </div>
   );

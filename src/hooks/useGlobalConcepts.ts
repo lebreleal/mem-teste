@@ -72,6 +72,30 @@ export const useGlobalConcepts = () => {
     return globalConceptService.getVariedQuestion(conceptId, user.id);
   };
 
+  const updateMeta = useMutation({
+    mutationFn: ({ conceptId, fields }: { conceptId: string; fields: { name?: string; category?: string | null; subcategory?: string | null } }) =>
+      globalConceptService.updateConceptMeta(conceptId, fields),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+    },
+  });
+
+  const deleteConcept = useMutation({
+    mutationFn: (conceptId: string) => globalConceptService.deleteConcept(conceptId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
+    },
+  });
+
+  const unlinkQuestion = useMutation({
+    mutationFn: ({ conceptId, questionId }: { conceptId: string; questionId: string }) =>
+      globalConceptService.unlinkQuestion(conceptId, questionId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+    },
+  });
+
   return {
     concepts: allQuery.data ?? [],
     dueConcepts: dueQuery.data ?? [],
@@ -79,5 +103,8 @@ export const useGlobalConcepts = () => {
     isDueLoading: dueQuery.isLoading,
     submitConceptReview,
     getVariedQuestion,
+    updateMeta,
+    deleteConcept,
+    unlinkQuestion,
   };
 };
