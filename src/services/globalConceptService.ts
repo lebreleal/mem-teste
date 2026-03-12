@@ -561,3 +561,72 @@ export async function importConceptWithContent(
     cardCount: insertedCards?.length ?? 0,
   };
 }
+
+// ─── Get cards related to a concept across ALL user decks ───
+// Looks up question_concepts → deck_questions → cards in those decks
+export async function getConceptRelatedCards(
+  conceptId: string,
+  userId: string,
+): Promise<{ id: string; front_content: string; back_content: string; deck_id: string }[]> {
+  // 1. Get deck_ids from questions linked to this concept
+  const { data: links } = await supabase
+    .from('question_concepts' as any)
+    .select('question_id')
+    .eq('concept_id', conceptId);
+
+  if (!links || links.length === 0) return [];
+
+  const questionIds = (links as any[]).map(l => l.question_id);
+
+  // 2. Get deck_ids from those questions
+  const { data: questions } = await supabase
+    .from('deck_questions' as any)
+    .select('deck_id')
+    .in('id', questionIds);
+
+  if (!questions || questions.length === 0) return [];
+
+  const deckIds = [...new Set((questions as any[]).map((q: any) => q.deck_id))];
+
+  // 3. Get cards from those decks (only user's own decks via RLS)
+  const { data: cards } = await supabase
+    .from('cards')
+    .select('id, front_content, back_content, deck_id')
+    .in('deck_id', deckIds)
+    .limit(100);
+
+  return (cards ?? []) as { id: string; front_content: string; back_content: string; deck_id: string }[];
+}
+
+// ─── Generate concept-focused questions via edge function ───
+export async function generateConceptQuestions(
+  cardIds: string[],
+  aiModel: string = 'flash',
+  energyCost: number = 0,
+): Promise<{
+  questions: Array<{
+    question_text: string;
+    options: string[];
+    correct_index: number;
+    explanation: string;
+    concepts: string[];
+    source_card_ids: string[];
+  }>;
+  usage: any;
+} | null> {
+  const { data, error } = await supabase.functions.invoke('generate-questions', {
+    body: { cardIds, aiModel, energyCost, optionsCount: 4 },
+  });
+
+  if (error) {
+    console.error('generateConceptQuestions error:', error);
+    return null;
+  }
+
+  if (data?.error) {
+    console.error('generateConceptQuestions AI error:', data.error);
+    return null;
+  }
+
+  return data;
+}
