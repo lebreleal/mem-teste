@@ -4,9 +4,6 @@ import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/Deck
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
-import ConceptStatsCard from '@/components/deck-detail/ConceptStatsCard';
-import ConceptList from '@/components/deck-detail/ConceptList';
-import { useConceptMastery } from '@/hooks/useConceptMastery';
 import { TagInput } from '@/components/TagInput';
 import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
