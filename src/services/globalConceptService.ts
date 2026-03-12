@@ -78,7 +78,7 @@ export function conceptSlug(name: string): string {
 export async function ensureGlobalConcepts(
   userId: string,
   conceptNames: string[],
-  conceptMetaMap?: Map<string, { category?: string; subcategory?: string }>,
+  conceptMetaMap?: Map<string, { category?: string; subcategory?: string; parentConceptSlug?: string }>,
 ): Promise<Map<string, string>> {
   const slugMap = new Map<string, string>(); // slug → id
   if (conceptNames.length === 0) return slugMap;
