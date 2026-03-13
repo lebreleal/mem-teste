@@ -206,29 +206,52 @@ export async function moveConceptCardsToErrorDeck(
   const normalizedTerms = new Set(terms.map(normalize));
   const cardIdsToMove = new Set<string>();
 
-  // Strategy 1: direct deck_concepts -> concept_cards mapping (most precise)
+  // Strategy 1: deck_concepts -> concept_cards (search ALL user concepts, not just originDeckId)
   const { data: deckConcepts } = await supabase
     .from('deck_concepts')
     .select('id, name')
-    .eq('user_id', userId)
-    .eq('deck_id', originDeckId);
+    .eq('user_id', userId);
 
   const matchedConceptIds = (deckConcepts ?? [])
     .filter(dc => normalizedTerms.has(normalize(dc.name)))
     .map(dc => dc.id);
 
   if (matchedConceptIds.length > 0) {
-    const { data: conceptCards } = await supabase
-      .from('concept_cards' as any)
-      .select('card_id')
-      .in('concept_id', matchedConceptIds);
+    for (let i = 0; i < matchedConceptIds.length; i += 50) {
+      const batch = matchedConceptIds.slice(i, i + 50);
+      const { data: conceptCards } = await supabase
+        .from('concept_cards' as any)
+        .select('card_id')
+        .in('concept_id', batch);
 
-    for (const cc of (conceptCards ?? []) as any[]) {
-      cardIdsToMove.add(cc.card_id);
+      for (const cc of (conceptCards ?? []) as any[]) {
+        cardIdsToMove.add(cc.card_id);
+      }
     }
   }
 
-  // Strategy 2: fallback to text match on cards from the same origin deck
+  // Strategy 2: global_concepts -> card_tags (concept slug matches tag slug)
+  if (cardIdsToMove.size === 0) {
+    const slugs = terms.map(t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+    const { data: tags } = await supabase
+      .from('tags')
+      .select('id')
+      .in('slug', slugs);
+
+    if (tags && tags.length > 0) {
+      const tagIds = tags.map(t => t.id);
+      const { data: cardTags } = await supabase
+        .from('card_tags')
+        .select('card_id')
+        .in('tag_id', tagIds);
+
+      for (const ct of cardTags ?? []) {
+        cardIdsToMove.add(ct.card_id);
+      }
+    }
+  }
+
+  // Strategy 3: fallback text match on cards from the origin deck
   if (cardIdsToMove.size === 0) {
     const keywordParts = terms
       .flatMap(term => term.split(/\s+/))
