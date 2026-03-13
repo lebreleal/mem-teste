@@ -12,6 +12,7 @@ import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
+import { moveQuestionToErrorDeck } from '@/services/errorDeckService';
 import { useDecks } from '@/hooks/useDecks';
 import { linkQuestionsToConcepts, ensureGlobalConcepts, updateConceptMastery, conceptSlug } from '@/services/globalConceptService';
 import { Button } from '@/components/ui/button';
@@ -503,6 +504,23 @@ const QuestionPractice = ({
         queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
       }).catch(console.error);
 
+    }
+
+    // Move wrong questions to error deck as flashcards
+    if (!isCorrect) {
+      moveQuestionToErrorDeck(user.id, {
+        id: q.id,
+        question_text: q.question_text,
+        correct_answer: q.correct_answer,
+        explanation: q.explanation,
+        options: q.options,
+        correct_indices: q.correct_indices,
+      }, deckId).then(created => {
+        if (created) {
+          queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
+          queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
+        }
+      }).catch(console.error);
     }
 
     queryClient.invalidateQueries({ queryKey: ['question-attempts', deckId] });
