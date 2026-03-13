@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot, Crown } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot, Crown, BarChart3, BrainCircuit, Gauge, LogOut } from 'lucide-react';
 
 const Profile = () => {
   const { user } = useAuth();
