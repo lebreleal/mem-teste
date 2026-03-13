@@ -179,7 +179,14 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     const textPages = splitTextIntoPages(rawText.trim());
     setPages(textPages.map(p => ({ ...p, selected: true })));
     setStep('pages');
-  }, [rawText]);
+    // Auto-save as AI source
+    if (user) {
+      const sourceName = deckName.trim() || 'Texto colado';
+      saveTextSource.mutateAsync({ name: sourceName, textContent: rawText.trim() })
+        .then(saved => setSelectedSourceId(saved.id))
+        .catch(() => {});
+    }
+  }, [rawText, user, deckName, saveTextSource]);
 
   const togglePage = useCallback((idx: number) => {
     setPages(prev => prev.map((p, i) => i === idx ? { ...p, selected: !p.selected } : p));
