@@ -173,38 +173,65 @@ async function tryAutoMapPrerequisites(userId: string, newConceptSlugs?: string[
 }
 
 // ─── Link questions to global concepts (with prerequisite support) ──────────
+export type LinkQuestionsToConceptsOptions = {
+  /** Also links prerequisite concepts to the same questions to avoid orphan concepts */
+  linkPrerequisitesToQuestion?: boolean;
+  /** Links every concept in the batch to every question in the same batch */
+  denseBatchLinking?: boolean;
+};
+
 export async function linkQuestionsToConcepts(
   userId: string,
   questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[],
+  options?: LinkQuestionsToConceptsOptions,
 ) {
+  const linkPrerequisitesToQuestion = options?.linkPrerequisitesToQuestion ?? true;
+  const denseBatchLinking = options?.denseBatchLinking ?? false;
+
   // Collect all unique concept names + meta (concepts + prerequisites)
   const allNames = new Set<string>();
   const metaMap = new Map<string, { category?: string; subcategory?: string }>();
   const prerequisiteMap = new Map<string, string[]>(); // conceptSlug → prerequisiteNames[]
+  const questionSlugMap = new Map<string, Set<string>>(); // questionId → concept slugs linked to that question
 
   for (const pair of questionConceptPairs) {
-    for (const name of pair.conceptNames) {
+    const questionSlugs = questionSlugMap.get(pair.questionId) ?? new Set<string>();
+
+    const conceptNames = (pair.conceptNames ?? [])
+      .map(name => name?.trim())
+      .filter((name): name is string => !!name);
+
+    const prerequisiteNames = Array.from(new Set((pair.prerequisites ?? [])
+      .map(name => name?.trim())
+      .filter((name): name is string => !!name)));
+
+    for (const name of conceptNames) {
       allNames.add(name);
       const slug = conceptSlug(name);
+      questionSlugs.add(slug);
+
       if (pair.category && !metaMap.has(slug)) {
         metaMap.set(slug, { category: pair.category, subcategory: pair.subcategory });
       }
-    }
-    // Collect prerequisites
-    if (pair.prerequisites && pair.prerequisites.length > 0) {
-      for (const prereq of pair.prerequisites) {
-        allNames.add(prereq);
-      }
-      // Map each concept to its prerequisites
-      for (const name of pair.conceptNames) {
-        const slug = conceptSlug(name);
+
+      if (prerequisiteNames.length > 0) {
         const existing = prerequisiteMap.get(slug) ?? [];
-        prerequisiteMap.set(slug, [...existing, ...pair.prerequisites]);
+        prerequisiteMap.set(slug, [...existing, ...prerequisiteNames]);
       }
     }
+
+    for (const prereq of prerequisiteNames) {
+      allNames.add(prereq);
+      if (linkPrerequisitesToQuestion) {
+        questionSlugs.add(conceptSlug(prereq));
+      }
+    }
+
+    questionSlugMap.set(pair.questionId, questionSlugs);
   }
 
-  const slugToId = await ensureGlobalConcepts(userId, Array.from(allNames), metaMap);
+  const uniqueNames = Array.from(allNames);
+  const slugToId = await ensureGlobalConcepts(userId, uniqueNames, metaMap);
 
   // Set parent_concept_id for concepts that have prerequisites
   for (const [conceptSlugKey, prereqNames] of prerequisiteMap.entries()) {
@@ -231,14 +258,35 @@ export async function linkQuestionsToConcepts(
     }
   }
 
-  // Build junction rows
+  // Build junction rows (deduplicated)
   const rows: { question_id: string; concept_id: string }[] = [];
-  for (const pair of questionConceptPairs) {
-    for (const name of pair.conceptNames) {
-      const slug = conceptSlug(name);
+  const rowKeys = new Set<string>();
+  const addRow = (questionId: string, conceptId: string) => {
+    const key = `${questionId}:${conceptId}`;
+    if (rowKeys.has(key)) return;
+    rowKeys.add(key);
+    rows.push({ question_id: questionId, concept_id: conceptId });
+  };
+
+  for (const [questionId, slugs] of questionSlugMap.entries()) {
+    for (const slug of slugs) {
       const conceptId = slugToId.get(slug);
-      if (conceptId) {
-        rows.push({ question_id: pair.questionId, concept_id: conceptId });
+      if (conceptId) addRow(questionId, conceptId);
+    }
+  }
+
+  if (denseBatchLinking && questionSlugMap.size > 1) {
+    const allConceptIds = new Set<string>();
+    for (const slugs of questionSlugMap.values()) {
+      for (const slug of slugs) {
+        const conceptId = slugToId.get(slug);
+        if (conceptId) allConceptIds.add(conceptId);
+      }
+    }
+
+    for (const questionId of questionSlugMap.keys()) {
+      for (const conceptId of allConceptIds) {
+        addRow(questionId, conceptId);
       }
     }
   }
@@ -252,7 +300,7 @@ export async function linkQuestionsToConcepts(
 
   // ── Auto-trigger prerequisite mapping for newly created concepts ──
   // Pass the new concept slugs so mapping always runs when new concepts appear
-  const newSlugs = Array.from(allNames).map(n => conceptSlug(n));
+  const newSlugs = uniqueNames.map(n => conceptSlug(n));
   tryAutoMapPrerequisites(userId, newSlugs).catch(() => {});
 }
 
