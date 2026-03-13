@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ArrowLeft, Save, Loader2, User, Lock, Wallet, Bot, Crown, BarChart3, BrainCircuit, Gauge, LogOut } from 'lucide-react';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const { toast } = useToast();
