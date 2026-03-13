@@ -41,8 +41,10 @@ import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
-
+import MiniStatsStrip from '@/components/dashboard/MiniStatsStrip';
+import DashboardDueThemes from '@/components/dashboard/DashboardDueThemes';
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
+import BottomNav from '@/components/BottomNav';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -203,7 +205,7 @@ const Dashboard = () => {
         onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
       />
 
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
+      <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-5 gap-2 sm:gap-3">
           <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
@@ -246,6 +248,12 @@ const Dashboard = () => {
             <Badge variant="destructive" className="text-xs">{errorCount}</Badge>
           </button>
         )}
+
+        {/* Mini Stats Strip */}
+        <MiniStatsStrip />
+
+        {/* Due Themes Section */}
+        <DashboardDueThemes />
 
         {/* Study deck carousel */}
         {allDecks && (
@@ -526,6 +534,7 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <BottomNav />
     </div>
   );
 };
