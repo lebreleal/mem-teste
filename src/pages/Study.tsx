@@ -592,6 +592,14 @@ const Study = () => {
             ));
           }
 
+          // Error deck toasts
+          if (result.movedToError) {
+            toast({ title: '📕 Card movido para o Caderno de Erros', description: 'Domine-o para devolvê-lo ao deck original.' });
+          }
+          if (result.returnedFromError && result.originDeckName) {
+            toast({ title: '✅ Card dominado!', description: `Devolvido ao deck "${result.originDeckName}".` });
+          }
+
           // ── Fase 1a: Sync card review → concept mastery (non-blocking) ──
           if (user) {
             const isCorrect = rating >= 3;
