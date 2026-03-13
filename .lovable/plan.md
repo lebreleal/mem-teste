@@ -133,3 +133,16 @@
 | `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
 | `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
 | `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
+
+### 17. Edição de Conceitos no EditQuestionDialog
+- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
+- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
+- Campo de explicação editável
+- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
+
+### 18. Reuso Inteligente de Conceitos pela IA
+- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
+- Fallback: top 100 conceitos do usuário por uso
+- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
+- Custo: ~500 tokens extras (~centavos)
+- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
