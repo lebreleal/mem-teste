@@ -169,7 +169,13 @@ Regras:
 Exemplos CORRETOS: "Mecanismo de ação dos IECA", "Critérios de Light", "Diferença abscesso vs flegmão"
 Exemplos ERRADOS: "Cardiologia" (amplo demais), "Dose de Captopril 25mg" (fato isolado), "Você entendeu X?" (pergunta, não conceito)
 
-## EXPLICAÇÃO:
+## CONCEPT_DESCRIPTIONS — RELAÇÃO CONCEITO↔QUESTÃO:
+O campo "concept_descriptions" descreve COMO cada conceito se aplica NESTA questão específica.
+- NÃO defina o conceito genericamente (isso o aluno pode pesquisar)
+- EXPLIQUE o que o aluno precisa saber sobre este conceito PARA acertar esta questão
+- 15-30 palavras por descrição
+- Ajude o aluno a avaliar se realmente domina este aspecto do tema
+
 A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 - Comece com uma frase-resumo da resposta correta
 - Explique POR QUE cada alternativa incorreta está errada
