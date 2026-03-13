@@ -228,7 +228,7 @@ const ErrorNotebook = () => {
             </div>
             <h3 className="font-display text-lg font-bold text-foreground">Tudo dominado!</h3>
             <p className="mt-1 text-sm text-muted-foreground max-w-xs">
-              Não há conceitos fracos. Continue estudando — conceitos fracos aparecerão aqui automaticamente.
+              Não há temas fracos. Continue estudando — temas fracos aparecerão aqui automaticamente.
             </p>
             <Button variant="outline" className="mt-4" onClick={() => navigate('/dashboard')}>
               Voltar ao Dashboard
