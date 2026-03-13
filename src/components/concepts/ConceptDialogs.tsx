@@ -91,7 +91,7 @@ export const DeleteConceptDialog = ({ open, onClose, target, selectedCount, onCo
   <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="sm:max-w-sm">
       <DialogHeader>
-        <DialogTitle>Excluir {target ? 'conceito' : `${selectedCount} conceitos`}</DialogTitle>
+        <DialogTitle>Excluir {target ? 'tema' : `${selectedCount} temas`}</DialogTitle>
       </DialogHeader>
       <p className="text-sm text-muted-foreground">
         {target ? (
