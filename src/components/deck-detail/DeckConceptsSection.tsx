@@ -98,10 +98,7 @@ const DeckConceptsSection = ({ deckId, sourceDeckId }: { deckId: string; sourceD
   const hiddenCount = concepts.length - VISIBLE_LIMIT;
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-        <BrainCircuit className="h-3.5 w-3.5" /> Tags ({concepts.length})
-      </p>
+    <div className="space-y-1.5 mt-2">
       <div className="flex flex-wrap gap-1.5">
         {visibleConcepts.map(c => {
           const info = STATE_LABELS[c.state] ?? STATE_LABELS[0];
