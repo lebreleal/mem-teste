@@ -84,6 +84,15 @@ const FileExamFlow = ({
             </div>
           </div>
           <input ref={fileInputRef} type="file" accept=".pdf,.pptx,.docx,.txt" className="hidden" onChange={onFileUpload} />
+          
+          {/* AI Source Selector */}
+          {onLoadSource && (
+            <AISourceSelector
+              selectedSourceId={selectedSourceId ?? null}
+              onSelectSource={onLoadSource}
+            />
+          )}
+
           <button onClick={() => fileInputRef.current?.click()} disabled={fileLoading}
             className="w-full flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 transition-colors hover:bg-muted/50 hover:border-primary/30">
             {fileLoading ? <Loader2 className="h-8 w-8 text-primary animate-spin" /> : <Upload className="h-8 w-8 text-muted-foreground" />}
