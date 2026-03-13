@@ -883,6 +883,13 @@ const CreateQuestionDialog = ({
             .order('created_at', { ascending: false }).limit(1);
           if (latest?.[0]) {
             await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', (latest[0] as any).id);
+            // Link with descriptions if available
+            const conceptDescs = data.conceptsWithDescriptions ?? [];
+            await linkQuestionsToConcepts(user.id, [{
+              questionId: (latest[0] as any).id,
+              conceptNames: data.concepts,
+              conceptDescriptions: conceptDescs,
+            }]);
             queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
           }
         }
