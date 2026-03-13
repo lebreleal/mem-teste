@@ -81,8 +81,36 @@ const ConceptMasterySection = ({
   const [conceptExplanations, setConceptExplanations] = useState<Record<string, string>>({});
   const [previewCards, setPreviewCards] = useState<Record<string, any[]>>({});
   const [loadingCards, setLoadingCards] = useState<Record<string, boolean>>({});
+  const [conceptDescriptions, setConceptDescriptions] = useState<Record<string, string>>({});
   const { energy, spendEnergy } = useEnergy();
   const { toast } = useToast();
+
+  // Fetch concept descriptions from global_concepts
+  useEffect(() => {
+    if (!concepts || concepts.length === 0) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const slugs = concepts.map(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR'));
+      const { data } = await supabase
+        .from('global_concepts' as any)
+        .select('name, slug, description')
+        .eq('user_id', user.id)
+        .in('slug', slugs);
+      if (data) {
+        const descMap: Record<string, string> = {};
+        for (const row of data as any[]) {
+          if (row.description) {
+            descMap[row.name] = row.description;
+            // Also map by slug match to original concept name
+            const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === row.slug);
+            if (matchedConcept) descMap[matchedConcept] = row.description;
+          }
+        }
+        setConceptDescriptions(descMap);
+      }
+    })();
+  }, [concepts]);
 
   if (!concepts || concepts.length === 0) return null;
 
