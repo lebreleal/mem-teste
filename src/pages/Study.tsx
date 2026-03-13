@@ -288,8 +288,8 @@ const Study = () => {
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
-    () => ['study-queue', isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId)],
-    [deckId, folderId, isUnifiedMode],
+    () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    [deckId, folderId],
   );
   useEffect(() => {
     return () => {
