@@ -9,29 +9,43 @@ export type { StudyQueueResult } from '@/services/studyService';
 export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isUnifiedMode = deckId === '__all__';
 
   const studyQueue = useQuery({
-    queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
-    queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
-    enabled: !!user && !!(deckId || folderId),
+    queryKey: ['study-queue', isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId)],
+    queryFn: () => {
+      if (isUnifiedMode) {
+        return studyService.fetchUnifiedStudyQueue(user!.id);
+      }
+      return studyService.fetchStudyQueue(user!.id, deckId, folderId);
+    },
+    enabled: !!user && (isUnifiedMode || !!(deckId || folderId)),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
+  // For unified mode, resolve deckConfig per-card from deckConfigs map
+  const deckConfigs = (studyQueue.data as any)?.deckConfigs as Record<string, any> | undefined;
+  const defaultDeckConfig = isUnifiedMode ? {} : (studyQueue.data as any)?.deckConfig;
+
   const submitReview = useMutation({
     mutationFn: async ({ card, rating, elapsedMs }: { card: any; rating: Rating; elapsedMs?: number }) => {
       if (!user) throw new Error('Not authenticated');
+      // In unified mode, resolve the deck config for this specific card
+      const cardDeckConfig = isUnifiedMode
+        ? (deckConfigs?.[card.deck_id] ?? {})
+        : (studyQueue.data as any)?.deckConfig;
+      const algorithmMode = cardDeckConfig?.algorithm_mode || 'fsrs';
       return studyService.submitCardReview(
         user.id,
         card,
         rating,
-        studyQueue.data?.algorithmMode || 'sm2',
-        studyQueue.data?.deckConfig,
+        algorithmMode,
+        cardDeckConfig,
         elapsedMs,
       );
     },
     onSuccess: (_result, { card }) => {
-      // Optimistic: update study-stats cache incrementally
       queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
         if (!old) return old;
         return {
@@ -41,25 +55,21 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       });
     },
     onSettled: () => {
-      // OPTIMIZATION: Only invalidate lightweight queries during active study.
-      // Heavy queries (decks, deck-stats) are deferred to unmount or 10s delay.
-      // This prevents 50+ cache invalidations during a 50-card study session.
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-
-      // Defer heavy dashboard invalidations — they only matter when user leaves study
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['decks'] });
         queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
         queryClient.invalidateQueries({ queryKey: ['study-stats'] });
         queryClient.invalidateQueries({ queryKey: ['activity-full'] });
-      }, 10_000); // 10s delay — user is still studying, no need to refetch dashboard
+      }, 10_000);
     },
   });
 
   return {
     queue: studyQueue.data?.cards ?? [],
-    algorithmMode: studyQueue.data?.algorithmMode || 'fsrs',
-    deckConfig: studyQueue.data?.deckConfig,
+    algorithmMode: isUnifiedMode ? 'fsrs' : ((studyQueue.data as any)?.algorithmMode || 'fsrs'),
+    deckConfig: defaultDeckConfig,
+    deckConfigs: deckConfigs ?? {},
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     isFetching: studyQueue.isFetching,
