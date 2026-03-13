@@ -1214,8 +1214,16 @@ const ConceptsPage = () => {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
-                        </div>
-                      </div>
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          {isLocked && parentConcept && (
+                            <TooltipContent side="top">
+                              <p className="text-xs">Domine "{parentConcept.name}" primeiro</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
                     );
                   })}
                 </div>
