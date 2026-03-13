@@ -483,7 +483,8 @@ const Study = () => {
     setReviewCount(prev => prev + 1);
 
     if (shouldKeep) {
-      const steps = deckConfig?.learning_steps ?? ['1', '10'];
+      const cardConfig = getCardDeckConfig(card);
+      const steps = cardConfig?.learning_steps ?? ['1', '10'];
       const currentStep = card.learning_step ?? 0;
       const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
       const stepStr = steps[stepIdx] ?? '1';
