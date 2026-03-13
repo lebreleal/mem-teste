@@ -920,6 +920,148 @@ export async function generateConceptQuestions(
   return data;
 }
 
+// ─── Auto-generate questions for a concept that has none ───
+// Creates a small deck with cards about the concept, then generates questions from those cards,
+// links them to the concept, and returns the first question.
+export async function generateQuestionsForConcept(
+  conceptId: string,
+  conceptName: string,
+  conceptCategory: string | null,
+  userId: string,
+): Promise<ReturnType<typeof getVariedQuestion>> {
+  // 1. Generate cards about this concept via AI
+  const textContent = [
+    `Tema: ${conceptName}`,
+    conceptCategory ? `Grande área: ${conceptCategory}` : '',
+    `Crie flashcards sobre "${conceptName}" cobrindo: definição, fisiopatologia/mecanismo, quadro clínico, diagnóstico e tratamento (quando aplicável).`,
+  ].filter(Boolean).join('\n');
+
+  const customInstructions = `
+Você é um professor de medicina criando material de estudo.
+Crie cartões objetivos sobre "${conceptName}".
+- Cada card deve cobrir UM aspecto do tema.
+- Front: pergunta curta e direta.
+- Back: resposta em 1-3 frases.
+- APENAS type "basic" (qa).
+`.trim();
+
+  const { data: genData, error: genError } = await supabase.functions.invoke('generate-deck', {
+    body: {
+      textContent,
+      customInstructions,
+      cardCount: 4,
+      detailLevel: 'essential',
+      cardFormats: ['qa'],
+      aiModel: 'flash',
+      energyCost: 0,
+    },
+  });
+
+  if (genError || genData?.error || !Array.isArray(genData?.cards) || genData.cards.length === 0) {
+    console.error('generateQuestionsForConcept card gen error:', genError ?? genData?.error);
+    return null;
+  }
+
+  // 2. Create/reuse deck
+  const deckName = `Conceito: ${conceptName.slice(0, 60)}`;
+  const { data: existingDeck } = await supabase
+    .from('decks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', deckName)
+    .maybeSingle();
+
+  let deckId = existingDeck?.id;
+  if (!deckId) {
+    const { data: newDeck, error: deckErr } = await supabase
+      .from('decks')
+      .insert({ user_id: userId, name: deckName })
+      .select('id')
+      .single();
+    if (deckErr || !newDeck) return null;
+    deckId = newDeck.id;
+  }
+
+  // 3. Insert cards
+  const normalize = (v?: string) => (v ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const cardRows = genData.cards
+    .map((c: any) => ({
+      deck_id: deckId,
+      front_content: normalize(c?.front),
+      back_content: normalize(c?.back),
+      card_type: 'basic',
+    }))
+    .filter((c: any) => c.front_content.length > 0 && c.back_content.length > 0);
+
+  if (cardRows.length === 0) return null;
+
+  const { data: insertedCards } = await supabase
+    .from('cards')
+    .insert(cardRows as any)
+    .select('id');
+
+  if (!insertedCards || insertedCards.length === 0) return null;
+
+  // 4. Generate questions from those cards
+  const cardIds = insertedCards.map((c: any) => c.id);
+  const { data: qData } = await supabase.functions.invoke('generate-questions', {
+    body: { cardIds, aiModel: 'flash', energyCost: 0, optionsCount: 4 },
+  });
+
+  if (!qData?.questions || !Array.isArray(qData.questions) || qData.questions.length === 0) {
+    return null;
+  }
+
+  // 5. Insert questions and link to concept
+  const questionRows = qData.questions.map((q: any, i: number) => ({
+    deck_id: deckId,
+    created_by: userId,
+    question_text: q.question_text,
+    options: q.options,
+    correct_indices: [q.correct_index ?? 0],
+    correct_answer: q.options?.[q.correct_index ?? 0] ?? '',
+    explanation: q.explanation ?? '',
+    concepts: q.concepts ?? [conceptName],
+    question_type: 'multiple_choice',
+    sort_order: i,
+  }));
+
+  const { data: insertedQs } = await supabase
+    .from('deck_questions' as any)
+    .insert(questionRows as any)
+    .select('id');
+
+  if (!insertedQs || insertedQs.length === 0) return null;
+
+  // Link questions to concept
+  const junctionRows = (insertedQs as any[]).map(q => ({
+    question_id: q.id,
+    concept_id: conceptId,
+  }));
+  await supabase
+    .from('question_concepts' as any)
+    .upsert(junctionRows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
+
+  // 6. Return the first question
+  return getVariedQuestion(conceptId, userId);
+}
+
+// ─── Get or generate a question for a concept ───
+// Tries getVariedQuestion first; if null, auto-generates questions then retries.
+export async function getOrGenerateQuestion(
+  conceptId: string,
+  userId: string,
+  conceptName: string,
+  conceptCategory: string | null,
+): Promise<{ question: ReturnType<typeof getVariedQuestion> extends Promise<infer T> ? T : never; wasGenerated: boolean }> {
+  const existing = await getVariedQuestion(conceptId, userId);
+  if (existing) return { question: existing, wasGenerated: false };
+
+  // Auto-generate
+  const generated = await generateQuestionsForConcept(conceptId, conceptName, conceptCategory, userId);
+  return { question: generated, wasGenerated: true };
+}
+
 // ─── Map prerequisites via AI (batch) ───────────
 export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
   const { data: all } = await supabase
