@@ -544,7 +544,7 @@ const ConceptsPage = () => {
         onSave={async (name, category, subcategory) => {
           if (!editConcept) return;
           await updateMeta.mutateAsync({ conceptId: editConcept.id, fields: { name, category, subcategory } });
-          toast.success('Conceito atualizado');
+          toast.success('Tema atualizado');
           setEditConcept(null);
         }}
         isPending={updateMeta.isPending}
