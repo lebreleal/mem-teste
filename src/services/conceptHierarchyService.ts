@@ -54,9 +54,7 @@ export async function getWeakConceptsWithErrors(userId: string): Promise<WeakCon
     .eq('user_id', userId)
     .order('answered_at', { ascending: false });
 
-  if (!attempts || attempts.length === 0) return [];
-
-  // Keep only latest attempt per question
+  // Keep only latest attempt per question (may be empty for new users)
   const latestByQ = new Map<string, any>();
   for (const a of (attempts ?? []) as any[]) {
     if (!latestByQ.has(a.question_id)) latestByQ.set(a.question_id, a);

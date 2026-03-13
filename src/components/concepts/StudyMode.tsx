@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { getOrGenerateQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { X as XIcon, BrainCircuit, Wand2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { Rating } from '@/lib/fsrs';
 
-const MASTERY_THRESHOLD = 2; // consecutive correct answers needed
+const MASTERY_THRESHOLD = 2;
 
 interface StudyModeProps {
   queue: GlobalConcept[];
@@ -30,11 +30,19 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
 
   // Elaborative Interrogation state
   const [elaboration, setElaboration] = useState('');
-  const [showElaboration, setShowElaboration] = useState(false); // true after error, before showing explanation
+  const [showElaboration, setShowElaboration] = useState(false);
   const [elaborationSubmitted, setElaborationSubmitted] = useState(false);
 
   // Confidence check state
   const [awaitingConfidence, setAwaitingConfidence] = useState(false);
+  const [guessCount, setGuessCount] = useState(0);
+
+  // Transition feedback state (shown briefly before loading next question)
+  const [transitionMsg, setTransitionMsg] = useState<string | null>(null);
+
+  // Ref to avoid stale closure issues
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
   async function loadQuestion(concept: GlobalConcept) {
     setLoading(true);
@@ -68,58 +76,22 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     setConfirmed(true);
 
     if (isCorrect) {
-      // Show confidence check
       setAwaitingConfidence(true);
     } else {
-      // Show elaborative interrogation prompt
       setShowElaboration(true);
       setElaboration('');
       setElaborationSubmitted(false);
     }
   };
 
-  // Track guess count per concept to avoid infinite loop
-  const [guessCount, setGuessCount] = useState(0);
-
-  // Confidence response handler
-  const handleConfidence = useCallback(async (wasConfident: boolean) => {
-    setAwaitingConfidence(false);
-
-    if (wasConfident) {
-      const newStreak = consecutiveCorrect + 1;
-      if (newStreak >= MASTERY_THRESHOLD) {
-        await onRate(concept, 3, true);
-        moveToNextConcept();
-        return;
-      }
-      setConsecutiveCorrect(newStreak);
-      resetForNextQuestion(concept);
-    } else {
-      const newGuessCount = guessCount + 1;
-      setGuessCount(newGuessCount);
-
-      if (newGuessCount >= 2) {
-        // After 2 guesses, treat as Hard (rating=2) — still counts as correct but with penalty
-        await onRate(concept, 2, true);
-        moveToNextConcept();
-        return;
-      }
-      // First guess — don't increment streak, load another question
-      resetForNextQuestion(concept);
-    }
-  }, [concept, consecutiveCorrect, onRate, queue, index, guessCount]);
-
-  // Elaboration submit — reveal explanation
-  const handleElaborationSubmit = () => {
-    setElaborationSubmitted(true);
-  };
-
-  // After error + elaboration, advance
-  const handleAdvanceAfterError = useCallback(async () => {
-    if (!concept || !user) return;
-    await onRate(concept, 1, false);
-    moveToNextConcept();
-  }, [concept, user, onRate, queue, index]);
+  // Show brief feedback then transition to next question/concept
+  function showFeedbackThenTransition(msg: string, nextAction: () => void) {
+    setTransitionMsg(msg);
+    setTimeout(() => {
+      setTransitionMsg(null);
+      nextAction();
+    }, 1200);
+  }
 
   function resetForNextQuestion(c: GlobalConcept) {
     setSelectedOption(null);
@@ -133,7 +105,8 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   }
 
   function moveToNextConcept() {
-    const nextIdx = index + 1;
+    const currentIdx = indexRef.current;
+    const nextIdx = currentIdx + 1;
     if (nextIdx >= queue.length) {
       onClose();
       return;
@@ -144,7 +117,49 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     resetForNextQuestion(queue[nextIdx]);
   }
 
-  // Correct answer option index for elaboration prompt
+  // Confidence response handler — regular function (no useCallback) to avoid stale closures
+  function handleConfidence(wasConfident: boolean) {
+    setAwaitingConfidence(false);
+
+    if (wasConfident) {
+      const newStreak = consecutiveCorrect + 1;
+      if (newStreak >= MASTERY_THRESHOLD) {
+        onRate(concept, 3, true);
+        moveToNextConcept();
+        return;
+      }
+      setConsecutiveCorrect(newStreak);
+      showFeedbackThenTransition(
+        `✅ Correto! Mais ${MASTERY_THRESHOLD - newStreak} para confirmar domínio.`,
+        () => resetForNextQuestion(concept),
+      );
+    } else {
+      const newGuessCount = guessCount + 1;
+      setGuessCount(newGuessCount);
+
+      if (newGuessCount >= 2) {
+        onRate(concept, 2, true);
+        moveToNextConcept();
+        return;
+      }
+      showFeedbackThenTransition(
+        '🎲 Chute registrado — responda mais uma para confirmar.',
+        () => resetForNextQuestion(concept),
+      );
+    }
+  }
+
+  const handleElaborationSubmit = () => {
+    setElaborationSubmitted(true);
+  };
+
+  // After error + elaboration, advance — regular function
+  function handleAdvanceAfterError() {
+    if (!concept || !user) return;
+    onRate(concept, 1, false);
+    moveToNextConcept();
+  }
+
   const correctOptionIndex = question?.correctIndices?.[0] ?? 0;
   const correctOptionLetter = String.fromCharCode(65 + correctOptionIndex);
 
@@ -165,13 +180,20 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       </header>
 
       <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
-        {consecutiveCorrect > 0 && (
+        {consecutiveCorrect > 0 && !transitionMsg && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
             Acertos consecutivos: {consecutiveCorrect}/{MASTERY_THRESHOLD}
           </div>
         )}
 
-        {loading ? (
+        {/* Transition feedback message */}
+        {transitionMsg && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300 animate-in fade-in duration-200">
+            {transitionMsg}
+          </div>
+        )}
+
+        {loading && !transitionMsg ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Wand2 className="h-4 w-4 animate-spin" />
@@ -181,7 +203,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             <Skeleton className="h-12 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
           </div>
-        ) : !question ? (
+        ) : !question && !transitionMsg ? (
           <Card>
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -189,7 +211,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
               <Button variant="outline" className="mt-4" onClick={handleAdvanceAfterError}>Pular</Button>
             </CardContent>
           </Card>
-        ) : (
+        ) : !transitionMsg && question ? (
           <>
             {generating && (
               <div className="flex items-center gap-1.5 text-[10px] text-primary">
@@ -254,17 +276,6 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
               </div>
             )}
 
-            {/* Post-confirmation: CORRECT → after confidence resolved */}
-            {confirmed && isCorrect && !awaitingConfidence && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-                  {consecutiveCorrect >= MASTERY_THRESHOLD
-                    ? '✅ Conceito dominado!'
-                    : `✅ Correto! Mais ${MASTERY_THRESHOLD - consecutiveCorrect} para confirmar domínio.`}
-                </div>
-              </div>
-            )}
-
             {/* Post-confirmation: INCORRECT → Elaborative Interrogation */}
             {confirmed && !isCorrect && showElaboration && !elaborationSubmitted && (
               <div className="space-y-3">
@@ -317,7 +328,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
               </div>
             )}
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );
