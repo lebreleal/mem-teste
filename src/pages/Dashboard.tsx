@@ -42,7 +42,7 @@ const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 
-import StudyNowHero from '@/components/dashboard/StudyNowHero';
+
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
