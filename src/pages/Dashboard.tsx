@@ -205,7 +205,7 @@ const Dashboard = () => {
         onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
       />
 
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
+      <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
         {/* Quick Nav */}
         <div className="mb-6 grid grid-cols-5 gap-2 sm:gap-3">
           <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
