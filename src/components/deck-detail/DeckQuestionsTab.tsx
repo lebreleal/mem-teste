@@ -30,6 +30,7 @@ import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
   ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
   BookX, Zap, Crown, Search, Filter, CheckCheck, MoreVertical, Eye, ArrowUpRight,
+  Upload, FileText, Clock,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
