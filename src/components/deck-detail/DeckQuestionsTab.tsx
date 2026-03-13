@@ -12,7 +12,7 @@ import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
-import { moveQuestionToErrorDeck } from '@/services/errorDeckService';
+import { moveConceptCardsToErrorDeck } from '@/services/errorDeckService';
 import { useDecks } from '@/hooks/useDecks';
 import { linkQuestionsToConcepts, ensureGlobalConcepts, updateConceptMastery, conceptSlug } from '@/services/globalConceptService';
 import { Button } from '@/components/ui/button';
@@ -506,19 +506,13 @@ const QuestionPractice = ({
 
     }
 
-    // Move wrong questions to error deck as flashcards
-    if (!isCorrect) {
-      moveQuestionToErrorDeck(user.id, {
-        id: q.id,
-        question_text: q.question_text,
-        correct_answer: q.correct_answer,
-        explanation: q.explanation,
-        options: q.options,
-        correct_indices: q.correct_indices,
-      }, deckId).then(created => {
-        if (created) {
+    // Move existing concept-linked cards to error deck when wrong
+    if (!isCorrect && q.concepts && q.concepts.length > 0) {
+      moveConceptCardsToErrorDeck(user.id, q.concepts, deckId).then(moved => {
+        if (moved > 0) {
           queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
           queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
+          queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
         }
       }).catch(console.error);
     }
