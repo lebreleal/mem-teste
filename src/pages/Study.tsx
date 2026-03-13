@@ -105,11 +105,11 @@ const Study = () => {
   const leechBypassOnceRef = useRef<Set<string>>(new Set());
   const leechAdvanceLockRef = useRef(false);
   const leechFailStorageKey = useMemo(
-    () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
-    [deckId, folderId],
+    () => `study-leech-fails:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
+    [deckId, folderId, isUnifiedMode],
   );
   const leechInterruptionStorageKey = useMemo(
-    () => `study-leech-interruption:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    () => `study-leech-interruption:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
     [deckId, folderId],
   );
 
