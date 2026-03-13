@@ -226,7 +226,7 @@ Para cada questão, retorne:
                 description: "IDs dos cartões usados para esta questão",
               },
             },
-            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "prerequisites", "source_card_ids"],
+            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "concept_descriptions", "prerequisites", "source_card_ids"],
             additionalProperties: false,
           },
         },
