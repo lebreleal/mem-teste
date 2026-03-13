@@ -308,7 +308,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             {confirmed && !isCorrect && elaborationSubmitted && (
               <div className="space-y-3">
                 <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                  ❌ Incorreto — conceito marcado para revisão futura
+                  ❌ Incorreto — tema marcado para revisão futura
                 </div>
                 {question.explanation && (
                   <div className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
