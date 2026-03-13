@@ -523,15 +523,38 @@ const QuestionPractice = ({
 
     }
 
-    // Move existing concept-linked cards to error deck when wrong
-    if (!isCorrect && q.concepts && q.concepts.length > 0) {
-      moveConceptCardsToErrorDeck(user.id, q.concepts, deckId).then(moved => {
+    // Move concept-related cards to error deck when wrong
+    if (!isCorrect) {
+      void (async () => {
+        let conceptsToUse = q.concepts ?? [];
+
+        // Fallback: if question has no inline concepts, resolve from question_concepts
+        if (conceptsToUse.length === 0) {
+          const { data: links } = await supabase
+            .from('question_concepts' as any)
+            .select('concept_id')
+            .eq('question_id', q.id)
+            .limit(8);
+
+          const conceptIds = (links ?? []).map((l: any) => l.concept_id).filter(Boolean);
+          if (conceptIds.length > 0) {
+            const { data: gc } = await supabase
+              .from('global_concepts' as any)
+              .select('name')
+              .in('id', conceptIds);
+            conceptsToUse = (gc ?? []).map((c: any) => c.name).filter(Boolean);
+          }
+        }
+
+        if (conceptsToUse.length === 0) return;
+
+        const moved = await moveConceptCardsToErrorDeck(user.id, conceptsToUse, q.deck_id || deckId);
         if (moved > 0) {
           queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
           queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
           queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
         }
-      }).catch(console.error);
+      })().catch(console.error);
     }
 
     queryClient.invalidateQueries({ queryKey: ['question-attempts', deckId] });
