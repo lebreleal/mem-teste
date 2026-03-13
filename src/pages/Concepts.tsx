@@ -37,6 +37,7 @@ import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
 // ReadyToLearnSection is now integrated into ConceptGroupedList
 import ConceptListItem from '@/components/concepts/ConceptListItem';
 import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
+import DeckConceptMap from '@/components/concepts/DeckConceptMap';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
 
 // ═══════════════════════════════════════════════════
@@ -455,6 +456,11 @@ const ConceptsPage = () => {
                 {/* Donut Chart */}
                 {!selectionMode && concepts.length >= 3 && (
                   <CategoryDonutChart concepts={concepts} onCategoryClick={setCategoryFilter} />
+                )}
+
+                {/* Deck Concept Map — conquest lines per deck */}
+                {!selectionMode && !hasActiveFilter && !search && (
+                  <DeckConceptMap concepts={concepts} onStartStudy={handleStartFrontierStudy} />
                 )}
 
                 {/* Action Buttons */}

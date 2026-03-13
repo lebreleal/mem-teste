@@ -63,31 +63,26 @@ type LeechInterruptionState = {
 
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
-  const isUnifiedMode = !deckId && !folderId; // /study/all route
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(isUnifiedMode ? '__all__' : (deckId ?? ''), folderId);
+  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(deckId ?? '', folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     invalidateStudyQueries(queryClient);
-    if (isUnifiedMode) navigate('/dashboard', { replace: true });
-    else if (deckId) navigate(`/decks/${deckId}`, { replace: true });
+    if (deckId) navigate(`/decks/${deckId}`, { replace: true });
     else if (folderId) navigate(`/dashboard?folder=${folderId}`, { replace: true });
     else navigate('/dashboard', { replace: true });
-  }, [deckId, folderId, isUnifiedMode, navigate, queryClient]);
+  }, [deckId, folderId, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  /** Resolve deck config for a specific card (unified mode uses per-card lookup) */
-  const getCardDeckConfig = useCallback((card: any) => {
-    if (isUnifiedMode && card?.deck_id && deckConfigs[card.deck_id]) {
-      return deckConfigs[card.deck_id];
-    }
+  /** Resolve deck config for a specific card */
+  const getCardDeckConfig = useCallback((_card: any) => {
     return deckConfig ?? {};
-  }, [isUnifiedMode, deckConfigs, deckConfig]);
+  }, [deckConfig]);
 
 
   // Local queue state
@@ -124,11 +119,11 @@ const Study = () => {
   const leechBypassOnceRef = useRef<Set<string>>(new Set());
   const leechAdvanceLockRef = useRef(false);
   const leechFailStorageKey = useMemo(
-    () => `study-leech-fails:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
-    [deckId, folderId, isUnifiedMode],
+    () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    [deckId, folderId],
   );
   const leechInterruptionStorageKey = useMemo(
-    () => `study-leech-interruption:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
+    () => `study-leech-interruption:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
     [deckId, folderId],
   );
 
@@ -293,8 +288,8 @@ const Study = () => {
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
-    () => ['study-queue', isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId)],
-    [deckId, folderId, isUnifiedMode],
+    () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    [deckId, folderId],
   );
   useEffect(() => {
     return () => {
