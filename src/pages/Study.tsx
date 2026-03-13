@@ -1004,7 +1004,7 @@ const Study = () => {
             isSubmitting={submitReview.isPending || isTransitioning}
             quickReview={algorithmMode === 'quick_review'}
             algorithmMode={algorithmMode}
-            deckConfig={deckConfig}
+            deckConfig={getCardDeckConfig(currentCard)}
             energy={energy}
             tutorCost={TUTOR_COST}
             onTutorRequest={(options) => tutor.handleTutorRequest(currentCard, options)}
