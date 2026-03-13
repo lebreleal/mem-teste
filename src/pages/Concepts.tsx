@@ -35,6 +35,7 @@ import StudyMode from '@/components/concepts/StudyMode';
 import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
 import ReadyToLearnSection from '@/components/concepts/ReadyToLearnSection';
 import ConceptListItem from '@/components/concepts/ConceptListItem';
+import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
 
 // ═══════════════════════════════════════════════════
