@@ -109,12 +109,14 @@ export async function ensureGlobalConcepts(
     const rows = missingSlugs.map(s => {
       const name = uniqueBySlug.get(s)!;
       const meta = conceptMetaMap?.get(s);
+      const desc = descriptionMap?.get(s) ?? descriptionMap?.get(name);
       return {
         user_id: userId,
         name,
         slug: s,
         ...(meta?.category ? { category: meta.category } : {}),
         ...(meta?.subcategory ? { subcategory: meta.subcategory } : {}),
+        ...(desc ? { description: desc } : {}),
       };
     });
 
