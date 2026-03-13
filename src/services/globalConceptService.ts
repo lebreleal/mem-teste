@@ -292,8 +292,15 @@ export async function getVariedQuestion(
     return aDate! < bDate! ? -1 : 1;
   });
 
-  // Pick the best candidate
-  const bestId = sorted[0];
+  // Pick randomly among the top candidates (unanswered or same oldest date)
+  // to avoid always showing the same question in small pools
+  const topDate = lastAnswered.get(sorted[0]);
+  const topCandidates = sorted.filter(id => {
+    const d = lastAnswered.get(id);
+    if (!topDate && !d) return true;
+    return d === topDate;
+  });
+  const bestId = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
   const { data: question } = await supabase
     .from('deck_questions' as any)

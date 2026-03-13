@@ -154,9 +154,9 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   };
 
   // After error + elaboration, advance — regular function
-  function handleAdvanceAfterError() {
+  async function handleAdvanceAfterError() {
     if (!concept || !user) return;
-    onRate(concept, 1, false);
+    try { await onRate(concept, 1, false); } catch (e) { console.error('onRate error:', e); }
     moveToNextConcept();
   }
 
