@@ -579,18 +579,51 @@ export async function fetchOfficialConcepts(): Promise<{ id: string; name: strin
   return (data ?? []) as any[];
 }
 
-// ─── Fetch community concepts (from public turma decks via question_concepts) ───
+// ─── Fetch community concepts (official concept tags the user hasn't imported yet) ───
 export async function fetchCommunityConcepts(userId: string): Promise<GlobalConcept[]> {
-  // Get concepts from other users that are linked to questions in public community decks
-  const { data, error } = await supabase
-    .from('global_concepts' as any)
-    .select('*')
-    .neq('user_id', userId)
+  // Get official concept tags
+  const { data: officialTags, error: tagErr } = await supabase
+    .from('tags')
+    .select('id, name, slug, description, parent_id')
+    .eq('is_official', true)
+    .eq('is_concept', true)
     .order('name')
     .limit(200);
 
-  if (error) throw error;
-  return (data ?? []) as unknown as GlobalConcept[];
+  if (tagErr) throw tagErr;
+  if (!officialTags || officialTags.length === 0) return [];
+
+  // Get user's existing concept slugs to exclude already-imported ones
+  const { data: userConcepts } = await supabase
+    .from('global_concepts' as any)
+    .select('slug')
+    .eq('user_id', userId);
+
+  const existingSlugs = new Set(((userConcepts ?? []) as any[]).map((c: any) => c.slug));
+
+  // Return official concepts not yet imported as pseudo-GlobalConcept objects
+  return (officialTags as any[])
+    .filter(t => !existingSlugs.has(t.slug))
+    .map(t => ({
+      id: t.id,
+      user_id: '',
+      name: t.name,
+      slug: t.slug,
+      category: null,
+      subcategory: null,
+      state: 0,
+      stability: 0,
+      difficulty: 0,
+      scheduled_date: new Date().toISOString(),
+      learning_step: 0,
+      last_reviewed_at: null,
+      correct_count: 0,
+      wrong_count: 0,
+      parent_concept_id: null,
+      concept_tag_id: t.id,
+      created_at: '',
+      updated_at: '',
+    })) as GlobalConcept[];
 }
 
 // ─── Import a concept (official tag or community) into user's personal collection ───

@@ -55,13 +55,6 @@ interface QuestionAttempt {
   answered_at: string;
 }
 
-interface ConceptMastery {
-  id: string;
-  concept: string;
-  correct_count: number;
-  wrong_count: number;
-  mastery_level: string;
-}
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -416,21 +409,6 @@ const QuestionPractice = ({
   const [elaborativeText, setElaborativeText] = useState('');
   const [elaborativeSubmitted, setElaborativeSubmitted] = useState(false);
 
-  // Concept mastery for current deck
-  const { data: conceptMastery = [] } = useQuery({
-    queryKey: ['concept-mastery', deckId, user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data } = await supabase
-        .from('deck_concept_mastery' as any)
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('deck_id', deckId);
-      return (data ?? []) as unknown as ConceptMastery[];
-    },
-    enabled: !!user,
-    staleTime: 30_000,
-  });
 
   const q = questions[index];
 
@@ -476,30 +454,10 @@ const QuestionPractice = ({
         queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
       }).catch(console.error);
 
-      // Legacy: still update deck_concept_mastery for backward compat
-      for (const concept of q.concepts) {
-        const existing = conceptMastery.find(m => m.concept === concept);
-        const newCorrect = (existing?.correct_count || 0) + (isCorrect ? 1 : 0);
-        const newWrong = (existing?.wrong_count || 0) + (isCorrect ? 0 : 1);
-        const total = newCorrect + newWrong;
-        const rate = total > 0 ? newCorrect / total : 0;
-        const newLevel = rate >= 0.75 && total >= 3 ? 'strong' : rate >= 0.5 ? 'learning' : 'weak';
-
-        await supabase.from('deck_concept_mastery' as any).upsert({
-          user_id: user.id,
-          deck_id: deckId,
-          concept,
-          correct_count: newCorrect,
-          wrong_count: newWrong,
-          mastery_level: newLevel,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id,deck_id,concept' });
-      }
-      queryClient.invalidateQueries({ queryKey: ['concept-mastery', deckId, user.id] });
     }
 
     queryClient.invalidateQueries({ queryKey: ['question-attempts', deckId] });
-  }, [selected, q, user, deckId, conceptMastery, queryClient]);
+  }, [selected, q, user, deckId, queryClient]);
 
   const handleNext = useCallback(() => {
     if (index >= questions.length - 1) { setFinished(true); return; }
