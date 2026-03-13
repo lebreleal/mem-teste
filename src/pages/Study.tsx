@@ -947,17 +947,15 @@ const Study = () => {
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-        <div className="animate-fade-in text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-            <CheckCircle2 className="h-10 w-10 text-primary" />
-          </div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Sessão Completa!</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
-          </p>
-          <Button onClick={goBack} className="mt-8 gap-2">
-            <ArrowLeft className="h-4 w-4" /> Voltar
+      <SessionCompleteSummary
+        reviewCount={reviewCount}
+        correctCount={correctCount}
+        wrongCount={wrongCount}
+        elapsedMs={sessionElapsed}
+        deckStats={deckStatsSnapshot}
+        onGoBack={goBack}
+      />
+    );
           </Button>
         </div>
       </div>
