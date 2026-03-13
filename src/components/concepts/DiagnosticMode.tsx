@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { getVariedQuestion, markConceptMastered, markConceptWeak } from '@/services/globalConceptService';
+import { getOrGenerateQuestion, markConceptMastered, markConceptWeak } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { X as XIcon, BrainCircuit, Stethoscope } from 'lucide-react';
+import { X as XIcon, BrainCircuit, Stethoscope, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DiagnosticModeProps {
@@ -25,15 +25,26 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
   const [selected, setSelected] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState({ correct: 0, wrong: 0 });
+
+  async function loadQuestion(concept: GlobalConcept) {
+    setLoading(true);
+    setGenerating(false);
+    try {
+      const result = await getOrGenerateQuestion(concept.id, user!.id, concept.name, concept.category);
+      if (result.wasGenerated) setGenerating(true);
+      setQuestion(result.question);
+    } catch {
+      setQuestion(null);
+    }
+    setLoading(false);
+  }
 
   // Load first question on mount
   useState(() => {
     if (queue.length > 0 && user) {
-      getVariedQuestion(queue[0].id, user.id)
-        .then(q => setQuestion(q))
-        .catch(() => setQuestion(null))
-        .finally(() => setLoading(false));
+      loadQuestion(queue[0]);
     }
   });
 
@@ -69,12 +80,8 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
     setIndex(nextIdx);
     setSelected(null);
     setConfirmed(false);
-    setLoading(true);
-    try {
-      const q = await getVariedQuestion(queue[nextIdx].id, user.id);
-      setQuestion(q);
-    } catch { setQuestion(null); }
-    setLoading(false);
+    setGenerating(false);
+    loadQuestion(queue[nextIdx]);
   };
 
   return (
@@ -99,6 +106,10 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
       <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
         {loading ? (
           <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Wand2 className="h-4 w-4 animate-spin" />
+              <span>Preparando questão para "{concept?.name}"...</span>
+            </div>
             <Skeleton className="h-20 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
           </div>
@@ -106,12 +117,18 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
           <Card>
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Sem questão para este conceito.</p>
+              <p className="text-sm text-muted-foreground">Não foi possível gerar questão para este conceito.</p>
               <Button variant="outline" className="mt-4" onClick={() => handleNext(false)}>Pular (marcar como fraco)</Button>
             </CardContent>
           </Card>
         ) : (
           <>
+            {generating && (
+              <div className="flex items-center gap-1.5 text-[10px] text-primary">
+                <Wand2 className="h-3 w-3" />
+                <span>Questão gerada automaticamente por IA</span>
+              </div>
+            )}
             <Card className="border-border/50">
               <CardContent className="pt-4 pb-3">
                 <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{question.questionText}</p>
