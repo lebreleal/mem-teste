@@ -460,10 +460,10 @@ const ConceptsPage = () => {
                 {/* Action Buttons */}
                 {!selectionMode && concepts.length >= 2 && (
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleMapPrerequisites} disabled={mappingPrereqs}>
-                      <Wand2 className="h-3.5 w-3.5" />{mappingPrereqs ? 'Mapeando...' : 'Mapear pré-requisitos com IA'}
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowPrereqExplainer(true)} disabled={mappingPrereqs}>
+                      <Wand2 className="h-3.5 w-3.5" />{mappingPrereqs ? 'Mapeando...' : 'Mapear pré-requisitos'}
                     </Button>
-                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleStartDiagnostic} disabled={diagnosticLoading}>
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setShowDiagnosticExplainer(true)} disabled={diagnosticLoading}>
                       <Stethoscope className="h-3.5 w-3.5" />{diagnosticLoading ? 'Preparando...' : 'Diagnóstico Inicial'}
                     </Button>
                   </div>
