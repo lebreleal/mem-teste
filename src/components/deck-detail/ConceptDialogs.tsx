@@ -121,7 +121,18 @@ interface EditConceptCardsDialogProps {
 
 export const EditConceptCardsDialog = ({ open, onOpenChange, deckId, conceptId, conceptName, onConfirm }: EditConceptCardsDialogProps) => {
   const { cards } = useCards(deckId);
-  const { data: existingCardIds = [] } = useConceptCards(open ? conceptId : null);
+  const { data: existingCardIds = [] } = useQuery({
+    queryKey: ['concept-cards-legacy', conceptId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('concept_cards' as any)
+        .select('card_id')
+        .eq('concept_id', conceptId);
+      return ((data ?? []) as any[]).map((r: any) => r.card_id);
+    },
+    enabled: !!conceptId && open,
+    staleTime: 60_000,
+  });
   const [selectedCards, setSelectedCards] = useState<Set<string> | null>(null);
   const [search, setSearch] = useState('');
 
