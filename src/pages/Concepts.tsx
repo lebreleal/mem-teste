@@ -403,7 +403,7 @@ const ConceptsPage = () => {
               <>
                 {/* Title bar */}
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">Conceitos ({counts.total})</h2>
+                  <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">Temas ({counts.total})</h2>
                   <div className="flex items-center gap-2">
                     <Button variant={hasActiveFilter ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8 relative" onClick={() => setShowFilters(!showFilters)}>
                       <Filter className="h-4 w-4" />
