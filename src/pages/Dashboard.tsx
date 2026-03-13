@@ -259,6 +259,7 @@ const Dashboard = () => {
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new' },
             { label: 'Questões', icon: Library, path: '/banco-questoes' },
+            { label: 'Caderno de Erros', icon: BookX, path: '/caderno-de-erros', badge: errorCount },
             { label: 'Plano', icon: CalendarCheck, path: '/plano' },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1 rounded-full border border-border/30 bg-muted/30 px-2.5 py-1 hover:bg-muted/60 transition-all shrink-0">
