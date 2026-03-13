@@ -380,6 +380,52 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     navigate('/exam/new');
   };
 
+  // === Load from saved AI source ===
+  const handleLoadSource = async (source: AISource | null) => {
+    if (!source) {
+      setSelectedSourceId(null);
+      return;
+    }
+    setSelectedSourceId(source.id);
+
+    if (source.source_type === 'text' && source.text_content) {
+      const textPages = splitTextIntoPages(source.text_content);
+      setFilePages(textPages.map(p => ({ ...p, selected: true })));
+      if (!fileTitle) setFileTitle(source.name);
+      setFileName(source.name);
+      setFileStep('pages');
+    } else if (source.source_type === 'file' && source.file_path) {
+      setFileName(source.name);
+      if (!fileTitle) setFileTitle(source.name.replace(/\.[^/.]+$/, ''));
+      setFileStep('loading');
+      setFileLoading(true);
+      try {
+        const { data: blob, error } = await supabase.storage
+          .from('ai-sources')
+          .download(source.file_path);
+        if (error || !blob) throw error || new Error('Download failed');
+
+        const isPdf = source.mime_type === 'application/pdf' || source.file_path.endsWith('.pdf');
+        if (isPdf) {
+          const file = new File([blob], source.name, { type: 'application/pdf' });
+          const pdfPages = await extractPDFPages(file, (cur, tot) => setFileLoadProgress({ current: cur, total: tot }));
+          setFilePages(pdfPages.map(p => ({ ...p, selected: true })));
+        } else {
+          const text = await blob.text();
+          const textPages = splitTextIntoPages(text);
+          setFilePages(textPages.map(p => ({ ...p, selected: true })));
+        }
+        setFileStep('pages');
+      } catch (err) {
+        console.error('Error loading source:', err);
+        toast({ title: 'Erro ao carregar fonte', variant: 'destructive' });
+        setFileStep('upload');
+      } finally {
+        setFileLoading(false);
+      }
+    }
+  };
+
   return {
     // Meta
     isEditing, examLoading, user, navigate,
@@ -410,6 +456,9 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     fileTimeLimit, setFileTimeLimit, fileInputRef, setFileStep,
     fileTotalCost, fileCanAfford, fileMcCount,
     handleFileUpload, handleFileGenerate,
+    
+    // AI Sources
+    aiSources, selectedSourceId, handleLoadSource,
     
     // Example reference
     exampleMode, setExampleMode, exampleText, setExampleText,
