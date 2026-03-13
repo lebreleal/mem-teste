@@ -204,9 +204,33 @@ export async function moveConceptCardsToErrorDeck(
   if (terms.length === 0) return 0;
 
   const normalizedTerms = new Set(terms.map(normalize));
+
+  // Scope: current deck + all descendants (hierarchical decks)
+  const { data: userDecks, error: userDecksError } = await supabase
+    .from('decks')
+    .select('id, parent_deck_id')
+    .eq('user_id', userId)
+    .eq('is_archived', false);
+
+  if (userDecksError) throw userDecksError;
+
+  const deckScopeSet = new Set<string>([originDeckId]);
+  const queue = [originDeckId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const children = (userDecks ?? []).filter(d => d.parent_deck_id === current);
+    for (const child of children) {
+      if (!deckScopeSet.has(child.id)) {
+        deckScopeSet.add(child.id);
+        queue.push(child.id);
+      }
+    }
+  }
+  const deckScopeIds = [...deckScopeSet];
+
   const cardIdsToMove = new Set<string>();
 
-  // Strategy 1: deck_concepts -> concept_cards (search ALL user concepts, not just originDeckId)
+  // Strategy 1: deck_concepts -> concept_cards (all user concepts)
   const { data: deckConcepts } = await supabase
     .from('deck_concepts')
     .select('id, name')
@@ -230,20 +254,23 @@ export async function moveConceptCardsToErrorDeck(
     }
   }
 
-  // Strategy 2: global_concepts -> card_tags (concept slug matches tag slug)
+  // Strategy 2: global_concepts.concept_tag_id -> card_tags
   if (cardIdsToMove.size === 0) {
-    const slugs = terms.map(t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
-    const { data: tags } = await supabase
-      .from('tags')
-      .select('id')
-      .in('slug', slugs);
+    const { data: globalConcepts } = await supabase
+      .from('global_concepts' as any)
+      .select('name, slug, concept_tag_id')
+      .eq('user_id', userId);
 
-    if (tags && tags.length > 0) {
-      const tagIds = tags.map(t => t.id);
+    const conceptTagIds = (globalConcepts ?? [])
+      .filter((gc: any) => normalizedTerms.has(normalize(gc.name ?? '')) || normalizedTerms.has(normalize(gc.slug ?? '')))
+      .map((gc: any) => gc.concept_tag_id)
+      .filter(Boolean);
+
+    if (conceptTagIds.length > 0) {
       const { data: cardTags } = await supabase
         .from('card_tags')
         .select('card_id')
-        .in('tag_id', tagIds);
+        .in('tag_id', [...new Set(conceptTagIds)] as string[]);
 
       for (const ct of cardTags ?? []) {
         cardIdsToMove.add(ct.card_id);
@@ -251,7 +278,7 @@ export async function moveConceptCardsToErrorDeck(
     }
   }
 
-  // Strategy 3: fallback text match on cards from the origin deck
+  // Strategy 3: fallback text match inside deck scope
   if (cardIdsToMove.size === 0) {
     const keywordParts = terms
       .flatMap(term => term.split(/\s+/))
@@ -271,11 +298,11 @@ export async function moveConceptCardsToErrorDeck(
       const { data: matchedCards } = await supabase
         .from('cards')
         .select('id')
-        .eq('deck_id', originDeckId)
+        .in('deck_id', deckScopeIds)
         .is('origin_deck_id', null)
         .neq('deck_id', errorDeckId)
         .or(orExpr)
-        .limit(120);
+        .limit(180);
 
       for (const card of matchedCards ?? []) {
         cardIdsToMove.add(card.id);
@@ -284,22 +311,50 @@ export async function moveConceptCardsToErrorDeck(
   }
 
   if (cardIdsToMove.size === 0) {
-    console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck:', originDeckId);
+    console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck scope:', deckScopeIds);
     return 0;
   }
 
-  console.log('[ErrorDeck] Found', cardIdsToMove.size, 'candidate cards for concepts:', terms);
-
-  const ids = [...cardIdsToMove];
-  const { data: movedRows, error } = await supabase
+  // Keep only cards that are currently in the deck scope and not yet moved.
+  const candidateIds = [...cardIdsToMove];
+  const { data: candidateCards, error: candidateError } = await supabase
     .from('cards')
-    .update({ deck_id: errorDeckId, origin_deck_id: originDeckId } as any)
-    .in('id', ids)
-    .eq('deck_id', originDeckId)
+    .select('id, deck_id')
+    .in('id', candidateIds)
+    .in('deck_id', deckScopeIds)
     .is('origin_deck_id', null)
-    .select('id');
+    .neq('deck_id', errorDeckId);
 
-  if (error) throw error;
-  console.log('[ErrorDeck] Moved', movedRows?.length ?? 0, 'cards to error deck');
-  return movedRows?.length ?? 0;
+  if (candidateError) throw candidateError;
+  if (!candidateCards || candidateCards.length === 0) {
+    console.warn('[ErrorDeck] Candidates found by concept, but none eligible to move in current scope.');
+    return 0;
+  }
+
+  // Preserve each card's real source deck for accurate return after mastery.
+  const bySourceDeck = new Map<string, string[]>();
+  for (const card of candidateCards) {
+    const arr = bySourceDeck.get(card.deck_id) ?? [];
+    arr.push(card.id);
+    bySourceDeck.set(card.deck_id, arr);
+  }
+
+  const updates = await Promise.all(
+    [...bySourceDeck.entries()].map(async ([sourceDeckId, ids]) => {
+      const { data, error } = await supabase
+        .from('cards')
+        .update({ deck_id: errorDeckId, origin_deck_id: sourceDeckId } as any)
+        .in('id', ids)
+        .eq('deck_id', sourceDeckId)
+        .is('origin_deck_id', null)
+        .select('id');
+
+      if (error) throw error;
+      return data?.length ?? 0;
+    })
+  );
+
+  const movedCount = updates.reduce((sum, n) => sum + n, 0);
+  console.log('[ErrorDeck] Moved', movedCount, 'cards to error deck from', bySourceDeck.size, 'source decks');
+  return movedCount;
 }
