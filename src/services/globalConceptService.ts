@@ -185,7 +185,7 @@ export type LinkQuestionsToConceptsOptions = {
 
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[],
   options?: LinkQuestionsToConceptsOptions,
 ) {
   const linkPrerequisitesToQuestion = options?.linkPrerequisitesToQuestion ?? true;
