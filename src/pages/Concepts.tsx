@@ -73,8 +73,8 @@ const OficiaisTab = () => {
   if (officialConcepts.length === 0) return (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
       <ShieldCheck className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito oficial ainda</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Conceitos oficiais da plataforma aparecerão aqui.</p>
+      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema oficial ainda</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Temas oficiais da plataforma aparecerão aqui.</p>
     </div>
   );
 
