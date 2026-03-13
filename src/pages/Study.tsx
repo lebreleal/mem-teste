@@ -517,6 +517,17 @@ const Study = () => {
     reviewedCardIdsRef.current.add(card.id);
     setReviewCount(prev => prev + 1);
 
+    // Track accuracy + per-deck stats
+    if (rating >= 3) setCorrectCount(prev => prev + 1);
+    else setWrongCount(prev => prev + 1);
+    const deckStat = deckStatsRef.current.get(card.deck_id);
+    if (deckStat) {
+      deckStat.done += 1;
+      if (rating >= 3) deckStat.correct += 1;
+      else deckStat.wrong += 1;
+      setDeckStatsSnapshot(Array.from(deckStatsRef.current.values()));
+    }
+
     if (shouldKeep) {
       const cardConfig = getCardDeckConfig(card);
       const steps = cardConfig?.learning_steps ?? ['1', '10'];
