@@ -1,55 +1,69 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-# Diagnóstico: Caderno de Erros vs ALEKS
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-## Problema Central
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-O Caderno de Erros atual funciona como um **log passivo de questões erradas** agrupado por baralho. No ALEKS, quando o aluno erra, o sistema **não mostra a questão errada de volta** — ele identifica o Knowledge Component fraco e redireciona para **estudo ativo do conceito**, não revisão da questão.
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-## Diferenças Concretas
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-| Aspecto | ALEKS | Sistema Atual |
-|---|---|---|
-| **Foco** | No conceito fraco (KC) | Na questão errada |
-| **Ação principal** | Estudar o conceito fraco com questões variadas | "Revisar erros" (reler a mesma questão) |
-| **Agrupamento** | Por conceito/KC | Por baralho |
-| **Diagnóstico** | Automático e imediato | Manual (clicar questão → esperar API) |
-| **Remediação** | Estudo guiado do KC até domínio | "Preencher lacuna" gera cards soltos |
-| **Progresso** | Conceito sai da lista quando dominado | Questão some só quando acertar de novo |
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-## Correções Propostas
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-### 1. Agrupar por Conceito, não por Baralho
-Inverter a hierarquia: o nível principal é o **Knowledge Component fraco**, com as questões erradas como evidência embaixo. Isso elimina a visão por deck que não tem significado pedagógico.
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-### 2. Ação principal = "Estudar Conceito"
-Em vez de "Revisar erros" (reler a questão), o botão principal inicia uma mini-sessão de estudo do conceito fraco usando `getOrGenerateQuestion` — questão **diferente** da que errou, testando o mesmo KC.
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-### 3. Diagnóstico hierárquico pré-carregado
-Carregar os pré-requisitos fracos automaticamente ao abrir a página (em batch), eliminando o clique-e-espera por questão. O `buildHierarchyDiagnostic` já faz muitas queries sequenciais — pré-carregar ao menos os source concepts + parents.
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-### 4. Remover "Preencher lacuna com cards"
-O botão `generateCascadeContent` cria um deck "Reforço: X" solto que o aluno nunca vai encontrar. Substituir por "Estudar pré-requisito" que inicia o `StudyMode` direto com o conceito fraco.
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-### 5. Progresso visível: conceitos saem da lista
-Quando um conceito atinge `state === 2` (dominado), ele some automaticamente da lista de lacunas. Isso dá feedback tangível de progresso.
-
-## Implementação Técnica
-
-### Arquivo: `src/pages/ErrorNotebook.tsx` (reescrever)
-- Query principal: buscar todos os conceitos do usuário com `state IN (0, 3)` que têm questões erradas vinculadas
-- Agrupar por conceito (não por deck)
-- Para cada conceito fraco: mostrar nome, health, count de erros, pré-requisitos (via parent_concept_id join simples, sem recursão completa)
-- Botão "Estudar" → abre `StudyMode` com queue = [conceito]
-- Remover `ConceptDrillQuiz`, `HierarchyTreeView`, `generateCascadeContent`
-
-### Arquivo: `src/services/conceptHierarchyService.ts`
-- Simplificar: manter apenas `getWeakConceptsWithErrors` que retorna conceitos fracos + parents fracos em uma query
-- Remover as funções recursivas de ancestors/descendants/siblings (over-engineering)
-
-### Dados necessários (sem migration)
-- `global_concepts` já tem `state`, `parent_concept_id`
-- `question_concepts` já vincula questões a conceitos
-- `deck_question_attempts` já tem `is_correct`
-- Tudo já existe no schema
-
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Usa grafo de conceitos em vez de decks |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |
