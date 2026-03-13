@@ -468,7 +468,7 @@ const ConceptsPage = () => {
                     concepts={concepts}
                     lockedIds={lockedIds}
                     onStartStudy={handleStartFrontierStudy}
-                    onNodeTap={selectionMode ? undefined : setEditConcept}
+                    onNodeTap={selectionMode ? undefined : setDetailConcept}
                     selectionMode={selectionMode}
                     selectedIds={selectedIds}
                     onToggleSelection={toggleSelection}
