@@ -185,10 +185,14 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 ❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem
 ❌ Colocar perguntas de autoavaliação no campo concepts — use APENAS nomes de Knowledge Components`;
 
+    const existingConceptsBlock = existingConceptNames.length > 0
+      ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE se aplicável, em vez de criar novos sinônimos):\n${existingConceptNames.join(', ')}\n`
+      : '';
+
     const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
 
 NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo do baralho.
-
+${existingConceptsBlock}
 CARTÕES DO BARALHO:
 ---
 ${cardSummaries}

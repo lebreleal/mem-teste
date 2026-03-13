@@ -56,13 +56,40 @@ Deno.serve(async (req) => {
       const qText = (question || "").replace(/<[^>]*>/g, "").trim();
       const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
 
+      // Fetch existing concepts for reuse (contextual)
+      let existingConceptNames: string[] = [];
+      try {
+        if (deckId) {
+          const { data: deckConcepts } = await supabase.rpc('get_deck_concept_names' as any, {
+            p_deck_id: deckId,
+            p_user_id: userId,
+          });
+          if (deckConcepts && (deckConcepts as any[]).length > 0) {
+            existingConceptNames = (deckConcepts as any[]).map((r: any) => r.name);
+          }
+        }
+        if (existingConceptNames.length === 0) {
+          const { data: topConcepts } = await supabase
+            .from('global_concepts')
+            .select('name')
+            .eq('user_id', userId)
+            .order('correct_count', { ascending: false })
+            .limit(100);
+          existingConceptNames = (topConcepts ?? []).map((r: any) => r.name);
+        }
+      } catch { /* non-blocking */ }
+
+      const reuseBlock = existingConceptNames.length > 0
+        ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE nomes existentes se aplicável, em vez de criar sinônimos):\n${existingConceptNames.join(', ')}\n`
+        : '';
+
       const cPrompt = `Analise esta questão de múltipla escolha e extraia os CONCEITOS-CHAVE (Knowledge Components) que o aluno precisa dominar para acertá-la.
 
 QUESTÃO: ${qText}
 
 ALTERNATIVAS:
 ${qOpts}
-
+${reuseBlock}
 Para CADA conceito, forneça:
 - "name": nome curto (2-6 palavras), específico e reutilizável (ex: "Critérios de Light", "Fisiopatologia da ICC")
 - "description": uma frase concisa (15-30 palavras) que explique O QUE é esse conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de "retrieval cue" — ajude o aluno a ativar o conhecimento correto para autoavaliar se realmente domina o tema.
