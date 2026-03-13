@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.parse-questions]
 verify_jwt = false
+
+[functions.map-prerequisites]
+verify_jwt = false

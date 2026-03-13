@@ -4,13 +4,13 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import {
   MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions, linkQuestionsToConcepts,
   getVariedQuestion, fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
-  fetchReadyToLearnConcepts,
+  fetchReadyToLearnConcepts, mapPrerequisitesViaAI, fetchDiagnosticConcepts, markConceptMastered, markConceptWeak,
 } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -25,11 +25,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BottomNav from '@/components/BottomNav';
 import {
   BrainCircuit, ArrowLeft, Search, Play, Clock, Zap,
   X as XIcon, Pencil, Trash2, Link2, Unlink, MoreVertical,
   CheckCheck, Filter, Plus, Download, Users, ShieldCheck, Unlock,
+  Lock, Wand2, Stethoscope, PieChart,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -38,6 +40,7 @@ import { toast } from 'sonner';
 import type { Rating } from '@/lib/fsrs';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 type StateFilter = 'all' | 'due' | 'new' | 'learning' | 'mastered';
 
@@ -250,6 +253,98 @@ const ComunidadeTab = () => {
 };
 
 // ═══════════════════════════════════════════════════
+// Category Donut Chart (ALEKS-style progress)
+// ═══════════════════════════════════════════════════
+const CATEGORY_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(200, 70%, 50%)',
+  'hsl(150, 60%, 45%)',
+  'hsl(30, 80%, 55%)',
+  'hsl(280, 60%, 55%)',
+  'hsl(0, 65%, 55%)',
+];
+
+const CategoryDonutChart = ({
+  concepts,
+  onCategoryClick,
+}: {
+  concepts: GlobalConcept[];
+  onCategoryClick: (category: string | null) => void;
+}) => {
+  const categoryData = useMemo(() => {
+    const catMap = new Map<string, { total: number; mastered: number }>();
+    for (const c of concepts) {
+      const cat = c.category || 'Sem categoria';
+      const entry = catMap.get(cat) ?? { total: 0, mastered: 0 };
+      entry.total++;
+      if (c.state === 2) entry.mastered++;
+      catMap.set(cat, entry);
+    }
+    return Array.from(catMap.entries())
+      .map(([name, { total, mastered }]) => ({
+        name,
+        value: total,
+        mastered,
+        pct: Math.round((mastered / total) * 100),
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [concepts]);
+
+  if (categoryData.length === 0) return null;
+
+  const totalMastered = concepts.filter(c => c.state === 2).length;
+  const totalPct = concepts.length > 0 ? Math.round((totalMastered / concepts.length) * 100) : 0;
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card p-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <PieChart className="h-4 w-4 text-primary" />
+        <p className="text-xs font-semibold text-foreground">Progresso por Área</p>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative w-24 h-24 shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <RechartsPieChart>
+              <Pie
+                data={categoryData}
+                cx="50%"
+                cy="50%"
+                innerRadius={28}
+                outerRadius={42}
+                dataKey="value"
+                stroke="none"
+                onClick={(_, idx) => onCategoryClick(categoryData[idx]?.name === 'Sem categoria' ? null : categoryData[idx]?.name)}
+                style={{ cursor: 'pointer' }}
+              >
+                {categoryData.map((_, i) => (
+                  <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} opacity={0.85} />
+                ))}
+              </Pie>
+            </RechartsPieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-lg font-bold text-foreground">{totalPct}%</span>
+          </div>
+        </div>
+        <div className="flex-1 space-y-1 min-w-0">
+          {categoryData.slice(0, 5).map((cat, i) => (
+            <button
+              key={cat.name}
+              onClick={() => onCategoryClick(cat.name === 'Sem categoria' ? null : cat.name)}
+              className="flex items-center gap-1.5 w-full text-left hover:bg-accent/30 rounded px-1 py-0.5 transition-colors"
+            >
+              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }} />
+              <span className="text-[10px] text-muted-foreground truncate flex-1">{cat.name}</span>
+              <span className="text-[10px] font-medium text-foreground">{cat.pct}%</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
 // Ready-to-Learn Frontier (ALEKS-style)
 // ═══════════════════════════════════════════════════
 const ReadyToLearnSection = ({ onStartStudy }: { onStartStudy: (concept: GlobalConcept) => void }) => {
@@ -306,10 +401,26 @@ const ConceptsPage = () => {
     submitConceptReview, updateMeta, deleteConcept, unlinkQuestion,
   } = useGlobalConcepts();
 
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState('meus');
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Map prerequisites
+  const [mappingPrereqs, setMappingPrereqs] = useState(false);
+
+  // Diagnostic mode
+  const [diagnosticMode, setDiagnosticMode] = useState(false);
+  const [diagnosticQueue, setDiagnosticQueue] = useState<GlobalConcept[]>([]);
+  const [diagnosticIndex, setDiagnosticIndex] = useState(0);
+  const [diagnosticQuestion, setDiagnosticQuestion] = useState<any>(null);
+  const [diagnosticSelected, setDiagnosticSelected] = useState<number | null>(null);
+  const [diagnosticConfirmed, setDiagnosticConfirmed] = useState(false);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticResults, setDiagnosticResults] = useState<{ correct: number; wrong: number }>({ correct: 0, wrong: 0 });
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
@@ -358,6 +469,19 @@ const ConceptsPage = () => {
     mastered: concepts.filter(c => c.state === 2).length,
   }), [concepts, isDue]);
 
+  // Build locked-concept set (parent not mastered)
+  const lockedIds = useMemo(() => {
+    const byId = new Map(concepts.map(c => [c.id, c]));
+    const locked = new Set<string>();
+    for (const c of concepts) {
+      if (c.parent_concept_id) {
+        const parent = byId.get(c.parent_concept_id);
+        if (parent && parent.state !== 2) locked.add(c.id);
+      }
+    }
+    return locked;
+  }, [concepts]);
+
   const filtered = useMemo(() => {
     let result = concepts;
     if (search) {
@@ -368,14 +492,91 @@ const ConceptsPage = () => {
         (c.subcategory ?? '').toLowerCase().includes(q)
       );
     }
+    if (categoryFilter) {
+      result = result.filter(c => c.category === categoryFilter);
+    }
     if (stateFilter === 'due') result = result.filter(isDue);
     if (stateFilter === 'new') result = result.filter(c => c.state === 0);
     if (stateFilter === 'learning') result = result.filter(c => c.state === 1 || c.state === 3);
     if (stateFilter === 'mastered') result = result.filter(c => c.state === 2);
     return result;
-  }, [concepts, search, stateFilter, isDue]);
+  }, [concepts, search, stateFilter, categoryFilter, isDue]);
 
-  const hasActiveFilter = stateFilter !== 'all';
+  const hasActiveFilter = stateFilter !== 'all' || !!categoryFilter;
+
+  // Map prerequisites handler
+  const handleMapPrerequisites = async () => {
+    if (!user) return;
+    setMappingPrereqs(true);
+    try {
+      const count = await mapPrerequisitesViaAI(user.id);
+      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao mapear pré-requisitos');
+    }
+    setMappingPrereqs(false);
+  };
+
+  // Diagnostic flow
+  const handleStartDiagnostic = async () => {
+    if (!user) return;
+    setDiagnosticLoading(true);
+    try {
+      const queue = await fetchDiagnosticConcepts(user.id);
+      if (queue.length === 0) {
+        toast.error('Nenhum conceito disponível para diagnóstico');
+        setDiagnosticLoading(false);
+        return;
+      }
+      setDiagnosticQueue(queue);
+      setDiagnosticIndex(0);
+      setDiagnosticResults({ correct: 0, wrong: 0 });
+      setDiagnosticMode(true);
+      const q = await getVariedQuestion(queue[0].id, user.id);
+      setDiagnosticQuestion(q);
+    } catch { toast.error('Erro ao iniciar diagnóstico'); }
+    setDiagnosticLoading(false);
+  };
+
+  const handleDiagnosticAnswer = async () => {
+    if (diagnosticSelected === null || !diagnosticQuestion) return;
+    setDiagnosticConfirmed(true);
+  };
+
+  const handleDiagnosticNext = async (wasCorrect: boolean) => {
+    const concept = diagnosticQueue[diagnosticIndex];
+    if (!concept || !user) return;
+
+    // Mark concept based on answer
+    if (wasCorrect) {
+      await markConceptMastered(concept.id);
+      setDiagnosticResults(r => ({ ...r, correct: r.correct + 1 }));
+    } else {
+      await markConceptWeak(concept.id);
+      setDiagnosticResults(r => ({ ...r, wrong: r.wrong + 1 }));
+    }
+
+    const nextIdx = diagnosticIndex + 1;
+    if (nextIdx >= diagnosticQueue.length) {
+      setDiagnosticMode(false);
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
+      toast.success(`Diagnóstico concluído: ${diagnosticResults.correct + (wasCorrect ? 1 : 0)} acertos, ${diagnosticResults.wrong + (wasCorrect ? 0 : 1)} erros`);
+      return;
+    }
+
+    setDiagnosticIndex(nextIdx);
+    setDiagnosticSelected(null);
+    setDiagnosticConfirmed(false);
+    setDiagnosticLoading(true);
+    try {
+      const q = await getVariedQuestion(diagnosticQueue[nextIdx].id, user.id);
+      setDiagnosticQuestion(q);
+    } catch { setDiagnosticQuestion(null); }
+    setDiagnosticLoading(false);
+  };
   const newPct = counts.total > 0 ? (counts.new / counts.total) * 100 : 0;
   const learningPct = counts.total > 0 ? (counts.learning / counts.total) * 100 : 0;
   const masteredPct = counts.total > 0 ? (counts.mastered / counts.total) * 100 : 0;
@@ -520,6 +721,97 @@ const ConceptsPage = () => {
     } catch { setCurrentQuestion(null); }
     setLoadingQuestion(false);
   }, [studyQueue, studyIndex, currentQuestion, selectedOption, submitConceptReview, user]);
+
+  // ═══ Diagnostic Mode UI ═══
+  if (diagnosticMode) {
+    const concept = diagnosticQueue[diagnosticIndex];
+    const isCorrect = diagnosticQuestion?.correctIndices?.includes(diagnosticSelected) ?? false;
+    const progress = diagnosticQueue.length > 0 ? ((diagnosticIndex + 1) / diagnosticQueue.length) * 100 : 0;
+
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/40 bg-card/95 backdrop-blur-md px-4 py-3">
+          <Button variant="ghost" size="icon" onClick={() => setDiagnosticMode(false)}>
+            <XIcon className="h-5 w-5" />
+          </Button>
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">Diagnóstico {diagnosticIndex + 1}/{diagnosticQueue.length}</p>
+            <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
+          </div>
+          <Badge variant="outline" className="text-[10px]">
+            <Stethoscope className="h-3 w-3 mr-1" /> Knowledge Check
+          </Badge>
+        </header>
+
+        <div className="px-4 py-2">
+          <Progress value={progress} className="h-1.5" />
+        </div>
+
+        <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
+          {diagnosticLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          ) : !diagnosticQuestion ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Sem questão para este conceito.</p>
+                <Button variant="outline" className="mt-4" onClick={() => handleDiagnosticNext(false)}>Pular (marcar como fraco)</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card className="border-border/50">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{diagnosticQuestion.questionText}</p>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-2">
+                {(diagnosticQuestion.options ?? []).map((opt: string, i: number) => {
+                  const isSelected = diagnosticSelected === i;
+                  const isCorrectOpt = diagnosticQuestion.correctIndices?.includes(i);
+                  let optClasses = 'border-border/50 bg-card hover:bg-accent/30';
+                  if (diagnosticConfirmed) {
+                    if (isCorrectOpt) optClasses = 'border-emerald-500 bg-emerald-500/10';
+                    else if (isSelected && !isCorrectOpt) optClasses = 'border-destructive bg-destructive/10';
+                  } else if (isSelected) {
+                    optClasses = 'border-primary bg-primary/5';
+                  }
+                  return (
+                    <button
+                      key={i}
+                      disabled={diagnosticConfirmed}
+                      onClick={() => setDiagnosticSelected(i)}
+                      className={`w-full text-left rounded-xl border-2 px-4 py-3 text-sm transition-all ${optClasses}`}
+                    >
+                      <span className="font-medium text-muted-foreground mr-2">{String.fromCharCode(65 + i)}.</span>
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!diagnosticConfirmed ? (
+                <Button className="w-full" disabled={diagnosticSelected === null} onClick={handleDiagnosticAnswer}>Confirmar</Button>
+              ) : (
+                <div className="space-y-3">
+                  <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
+                    {isCorrect ? '✅ Correto — conceito dominado!' : '❌ Incorreto — conceito marcado para revisão'}
+                  </div>
+                  <Button className="w-full" onClick={() => handleDiagnosticNext(isCorrect)}>
+                    {diagnosticIndex + 1 >= diagnosticQueue.length ? 'Finalizar Diagnóstico' : 'Próximo Conceito'}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ═══ Study Mode UI ═══
   if (studyMode) {
@@ -746,6 +1038,37 @@ const ConceptsPage = () => {
                   </div>
                 )}
 
+                {/* Donut Chart */}
+                {!selectionMode && concepts.length >= 3 && (
+                  <CategoryDonutChart concepts={concepts} onCategoryClick={(cat) => setCategoryFilter(cat)} />
+                )}
+
+                {/* Action Buttons */}
+                {!selectionMode && concepts.length >= 2 && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleMapPrerequisites} disabled={mappingPrereqs}>
+                      <Wand2 className="h-3.5 w-3.5" />
+                      {mappingPrereqs ? 'Mapeando...' : 'Mapear pré-requisitos com IA'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleStartDiagnostic} disabled={diagnosticLoading}>
+                      <Stethoscope className="h-3.5 w-3.5" />
+                      {diagnosticLoading ? 'Preparando...' : 'Diagnóstico Inicial'}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Category filter active */}
+                {categoryFilter && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs gap-1">
+                      {categoryFilter}
+                      <button onClick={() => setCategoryFilter(null)} className="ml-0.5 hover:text-destructive">
+                        <XIcon className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  </div>
+                )}
+
                 {/* Search */}
                 {counts.total > 5 && (
                   <div className="relative">
@@ -782,7 +1105,7 @@ const ConceptsPage = () => {
                       </div>
                     </div>
                     {hasActiveFilter && (
-                      <button onClick={() => setStateFilter('all')} className="text-xs text-primary hover:underline">
+                      <button onClick={() => { setStateFilter('all'); setCategoryFilter(null); }} className="text-xs text-primary hover:underline">
                         Limpar filtros
                       </button>
                     )}
@@ -815,47 +1138,61 @@ const ConceptsPage = () => {
                   ) : filtered.map(concept => {
                     const si = stateInfo(concept.state);
                     const isSelected = selectedIds.has(concept.id);
+                    const isLocked = lockedIds.has(concept.id);
                     const totalAttempts = concept.correct_count + concept.wrong_count;
                     const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
+                    const parentConcept = isLocked && concept.parent_concept_id
+                      ? concepts.find(c => c.id === concept.parent_concept_id)
+                      : null;
 
                     return (
-                      <div
-                        key={concept.id}
-                        className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
-                          isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
-                        }`}
-                        onClick={() => { if (selectionMode) toggleSelection(concept.id); }}
-                      >
-                        <div className="flex items-start gap-3">
-                          {selectionMode && (
-                            <div className="pt-0.5 shrink-0" onClick={e => { e.stopPropagation(); toggleSelection(concept.id); }}>
-                              <Checkbox checked={isSelected} />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${si.color}`}>
-                                {si.label}
-                              </span>
-                              {concept.state !== 0 && (
-                                <span className="text-[10px] text-muted-foreground">{nextReviewLabel(concept.scheduled_date)}</span>
-                              )}
-                            </div>
-                            <p className="text-sm font-semibold text-foreground leading-snug">{concept.name}</p>
-                            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                              {concept.category ? (
-                                <span>{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</span>
-                              ) : (
-                                <span className="italic">Sem categoria</span>
-                              )}
-                              {totalAttempts > 0 && (
-                                <>
-                                  <span>·</span>
-                                  <span>{accuracy}% acerto ({concept.correct_count}/{totalAttempts})</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                      <TooltipProvider key={concept.id}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
+                                isLocked
+                                  ? 'opacity-50 border-border/30'
+                                  : isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                              }`}
+                              onClick={() => { if (selectionMode) toggleSelection(concept.id); }}
+                            >
+                              <div className="flex items-start gap-3">
+                                {selectionMode && (
+                                  <div className="pt-0.5 shrink-0" onClick={e => { e.stopPropagation(); toggleSelection(concept.id); }}>
+                                    <Checkbox checked={isSelected} />
+                                  </div>
+                                )}
+                                {isLocked && !selectionMode && (
+                                  <Lock className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-0.5" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${si.color}`}>
+                                      {si.label}
+                                    </span>
+                                    {concept.state !== 0 && !isLocked && (
+                                      <span className="text-[10px] text-muted-foreground">{nextReviewLabel(concept.scheduled_date)}</span>
+                                    )}
+                                    {isLocked && (
+                                      <span className="text-[10px] text-muted-foreground italic">Bloqueado</span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-semibold text-foreground leading-snug">{concept.name}</p>
+                                  <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                    {concept.category ? (
+                                      <span>{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</span>
+                                    ) : (
+                                      <span className="italic">Sem categoria</span>
+                                    )}
+                                    {totalAttempts > 0 && (
+                                      <>
+                                        <span>·</span>
+                                        <span>{accuracy}% acerto ({concept.correct_count}/{totalAttempts})</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
 
                           {!selectionMode && (
                             <DropdownMenu>
@@ -877,8 +1214,16 @@ const ConceptsPage = () => {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
-                        </div>
-                      </div>
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          {isLocked && parentConcept && (
+                            <TooltipContent side="top">
+                              <p className="text-xs">Domine "{parentConcept.name}" primeiro</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
                     );
                   })}
                 </div>
