@@ -12,6 +12,7 @@ import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
+import { moveQuestionToErrorDeck } from '@/services/errorDeckService';
 import { useDecks } from '@/hooks/useDecks';
 import { linkQuestionsToConcepts, ensureGlobalConcepts, updateConceptMastery, conceptSlug } from '@/services/globalConceptService';
 import { Button } from '@/components/ui/button';
