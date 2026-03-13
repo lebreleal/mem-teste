@@ -140,6 +140,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     }
     setIndex(nextIdx);
     setConsecutiveCorrect(0);
+    setGuessCount(0);
     resetForNextQuestion(queue[nextIdx]);
   }
 
