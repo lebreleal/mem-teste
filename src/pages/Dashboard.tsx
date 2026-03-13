@@ -225,10 +225,20 @@ const Dashboard = () => {
       />
 
       <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
-        {/* ▶ ESTUDAR AGORA — Single dominant CTA (the ONLY thing above the fold) */}
-        <StudyNowHero />
-
-        {/* Everything else is below the fold, inside collapsible sections */}
+        {/* ▶ Deck Carousel — primary daily study UI */}
+        {allDecks && (
+          <DeckCarousel
+            decks={allDecks}
+            avgSecondsPerCard={avgSecondsPerCard}
+            studyMetrics={realStudyMetrics}
+            hasPlan={hasPlan}
+            planDeckIds={planDeckIds}
+            planDeckOrder={planDeckOrderEarly}
+            plansByDeckId={plansByDeckId}
+            globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+            distributedNewByDeck={state.distributedNewByDeck}
+          />
+        )}
 
         {/* Caderno de Erros — subtle inline, not a banner */}
         {errorCount > 0 && (
