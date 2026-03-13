@@ -835,6 +835,64 @@ const CreateQuestionDialog = ({
   const [aiCustomInstructions, setAiCustomInstructions] = useState('');
   const [aiModel, setAiModel] = useState<'flash' | 'pro'>('flash');
 
+  // AI Source state
+  const { sources, saveText: saveTextSource, saveFile: saveFileSource } = useAISources();
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourceMode, setSourceMode] = useState<'none' | 'text' | 'file'>('none');
+  const [loadingSourceContent, setLoadingSourceContent] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedSource = sources.find(s => s.id === selectedSourceId);
+
+  // Load source content when a saved source is selected
+  const handleSelectSource = useCallback(async (source: AISource | null) => {
+    if (!source) {
+      setSelectedSourceId(null);
+      setSourceText('');
+      setSourceFile(null);
+      setSourceMode('none');
+      return;
+    }
+    setSelectedSourceId(source.id);
+    if (source.source_type === 'text' && source.text_content) {
+      setSourceText(source.text_content);
+      setSourceMode('text');
+    } else if (source.source_type === 'file') {
+      setSourceMode('file');
+      // For files, we'll pass the source ID to the edge function
+    }
+  }, []);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSourceFile(file);
+    setSourceMode('file');
+    setSelectedSourceId(null);
+    // Auto-save source
+    if (user) {
+      saveFileSource.mutate(file);
+    }
+  }, [user, saveFileSource]);
+
+  // Get source content for the AI call
+  const getSourceContent = useCallback(async (): Promise<string | undefined> => {
+    if (sourceMode === 'text' && sourceText.trim()) return sourceText.trim();
+    if (sourceMode === 'file' && selectedSource?.text_content) return selectedSource.text_content;
+    if (sourceMode === 'file' && selectedSource?.file_path) {
+      try {
+        const { downloadSourceFileAsText } = await import('@/services/aiSourceService');
+        return await downloadSourceFileAsText(selectedSource);
+      } catch {
+        // If PDF or can't parse, return undefined — edge function can try
+        return undefined;
+      }
+    }
+    return undefined;
+  }, [sourceMode, sourceText, selectedSource]);
+
   // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
     queryKey: ['deck-card-count', deckId],
