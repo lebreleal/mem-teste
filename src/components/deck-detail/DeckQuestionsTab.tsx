@@ -1319,7 +1319,7 @@ const CreateQuestionDialog = ({
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button
                 onClick={() => aiGenerateMutation.mutate()}
-                disabled={cardCount === 0 || energy < aiCost}
+                disabled={(cardCount === 0 && sourceMode === 'none') || energy < aiCost}
                 className="gap-1.5"
               >
                 <Sparkles className="h-3.5 w-3.5" /> Gerar questões
