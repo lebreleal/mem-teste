@@ -60,7 +60,7 @@ const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
 const AdminTags = lazyRetry(() => import("./pages/AdminTags"));
 const AdminUsageReport = lazyRetry(() => import("./pages/AdminUsageReport"));
 const ErrorNotebook = lazyRetry(() => import("./pages/ErrorNotebook"));
-const Concepts = lazyRetry(() => import("./pages/Concepts"));
+
 const QuestionBank = lazyRetry(() => import("./pages/QuestionBank"));
 
 const Install = lazyRetry(() => import("./pages/Install"));
@@ -124,7 +124,7 @@ const App = () => (
                 <Route path="/ia" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
                 <Route path="/desempenho" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
                 <Route path="/caderno-de-erros" element={<ProtectedRoute><ErrorNotebook /></ProtectedRoute>} />
-                <Route path="/conceitos" element={<ProtectedRoute><Concepts /></ProtectedRoute>} />
+                
                 <Route path="/banco-questoes" element={<ProtectedRoute><QuestionBank /></ProtectedRoute>} />
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />

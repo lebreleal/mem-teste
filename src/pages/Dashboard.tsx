@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX, Library, BrainCircuit } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
@@ -260,7 +260,6 @@ const Dashboard = () => {
             { label: 'Provas', icon: BookOpen, path: '/exam/new' },
             { label: 'Questões', icon: Library, path: '/banco-questoes' },
             { label: 'Plano', icon: CalendarCheck, path: '/plano' },
-            { label: 'Conceitos', icon: BrainCircuit, path: '/conceitos' },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1 rounded-full border border-border/30 bg-muted/30 px-2.5 py-1 hover:bg-muted/60 transition-all shrink-0">
               <item.icon className="h-3 w-3 text-muted-foreground" />
@@ -274,13 +273,8 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* 📚 Meus Baralhos — collapsible deck management */}
-        <details className="mb-4 group">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden py-2">
-            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            📚 Gerenciar Baralhos
-          </summary>
-          <div className="mt-2 space-y-2">
+        {/* 📚 Meus Baralhos */}
+        <div className="mb-4 space-y-2">
 
             <DashboardActions
               mode="personal"
@@ -396,8 +390,7 @@ const Dashboard = () => {
                 )}
               </div>
             )}
-          </div>
-        </details>
+        </div>
       </main>
 
       <DashboardDialogs
