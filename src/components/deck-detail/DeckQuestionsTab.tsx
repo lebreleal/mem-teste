@@ -947,7 +947,7 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
-        const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
+        const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
