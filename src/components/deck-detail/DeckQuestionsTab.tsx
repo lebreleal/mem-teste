@@ -7,6 +7,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAISources, type AISource } from '@/hooks/useAISources';
+import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +30,7 @@ import {
   PenLine, Sparkles, Brain, Trash2, PlayCircle, Plus, X, Check,
   ChevronRight, AlertCircle, Scissors, Lightbulb, MessageSquareText, Loader2,
   BookX, Zap, Crown, Search, Filter, CheckCheck, MoreVertical, Eye, ArrowUpRight,
+  Upload, FileText, Clock,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
@@ -835,6 +838,64 @@ const CreateQuestionDialog = ({
   const [aiCustomInstructions, setAiCustomInstructions] = useState('');
   const [aiModel, setAiModel] = useState<'flash' | 'pro'>('flash');
 
+  // AI Source state
+  const { sources, saveText: saveTextSource, saveFile: saveFileSource } = useAISources();
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourceMode, setSourceMode] = useState<'none' | 'text' | 'file'>('none');
+  const [loadingSourceContent, setLoadingSourceContent] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedSource = sources.find(s => s.id === selectedSourceId);
+
+  // Load source content when a saved source is selected
+  const handleSelectSource = useCallback(async (source: AISource | null) => {
+    if (!source) {
+      setSelectedSourceId(null);
+      setSourceText('');
+      setSourceFile(null);
+      setSourceMode('none');
+      return;
+    }
+    setSelectedSourceId(source.id);
+    if (source.source_type === 'text' && source.text_content) {
+      setSourceText(source.text_content);
+      setSourceMode('text');
+    } else if (source.source_type === 'file') {
+      setSourceMode('file');
+      // For files, we'll pass the source ID to the edge function
+    }
+  }, []);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSourceFile(file);
+    setSourceMode('file');
+    setSelectedSourceId(null);
+    // Auto-save source
+    if (user) {
+      saveFileSource.mutate(file);
+    }
+  }, [user, saveFileSource]);
+
+  // Get source content for the AI call
+  const getSourceContent = useCallback(async (): Promise<string | undefined> => {
+    if (sourceMode === 'text' && sourceText.trim()) return sourceText.trim();
+    if (sourceMode === 'file' && selectedSource?.text_content) return selectedSource.text_content;
+    if (sourceMode === 'file' && selectedSource?.file_path) {
+      try {
+        const { downloadSourceFileAsText } = await import('@/services/aiSourceService');
+        return await downloadSourceFileAsText(selectedSource);
+      } catch {
+        // If PDF or can't parse, return undefined — edge function can try
+        return undefined;
+      }
+    }
+    return undefined;
+  }, [sourceMode, sourceText, selectedSource]);
+
   // Fetch card count for the deck (including sub-decks)
   const { data: cardCount = 0 } = useQuery({
     queryKey: ['deck-card-count', deckId],
@@ -926,11 +987,20 @@ const CreateQuestionDialog = ({
   const aiGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
-      if (cardCount === 0) throw new Error('Este baralho não tem cards para gerar questões');
+      if (cardCount === 0 && sourceMode === 'none') throw new Error('Adicione cards ou selecione uma fonte de referência');
       if (energy < aiCost) throw new Error(`Créditos insuficientes (necessário: ${aiCost})`);
 
       setAiGenerating(true);
       setGenerationStep(0);
+
+      // Get source content if available
+      const sourceContent = await getSourceContent();
+
+      // Auto-save text source if it's new
+      if (sourceMode === 'text' && sourceText.trim() && !selectedSourceId && user) {
+        const name = sourceText.trim().slice(0, 50).replace(/\n/g, ' ') + '...';
+        saveTextSource.mutate({ name, textContent: sourceText.trim() });
+      }
 
       // Simulate progress steps while waiting for AI
       const stepInterval = setInterval(() => {
@@ -945,6 +1015,7 @@ const CreateQuestionDialog = ({
             aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             energyCost: aiCost,
             customInstructions: aiCustomInstructions.trim() || undefined,
+            sourceContent: sourceContent || undefined,
           },
         });
 
@@ -1086,18 +1157,94 @@ const CreateQuestionDialog = ({
             <div className="rounded-xl border border-border/50 bg-muted/30 p-3.5">
               <p className="text-sm font-bold text-foreground">
                 A IA vai analisar os <span className="text-primary">{cardCount} cards</span> do baralho
+                {sourceMode !== 'none' && <span className="text-primary"> + fonte de referência</span>}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Cards com conceitos relacionados serão agrupados em questões integradas de raciocínio.
+                {sourceMode !== 'none'
+                  ? 'O material anexado será usado como contexto adicional para gerar questões mais ricas.'
+                  : 'Cards com conceitos relacionados serão agrupados em questões integradas de raciocínio.'}
               </p>
             </div>
 
-            {cardCount === 0 && (
+            {cardCount === 0 && sourceMode === 'none' && (
               <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                 <AlertCircle className="inline h-4 w-4 mr-1" />
-                Este baralho não tem cards. Adicione cards antes de gerar questões.
+                Este baralho não tem cards. Adicione cards ou anexe uma fonte de referência.
               </div>
             )}
+
+            {/* AI Source Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5 text-primary" />
+                Fonte de referência <span className="text-muted-foreground/60 font-normal">(opcional)</span>
+              </label>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <AISourceSelector
+                  selectedSourceId={selectedSourceId}
+                  onSelectSource={handleSelectSource}
+                />
+
+                {sourceMode === 'none' && (
+                  <>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"
+                      onClick={() => setSourceMode('text')}>
+                      <FileText className="h-3.5 w-3.5" /> Colar texto
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"
+                      onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-3.5 w-3.5" /> Enviar arquivo
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.doc,.docx"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                  </>
+                )}
+              </div>
+
+              {sourceMode === 'text' && !selectedSourceId && (
+                <div className="space-y-1.5">
+                  <Textarea
+                    value={sourceText}
+                    onChange={(e) => setSourceText(e.target.value)}
+                    placeholder="Cole aqui o texto de referência (resumo, anotações, conteúdo da aula...)"
+                    className="min-h-[80px] text-sm"
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      Fonte salva por até 30 dias para reutilização
+                    </p>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground"
+                      onClick={() => { setSourceMode('none'); setSourceText(''); }}>
+                      <X className="h-3 w-3 mr-1" /> Remover
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {sourceMode === 'file' && sourceFile && !selectedSourceId && (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <Upload className="h-4 w-4 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{sourceFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      Arquivo salvo por até 30 dias
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 px-1.5 text-muted-foreground"
+                    onClick={() => { setSourceMode('none'); setSourceFile(null); }}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* Model selector */}
             <div className="space-y-2">
@@ -1172,7 +1319,7 @@ const CreateQuestionDialog = ({
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button
                 onClick={() => aiGenerateMutation.mutate()}
-                disabled={cardCount === 0 || energy < aiCost}
+                disabled={(cardCount === 0 && sourceMode === 'none') || energy < aiCost}
                 className="gap-1.5"
               >
                 <Sparkles className="h-3.5 w-3.5" /> Gerar questões

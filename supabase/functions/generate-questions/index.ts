@@ -52,19 +52,19 @@ Deno.serve(async (req) => {
       aiModel = "flash",
       energyCost = 0,
       customInstructions = "",
+      sourceContent = "",
     } = body;
 
-    if (!deckId && (!rawCardIds || rawCardIds.length === 0)) {
-      return jsonResponse({ error: "deckId ou cardIds é obrigatório" }, 400);
+    if (!deckId && (!rawCardIds || rawCardIds.length === 0) && !sourceContent) {
+      return jsonResponse({ error: "deckId, cardIds ou sourceContent é obrigatório" }, 400);
     }
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "AI key não configurada" }, 500);
 
     // ─── Fetch cards: by cardIds or by deckId ───
-    let cards: any[];
+    let cards: any[] = [];
     if (rawCardIds && rawCardIds.length > 0) {
-      // Fetch specific cards by IDs (cross-deck deepening)
       const { data, error: cardsError } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type, deck_id')
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Erro ao buscar cards" }, 500);
       }
       cards = data || [];
-    } else {
+    } else if (deckId) {
       const { data, error: cardsError } = await supabase
         .rpc('get_descendant_cards_page', { p_deck_id: deckId, p_limit: 300, p_offset: 0 });
       if (cardsError) {
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       cards = data || [];
     }
 
-    if (!cards || cards.length === 0) return jsonResponse({ error: "Nenhum card encontrado" }, 400);
+    if (cards.length === 0 && !sourceContent) return jsonResponse({ error: "Nenhum card encontrado e nenhuma fonte de referência fornecida" }, 400);
 
     // ─── Deduct energy ───
     const cost = energyCost || 0;
@@ -151,7 +151,7 @@ TESTE DE QUALIDADE: Se um aluno pode acertar a questão SEM ter estudado o mater
 ## MÉTODO DE TRABALHO (siga EXATAMENTE nesta ordem):
 
 ### PASSO 1: ANÁLISE DE CONCEITOS
-Analise TODOS os ${cards.length} cartões e identifique os CONCEITOS-CHAVE presentes. Um conceito pode aparecer em vários cartões.
+Analise TODO o material disponível (cartões${sourceContent ? ' e material de referência' : ''}) e identifique os CONCEITOS-CHAVE presentes. Um conceito pode aparecer em vários cartões.
 
 ### PASSO 2: AGRUPAMENTO (CLUSTERING)
 Agrupe os cartões por afinidade conceitual. Cartões que compartilham temas, que são causa-efeito, que se complementam, ou que podem ser comparados devem ficar no MESMO grupo.
@@ -216,15 +216,20 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
       ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE se aplicável, em vez de criar novos sinônimos):\n${existingConceptNames.join(', ')}\n`
       : '';
 
-    const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
+    const sourceBlock = sourceContent
+      ? `\n\nMATERIAL DE REFERÊNCIA ANEXADO PELO ALUNO:\n---\n${(sourceContent as string).slice(0, 30000)}\n---\nUse este material como CONTEXTO PRINCIPAL para gerar questões. Os cartões acima complementam o material.\n`
+      : '';
 
-NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo do baralho.
+    const hasCards = cards.length > 0;
+    const cardBlock = hasCards
+      ? `CARTÕES DO BARALHO:\n---\n${cardSummaries}\n---\n`
+      : '';
+
+    const userPrompt = `${hasCards ? `Analise os ${cards.length} cartões${sourceContent ? ' e o material de referência' : ''} abaixo.` : 'Analise o material de referência abaixo.'} Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
+
+NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo.
 ${existingConceptsBlock}
-CARTÕES DO BARALHO:
----
-${cardSummaries}
----
-
+${cardBlock}${sourceBlock}
 ${customInstructions ? `INSTRUÇÕES ADICIONAIS DO USUÁRIO: ${customInstructions}\n` : ""}
 Para cada questão, retorne:
 - question_text: enunciado (pode usar HTML para formatação)
@@ -232,8 +237,8 @@ Para cada questão, retorne:
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
 - concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
-- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados. REGRA CRÍTICA: os pré-requisitos devem ser temas que APARECEM ou são IMPLÍCITOS nos próprios cartões fornecidos. NÃO invente temas genéricos aleatórios. Se os cartões falam de "Apoptose Fisiológica" e "Apoptose por Prevenção de Câncer", o pré-requisito seria "Apoptose" (tema comum). Se não há pré-requisito claro DENTRO do material, deixe vazio.
-- source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
+- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados. REGRA CRÍTICA: os pré-requisitos devem ser temas que APARECEM ou são IMPLÍCITOS no material fornecido. NÃO invente temas genéricos aleatórios.
+- source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima, ou [] se gerado apenas do material de referência)`;
 
     // ─── Tool schema for structured output ───
     const toolSchema = {
