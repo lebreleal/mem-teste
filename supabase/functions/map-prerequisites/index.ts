@@ -20,16 +20,25 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are a medical education expert that maps prerequisite relationships between Knowledge Components (concepts).
+    const systemPrompt = `You are a medical education expert that maps prerequisite and hierarchical relationships between Knowledge Components (concepts).
 
-Given a list of medical concepts, return prerequisite pairs where concept A is a prerequisite for concept B.
-Rules:
-- A prerequisite is a foundational concept that MUST be understood before learning the dependent concept.
+Given a list of concepts, return TWO types of relationships:
+1. PREREQUISITE pairs: concept A is a prerequisite for concept B (A must be understood before B)
+2. SIBLING groups: concepts that share a common parent theme and should be grouped together
+
+Rules for PREREQUISITES:
+- A prerequisite is a foundational concept that MUST be understood before the dependent concept.
 - Example: "Fisiologia Cardíaca" is prerequisite for "Insuficiência Cardíaca"
-- Only return relationships where the prerequisite is clearly foundational.
 - Each concept can have at most ONE prerequisite (the most important one).
-- Not every concept needs a prerequisite — orphan concepts are fine.
-- Return ONLY pairs where BOTH concept and prerequisite exist in the provided list.`;
+- Return ONLY pairs where BOTH concept and prerequisite exist in the provided list.
+
+Rules for SIBLING GROUPS:
+- If multiple concepts are clearly subtopics of the same theme, group them as siblings.
+- Example: "Apoptose Fisiológica", "Apoptose por Prevenção de Câncer", "Convergência via Apoptose" → siblings under parent "Apoptose"
+- The parent concept name MUST be a concept that ALREADY EXISTS in the provided list.
+- If no existing concept can serve as parent, suggest a NEW parent name via the "new_parents" field.
+- Sibling groups help connect isolated concepts that came from the same study material.
+- Only group concepts that are GENUINELY related — don't force unrelated concepts together.`;
 
     const userPrompt = `Here are the concepts to analyze:\n\n${conceptNames.map((n: string, i: number) => `${i + 1}. ${n}`).join('\n')}\n\nReturn prerequisite relationships.`;
 
