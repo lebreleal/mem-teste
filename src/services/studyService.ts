@@ -251,16 +251,66 @@ export async function submitCardReview(
     : null;
 
   if (algorithmMode === 'quick_review') {
+    const nowIso = new Date().toISOString();
     const newState = rating > 2 ? 2 : 1;
-    await supabase
-      .from('cards')
-      .update({ state: newState, last_reviewed_at: new Date().toISOString() } as any)
-      .eq('id', card.id);
-    await supabase.from('review_logs').insert({
-      user_id: userId, card_id: card.id, rating, stability: 0, difficulty: 0,
-      scheduled_date: new Date().toISOString(), elapsed_ms: cappedMs,
-    } as any);
-    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 1 };
+    const isRatingFail = rating === 1;
+    const isInErrorDeck = !!card.origin_deck_id;
+
+    const updatePayload: any = {
+      state: newState,
+      last_reviewed_at: nowIso,
+    };
+
+    let movedToError = false;
+    let returnedFromError = false;
+    let originDeckName: string | null = null;
+
+    if (isRatingFail && !isInErrorDeck) {
+      const errorDeckId = await getOrCreateErrorDeck(userId);
+      updatePayload.origin_deck_id = card.deck_id;
+      updatePayload.deck_id = errorDeckId;
+      movedToError = true;
+    }
+
+    if (newState === 2 && isInErrorDeck) {
+      updatePayload.deck_id = card.origin_deck_id;
+      updatePayload.origin_deck_id = null;
+      returnedFromError = true;
+
+      const { data: originDeck } = await supabase
+        .from('decks')
+        .select('name')
+        .eq('id', card.origin_deck_id)
+        .single();
+      originDeckName = originDeck?.name ?? null;
+    }
+
+    const [updateResult, logResult] = await Promise.all([
+      supabase.from('cards').update(updatePayload).eq('id', card.id),
+      supabase.from('review_logs').insert({
+        user_id: userId,
+        card_id: card.id,
+        rating,
+        stability: 0,
+        difficulty: 0,
+        scheduled_date: nowIso,
+        elapsed_ms: cappedMs,
+      } as any),
+    ]);
+
+    if (updateResult.error) throw updateResult.error;
+    if (logResult.error) throw logResult.error;
+
+    return {
+      state: newState,
+      stability: 0,
+      difficulty: 0,
+      scheduled_date: nowIso,
+      interval_days: 1,
+      movedToError,
+      returnedFromError,
+      originDeckName,
+    };
   }
 
   const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];

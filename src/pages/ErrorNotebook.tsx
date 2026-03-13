@@ -165,7 +165,7 @@ const ErrorNotebook = () => {
               Caderno de Erros
             </h1>
             <p className="text-xs text-muted-foreground">
-              {cards.length} cards · {dueCount} para revisar
+              {cards.length} itens · {dueCount} para revisar
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -222,7 +222,7 @@ const ErrorNotebook = () => {
             </div>
             <h3 className="font-display text-lg font-bold text-foreground">Nenhum erro!</h3>
             <p className="mt-1 text-sm text-muted-foreground max-w-xs">
-              Cards que você errar durante o estudo serão movidos automaticamente para cá.
+              Erros em cards e questões podem aparecer aqui para revisão rápida.
             </p>
             <Button variant="outline" className="mt-4" onClick={() => navigate('/dashboard')}>
               Voltar ao Dashboard
