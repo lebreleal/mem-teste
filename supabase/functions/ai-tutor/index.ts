@@ -84,7 +84,7 @@ Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
             { role: "system", content: "Você extrai conceitos de questões. Responda APENAS JSON." },
             { role: "user", content: cPrompt },
           ],
-          max_tokens: 300,
+          max_tokens: 600,
           temperature: 0.2,
         }),
       });
@@ -95,8 +95,20 @@ Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
       const rawText = cData.choices?.[0]?.message?.content || "[]";
       try {
         const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-        const concepts = JSON.parse(cleaned);
-        return jsonResponse({ concepts: Array.isArray(concepts) ? concepts.slice(0, 5) : [] });
+        const parsed = JSON.parse(cleaned);
+        if (!Array.isArray(parsed)) return jsonResponse({ concepts: [] });
+
+        // Support both old format (string[]) and new format ({name, description}[])
+        const concepts = parsed.slice(0, 5).map((item: any) => {
+          if (typeof item === 'string') return { name: item, description: null };
+          return { name: item.name || '', description: item.description || null };
+        }).filter((c: any) => c.name);
+
+        // Return both formats for backward compatibility
+        return jsonResponse({
+          concepts: concepts.map((c: any) => c.name),
+          conceptsWithDescriptions: concepts,
+        });
       } catch {
         return jsonResponse({ concepts: [] });
       }
