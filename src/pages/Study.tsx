@@ -539,10 +539,22 @@ const Study = () => {
                 : c
             ));
           }
+
+          // ── Fase 1a: Sync card review → concept mastery (non-blocking) ──
+          if (user) {
+            const isCorrect = rating >= 3;
+            getCardConcepts(card.id, user.id)
+              .then(concepts => {
+                for (const concept of concepts) {
+                  updateConceptMastery(concept.id, isCorrect).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }
         },
       }
     );
-  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;
