@@ -146,3 +146,12 @@
 - Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
 - Custo: ~500 tokens extras (~centavos)
 - RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
+
+### 19. Descrição Contextual por Questão (context_description)
+- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
+  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
+  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
+- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
+- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
+- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
+- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
