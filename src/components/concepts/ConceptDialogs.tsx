@@ -195,7 +195,7 @@ export const AddConceptDialog = ({ open, questionId, onClose }: AddConceptDialog
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Vincular conceito à questão</DialogTitle>
+          <DialogTitle>Vincular tema à questão</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
           Adicione esta questão a um conceito adicional (ex: uma questão de Clínica Médica que também serve para Oftalmologia).
