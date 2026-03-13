@@ -36,7 +36,9 @@ export function useExamCreateFlow() {
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { data: studyStats } = useStudyStats();
   const { addNotification, updateNotification } = useExamNotifications();
+  const { sources: aiSources, saveText: saveTextSource, saveFile: saveFileSource } = useAISources();
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   const { exam: existingExam, questions: existingQuestions, isLoading: examLoading } = useExamDetail(examId ?? '');
 
