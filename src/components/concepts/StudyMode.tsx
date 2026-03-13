@@ -118,13 +118,13 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   }
 
   // Confidence response handler — regular function (no useCallback) to avoid stale closures
-  function handleConfidence(wasConfident: boolean) {
+  async function handleConfidence(wasConfident: boolean) {
     setAwaitingConfidence(false);
 
     if (wasConfident) {
       const newStreak = consecutiveCorrect + 1;
       if (newStreak >= MASTERY_THRESHOLD) {
-        onRate(concept, 3, true);
+        try { await onRate(concept, 3, true); } catch (e) { console.error('onRate error:', e); }
         moveToNextConcept();
         return;
       }
@@ -138,7 +138,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       setGuessCount(newGuessCount);
 
       if (newGuessCount >= 2) {
-        onRate(concept, 2, true);
+        try { await onRate(concept, 2, true); } catch (e) { console.error('onRate error:', e); }
         moveToNextConcept();
         return;
       }
@@ -154,9 +154,9 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   };
 
   // After error + elaboration, advance — regular function
-  function handleAdvanceAfterError() {
+  async function handleAdvanceAfterError() {
     if (!concept || !user) return;
-    onRate(concept, 1, false);
+    try { await onRate(concept, 1, false); } catch (e) { console.error('onRate error:', e); }
     moveToNextConcept();
   }
 
