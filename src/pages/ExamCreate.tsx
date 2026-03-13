@@ -87,6 +87,8 @@ const ExamCreate = () => {
               exampleText={flow.exampleText} setExampleText={flow.setExampleText}
               exampleImageUrl={flow.exampleImageUrl} setExampleImageUrl={flow.setExampleImageUrl}
               exampleImageUploading={flow.exampleImageUploading} setExampleImageUploading={flow.setExampleImageUploading}
+              selectedSourceId={flow.selectedSourceId}
+              onLoadSource={flow.handleLoadSource}
             />
           )}
 
