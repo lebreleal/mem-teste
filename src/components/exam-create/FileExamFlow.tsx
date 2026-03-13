@@ -64,6 +64,7 @@ const FileExamFlow = ({
   onFileUpload, onTogglePage, onSelectAll, onDeselectAll, onContinueToConfig, onGenerate,
   exampleMode, setExampleMode, exampleText, setExampleText,
   exampleImageUrl, setExampleImageUrl, exampleImageUploading, setExampleImageUploading,
+  selectedSourceId, onLoadSource,
 }: FileExamFlowProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFilePages = filePages.filter(p => p.selected);
