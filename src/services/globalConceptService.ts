@@ -275,20 +275,21 @@ export async function linkQuestionsToConcepts(
     }
   }
 
-  // Build junction rows (deduplicated)
-  const rows: { question_id: string; concept_id: string }[] = [];
+  // Build junction rows with context_description (deduplicated)
+  const rows: { question_id: string; concept_id: string; context_description?: string }[] = [];
   const rowKeys = new Set<string>();
-  const addRow = (questionId: string, conceptId: string) => {
+  const addRow = (questionId: string, conceptId: string, slug?: string) => {
     const key = `${questionId}:${conceptId}`;
     if (rowKeys.has(key)) return;
     rowKeys.add(key);
-    rows.push({ question_id: questionId, concept_id: conceptId });
+    const ctxDesc = slug ? contextDescMap.get(`${questionId}:${slug}`) : undefined;
+    rows.push({ question_id: questionId, concept_id: conceptId, ...(ctxDesc ? { context_description: ctxDesc } : {}) });
   };
 
   for (const [questionId, slugs] of questionSlugMap.entries()) {
     for (const slug of slugs) {
       const conceptId = slugToId.get(slug);
-      if (conceptId) addRow(questionId, conceptId);
+      if (conceptId) addRow(questionId, conceptId, slug);
     }
   }
 
@@ -310,10 +311,10 @@ export async function linkQuestionsToConcepts(
 
   if (rows.length === 0) return;
 
-  // Upsert to avoid duplicates
+  // Upsert to avoid duplicates — update context_description if it changes
   await supabase
     .from('question_concepts' as any)
-    .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
+    .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: false });
 
   // ── Auto-trigger prerequisite mapping for newly created concepts ──
   // Pass the new concept slugs so mapping always runs when new concepts appear
