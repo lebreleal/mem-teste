@@ -60,20 +60,22 @@ type LeechInterruptionState = {
 
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
+  const isUnifiedMode = !deckId && !folderId; // /study/all route
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(isUnifiedMode ? '__all__' : (deckId ?? ''), folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     invalidateStudyQueries(queryClient);
-    if (deckId) navigate(`/decks/${deckId}`, { replace: true });
+    if (isUnifiedMode) navigate('/dashboard', { replace: true });
+    else if (deckId) navigate(`/decks/${deckId}`, { replace: true });
     else if (folderId) navigate(`/dashboard?folder=${folderId}`, { replace: true });
     else navigate('/dashboard', { replace: true });
-  }, [deckId, folderId, navigate, queryClient]);
+  }, [deckId, folderId, isUnifiedMode, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
   

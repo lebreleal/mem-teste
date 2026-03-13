@@ -39,7 +39,7 @@ const StudyNowHero = () => {
       return;
     }
     if (q.firstPendingDeckId) {
-      navigate(`/study/${q.firstPendingDeckId}`);
+      navigate('/study/all');
     }
   };
 
@@ -48,7 +48,7 @@ const StudyNowHero = () => {
     try { localStorage.setItem(DIAGNOSTIC_DONE_KEY, 'true'); } catch {}
     // After diagnostic, start studying
     if (q.firstPendingDeckId) {
-      navigate(`/study/${q.firstPendingDeckId}`);
+      navigate('/study/all');
     }
   };
 
