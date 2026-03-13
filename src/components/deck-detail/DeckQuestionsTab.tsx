@@ -89,6 +89,24 @@ const ConceptMasterySection = ({
   const [conceptDescriptions, setConceptDescriptions] = useState<Record<string, string>>({});
   const { energy, spendEnergy } = useEnergy();
   const { toast } = useToast();
+  const { decks } = useDecks();
+
+  const deckScopeIds = useMemo(() => {
+    if (!decks || decks.length === 0) return [deckId];
+    const result = new Set<string>([deckId]);
+    const queue = [deckId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const children = decks.filter(d => d.parent_deck_id === current && !d.is_archived);
+      for (const child of children) {
+        if (!result.has(child.id)) {
+          result.add(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+    return [...result];
+  }, [decks, deckId]);
 
   // Fetch context descriptions from question_concepts (how each concept relates to THIS question)
   useEffect(() => {
@@ -150,7 +168,7 @@ const ConceptMasterySection = ({
       const { data } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type')
-        .eq('deck_id', deckId)
+        .in('deck_id', deckScopeIds)
         .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
         .limit(5);
 
