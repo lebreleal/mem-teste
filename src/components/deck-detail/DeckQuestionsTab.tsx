@@ -7,6 +7,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAISources, type AISource } from '@/hooks/useAISources';
+import AISourceSelector from '@/components/AISourceSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
