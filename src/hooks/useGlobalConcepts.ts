@@ -110,6 +110,16 @@ export const useGlobalConcepts = () => {
     },
   });
 
+  // Count new themes studied today (reviewed today for the first time)
+  const newThemesStudiedToday = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return (allQuery.data ?? []).filter(c =>
+      c.last_reviewed_at && c.last_reviewed_at.slice(0, 10) === today && c.state !== 0
+    ).length;
+  }, [allQuery.data]);
+
+  const newThemeRemaining = Math.max(0, DAILY_NEW_THEME_LIMIT - newThemesStudiedToday);
+
   return {
     concepts: allQuery.data ?? [],
     dueConcepts: dueQuery.data ?? [],
@@ -120,5 +130,7 @@ export const useGlobalConcepts = () => {
     updateMeta,
     deleteConcept,
     unlinkQuestion,
+    newThemeRemaining,
+    DAILY_NEW_THEME_LIMIT,
   };
 };
