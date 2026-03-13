@@ -377,7 +377,7 @@ export async function importQuestionsToDecks(
         }));
 
       if (pairs.length > 0) {
-        await linkQuestionsToConcepts(userId, pairs);
+        await linkQuestionsToConcepts(userId, pairs, { denseBatchLinking: true });
       }
 
       const conceptNames = new Set<string>();
