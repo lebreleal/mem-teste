@@ -92,12 +92,12 @@ ${qOpts}
 ${reuseBlock}
 Para CADA conceito, forneça:
 - "name": nome curto (2-6 palavras), específico e reutilizável (ex: "Critérios de Light", "Fisiopatologia da ICC")
-- "description": uma frase concisa (15-30 palavras) que explique O QUE é esse conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de "retrieval cue" — ajude o aluno a ativar o conhecimento correto para autoavaliar se realmente domina o tema.
+- "description": frase concisa (15-30 palavras) explicando COMO este conceito se aplica NESTA QUESTÃO ESPECÍFICA. Não defina o conceito genericamente — explique o que o aluno precisa saber SOBRE este conceito PARA acertar esta questão. Ex: "Nesta questão, aplicar os critérios de Light ao caso permite diferenciar exsudato de transudato."
 
 Exemplo:
 [
-  {"name": "Critérios de Light", "description": "Parâmetros bioquímicos (proteína e LDH) que diferenciam exsudato de transudato pleural. A questão exige aplicar esses critérios ao caso clínico."},
-  {"name": "Derrame Pleural Transudativo", "description": "Acúmulo de líquido por desequilíbrio hidrostático/oncótico (ICC, cirrose). Identificar a etiologia é essencial para a alternativa correta."}
+  {"name": "Critérios de Light", "description": "Nesta questão, aplicar os critérios de Light ao caso clínico permite diferenciar exsudato de transudato e identificar a etiologia do derrame."},
+  {"name": "Derrame Pleural Transudativo", "description": "Reconhecer que o desequilíbrio hidrostático (ICC, cirrose) causa transudato é essencial para eliminar as alternativas incorretas."}
 ]
 
 Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;

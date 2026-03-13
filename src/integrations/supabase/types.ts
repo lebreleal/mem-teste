@@ -1612,18 +1612,21 @@ export type Database = {
       question_concepts: {
         Row: {
           concept_id: string
+          context_description: string | null
           created_at: string
           id: string
           question_id: string
         }
         Insert: {
           concept_id: string
+          context_description?: string | null
           created_at?: string
           id?: string
           question_id: string
         }
         Update: {
           concept_id?: string
+          context_description?: string | null
           created_at?: string
           id?: string
           question_id?: string

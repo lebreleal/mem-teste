@@ -169,7 +169,13 @@ Regras:
 Exemplos CORRETOS: "Mecanismo de ação dos IECA", "Critérios de Light", "Diferença abscesso vs flegmão"
 Exemplos ERRADOS: "Cardiologia" (amplo demais), "Dose de Captopril 25mg" (fato isolado), "Você entendeu X?" (pergunta, não conceito)
 
-## EXPLICAÇÃO:
+## CONCEPT_DESCRIPTIONS — RELAÇÃO CONCEITO↔QUESTÃO:
+O campo "concept_descriptions" descreve COMO cada conceito se aplica NESTA questão específica.
+- NÃO defina o conceito genericamente (isso o aluno pode pesquisar)
+- EXPLIQUE o que o aluno precisa saber sobre este conceito PARA acertar esta questão
+- 15-30 palavras por descrição
+- Ajude o aluno a avaliar se realmente domina este aspecto do tema
+
 A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 - Comece com uma frase-resumo da resposta correta
 - Explique POR QUE cada alternativa incorreta está errada
@@ -238,12 +244,12 @@ Para cada questão, retorne:
                   type: "object",
                   properties: {
                     name: { type: "string", description: "Nome do conceito (deve corresponder ao array concepts)" },
-                    description: { type: "string", description: "Frase concisa (15-30 palavras) que explique O QUE é o conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de 'retrieval cue' — ajude o aluno a ativar o conhecimento correto." },
+                    description: { type: "string", description: "Frase concisa (15-30 palavras) explicando COMO este conceito se aplica NESTA QUESTÃO ESPECÍFICA. Não defina o conceito genericamente — explique o que o aluno precisa saber SOBRE este conceito PARA acertar esta questão. Ex: 'Nesta questão, aplicar os critérios de Light ao caso clínico permite diferenciar exsudato de transudato e identificar a etiologia.'" },
                   },
                   required: ["name", "description"],
                   additionalProperties: false,
                 },
-                description: "Descrição de cada conceito com contexto da questão. Deve ter o mesmo comprimento do array concepts.",
+                description: "Descrição contextual de como cada conceito se relaciona com ESTA questão específica. Mesmo comprimento do array concepts.",
               },
               prerequisites: {
                 type: "array",

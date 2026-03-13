@@ -85,32 +85,42 @@ const ConceptMasterySection = ({
   const { energy, spendEnergy } = useEnergy();
   const { toast } = useToast();
 
-  // Fetch concept descriptions from global_concepts
+  // Fetch context descriptions from question_concepts (how each concept relates to THIS question)
   useEffect(() => {
-    if (!concepts || concepts.length === 0) return;
+    if (!concepts || concepts.length === 0 || !questionId) return;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const slugs = concepts.map(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR'));
-      const { data } = await supabase
+      // Get concept IDs for this question from question_concepts
+      const { data: links } = await supabase
+        .from('question_concepts' as any)
+        .select('concept_id, context_description')
+        .eq('question_id', questionId);
+      if (!links || (links as any[]).length === 0) return;
+
+      const conceptIds = (links as any[]).filter(l => l.context_description).map(l => l.concept_id);
+      if (conceptIds.length === 0) return;
+
+      // Get concept names to map back
+      const { data: gcData } = await supabase
         .from('global_concepts' as any)
-        .select('name, slug, description')
-        .eq('user_id', user.id)
-        .in('slug', slugs);
-      if (data) {
-        const descMap: Record<string, string> = {};
-        for (const row of data as any[]) {
-          if (row.description) {
-            descMap[row.name] = row.description;
-            // Also map by slug match to original concept name
-            const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === row.slug);
-            if (matchedConcept) descMap[matchedConcept] = row.description;
-          }
+        .select('id, name, slug')
+        .in('id', conceptIds);
+
+      const descMap: Record<string, string> = {};
+      for (const link of links as any[]) {
+        if (!link.context_description) continue;
+        const gc = (gcData as any[] ?? []).find(g => g.id === link.concept_id);
+        if (gc) {
+          descMap[gc.name] = link.context_description;
+          // Also map by original concept name match
+          const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === gc.slug);
+          if (matchedConcept) descMap[matchedConcept] = link.context_description;
         }
-        setConceptDescriptions(descMap);
       }
+      setConceptDescriptions(descMap);
     })();
-  }, [concepts]);
+  }, [concepts, questionId]);
 
   if (!concepts || concepts.length === 0) return null;
 
