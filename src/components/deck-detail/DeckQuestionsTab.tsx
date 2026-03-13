@@ -1261,6 +1261,7 @@ const DeckQuestionsTab = ({
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { decks } = useDecks();
   const [createOpen, setCreateOpen] = useState(!!autoCreate);
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
   const [practicing, setPracticing] = useState(!!autoStart);
