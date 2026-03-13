@@ -464,7 +464,7 @@ const QuestionPractice = ({
     }
 
     queryClient.invalidateQueries({ queryKey: ['question-attempts', deckId] });
-  }, [selected, q, user, deckId, conceptMastery, queryClient]);
+  }, [selected, q, user, deckId, queryClient]);
 
   const handleNext = useCallback(() => {
     if (index >= questions.length - 1) { setFinished(true); return; }
