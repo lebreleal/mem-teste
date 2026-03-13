@@ -41,7 +41,8 @@ import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
-
+import MiniStatsStrip from '@/components/dashboard/MiniStatsStrip';
+import DashboardDueThemes from '@/components/dashboard/DashboardDueThemes';
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useMissions } from '@/hooks/useMissions';
