@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, BrainCircuit, Gauge } from 'lucide-react';
+import { Home, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
