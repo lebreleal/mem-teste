@@ -278,22 +278,9 @@ const Dashboard = () => {
         <details className="mb-4 group">
           <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden py-2">
             <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            📚 Meus Baralhos
+            📚 Gerenciar Baralhos
           </summary>
           <div className="mt-2 space-y-2">
-            {allDecks && (
-              <DeckCarousel
-                decks={allDecks}
-                avgSecondsPerCard={avgSecondsPerCard}
-                studyMetrics={realStudyMetrics}
-                hasPlan={hasPlan}
-                planDeckIds={planDeckIds}
-                planDeckOrder={planDeckOrderEarly}
-                plansByDeckId={plansByDeckId}
-                globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
-                distributedNewByDeck={state.distributedNewByDeck}
-              />
-            )}
 
             <DashboardActions
               mode="personal"
