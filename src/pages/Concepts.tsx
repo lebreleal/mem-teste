@@ -396,8 +396,8 @@ const ConceptsPage = () => {
             ) : concepts.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
                 <BrainCircuit className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-                <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito ainda</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Gere questões nos seus baralhos ou importe das abas Oficiais/Comunidade.</p>
+                <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema ainda</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Gere questões nos seus baralhos — os temas serão criados automaticamente.</p>
               </div>
             ) : (
               <>
