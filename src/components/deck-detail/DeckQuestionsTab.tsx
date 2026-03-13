@@ -986,11 +986,20 @@ const CreateQuestionDialog = ({
   const aiGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
-      if (cardCount === 0) throw new Error('Este baralho não tem cards para gerar questões');
+      if (cardCount === 0 && sourceMode === 'none') throw new Error('Adicione cards ou selecione uma fonte de referência');
       if (energy < aiCost) throw new Error(`Créditos insuficientes (necessário: ${aiCost})`);
 
       setAiGenerating(true);
       setGenerationStep(0);
+
+      // Get source content if available
+      const sourceContent = await getSourceContent();
+
+      // Auto-save text source if it's new
+      if (sourceMode === 'text' && sourceText.trim() && !selectedSourceId && user) {
+        const name = sourceText.trim().slice(0, 50).replace(/\n/g, ' ') + '...';
+        saveTextSource.mutate({ name, textContent: sourceText.trim() });
+      }
 
       // Simulate progress steps while waiting for AI
       const stepInterval = setInterval(() => {
@@ -1005,6 +1014,7 @@ const CreateQuestionDialog = ({
             aiModel: aiModel === 'pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             energyCost: aiCost,
             customInstructions: aiCustomInstructions.trim() || undefined,
+            sourceContent: sourceContent || undefined,
           },
         });
 
