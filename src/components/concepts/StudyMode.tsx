@@ -323,7 +323,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
                   </div>
                 )}
                 <Button className="w-full" onClick={handleAdvanceAfterError}>
-                  {index + 1 >= queue.length ? 'Finalizar' : 'Próximo conceito'}
+                  {index + 1 >= queue.length ? 'Finalizar' : 'Próximo tema'}
                 </Button>
               </div>
             )}

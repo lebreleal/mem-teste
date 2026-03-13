@@ -202,7 +202,7 @@ export const AddConceptDialog = ({ open, questionId, onClose }: AddConceptDialog
         </p>
         <div className="space-y-3 mt-2">
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do conceito</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do tema</label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Hipertensão intracraniana" autoFocus />
           </div>
           <div>

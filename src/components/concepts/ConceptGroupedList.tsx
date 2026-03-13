@@ -149,7 +149,7 @@ const ConceptGroupedList = ({
   if (concepts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
-        <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito encontrado</h3>
+        <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema encontrado</h3>
         <p className="mt-1 text-sm text-muted-foreground">Tente ajustar os filtros.</p>
       </div>
     );

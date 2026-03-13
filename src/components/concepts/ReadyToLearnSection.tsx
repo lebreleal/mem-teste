@@ -29,7 +29,7 @@ const ReadyToLearnSection = ({ onStartStudy }: ReadyToLearnSectionProps) => {
         <Badge variant="secondary" className="text-[9px] ml-auto">{readyConcepts.length}</Badge>
       </div>
       <p className="text-[10px] text-muted-foreground">
-        Conceitos cujos pré-requisitos já foram dominados — a fronteira do seu conhecimento.
+        Temas cujos pré-requisitos já foram dominados — a fronteira do seu conhecimento.
       </p>
       <div className="flex flex-wrap gap-1.5">
         {readyConcepts.slice(0, 8).map(c => (

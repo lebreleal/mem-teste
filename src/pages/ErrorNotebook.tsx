@@ -250,7 +250,7 @@ const ErrorNotebook = () => {
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Estude cada conceito com questões variadas até dominá-lo. O FSRS agenda revisões no tempo ideal.
+                  Estude cada tema com questões variadas até dominá-lo. O FSRS agenda revisões no tempo ideal.
                 </p>
                 <Button
                   className="w-full gap-2"

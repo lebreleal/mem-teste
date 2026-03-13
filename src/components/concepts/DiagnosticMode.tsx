@@ -116,7 +116,7 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
           <p className="text-sm font-semibold text-foreground truncate">
             {consecutiveCorrect > 0
               ? `Acerto ${consecutiveCorrect}/${MASTERY_THRESHOLD}`
-              : `Conceito ${index + 1}/${queue.length}`}
+              : `Tema ${index + 1}/${queue.length}`}
           </p>
         </div>
         <Badge variant="outline" className="text-[10px]">
