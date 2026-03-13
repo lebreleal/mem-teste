@@ -543,6 +543,53 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     }));
   }, []);
 
+  // === Load from saved AI source ===
+  const handleLoadSource = useCallback(async (source: AISource | null) => {
+    if (!source) {
+      setSelectedSourceId(null);
+      return;
+    }
+    setSelectedSourceId(source.id);
+
+    if (source.source_type === 'text' && source.text_content) {
+      setRawText(source.text_content);
+      if (!deckName) setDeckName(source.name);
+      const textPages = splitTextIntoPages(source.text_content);
+      setPages(textPages.map(p => ({ ...p, selected: true })));
+      setInputMode('text');
+      setStep('pages');
+    } else if (source.source_type === 'file' && source.file_path) {
+      // Download and re-parse the file
+      if (!deckName) setDeckName(source.name.replace(/\.[^/.]+$/, ''));
+      setFileName(source.name);
+      setInputMode('file');
+      setStep('loading-pages');
+      try {
+        const { data: blob, error } = await supabase.storage
+          .from('ai-sources')
+          .download(source.file_path);
+        if (error || !blob) throw error || new Error('Download failed');
+
+        const isPdf = source.mime_type === 'application/pdf' || source.file_path.endsWith('.pdf');
+        if (isPdf) {
+          const file = new File([blob], source.name, { type: 'application/pdf' });
+          const pdfPages = await extractPDFPages(file, (cur, tot) => setLoadProgress({ current: cur, total: tot }));
+          setPages(pdfPages.map(p => ({ ...p, selected: true })));
+          setStep('pages');
+        } else {
+          const text = await blob.text();
+          const textPages = splitTextIntoPages(text);
+          setPages(textPages.map(p => ({ ...p, selected: true })));
+          setStep('pages');
+        }
+      } catch (err) {
+        console.error('Error loading source file:', err);
+        toast({ title: 'Erro ao carregar fonte', description: 'Tente enviar o arquivo novamente.', variant: 'destructive' });
+        setStep('upload');
+      }
+    }
+  }, [deckName, toast]);
+
   return {
     // State
     step, setStep, deckName, setDeckName, inputMode, setInputMode, fileName, rawText, setRawText,
@@ -553,6 +600,8 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     selectedPages, totalCredits, energy, model, setModel, isPremium,
     pendingPro, confirmPro, cancelPro,
     textSample: textSampleRef.current,
+    // AI Sources
+    aiSources, selectedSourceId, handleLoadSource,
     // Actions
     resetState, handleFileSelect, handleTextContinue, togglePage, selectAll, deselectAll,
     handleGenerate, handleSave, handleDismissToBackground,
