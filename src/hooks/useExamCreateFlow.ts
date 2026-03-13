@@ -14,10 +14,12 @@ import { useStudyStats } from '@/hooks/useStudyStats';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAISources, type AISource } from '@/hooks/useAISources';
 
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { fetchCards } from '@/services/cardService';
 import { invokeGenerateExamQuestions } from '@/services/aiService';
+import { supabase } from '@/integrations/supabase/client';
 import { createEmptyQuestion, type CreationMode, type ManualQuestion, type ManualQuestionType, type PageItem } from '@/components/exam-create/types';
 
 export function useExamCreateFlow() {
