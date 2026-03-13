@@ -151,7 +151,7 @@ TESTE DE QUALIDADE: Se um aluno pode acertar a questão SEM ter estudado o mater
 ## MÉTODO DE TRABALHO (siga EXATAMENTE nesta ordem):
 
 ### PASSO 1: ANÁLISE DE CONCEITOS
-Analise TODOS os ${cards.length} cartões e identifique os CONCEITOS-CHAVE presentes. Um conceito pode aparecer em vários cartões.
+Analise TODO o material disponível (cartões${sourceContent ? ' e material de referência' : ''}) e identifique os CONCEITOS-CHAVE presentes. Um conceito pode aparecer em vários cartões.
 
 ### PASSO 2: AGRUPAMENTO (CLUSTERING)
 Agrupe os cartões por afinidade conceitual. Cartões que compartilham temas, que são causa-efeito, que se complementam, ou que podem ser comparados devem ficar no MESMO grupo.
