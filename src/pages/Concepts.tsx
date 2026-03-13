@@ -33,7 +33,7 @@ import type { StateFilter } from '@/components/concepts/helpers';
 import DiagnosticMode from '@/components/concepts/DiagnosticMode';
 import StudyMode from '@/components/concepts/StudyMode';
 import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
-import ReadyToLearnSection from '@/components/concepts/ReadyToLearnSection';
+// ReadyToLearnSection is now integrated into ConceptGroupedList
 import ConceptListItem from '@/components/concepts/ConceptListItem';
 import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
