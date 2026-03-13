@@ -208,6 +208,9 @@ const ConceptsPage = () => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Detail sheet (tapped node)
+  const [detailConcept, setDetailConcept] = useState<GlobalConcept | null>(null);
+
   // Edit dialog
   const [editConcept, setEditConcept] = useState<GlobalConcept | null>(null);
 
