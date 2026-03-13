@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { getVariedQuestion } from '@/services/globalConceptService';
+import { getOrGenerateQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { X as XIcon, BrainCircuit } from 'lucide-react';
+import { X as XIcon, BrainCircuit, Wand2 } from 'lucide-react';
 import type { Rating } from '@/lib/fsrs';
 
 interface StudyModeProps {
@@ -22,16 +22,32 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   // Load first question on mount
   useState(() => {
     if (queue.length > 0 && user) {
-      getVariedQuestion(queue[0].id, user.id)
-        .then(q => setQuestion(q))
-        .catch(() => setQuestion(null))
-        .finally(() => setLoading(false));
+      loadQuestion(queue[0]);
     }
   });
+
+  async function loadQuestion(concept: GlobalConcept) {
+    setLoading(true);
+    setGenerating(false);
+    try {
+      const result = await getOrGenerateQuestion(concept.id, user!.id, concept.name, concept.category);
+      if (result.wasGenerated && !result.question) {
+        // Generation failed
+        setQuestion(null);
+      } else {
+        if (result.wasGenerated) setGenerating(true);
+        setQuestion(result.question);
+      }
+    } catch {
+      setQuestion(null);
+    }
+    setLoading(false);
+  }
 
   const concept = queue[index];
   const isCorrect = question?.correctIndices?.includes(selectedOption) ?? false;
@@ -55,12 +71,8 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     setIndex(nextIdx);
     setSelectedOption(null);
     setConfirmed(false);
-    setLoading(true);
-    try {
-      const q = await getVariedQuestion(queue[nextIdx].id, user.id);
-      setQuestion(q);
-    } catch { setQuestion(null); }
-    setLoading(false);
+    setGenerating(false);
+    loadQuestion(queue[nextIdx]);
   }, [queue, index, question, selectedOption, onRate, user, concept, onClose]);
 
   return (
@@ -82,6 +94,10 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
         {loading ? (
           <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Wand2 className="h-4 w-4 animate-spin" />
+              <span>Buscando questão{generating ? '' : '...'}</span>
+            </div>
             <Skeleton className="h-20 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
@@ -90,12 +106,18 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
           <Card>
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Nenhuma questão vinculada a este conceito.</p>
+              <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este conceito.</p>
               <Button variant="outline" className="mt-4" onClick={() => handleRate(3)}>Pular</Button>
             </CardContent>
           </Card>
         ) : (
           <>
+            {generating && (
+              <div className="flex items-center gap-1.5 text-[10px] text-primary">
+                <Wand2 className="h-3 w-3" />
+                <span>Questão gerada automaticamente por IA</span>
+              </div>
+            )}
             <Card className="border-border/50">
               <CardContent className="pt-4 pb-3">
                 <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{question.questionText}</p>

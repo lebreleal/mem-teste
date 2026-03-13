@@ -9,7 +9,7 @@ import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import {
   MEDICAL_CATEGORIES, CATEGORY_SUBCATEGORIES, getConceptQuestions,
-  getVariedQuestion, fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
+  fetchOfficialConcepts, fetchCommunityConcepts, importConcept, importConceptWithContent,
   mapPrerequisitesViaAI, fetchDiagnosticConcepts,
 } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
