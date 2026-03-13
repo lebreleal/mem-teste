@@ -63,8 +63,8 @@ const OficiaisTab = () => {
     setImporting(concept.id);
     try {
       await importConcept(user.id, { name: concept.name, conceptTagId: concept.id });
-      toast.success(`"${concept.name}" adicionado aos seus conceitos`);
-    } catch { toast.error('Erro ao importar conceito'); }
+      toast.success(`"${concept.name}" adicionado aos seus temas`);
+    } catch { toast.error('Erro ao importar tema'); }
     setImporting(null);
   };
 
