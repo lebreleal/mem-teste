@@ -1178,14 +1178,17 @@ export async function markConceptMastered(conceptId: string) {
   const params = { ...DEFAULT_FSRS_PARAMS, learningSteps: [10, 1440], relearningSteps: [10] };
 
   // First "Good" on a new card → enters learning
+  // Simulate review happened 10 minutes ago (matching learningSteps[0])
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const first = fsrsSchedule(
-    { stability: 0, difficulty: 0, state: 0, scheduled_date: new Date().toISOString(), learning_step: 0 },
+    { stability: 0, difficulty: 0, state: 0, scheduled_date: tenMinAgo, learning_step: 0 },
     3, params,
   );
 
-  // Second "Good" → graduates or advances
+  // Second "Good" → graduates (simulate 1440 min / 24h elapsed matching learningSteps[1])
+  const dayAgo = new Date(Date.now() - 1440 * 60 * 1000).toISOString();
   const second = fsrsSchedule(
-    { stability: first.stability, difficulty: first.difficulty, state: first.state, scheduled_date: first.scheduled_date, learning_step: first.learning_step, last_reviewed_at: new Date().toISOString() },
+    { stability: first.stability, difficulty: first.difficulty, state: first.state, scheduled_date: new Date().toISOString(), learning_step: first.learning_step, last_reviewed_at: dayAgo },
     3, params,
   );
 
