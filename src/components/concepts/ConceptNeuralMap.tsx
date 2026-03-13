@@ -269,7 +269,7 @@ export default function ConceptNeuralMap({
   if (concepts.length === 0) return null;
 
   return (
-    <div className="relative rounded-xl border border-border/60 bg-muted/20 overflow-hidden" style={{ height: '60vh', minHeight: 350 }}>
+    <div className="relative rounded-xl border border-border/60 bg-muted/20 overflow-hidden" style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
       {/* Zoom controls */}
       <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
         <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm" onClick={zoomIn}>
