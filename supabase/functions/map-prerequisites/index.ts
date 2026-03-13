@@ -58,12 +58,13 @@ Rules for SIBLING GROUPS:
           type: "function",
           function: {
             name: "map_prerequisites",
-            description: "Map prerequisite relationships between concepts",
+            description: "Map prerequisite and sibling relationships between concepts",
             parameters: {
               type: "object",
               properties: {
                 pairs: {
                   type: "array",
+                  description: "Direct prerequisite relationships (A is prerequisite of B)",
                   items: {
                     type: "object",
                     properties: {
@@ -74,8 +75,26 @@ Rules for SIBLING GROUPS:
                     additionalProperties: false,
                   },
                 },
+                sibling_groups: {
+                  type: "array",
+                  description: "Groups of concepts that share a common parent theme",
+                  items: {
+                    type: "object",
+                    properties: {
+                      parent_name: { type: "string", description: "Name of the parent concept (existing from list OR new)" },
+                      parent_exists: { type: "boolean", description: "true if parent_name exists in the provided list, false if it's a new suggested parent" },
+                      children: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Exact names from the list that are children of this parent",
+                      },
+                    },
+                    required: ["parent_name", "parent_exists", "children"],
+                    additionalProperties: false,
+                  },
+                },
               },
-              required: ["pairs"],
+              required: ["pairs", "sibling_groups"],
               additionalProperties: false,
             },
           },
