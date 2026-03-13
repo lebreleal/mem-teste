@@ -206,55 +206,65 @@ const Dashboard = () => {
       />
 
       <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
-        {/* Quick Nav — compact row */}
-        <div className="mb-4 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        {/* ▶ ESTUDAR AGORA — Single dominant CTA (the ONLY thing above the fold) */}
+        <StudyNowHero />
+
+        {/* Everything else is below the fold, inside collapsible sections */}
+
+        {/* Caderno de Erros — subtle inline, not a banner */}
+        {errorCount > 0 && (
+          <button
+            onClick={() => navigate('/caderno-de-erros')}
+            className="mb-3 w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <BookX className="h-3.5 w-3.5 text-destructive/60" />
+            <span>{errorCount} {errorCount === 1 ? 'questão errada' : 'questões erradas'} para revisar</span>
+            <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
+          </button>
+        )}
+
+        {/* Quick access — compact, BELOW the CTA */}
+        <div className="mb-4 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
           {[
-            { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
+            { label: 'Comunidade', icon: Users, path: '/turmas' },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
-            { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
-            { label: 'Questões', icon: Library, path: '/banco-questoes', badge: 0 },
-            { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
+            { label: 'Provas', icon: BookOpen, path: '/exam/new' },
+            { label: 'Questões', icon: Library, path: '/banco-questoes' },
+            { label: 'Plano', icon: CalendarCheck, path: '/plano' },
+            { label: 'Conceitos', icon: BrainCircuit, path: '/conceitos' },
           ].map(item => (
-            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-3 py-1.5 shadow-sm hover:bg-muted/50 transition-all shrink-0">
-              <item.icon className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-semibold text-foreground whitespace-nowrap">{item.label}</span>
-              {item.badge > 0 && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-                  {item.badge}
+            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1 rounded-full border border-border/30 bg-muted/30 px-2.5 py-1 hover:bg-muted/60 transition-all shrink-0">
+              <item.icon className="h-3 w-3 text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">{item.label}</span>
+              {'badge' in item && (item as any).badge > 0 && (
+                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                  {(item as any).badge}
                 </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* Mini Stats Strip */}
-        <div className="mb-4">
-          <MiniStatsStrip />
-        </div>
-
-        {/* ▶ ESTUDAR AGORA — Single dominant CTA */}
-        <StudyNowHero />
-
-        {/* Collapsible Deck Carousel */}
-        {allDecks && (
-          <details className="mb-4 group" open={false}>
-            <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden mb-2">
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-              📚 Meus Baralhos
-            </summary>
-            <DeckCarousel
-              decks={allDecks}
-              avgSecondsPerCard={avgSecondsPerCard}
-              studyMetrics={realStudyMetrics}
-              hasPlan={hasPlan}
-              planDeckIds={planDeckIds}
-              planDeckOrder={planDeckOrderEarly}
-              plansByDeckId={plansByDeckId}
-              globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
-              distributedNewByDeck={state.distributedNewByDeck}
-            />
-          </details>
-        )}
+        {/* 📚 Meus Baralhos — collapsible deck management */}
+        <details className="mb-4 group">
+          <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden py-2">
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            📚 Meus Baralhos
+          </summary>
+          <div className="mt-2 space-y-2">
+            {allDecks && (
+              <DeckCarousel
+                decks={allDecks}
+                avgSecondsPerCard={avgSecondsPerCard}
+                studyMetrics={realStudyMetrics}
+                hasPlan={hasPlan}
+                planDeckIds={planDeckIds}
+                planDeckOrder={planDeckOrderEarly}
+                plansByDeckId={plansByDeckId}
+                globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+                distributedNewByDeck={state.distributedNewByDeck}
+              />
+            )}
 
         <DashboardActions
           mode="personal"
