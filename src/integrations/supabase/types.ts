@@ -2701,6 +2701,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ai_sources: {
+        Row: {
+          created_at: string
+          expires_at: string
+          file_path: string | null
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          name: string
+          source_type: string
+          text_content: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name: string
+          source_type?: string
+          text_content?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name?: string
+          source_type?: string
+          text_content?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_card_metadata: {
         Row: {
           card_id: string
