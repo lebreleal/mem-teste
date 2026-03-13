@@ -698,6 +698,7 @@ export async function fetchCommunityConcepts(userId: string): Promise<GlobalConc
       wrong_count: 0,
       parent_concept_id: null,
       concept_tag_id: t.id,
+      description: null,
       created_at: '',
       updated_at: '',
     })) as GlobalConcept[];
