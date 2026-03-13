@@ -515,35 +515,19 @@ const ConceptsPage = () => {
                   </div>
                 )}
 
-                {/* Ready-to-Learn Frontier */}
-                <ReadyToLearnSection onStartStudy={handleStartFrontierStudy} />
-
-                {/* Concept list */}
-                <div className="space-y-2.5">
-                  {filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
-                      <h3 className="font-display text-lg font-semibold text-foreground">{hasActiveFilter ? 'Nenhum conceito encontrado' : 'Nenhum conceito'}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{hasActiveFilter ? 'Tente ajustar os filtros.' : ''}</p>
-                    </div>
-                  ) : filtered.map(concept => {
-                    const isLocked = lockedIds.has(concept.id);
-                    const parentConcept = isLocked && concept.parent_concept_id ? concepts.find(c => c.id === concept.parent_concept_id) : null;
-                    return (
-                      <ConceptListItem
-                        key={concept.id}
-                        concept={concept}
-                        isLocked={isLocked}
-                        isSelected={selectedIds.has(concept.id)}
-                        selectionMode={selectionMode}
-                        parentName={parentConcept?.name}
-                        onToggleSelection={toggleSelection}
-                        onEdit={setEditConcept}
-                        onOpenQuestions={openQuestions}
-                        onDelete={c => { setDeleteSingleTarget(c); setDeleteConfirmOpen(true); }}
-                      />
-                    );
-                  })}
-                </div>
+                {/* Concept list — grouped by priority sections */}
+                <ConceptGroupedList
+                  concepts={filtered}
+                  lockedIds={lockedIds}
+                  allConcepts={concepts}
+                  selectionMode={selectionMode}
+                  selectedIds={selectedIds}
+                  onToggleSelection={toggleSelection}
+                  onEdit={setEditConcept}
+                  onOpenQuestions={openQuestions}
+                  onDelete={c => { setDeleteSingleTarget(c); setDeleteConfirmOpen(true); }}
+                  onStartStudy={handleStartFrontierStudy}
+                />
               </>
             )}
           </TabsContent>
