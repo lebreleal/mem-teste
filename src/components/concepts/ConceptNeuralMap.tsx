@@ -180,6 +180,9 @@ export default function ConceptNeuralMap({
   lockedIds,
   onStartStudy,
   onNodeTap,
+  selectionMode = false,
+  selectedIds,
+  onToggleSelection,
 }: ConceptNeuralMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
