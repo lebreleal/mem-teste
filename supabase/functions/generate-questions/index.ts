@@ -216,15 +216,20 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
       ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE se aplicável, em vez de criar novos sinônimos):\n${existingConceptNames.join(', ')}\n`
       : '';
 
-    const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
+    const sourceBlock = sourceContent
+      ? `\n\nMATERIAL DE REFERÊNCIA ANEXADO PELO ALUNO:\n---\n${(sourceContent as string).slice(0, 30000)}\n---\nUse este material como CONTEXTO PRINCIPAL para gerar questões. Os cartões acima complementam o material.\n`
+      : '';
 
-NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo do baralho.
+    const hasCards = cards.length > 0;
+    const cardBlock = hasCards
+      ? `CARTÕES DO BARALHO:\n---\n${cardSummaries}\n---\n`
+      : '';
+
+    const userPrompt = `${hasCards ? `Analise os ${cards.length} cartões${sourceContent ? ' e o material de referência' : ''} abaixo.` : 'Analise o material de referência abaixo.'} Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
+
+NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo.
 ${existingConceptsBlock}
-CARTÕES DO BARALHO:
----
-${cardSummaries}
----
-
+${cardBlock}${sourceBlock}
 ${customInstructions ? `INSTRUÇÕES ADICIONAIS DO USUÁRIO: ${customInstructions}\n` : ""}
 Para cada questão, retorne:
 - question_text: enunciado (pode usar HTML para formatação)
@@ -232,8 +237,8 @@ Para cada questão, retorne:
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
 - concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
-- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados. REGRA CRÍTICA: os pré-requisitos devem ser temas que APARECEM ou são IMPLÍCITOS nos próprios cartões fornecidos. NÃO invente temas genéricos aleatórios. Se os cartões falam de "Apoptose Fisiológica" e "Apoptose por Prevenção de Câncer", o pré-requisito seria "Apoptose" (tema comum). Se não há pré-requisito claro DENTRO do material, deixe vazio.
-- source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
+- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados. REGRA CRÍTICA: os pré-requisitos devem ser temas que APARECEM ou são IMPLÍCITOS no material fornecido. NÃO invente temas genéricos aleatórios.
+- source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima, ou [] se gerado apenas do material de referência)`;
 
     // ─── Tool schema for structured output ───
     const toolSchema = {
