@@ -459,12 +459,15 @@ const ConceptsPage = () => {
                 )}
 
                 {/* Neural Map — skill tree visualization */}
-                {!selectionMode && !hasActiveFilter && !search && (
+                {!hasActiveFilter && !search && (
                   <ConceptNeuralMap
                     concepts={concepts}
                     lockedIds={lockedIds}
                     onStartStudy={handleStartFrontierStudy}
-                    onNodeTap={setEditConcept}
+                    onNodeTap={selectionMode ? undefined : setEditConcept}
+                    selectionMode={selectionMode}
+                    selectedIds={selectedIds}
+                    onToggleSelection={toggleSelection}
                   />
                 )}
 
