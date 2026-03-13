@@ -63,9 +63,8 @@ Deno.serve(async (req) => {
     if (!AI_KEY) return jsonResponse({ error: "AI key não configurada" }, 500);
 
     // ─── Fetch cards: by cardIds or by deckId ───
-    let cards: any[];
+    let cards: any[] = [];
     if (rawCardIds && rawCardIds.length > 0) {
-      // Fetch specific cards by IDs (cross-deck deepening)
       const { data, error: cardsError } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type, deck_id')
@@ -75,7 +74,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Erro ao buscar cards" }, 500);
       }
       cards = data || [];
-    } else {
+    } else if (deckId) {
       const { data, error: cardsError } = await supabase
         .rpc('get_descendant_cards_page', { p_deck_id: deckId, p_limit: 300, p_offset: 0 });
       if (cardsError) {
@@ -85,7 +84,7 @@ Deno.serve(async (req) => {
       cards = data || [];
     }
 
-    if (!cards || cards.length === 0) return jsonResponse({ error: "Nenhum card encontrado" }, 400);
+    if (cards.length === 0 && !sourceContent) return jsonResponse({ error: "Nenhum card encontrado e nenhuma fonte de referência fornecida" }, 400);
 
     // ─── Deduct energy ───
     const cost = energyCost || 0;
