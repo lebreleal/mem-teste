@@ -36,7 +36,7 @@ export const EditConceptDialog = ({ concept, onClose, onSave, isPending }: EditD
     <Dialog open={!!concept} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Editar conceito</DialogTitle>
+          <DialogTitle>Editar tema</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
