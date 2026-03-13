@@ -10,6 +10,7 @@ export interface GlobalConcept {
   user_id: string;
   name: string;
   slug: string;
+  description: string | null;
   category: string | null;
   subcategory: string | null;
   parent_concept_id: string | null;
