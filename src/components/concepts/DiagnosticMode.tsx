@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { getOrGenerateQuestion, markConceptMastered, markConceptWeak } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
