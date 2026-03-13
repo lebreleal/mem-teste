@@ -55,13 +55,6 @@ interface QuestionAttempt {
   answered_at: string;
 }
 
-interface ConceptMastery {
-  id: string;
-  concept: string;
-  correct_count: number;
-  wrong_count: number;
-  mastery_level: string;
-}
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
