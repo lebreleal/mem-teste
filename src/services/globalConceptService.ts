@@ -250,9 +250,10 @@ export async function linkQuestionsToConcepts(
     .from('question_concepts' as any)
     .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
 
-  // ── Auto-trigger prerequisite mapping if >5 unmapped concepts ──
-  // Fire-and-forget, non-blocking
-  tryAutoMapPrerequisites(userId).catch(() => {});
+  // ── Auto-trigger prerequisite mapping for newly created concepts ──
+  // Pass the new concept slugs so mapping always runs when new concepts appear
+  const newSlugs = Array.from(allNames).map(n => conceptSlug(n));
+  tryAutoMapPrerequisites(userId, newSlugs).catch(() => {});
 }
 
 // ─── Fetch all global concepts for a user ───────
