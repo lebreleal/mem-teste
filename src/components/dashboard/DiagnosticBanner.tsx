@@ -44,9 +44,9 @@ const DiagnosticBanner = () => {
   if (!shouldShow) return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 flex items-start gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
-        <BrainCircuit className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+    <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <BrainCircuit className="h-5 w-5 text-primary" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-foreground">Diagnóstico rápido disponível</p>

@@ -253,6 +253,9 @@ const Dashboard = () => {
         {/* Mini Stats Strip */}
         <MiniStatsStrip />
 
+        {/* Auto-trigger diagnostic when 10+ unreviewed concepts */}
+        <DiagnosticBanner />
+
         {/* Due Themes Section */}
         <DashboardDueThemes />
 
