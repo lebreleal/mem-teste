@@ -1016,9 +1016,19 @@ const Study = () => {
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
-          <span className="text-xs font-bold text-muted-foreground tabular-nums">{cardsCompleted}/{initialQueueSize}</span>
         </div>
       </header>
+
+      {/* ALEKS-style progress strip */}
+      <SessionProgressStrip
+        reviewCount={reviewCount}
+        correctCount={correctCount}
+        wrongCount={wrongCount}
+        initialQueueSize={initialQueueSize}
+        remainingCount={localQueue.length}
+        elapsedMs={sessionElapsed}
+        deckStats={deckStatsSnapshot}
+      />
 
       <div className="h-1.5 w-full bg-muted/40">
         <div
@@ -1026,6 +1036,9 @@ const Study = () => {
           style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }}
         />
       </div>
+
+      {/* Milestone celebrations */}
+      <MilestoneToast reviewCount={reviewCount} correctCount={correctCount} />
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
