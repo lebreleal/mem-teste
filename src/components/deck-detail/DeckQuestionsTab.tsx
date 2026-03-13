@@ -3,13 +3,14 @@
  * Features: stats bar, error notebook, concept mastery, AI hints/explanations,
  * option elimination (scissors), AI concept card generation.
  */
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { renderClozePreview } from '@/components/deck-detail/CardPreviewSheet';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { supabase } from '@/integrations/supabase/client';
+import { useDecks } from '@/hooks/useDecks';
 import { linkQuestionsToConcepts, ensureGlobalConcepts, updateConceptMastery, conceptSlug } from '@/services/globalConceptService';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1261,6 +1262,7 @@ const DeckQuestionsTab = ({
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { decks } = useDecks();
   const [createOpen, setCreateOpen] = useState(!!autoCreate);
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>(autoCreate === 'manual' ? 'manual' : 'ai');
   const [practicing, setPracticing] = useState(!!autoStart);
@@ -1294,38 +1296,33 @@ const DeckQuestionsTab = ({
     return !!sourceDeckId && sourceDeckId !== deckId;
   }, [sourceDeckId, deckId]);
 
-  // Fetch all deck IDs in hierarchy (this deck + all descendants)
-  const { data: hierarchyDeckIds = [effectiveDeckId] } = useQuery({
-    queryKey: ['deck-hierarchy-ids', effectiveDeckId],
-    queryFn: async () => {
-      // BFS to collect all descendant deck IDs
-      const allIds: string[] = [effectiveDeckId];
-      let frontier = [effectiveDeckId];
-      while (frontier.length > 0) {
-        const { data: children } = await supabase
-          .from('decks')
-          .select('id')
-          .in('parent_deck_id', frontier);
-        if (!children || children.length === 0) break;
-        const childIds = children.map((d: any) => d.id);
-        allIds.push(...childIds);
-        frontier = childIds;
-      }
-      return allIds;
-    },
-    enabled: !!effectiveDeckId,
-    staleTime: 120_000,
-  });
+  // Compute hierarchy deck IDs in-memory from already-loaded decks (same pattern as cards tab)
+  const hierarchyDeckIds = useMemo(() => {
+    const allIds: string[] = [effectiveDeckId];
+    if (!decks.length) return allIds;
+    const queue = [effectiveDeckId];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      const children = decks.filter(d => d.parent_deck_id === current && !d.is_archived);
+      for (const child of children) { allIds.push(child.id); queue.push(child.id); }
+    }
+    return allIds;
+  }, [decks, effectiveDeckId]);
 
-  const { data: questions = [], isLoading } = useQuery({
-    queryKey: ['deck-questions', effectiveDeckId, hierarchyDeckIds],
+  // Stable key for the hierarchy to avoid unnecessary refetches
+  const hierarchyKey = useMemo(() => hierarchyDeckIds.join(','), [hierarchyDeckIds]);
+
+  const prevQuestionsRef = useRef<DeckQuestion[]>([]);
+
+  const { data: questions = prevQuestionsRef.current, isLoading } = useQuery({
+    queryKey: ['deck-questions', effectiveDeckId, hierarchyKey],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deck_questions' as any).select('*')
         .in('deck_id', hierarchyDeckIds)
         .order('sort_order', { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((q: any) => {
+      const result = (data ?? []).map((q: any) => {
         let opts: string[] = [];
         if (Array.isArray(q.options)) {
           opts = q.options.map((o: any) => typeof o === 'string' ? o : (o?.text || o?.label || JSON.stringify(o)));
@@ -1341,9 +1338,12 @@ const DeckQuestionsTab = ({
           concepts: Array.isArray(q.concepts) ? q.concepts : [],
         };
       }) as DeckQuestion[];
+      prevQuestionsRef.current = result;
+      return result;
     },
     enabled: !!effectiveDeckId && hierarchyDeckIds.length > 0,
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 
   // Fetch user's attempts for stats
@@ -1361,6 +1361,7 @@ const DeckQuestionsTab = ({
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 
   // Compute stats
