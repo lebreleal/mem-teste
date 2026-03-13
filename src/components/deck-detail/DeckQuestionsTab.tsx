@@ -129,53 +129,70 @@ const ConceptMasterySection = ({
 
   if (!concepts || concepts.length === 0) return null;
 
+  const queryClient = useQueryClient();
   const evaluatedCount = Object.keys(feedback).length;
   const strongCount = Object.values(feedback).filter(v => v === 'strong').length;
   const learningCount = Object.values(feedback).filter(v => v === 'learning').length;
   const weakCount = Object.values(feedback).filter(v => v === 'weak').length;
 
-  const handleFeedback = (concept: string, value: MasteryLevel) => {
-    setFeedback(prev => ({ ...prev, [concept]: value }));
-    if (value === 'strong') {
-      setTimeout(() => setExpanded(prev => ({ ...prev, [concept]: false })), 300);
-    }
-    if (value === 'learning' || value === 'weak') {
-      searchExistingCards(concept);
-    }
-  };
-
-  const toggleExpand = (concept: string) => {
-    setExpanded(prev => ({ ...prev, [concept]: !prev[concept] }));
-  };
-
-  const searchExistingCards = async (concept: string) => {
+  const searchExistingCards = async (concept: string): Promise<any[]> => {
     setLoadingCards(prev => ({ ...prev, [concept]: true }));
     try {
       const keywords = concept
         .replace(/^(Você conseguiu|Você entendeu|Você sabe).*?\??\s*/i, '')
         .split(/\s+/)
+        .map(k => k.replace(/[%,_]/g, ''))
         .filter(w => w.length > 3)
         .slice(0, 4);
 
-      if (keywords.length === 0) { setLoadingCards(prev => ({ ...prev, [concept]: false })); return; }
+      if (keywords.length === 0) return [];
 
-      // Search across all user's decks (not just parent) to find related cards in sub-decks
-      const { data: userDecks } = await supabase
-        .from('decks')
-        .select('id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '');
-      const userDeckIds = (userDecks ?? []).map(d => d.id);
-      
       const { data } = await supabase
         .from('cards')
         .select('id, front_content, back_content, card_type')
-        .in('deck_id', userDeckIds.length > 0 ? userDeckIds : [deckId])
+        .eq('deck_id', deckId)
         .or(keywords.map(k => `front_content.ilike.%${k}%,back_content.ilike.%${k}%`).join(','))
         .limit(5);
 
-      setPreviewCards(prev => ({ ...prev, [concept]: data || [] }));
-    } catch { /* ignore */ }
-    finally { setLoadingCards(prev => ({ ...prev, [concept]: false })); }
+      const cards = data || [];
+      setPreviewCards(prev => ({ ...prev, [concept]: cards }));
+      return cards;
+    } catch {
+      return [];
+    } finally {
+      setLoadingCards(prev => ({ ...prev, [concept]: false }));
+    }
+  };
+
+  const handleFeedback = (concept: string, value: MasteryLevel) => {
+    setFeedback(prev => ({ ...prev, [concept]: value }));
+
+    if (value === 'strong') {
+      setTimeout(() => setExpanded(prev => ({ ...prev, [concept]: false })), 300);
+      return;
+    }
+
+    void (async () => {
+      await searchExistingCards(concept);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      try {
+        const moved = await moveConceptCardsToErrorDeck(user.id, [concept], deckId);
+        if (moved > 0) {
+          queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
+          queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
+          queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
+        }
+      } catch {
+        // keep self-assessment usable even if movement fails
+      }
+    })();
+  };
+
+  const toggleExpand = (concept: string) => {
+    setExpanded(prev => ({ ...prev, [concept]: !prev[concept] }));
   };
 
   const handleExplainConcept = async (concept: string) => {
