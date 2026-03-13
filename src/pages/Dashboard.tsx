@@ -248,6 +248,12 @@ const Dashboard = () => {
           </button>
         )}
 
+        {/* Mini Stats Strip */}
+        <MiniStatsStrip />
+
+        {/* Due Themes Section */}
+        <DashboardDueThemes />
+
         {/* Study deck carousel */}
         {allDecks && (
           <DeckCarousel
