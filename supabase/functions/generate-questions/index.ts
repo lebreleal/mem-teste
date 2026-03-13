@@ -238,12 +238,12 @@ Para cada questão, retorne:
                   type: "object",
                   properties: {
                     name: { type: "string", description: "Nome do conceito (deve corresponder ao array concepts)" },
-                    description: { type: "string", description: "Frase concisa (15-30 palavras) que explique O QUE é o conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de 'retrieval cue' — ajude o aluno a ativar o conhecimento correto." },
+                    description: { type: "string", description: "Frase concisa (15-30 palavras) explicando COMO este conceito se aplica NESTA QUESTÃO ESPECÍFICA. Não defina o conceito genericamente — explique o que o aluno precisa saber SOBRE este conceito PARA acertar esta questão. Ex: 'Nesta questão, aplicar os critérios de Light ao caso clínico permite diferenciar exsudato de transudato e identificar a etiologia.'" },
                   },
                   required: ["name", "description"],
                   additionalProperties: false,
                 },
-                description: "Descrição de cada conceito com contexto da questão. Deve ter o mesmo comprimento do array concepts.",
+                description: "Descrição contextual de como cada conceito se relaciona com ESTA questão específica. Mesmo comprimento do array concepts.",
               },
               prerequisites: {
                 type: "array",
