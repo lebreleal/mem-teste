@@ -100,8 +100,24 @@ const Study = () => {
   const [initialQueueSize, setInitialQueueSize] = useState(0);
   const reviewedCardIdsRef = useRef(new Set<string>());
   const cardShownAt = useRef<number>(Date.now());
+  const sessionStartRef = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Session tracking for ALEKS-style progress
+  const [correctCount, setCorrectCount] = useState(0);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+  const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
+  const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
+
+  // Elapsed time ticker
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSessionElapsed(Date.now() - sessionStartRef.current);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
