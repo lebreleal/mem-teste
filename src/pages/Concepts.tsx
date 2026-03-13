@@ -302,7 +302,7 @@ const ConceptsPage = () => {
   const confirmDelete = async () => {
     if (deleteSingleTarget) {
       await deleteConcept.mutateAsync(deleteSingleTarget.id);
-      toast.success('Conceito excluído');
+      toast.success('Tema excluído');
     } else {
       const ids = Array.from(selectedIds);
       for (const id of ids) await deleteConcept.mutateAsync(id);
