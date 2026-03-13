@@ -458,6 +458,11 @@ const ConceptsPage = () => {
                   <CategoryDonutChart concepts={concepts} onCategoryClick={setCategoryFilter} />
                 )}
 
+                {/* Deck Concept Map — conquest lines per deck */}
+                {!selectionMode && !hasActiveFilter && !search && (
+                  <DeckConceptMap concepts={concepts} onStartStudy={handleStartFrontierStudy} />
+                )}
+
                 {/* Action Buttons */}
                 {!selectionMode && concepts.length >= 2 && (
                   <div className="flex flex-wrap gap-2">
