@@ -132,6 +132,13 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
     setFileName(file.name);
     setInputMode('file');
 
+    // Auto-save file as AI source (fire and forget)
+    if (user) {
+      saveFileSource.mutateAsync(file)
+        .then(saved => setSelectedSourceId(saved.id))
+        .catch(() => {});
+    }
+
     const ext = file.name.toLowerCase().split('.').pop() || '';
     const isPdf = file.type === 'application/pdf' || ext === 'pdf';
     const isText = file.type.startsWith('text/') || ['txt', 'md', 'csv'].includes(ext);
@@ -172,7 +179,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
         setStep('upload'); setInputMode(null); setFileName('');
       }
     }
-  }, [deckName, toast]);
+  }, [deckName, toast, user, saveFileSource]);
 
   const handleTextContinue = useCallback(() => {
     if (!rawText.trim()) return;
