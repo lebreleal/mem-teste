@@ -44,6 +44,7 @@ import DeckCarousel from '@/components/dashboard/DeckCarousel';
 import MiniStatsStrip from '@/components/dashboard/MiniStatsStrip';
 import DashboardDueThemes from '@/components/dashboard/DashboardDueThemes';
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
+import BottomNav from '@/components/BottomNav';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
