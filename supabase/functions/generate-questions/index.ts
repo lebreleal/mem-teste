@@ -318,6 +318,7 @@ Para cada questão, retorne:
       explanation: q.explanation || "",
       concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3) : [],
       prerequisites: Array.isArray(q.prerequisites) ? q.prerequisites.slice(0, 2) : [],
+      concept_descriptions: Array.isArray(q.concept_descriptions) ? q.concept_descriptions : [],
       source_card_ids: Array.isArray(q.source_card_ids)
         ? q.source_card_ids.filter((id: string) => validCardIds.has(id))
         : [],
