@@ -1,7 +1,7 @@
 /**
  * suggest-tags edge function
- * Analyzes text content and suggests relevant tags using AI.
- * Prioritizes existing "Leader Tags" and respects tag hierarchy.
+ * Analyzes text content and suggests relevant concept-tags using AI.
+ * Prioritizes user's existing global_concepts, then platform tags.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -52,17 +52,33 @@ serve(async (req) => {
       });
     }
 
-    // Fetch top existing tags with hierarchy info
-    const { data: leaderTags } = await supabase
-      .from("tags")
-      .select("id, name, slug, usage_count, parent_id, synonyms")
-      .is("merged_into_id", null)
-      .order("usage_count", { ascending: false })
-      .limit(100);
+    // Fetch user's global_concepts AND platform tags in parallel
+    const [conceptsRes, leaderTagsRes] = await Promise.all([
+      supabase
+        .from("global_concepts")
+        .select("id, name, slug, category, subcategory")
+        .eq("user_id", user.id)
+        .limit(200),
+      supabase
+        .from("tags")
+        .select("id, name, slug, usage_count, parent_id, synonyms")
+        .is("merged_into_id", null)
+        .order("usage_count", { ascending: false })
+        .limit(100),
+    ]);
 
-    const allTags = leaderTags ?? [];
+    const userConcepts = conceptsRes.data ?? [];
+    const allTags = leaderTagsRes.data ?? [];
     
-    // Build hierarchy labels for context
+    // Build vocabulary: user concepts first, then platform tags
+    const conceptNameSet = new Set(userConcepts.map((c: any) => c.name.toLowerCase()));
+    const conceptList = userConcepts.map((c: any) => {
+      const parts = [c.name];
+      if (c.category) parts.push(`(${c.category}${c.subcategory ? ' > ' + c.subcategory : ''})`);
+      return parts.join(' ');
+    });
+
+    // Build hierarchy labels for platform tags
     const tagMap = new Map(allTags.map((t: any) => [t.id, t]));
     const getPath = (t: any): string => {
       if (!t.parent_id) return t.name;
@@ -70,13 +86,13 @@ serve(async (req) => {
       return parent ? `${getPath(parent)} > ${t.name}` : t.name;
     };
 
-    const tagListWithHierarchy = allTags
+    const platformTagList = allTags
+      .filter((t: any) => !conceptNameSet.has(t.name.toLowerCase()))
       .map((t: any) => {
         const path = getPath(t);
         const syns = (t.synonyms ?? []).length > 0 ? ` (sinônimos: ${t.synonyms.join(", ")})` : "";
         return `${path}${syns} [${t.usage_count} usos]`;
-      })
-      .join("\n");
+      });
 
     const alreadyApplied = (existingTagNames ?? []).join(", ");
 
@@ -88,21 +104,24 @@ serve(async (req) => {
       });
     }
 
-    const prompt = `Analise o seguinte conteúdo de estudo e sugira de 3 a 8 tags relevantes para categorização.
+    const prompt = `Analise o seguinte conteúdo de estudo e sugira de 3 a 8 conceitos/temas relevantes.
 
 REGRAS:
-1. Prefira tags da lista de tags existentes quando possível (Leader Tags)
-2. Respeite a hierarquia: se existe "Medicina > Cardiologia > Hipertensão", sugira a tag mais específica aplicável
-3. Crie novas tags apenas se nenhuma existente se encaixa
-4. Tags devem ser curtas (1-3 palavras), em português
+1. PRIORIZE conceitos já existentes do aluno quando o tema for equivalente
+2. Se não existir, use tags da plataforma quando possível
+3. Crie novas apenas se nenhuma existente se encaixa
+4. Conceitos devem ser específicos (1-3 palavras), em português
 5. Use termos técnicos padronizados da área
-6. Não repita tags já aplicadas
-7. Retorne APENAS um JSON array de strings com os NOMES exatos das tags (sem o caminho hierárquico)
+6. Não repita conceitos já aplicados
+7. Retorne APENAS um JSON array de strings com os NOMES exatos
 
-TAGS EXISTENTES (com hierarquia e sinônimos):
-${tagListWithHierarchy || "nenhuma ainda"}
+CONCEITOS DO ALUNO (prioridade máxima):
+${conceptList.join("\n") || "nenhum ainda"}
 
-TAGS JÁ APLICADAS (não repita): ${alreadyApplied || "nenhuma"}
+TAGS DA PLATAFORMA (segunda prioridade):
+${platformTagList.join("\n") || "nenhuma"}
+
+CONCEITOS JÁ APLICADOS (não repita): ${alreadyApplied || "nenhum"}
 
 NOME DO DECK: ${deckName || "não informado"}
 
@@ -166,12 +185,15 @@ Responda APENAS com o JSON array, sem explicação. Exemplo: ["Cardiologia", "Fi
       .filter((t: string) => !existingSet.has(t.toLowerCase()));
 
     const tagNameMap = new Map(allTags.map((t: any) => [t.name.toLowerCase(), t]));
+    const conceptNameMap = new Map(userConcepts.map((c: any) => [c.name.toLowerCase(), c]));
+    
     const result = suggestedTags.map((name: string) => {
-      const existing = tagNameMap.get(name.toLowerCase());
+      const existingTag = tagNameMap.get(name.toLowerCase());
+      const existingConcept = conceptNameMap.get(name.toLowerCase());
       return {
-        name: existing ? existing.name : name,
-        isExisting: !!existing,
-        usageCount: existing?.usage_count ?? 0,
+        name: existingConcept?.name ?? existingTag?.name ?? name,
+        isExisting: !!(existingTag || existingConcept),
+        usageCount: existingTag?.usage_count ?? 0,
       };
     });
 
