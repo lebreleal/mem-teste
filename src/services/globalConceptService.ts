@@ -222,6 +222,10 @@ export async function linkQuestionsToConcepts(
   await supabase
     .from('question_concepts' as any)
     .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
+
+  // ── Auto-trigger prerequisite mapping if >5 unmapped concepts ──
+  // Fire-and-forget, non-blocking
+  tryAutoMapPrerequisites(userId).catch(() => {});
 }
 
 // ─── Fetch all global concepts for a user ───────
