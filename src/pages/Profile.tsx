@@ -264,7 +264,21 @@ const Profile = () => {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Sign out */}
+        <Card className="cursor-pointer hover:bg-destructive/5 transition-colors border-destructive/20" onClick={() => { signOut(); }}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10">
+              <LogOut className="h-5 w-5 text-destructive" />
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-destructive">Sair da conta</p>
+              <p className="text-xs text-muted-foreground">{email}</p>
+            </div>
+          </CardContent>
+        </Card>
       </main>
+      <BottomNav />
     </div>
   );
 };
