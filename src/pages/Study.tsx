@@ -11,6 +11,9 @@ import { useStudyUndo } from '@/hooks/useStudyUndo';
 import { useAuth } from '@/hooks/useAuth';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
+import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
+import MilestoneToast from '@/components/MilestoneToast';
+import SessionCompleteSummary from '@/components/SessionCompleteSummary';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import {
