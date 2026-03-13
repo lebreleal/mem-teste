@@ -279,7 +279,14 @@ const ConceptMasterySection = ({
           return (
             <div key={i} className={`rounded-lg border border-border/40 border-l-[3px] ${getBorderColor(answer)} bg-background/50 p-3 space-y-2.5 transition-all`}>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-foreground leading-relaxed flex-1">{c}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-relaxed">{c}</p>
+                  {conceptDescriptions[c] && (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                      {conceptDescriptions[c]}
+                    </p>
+                  )}
+                </div>
                 {isEvaluated && (
                   <button onClick={() => toggleExpand(c)} className="text-muted-foreground hover:text-foreground shrink-0 p-0.5">
                     <X className="h-3 w-3" />
