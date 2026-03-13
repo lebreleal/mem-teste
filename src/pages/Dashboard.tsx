@@ -382,6 +382,7 @@ const Dashboard = () => {
             )}
           </div>
         </details>
+      </main>
 
       <DashboardDialogs
         createType={state.createType} setCreateType={state.setCreateType}
