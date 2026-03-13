@@ -3128,6 +3128,10 @@ export type Database = {
         Args: { _permission: string; _turma_id: string; _user_id: string }
         Returns: boolean
       }
+      increment_concept_count: {
+        Args: { p_concept_id: string; p_field: string }
+        Returns: undefined
+      }
       insert_review_batch: { Args: { p_reviews: Json }; Returns: undefined }
       is_turma_member: {
         Args: { _turma_id: string; _user_id: string }
