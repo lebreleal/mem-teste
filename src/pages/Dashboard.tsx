@@ -391,7 +391,7 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-        </details>
+        </div>
       </main>
 
       <DashboardDialogs
