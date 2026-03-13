@@ -1,255 +1,413 @@
 /**
- * ConceptNeuralMap — Neural network / skill tree visualization.
- * Renders concepts as card-styled nodes connected by lines,
- * like a Minecraft achievement tree / neural pathway.
- * Grows infinitely as user adds more questions.
+ * ConceptNeuralMap — 2D pannable/zoomable neural network canvas.
+ * Concepts are nodes positioned spatially, connected by SVG lines.
+ * Draggable like a game map — pan with touch/mouse, pinch to zoom.
  */
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { CheckCircle2, Lock, Circle, Loader2, ChevronDown, ChevronRight, Play } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { CheckCircle2, Lock, Circle, Loader2, ZoomIn, ZoomOut, Locate } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { stateInfo, nextReviewLabel } from './helpers';
 
 interface ConceptNeuralMapProps {
   concepts: GlobalConcept[];
   lockedIds: Set<string>;
   onStartStudy?: (concept: GlobalConcept) => void;
-  onEdit?: (concept: GlobalConcept) => void;
-  onOpenQuestions?: (conceptId: string) => void;
+  onNodeTap?: (concept: GlobalConcept) => void;
 }
 
-interface TreeNode {
+// ── Layout constants ──
+const NODE_W = 120;
+const NODE_H = 56;
+const H_GAP = 60;
+const V_GAP = 80;
+
+// ── Position types ──
+interface NodePos {
   concept: GlobalConcept;
-  children: TreeNode[];
-  depth: number;
+  x: number;
+  y: number;
 }
 
-/** Build forest from flat concept list using parent_concept_id */
-function buildForest(concepts: GlobalConcept[]): TreeNode[] {
+interface Edge {
+  from: string;
+  to: string;
+}
+
+// ── Tree layout algorithm ──
+// Assigns (x,y) positions to each concept in a tree-like 2D layout
+function layoutGraph(concepts: GlobalConcept[]): { nodes: NodePos[]; edges: Edge[]; width: number; height: number } {
+  if (concepts.length === 0) return { nodes: [], edges: [], width: 0, height: 0 };
+
   const byId = new Map(concepts.map(c => [c.id, c]));
-  const childrenMap = new Map<string, GlobalConcept[]>();
+  const childrenMap = new Map<string, string[]>();
+  const edges: Edge[] = [];
 
   for (const c of concepts) {
     if (c.parent_concept_id && byId.has(c.parent_concept_id)) {
       const arr = childrenMap.get(c.parent_concept_id) ?? [];
-      arr.push(c);
+      arr.push(c.id);
       childrenMap.set(c.parent_concept_id, arr);
+      edges.push({ from: c.parent_concept_id, to: c.id });
     }
   }
 
-  // Roots = concepts with no parent or parent not in set
+  // Find roots
   const roots = concepts.filter(c => !c.parent_concept_id || !byId.has(c.parent_concept_id));
 
-  function buildNode(concept: GlobalConcept, depth: number): TreeNode {
-    const kids = childrenMap.get(concept.id) ?? [];
-    // Sort children: active first, then by name
-    kids.sort((a, b) => {
-      if (a.state === 2 && b.state !== 2) return 1;
-      if (a.state !== 2 && b.state === 2) return -1;
-      return a.name.localeCompare(b.name);
-    });
-    return {
-      concept,
-      children: kids.map(k => buildNode(k, depth + 1)),
-      depth,
-    };
-  }
-
-  // Sort roots: active first, then by name
+  // Sort roots by category then name
   roots.sort((a, b) => {
-    if (a.state === 2 && b.state !== 2) return 1;
-    if (a.state !== 2 && b.state === 2) return -1;
+    const catA = a.category ?? '';
+    const catB = b.category ?? '';
+    if (catA !== catB) return catA.localeCompare(catB);
     return a.name.localeCompare(b.name);
   });
 
-  return roots.map(r => buildNode(r, 0));
+  const positions = new Map<string, { x: number; y: number }>();
+
+  // Measure subtree width (number of leaf-level slots)
+  const subtreeWidth = new Map<string, number>();
+  function measureWidth(id: string): number {
+    const kids = childrenMap.get(id) ?? [];
+    if (kids.length === 0) {
+      subtreeWidth.set(id, 1);
+      return 1;
+    }
+    const w = kids.reduce((sum, kid) => sum + measureWidth(kid), 0);
+    subtreeWidth.set(id, w);
+    return w;
+  }
+
+  for (const r of roots) measureWidth(r.id);
+
+  // Place nodes using recursive layout
+  let globalCol = 0;
+
+  function placeNode(id: string, depth: number) {
+    const kids = childrenMap.get(id) ?? [];
+    if (kids.length === 0) {
+      positions.set(id, {
+        x: globalCol * (NODE_W + H_GAP),
+        y: depth * (NODE_H + V_GAP),
+      });
+      globalCol++;
+      return;
+    }
+
+    // Place children first
+    const startCol = globalCol;
+    for (const kid of kids) placeNode(kid, depth + 1);
+    const endCol = globalCol;
+
+    // Center parent over children
+    const firstChild = positions.get(kids[0])!;
+    const lastChild = positions.get(kids[kids.length - 1])!;
+    positions.set(id, {
+      x: (firstChild.x + lastChild.x) / 2,
+      y: depth * (NODE_H + V_GAP),
+    });
+  }
+
+  for (const r of roots) {
+    placeNode(r.id, 0);
+    globalCol += 0.5; // gap between trees
+  }
+
+  // Build node positions array
+  const nodes: NodePos[] = [];
+  let maxX = 0, maxY = 0;
+
+  for (const c of concepts) {
+    const pos = positions.get(c.id);
+    if (pos) {
+      nodes.push({ concept: c, x: pos.x, y: pos.y });
+      maxX = Math.max(maxX, pos.x + NODE_W);
+      maxY = Math.max(maxY, pos.y + NODE_H);
+    } else {
+      // Orphan nodes without position — place them at the bottom
+      nodes.push({ concept: c, x: globalCol * (NODE_W + H_GAP), y: 0 });
+      maxX = Math.max(maxX, globalCol * (NODE_W + H_GAP) + NODE_W);
+      globalCol++;
+    }
+  }
+
+  return { nodes, edges, width: maxX + 40, height: maxY + 40 };
 }
 
-/** Single concept node styled like a deck card */
-function ConceptCardNode({
-  node,
-  isLocked,
-  lockedIds,
-  onStartStudy,
-  onEdit,
-  onOpenQuestions,
-}: {
-  node: TreeNode;
-  isLocked: boolean;
-  lockedIds: Set<string>;
-  onStartStudy?: (c: GlobalConcept) => void;
-  onEdit?: (c: GlobalConcept) => void;
-  onOpenQuestions?: (id: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(() => node.depth < 2 && node.concept.state !== 2);
-  const c = node.concept;
-  const si = stateInfo(c.state);
-  const isDominated = c.state === 2;
-  const isLearning = c.state === 1 || c.state === 3;
-  const totalAttempts = c.correct_count + c.wrong_count;
-  const accuracy = totalAttempts > 0 ? Math.round((c.correct_count / totalAttempts) * 100) : 0;
-  const hasChildren = node.children.length > 0;
-  const canStudy = !isLocked && !isDominated;
-
-  // Border color based on state
-  const borderClass = isDominated
-    ? 'border-emerald-500/40 bg-emerald-500/5'
-    : isLearning
-      ? 'border-amber-500/40 bg-amber-500/5'
-      : isLocked
-        ? 'border-border/30 bg-muted/30'
-        : 'border-border/60 bg-card';
-
-  // State icon
-  const StateIcon = isDominated
-    ? () => <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-    : isLocked
-      ? () => <Lock className="h-3.5 w-3.5 text-muted-foreground/40" />
-      : isLearning
-        ? () => <Loader2 className="h-3.5 w-3.5 text-amber-500" />
-        : () => <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />;
-
-  return (
-    <div className="relative">
-      {/* The card node */}
-      <div
-        className={`relative rounded-xl border-2 p-3 transition-all ${borderClass} ${
-          isLocked ? 'opacity-60' : 'hover:shadow-md'
-        }`}
-      >
-        <div className="flex items-start gap-2.5">
-          {/* State indicator */}
-          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-            isDominated ? 'bg-emerald-500/15' : isLearning ? 'bg-amber-500/15' : isLocked ? 'bg-muted/50' : 'bg-muted/30'
-          }`}>
-            <StateIcon />
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${si.color}`}>
-                {si.label}
-              </span>
-              {c.state !== 0 && !isLocked && (
-                <span className="text-[9px] text-muted-foreground">{nextReviewLabel(c.scheduled_date)}</span>
-              )}
-            </div>
-            <p className={`text-sm font-semibold leading-snug ${isLocked ? 'text-muted-foreground/60' : 'text-foreground'}`}>
-              {c.name}
-            </p>
-            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-              {c.category && (
-                <span className="truncate">{c.category}{c.subcategory ? ` › ${c.subcategory}` : ''}</span>
-              )}
-              {totalAttempts > 0 && (
-                <span className="shrink-0">· {accuracy}% ({totalAttempts})</span>
-              )}
-            </div>
-
-            {/* Action row */}
-            {canStudy && onStartStudy && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-2 h-7 text-[11px] gap-1"
-                onClick={(e) => { e.stopPropagation(); onStartStudy(c); }}
-              >
-                <Play className="h-3 w-3" /> Estudar
-              </Button>
-            )}
-          </div>
-
-          {/* Expand toggle for children */}
-          {hasChildren && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="shrink-0 p-1 rounded-md hover:bg-accent/50 transition-colors"
-            >
-              {expanded
-                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              }
-              <span className="sr-only">{expanded ? 'Recolher' : 'Expandir'}</span>
-            </button>
-          )}
-        </div>
-
-        {/* Children count badge */}
-        {hasChildren && !expanded && (
-          <div className="mt-2 flex items-center gap-1">
-            <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
-              +{node.children.length} ramificaç{node.children.length > 1 ? 'ões' : 'ão'}
-            </Badge>
-          </div>
-        )}
-      </div>
-
-      {/* Children tree branches */}
-      {hasChildren && expanded && (
-        <div className="mt-1 ml-4 pl-4 border-l-2 border-dashed border-border/50 space-y-1">
-          {node.children.map((child, i) => (
-            <div key={child.concept.id} className="relative">
-              {/* Horizontal connector line */}
-              <div className="absolute -left-4 top-5 w-4 border-t-2 border-dashed border-border/50" />
-              <ConceptCardNode
-                node={child}
-                isLocked={lockedIds.has(child.concept.id)}
-                lockedIds={lockedIds}
-                onStartStudy={onStartStudy}
-                onEdit={onEdit}
-                onOpenQuestions={onOpenQuestions}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+// ── Node colors ──
+function getNodeStyle(state: number, isLocked: boolean) {
+  if (isLocked) return {
+    bg: 'hsl(var(--muted) / 0.6)',
+    border: 'hsl(var(--border) / 0.4)',
+    text: 'hsl(var(--muted-foreground) / 0.5)',
+    glow: 'none',
+  };
+  switch (state) {
+    case 2: return {
+      bg: 'hsl(150 60% 45% / 0.15)',
+      border: 'hsl(150 60% 45% / 0.6)',
+      text: 'hsl(150 60% 35%)',
+      glow: '0 0 12px hsl(150 60% 45% / 0.3)',
+    };
+    case 1: case 3: return {
+      bg: 'hsl(40 80% 55% / 0.12)',
+      border: 'hsl(40 80% 55% / 0.6)',
+      text: 'hsl(40 80% 40%)',
+      glow: '0 0 8px hsl(40 80% 55% / 0.2)',
+    };
+    default: return {
+      bg: 'hsl(var(--card))',
+      border: 'hsl(var(--border) / 0.7)',
+      text: 'hsl(var(--foreground))',
+      glow: 'none',
+    };
+  }
 }
 
+function getEdgeColor(fromState: number, toState: number, isToLocked: boolean) {
+  if (isToLocked) return 'hsl(var(--border) / 0.3)';
+  if (fromState === 2 && toState === 2) return 'hsl(150 60% 45% / 0.5)';
+  if (fromState === 2) return 'hsl(150 60% 45% / 0.35)';
+  return 'hsl(var(--border) / 0.5)';
+}
+
+// ── Main Component ──
 export default function ConceptNeuralMap({
   concepts,
   lockedIds,
   onStartStudy,
-  onEdit,
-  onOpenQuestions,
+  onNodeTap,
 }: ConceptNeuralMapProps) {
-  const forest = useMemo(() => buildForest(concepts), [concepts]);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  if (concepts.length === 0) return null;
+  // Pan & zoom state
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const lastTouchDist = useRef(0);
+
+  // Layout
+  const { nodes, edges, width, height } = useMemo(() => layoutGraph(concepts), [concepts]);
+  const byId = useMemo(() => new Map(concepts.map(c => [c.id, c])), [concepts]);
+
+  // Center on mount
+  useEffect(() => {
+    if (containerRef.current && nodes.length > 0) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const fitScale = Math.min(rect.width / (width + 40), rect.height / (height + 40), 1);
+      const s = Math.max(0.3, Math.min(fitScale, 0.8));
+      setPan({
+        x: (rect.width - width * s) / 2,
+        y: 20,
+      });
+      setScale(s);
+    }
+  }, [nodes.length, width, height]);
+
+  // Mouse/touch handlers for panning
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('[data-node]')) return;
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, [pan]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging) return;
+    setPan({
+      x: dragStart.current.panX + (e.clientX - dragStart.current.x),
+      y: dragStart.current.panY + (e.clientY - dragStart.current.y),
+    });
+  }, [isDragging]);
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(s => Math.max(0.2, Math.min(2, s * delta)));
+  }, []);
+
+  // Touch zoom (pinch)
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (lastTouchDist.current > 0) {
+        const ratio = dist / lastTouchDist.current;
+        setScale(s => Math.max(0.2, Math.min(2, s * ratio)));
+      }
+      lastTouchDist.current = dist;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    lastTouchDist.current = 0;
+  }, []);
+
+  const zoomIn = () => setScale(s => Math.min(2, s * 1.3));
+  const zoomOut = () => setScale(s => Math.max(0.2, s / 1.3));
+  const resetView = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const fitScale = Math.min(rect.width / (width + 40), rect.height / (height + 40), 1);
+      const s = Math.max(0.3, Math.min(fitScale, 0.8));
+      setPan({ x: (rect.width - width * s) / 2, y: 20 });
+      setScale(s);
+    }
+  };
 
   // Stats
   const totalDominated = concepts.filter(c => c.state === 2).length;
   const totalConcepts = concepts.length;
-  const progressPct = totalConcepts > 0 ? Math.round((totalDominated / totalConcepts) * 100) : 0;
+
+  if (concepts.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Mapa Neural</h3>
-          <p className="text-[11px] text-muted-foreground">
-            {totalDominated}/{totalConcepts} conceitos dominados ({progressPct}%)
-          </p>
-        </div>
+    <div className="relative rounded-xl border border-border/60 bg-muted/20 overflow-hidden" style={{ height: '60vh', minHeight: 350 }}>
+      {/* Zoom controls */}
+      <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
+        <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm" onClick={zoomIn}>
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm" onClick={zoomOut}>
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm" onClick={resetView}>
+          <Locate className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Tree */}
-      <div className="space-y-2">
-        {forest.map(root => (
-          <ConceptCardNode
-            key={root.concept.id}
-            node={root}
-            isLocked={lockedIds.has(root.concept.id)}
-            lockedIds={lockedIds}
-            onStartStudy={onStartStudy}
-            onEdit={onEdit}
-            onOpenQuestions={onOpenQuestions}
-          />
-        ))}
+      {/* Stats overlay */}
+      <div className="absolute top-2 left-2 z-20 rounded-lg bg-card/90 backdrop-blur-sm border border-border/40 px-3 py-1.5 shadow-sm">
+        <p className="text-[11px] font-semibold text-foreground">
+          🧠 {totalDominated}/{totalConcepts} dominados
+        </p>
+      </div>
+
+      {/* Canvas area */}
+      <div
+        ref={containerRef}
+        className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onWheel={handleWheel}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+            transformOrigin: '0 0',
+            width: width,
+            height: height,
+            position: 'relative',
+          }}
+        >
+          {/* SVG edges layer */}
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            width={width}
+            height={height}
+            style={{ overflow: 'visible' }}
+          >
+            {edges.map(edge => {
+              const fromNode = nodes.find(n => n.concept.id === edge.from);
+              const toNode = nodes.find(n => n.concept.id === edge.to);
+              if (!fromNode || !toNode) return null;
+
+              const x1 = fromNode.x + NODE_W / 2;
+              const y1 = fromNode.y + NODE_H;
+              const x2 = toNode.x + NODE_W / 2;
+              const y2 = toNode.y;
+
+              const fromConcept = byId.get(edge.from);
+              const toConcept = byId.get(edge.to);
+              const color = getEdgeColor(
+                fromConcept?.state ?? 0,
+                toConcept?.state ?? 0,
+                lockedIds.has(edge.to)
+              );
+
+              // Bezier curve for smooth connection
+              const midY = (y1 + y2) / 2;
+
+              return (
+                <g key={`${edge.from}-${edge.to}`}>
+                  <path
+                    d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
+                    stroke={color}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeDasharray={lockedIds.has(edge.to) ? '4 4' : 'none'}
+                  />
+                  {/* Small dot at connection point */}
+                  <circle cx={x2} cy={y2} r={3} fill={color} />
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Nodes layer */}
+          {nodes.map(node => {
+            const c = node.concept;
+            const isLocked = lockedIds.has(c.id);
+            const style = getNodeStyle(c.state, isLocked);
+            const isDominated = c.state === 2;
+            const isLearning = c.state === 1 || c.state === 3;
+
+            return (
+              <div
+                key={c.id}
+                data-node
+                className="absolute transition-shadow duration-200 select-none"
+                style={{
+                  left: node.x,
+                  top: node.y,
+                  width: NODE_W,
+                  height: NODE_H,
+                }}
+                onClick={() => onNodeTap?.(c)}
+              >
+                <div
+                  className="w-full h-full rounded-xl border-2 flex flex-col items-center justify-center p-1.5 cursor-pointer hover:scale-105 transition-transform"
+                  style={{
+                    background: style.bg,
+                    borderColor: style.border,
+                    boxShadow: style.glow,
+                  }}
+                >
+                  {/* State icon */}
+                  <div className="mb-0.5">
+                    {isDominated ? (
+                      <CheckCircle2 className="h-4 w-4" style={{ color: style.text }} />
+                    ) : isLocked ? (
+                      <Lock className="h-3.5 w-3.5" style={{ color: style.text }} />
+                    ) : isLearning ? (
+                      <Loader2 className="h-3.5 w-3.5" style={{ color: style.text }} />
+                    ) : (
+                      <Circle className="h-3.5 w-3.5" style={{ color: style.text }} />
+                    )}
+                  </div>
+                  {/* Name */}
+                  <p
+                    className="text-[10px] font-semibold leading-tight text-center line-clamp-2 px-1"
+                    style={{ color: style.text }}
+                  >
+                    {c.name}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

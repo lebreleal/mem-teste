@@ -464,8 +464,7 @@ const ConceptsPage = () => {
                     concepts={concepts}
                     lockedIds={lockedIds}
                     onStartStudy={handleStartFrontierStudy}
-                    onEdit={setEditConcept}
-                    onOpenQuestions={openQuestions}
+                    onNodeTap={setEditConcept}
                   />
                 )}
 
