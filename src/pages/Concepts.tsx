@@ -38,6 +38,7 @@ import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
 import ConceptListItem from '@/components/concepts/ConceptListItem';
 import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
 import ConceptNeuralMap from '@/components/concepts/ConceptNeuralMap';
+import ConceptDetailSheet from '@/components/concepts/ConceptDetailSheet';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
 
 // ═══════════════════════════════════════════════════
