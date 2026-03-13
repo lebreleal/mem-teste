@@ -1,67 +1,69 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-# Avaliação: Estamos no caminho certo? Melhorias recomendadas
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-## O que está correto
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-O Caderno de Erros agora segue os princípios ALEKS:
-- Agrupa por **conceito fraco** (KC), não por deck/questão
-- Ação principal é **"Estudar conceito"** com questão variada (não reler a errada)
-- Conceitos dominados **saem automaticamente** da lista (state !== 2)
-- Pré-requisitos fracos são exibidos inline
-- Auto-geração de questões via IA quando não há questões vinculadas
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-A arquitetura está sólida. Mas há **3 problemas concretos** que enfraquecem a experiência ALEKS:
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
----
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-## Problema 1: Rating manual no StudyMode (Errei/Bom/Fácil)
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-**Atual**: Após responder, o aluno vê 3 botões — "Errei", "Bom", "Fácil" — e escolhe manualmente como se autoavaliar.
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-**ALEKS**: O sistema determina automaticamente. Acertou = progresso. Errou = reforço. Sem autoavaliação.
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-**Correção**: Remover os 3 botões. Após confirmar a resposta:
-- Correto → `rating = 3` (Bom) automaticamente, avança
-- Incorreto → `rating = 1` (Again) automaticamente, avança
-- O aluno não precisa decidir nada — o FSRS recebe o sinal binário correto
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-Isso simplifica a UI e elimina a possibilidade do aluno errar e clicar "Fácil".
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-## Problema 2: Apenas 1 questão por conceito no StudyMode
-
-**Atual**: Para cada conceito na queue, apresenta 1 questão e avança.
-
-**ALEKS**: Exige **2-3 questões corretas consecutivas** para considerar o conceito dominado. Um acerto isolado pode ser sorte.
-
-**Correção**: No StudyMode, quando vindo do ErrorNotebook, apresentar **até 3 questões** por conceito:
-- Se acerta 2 consecutivas → rating 3, avança (demonstrou domínio)
-- Se erra qualquer uma → rating 1, avança (marca para revisão futura)
-- Isso dá confiança real no domínio sem ser excessivamente frustrante
-
-## Problema 3: Bug — `useState` usado como `useEffect`
-
-**Atual** (StudyMode.tsx linha 28-32 e DiagnosticMode.tsx linha 45-49):
-```ts
-useState(() => {
-  if (queue.length > 0 && user) {
-    loadQuestion(queue[0]);
-  }
-});
-```
-
-Isso é um **anti-pattern**. `useState` com initializer roda durante o render, não como side effect. Funciona "por acaso" mas pode causar bugs de race condition em React 18 strict mode.
-
-**Correção**: Substituir por `useEffect` com dependência vazia.
-
----
-
-## Resumo das mudanças
-
+## Arquivos Modificados
 | Arquivo | Mudança |
 |---|---|
-| `src/components/concepts/StudyMode.tsx` | Remover botões Errei/Bom/Fácil → rating automático binário. Adicionar loop de 2-3 questões por conceito. Corrigir useState → useEffect |
-| `src/components/concepts/DiagnosticMode.tsx` | Corrigir useState → useEffect |
-
-Nenhuma mudança no backend, migrations, ou service. Apenas refinamento do fluxo de UI.
-
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Usa grafo de conceitos em vez de decks |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |

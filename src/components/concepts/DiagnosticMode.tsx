@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { getOrGenerateQuestion, markConceptMastered, markConceptWeak } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
@@ -41,12 +41,12 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
     setLoading(false);
   }
 
-  // Load first question on mount
-  useState(() => {
+  useEffect(() => {
     if (queue.length > 0 && user) {
       loadQuestion(queue[0]);
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const concept = queue[index];
   const isCorrect = question?.correctIndices?.includes(selected) ?? false;

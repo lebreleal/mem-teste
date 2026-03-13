@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { getOrGenerateQuestion } from '@/services/globalConceptService';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { X as XIcon, BrainCircuit, Wand2 } from 'lucide-react';
 import type { Rating } from '@/lib/fsrs';
+
+const MASTERY_THRESHOLD = 2; // consecutive correct answers needed
 
 interface StudyModeProps {
   queue: GlobalConcept[];
@@ -23,13 +25,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-
-  // Load first question on mount
-  useState(() => {
-    if (queue.length > 0 && user) {
-      loadQuestion(queue[0]);
-    }
-  });
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
 
   async function loadQuestion(concept: GlobalConcept) {
     setLoading(true);
@@ -37,7 +33,6 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     try {
       const result = await getOrGenerateQuestion(concept.id, user!.id, concept.name, concept.category);
       if (result.wasGenerated && !result.question) {
-        // Generation failed
         setQuestion(null);
       } else {
         if (result.wasGenerated) setGenerating(true);
@@ -49,6 +44,13 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     setLoading(false);
   }
 
+  useEffect(() => {
+    if (queue.length > 0 && user) {
+      loadQuestion(queue[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const concept = queue[index];
   const isCorrect = question?.correctIndices?.includes(selectedOption) ?? false;
 
@@ -57,23 +59,43 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     setConfirmed(true);
   };
 
-  const handleRate = useCallback(async (rating: Rating) => {
+  const advanceConcept = useCallback(async (correct: boolean) => {
     if (!concept || !user) return;
-    const correct = question?.correctIndices?.includes(selectedOption) ?? false;
-    await onRate(concept, rating, correct);
 
+    if (correct) {
+      const newStreak = consecutiveCorrect + 1;
+      if (newStreak >= MASTERY_THRESHOLD) {
+        // Mastered — submit good rating and move to next concept
+        await onRate(concept, 3, true);
+        moveToNextConcept();
+        return;
+      }
+      // Need more correct answers — load another question for same concept
+      setConsecutiveCorrect(newStreak);
+      setSelectedOption(null);
+      setConfirmed(false);
+      setGenerating(false);
+      loadQuestion(concept);
+    } else {
+      // Failed — submit again rating and move on
+      await onRate(concept, 1, false);
+      moveToNextConcept();
+    }
+  }, [concept, user, consecutiveCorrect, onRate, queue, index]);
+
+  function moveToNextConcept() {
     const nextIdx = index + 1;
     if (nextIdx >= queue.length) {
       onClose();
       return;
     }
-
     setIndex(nextIdx);
     setSelectedOption(null);
     setConfirmed(false);
     setGenerating(false);
+    setConsecutiveCorrect(0);
     loadQuestion(queue[nextIdx]);
-  }, [queue, index, question, selectedOption, onRate, user, concept, onClose]);
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -92,11 +114,17 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       </header>
 
       <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
+        {consecutiveCorrect > 0 && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            Acertos consecutivos: {consecutiveCorrect}/{MASTERY_THRESHOLD}
+          </div>
+        )}
+
         {loading ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Wand2 className="h-4 w-4 animate-spin" />
-              <span>Buscando questão{generating ? '' : '...'}</span>
+              <span>Buscando questão...</span>
             </div>
             <Skeleton className="h-20 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
@@ -107,7 +135,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este conceito.</p>
-              <Button variant="outline" className="mt-4" onClick={() => handleRate(3)}>Pular</Button>
+              <Button variant="outline" className="mt-4" onClick={() => advanceConcept(false)}>Pular</Button>
             </CardContent>
           </Card>
         ) : (
@@ -155,16 +183,22 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             ) : (
               <div className="space-y-3">
                 <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
-                  {isCorrect ? '✅ Correto!' : '❌ Incorreto'}
+                  {isCorrect
+                    ? consecutiveCorrect + 1 >= MASTERY_THRESHOLD
+                      ? '✅ Conceito dominado!'
+                      : `✅ Correto! Mais ${MASTERY_THRESHOLD - consecutiveCorrect - 1} para confirmar domínio.`
+                    : '❌ Incorreto — conceito marcado para revisão futura'}
                   {question.explanation && (
                     <p className="mt-2 text-xs text-muted-foreground">{question.explanation}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" className="text-xs border-destructive/30 text-destructive" onClick={() => handleRate(1)}>Errei</Button>
-                  <Button variant="outline" className="text-xs" onClick={() => handleRate(3)}>Bom</Button>
-                  <Button variant="outline" className="text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400" onClick={() => handleRate(4)}>Fácil</Button>
-                </div>
+                <Button className="w-full" onClick={() => advanceConcept(isCorrect)}>
+                  {isCorrect && consecutiveCorrect + 1 < MASTERY_THRESHOLD
+                    ? 'Próxima questão'
+                    : index + 1 >= queue.length
+                      ? 'Finalizar'
+                      : 'Próximo conceito'}
+                </Button>
               </div>
             )}
           </>
