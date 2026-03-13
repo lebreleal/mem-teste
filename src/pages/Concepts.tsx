@@ -283,7 +283,7 @@ const ConceptsPage = () => {
     setDiagnosticLoading(true);
     try {
       const queue = await fetchDiagnosticConcepts(user.id);
-      if (queue.length === 0) { toast.error('Nenhum conceito disponível para diagnóstico'); setDiagnosticLoading(false); return; }
+      if (queue.length === 0) { toast.error('Nenhum tema disponível para diagnóstico'); setDiagnosticLoading(false); return; }
       setDiagnosticQueue(queue);
       setDiagnosticMode(true);
     } catch { toast.error('Erro ao iniciar diagnóstico'); }
