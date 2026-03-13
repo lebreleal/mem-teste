@@ -565,7 +565,7 @@ const Study = () => {
         },
       }
     );
-  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;
