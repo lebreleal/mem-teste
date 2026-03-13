@@ -416,21 +416,6 @@ const QuestionPractice = ({
   const [elaborativeText, setElaborativeText] = useState('');
   const [elaborativeSubmitted, setElaborativeSubmitted] = useState(false);
 
-  // Concept mastery for current deck
-  const { data: conceptMastery = [] } = useQuery({
-    queryKey: ['concept-mastery', deckId, user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data } = await supabase
-        .from('deck_concept_mastery' as any)
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('deck_id', deckId);
-      return (data ?? []) as unknown as ConceptMastery[];
-    },
-    enabled: !!user,
-    staleTime: 30_000,
-  });
 
   const q = questions[index];
 
