@@ -384,7 +384,7 @@ const ConceptsPage = () => {
         )}
       </header>
 
-      <div className="px-4 py-4 max-w-lg mx-auto space-y-3">
+      <div className="px-4 py-4 max-w-7xl mx-auto space-y-3">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full grid grid-cols-3">
             <TabsTrigger value="meus" className="gap-1.5 text-xs"><BrainCircuit className="h-3.5 w-3.5" /> Meus ({counts.total})</TabsTrigger>
