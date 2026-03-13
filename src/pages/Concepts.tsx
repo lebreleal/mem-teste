@@ -226,6 +226,10 @@ const ConceptsPage = () => {
   const [studyMode, setStudyMode] = useState(false);
   const [studyQueue, setStudyQueue] = useState<GlobalConcept[]>([]);
 
+  // Explanatory modals
+  const [showPrereqExplainer, setShowPrereqExplainer] = useState(false);
+  const [showDiagnosticExplainer, setShowDiagnosticExplainer] = useState(false);
+
   const now = useMemo(() => new Date(), []);
   const isDue = useCallback((c: GlobalConcept) => new Date(c.scheduled_date) <= now, [now]);
 
