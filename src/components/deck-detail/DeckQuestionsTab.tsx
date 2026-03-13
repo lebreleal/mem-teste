@@ -1868,7 +1868,7 @@ const PasteQuestionsDialog = ({
       }
 
       if (questionConceptPairs.length > 0) {
-        linkQuestionsToConcepts(user.id, questionConceptPairs).catch(console.error);
+        linkQuestionsToConcepts(user.id, questionConceptPairs, { denseBatchLinking: true }).catch(console.error);
       }
 
       queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
