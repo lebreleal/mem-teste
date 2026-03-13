@@ -16,9 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Brain, Flame, Timer, Crown, Bell, Menu, Moon, Sun, LogOut, UserCircle,
-  Lightbulb, FileText, X, BrainCircuit,
+  Lightbulb, FileText, X,
 } from 'lucide-react';
-import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 
 interface DashboardHeaderProps {
   onCreditsOpen: () => void;
