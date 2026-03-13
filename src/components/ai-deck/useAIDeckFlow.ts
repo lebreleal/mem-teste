@@ -47,8 +47,10 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { addPending, updatePending, removePending } = usePendingDecks();
+  const { sources: aiSources, saveText: saveTextSource, saveFile: saveFileSource } = useAISources();
 
   const [step, setStep] = useState<Step>(pendingReviewData ? 'review' : 'upload');
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   // Text sample for AI tag suggestions
   const textSampleRef = useRef<string>(pendingReviewData?.textSample || '');
