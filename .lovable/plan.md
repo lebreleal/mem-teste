@@ -1,79 +1,100 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-# Analise Profunda: Neurociencia da Aprendizagem vs Implementacao Atual
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-## Veredicto Geral
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-O sistema esta **80% alinhado** com os principios da neurociencia. As ultimas modificacoes (rating automatico binario, mastery threshold de 2 acertos consecutivos, agrupamento por KC, auto-geracao de questoes) foram acertos significativos. Porem, ha **4 lacunas concretas** que a literatura de learning science identifica como criticas.
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
----
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-## O que esta CORRETO (validado pela literatura)
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-| Principio | Implementacao | Base Cientifica |
-|---|---|---|
-| **Spaced Repetition (FSRS-6)** | Conceitos agendados por FSRS com 85% retention | Ebbinghaus 1885, Cepeda et al. 2006 |
-| **Testing Effect** | Estudo via questoes (retrieval practice), nao releitura | Roediger & Karpicke 2006 |
-| **Varied Practice** | `getVariedQuestion` seleciona questao diferente a cada revisao | Bjork 1994 (desirable difficulties) |
-| **Binary Feedback** | Rating automatico (acertou=3, errou=1) sem autoavaliacao | Dunning-Kruger: alunos sao pessimos em autoavaliar |
-| **Mastery-based** | 2 acertos consecutivos para confirmar dominio | Bloom 1968 (mastery learning) |
-| **Prerequisite Graph** | `parent_concept_id` + cascade on error | Doignon & Falmagne 1999 (Knowledge Space Theory) |
-| **Auto-generation** | Conceitos sem questoes geram conteudo via IA | Elimina "dead ends" no grafo de conhecimento |
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
----
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-## LACUNA 1: Falta Elaborative Interrogation apos erro
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-**Problema**: Quando o aluno erra no `StudyMode`, ve "Incorreto — conceito marcado para revisao futura" + explicacao passiva. Isso e **feedback passivo** — o aluno le a resposta e clica "proximo".
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-**Neurociencia**: Elaborative Interrogation (Chi et al. 1994, Dunlosky et al. 2013) mostra que **forcar o aluno a explicar POR QUE a resposta correta esta certa** antes de ver a explicacao da IA melhora retenção em ~30%. A memoria nota do sistema ja menciona isso mas nao esta implementado.
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-**Correcao**: Apos erro, mostrar um campo de texto "Explique por que a alternativa X esta correta" antes de revelar a explicacao. Opcional (pode pular), mas o ato de tentar gerar a explicacao ativa circuitos de encoding profundo.
+### 11. Princípios de Neurociência Aplicados (Learning Science)
 
-## LACUNA 2: Falta Interleaved Practice
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
 
-**Problema**: O `StudyMode` apresenta conceitos **em sequencia** (conceito 1 → conceito 2 → ...). Quando vem do ErrorNotebook, a queue e [conceito_clicado, parent_fraco]. Isso e **blocked practice** — estudar um tema por vez.
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
 
-**Neurociencia**: Interleaved Practice (Rohrer & Taylor 2007, Kornell & Bjork 2008) mostra que **misturar conceitos de categorias diferentes** na mesma sessao melhora retenção de longo prazo em ~20-40%, apesar de parecer mais dificil no momento. A memoria do sistema ja menciona isso.
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
 
-**Correcao**: No ErrorNotebook, o botao "Estudar conceito" deveria construir uma queue com **todos os conceitos fracos embaralhados** (ou pelo menos 5-10), nao apenas o conceito clicado + parent. Adicionar um botao "Estudar todos" que cria uma sessao interleaved.
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
 
-## LACUNA 3: Falta Confidence-Based Assessment
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
-**Problema**: O sistema trata um acerto como um acerto, independente de se o aluno "chutou" ou "sabia". No ALEKS real, acertar por chute nao conta como dominio.
-
-**Neurociencia**: Confidence-weighted learning (Hunt 2003, Dunlosky & Rawson 2012) mostra que pedir ao aluno "Qual sua confianca?" APOS responder (nao antes) melhora a calibracao metacognitiva. Acertou com baixa confianca = nao conta como streak.
-
-**Correcao**: Apos confirmar resposta correta, perguntar "Voce tinha certeza?" (Sim/Nao). Se "Nao" → nao incrementa `consecutiveCorrect`, exige mais uma questao. Isso impede que chutes sortudos confirmem dominio. Simples de implementar, alto impacto.
-
-## LACUNA 4: DiagnosticMode nao usa mastery threshold
-
-**Problema**: O `DiagnosticMode` usa apenas **1 questao por conceito** para determinar se e "dominado" ou "fraco". Um acerto isolado pode ser sorte — especialmente em questoes de 4 alternativas (25% de chute).
-
-**Neurociencia**: O mesmo principio do mastery threshold (Bloom 1968) que ja aplicamos no StudyMode deveria valer no diagnostico. 1 questao = 25% chance de falso positivo.
-
-**Correcao**: Aplicar o mesmo `MASTERY_THRESHOLD = 2` do StudyMode ao DiagnosticMode. Se acertou a primeira, apresentar uma segunda questao do mesmo conceito antes de marcar como dominado.
-
----
-
-## Resumo de Prioridade
-
-| Lacuna | Impacto | Esforco | Prioridade |
-|---|---|---|---|
-| **Interleaved Practice** (embaralhar conceitos) | Alto (+20-40% retencao) | Baixo (mudar construcao da queue) | 1 |
-| **Elaborative Interrogation** (explicar apos erro) | Alto (+30% encoding) | Medio (adicionar campo texto) | 2 |
-| **Confidence check** (filtrar chutes) | Medio (calibracao) | Baixo (1 pergunta extra) | 3 |
-| **DiagnosticMode mastery threshold** | Medio (reduz falsos positivos) | Baixo (reusar logica StudyMode) | 4 |
-
-## Implementacao Tecnica
-
-### Arquivos afetados
-- `src/pages/ErrorNotebook.tsx` — adicionar botao "Estudar todos" com queue embaralhada
-- `src/components/concepts/StudyMode.tsx` — elaborative interrogation field + confidence check
-- `src/components/concepts/DiagnosticMode.tsx` — mastery threshold de 2 questoes
-
-### Sem mudancas necessarias em
-- Backend/migrations
-- FSRS logic
-- Services
-
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |

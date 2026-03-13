@@ -1,10 +1,9 @@
 /**
  * ErrorNotebook — ALEKS-style concept-centric error remediation.
  * Groups errors by weak Knowledge Component, not by deck.
- * Primary action: "Estudar" opens StudyMode with varied questions for the concept.
- * Concepts disappear from the list once mastered (state === 2).
+ * Supports interleaved practice: "Estudar todos" shuffles all weak concepts.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, BookX, CheckCircle2, BrainCircuit,
   AlertTriangle, Shield, PlayCircle, ChevronRight,
-  Loader2, GitBranch,
+  Loader2, GitBranch, Shuffle,
 } from 'lucide-react';
 import { getWeakConceptsWithErrors, type WeakConceptWithErrors } from '@/services/conceptHierarchyService';
 import StudyMode from '@/components/concepts/StudyMode';
@@ -25,6 +24,16 @@ const HEALTH_CONFIG = {
   learning: { label: 'Aprendendo', icon: BrainCircuit, badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
   strong: { label: 'Dominado', icon: Shield, badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
 };
+
+// Fisher-Yates shuffle
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 // ─── Concept Row ───
 const ConceptRow = ({
@@ -51,7 +60,6 @@ const ConceptRow = ({
         </Badge>
       </div>
 
-      {/* Stats row */}
       <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
         <span>{concept.errorCount} {concept.errorCount === 1 ? 'erro' : 'erros'}</span>
         {total > 0 && (
@@ -68,7 +76,6 @@ const ConceptRow = ({
         )}
       </div>
 
-      {/* Accuracy bar */}
       {total > 0 && (
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
@@ -81,7 +88,6 @@ const ConceptRow = ({
         </div>
       )}
 
-      {/* Parent prerequisite */}
       {concept.parent && concept.parent.state !== 2 && (
         <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400">
           <GitBranch className="h-3 w-3" />
@@ -89,7 +95,6 @@ const ConceptRow = ({
         </div>
       )}
 
-      {/* Study action */}
       <Button
         size="sm"
         className="w-full gap-1.5"
@@ -118,12 +123,16 @@ const ErrorNotebook = () => {
     staleTime: 30_000,
   });
 
+  // Build a shuffled queue of ALL weak concepts for interleaved practice
+  const buildInterleavedQueue = useCallback((): GlobalConcept[] => {
+    const ids = new Set(weakConcepts.map(wc => wc.id));
+    const gcs = allConcepts.filter(c => ids.has(c.id));
+    return shuffle(gcs);
+  }, [weakConcepts, allConcepts]);
+
   const handleStudy = useCallback((wc: WeakConceptWithErrors) => {
-    // Find the full GlobalConcept from the hook data to pass to StudyMode
     const gc = allConcepts.find(c => c.id === wc.id);
     if (!gc) return;
-
-    // Build queue: this concept + its weak parent (if any)
     const queue: GlobalConcept[] = [gc];
     if (wc.parent && wc.parent.state !== 2) {
       const parentGc = allConcepts.find(c => c.id === wc.parent!.id);
@@ -131,6 +140,12 @@ const ErrorNotebook = () => {
     }
     setStudyQueue(queue);
   }, [allConcepts]);
+
+  const handleStudyAll = useCallback(() => {
+    const queue = buildInterleavedQueue();
+    if (queue.length === 0) return;
+    setStudyQueue(queue);
+  }, [buildInterleavedQueue]);
 
   const handleRate = useCallback(async (concept: GlobalConcept, rating: any, isCorrect: boolean) => {
     await submitConceptReview.mutateAsync({ concept, rating, isCorrect });
@@ -142,7 +157,6 @@ const ErrorNotebook = () => {
     queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
   }, [queryClient]);
 
-  // If studying, show StudyMode fullscreen
   if (studyQueue) {
     return (
       <StudyMode
@@ -192,8 +206,8 @@ const ErrorNotebook = () => {
           </div>
         ) : (
           <>
-            {/* Summary */}
-            <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-2">
+            {/* Summary + Study All */}
+            <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                   <span className="font-bold text-destructive text-lg">{weakConcepts.length}</span>{' '}
@@ -207,9 +221,16 @@ const ErrorNotebook = () => {
               <p className="text-[11px] text-muted-foreground">
                 Estude cada conceito com questões variadas até dominá-lo. Conceitos dominados saem automaticamente da lista.
               </p>
+              <Button
+                className="w-full gap-2"
+                variant="default"
+                onClick={handleStudyAll}
+              >
+                <Shuffle className="h-4 w-4" />
+                Estudar todos (prática intercalada)
+              </Button>
             </div>
 
-            {/* Concept list */}
             {weakConcepts.map(concept => (
               <ConceptRow
                 key={concept.id}
