@@ -97,7 +97,7 @@ export const DeleteConceptDialog = ({ open, onClose, target, selectedCount, onCo
         {target ? (
           <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">"{target.name}"</span>?</>
         ) : (
-          <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selectedCount} conceitos</span> selecionados?</>
+          <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selectedCount} temas</span> selecionados?</>
         )}
         {' '}Os vínculos com questões serão removidos, mas as questões não serão afetadas.
       </p>
