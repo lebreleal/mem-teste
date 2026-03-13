@@ -165,7 +165,7 @@ const ErrorNotebook = () => {
               Caderno de Erros
             </h1>
             <p className="text-xs text-muted-foreground">
-              {cards.length} cards · {dueCount} para revisar
+              {cards.length} itens · {dueCount} para revisar
             </p>
           </div>
           <div className="flex items-center gap-2">
