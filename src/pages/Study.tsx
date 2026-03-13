@@ -11,6 +11,9 @@ import { useStudyUndo } from '@/hooks/useStudyUndo';
 import { useAuth } from '@/hooks/useAuth';
 import AIModelSelector from '@/components/AIModelSelector';
 import FlashCard from '@/components/FlashCard';
+import SessionProgressStrip, { type DeckSessionStats } from '@/components/SessionProgressStrip';
+import MilestoneToast from '@/components/MilestoneToast';
+import SessionCompleteSummary from '@/components/SessionCompleteSummary';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle2, Brain, Moon, Sun, Timer, RefreshCw, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import {
@@ -97,8 +100,24 @@ const Study = () => {
   const [initialQueueSize, setInitialQueueSize] = useState(0);
   const reviewedCardIdsRef = useRef(new Set<string>());
   const cardShownAt = useRef<number>(Date.now());
+  const sessionStartRef = useRef<number>(Date.now());
   const fastWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Session tracking for ALEKS-style progress
+  const [correctCount, setCorrectCount] = useState(0);
+  const [wrongCount, setWrongCount] = useState(0);
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+  const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
+  const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
+
+  // Elapsed time ticker
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSessionElapsed(Date.now() - sessionStartRef.current);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
@@ -248,8 +267,24 @@ const Study = () => {
       setLocalQueue([...queue]);
       setInitialQueueSize(queue.length);
       setQueueInitialized(true);
+      sessionStartRef.current = Date.now();
+
+      // Initialize per-deck stats
+      const statsMap = new Map<string, DeckSessionStats>();
+      for (const card of queue) {
+        const did = card.deck_id as string;
+        if (!statsMap.has(did)) {
+          // Resolve deck name from deckConfigs or fallback
+          const cfg = deckConfigs[did];
+          const name = cfg?.name || (deckConfig?.name) || 'Baralho';
+          statsMap.set(did, { deckId: did, deckName: name, total: 0, done: 0, correct: 0, wrong: 0 });
+        }
+        statsMap.get(did)!.total += 1;
+      }
+      deckStatsRef.current = statsMap;
+      setDeckStatsSnapshot(Array.from(statsMap.values()));
     }
-  }, [queue, queueInitialized]);
+  }, [queue, queueInitialized, deckConfigs, deckConfig]);
 
   // Restore leech fail counters for this study context
   useEffect(() => {
@@ -481,6 +516,17 @@ const Study = () => {
     const shouldKeep = rating === 1 || (rating === 2 && card.state !== 2);
     reviewedCardIdsRef.current.add(card.id);
     setReviewCount(prev => prev + 1);
+
+    // Track accuracy + per-deck stats
+    if (rating >= 3) setCorrectCount(prev => prev + 1);
+    else setWrongCount(prev => prev + 1);
+    const deckStat = deckStatsRef.current.get(card.deck_id);
+    if (deckStat) {
+      deckStat.done += 1;
+      if (rating >= 3) deckStat.correct += 1;
+      else deckStat.wrong += 1;
+      setDeckStatsSnapshot(Array.from(deckStatsRef.current.values()));
+    }
 
     if (shouldKeep) {
       const cardConfig = getCardDeckConfig(card);
@@ -901,20 +947,14 @@ const Study = () => {
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-        <div className="animate-fade-in text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-            <CheckCircle2 className="h-10 w-10 text-primary" />
-          </div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Sessão Completa!</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            Você revisou <span className="font-bold text-primary">{reviewCount}</span> {reviewCount === 1 ? 'card' : 'cards'} hoje.
-          </p>
-          <Button onClick={goBack} className="mt-8 gap-2">
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </Button>
-        </div>
-      </div>
+      <SessionCompleteSummary
+        reviewCount={reviewCount}
+        correctCount={correctCount}
+        wrongCount={wrongCount}
+        elapsedMs={sessionElapsed}
+        deckStats={deckStatsSnapshot}
+        onGoBack={goBack}
+      />
     );
   }
 
@@ -976,9 +1016,19 @@ const Study = () => {
             <span className="text-xs font-bold text-foreground tabular-nums">{energy}</span>
           </div>
           <AIModelSelector model={model} onChange={setModel} baseCost={BASE_TUTOR_COST} compact />
-          <span className="text-xs font-bold text-muted-foreground tabular-nums">{cardsCompleted}/{initialQueueSize}</span>
         </div>
       </header>
+
+      {/* ALEKS-style progress strip */}
+      <SessionProgressStrip
+        reviewCount={reviewCount}
+        correctCount={correctCount}
+        wrongCount={wrongCount}
+        initialQueueSize={initialQueueSize}
+        remainingCount={localQueue.length}
+        elapsedMs={sessionElapsed}
+        deckStats={deckStatsSnapshot}
+      />
 
       <div className="h-1.5 w-full bg-muted/40">
         <div
@@ -986,6 +1036,9 @@ const Study = () => {
           style={{ width: `${progressPercent}%`, background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))`, borderRadius: '0 4px 4px 0' }}
         />
       </div>
+
+      {/* Milestone celebrations */}
+      <MilestoneToast reviewCount={reviewCount} correctCount={correctCount} />
 
       <main ref={mainScrollRef} className="flex flex-1 min-h-0 items-center justify-center px-2 sm:px-4 py-2 sm:py-4 overflow-y-auto">
         <div key={cardKey} className={`w-full transition-all duration-200 ${isTransitioning ? 'opacity-0 scale-95' : 'animate-fade-in'}`}>
