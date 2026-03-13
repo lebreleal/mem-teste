@@ -63,8 +63,8 @@ const OficiaisTab = () => {
     setImporting(concept.id);
     try {
       await importConcept(user.id, { name: concept.name, conceptTagId: concept.id });
-      toast.success(`"${concept.name}" adicionado aos seus conceitos`);
-    } catch { toast.error('Erro ao importar conceito'); }
+      toast.success(`"${concept.name}" adicionado aos seus temas`);
+    } catch { toast.error('Erro ao importar tema'); }
     setImporting(null);
   };
 
@@ -73,8 +73,8 @@ const OficiaisTab = () => {
   if (officialConcepts.length === 0) return (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
       <ShieldCheck className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito oficial ainda</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Conceitos oficiais da plataforma aparecerão aqui.</p>
+      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema oficial ainda</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Temas oficiais da plataforma aparecerão aqui.</p>
     </div>
   );
 
@@ -83,7 +83,7 @@ const OficiaisTab = () => {
       {officialConcepts.length > 5 && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Pesquisar conceitos oficiais" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Pesquisar temas oficiais" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
       )}
       <div className="space-y-2">
@@ -132,7 +132,7 @@ const ComunidadeTab = () => {
         name: concept.name, category: concept.category ?? undefined, subcategory: concept.subcategory ?? undefined,
       });
       toast.success(`"${concept.name}" importado: ${result.questionCount} questões, ${result.cardCount} cards`);
-    } catch { toast.error('Erro ao importar conceito'); }
+    } catch { toast.error('Erro ao importar tema'); }
     setImporting(null);
   };
 
@@ -141,8 +141,8 @@ const ComunidadeTab = () => {
   if (communityConcepts.length === 0) return (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
       <Users className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito na comunidade</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Conceitos compartilhados por outros usuários aparecerão aqui.</p>
+      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema na comunidade</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Temas compartilhados por outros usuários aparecerão aqui.</p>
     </div>
   );
 
@@ -151,7 +151,7 @@ const ComunidadeTab = () => {
       {communityConcepts.length > 5 && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Pesquisar conceitos da comunidade" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Pesquisar temas da comunidade" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
       )}
       <div className="space-y-2">
@@ -271,7 +271,7 @@ const ConceptsPage = () => {
     setMappingPrereqs(true);
     try {
       const count = await mapPrerequisitesViaAI(user.id);
-      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''}`);
+      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''} automaticamente`);
       queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
       queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
     } catch (e: any) { toast.error(e?.message || 'Erro ao mapear pré-requisitos'); }
@@ -283,7 +283,7 @@ const ConceptsPage = () => {
     setDiagnosticLoading(true);
     try {
       const queue = await fetchDiagnosticConcepts(user.id);
-      if (queue.length === 0) { toast.error('Nenhum conceito disponível para diagnóstico'); setDiagnosticLoading(false); return; }
+      if (queue.length === 0) { toast.error('Nenhum tema disponível para diagnóstico'); setDiagnosticLoading(false); return; }
       setDiagnosticQueue(queue);
       setDiagnosticMode(true);
     } catch { toast.error('Erro ao iniciar diagnóstico'); }
@@ -302,11 +302,11 @@ const ConceptsPage = () => {
   const confirmDelete = async () => {
     if (deleteSingleTarget) {
       await deleteConcept.mutateAsync(deleteSingleTarget.id);
-      toast.success('Conceito excluído');
+      toast.success('Tema excluído');
     } else {
       const ids = Array.from(selectedIds);
       for (const id of ids) await deleteConcept.mutateAsync(id);
-      toast.success(`${ids.length} conceito${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}`);
+      toast.success(`${ids.length} tema${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}`);
       setSelectedIds(new Set());
       setSelectionMode(false);
     }
@@ -362,9 +362,9 @@ const ConceptsPage = () => {
         <div className="flex-1">
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
-            Conceitos
+            Temas
           </h1>
-          <p className="text-xs text-muted-foreground">Biblioteca de conceitos</p>
+          <p className="text-xs text-muted-foreground">Seus assuntos de estudo</p>
         </div>
         {activeTab === 'meus' && counts.due > 0 && (
           <Button size="sm" className="gap-1.5" onClick={handleStartStudy}>
@@ -396,14 +396,14 @@ const ConceptsPage = () => {
             ) : concepts.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
                 <BrainCircuit className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-                <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito ainda</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Gere questões nos seus baralhos ou importe das abas Oficiais/Comunidade.</p>
+                <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema ainda</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Gere questões nos seus baralhos — os temas serão criados automaticamente.</p>
               </div>
             ) : (
               <>
                 {/* Title bar */}
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">Conceitos ({counts.total})</h2>
+                  <h2 className="font-display text-base sm:text-lg font-bold text-foreground shrink-0">Temas ({counts.total})</h2>
                   <div className="flex items-center gap-2">
                     <Button variant={hasActiveFilter ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8 relative" onClick={() => setShowFilters(!showFilters)}>
                       <Filter className="h-4 w-4" />
@@ -478,7 +478,7 @@ const ConceptsPage = () => {
                 {counts.total > 5 && (
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input placeholder="Pesquisar conceitos" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+                    <Input placeholder="Pesquisar temas" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
                   </div>
                 )}
 
@@ -544,7 +544,7 @@ const ConceptsPage = () => {
         onSave={async (name, category, subcategory) => {
           if (!editConcept) return;
           await updateMeta.mutateAsync({ conceptId: editConcept.id, fields: { name, category, subcategory } });
-          toast.success('Conceito atualizado');
+          toast.success('Tema atualizado');
           setEditConcept(null);
         }}
         isPending={updateMeta.isPending}

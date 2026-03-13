@@ -170,7 +170,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
           <XIcon className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <p className="text-xs text-muted-foreground">Conceito {index + 1}/{queue.length}</p>
+          <p className="text-xs text-muted-foreground">Tema {index + 1}/{queue.length}</p>
           <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
           {concept?.category && (
             <p className="text-[10px] text-muted-foreground">{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</p>
@@ -207,7 +207,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
           <Card>
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este conceito.</p>
+              <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este tema.</p>
               <Button variant="outline" className="mt-4" onClick={handleAdvanceAfterError}>Pular</Button>
             </CardContent>
           </Card>
@@ -308,7 +308,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             {confirmed && !isCorrect && elaborationSubmitted && (
               <div className="space-y-3">
                 <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                  ❌ Incorreto — conceito marcado para revisão futura
+                  ❌ Incorreto — tema marcado para revisão futura
                 </div>
                 {question.explanation && (
                   <div className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
@@ -323,7 +323,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
                   </div>
                 )}
                 <Button className="w-full" onClick={handleAdvanceAfterError}>
-                  {index + 1 >= queue.length ? 'Finalizar' : 'Próximo conceito'}
+                  {index + 1 >= queue.length ? 'Finalizar' : 'Próximo tema'}
                 </Button>
               </div>
             )}

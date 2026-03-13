@@ -100,7 +100,7 @@ const ConceptListItem = ({
         </TooltipTrigger>
         {isLocked && parentName && (
           <TooltipContent side="top">
-            <p className="text-xs">Domine "{parentName}" primeiro</p>
+            <p className="text-xs">Domine o tema "{parentName}" primeiro</p>
           </TooltipContent>
         )}
       </Tooltip>

@@ -126,7 +126,7 @@ const ConceptRow = ({
           onClick={() => onStudy(concept)}
         >
           <PlayCircle className="h-4 w-4" />
-          Estudar conceito
+          Estudar tema
           <ChevronRight className="h-3.5 w-3.5 ml-auto" />
         </Button>
       )}
@@ -206,7 +206,7 @@ const ErrorNotebook = () => {
           <div className="flex-1">
             <h1 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
               <BookX className="h-5 w-5 text-destructive" />
-              Conceitos Fracos
+              Temas Fracos
             </h1>
             <p className="text-xs text-muted-foreground">
               {dueConcepts.length} para revisar agora
@@ -228,7 +228,7 @@ const ErrorNotebook = () => {
             </div>
             <h3 className="font-display text-lg font-bold text-foreground">Tudo dominado!</h3>
             <p className="mt-1 text-sm text-muted-foreground max-w-xs">
-              Não há conceitos fracos. Continue estudando — conceitos fracos aparecerão aqui automaticamente.
+              Não há temas fracos. Continue estudando — temas fracos aparecerão aqui automaticamente.
             </p>
             <Button variant="outline" className="mt-4" onClick={() => navigate('/dashboard')}>
               Voltar ao Dashboard
@@ -242,7 +242,7 @@ const ErrorNotebook = () => {
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-bold text-destructive text-lg">{dueConcepts.length}</span>{' '}
-                    conceitos para revisar agora
+                    temas para revisar agora
                   </p>
                   <Badge variant="destructive" className="gap-1">
                     <BrainCircuit className="h-3 w-3" />
@@ -250,7 +250,7 @@ const ErrorNotebook = () => {
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Estude cada conceito com questões variadas até dominá-lo. O FSRS agenda revisões no tempo ideal.
+                  Estude cada tema com questões variadas até dominá-lo. O FSRS agenda revisões no tempo ideal.
                 </p>
                 <Button
                   className="w-full gap-2"

@@ -36,7 +36,7 @@ export const EditConceptDialog = ({ concept, onClose, onSave, isPending }: EditD
     <Dialog open={!!concept} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Editar conceito</DialogTitle>
+          <DialogTitle>Editar tema</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -91,13 +91,13 @@ export const DeleteConceptDialog = ({ open, onClose, target, selectedCount, onCo
   <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
     <DialogContent className="sm:max-w-sm">
       <DialogHeader>
-        <DialogTitle>Excluir {target ? 'conceito' : `${selectedCount} conceitos`}</DialogTitle>
+        <DialogTitle>Excluir {target ? 'tema' : `${selectedCount} temas`}</DialogTitle>
       </DialogHeader>
       <p className="text-sm text-muted-foreground">
         {target ? (
           <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">"{target.name}"</span>?</>
         ) : (
-          <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selectedCount} conceitos</span> selecionados?</>
+          <>Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selectedCount} temas</span> selecionados?</>
         )}
         {' '}Os vínculos com questões serão removidos, mas as questões não serão afetadas.
       </p>
@@ -146,7 +146,7 @@ export const QuestionsSheet = ({ conceptId, questions, loading, onClose, onUnlin
                   <p className="text-xs text-foreground line-clamp-2">{q.questionText}</p>
                   {q.deckName && <p className="text-[10px] text-muted-foreground mt-0.5">Baralho: {q.deckName}</p>}
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary" title="Adicionar conceito" onClick={() => onAddConcept(q.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary" title="Adicionar tema" onClick={() => onAddConcept(q.id)}>
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" title="Desvincular" onClick={() => onUnlink(q.id)}>
@@ -185,9 +185,9 @@ export const AddConceptDialog = ({ open, questionId, onClose }: AddConceptDialog
         category: category || undefined,
         subcategory: subcategory || undefined,
       }]);
-      toast.success(`Conceito "${name.trim()}" vinculado`);
+      toast.success(`Tema "${name.trim()}" vinculado`);
       onClose();
-    } catch { toast.error('Erro ao vincular conceito'); }
+    } catch { toast.error('Erro ao vincular tema'); }
     setSaving(false);
   };
 
@@ -195,14 +195,14 @@ export const AddConceptDialog = ({ open, questionId, onClose }: AddConceptDialog
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Vincular conceito à questão</DialogTitle>
+          <DialogTitle>Vincular tema à questão</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
           Adicione esta questão a um conceito adicional (ex: uma questão de Clínica Médica que também serve para Oftalmologia).
         </p>
         <div className="space-y-3 mt-2">
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do conceito</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome do tema</label>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Hipertensão intracraniana" autoFocus />
           </div>
           <div>
