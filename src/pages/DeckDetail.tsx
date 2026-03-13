@@ -407,7 +407,7 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
   );
 };
 
-const DeckTagsSection = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
+const DeckTagsSection = ({ deckId, isLinkedDeck, sourceDeckId }: { deckId: string; isLinkedDeck: boolean; sourceDeckId?: string | null }) => {
   const { data: tags = [] } = useDeckTags(deckId);
   const { addTag, removeTag } = useDeckTagMutations(deckId);
 
@@ -423,6 +423,7 @@ const DeckTagsSection = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDec
             </span>
           ))}
         </div>
+        <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
       </div>
     );
   }
@@ -438,8 +439,8 @@ const DeckTagsSection = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDec
         onRemove={(tagId) => removeTag.mutate(tagId)}
         placeholder="Buscar ou criar tag..."
         aiContext={{ deckName: (deck as any)?.name }}
-        
       />
+      <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
     </div>
   );
 };
