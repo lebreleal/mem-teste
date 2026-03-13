@@ -271,7 +271,7 @@ const ConceptsPage = () => {
     setMappingPrereqs(true);
     try {
       const count = await mapPrerequisitesViaAI(user.id);
-      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''}`);
+      toast.success(`${count} pré-requisito${count !== 1 ? 's' : ''} mapeado${count !== 1 ? 's' : ''} automaticamente`);
       queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
       queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
     } catch (e: any) { toast.error(e?.message || 'Erro ao mapear pré-requisitos'); }
