@@ -5,14 +5,18 @@
  */
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { CheckCircle2, Lock, Circle, Loader2, ZoomIn, ZoomOut, Locate } from 'lucide-react';
+import { CheckCircle2, Lock, Circle, Loader2, ZoomIn, ZoomOut, Locate, CheckSquare, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ConceptNeuralMapProps {
   concepts: GlobalConcept[];
   lockedIds: Set<string>;
   onStartStudy?: (concept: GlobalConcept) => void;
   onNodeTap?: (concept: GlobalConcept) => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
 }
 
 // ── Layout constants ──
