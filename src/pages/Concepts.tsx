@@ -1138,47 +1138,61 @@ const ConceptsPage = () => {
                   ) : filtered.map(concept => {
                     const si = stateInfo(concept.state);
                     const isSelected = selectedIds.has(concept.id);
+                    const isLocked = lockedIds.has(concept.id);
                     const totalAttempts = concept.correct_count + concept.wrong_count;
                     const accuracy = totalAttempts > 0 ? Math.round((concept.correct_count / totalAttempts) * 100) : 0;
+                    const parentConcept = isLocked && concept.parent_concept_id
+                      ? concepts.find(c => c.id === concept.parent_concept_id)
+                      : null;
 
                     return (
-                      <div
-                        key={concept.id}
-                        className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
-                          isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
-                        }`}
-                        onClick={() => { if (selectionMode) toggleSelection(concept.id); }}
-                      >
-                        <div className="flex items-start gap-3">
-                          {selectionMode && (
-                            <div className="pt-0.5 shrink-0" onClick={e => { e.stopPropagation(); toggleSelection(concept.id); }}>
-                              <Checkbox checked={isSelected} />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${si.color}`}>
-                                {si.label}
-                              </span>
-                              {concept.state !== 0 && (
-                                <span className="text-[10px] text-muted-foreground">{nextReviewLabel(concept.scheduled_date)}</span>
-                              )}
-                            </div>
-                            <p className="text-sm font-semibold text-foreground leading-snug">{concept.name}</p>
-                            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                              {concept.category ? (
-                                <span>{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</span>
-                              ) : (
-                                <span className="italic">Sem categoria</span>
-                              )}
-                              {totalAttempts > 0 && (
-                                <>
-                                  <span>·</span>
-                                  <span>{accuracy}% acerto ({concept.correct_count}/{totalAttempts})</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                      <TooltipProvider key={concept.id}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
+                                isLocked
+                                  ? 'opacity-50 border-border/30'
+                                  : isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
+                              }`}
+                              onClick={() => { if (selectionMode) toggleSelection(concept.id); }}
+                            >
+                              <div className="flex items-start gap-3">
+                                {selectionMode && (
+                                  <div className="pt-0.5 shrink-0" onClick={e => { e.stopPropagation(); toggleSelection(concept.id); }}>
+                                    <Checkbox checked={isSelected} />
+                                  </div>
+                                )}
+                                {isLocked && !selectionMode && (
+                                  <Lock className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-0.5" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${si.color}`}>
+                                      {si.label}
+                                    </span>
+                                    {concept.state !== 0 && !isLocked && (
+                                      <span className="text-[10px] text-muted-foreground">{nextReviewLabel(concept.scheduled_date)}</span>
+                                    )}
+                                    {isLocked && (
+                                      <span className="text-[10px] text-muted-foreground italic">Bloqueado</span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-semibold text-foreground leading-snug">{concept.name}</p>
+                                  <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                    {concept.category ? (
+                                      <span>{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</span>
+                                    ) : (
+                                      <span className="italic">Sem categoria</span>
+                                    )}
+                                    {totalAttempts > 0 && (
+                                      <>
+                                        <span>·</span>
+                                        <span>{accuracy}% acerto ({concept.correct_count}/{totalAttempts})</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
 
                           {!selectionMode && (
                             <DropdownMenu>
