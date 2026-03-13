@@ -96,6 +96,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/decks/:deckId" element={<ProtectedRoute><DeckDetail /></ProtectedRoute>} />
+                <Route path="/study/all" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/study/folder/:folderId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/study/:deckId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/manage" element={<ProtectedRoute><ManageDeck /></ProtectedRoute>} />

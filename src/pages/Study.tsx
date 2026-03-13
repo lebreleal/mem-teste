@@ -60,23 +60,32 @@ type LeechInterruptionState = {
 
 const Study = () => {
   const { deckId, folderId } = useParams<{ deckId?: string; folderId?: string }>();
+  const isUnifiedMode = !deckId && !folderId; // /study/all route
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig } = useStudySession(deckId ?? '', folderId);
+  const { queue, isLoading, isFetching, submitReview, algorithmMode, isLiveDeck, deckConfig, deckConfigs } = useStudySession(isUnifiedMode ? '__all__' : (deckId ?? ''), folderId);
   const { theme, toggleTheme } = useTheme();
   const { energy, addSuccessfulCard } = useEnergy();
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const goBack = useCallback(() => {
     invalidateStudyQueries(queryClient);
-    if (deckId) navigate(`/decks/${deckId}`, { replace: true });
+    if (isUnifiedMode) navigate('/dashboard', { replace: true });
+    else if (deckId) navigate(`/decks/${deckId}`, { replace: true });
     else if (folderId) navigate(`/dashboard?folder=${folderId}`, { replace: true });
     else navigate('/dashboard', { replace: true });
-  }, [deckId, folderId, navigate, queryClient]);
+  }, [deckId, folderId, isUnifiedMode, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  
+  /** Resolve deck config for a specific card (unified mode uses per-card lookup) */
+  const getCardDeckConfig = useCallback((card: any) => {
+    if (isUnifiedMode && card?.deck_id && deckConfigs[card.deck_id]) {
+      return deckConfigs[card.deck_id];
+    }
+    return deckConfig ?? {};
+  }, [isUnifiedMode, deckConfigs, deckConfig]);
+
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
@@ -96,11 +105,11 @@ const Study = () => {
   const leechBypassOnceRef = useRef<Set<string>>(new Set());
   const leechAdvanceLockRef = useRef(false);
   const leechFailStorageKey = useMemo(
-    () => `study-leech-fails:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
-    [deckId, folderId],
+    () => `study-leech-fails:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
+    [deckId, folderId, isUnifiedMode],
   );
   const leechInterruptionStorageKey = useMemo(
-    () => `study-leech-interruption:${folderId ? `folder-${folderId}` : deckId ?? 'no-deck'}`,
+    () => `study-leech-interruption:${isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId ?? 'no-deck')}`,
     [deckId, folderId],
   );
 
@@ -249,8 +258,8 @@ const Study = () => {
 
   // Clear stale cache on unmount
   const studyQueueKey = useMemo(
-    () => ['study-queue', folderId ? `folder-${folderId}` : deckId],
-    [deckId, folderId],
+    () => ['study-queue', isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId)],
+    [deckId, folderId, isUnifiedMode],
   );
   useEffect(() => {
     return () => {
@@ -474,7 +483,8 @@ const Study = () => {
     setReviewCount(prev => prev + 1);
 
     if (shouldKeep) {
-      const steps = deckConfig?.learning_steps ?? ['1', '10'];
+      const cardConfig = getCardDeckConfig(card);
+      const steps = cardConfig?.learning_steps ?? ['1', '10'];
       const currentStep = card.learning_step ?? 0;
       const stepIdx = rating === 1 ? 0 : Math.min(currentStep + 1, steps.length - 1);
       const stepStr = steps[stepIdx] ?? '1';
@@ -494,9 +504,10 @@ const Study = () => {
       setLocalQueue(prev => {
         let filtered = prev.filter(c => c.id !== card.id);
         if (card.card_type === 'cloze') {
-          const buryNew = deckConfig?.bury_new_siblings !== false;
-          const buryReview = deckConfig?.bury_review_siblings !== false;
-          const buryLearning = deckConfig?.bury_learning_siblings !== false;
+          const cardCfg = getCardDeckConfig(card);
+          const buryNew = cardCfg?.bury_new_siblings !== false;
+          const buryReview = cardCfg?.bury_review_siblings !== false;
+          const buryLearning = cardCfg?.bury_learning_siblings !== false;
           if (buryNew || buryReview || buryLearning) {
             const siblingIds = getSiblingIds(card, filtered);
             if (siblingIds.length > 0) {
@@ -554,7 +565,7 @@ const Study = () => {
         },
       }
     );
-  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, deckConfigs, getCardDeckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;
@@ -993,7 +1004,7 @@ const Study = () => {
             isSubmitting={submitReview.isPending || isTransitioning}
             quickReview={algorithmMode === 'quick_review'}
             algorithmMode={algorithmMode}
-            deckConfig={deckConfig}
+            deckConfig={getCardDeckConfig(currentCard)}
             energy={energy}
             tutorCost={TUTOR_COST}
             onTutorRequest={(options) => tutor.handleTutorRequest(currentCard, options)}

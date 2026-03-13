@@ -1,66 +1,135 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-# Diagnóstico: "Estudar Agora" Quebrado + Plano de Correção
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-## Problemas Identificados
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-### Bug Principal: O botão mente para o usuário
-O Hero mostra "82 revisão · 19 aprendendo · 111 novos" (agregado de TODOS os baralhos), mas ao clicar navega para `/study/{firstPendingDeckId}` — que carrega cards de **um único baralho**. O usuário espera estudar tudo, mas estuda só um pedaço.
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-### Bug 2: Não existe rota unificada
-Não existe `/study/unified`. O `Study.tsx` requer `deckId` ou `folderId` via `useParams`. Sem isso, não carrega nada.
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-### Bug 3: Temas (concepts) não entram na sessão
-O Hero conta "50 temas" no total mas a rota de estudo só busca cards via `fetchStudyQueue`. Os temas due nunca são incluídos na sessão real.
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-### Bug 4: Session cap é cosmético
-O banner "Sessão recomendada: 30min" é apenas visual. A sessão real carrega todos os cards do baralho sem respeitar o cap.
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-### Bug 5: Estudar direto nos baralhos (DeckCarousel)
-Cada baralho no carousel tem botão "Estudar" próprio que vai pra `/study/{deckId}`. Isso **está correto** — é acesso direto para power users. O problema é que contradiz a promessa do Hero.
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-## Solução: Rota Unificada Real
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-### 1. Nova rota `/study/all` no `App.tsx`
-Adicionar rota que carrega `Study.tsx` sem `deckId`/`folderId`, sinalizando modo unificado.
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-### 2. Novo service: `fetchUnifiedStudyQueue` no `studyService.ts`
-- Busca cards de TODOS os baralhos do escopo (plan mode ou todos) numa única query
-- Aplica limites por hierarquia (new/review) igual ao `fetchStudyQueue` atual
-- Intercala cards de diferentes baralhos (não estuda um baralho inteiro antes do próximo)
-- Prioridade: learning/relearning → review → new (mesma lógica atual, mas cross-deck)
-- Usa o config do baralho de cada card para `submitReview` (já funciona assim — o card tem `deck_id`)
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-### 3. Adaptar `useStudySession.ts`
-- Novo modo: quando `deckId === 'all'` e sem `folderId`, chama `fetchUnifiedStudyQueue`
-- O `submitReview` já funciona por card individual (busca `deckConfig` do card.deck_id), precisa adaptar para buscar config do deck correto
+### 11. Princípios de Neurociência Aplicados (Learning Science)
 
-### 4. Adaptar `Study.tsx`
-- Detectar modo unificado (`deckId === 'all'`)
-- No `goBack`, voltar para `/dashboard` em vez de `/decks/:id`
-- Para `submitReview`, buscar `deckConfig` do deck do card atual (não do deck da rota)
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
 
-### 5. `StudyNowHero.tsx` — navegar para `/study/all`
-- Trocar `navigate(`/study/${q.firstPendingDeckId}`)` por `navigate('/study/all')`
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
 
-### 6. Session cap real (fase 2, opcional)
-- Por agora, o cap fica cosmético — o service já respeita daily limits per deck
-- Implementar cap real requer truncar a fila unificada, o que pode ser feito depois
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
 
-### 7. Temas na fila (fase 2, opcional)
-- Integrar concepts due na fila unificada é complexo (são quizzes, não flashcards)
-- Manter separado por agora — o Hero pode mostrar link para `/conceitos` se há temas due
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
 
-## Resumo das mudanças concretas
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
+## Correções Arquiteturais — Unificação Cards ↔ Temas
+
+### 12. Card Review → Concept Mastery Sync (Fase 1a)
+- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
+- Se rating≥3: incrementa correct_count do tema vinculado
+- Se rating=1: incrementa wrong_count do tema vinculado
+- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+
+### 13. Temas Due → Flashcard Retrieval (Fase 1b)
+- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
+- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
+- Fallback para `/conceitos` se não houver deck vinculado
+- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+
+### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
+- Novo componente `DiagnosticBanner.tsx` no Dashboard
+- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
+- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
+- Dismissível com persistência em localStorage
+
+### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
+- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
+- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
+- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
+- Guard contra execução duplicada via `_autoMapInFlight` Set
+
+### 16. Daily Theme Limit (Fase 3a)
+- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
+- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
+- Exposto no hook para UI consumir (banners, limites)
+
+## Arquivos Modificados
 | Arquivo | Mudança |
 |---|---|
-| `App.tsx` | Adicionar rota `/study/all` |
-| `studyService.ts` | Nova função `fetchUnifiedStudyQueue` |
-| `useStudySession.ts` | Detectar modo `all`, chamar service correto |
-| `Study.tsx` | Adaptar goBack, deckConfig per-card |
-| `StudyNowHero.tsx` | Navegar para `/study/all` |
-| `useUnifiedQueue.ts` | Expor `pendingDeckIds` para o service |
-
-A retenção FSRS está funcionando corretamente — o algoritmo, os estados, o agendamento estão todos íntegros. O problema é puramente de **navegação e montagem da fila**.
-
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |
+| `src/pages/Study.tsx` | Sync card review → concept mastery |
+| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
+| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
+| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
