@@ -12,8 +12,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import ExamConfigWizard from './ExamConfigWizard';
+import AISourceSelector from '@/components/AISourceSelector';
 import type { PageItem } from './types';
 import type { AIModel } from '@/hooks/useAIModel';
+import type { AISource } from '@/hooks/useAISources';
 
 interface FileExamFlowProps {
   userId: string;
@@ -50,6 +52,8 @@ interface FileExamFlowProps {
   setExampleImageUrl: (url: string) => void;
   exampleImageUploading: boolean;
   setExampleImageUploading: (v: boolean) => void;
+  selectedSourceId?: string | null;
+  onLoadSource?: (source: AISource | null) => void;
 }
 
 const FileExamFlow = ({
@@ -60,6 +64,7 @@ const FileExamFlow = ({
   onFileUpload, onTogglePage, onSelectAll, onDeselectAll, onContinueToConfig, onGenerate,
   exampleMode, setExampleMode, exampleText, setExampleText,
   exampleImageUrl, setExampleImageUrl, exampleImageUploading, setExampleImageUploading,
+  selectedSourceId, onLoadSource,
 }: FileExamFlowProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFilePages = filePages.filter(p => p.selected);
@@ -79,6 +84,15 @@ const FileExamFlow = ({
             </div>
           </div>
           <input ref={fileInputRef} type="file" accept=".pdf,.pptx,.docx,.txt" className="hidden" onChange={onFileUpload} />
+          
+          {/* AI Source Selector */}
+          {onLoadSource && (
+            <AISourceSelector
+              selectedSourceId={selectedSourceId ?? null}
+              onSelectSource={onLoadSource}
+            />
+          )}
+
           <button onClick={() => fileInputRef.current?.click()} disabled={fileLoading}
             className="w-full flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 transition-colors hover:bg-muted/50 hover:border-primary/30">
             {fileLoading ? <Loader2 className="h-8 w-8 text-primary animate-spin" /> : <Upload className="h-8 w-8 text-muted-foreground" />}

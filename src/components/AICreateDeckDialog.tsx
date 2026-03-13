@@ -76,6 +76,8 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
             fileInputRef={flow.fileInputRef}
             onFileSelect={flow.handleFileSelect}
             onTextContinue={flow.handleTextContinue}
+            selectedSourceId={flow.selectedSourceId}
+            onLoadSource={flow.handleLoadSource}
           />
         )}
 

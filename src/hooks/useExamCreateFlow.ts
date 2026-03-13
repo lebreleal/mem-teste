@@ -14,10 +14,12 @@ import { useStudyStats } from '@/hooks/useStudyStats';
 import { useExamNotifications } from '@/hooks/useExamNotifications';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useAISources, type AISource } from '@/hooks/useAISources';
 
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { fetchCards } from '@/services/cardService';
 import { invokeGenerateExamQuestions } from '@/services/aiService';
+import { supabase } from '@/integrations/supabase/client';
 import { createEmptyQuestion, type CreationMode, type ManualQuestion, type ManualQuestionType, type PageItem } from '@/components/exam-create/types';
 
 export function useExamCreateFlow() {
@@ -34,7 +36,9 @@ export function useExamCreateFlow() {
   const { model, setModel, getCost, pendingPro, confirmPro, cancelPro } = useAIModel();
   const { data: studyStats } = useStudyStats();
   const { addNotification, updateNotification } = useExamNotifications();
+  const { sources: aiSources, saveText: saveTextSource, saveFile: saveFileSource } = useAISources();
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   const { exam: existingExam, questions: existingQuestions, isLoading: examLoading } = useExamDetail(examId ?? '');
 
@@ -220,6 +224,13 @@ Baseie-se APENAS no material fornecido. Varie a dificuldade.${getExampleInstruct
     setFileName(file.name);
     setFileStep('loading');
 
+    // Auto-save file as AI source
+    if (user) {
+      saveFileSource.mutateAsync(file)
+        .then(saved => setSelectedSourceId(saved.id))
+        .catch(() => {});
+    }
+
     try {
       if (file.name.toLowerCase().endsWith('.pdf')) {
         const pdfPages = await extractPDFPages(file, (cur, tot) => setFileLoadProgress({ current: cur, total: tot }));
@@ -369,6 +380,52 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     navigate('/exam/new');
   };
 
+  // === Load from saved AI source ===
+  const handleLoadSource = async (source: AISource | null) => {
+    if (!source) {
+      setSelectedSourceId(null);
+      return;
+    }
+    setSelectedSourceId(source.id);
+
+    if (source.source_type === 'text' && source.text_content) {
+      const textPages = splitTextIntoPages(source.text_content);
+      setFilePages(textPages.map(p => ({ ...p, selected: true })));
+      if (!fileTitle) setFileTitle(source.name);
+      setFileName(source.name);
+      setFileStep('pages');
+    } else if (source.source_type === 'file' && source.file_path) {
+      setFileName(source.name);
+      if (!fileTitle) setFileTitle(source.name.replace(/\.[^/.]+$/, ''));
+      setFileStep('loading');
+      setFileLoading(true);
+      try {
+        const { data: blob, error } = await supabase.storage
+          .from('ai-sources')
+          .download(source.file_path);
+        if (error || !blob) throw error || new Error('Download failed');
+
+        const isPdf = source.mime_type === 'application/pdf' || source.file_path.endsWith('.pdf');
+        if (isPdf) {
+          const file = new File([blob], source.name, { type: 'application/pdf' });
+          const pdfPages = await extractPDFPages(file, (cur, tot) => setFileLoadProgress({ current: cur, total: tot }));
+          setFilePages(pdfPages.map(p => ({ ...p, selected: true })));
+        } else {
+          const text = await blob.text();
+          const textPages = splitTextIntoPages(text);
+          setFilePages(textPages.map(p => ({ ...p, selected: true })));
+        }
+        setFileStep('pages');
+      } catch (err) {
+        console.error('Error loading source:', err);
+        toast({ title: 'Erro ao carregar fonte', variant: 'destructive' });
+        setFileStep('upload');
+      } finally {
+        setFileLoading(false);
+      }
+    }
+  };
+
   return {
     // Meta
     isEditing, examLoading, user, navigate,
@@ -399,6 +456,9 @@ Dissertativas: "front" = enunciado + pergunta, "back" = resposta completa. Varie
     fileTimeLimit, setFileTimeLimit, fileInputRef, setFileStep,
     fileTotalCost, fileCanAfford, fileMcCount,
     handleFileUpload, handleFileGenerate,
+    
+    // AI Sources
+    aiSources, selectedSourceId, handleLoadSource,
     
     // Example reference
     exampleMode, setExampleMode, exampleText, setExampleText,
