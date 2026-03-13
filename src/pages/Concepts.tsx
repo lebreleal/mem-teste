@@ -132,7 +132,7 @@ const ComunidadeTab = () => {
         name: concept.name, category: concept.category ?? undefined, subcategory: concept.subcategory ?? undefined,
       });
       toast.success(`"${concept.name}" importado: ${result.questionCount} questões, ${result.cardCount} cards`);
-    } catch { toast.error('Erro ao importar conceito'); }
+    } catch { toast.error('Erro ao importar tema'); }
     setImporting(null);
   };
 
