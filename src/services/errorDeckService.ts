@@ -177,58 +177,98 @@ export async function deleteErrorCards(cardIds: string[]): Promise<void> {
 }
 
 /**
- * Move a wrong question into the error deck as a flashcard.
- * Checks if a card for this question already exists in the error deck to avoid duplicates.
- * Returns true if a new card was created.
+ * Move existing cards linked to wrong concepts to the error deck.
+ * When a user answers a question wrong, finds cards linked to the same concepts
+ * (via question_concepts → global_concepts → concept_tag_id → card_tags,
+ *  or via deck_concepts → concept_cards) and moves them to the error deck.
+ * Cards already in the error deck are skipped.
+ * Returns the number of cards moved.
  */
-export async function moveQuestionToErrorDeck(
+export async function moveConceptCardsToErrorDeck(
   userId: string,
-  question: { id: string; question_text: string; correct_answer: string; explanation?: string; options?: any; correct_indices?: number[] | null },
+  conceptNames: string[],
   originDeckId: string,
-): Promise<boolean> {
+): Promise<number> {
+  if (!conceptNames || conceptNames.length === 0) return 0;
+
   const errorDeckId = await getOrCreateErrorDeck(userId);
 
-  // Check if a card for this question already exists in the error deck (by matching front content with question id marker)
-  const marker = `<!-- q:${question.id} -->`;
-  const { data: existing } = await supabase
-    .from('cards')
+  // Strategy 1: Find cards via concept_cards → deck_concepts (by concept name)
+  const conceptSlugs = conceptNames.map(n =>
+    n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')
+  );
+
+  // Find deck_concepts matching these names (for this user's decks, excluding the error deck)
+  const { data: deckConcepts } = await supabase
+    .from('deck_concepts')
     .select('id')
-    .eq('deck_id', errorDeckId)
-    .like('front_content', `%${marker}%`)
-    .limit(1)
-    .single();
+    .eq('user_id', userId)
+    .in('name', conceptNames);
 
-  if (existing) return false; // Already exists
+  let cardIdsToMove = new Set<string>();
 
-  // Build front (question) and back (answer + explanation)
-  const front = `${marker}${question.question_text}`;
+  if (deckConcepts && deckConcepts.length > 0) {
+    const conceptIds = deckConcepts.map(dc => dc.id);
+    const { data: conceptCards } = await supabase
+      .from('concept_cards' as any)
+      .select('card_id')
+      .in('concept_id', conceptIds);
 
-  let back = '';
-  if (question.options && question.correct_indices && question.correct_indices.length > 0) {
-    const opts = Array.isArray(question.options) ? question.options : [];
-    const correctTexts = question.correct_indices
-      .map(i => opts[i])
-      .filter(Boolean)
-      .map(o => (typeof o === 'string' ? o : (o as any).text ?? JSON.stringify(o)));
-    back = `<p><strong>Resposta:</strong> ${correctTexts.join(', ')}</p>`;
-  } else if (question.correct_answer) {
-    back = `<p><strong>Resposta:</strong> ${question.correct_answer}</p>`;
-  }
-  if (question.explanation) {
-    back += `<p>${question.explanation}</p>`;
+    if (conceptCards) {
+      for (const cc of conceptCards as any[]) {
+        cardIdsToMove.add(cc.card_id);
+      }
+    }
   }
 
-  const { error } = await supabase.from('cards').insert({
-    deck_id: errorDeckId,
-    front_content: front,
-    back_content: back || '<p>—</p>',
-    card_type: 'basic',
-    origin_deck_id: originDeckId,
-    state: 0,
-    stability: 0,
-    difficulty: 0,
-  });
+  // Strategy 2: Find cards via global_concepts → concept_tag_id → card_tags
+  const { data: globalConcepts } = await supabase
+    .from('global_concepts' as any)
+    .select('concept_tag_id')
+    .eq('user_id', userId)
+    .in('slug', conceptSlugs);
 
-  if (error) throw error;
-  return true;
+  if (globalConcepts) {
+    const tagIds = (globalConcepts as any[]).map(gc => gc.concept_tag_id).filter(Boolean);
+    if (tagIds.length > 0) {
+      const { data: cardTags } = await supabase
+        .from('card_tags')
+        .select('card_id')
+        .in('tag_id', tagIds);
+
+      if (cardTags) {
+        for (const ct of cardTags) {
+          cardIdsToMove.add(ct.card_id);
+        }
+      }
+    }
+  }
+
+  if (cardIdsToMove.size === 0) return 0;
+
+  // Filter: only move cards that belong to user's decks (not already in error deck)
+  const { data: validCards } = await supabase
+    .from('cards')
+    .select('id, deck_id, origin_deck_id')
+    .in('id', [...cardIdsToMove])
+    .is('origin_deck_id', null) // Not already in error deck
+    .neq('deck_id', errorDeckId);
+
+  if (!validCards || validCards.length === 0) return 0;
+
+  // Move cards to error deck
+  let moved = 0;
+  for (const card of validCards) {
+    const { error } = await supabase
+      .from('cards')
+      .update({
+        deck_id: errorDeckId,
+        origin_deck_id: card.deck_id,
+      } as any)
+      .eq('id', card.id);
+
+    if (!error) moved++;
+  }
+
+  return moved;
 }
