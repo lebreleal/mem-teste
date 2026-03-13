@@ -100,7 +100,7 @@ const DeckConceptsSection = ({ deckId, sourceDeckId }: { deckId: string; sourceD
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-        <BrainCircuit className="h-3.5 w-3.5" /> Conceitos ({concepts.length})
+        <BrainCircuit className="h-3.5 w-3.5" /> Tags ({concepts.length})
       </p>
       <div className="flex flex-wrap gap-1.5">
         {visibleConcepts.map(c => {
