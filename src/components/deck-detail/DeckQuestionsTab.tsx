@@ -565,10 +565,23 @@ const QuestionPractice = ({
           }
         }
 
-        if (conceptsToUse.length === 0) return;
+        const moved = conceptsToUse.length > 0
+          ? await moveConceptCardsToErrorDeck(user.id, conceptsToUse, q.deck_id || deckId)
+          : 0;
 
-        const moved = await moveConceptCardsToErrorDeck(user.id, conceptsToUse, q.deck_id || deckId);
-        if (moved > 0) {
+        const fallback = moved === 0
+          ? await upsertQuestionIntoErrorDeck(user.id, {
+            questionId: q.id,
+            questionText: q.question_text,
+            correctAnswer: q.correct_answer,
+            correctIndices: q.correct_indices,
+            options: q.options,
+            explanation: q.explanation,
+            originDeckId: q.deck_id || deckId,
+          })
+          : 'exists';
+
+        if (moved > 0 || fallback === 'created' || fallback === 'moved') {
           queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
           queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
           queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
