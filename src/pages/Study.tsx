@@ -956,10 +956,6 @@ const Study = () => {
         onGoBack={goBack}
       />
     );
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   if (allWaiting) {
