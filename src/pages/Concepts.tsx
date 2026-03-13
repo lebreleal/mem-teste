@@ -38,6 +38,7 @@ import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
 import ConceptListItem from '@/components/concepts/ConceptListItem';
 import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
 import ConceptNeuralMap from '@/components/concepts/ConceptNeuralMap';
+import ConceptDetailSheet from '@/components/concepts/ConceptDetailSheet';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
 
 // ═══════════════════════════════════════════════════
@@ -206,6 +207,9 @@ const ConceptsPage = () => {
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Detail sheet (tapped node)
+  const [detailConcept, setDetailConcept] = useState<GlobalConcept | null>(null);
 
   // Edit dialog
   const [editConcept, setEditConcept] = useState<GlobalConcept | null>(null);
@@ -464,7 +468,7 @@ const ConceptsPage = () => {
                     concepts={concepts}
                     lockedIds={lockedIds}
                     onStartStudy={handleStartFrontierStudy}
-                    onNodeTap={selectionMode ? undefined : setEditConcept}
+                    onNodeTap={selectionMode ? undefined : setDetailConcept}
                     selectionMode={selectionMode}
                     selectedIds={selectedIds}
                     onToggleSelection={toggleSelection}
@@ -555,6 +559,17 @@ const ConceptsPage = () => {
           <TabsContent value="comunidade" className="mt-3"><ComunidadeTab /></TabsContent>
         </Tabs>
       </div>
+
+      {/* Concept Detail Sheet */}
+      <ConceptDetailSheet
+        concept={detailConcept}
+        isLocked={detailConcept ? lockedIds.has(detailConcept.id) : false}
+        onClose={() => setDetailConcept(null)}
+        onStudy={handleStartFrontierStudy}
+        onEdit={setEditConcept}
+        onDelete={c => { setDeleteSingleTarget(c); setDeleteConfirmOpen(true); }}
+        onOpenQuestions={openQuestions}
+      />
 
       {/* Dialogs */}
       <EditConceptDialog
