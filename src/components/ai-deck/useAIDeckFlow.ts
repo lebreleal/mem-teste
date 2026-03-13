@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEnergy } from '@/hooks/useEnergy';
 import { usePremium } from '@/hooks/usePremium';
 import { useAIModel } from '@/hooks/useAIModel';
+import { useAISources, type AISource } from '@/hooks/useAISources';
 import { extractPDFPages, splitTextIntoPages } from '@/lib/pdfUtils';
 import { CREDITS_PER_PAGE } from '@/types/ai';
 import { usePendingDecks } from '@/stores/usePendingDecks';
