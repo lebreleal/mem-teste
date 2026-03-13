@@ -146,29 +146,26 @@ export async function ensureGlobalConcepts(
 }
 
 // ─── Auto-trigger prerequisite mapping (non-blocking) ───
-// Only runs if >5 concepts have no parent_concept_id set
+// Runs when new concepts are created that have no parent_concept_id
 const _autoMapInFlight = new Set<string>();
-async function tryAutoMapPrerequisites(userId: string) {
+async function tryAutoMapPrerequisites(userId: string, newConceptSlugs?: string[]) {
   if (_autoMapInFlight.has(userId)) return;
   _autoMapInFlight.add(userId);
   try {
+    // If we have new concepts, always try to map them
+    if (newConceptSlugs && newConceptSlugs.length > 0) {
+      await mapPrerequisitesViaAI(userId);
+      return;
+    }
+
+    // Fallback: check if there are enough unmapped concepts
     const { data: unmapped } = await supabase
       .from('global_concepts' as any)
       .select('id')
       .eq('user_id', userId)
       .is('parent_concept_id', null);
 
-    if (!unmapped || unmapped.length < 6) return;
-
-    // Check how many total concepts exist
-    const { count } = await supabase
-      .from('global_concepts' as any)
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    // Only auto-map if >80% of concepts are unmapped (first-time scenario)
-    if (count && unmapped.length / count < 0.8) return;
-
+    if (!unmapped || unmapped.length < 3) return;
     await mapPrerequisitesViaAI(userId);
   } finally {
     _autoMapInFlight.delete(userId);
@@ -253,9 +250,10 @@ export async function linkQuestionsToConcepts(
     .from('question_concepts' as any)
     .upsert(rows as any, { onConflict: 'question_id,concept_id', ignoreDuplicates: true });
 
-  // ── Auto-trigger prerequisite mapping if >5 unmapped concepts ──
-  // Fire-and-forget, non-blocking
-  tryAutoMapPrerequisites(userId).catch(() => {});
+  // ── Auto-trigger prerequisite mapping for newly created concepts ──
+  // Pass the new concept slugs so mapping always runs when new concepts appear
+  const newSlugs = Array.from(allNames).map(n => conceptSlug(n));
+  tryAutoMapPrerequisites(userId, newSlugs).catch(() => {});
 }
 
 // ─── Fetch all global concepts for a user ───────
@@ -1164,7 +1162,7 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
   }
 
   const pairs: { concept: string; prerequisite: string }[] = data?.pairs ?? [];
-  if (pairs.length === 0) return 0;
+  const siblingGroups: { parent_name: string; parent_exists: boolean; children: string[] }[] = data?.sibling_groups ?? [];
 
   // Build name→id map (case-insensitive)
   const nameToId = new Map<string, string>();
@@ -1173,6 +1171,64 @@ export async function mapPrerequisitesViaAI(userId: string): Promise<number> {
   }
 
   let updated = 0;
+
+  // Handle sibling groups first — create parent concepts if needed
+  for (const group of siblingGroups) {
+    if (!group.children || group.children.length === 0) continue;
+
+    let parentId = nameToId.get(group.parent_name.toLowerCase());
+
+    // If parent doesn't exist, create it
+    if (!parentId && !group.parent_exists) {
+      const slug = conceptSlug(group.parent_name);
+      const { data: inserted } = await supabase
+        .from('global_concepts' as any)
+        .upsert({
+          user_id: userId,
+          name: group.parent_name.trim(),
+          slug,
+        } as any, { onConflict: 'user_id,slug', ignoreDuplicates: true })
+        .select('id')
+        .maybeSingle();
+
+      if (inserted) {
+        parentId = (inserted as any).id;
+        nameToId.set(group.parent_name.toLowerCase(), parentId!);
+      } else {
+        // Re-fetch in case of upsert conflict
+        const { data: existing } = await supabase
+          .from('global_concepts' as any)
+          .select('id')
+          .eq('user_id', userId)
+          .eq('slug', slug)
+          .maybeSingle();
+        if (existing) {
+          parentId = (existing as any).id;
+          nameToId.set(group.parent_name.toLowerCase(), parentId!);
+        }
+      }
+    }
+
+    if (!parentId) continue;
+
+    // Set parent_concept_id for each child
+    for (const childName of group.children) {
+      const childId = nameToId.get(childName.toLowerCase());
+      if (!childId || childId === parentId) continue;
+
+      // Only set if not already set
+      const existing = concepts.find((c: any) => c.id === childId);
+      if (existing?.parent_concept_id) continue;
+
+      await supabase
+        .from('global_concepts' as any)
+        .update({ parent_concept_id: parentId, updated_at: new Date().toISOString() } as any)
+        .eq('id', childId);
+      updated++;
+    }
+  }
+
+  // Handle direct prerequisite pairs
   for (const pair of pairs) {
     const conceptId = nameToId.get(pair.concept.toLowerCase());
     const prereqId = nameToId.get(pair.prerequisite.toLowerCase());

@@ -175,7 +175,7 @@ Para cada questão, retorne:
 - correct_index: índice da correta (0-based)
 - explanation: explicação detalhada
 - concepts: 1-3 Knowledge Components centrais testados nesta questão (nomes curtos, 2-6 palavras)
-- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados (ex: se testando "Tratamento de IC", o pré-requisito é "Fisiologia Cardíaca"). Conceitos mais básicos que o aluno precisa dominar ANTES.
+- prerequisites: 0-2 Knowledge Components PRÉ-REQUISITOS dos conceitos testados. REGRA CRÍTICA: os pré-requisitos devem ser temas que APARECEM ou são IMPLÍCITOS nos próprios cartões fornecidos. NÃO invente temas genéricos aleatórios. Se os cartões falam de "Apoptose Fisiológica" e "Apoptose por Prevenção de Câncer", o pré-requisito seria "Apoptose" (tema comum). Se não há pré-requisito claro DENTRO do material, deixe vazio.
 - source_card_ids: IDs exatos dos cartões usados (copie do campo ID acima)`;
 
     // ─── Tool schema for structured output ───
@@ -205,7 +205,7 @@ Para cada questão, retorne:
               prerequisites: {
                 type: "array",
                 items: { type: "string" },
-                description: "0-2 Knowledge Components que são PRÉ-REQUISITOS dos conceitos desta questão. São conceitos mais básicos que o aluno precisa dominar ANTES de entender os conceitos testados. Mesmo formato: 2-6 palavras. Exemplo: se o conceito é 'Tratamento de IC', o pré-requisito poderia ser 'Fisiologia Cardíaca'. Deixe vazio se não houver pré-requisito claro.",
+                description: "0-2 Knowledge Components que são PRÉ-REQUISITOS dos conceitos desta questão. DEVEM ser temas que aparecem ou são implícitos nos cartões fornecidos. NÃO invente temas aleatórios. Se os conceitos são 'Apoptose Fisiológica' e 'Apoptose por Câncer', o pré-requisito é 'Apoptose'. Se não há pré-requisito claro no material, deixe array vazio [].",
               },
               source_card_ids: {
                 type: "array",
