@@ -185,9 +185,9 @@ export const AddConceptDialog = ({ open, questionId, onClose }: AddConceptDialog
         category: category || undefined,
         subcategory: subcategory || undefined,
       }]);
-      toast.success(`Conceito "${name.trim()}" vinculado`);
+      toast.success(`Tema "${name.trim()}" vinculado`);
       onClose();
-    } catch { toast.error('Erro ao vincular conceito'); }
+    } catch { toast.error('Erro ao vincular tema'); }
     setSaving(false);
   };
 
