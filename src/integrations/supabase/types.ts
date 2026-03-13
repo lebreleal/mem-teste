@@ -3004,6 +3004,12 @@ export type Database = {
         Args: { p_turma_id: string }
         Returns: Json
       }
+      get_deck_concept_names: {
+        Args: { p_deck_id: string; p_user_id: string }
+        Returns: {
+          name: string
+        }[]
+      }
       get_deck_stats: {
         Args: { p_deck_id: string; p_tz_offset_minutes?: number }
         Returns: {

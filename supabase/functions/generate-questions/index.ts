@@ -95,6 +95,32 @@ Deno.serve(async (req) => {
       deductedCost = cost;
     }
 
+    // ─── Fetch existing concepts for reuse (contextual, not all) ───
+    let existingConceptNames: string[] = [];
+    try {
+      // Strategy 1: concepts already linked to this deck's questions
+      const { data: deckConcepts } = await supabase.rpc('get_deck_concept_names' as any, {
+        p_deck_id: deckId || cards[0]?.deck_id,
+        p_user_id: userId,
+      });
+      if (deckConcepts && deckConcepts.length > 0) {
+        existingConceptNames = (deckConcepts as any[]).map((r: any) => r.name);
+      }
+      
+      // Fallback: if no deck concepts, get top used concepts
+      if (existingConceptNames.length === 0) {
+        const { data: topConcepts } = await supabase
+          .from('global_concepts')
+          .select('name')
+          .eq('user_id', userId)
+          .order('correct_count', { ascending: false })
+          .limit(100);
+        existingConceptNames = (topConcepts ?? []).map((r: any) => r.name);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch existing concepts (non-blocking):", e);
+    }
+
     // ─── Prepare card content for AI ───
     const cardSummaries = cards.map((c: any, i: number) => {
       const front = (c.front_content || "").replace(/<[^>]*>/g, "").replace(/\{\{c\d+::(.*?)\}\}/g, "$1").trim();
@@ -159,10 +185,14 @@ A explicação deve ser DIDÁTICA e ESTRUTURADA. Use markdown:
 ❌ Limitar artificialmente o número de questões — crie tantas quantos grupos conceituais existirem
 ❌ Colocar perguntas de autoavaliação no campo concepts — use APENAS nomes de Knowledge Components`;
 
+    const existingConceptsBlock = existingConceptNames.length > 0
+      ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE se aplicável, em vez de criar novos sinônimos):\n${existingConceptNames.join(', ')}\n`
+      : '';
+
     const userPrompt = `Analise os ${cards.length} cartões abaixo. Identifique os grupos de conceitos relacionados e crie UMA questão de múltipla escolha (${optionsCount} alternativas) por grupo.
 
 NÃO defina um número fixo — crie tantas questões quantos grupos conceituais você identificar. O importante é cobrir TODO o conteúdo do baralho.
-
+${existingConceptsBlock}
 CARTÕES DO BARALHO:
 ---
 ${cardSummaries}

@@ -2101,18 +2101,103 @@ const PasteQuestionsDialog = ({
 };
 
 /* ════════════════════════════════════════════════════════════
-   Edit Question Dialog
+   Edit Question Dialog — with concept editing & explanation
    ════════════════════════════════════════════════════════════ */
 const EditQuestionDialog = ({
   question, open, onOpenChange, deckId, effectiveDeckId,
 }: {
   question: DeckQuestion; open: boolean; onOpenChange: (v: boolean) => void; deckId: string; effectiveDeckId: string;
 }) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [questionText, setQuestionText] = useState(question.question_text);
   const [options, setOptions] = useState<string[]>(question.options.length > 0 ? [...question.options] : ['', '', '', '']);
   const [correctIdx, setCorrectIdx] = useState<number | null>(question.correct_indices?.[0] ?? null);
+  const [explanation, setExplanation] = useState(question.explanation || '');
+  const [concepts, setConcepts] = useState<string[]>(question.concepts ?? []);
+  const [conceptSearch, setConceptSearch] = useState('');
+  const [conceptSuggestions, setConceptSuggestions] = useState<{ name: string; description: string | null; id: string }[]>([]);
+  const [searchingConcepts, setSearchingConcepts] = useState(false);
+  const [editingConcept, setEditingConcept] = useState<{ name: string; id: string; description: string | null } | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [savingConcept, setSavingConcept] = useState(false);
+
+  // Debounced concept search
+  useEffect(() => {
+    if (!conceptSearch.trim() || !user) { setConceptSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      setSearchingConcepts(true);
+      try {
+        const { data } = await supabase
+          .from('global_concepts' as any)
+          .select('id, name, description')
+          .eq('user_id', user.id)
+          .ilike('name', `%${conceptSearch.trim()}%`)
+          .limit(20);
+        const results = (data ?? []) as any[];
+        // Filter out already-added concepts
+        const filtered = results.filter(r => !concepts.some(c => conceptSlug(c) === conceptSlug(r.name)));
+        setConceptSuggestions(filtered.map(r => ({ name: r.name, description: r.description, id: r.id })));
+      } catch { setConceptSuggestions([]); }
+      finally { setSearchingConcepts(false); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [conceptSearch, user, concepts]);
+
+  const addConcept = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || concepts.some(c => conceptSlug(c) === conceptSlug(trimmed))) return;
+    setConcepts(prev => [...prev, trimmed]);
+    setConceptSearch('');
+    setConceptSuggestions([]);
+  };
+
+  const removeConcept = (idx: number) => {
+    setConcepts(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleConceptClick = async (conceptName: string) => {
+    if (!user) return;
+    const slug = conceptSlug(conceptName);
+    const { data } = await supabase
+      .from('global_concepts' as any)
+      .select('id, name, description')
+      .eq('user_id', user.id)
+      .eq('slug', slug)
+      .maybeSingle();
+    if (data) {
+      const r = data as any;
+      setEditingConcept({ name: r.name, id: r.id, description: r.description });
+      setEditName(r.name);
+      setEditDescription(r.description || '');
+    }
+  };
+
+  const saveConceptEdit = async () => {
+    if (!editingConcept) return;
+    setSavingConcept(true);
+    try {
+      const { updateConceptMeta } = await import('@/services/globalConceptService');
+      await updateConceptMeta(editingConcept.id, {
+        name: editName.trim() || editingConcept.name,
+      });
+      // Update description separately
+      await supabase
+        .from('global_concepts' as any)
+        .update({ description: editDescription.trim() || null } as any)
+        .eq('id', editingConcept.id);
+
+      // Update local concept name if changed
+      if (editName.trim() && editName.trim() !== editingConcept.name) {
+        setConcepts(prev => prev.map(c => conceptSlug(c) === conceptSlug(editingConcept.name) ? editName.trim() : c));
+      }
+      toast({ title: 'Conceito atualizado!' });
+      setEditingConcept(null);
+    } catch { toast({ title: 'Erro ao salvar conceito', variant: 'destructive' }); }
+    finally { setSavingConcept(false); }
+  };
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -2125,11 +2210,22 @@ const EditQuestionDialog = ({
         question_text: questionText.trim(),
         options: validOptions,
         correct_indices: [correctIdx],
+        explanation: explanation.trim(),
+        concepts: concepts,
       }).eq('id', question.id);
       if (error) throw error;
+
+      // Sync question_concepts junction
+      if (user && concepts.length > 0) {
+        linkQuestionsToConcepts(user.id, [{
+          questionId: question.id,
+          conceptNames: concepts,
+        }]).catch(() => {});
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deck-questions', effectiveDeckId] });
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
       toast({ title: 'Questão atualizada!' });
       onOpenChange(false);
     },
@@ -2143,10 +2239,13 @@ const EditQuestionDialog = ({
           <DialogTitle>Editar Questão</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Enunciado */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Enunciado</label>
             <Textarea value={questionText} onChange={(e) => setQuestionText(e.target.value)} placeholder="Digite o enunciado..." className="min-h-[80px]" />
           </div>
+
+          {/* Alternativas */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
               Alternativas <span className="text-[10px] text-muted-foreground/60">(toque na letra para marcar a correta)</span>
@@ -2165,6 +2264,119 @@ const EditQuestionDialog = ({
               ))}
             </div>
           </div>
+
+          {/* Explicação */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Explicação</label>
+            <Textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="Explicação da resposta correta..." className="min-h-[60px] text-sm" />
+          </div>
+
+          {/* Conceitos */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1">
+              <Brain className="h-3.5 w-3.5 text-primary" /> Conceitos (Knowledge Components)
+            </label>
+
+            {/* Chips dos conceitos atuais */}
+            {concepts.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {concepts.map((c, i) => (
+                  <Badge
+                    key={i}
+                    variant="secondary"
+                    className="text-xs h-6 px-2 gap-1 cursor-pointer hover:bg-primary/10 transition-colors"
+                    onClick={() => handleConceptClick(c)}
+                  >
+                    <span className="truncate max-w-[180px]">{c}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeConcept(i); }}
+                      className="ml-0.5 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Input de busca */}
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={conceptSearch}
+                  onChange={(e) => setConceptSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && conceptSearch.trim()) {
+                      e.preventDefault();
+                      addConcept(conceptSearch);
+                    }
+                  }}
+                  placeholder="Buscar ou criar conceito..."
+                  className="pl-8 text-sm h-8"
+                />
+                {searchingConcepts && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </div>
+
+              {/* Dropdown de sugestões */}
+              {(conceptSuggestions.length > 0 || (conceptSearch.trim() && !searchingConcepts)) && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-[200px] overflow-y-auto">
+                  {conceptSuggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => addConcept(s.name)}
+                      className="w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors border-b border-border/30 last:border-0"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 text-primary border-primary/30">Meu</Badge>
+                        <span className="text-xs font-medium text-foreground truncate">{s.name}</span>
+                      </div>
+                      {s.description && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.description}</p>
+                      )}
+                    </button>
+                  ))}
+                  {conceptSearch.trim() && !conceptSuggestions.some(s => conceptSlug(s.name) === conceptSlug(conceptSearch)) && (
+                    <button
+                      type="button"
+                      onClick={() => addConcept(conceptSearch)}
+                      className="w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors flex items-center gap-1.5"
+                    >
+                      <Plus className="h-3 w-3 text-primary" />
+                      <span className="text-xs text-foreground">Criar "<span className="font-medium">{conceptSearch.trim()}</span>"</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-muted-foreground mt-1">Clique num conceito para editar nome/descrição</p>
+          </div>
+
+          {/* Inline concept editor */}
+          {editingConcept && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-foreground flex items-center gap-1">
+                  <PenLine className="h-3 w-3 text-primary" /> Editar Conceito
+                </p>
+                <button type="button" onClick={() => setEditingConcept(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nome do conceito" className="text-sm h-8" />
+              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Descrição (15-30 palavras)..." className="min-h-[50px] text-xs" />
+              <div className="flex justify-end">
+                <Button size="sm" onClick={saveConceptEdit} disabled={savingConcept} className="h-7 text-xs gap-1">
+                  {savingConcept ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
