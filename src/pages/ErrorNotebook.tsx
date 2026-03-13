@@ -1,8 +1,6 @@
 /**
- * ErrorNotebook — ALEKS-style concept-centric error remediation.
- * Shows ALL weak concepts: those with errors AND those rescheduled by cascade.
- * Respects FSRS scheduled_date — shows "due" vs "scheduled" status.
- * Supports interleaved practice: "Estudar todos" shuffles all due concepts.
+ * ErrorNotebook — Shows weak concepts with errors.
+ * Lists concepts the user got wrong, with stats and scheduled review dates.
  */
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,12 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, BookX, CheckCircle2, BrainCircuit,
   AlertTriangle, Shield, PlayCircle, ChevronRight,
-  Loader2, GitBranch, Shuffle, Clock, Zap,
+  Loader2, GitBranch, Clock, Zap,
 } from 'lucide-react';
 import { getWeakConceptsWithErrors, type WeakConceptWithErrors } from '@/services/conceptHierarchyService';
-import StudyMode from '@/components/concepts/StudyMode';
-import type { GlobalConcept } from '@/services/globalConceptService';
-import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -28,23 +23,11 @@ const HEALTH_CONFIG = {
   strong: { label: 'Dominado', icon: Shield, badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
 };
 
-// Fisher-Yates shuffle
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 // ─── Concept Row ───
 const ConceptRow = ({
   concept,
-  onStudy,
 }: {
   concept: WeakConceptWithErrors;
-  onStudy: (concept: WeakConceptWithErrors) => void;
 }) => {
   const config = HEALTH_CONFIG[concept.health];
   const Icon = config.icon;
@@ -114,21 +97,11 @@ const ConceptRow = ({
         </div>
       )}
 
-      {isScheduledFuture ? (
+      {isScheduledFuture && (
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground py-1">
           <Clock className="h-3 w-3" />
           <span>Revisão agendada {timeLabel}</span>
         </div>
-      ) : (
-        <Button
-          size="sm"
-          className="w-full gap-1.5"
-          onClick={() => onStudy(concept)}
-        >
-          <PlayCircle className="h-4 w-4" />
-          Estudar tema
-          <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-        </Button>
       )}
     </div>
   );
@@ -137,10 +110,7 @@ const ConceptRow = ({
 // ─── Main Page ───
 const ErrorNotebook = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { submitConceptReview, concepts: allConcepts } = useGlobalConcepts();
-  const [studyQueue, setStudyQueue] = useState<GlobalConcept[] | null>(null);
 
   const { data: weakConcepts = [], isLoading } = useQuery({
     queryKey: ['error-notebook-concepts', user?.id],
@@ -151,50 +121,6 @@ const ErrorNotebook = () => {
 
   const dueConcepts = weakConcepts.filter(c => c.isDue);
   const scheduledConcepts = weakConcepts.filter(c => !c.isDue);
-
-  // Build a shuffled queue of ALL due weak concepts for interleaved practice
-  const buildInterleavedQueue = useCallback((): GlobalConcept[] => {
-    const ids = new Set(dueConcepts.map(wc => wc.id));
-    const gcs = allConcepts.filter(c => ids.has(c.id));
-    return shuffle(gcs);
-  }, [dueConcepts, allConcepts]);
-
-  const handleStudy = useCallback((wc: WeakConceptWithErrors) => {
-    const gc = allConcepts.find(c => c.id === wc.id);
-    if (!gc) return;
-    const queue: GlobalConcept[] = [gc];
-    if (wc.parent && wc.parent.state !== 2) {
-      const parentGc = allConcepts.find(c => c.id === wc.parent!.id);
-      if (parentGc) queue.push(parentGc);
-    }
-    setStudyQueue(queue);
-  }, [allConcepts]);
-
-  const handleStudyAll = useCallback(() => {
-    const queue = buildInterleavedQueue();
-    if (queue.length === 0) return;
-    setStudyQueue(queue);
-  }, [buildInterleavedQueue]);
-
-  const handleRate = useCallback(async (concept: GlobalConcept, rating: any, isCorrect: boolean) => {
-    await submitConceptReview.mutateAsync({ concept, rating, isCorrect });
-  }, [submitConceptReview]);
-
-  const handleCloseStudy = useCallback(() => {
-    setStudyQueue(null);
-    queryClient.invalidateQueries({ queryKey: ['error-notebook-concepts'] });
-    queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
-  }, [queryClient]);
-
-  if (studyQueue) {
-    return (
-      <StudyMode
-        queue={studyQueue}
-        onClose={handleCloseStudy}
-        onRate={handleRate}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,7 +162,7 @@ const ErrorNotebook = () => {
           </div>
         ) : (
           <>
-            {/* Summary + Study All */}
+            {/* Summary */}
             {dueConcepts.length > 0 && (
               <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -250,26 +176,14 @@ const ErrorNotebook = () => {
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Estude cada tema com questões variadas até dominá-lo. O FSRS agenda revisões no tempo ideal.
+                  Temas onde você errou questões. Revise-os nos seus baralhos para fortalecer seu conhecimento.
                 </p>
-                <Button
-                  className="w-full gap-2"
-                  variant="default"
-                  onClick={handleStudyAll}
-                >
-                  <Shuffle className="h-4 w-4" />
-                  Estudar todos (prática intercalada)
-                </Button>
               </div>
             )}
 
             {/* Due concepts */}
             {dueConcepts.map(concept => (
-              <ConceptRow
-                key={concept.id}
-                concept={concept}
-                onStudy={handleStudy}
-              />
+              <ConceptRow key={concept.id} concept={concept} />
             ))}
 
             {/* Scheduled concepts (not yet due) */}
@@ -280,11 +194,7 @@ const ErrorNotebook = () => {
                   <span className="text-xs font-medium text-muted-foreground">Agendados para revisão futura</span>
                 </div>
                 {scheduledConcepts.map(concept => (
-                  <ConceptRow
-                    key={concept.id}
-                    concept={concept}
-                    onStudy={handleStudy}
-                  />
+                  <ConceptRow key={concept.id} concept={concept} />
                 ))}
               </>
             )}
