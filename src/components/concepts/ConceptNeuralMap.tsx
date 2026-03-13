@@ -5,14 +5,18 @@
  */
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import type { GlobalConcept } from '@/services/globalConceptService';
-import { CheckCircle2, Lock, Circle, Loader2, ZoomIn, ZoomOut, Locate } from 'lucide-react';
+import { CheckCircle2, Lock, Circle, Loader2, ZoomIn, ZoomOut, Locate, CheckSquare, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ConceptNeuralMapProps {
   concepts: GlobalConcept[];
   lockedIds: Set<string>;
   onStartStudy?: (concept: GlobalConcept) => void;
   onNodeTap?: (concept: GlobalConcept) => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
 }
 
 // ── Layout constants ──
@@ -176,6 +180,9 @@ export default function ConceptNeuralMap({
   lockedIds,
   onStartStudy,
   onNodeTap,
+  selectionMode = false,
+  selectedIds,
+  onToggleSelection,
 }: ConceptNeuralMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -374,16 +381,34 @@ export default function ConceptNeuralMap({
                   width: NODE_W,
                   height: NODE_H,
                 }}
-                onClick={() => onNodeTap?.(c)}
+                onClick={() => {
+                  if (selectionMode && onToggleSelection) {
+                    onToggleSelection(c.id);
+                  } else {
+                    onNodeTap?.(c);
+                  }
+                }}
               >
                 <div
-                  className="w-full h-full rounded-xl border-2 flex flex-col items-center justify-center p-1.5 cursor-pointer hover:scale-105 transition-transform"
+                  className={`w-full h-full rounded-xl border-2 flex flex-col items-center justify-center p-1.5 cursor-pointer hover:scale-105 transition-transform relative ${
+                    selectionMode && selectedIds?.has(c.id) ? 'ring-2 ring-primary ring-offset-1' : ''
+                  }`}
                   style={{
                     background: style.bg,
-                    borderColor: style.border,
+                    borderColor: selectionMode && selectedIds?.has(c.id) ? 'hsl(var(--primary))' : style.border,
                     boxShadow: style.glow,
                   }}
                 >
+                  {/* Selection checkbox */}
+                  {selectionMode && (
+                    <div className="absolute -top-1.5 -right-1.5 z-10">
+                      <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                        selectedIds?.has(c.id) ? 'bg-primary border-primary' : 'bg-card border-border'
+                      }`}>
+                        {selectedIds?.has(c.id) && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                      </div>
+                    </div>
+                  )}
                   {/* State icon */}
                   <div className="mb-0.5">
                     {isDominated ? (
