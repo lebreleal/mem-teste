@@ -306,7 +306,7 @@ const ConceptsPage = () => {
     } else {
       const ids = Array.from(selectedIds);
       for (const id of ids) await deleteConcept.mutateAsync(id);
-      toast.success(`${ids.length} conceito${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}`);
+      toast.success(`${ids.length} tema${ids.length > 1 ? 's' : ''} excluído${ids.length > 1 ? 's' : ''}`);
       setSelectedIds(new Set());
       setSelectionMode(false);
     }
