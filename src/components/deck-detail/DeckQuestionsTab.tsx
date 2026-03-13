@@ -1361,6 +1361,7 @@ const DeckQuestionsTab = ({
     },
     enabled: !!user && questions.length > 0,
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 
   // Compute stats
