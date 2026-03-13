@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
-import { getCardConcepts, getConceptRelatedCards, generateReinforcementCards, type GlobalConcept } from '@/services/globalConceptService';
+import { getCardConcepts, getConceptRelatedCards, generateReinforcementCards, updateConceptMastery, type GlobalConcept } from '@/services/globalConceptService';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
@@ -539,10 +539,22 @@ const Study = () => {
                 : c
             ));
           }
+
+          // ── Fase 1a: Sync card review → concept mastery (non-blocking) ──
+          if (user) {
+            const isCorrect = rating >= 3;
+            getCardConcepts(card.id, user.id)
+              .then(concepts => {
+                for (const concept of concepts) {
+                  updateConceptMastery(concept.id, isCorrect).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }
         },
       }
     );
-  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview]);
+  }, [localQueue, reviewCount, cardKey, deckConfig, undo, tutor, addSuccessfulCard, submitReview, user]);
 
   const handleRate = useCallback(async (rating: Rating) => {
     if (!currentCard || isTransitioning || leechMode) return;

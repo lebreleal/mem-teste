@@ -1,14 +1,19 @@
 /**
  * useGlobalConcepts — hook for global concept FSRS study.
  * Provides: all concepts, due concepts, review mutation.
+ * Enforces DAILY_NEW_THEME_LIMIT to prevent cognitive overload.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as globalConceptService from '@/services/globalConceptService';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { fsrsSchedule, DEFAULT_FSRS_PARAMS, type FSRSCard, type Rating } from '@/lib/fsrs';
+import { useMemo } from 'react';
 
 export type { GlobalConcept } from '@/services/globalConceptService';
+
+/** Max new themes a user can study per day (prevents cognitive overload) */
+const DAILY_NEW_THEME_LIMIT = 5;
 
 export const useGlobalConcepts = () => {
   const { user } = useAuth();
@@ -105,6 +110,16 @@ export const useGlobalConcepts = () => {
     },
   });
 
+  // Count new themes studied today (reviewed today for the first time)
+  const newThemesStudiedToday = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return (allQuery.data ?? []).filter(c =>
+      c.last_reviewed_at && c.last_reviewed_at.slice(0, 10) === today && c.state !== 0
+    ).length;
+  }, [allQuery.data]);
+
+  const newThemeRemaining = Math.max(0, DAILY_NEW_THEME_LIMIT - newThemesStudiedToday);
+
   return {
     concepts: allQuery.data ?? [],
     dueConcepts: dueQuery.data ?? [],
@@ -115,5 +130,7 @@ export const useGlobalConcepts = () => {
     updateMeta,
     deleteConcept,
     unlinkQuestion,
+    newThemeRemaining,
+    DAILY_NEW_THEME_LIMIT,
   };
 };

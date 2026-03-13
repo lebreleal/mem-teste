@@ -43,6 +43,7 @@ const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDele
 import DeckCarousel from '@/components/dashboard/DeckCarousel';
 import MiniStatsStrip from '@/components/dashboard/MiniStatsStrip';
 import DashboardDueThemes from '@/components/dashboard/DashboardDueThemes';
+import DiagnosticBanner from '@/components/dashboard/DiagnosticBanner';
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
@@ -251,6 +252,9 @@ const Dashboard = () => {
 
         {/* Mini Stats Strip */}
         <MiniStatsStrip />
+
+        {/* Auto-trigger diagnostic when 10+ unreviewed concepts */}
+        <DiagnosticBanner />
 
         {/* Due Themes Section */}
         <DashboardDueThemes />
