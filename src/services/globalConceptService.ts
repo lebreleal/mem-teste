@@ -79,6 +79,7 @@ export async function ensureGlobalConcepts(
   userId: string,
   conceptNames: string[],
   conceptMetaMap?: Map<string, { category?: string; subcategory?: string; parentConceptSlug?: string }>,
+  descriptionMap?: Map<string, string>,
 ): Promise<Map<string, string>> {
   const slugMap = new Map<string, string>(); // slug → id
   if (conceptNames.length === 0) return slugMap;
