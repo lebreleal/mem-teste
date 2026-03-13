@@ -1886,7 +1886,7 @@ const PasteQuestionsDialog = ({
     setSaving(true);
     try {
       const toSave = parsedQuestions.filter((_, i) => selectedIds.has(i));
-      const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
+      const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
       for (const q of toSave) {
         const { data: inserted } = await supabase.from('deck_questions' as any).insert({
