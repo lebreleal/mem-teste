@@ -52,6 +52,8 @@ interface FileExamFlowProps {
   setExampleImageUrl: (url: string) => void;
   exampleImageUploading: boolean;
   setExampleImageUploading: (v: boolean) => void;
+  selectedSourceId?: string | null;
+  onLoadSource?: (source: AISource | null) => void;
 }
 
 const FileExamFlow = ({
