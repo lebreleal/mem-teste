@@ -362,9 +362,9 @@ const ConceptsPage = () => {
         <div className="flex-1">
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
             <BrainCircuit className="h-5 w-5 text-primary" />
-            Conceitos
+            Temas
           </h1>
-          <p className="text-xs text-muted-foreground">Biblioteca de conceitos</p>
+          <p className="text-xs text-muted-foreground">Seus assuntos de estudo</p>
         </div>
         {activeTab === 'meus' && counts.due > 0 && (
           <Button size="sm" className="gap-1.5" onClick={handleStartStudy}>
