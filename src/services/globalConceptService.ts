@@ -334,32 +334,38 @@ export async function updateConceptFsrs(
   if (error) throw error;
 }
 
-// ─── Update concept mastery counts ──────────────
+// ─── Update concept mastery counts (atomic increment) ──────────────
 export async function updateConceptMastery(
   conceptId: string,
   isCorrect: boolean,
 ) {
-  // First get current counts
-  const { data: current } = await supabase
-    .from('global_concepts' as any)
-    .select('correct_count, wrong_count')
-    .eq('id', conceptId)
-    .maybeSingle();
+  // Use raw SQL for atomic increment to avoid race conditions
+  const field = isCorrect ? 'correct_count' : 'wrong_count';
+  const { error } = await supabase.rpc('increment_concept_count' as any, {
+    p_concept_id: conceptId,
+    p_field: field,
+  });
 
-  if (!current) return;
+  // Fallback to non-atomic if RPC doesn't exist yet
+  if (error) {
+    const { data: current } = await supabase
+      .from('global_concepts' as any)
+      .select('correct_count, wrong_count')
+      .eq('id', conceptId)
+      .maybeSingle();
 
-  const c = current as any;
-  const newCorrect = (c.correct_count ?? 0) + (isCorrect ? 1 : 0);
-  const newWrong = (c.wrong_count ?? 0) + (isCorrect ? 0 : 1);
+    if (!current) return;
 
-  await supabase
-    .from('global_concepts' as any)
-    .update({
-      correct_count: newCorrect,
-      wrong_count: newWrong,
-      updated_at: new Date().toISOString(),
-    } as any)
-    .eq('id', conceptId);
+    const c = current as any;
+    await supabase
+      .from('global_concepts' as any)
+      .update({
+        correct_count: (c.correct_count ?? 0) + (isCorrect ? 1 : 0),
+        wrong_count: (c.wrong_count ?? 0) + (isCorrect ? 0 : 1),
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq('id', conceptId);
+  }
 }
 
 // ─── Get question count per concept ─────────────
