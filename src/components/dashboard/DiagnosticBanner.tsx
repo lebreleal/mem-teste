@@ -34,7 +34,7 @@ const DiagnosticBanner = () => {
     return (
       <Suspense fallback={null}>
         <DiagnosticMode
-          concepts={concepts.filter(c => c.state === 0)}
+          queue={concepts.filter(c => c.state === 0).slice(0, 20)}
           onClose={() => setShowDiagnostic(false)}
         />
       </Suspense>
