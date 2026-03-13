@@ -224,6 +224,13 @@ Baseie-se APENAS no material fornecido. Varie a dificuldade.${getExampleInstruct
     setFileName(file.name);
     setFileStep('loading');
 
+    // Auto-save file as AI source
+    if (user) {
+      saveFileSource.mutateAsync(file)
+        .then(saved => setSelectedSourceId(saved.id))
+        .catch(() => {});
+    }
+
     try {
       if (file.name.toLowerCase().endsWith('.pdf')) {
         const pdfPages = await extractPDFPages(file, (cur, tot) => setFileLoadProgress({ current: cur, total: tot }));
