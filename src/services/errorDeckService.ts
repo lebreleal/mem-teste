@@ -283,7 +283,12 @@ export async function moveConceptCardsToErrorDeck(
     }
   }
 
-  if (cardIdsToMove.size === 0) return 0;
+  if (cardIdsToMove.size === 0) {
+    console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck:', originDeckId);
+    return 0;
+  }
+
+  console.log('[ErrorDeck] Found', cardIdsToMove.size, 'candidate cards for concepts:', terms);
 
   const ids = [...cardIdsToMove];
   const { data: movedRows, error } = await supabase
@@ -295,5 +300,6 @@ export async function moveConceptCardsToErrorDeck(
     .select('id');
 
   if (error) throw error;
+  console.log('[ErrorDeck] Moved', movedRows?.length ?? 0, 'cards to error deck');
   return movedRows?.length ?? 0;
 }
