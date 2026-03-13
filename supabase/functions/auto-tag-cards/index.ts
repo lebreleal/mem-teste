@@ -1,7 +1,8 @@
 /**
  * auto-tag-cards edge function
- * Takes a deckId, fetches cards, generates keyword tags via AI, and links them.
- * Optimized for minimal DB round-trips to avoid compute limits.
+ * Takes a deckId, fetches cards, generates concept-tags via AI, and links them.
+ * Tags = Concepts: each tag also ensures a corresponding global_concept exists for the user.
+ * Optimized for minimal DB round-trips.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -52,8 +53,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch cards and existing tags in parallel
-    const [cardsRes, tagsRes] = await Promise.all([
+    // Fetch cards, existing tags, and user's global_concepts in parallel
+    const [cardsRes, tagsRes, conceptsRes] = await Promise.all([
       serviceSupabase.from("cards")
         .select("id, front_content, back_content, card_type")
         .eq("deck_id", deckId)
@@ -63,6 +64,10 @@ serve(async (req) => {
         .is("merged_into_id", null)
         .order("usage_count", { ascending: false })
         .limit(80),
+      serviceSupabase.from("global_concepts")
+        .select("id, name, slug, concept_tag_id")
+        .eq("user_id", user.id)
+        .limit(500),
     ]);
 
     if (cardsRes.error) throw cardsRes.error;
@@ -74,9 +79,20 @@ serve(async (req) => {
     }
 
     const allTags = tagsRes.data ?? [];
-    const tagListStr = allTags.slice(0, 40).map((t: any) => t.name).join(", ");
+    const userConcepts = conceptsRes.data ?? [];
 
-    // Build compact summaries (limit total prompt size)
+    // Prioritize user's existing concepts as the preferred tag vocabulary
+    const conceptNames = userConcepts.map((c: any) => c.name);
+    const tagNames = allTags.slice(0, 40).map((t: any) => t.name);
+    // Merge: concepts first, then platform tags (deduplicated)
+    const conceptSet = new Set(conceptNames.map((n: string) => n.toLowerCase()));
+    const mergedVocabulary = [
+      ...conceptNames,
+      ...tagNames.filter((n: string) => !conceptSet.has(n.toLowerCase())),
+    ].slice(0, 60);
+    const vocabStr = mergedVocabulary.join(", ");
+
+    // Build compact summaries
     const cardSummaries = cards.map((c: any, idx: number) => {
       const front = stripHtml(c.front_content).substring(0, 150);
       const back = stripHtml(c.back_content).substring(0, 150);
@@ -99,20 +115,21 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "gemini-2.0-flash",
           messages: [
-            { role: "system", content: "Você extrai palavras-chave específicas de cartões de estudo. Responda APENAS JSON válido, sem markdown." },
-            { role: "user", content: `Para CADA cartão abaixo, extraia 1-3 palavras-chave ESPECÍFICAS do conteúdo daquele cartão individual. As tags devem ser termos técnicos, conceitos ou entidades mencionados diretamente no texto do cartão — NÃO categorias genéricas ou nomes de disciplinas.
+            { role: "system", content: "Você extrai conceitos/temas específicos de cartões de estudo. Responda APENAS JSON válido, sem markdown." },
+            { role: "user", content: `Para CADA cartão abaixo, extraia 1-3 CONCEITOS específicos do conteúdo. Conceitos são temas de conhecimento que o cartão ensina.
 
 REGRAS:
 - Extraia termos concretos do texto (ex: "mitocôndria", "lei de Ohm", "artéria femoral")
 - NÃO use categorias amplas (ex: "Biologia", "Semiologia", "Anatomia")
-- Cada tag deve ter 1-3 palavras no máximo
-- TODOS os cartões devem receber tags, independente do tipo (basic, cloze, multiple_choice)
-- Prefira reutilizar tags existentes quando o conceito for igual: ${tagListStr || "nenhuma"}
+- Cada conceito deve ter 1-3 palavras no máximo
+- TODOS os cartões devem receber conceitos, independente do tipo (basic, cloze, multiple_choice)
+- PRIORIZE reutilizar conceitos desta lista quando o tema for equivalente: ${vocabStr || "nenhum"}
+- Se o conceito não existe na lista, crie um novo termo específico
 
 CARTÕES:
 ${cardSummaries}
 
-Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
+Responda JSON puro: {"0":["conceito1","conceito2"],"1":["conceito1"]}` },
           ],
           temperature: 0.2,
         }),
@@ -148,7 +165,7 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
       });
     }
 
-    // Collect all unique tag names needed
+    // Collect all unique concept names
     const neededNames = new Set<string>();
     for (const names of Object.values(tagsByCard)) {
       if (!Array.isArray(names)) continue;
@@ -163,44 +180,38 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
       });
     }
 
-    // Build slug-to-existing-tag map
+    // ── Step 1: Resolve tags (create if needed) ──
     const slugMap = new Map(allTags.map((t: any) => [t.slug, t]));
-    const nameToId = new Map<string, string>();
+    const nameToTagId = new Map<string, string>();
 
-    // Resolve all tags: find existing or batch-create new ones
-    const toCreate: { name: string; slug: string }[] = [];
+    const toCreateTags: { name: string; slug: string }[] = [];
     for (const name of neededNames) {
       const slug = generateSlug(name);
       const existing = slugMap.get(slug);
       if (existing) {
-        nameToId.set(name, existing.id);
+        nameToTagId.set(name, existing.id);
       } else {
-        toCreate.push({ name, slug });
+        toCreateTags.push({ name, slug });
       }
     }
 
-    // Batch insert new tags in one query
-    if (toCreate.length > 0) {
+    if (toCreateTags.length > 0) {
       const { data: created, error: createErr } = await serviceSupabase
         .from("tags")
         .upsert(
-          toCreate.map(t => ({ name: t.name, slug: t.slug, created_by: user.id })),
+          toCreateTags.map(t => ({ name: t.name, slug: t.slug, created_by: user.id })),
           { onConflict: "slug", ignoreDuplicates: true }
         )
         .select("id, name, slug");
 
-      if (createErr) {
-        console.error("Tag create error:", createErr.message);
-      }
+      if (createErr) console.error("Tag create error:", createErr.message);
 
-      // Map created tags
       for (const t of (created ?? [])) {
-        nameToId.set(t.name, t.id);
+        nameToTagId.set(t.name, t.id);
       }
 
-      // For any that were ignored (already existed), fetch them
-      const missingSlugs = toCreate
-        .filter(t => !nameToId.has(t.name))
+      const missingSlugs = toCreateTags
+        .filter(t => !nameToTagId.has(t.name))
         .map(t => t.slug);
 
       if (missingSlugs.length > 0) {
@@ -209,14 +220,33 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
           .select("id, name, slug")
           .in("slug", missingSlugs);
         for (const t of (fetched ?? [])) {
-          // Find original name by slug match
-          const orig = toCreate.find(tc => tc.slug === t.slug);
-          if (orig) nameToId.set(orig.name, t.id);
+          const orig = toCreateTags.find(tc => tc.slug === t.slug);
+          if (orig) nameToTagId.set(orig.name, t.id);
         }
       }
     }
 
-    // Build all card_tags rows in one batch
+    // ── Step 2: Ensure global_concepts exist for each concept ──
+    const conceptSlugMap = new Map(userConcepts.map((c: any) => [c.slug, c]));
+    const toCreateConcepts: { name: string; slug: string; user_id: string; concept_tag_id: string | null }[] = [];
+
+    for (const name of neededNames) {
+      const slug = generateSlug(name);
+      if (!conceptSlugMap.has(slug)) {
+        const tagId = nameToTagId.get(name) ?? null;
+        toCreateConcepts.push({ name, slug, user_id: user.id, concept_tag_id: tagId });
+      }
+    }
+
+    if (toCreateConcepts.length > 0) {
+      const { error: conceptErr } = await serviceSupabase
+        .from("global_concepts")
+        .upsert(toCreateConcepts, { onConflict: "user_id,slug", ignoreDuplicates: true });
+
+      if (conceptErr) console.error("Concept create error:", conceptErr.message);
+    }
+
+    // ── Step 3: Build card_tags rows ──
     const cardTagRows: { card_id: string; tag_id: string; added_by: string }[] = [];
     for (const [idxStr, tagNames] of Object.entries(tagsByCard)) {
       const idx = parseInt(idxStr);
@@ -224,14 +254,13 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
       const card = cards[idx];
       for (const rawName of tagNames) {
         if (typeof rawName !== "string" || !rawName.trim()) continue;
-        const tagId = nameToId.get(rawName.trim());
+        const tagId = nameToTagId.get(rawName.trim());
         if (tagId) {
           cardTagRows.push({ card_id: card.id, tag_id: tagId, added_by: user.id });
         }
       }
     }
 
-    // Single batch insert for all card-tag links
     let totalTagged = 0;
     if (cardTagRows.length > 0) {
       const { data: inserted, error: linkErr } = await serviceSupabase
@@ -239,14 +268,11 @@ Responda JSON puro: {"0":["tag1","tag2"],"1":["tag1"]}` },
         .upsert(cardTagRows, { onConflict: "card_id,tag_id", ignoreDuplicates: true })
         .select("id");
 
-      if (linkErr) {
-        console.error("Link error:", linkErr.message);
-      } else {
-        totalTagged = inserted?.length ?? 0;
-      }
+      if (linkErr) console.error("Link error:", linkErr.message);
+      else totalTagged = inserted?.length ?? 0;
     }
 
-    return new Response(JSON.stringify({ tagged: totalTagged, cardsProcessed: cards.length }), {
+    return new Response(JSON.stringify({ tagged: totalTagged, cardsProcessed: cards.length, conceptsCreated: toCreateConcepts.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
