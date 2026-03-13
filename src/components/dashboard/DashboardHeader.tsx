@@ -16,9 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Brain, Flame, Timer, Crown, Bell, Menu, Moon, Sun, LogOut, UserCircle,
-  Lightbulb, FileText, X, BrainCircuit,
+  Lightbulb, FileText, X,
 } from 'lucide-react';
-import { useGlobalConcepts } from '@/hooks/useGlobalConcepts';
 
 interface DashboardHeaderProps {
   onCreditsOpen: () => void;
@@ -38,8 +37,6 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
 
   const [notifOpen, setNotifOpen] = useState(false);
   const { notifications, hasUnread, markRead } = useExamNotifications();
-  const { dueConcepts } = useGlobalConcepts();
-  const dueConceptCount = dueConcepts.length;
 
   // Crown: gold when any premium is active (including trial)
   const showCrownActive = isPremium;
@@ -60,15 +57,6 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
           <button onClick={() => window.dispatchEvent(new CustomEvent('open-pomodoro'))} className="flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
             <Timer className="h-4 w-4" />
           </button>
-          {dueConceptCount > 0 && (
-            <button
-              onClick={() => navigate('/conceitos')}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:bg-muted/50 bg-primary/10"
-            >
-              <BrainCircuit className="h-4 w-4 text-primary" />
-              <span className="text-xs font-bold tabular-nums text-primary">{dueConceptCount}</span>
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-1.5">
