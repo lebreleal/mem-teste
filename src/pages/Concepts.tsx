@@ -560,6 +560,17 @@ const ConceptsPage = () => {
         </Tabs>
       </div>
 
+      {/* Concept Detail Sheet */}
+      <ConceptDetailSheet
+        concept={detailConcept}
+        isLocked={detailConcept ? lockedIds.has(detailConcept.id) : false}
+        onClose={() => setDetailConcept(null)}
+        onStudy={handleStartFrontierStudy}
+        onEdit={setEditConcept}
+        onDelete={c => { setDeleteSingleTarget(c); setDeleteConfirmOpen(true); }}
+        onOpenQuestions={openQuestions}
+      />
+
       {/* Dialogs */}
       <EditConceptDialog
         concept={editConcept}
