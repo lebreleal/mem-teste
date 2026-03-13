@@ -37,6 +37,7 @@ import CategoryDonutChart from '@/components/concepts/CategoryDonutChart';
 // ReadyToLearnSection is now integrated into ConceptGroupedList
 import ConceptListItem from '@/components/concepts/ConceptListItem';
 import ConceptGroupedList from '@/components/concepts/ConceptGroupedList';
+import DeckConceptMap from '@/components/concepts/DeckConceptMap';
 import { EditConceptDialog, DeleteConceptDialog, QuestionsSheet, AddConceptDialog } from '@/components/concepts/ConceptDialogs';
 
 // ═══════════════════════════════════════════════════
