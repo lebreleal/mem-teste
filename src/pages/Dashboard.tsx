@@ -260,7 +260,6 @@ const Dashboard = () => {
             { label: 'Provas', icon: BookOpen, path: '/exam/new' },
             { label: 'Questões', icon: Library, path: '/banco-questoes' },
             { label: 'Plano', icon: CalendarCheck, path: '/plano' },
-            { label: 'Conceitos', icon: BrainCircuit, path: '/conceitos' },
           ].map(item => (
             <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1 rounded-full border border-border/30 bg-muted/30 px-2.5 py-1 hover:bg-muted/60 transition-all shrink-0">
               <item.icon className="h-3 w-3 text-muted-foreground" />
