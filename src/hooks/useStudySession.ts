@@ -6,44 +6,24 @@ import type { Rating } from '@/lib/fsrs';
 
 export type { StudyQueueResult } from '@/services/studyService';
 
-interface AnyQueueResult {
-  cards: any[];
-  algorithmMode?: string;
-  deckConfig?: any;
-  deckConfigs?: Record<string, any>;
-  isLiveDeck: boolean;
-}
-
 export const useStudySession = (deckId: string, folderId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isUnifiedMode = deckId === '__all__';
 
-  const studyQueue = useQuery<AnyQueueResult>({
-    queryKey: ['study-queue', isUnifiedMode ? 'unified' : (folderId ? `folder-${folderId}` : deckId)],
-    queryFn: async (): Promise<AnyQueueResult> => {
-      if (isUnifiedMode) {
-        return studyService.fetchUnifiedStudyQueue(user!.id);
-      }
-      return studyService.fetchStudyQueue(user!.id, deckId, folderId);
-    },
-    enabled: !!user && (isUnifiedMode || !!(deckId || folderId)),
+  const studyQueue = useQuery<studyService.StudyQueueResult>({
+    queryKey: ['study-queue', folderId ? `folder-${folderId}` : deckId],
+    queryFn: () => studyService.fetchStudyQueue(user!.id, deckId, folderId),
+    enabled: !!user && !!(deckId || folderId),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
 
-  const deckConfigs = studyQueue.data?.deckConfigs as Record<string, any> | undefined;
-  const defaultDeckConfig = isUnifiedMode ? {} : studyQueue.data?.deckConfig;
-
   const submitReview = useMutation({
     mutationFn: async ({ card, rating, elapsedMs }: { card: any; rating: Rating; elapsedMs?: number }) => {
       if (!user) throw new Error('Not authenticated');
-      const cardDeckConfig = isUnifiedMode
-        ? (deckConfigs?.[card.deck_id] ?? {})
-        : studyQueue.data?.deckConfig;
-      const algorithmMode = cardDeckConfig?.algorithm_mode || 'fsrs';
+      const algorithmMode = studyQueue.data?.deckConfig?.algorithm_mode || 'fsrs';
       return studyService.submitCardReview(
-        user.id, card, rating, algorithmMode, cardDeckConfig, elapsedMs,
+        user.id, card, rating, algorithmMode, studyQueue.data?.deckConfig, elapsedMs,
       );
     },
     onSuccess: () => {
@@ -65,9 +45,9 @@ export const useStudySession = (deckId: string, folderId?: string) => {
 
   return {
     queue: studyQueue.data?.cards ?? [],
-    algorithmMode: isUnifiedMode ? 'fsrs' : (studyQueue.data?.algorithmMode || 'fsrs'),
-    deckConfig: defaultDeckConfig,
-    deckConfigs: deckConfigs ?? {},
+    algorithmMode: studyQueue.data?.algorithmMode || 'fsrs',
+    deckConfig: studyQueue.data?.deckConfig,
+    deckConfigs: {} as Record<string, any>,
     isLiveDeck: studyQueue.data?.isLiveDeck ?? false,
     isLoading: studyQueue.isLoading,
     isFetching: studyQueue.isFetching,
