@@ -105,7 +105,49 @@ const Profile = () => {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-2xl space-y-6 px-4 py-8">
+      <main className="container mx-auto max-w-2xl space-y-4 px-4 py-6 pb-24">
+        {/* Stats shortcut */}
+        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/desempenho')}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+              <BarChart3 className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-foreground">Estatísticas</p>
+              <p className="text-xs text-muted-foreground">Heatmap, gráficos e desempenho</p>
+            </div>
+            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
+          </CardContent>
+        </Card>
+
+        {/* Concepts shortcut */}
+        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/conceitos')}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+              <BrainCircuit className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-foreground">Biblioteca de Temas</p>
+              <p className="text-xs text-muted-foreground">Gerenciar temas, importar e estudar</p>
+            </div>
+            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
+          </CardContent>
+        </Card>
+
+        {/* Performance shortcut */}
+        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate('/planejamento')}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+              <Gauge className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-foreground">Planejamento</p>
+              <p className="text-xs text-muted-foreground">Retenção e o que fazer hoje</p>
+            </div>
+            <ArrowLeft className="h-4 w-4 text-muted-foreground rotate-180" />
+          </CardContent>
+        </Card>
+
         {/* Carteira shortcut */}
         <Card className={`relative transition-colors ${isAdmin ? 'cursor-pointer hover:bg-muted/30' : 'opacity-60'}`} onClick={() => isAdmin ? navigate('/memograna') : toast({ title: 'Em desenvolvimento', description: 'Carteira estará disponível em breve!' })}>
           <CardContent className="flex items-center gap-4 p-4">
