@@ -206,71 +206,54 @@ const Dashboard = () => {
       />
 
       <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
-        {/* Quick Nav */}
-        <div className="mb-6 grid grid-cols-5 gap-2 sm:gap-3">
-          <button onClick={() => navigate('/turmas')} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
-            <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-            <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-foreground">Comunidade</span>
-          </button>
+        {/* Quick Nav — compact row */}
+        <div className="mb-4 flex items-center gap-2 overflow-x-auto scrollbar-hide">
           {[
+            { label: 'Comunidade', icon: Users, path: '/turmas', badge: 0 },
             { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
             { label: 'Provas', icon: BookOpen, path: '/exam/new', badge: 0 },
             { label: 'Questões', icon: Library, path: '/banco-questoes', badge: 0 },
             { label: 'Meu Plano', icon: CalendarCheck, path: '/plano', badge: 0 },
           ].map(item => (
-            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex flex-col items-center gap-1 sm:gap-1.5 md:gap-2 rounded-xl sm:rounded-2xl border border-border/50 bg-card p-3 sm:p-4 md:p-5 shadow-sm hover:bg-muted/50 hover:shadow-md transition-all">
-              <div className="relative">
-                <item.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-                {item.badge > 0 && (
-                  <span className="absolute -top-2 -right-3 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground shadow-sm animate-in zoom-in-50">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-foreground">{item.label}</span>
+            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-3 py-1.5 shadow-sm hover:bg-muted/50 transition-all shrink-0">
+              <item.icon className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[11px] font-semibold text-foreground whitespace-nowrap">{item.label}</span>
+              {item.badge > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Caderno de Erros shortcut */}
-        {errorCount > 0 && (
-          <button
-            onClick={() => navigate('/caderno-de-erros')}
-            className="mb-6 w-full flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 hover:bg-destructive/10 transition-colors"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
-              <BookX className="h-5 w-5 text-destructive" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-bold text-foreground">Caderno de Erros</p>
-              <p className="text-[11px] text-muted-foreground">{errorCount} {errorCount === 1 ? 'questão errada' : 'questões erradas'} para revisar</p>
-            </div>
-            <Badge variant="destructive" className="text-xs">{errorCount}</Badge>
-          </button>
-        )}
-
         {/* Mini Stats Strip */}
-        <MiniStatsStrip />
+        <div className="mb-4">
+          <MiniStatsStrip />
+        </div>
 
-        {/* Auto-trigger diagnostic when 10+ unreviewed concepts */}
-        <DiagnosticBanner />
+        {/* ▶ ESTUDAR AGORA — Single dominant CTA */}
+        <StudyNowHero />
 
-        {/* Due Themes Section */}
-        <DashboardDueThemes />
-
-        {/* Study deck carousel */}
+        {/* Collapsible Deck Carousel */}
         {allDecks && (
-          <DeckCarousel
-            decks={allDecks}
-            avgSecondsPerCard={avgSecondsPerCard}
-            studyMetrics={realStudyMetrics}
-            hasPlan={hasPlan}
-            planDeckIds={planDeckIds}
-            planDeckOrder={planDeckOrderEarly}
-            plansByDeckId={plansByDeckId}
-            globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
-            distributedNewByDeck={state.distributedNewByDeck}
-          />
+          <details className="mb-4 group" open={false}>
+            <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden mb-2">
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+              📚 Meus Baralhos
+            </summary>
+            <DeckCarousel
+              decks={allDecks}
+              avgSecondsPerCard={avgSecondsPerCard}
+              studyMetrics={realStudyMetrics}
+              hasPlan={hasPlan}
+              planDeckIds={planDeckIds}
+              planDeckOrder={planDeckOrderEarly}
+              plansByDeckId={plansByDeckId}
+              globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
+              distributedNewByDeck={state.distributedNewByDeck}
+            />
+          </details>
         )}
 
         <DashboardActions
