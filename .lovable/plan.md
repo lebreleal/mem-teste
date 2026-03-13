@@ -50,9 +50,38 @@
 - Botão "Diagnóstico Inicial" na página de Conceitos
 - Seleciona ~20 conceitos distribuídos por profundidade no grafo
 - Para cada conceito, busca uma questão vinculada
-- Se acerta → marca conceito como dominado (state=2, stability=10)
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
 - Se erra → marca como fraco (state=0) para revisão futura
 - Exibe resultado final com contagem de acertos/erros
+
+### 11. Princípios de Neurociência Aplicados (Learning Science)
+
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
+
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
+
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
+
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
+
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
 ## Arquivos Modificados
 | Arquivo | Mudança |
@@ -62,7 +91,9 @@
 | `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
 | `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
 | `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
-| `src/pages/ErrorNotebook.tsx` | Usa grafo de conceitos em vez de decks |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
 | `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
 | `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
 | `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
