@@ -266,121 +266,122 @@ const Dashboard = () => {
               />
             )}
 
-        <DashboardActions
-          mode="personal"
-          currentFolderId={state.currentFolderId}
-          breadcrumb={state.breadcrumb}
-          onNavigateFolder={state.setCurrentFolderId}
-          onNavigateUp={() => {
-            const current = state.folders.find(f => f.id === state.currentFolderId);
-            state.setCurrentFolderId(current?.parent_id ?? null);
-          }}
-          hasDecks={state.currentDecks.length > 0}
-          deckSelectionMode={state.deckSelectionMode}
-          selectedCount={state.selectedDeckIds.size}
-          isAllSelected={state.currentDecks.length > 0 && state.selectedDeckIds.size === state.currentDecks.length}
-          toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
-          toggleSelectAll={() => {
-            if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
-            else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
-          }}
-          onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-          onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-          onCreateAI={() => state.setAiDeckOpen(true)}
-          onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
-          onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-          onBulkArchive={actions.handleBulkArchive}
-          onBulkDelete={actions.handleBulkDelete}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+            <DashboardActions
+              mode="personal"
+              currentFolderId={state.currentFolderId}
+              breadcrumb={state.breadcrumb}
+              onNavigateFolder={state.setCurrentFolderId}
+              onNavigateUp={() => {
+                const current = state.folders.find(f => f.id === state.currentFolderId);
+                state.setCurrentFolderId(current?.parent_id ?? null);
+              }}
+              hasDecks={state.currentDecks.length > 0}
+              deckSelectionMode={state.deckSelectionMode}
+              selectedCount={state.selectedDeckIds.size}
+              isAllSelected={state.currentDecks.length > 0 && state.selectedDeckIds.size === state.currentDecks.length}
+              toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
+              toggleSelectAll={() => {
+                if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
+                else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
+              }}
+              onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+              onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+              onCreateAI={() => state.setAiDeckOpen(true)}
+              onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+              onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+              onBulkArchive={actions.handleBulkArchive}
+              onBulkDelete={actions.handleBulkDelete}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
 
-        <DeckList
-          isLoading={state.isLoading}
-          currentFolders={state.currentFolders}
-          currentDecks={state.currentDecks}
-          currentFolderId={state.currentFolderId}
-          searchQuery={searchQuery}
-          deckSelectionMode={state.deckSelectionMode}
-          selectedDeckIds={state.selectedDeckIds}
-          expandedDecks={state.expandedDecks}
-          toggleExpand={state.toggleExpand}
-          toggleDeckSelection={state.toggleDeckSelection}
-          getSubDecks={state.getSubDecks}
-          getAggregateStats={state.getAggregateStats}
-          getCommunityLinkId={state.getCommunityLinkId}
-          folderHasCommunityLink={state.folderHasCommunityLink}
-          getFolderDueCount={state.getFolderDueCount}
-          getFolderCommunityLinkId={state.getFolderCommunityLinkId}
-          navigateToCommunity={actions.handleNavigateCommunity}
-          onFolderClick={state.setCurrentFolderId}
-          onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
-          onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
-          onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
-          onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
-          onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-          onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-          onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-          onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-          onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-          onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
-          onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
-          onPendingClick={handlePendingClick}
-          decksWithPendingUpdates={state.decksWithPendingUpdates}
-        />
+            <DeckList
+              isLoading={state.isLoading}
+              currentFolders={state.currentFolders}
+              currentDecks={state.currentDecks}
+              currentFolderId={state.currentFolderId}
+              searchQuery={searchQuery}
+              deckSelectionMode={state.deckSelectionMode}
+              selectedDeckIds={state.selectedDeckIds}
+              expandedDecks={state.expandedDecks}
+              toggleExpand={state.toggleExpand}
+              toggleDeckSelection={state.toggleDeckSelection}
+              getSubDecks={state.getSubDecks}
+              getAggregateStats={state.getAggregateStats}
+              getCommunityLinkId={state.getCommunityLinkId}
+              folderHasCommunityLink={state.folderHasCommunityLink}
+              getFolderDueCount={state.getFolderDueCount}
+              getFolderCommunityLinkId={state.getFolderCommunityLinkId}
+              navigateToCommunity={actions.handleNavigateCommunity}
+              onFolderClick={state.setCurrentFolderId}
+              onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
+              onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
+              onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
+              onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
+              onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+              onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+              onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+              onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+              onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+              onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
+              onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
+              onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+              onPendingClick={handlePendingClick}
+              decksWithPendingUpdates={state.decksWithPendingUpdates}
+            />
 
-        {/* Archived section */}
-        {state.totalArchived > 0 && (
-          <div className="mt-6">
-            <button
-              onClick={() => state.setShowArchived(!state.showArchived)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-            >
-              <Archive className="h-4 w-4" />
-              <span>Arquivados ({state.totalArchived})</span>
-              <ChevronDown className={`h-4 w-4 transition-transform ${state.showArchived ? 'rotate-180' : ''}`} />
-            </button>
-            {state.showArchived && (
-              <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
-                {state.archivedFolders.map(folder => (
-                  <div key={folder.id} className="flex items-center gap-3 px-5 py-4">
-                    <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-muted-foreground truncate">{folder.name}</h3>
-                      <p className="text-xs text-muted-foreground">Pasta arquivada</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveFolder.mutate(folder.id)}>
-                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+            {/* Archived section */}
+            {state.totalArchived > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => state.setShowArchived(!state.showArchived)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
+                >
+                  <Archive className="h-4 w-4" />
+                  <span>Arquivados ({state.totalArchived})</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${state.showArchived ? 'rotate-180' : ''}`} />
+                </button>
+                {state.showArchived && (
+                  <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
+                    {state.archivedFolders.map(folder => (
+                      <div key={folder.id} className="flex items-center gap-3 px-5 py-4">
+                        <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-display font-semibold text-muted-foreground truncate">{folder.name}</h3>
+                          <p className="text-xs text-muted-foreground">Pasta arquivada</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveFolder.mutate(folder.id)}>
+                            <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {state.archivedDecks.map(deck => (
+                      <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
+                          <p className="text-xs text-muted-foreground">Baralho arquivado</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
+                            <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => actions.handleDeleteDeckRequest(deck)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {state.archivedDecks.map(deck => (
-                  <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
-                      <p className="text-xs text-muted-foreground">Baralho arquivado</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
-                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => actions.handleDeleteDeckRequest(deck)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                )}
               </div>
             )}
           </div>
-        )}
-      </main>
+        </details>
 
       <DashboardDialogs
         createType={state.createType} setCreateType={state.setCreateType}
