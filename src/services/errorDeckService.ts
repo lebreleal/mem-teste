@@ -228,13 +228,17 @@ export async function moveConceptCardsToErrorDeck(
   }
   const deckScopeIds = [...deckScopeSet];
 
+  /** Max cards to move per concept-error event (safety cap) */
+  const MAX_CARDS_PER_EVENT = 30;
+
   const cardIdsToMove = new Set<string>();
 
-  // Strategy 1: deck_concepts -> concept_cards (all user concepts)
+  // Strategy 1: deck_concepts -> concept_cards (scoped to deck hierarchy)
   const { data: deckConcepts } = await supabase
     .from('deck_concepts')
     .select('id, name')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .in('deck_id', deckScopeIds);
 
   const matchedConceptIds = (deckConcepts ?? [])
     .filter(dc => normalizedTerms.has(normalize(dc.name)))
@@ -254,7 +258,7 @@ export async function moveConceptCardsToErrorDeck(
     }
   }
 
-  // Strategy 2: global_concepts.concept_tag_id -> card_tags
+  // Strategy 2: global_concepts.concept_tag_id -> card_tags (only if Strategy 1 found nothing)
   if (cardIdsToMove.size === 0) {
     const { data: globalConcepts } = await supabase
       .from('global_concepts' as any)
@@ -267,63 +271,56 @@ export async function moveConceptCardsToErrorDeck(
       .filter(Boolean);
 
     if (conceptTagIds.length > 0) {
-      const { data: cardTags } = await supabase
-        .from('card_tags')
-        .select('card_id')
-        .in('tag_id', [...new Set(conceptTagIds)] as string[]);
-
-      for (const ct of cardTags ?? []) {
-        cardIdsToMove.add(ct.card_id);
-      }
-    }
-  }
-
-  // Strategy 3: fallback text match inside deck scope
-  if (cardIdsToMove.size === 0) {
-    const keywordParts = terms
-      .flatMap(term => term.split(/\s+/))
-      .map(cleanTerm)
-      .filter(w => w.length >= 4);
-
-    const searchable = [...new Set([...terms.map(cleanTerm), ...keywordParts])].slice(0, 10);
-
-    if (searchable.length > 0) {
-      const orExpr = searchable
-        .flatMap(term => [
-          `front_content.ilike.%${term}%`,
-          `back_content.ilike.%${term}%`,
-        ])
-        .join(',');
-
-      const { data: matchedCards } = await supabase
+      // Get card_ids from card_tags, but only for cards in our deck scope
+      const { data: scopedCards } = await supabase
         .from('cards')
         .select('id')
         .in('deck_id', deckScopeIds)
         .is('origin_deck_id', null)
         .neq('deck_id', errorDeckId)
-        .or(orExpr)
-        .limit(180);
+        .limit(500);
 
-      for (const card of matchedCards ?? []) {
-        cardIdsToMove.add(card.id);
+      if (scopedCards && scopedCards.length > 0) {
+        const scopedCardIds = scopedCards.map(c => c.id);
+        const { data: cardTags } = await supabase
+          .from('card_tags')
+          .select('card_id')
+          .in('tag_id', [...new Set(conceptTagIds)] as string[])
+          .in('card_id', scopedCardIds);
+
+        for (const ct of cardTags ?? []) {
+          cardIdsToMove.add(ct.card_id);
+        }
       }
     }
   }
+
+  // Strategy 3 (text fallback) REMOVED — too aggressive, caused mass migrations.
 
   if (cardIdsToMove.size === 0) {
     console.warn('[ErrorDeck] No cards found for concepts:', terms, 'in deck scope:', deckScopeIds);
     return 0;
   }
 
-  // Keep only cards that are currently in the deck scope and not yet moved.
-  const candidateIds = [...cardIdsToMove];
-  const { data: candidateCards, error: candidateError } = await supabase
-    .from('cards')
-    .select('id, deck_id')
-    .in('id', candidateIds)
-    .in('deck_id', deckScopeIds)
-    .is('origin_deck_id', null)
-    .neq('deck_id', errorDeckId);
+  // Keep only cards in deck scope, not yet moved, capped for safety.
+  const candidateIds = [...cardIdsToMove].slice(0, 200);
+  
+  // Batch the .in() query to avoid Supabase limits
+  const allCandidateCards: { id: string; deck_id: string }[] = [];
+  for (let i = 0; i < candidateIds.length; i += 80) {
+    const batch = candidateIds.slice(i, i + 80);
+    const { data, error: bErr } = await supabase
+      .from('cards')
+      .select('id, deck_id')
+      .in('id', batch)
+      .in('deck_id', deckScopeIds)
+      .is('origin_deck_id', null)
+      .neq('deck_id', errorDeckId);
+    if (bErr) throw bErr;
+    if (data) allCandidateCards.push(...data);
+  }
+
+  const candidateCards = allCandidateCards.slice(0, MAX_CARDS_PER_EVENT);
 
   if (candidateError) throw candidateError;
   if (!candidateCards || candidateCards.length === 0) {
