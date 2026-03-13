@@ -322,11 +322,12 @@ export async function moveConceptCardsToErrorDeck(
 
   const candidateCards = allCandidateCards.slice(0, MAX_CARDS_PER_EVENT);
 
-  if (candidateError) throw candidateError;
-  if (!candidateCards || candidateCards.length === 0) {
+  if (candidateCards.length === 0) {
     console.warn('[ErrorDeck] Candidates found by concept, but none eligible to move in current scope.');
     return 0;
   }
+
+  console.log(`[ErrorDeck] Found ${cardIdsToMove.size} candidate card IDs, ${candidateCards.length} eligible (capped at ${MAX_CARDS_PER_EVENT})`);
 
   // Preserve each card's real source deck for accurate return after mastery.
   const bySourceDeck = new Map<string, string[]>();
