@@ -170,7 +170,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
           <XIcon className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <p className="text-xs text-muted-foreground">Conceito {index + 1}/{queue.length}</p>
+          <p className="text-xs text-muted-foreground">Tema {index + 1}/{queue.length}</p>
           <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
           {concept?.category && (
             <p className="text-[10px] text-muted-foreground">{concept.category}{concept.subcategory ? ` › ${concept.subcategory}` : ''}</p>
