@@ -584,6 +584,56 @@ const ConceptsPage = () => {
         onClose={() => setAddConceptOpen(false)}
       />
 
+      {/* Prerequisite Explainer Modal */}
+      <Dialog open={showPrereqExplainer} onOpenChange={setShowPrereqExplainer}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5 text-primary" />
+              Mapear Pré-requisitos
+            </DialogTitle>
+            <DialogDescription className="text-left space-y-3 pt-2">
+              <p>A IA analisa todos os seus temas e descobre a <strong>ordem ideal de estudo</strong>.</p>
+              <p>Por exemplo, se você tem os temas "Fração" e "Equação de 2º grau", a IA entende que você precisa dominar Fração antes.</p>
+              <p className="text-xs text-muted-foreground">Isso cria uma árvore de dependências que bloqueia temas avançados até você dominar os básicos — como funciona o ALEKS.</p>
+              <p className="font-medium text-foreground">Use quando tiver 3+ temas para organizar a ordem de estudo.</p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowPrereqExplainer(false)}>Cancelar</Button>
+            <Button onClick={() => { setShowPrereqExplainer(false); handleMapPrerequisites(); }} disabled={mappingPrereqs} className="gap-1.5">
+              <Wand2 className="h-4 w-4" />
+              {mappingPrereqs ? 'Mapeando...' : 'Mapear agora'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diagnostic Explainer Modal */}
+      <Dialog open={showDiagnosticExplainer} onOpenChange={setShowDiagnosticExplainer}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-primary" />
+              Diagnóstico Inicial
+            </DialogTitle>
+            <DialogDescription className="text-left space-y-3 pt-2">
+              <p>Um <strong>teste rápido e adaptativo</strong> para descobrir o que você já sabe.</p>
+              <p>A IA faz perguntas sobre seus temas — se você acerta, marca como dominado e pula os fáceis. Se erra, sabe exatamente onde você precisa estudar.</p>
+              <p className="text-xs text-muted-foreground">Funciona como uma prova diagnóstica: calibra seu nível inicial sem que você precise estudar tudo do zero.</p>
+              <p className="font-medium text-foreground">Ideal para quando você já conhece parte do conteúdo e quer pular o que já domina.</p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowDiagnosticExplainer(false)}>Cancelar</Button>
+            <Button onClick={() => { setShowDiagnosticExplainer(false); handleStartDiagnostic(); }} disabled={diagnosticLoading} className="gap-1.5">
+              <Stethoscope className="h-4 w-4" />
+              {diagnosticLoading ? 'Preparando...' : 'Iniciar diagnóstico'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   );
