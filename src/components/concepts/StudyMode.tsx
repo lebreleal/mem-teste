@@ -207,7 +207,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
           <Card>
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este conceito.</p>
+              <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este tema.</p>
               <Button variant="outline" className="mt-4" onClick={handleAdvanceAfterError}>Pular</Button>
             </CardContent>
           </Card>
