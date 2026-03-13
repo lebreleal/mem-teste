@@ -52,10 +52,11 @@ Deno.serve(async (req) => {
       aiModel = "flash",
       energyCost = 0,
       customInstructions = "",
+      sourceContent = "",
     } = body;
 
-    if (!deckId && (!rawCardIds || rawCardIds.length === 0)) {
-      return jsonResponse({ error: "deckId ou cardIds é obrigatório" }, 400);
+    if (!deckId && (!rawCardIds || rawCardIds.length === 0) && !sourceContent) {
+      return jsonResponse({ error: "deckId, cardIds ou sourceContent é obrigatório" }, 400);
     }
 
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
