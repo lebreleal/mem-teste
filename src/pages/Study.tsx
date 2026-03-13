@@ -78,7 +78,14 @@ const Study = () => {
   }, [deckId, folderId, isUnifiedMode, navigate, queryClient]);
   const TUTOR_COST = getCost(BASE_TUTOR_COST);
 
-  
+  /** Resolve deck config for a specific card (unified mode uses per-card lookup) */
+  const getCardDeckConfig = useCallback((card: any) => {
+    if (isUnifiedMode && card?.deck_id && deckConfigs[card.deck_id]) {
+      return deckConfigs[card.deck_id];
+    }
+    return deckConfig ?? {};
+  }, [isUnifiedMode, deckConfigs, deckConfig]);
+
 
   // Local queue state
   const [localQueue, setLocalQueue] = useState<any[]>([]);
