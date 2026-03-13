@@ -980,6 +980,7 @@ const CreateQuestionDialog = ({
               prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
               subcategory: qi.subcategory ?? undefined,
+              conceptDescriptions: qi.concept_descriptions ?? [],
             });
           }
         }
