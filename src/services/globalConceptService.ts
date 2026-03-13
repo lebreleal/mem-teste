@@ -145,6 +145,36 @@ export async function ensureGlobalConcepts(
   return slugMap;
 }
 
+// ─── Auto-trigger prerequisite mapping (non-blocking) ───
+// Only runs if >5 concepts have no parent_concept_id set
+const _autoMapInFlight = new Set<string>();
+async function tryAutoMapPrerequisites(userId: string) {
+  if (_autoMapInFlight.has(userId)) return;
+  _autoMapInFlight.add(userId);
+  try {
+    const { data: unmapped } = await supabase
+      .from('global_concepts' as any)
+      .select('id')
+      .eq('user_id', userId)
+      .is('parent_concept_id', null);
+
+    if (!unmapped || unmapped.length < 6) return;
+
+    // Check how many total concepts exist
+    const { count } = await supabase
+      .from('global_concepts' as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    // Only auto-map if >80% of concepts are unmapped (first-time scenario)
+    if (count && unmapped.length / count < 0.8) return;
+
+    await mapPrerequisitesViaAI(userId);
+  } finally {
+    _autoMapInFlight.delete(userId);
+  }
+}
+
 // ─── Link questions to global concepts (with prerequisite support) ──────────
 export async function linkQuestionsToConcepts(
   userId: string,
