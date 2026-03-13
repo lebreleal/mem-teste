@@ -243,8 +243,7 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
           onCreateAI={() => setQuestionAction('ai')}
         />
       )}
-      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <DeckConceptsSection deckId={deckId} sourceDeckId={resolvedSourceDeckId} />
+      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} sourceDeckId={resolvedSourceDeckId} />
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
