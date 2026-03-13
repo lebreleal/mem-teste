@@ -236,33 +236,19 @@ export async function linkQuestionsToConcepts(
 
   const uniqueNames = Array.from(allNames);
 
-  // Build description map from pairs
-  const descriptionMap = new Map<string, string>();
+  // Build context description map: questionId+conceptSlug → context_description
+  const contextDescMap = new Map<string, string>(); // "questionId:slug" → description
   for (const pair of questionConceptPairs) {
     if (pair.conceptDescriptions) {
       for (const cd of pair.conceptDescriptions) {
         if (cd.name && cd.description) {
-          descriptionMap.set(conceptSlug(cd.name), cd.description);
+          contextDescMap.set(`${pair.questionId}:${conceptSlug(cd.name)}`, cd.description);
         }
       }
     }
   }
 
-  const slugToId = await ensureGlobalConcepts(userId, uniqueNames, metaMap, descriptionMap.size > 0 ? descriptionMap : undefined);
-
-  // Update descriptions for existing concepts that don't have one yet
-  if (descriptionMap.size > 0) {
-    for (const [slug, desc] of descriptionMap) {
-      const conceptId = slugToId.get(slug);
-      if (conceptId) {
-        await supabase
-          .from('global_concepts' as any)
-          .update({ description: desc } as any)
-          .eq('id', conceptId)
-          .is('description', null);
-      }
-    }
-  }
+  const slugToId = await ensureGlobalConcepts(userId, uniqueNames, metaMap);
 
   // Set parent_concept_id for concepts that have prerequisites
   for (const [conceptSlugKey, prereqNames] of prerequisiteMap.entries()) {
