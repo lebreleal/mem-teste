@@ -1,100 +1,100 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-# Auditoria Brutal: Contradições e Pontas Soltas
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-Vou ser direto. Há problemas reais que eu encobri ao dizer "80% alinhado".
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
----
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-## CONTRADIÇÃO 1: FSRS no conceito é aplicado MAS ignorado na prática
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-**O que dizemos**: "FSRS é aplicado ao conceito, não à questão, para evitar decoreba."
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-**O que o código faz**: O `StudyMode` chama `onRate(concept, 3, true)` que roda `fsrsSchedule` e atualiza `scheduled_date` do conceito. Mas **o StudyMode nunca consulta se o conceito está due**. O `ErrorNotebook` mostra conceitos com `state !== 2`, independente de `scheduled_date`. O `StudyMode` vindo do ErrorNotebook não respeita o agendamento FSRS — o aluno pode estudar um conceito que o FSRS diz para revisar daqui a 30 dias.
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-**Resultado real**: O FSRS está atualizando campos que ninguém lê nesse fluxo. O agendamento é decorativo no ErrorNotebook. A única tela que respeita `scheduled_date` é a aba "Meus" na página de Conceitos (`dueConcepts`).
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-**O que deveria acontecer**: Se o aluno dominou um conceito (state=2), ele deve sair do ErrorNotebook (isso funciona). Mas se ele errou e o FSRS agendou para daqui a 10 minutos, o ErrorNotebook deveria indicar "revisão em 10min" em vez de permitir estudo imediato infinito. Caso contrário, o espaçamento (a base inteira do FSRS) é ignorado.
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
----
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-## CONTRADIÇÃO 2: `markConceptMastered` no DiagnosticMode bypassa o FSRS
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-**Linha 1169-1181** (`globalConceptService.ts`): `markConceptMastered` seta `stability: 10, difficulty: 0.3, scheduled_date: +30 dias` manualmente. Isso **sobrescreve** completamente o estado FSRS com valores hardcoded.
+### 11. Princípios de Neurociência Aplicados (Learning Science)
 
-**Problema**: Se o aluno acertou 2 questões no diagnóstico, marcamos stability=10 e dificuldade=0.3 — valores arbitrários que não vieram do algoritmo FSRS. O FSRS foi projetado para calcular esses valores a partir do histórico real. Ao forçar valores, estamos **corrompendo o modelo**.
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
 
-**O que deveria acontecer**: O diagnóstico deveria chamar `fsrsSchedule` com rating=3 duas vezes (simulando os 2 acertos) para que o modelo calcule stability e difficulty corretamente. Ou, no mínimo, usar os valores iniciais de `w[3]` (stability para rating "Easy" em card novo = 8.29 pelo FSRS-6).
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
 
----
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
 
-## CONTRADIÇÃO 3: `cascadeOnError` reschedula ancestrais mas não os coloca na sessão
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
 
-**Linha 405-442**: Quando o aluno erra, `cascadeOnError` percorre ancestrais e seta `scheduled_date = now()` para os fracos. Mas esses ancestrais **não entram na sessão atual de estudo**. O aluno nunca vê que seus pré-requisitos foram reagendados.
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
-**Na prática**: O cascade seta `scheduled_date = now()` e o ancestral só aparece da **próxima vez** que o aluno abrir a página de Conceitos e filtrar por "due". No ErrorNotebook, o conceito ancestral só aparece se tiver `state !== 2` E tiver questões erradas vinculadas — muitos ancestrais não terão questões erradas próprias.
-
-**Resultado**: O cascade é essencialmente invisível para o aluno. Um conceito pré-requisito pode ser reagendado 50 vezes sem nunca ser estudado.
-
----
-
-## CONTRADIÇÃO 4: `getVariedQuestion` não varia de verdade com pool pequeno
-
-**Linha 255-316**: A função ordena questões por "menos respondida recentemente". Mas a maioria dos conceitos tem **1-4 questões vinculadas** (geradas pelo `generateQuestionsForConcept` que cria exatamente 4 cards → ~4 questões).
-
-**Com MASTERY_THRESHOLD = 2**: O aluno precisa acertar 2 vezes consecutivas. Com 4 questões no pool, ele vai ver as mesmas questões rapidamente. Após 3-4 sessões, já memorizou as respostas — exatamente o "decoreba de questão" que dizemos combater.
-
-**Solução real**: Ou geramos mais questões por conceito (8-10), ou geramos questões novas on-the-fly a cada sessão (mais caro mas mais eficaz), ou aceitamos que com pool pequeno, o sistema degrada para memorização.
-
----
-
-## CONTRADIÇÃO 5: Confidence check tem UX enganosa
-
-**StudyMode linhas 82-97**: Se o aluno clica "Chutei", não incrementamos `consecutiveCorrect` e carregamos outra questão. Mas o conceito NÃO recebe rating negativo — simplesmente ignoramos o acerto. Se o aluno tem 4 questões e clica "Chutei" em todas, ele entra em loop infinito vendo as mesmas 4 questões.
-
-**Não há escape**: O código não tem limite de tentativas. Se o aluno é honesto e sempre diz "Chutei", ele nunca domina o conceito. Se é desonesto, o check não serve para nada. A feature incentiva mentir.
-
----
-
-## PROBLEMA 6: `updateConceptMastery` tem race condition
-
-**Linha 338-363**: A função faz SELECT → calcula → UPDATE. Em requests paralelos (aluno clicando rápido), dois SELECTs podem ler o mesmo valor e ambos incrementam +1, perdendo uma contagem. Deveria usar `correct_count + 1` no SQL diretamente (increment atômico via RPC ou raw SQL).
-
----
-
-## PROBLEMA 7: O ErrorNotebook não mostra conceitos fracos SEM questões erradas
-
-**`getWeakConceptsWithErrors` (conceptHierarchyService.ts)**: Filtra conceitos que têm `state !== 2` E questões erradas (`is_correct = false`). Mas conceitos novos (state=0) que nunca foram tentados **não aparecem no ErrorNotebook**, mesmo que sejam pré-requisitos reagendados pelo cascade.
-
-**Resultado**: O cascade reagenda um pré-requisito, mas se esse pré-requisito nunca teve uma questão errada, ele não aparece em lugar nenhum visível.
-
----
-
-## PROBLEMA 8: `parent_concept_id` é árvore, não grafo
-
-**Linha 187**: "Use the first prerequisite as parent (tree model, not DAG)". Um conceito só pode ter UM pré-requisito. Na medicina, "Mecanismo da Espironolactona" depende de "Efeitos da Aldosterona" E "Cascata Renina-Angiotensina". O modelo atual perde um dos dois.
-
-O ALEKS real usa Knowledge Space Theory com grafos (não árvores). O modelo de árvore é uma simplificação que perde relações importantes.
-
----
-
-## Resumo: O que corrigir (por prioridade)
-
-| # | Problema | Impacto | Correção |
-|---|---|---|---|
-| 1 | FSRS decorativo no ErrorNotebook | Alto | Respeitar `scheduled_date` ou remover FSRS desse fluxo |
-| 2 | `markConceptMastered` bypassa FSRS | Alto | Usar `fsrsSchedule` no diagnóstico |
-| 3 | Pool de questões muito pequeno (4) | Alto | Gerar 8-10, ou gerar on-the-fly na 2ª tentativa |
-| 4 | Confidence check sem escape (loop infinito) | Médio | Limitar a 1 "Chutei" por conceito, ou dar rating=2 (Hard) |
-| 5 | Cascade invisível | Médio | Injetar ancestrais na sessão atual, ou notificar |
-| 6 | Race condition no mastery count | Baixo | Increment atômico via RPC |
-| 7 | Conceitos novos sem erro não aparecem | Médio | ErrorNotebook → "Conceitos Fracos" (não só erros) |
-| 8 | Árvore vs Grafo | Baixo (longo prazo) | Tabela de junção `concept_prerequisites` |
-
-### Arquivos afetados
-- `src/components/concepts/StudyMode.tsx` — confidence check limit, FSRS respect
-- `src/components/concepts/DiagnosticMode.tsx` — usar fsrsSchedule em vez de markConceptMastered
-- `src/services/globalConceptService.ts` — markConceptMastered via FSRS, pool size, increment atômico
-- `src/services/conceptHierarchyService.ts` — incluir conceitos novos sem erros
-- `src/pages/ErrorNotebook.tsx` — mostrar scheduled_date, renomear para "Conceitos Fracos"
-
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |

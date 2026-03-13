@@ -78,6 +78,9 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     }
   };
 
+  // Track guess count per concept to avoid infinite loop
+  const [guessCount, setGuessCount] = useState(0);
+
   // Confidence response handler
   const handleConfidence = useCallback(async (wasConfident: boolean) => {
     setAwaitingConfidence(false);
@@ -92,10 +95,19 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       setConsecutiveCorrect(newStreak);
       resetForNextQuestion(concept);
     } else {
-      // Not confident — don't increment streak, load another question
+      const newGuessCount = guessCount + 1;
+      setGuessCount(newGuessCount);
+
+      if (newGuessCount >= 2) {
+        // After 2 guesses, treat as Hard (rating=2) — still counts as correct but with penalty
+        await onRate(concept, 2, true);
+        moveToNextConcept();
+        return;
+      }
+      // First guess — don't increment streak, load another question
       resetForNextQuestion(concept);
     }
-  }, [concept, consecutiveCorrect, onRate, queue, index]);
+  }, [concept, consecutiveCorrect, onRate, queue, index, guessCount]);
 
   // Elaboration submit — reveal explanation
   const handleElaborationSubmit = () => {
@@ -128,6 +140,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
     }
     setIndex(nextIdx);
     setConsecutiveCorrect(0);
+    setGuessCount(0);
     resetForNextQuestion(queue[nextIdx]);
   }
 
