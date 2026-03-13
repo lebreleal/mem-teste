@@ -202,6 +202,19 @@ Para cada questão, retorne:
                 items: { type: "string" },
                 description: "1-3 Knowledge Components centrais testados nesta questão. Nomes curtos de 2-6 palavras no nível Compreender/Aplicar de Bloom (ex: 'Fisiopatologia da ICC direita', 'Critérios de Light'). NÃO use perguntas, fatos isolados ou disciplinas amplas.",
               },
+              concept_descriptions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Nome do conceito (deve corresponder ao array concepts)" },
+                    description: { type: "string", description: "Frase concisa (15-30 palavras) que explique O QUE é o conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de 'retrieval cue' — ajude o aluno a ativar o conhecimento correto." },
+                  },
+                  required: ["name", "description"],
+                  additionalProperties: false,
+                },
+                description: "Descrição de cada conceito com contexto da questão. Deve ter o mesmo comprimento do array concepts.",
+              },
               prerequisites: {
                 type: "array",
                 items: { type: "string" },
