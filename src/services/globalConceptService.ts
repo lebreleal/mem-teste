@@ -1166,15 +1166,31 @@ export async function fetchDiagnosticConcepts(userId: string): Promise<GlobalCon
 }
 
 // ─── Mark concept as mastered (for diagnostic) ───
+// Uses FSRS properly: simulates 2x Good ratings on a new card to get real stability/difficulty
 export async function markConceptMastered(conceptId: string) {
+  const { fsrsSchedule, DEFAULT_FSRS_PARAMS } = await import('@/lib/fsrs');
+  const params = { ...DEFAULT_FSRS_PARAMS, learningSteps: [10, 1440], relearningSteps: [10] };
+
+  // First "Good" on a new card → enters learning
+  const first = fsrsSchedule(
+    { stability: 0, difficulty: 0, state: 0, scheduled_date: new Date().toISOString(), learning_step: 0 },
+    3, params,
+  );
+
+  // Second "Good" → graduates or advances
+  const second = fsrsSchedule(
+    { stability: first.stability, difficulty: first.difficulty, state: first.state, scheduled_date: first.scheduled_date, learning_step: first.learning_step, last_reviewed_at: new Date().toISOString() },
+    3, params,
+  );
+
   await supabase
     .from('global_concepts' as any)
     .update({
-      state: 2,
-      stability: 10,
-      difficulty: 0.3,
-      scheduled_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      learning_step: 0,
+      state: second.state,
+      stability: second.stability,
+      difficulty: second.difficulty,
+      scheduled_date: second.scheduled_date,
+      learning_step: second.learning_step,
       last_reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as any)
