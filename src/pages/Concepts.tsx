@@ -141,8 +141,8 @@ const ComunidadeTab = () => {
   if (communityConcepts.length === 0) return (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-12 text-center">
       <Users className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
-      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum conceito na comunidade</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Conceitos compartilhados por outros usuários aparecerão aqui.</p>
+      <h3 className="font-display text-lg font-semibold text-foreground">Nenhum tema na comunidade</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Temas compartilhados por outros usuários aparecerão aqui.</p>
     </div>
   );
 
