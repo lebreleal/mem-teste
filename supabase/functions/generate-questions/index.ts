@@ -202,6 +202,19 @@ Para cada questão, retorne:
                 items: { type: "string" },
                 description: "1-3 Knowledge Components centrais testados nesta questão. Nomes curtos de 2-6 palavras no nível Compreender/Aplicar de Bloom (ex: 'Fisiopatologia da ICC direita', 'Critérios de Light'). NÃO use perguntas, fatos isolados ou disciplinas amplas.",
               },
+              concept_descriptions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Nome do conceito (deve corresponder ao array concepts)" },
+                    description: { type: "string", description: "Frase concisa (15-30 palavras) que explique O QUE é o conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de 'retrieval cue' — ajude o aluno a ativar o conhecimento correto." },
+                  },
+                  required: ["name", "description"],
+                  additionalProperties: false,
+                },
+                description: "Descrição de cada conceito com contexto da questão. Deve ter o mesmo comprimento do array concepts.",
+              },
               prerequisites: {
                 type: "array",
                 items: { type: "string" },
@@ -213,7 +226,7 @@ Para cada questão, retorne:
                 description: "IDs dos cartões usados para esta questão",
               },
             },
-            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "prerequisites", "source_card_ids"],
+            required: ["cluster_name", "question_text", "options", "correct_index", "explanation", "concepts", "concept_descriptions", "prerequisites", "source_card_ids"],
             additionalProperties: false,
           },
         },
@@ -305,6 +318,7 @@ Para cada questão, retorne:
       explanation: q.explanation || "",
       concepts: Array.isArray(q.concepts) ? q.concepts.slice(0, 3) : [],
       prerequisites: Array.isArray(q.prerequisites) ? q.prerequisites.slice(0, 2) : [],
+      concept_descriptions: Array.isArray(q.concept_descriptions) ? q.concept_descriptions : [],
       source_card_ids: Array.isArray(q.source_card_ids)
         ? q.source_card_ids.filter((id: string) => validCardIds.has(id))
         : [],

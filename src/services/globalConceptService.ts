@@ -10,6 +10,7 @@ export interface GlobalConcept {
   user_id: string;
   name: string;
   slug: string;
+  description: string | null;
   category: string | null;
   subcategory: string | null;
   parent_concept_id: string | null;
@@ -79,6 +80,7 @@ export async function ensureGlobalConcepts(
   userId: string,
   conceptNames: string[],
   conceptMetaMap?: Map<string, { category?: string; subcategory?: string; parentConceptSlug?: string }>,
+  descriptionMap?: Map<string, string>,
 ): Promise<Map<string, string>> {
   const slugMap = new Map<string, string>(); // slug → id
   if (conceptNames.length === 0) return slugMap;
@@ -108,12 +110,14 @@ export async function ensureGlobalConcepts(
     const rows = missingSlugs.map(s => {
       const name = uniqueBySlug.get(s)!;
       const meta = conceptMetaMap?.get(s);
+      const desc = descriptionMap?.get(s) ?? descriptionMap?.get(name);
       return {
         user_id: userId,
         name,
         slug: s,
         ...(meta?.category ? { category: meta.category } : {}),
         ...(meta?.subcategory ? { subcategory: meta.subcategory } : {}),
+        ...(desc ? { description: desc } : {}),
       };
     });
 
@@ -182,7 +186,7 @@ export type LinkQuestionsToConceptsOptions = {
 
 export async function linkQuestionsToConcepts(
   userId: string,
-  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[],
+  questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[],
   options?: LinkQuestionsToConceptsOptions,
 ) {
   const linkPrerequisitesToQuestion = options?.linkPrerequisitesToQuestion ?? true;
@@ -231,7 +235,34 @@ export async function linkQuestionsToConcepts(
   }
 
   const uniqueNames = Array.from(allNames);
-  const slugToId = await ensureGlobalConcepts(userId, uniqueNames, metaMap);
+
+  // Build description map from pairs
+  const descriptionMap = new Map<string, string>();
+  for (const pair of questionConceptPairs) {
+    if (pair.conceptDescriptions) {
+      for (const cd of pair.conceptDescriptions) {
+        if (cd.name && cd.description) {
+          descriptionMap.set(conceptSlug(cd.name), cd.description);
+        }
+      }
+    }
+  }
+
+  const slugToId = await ensureGlobalConcepts(userId, uniqueNames, metaMap, descriptionMap.size > 0 ? descriptionMap : undefined);
+
+  // Update descriptions for existing concepts that don't have one yet
+  if (descriptionMap.size > 0) {
+    for (const [slug, desc] of descriptionMap) {
+      const conceptId = slugToId.get(slug);
+      if (conceptId) {
+        await supabase
+          .from('global_concepts' as any)
+          .update({ description: desc } as any)
+          .eq('id', conceptId)
+          .is('description', null);
+      }
+    }
+  }
 
   // Set parent_concept_id for concepts that have prerequisites
   for (const [conceptSlugKey, prereqNames] of prerequisiteMap.entries()) {
@@ -667,6 +698,7 @@ export async function fetchCommunityConcepts(userId: string): Promise<GlobalConc
       wrong_count: 0,
       parent_concept_id: null,
       concept_tag_id: t.id,
+      description: null,
       created_at: '',
       updated_at: '',
     })) as GlobalConcept[];

@@ -56,17 +56,24 @@ Deno.serve(async (req) => {
       const qText = (question || "").replace(/<[^>]*>/g, "").trim();
       const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
 
-      const cPrompt = `Analise esta questão de múltipla escolha e extraia os CONCEITOS-CHAVE que o aluno precisa dominar para acertá-la.
+      const cPrompt = `Analise esta questão de múltipla escolha e extraia os CONCEITOS-CHAVE (Knowledge Components) que o aluno precisa dominar para acertá-la.
 
 QUESTÃO: ${qText}
 
 ALTERNATIVAS:
 ${qOpts}
 
-Retorne APENAS um JSON array de strings com os conceitos (2-5 conceitos). Cada conceito deve ser curto (2-6 palavras) e representar um tópico específico.
-Exemplo: ["Princípio da Legalidade", "Art. 37 CF", "Administração Pública Direta"]
+Para CADA conceito, forneça:
+- "name": nome curto (2-6 palavras), específico e reutilizável (ex: "Critérios de Light", "Fisiopatologia da ICC")
+- "description": uma frase concisa (15-30 palavras) que explique O QUE é esse conceito e POR QUE ele é necessário para responder esta questão. Use linguagem de "retrieval cue" — ajude o aluno a ativar o conhecimento correto para autoavaliar se realmente domina o tema.
 
-Responda SOMENTE o JSON array, sem markdown, sem explicação.`;
+Exemplo:
+[
+  {"name": "Critérios de Light", "description": "Parâmetros bioquímicos (proteína e LDH) que diferenciam exsudato de transudato pleural. A questão exige aplicar esses critérios ao caso clínico."},
+  {"name": "Derrame Pleural Transudativo", "description": "Acúmulo de líquido por desequilíbrio hidrostático/oncótico (ICC, cirrose). Identificar a etiologia é essencial para a alternativa correta."}
+]
+
+Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
 
       const cResponse = await fetchWithRetry(AI_URL, {
         method: "POST",
@@ -77,7 +84,7 @@ Responda SOMENTE o JSON array, sem markdown, sem explicação.`;
             { role: "system", content: "Você extrai conceitos de questões. Responda APENAS JSON." },
             { role: "user", content: cPrompt },
           ],
-          max_tokens: 300,
+          max_tokens: 600,
           temperature: 0.2,
         }),
       });
@@ -88,8 +95,20 @@ Responda SOMENTE o JSON array, sem markdown, sem explicação.`;
       const rawText = cData.choices?.[0]?.message?.content || "[]";
       try {
         const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-        const concepts = JSON.parse(cleaned);
-        return jsonResponse({ concepts: Array.isArray(concepts) ? concepts.slice(0, 5) : [] });
+        const parsed = JSON.parse(cleaned);
+        if (!Array.isArray(parsed)) return jsonResponse({ concepts: [] });
+
+        // Support both old format (string[]) and new format ({name, description}[])
+        const concepts = parsed.slice(0, 5).map((item: any) => {
+          if (typeof item === 'string') return { name: item, description: null };
+          return { name: item.name || '', description: item.description || null };
+        }).filter((c: any) => c.name);
+
+        // Return both formats for backward compatibility
+        return jsonResponse({
+          concepts: concepts.map((c: any) => c.name),
+          conceptsWithDescriptions: concepts,
+        });
       } catch {
         return jsonResponse({ concepts: [] });
       }

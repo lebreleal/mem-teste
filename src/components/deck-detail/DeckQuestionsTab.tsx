@@ -81,8 +81,36 @@ const ConceptMasterySection = ({
   const [conceptExplanations, setConceptExplanations] = useState<Record<string, string>>({});
   const [previewCards, setPreviewCards] = useState<Record<string, any[]>>({});
   const [loadingCards, setLoadingCards] = useState<Record<string, boolean>>({});
+  const [conceptDescriptions, setConceptDescriptions] = useState<Record<string, string>>({});
   const { energy, spendEnergy } = useEnergy();
   const { toast } = useToast();
+
+  // Fetch concept descriptions from global_concepts
+  useEffect(() => {
+    if (!concepts || concepts.length === 0) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const slugs = concepts.map(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR'));
+      const { data } = await supabase
+        .from('global_concepts' as any)
+        .select('name, slug, description')
+        .eq('user_id', user.id)
+        .in('slug', slugs);
+      if (data) {
+        const descMap: Record<string, string> = {};
+        for (const row of data as any[]) {
+          if (row.description) {
+            descMap[row.name] = row.description;
+            // Also map by slug match to original concept name
+            const matchedConcept = concepts.find(c => c.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') === row.slug);
+            if (matchedConcept) descMap[matchedConcept] = row.description;
+          }
+        }
+        setConceptDescriptions(descMap);
+      }
+    })();
+  }, [concepts]);
 
   if (!concepts || concepts.length === 0) return null;
 
@@ -251,7 +279,14 @@ const ConceptMasterySection = ({
           return (
             <div key={i} className={`rounded-lg border border-border/40 border-l-[3px] ${getBorderColor(answer)} bg-background/50 p-3 space-y-2.5 transition-all`}>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-foreground leading-relaxed flex-1">{c}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-relaxed">{c}</p>
+                  {conceptDescriptions[c] && (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                      {conceptDescriptions[c]}
+                    </p>
+                  )}
+                </div>
                 {isEvaluated && (
                   <button onClick={() => toggleExpand(c)} className="text-muted-foreground hover:text-foreground shrink-0 p-0.5">
                     <X className="h-3 w-3" />
@@ -848,6 +883,13 @@ const CreateQuestionDialog = ({
             .order('created_at', { ascending: false }).limit(1);
           if (latest?.[0]) {
             await supabase.from('deck_questions' as any).update({ concepts: data.concepts }).eq('id', (latest[0] as any).id);
+            // Link with descriptions if available
+            const conceptDescs = data.conceptsWithDescriptions ?? [];
+            await linkQuestionsToConcepts(user.id, [{
+              questionId: (latest[0] as any).id,
+              conceptNames: data.concepts,
+              conceptDescriptions: conceptDescs,
+            }]);
             queryClient.invalidateQueries({ queryKey: ['deck-questions', deckId] });
           }
         }
@@ -905,7 +947,7 @@ const CreateQuestionDialog = ({
 
         setGenerationStep(4); // Saving step
 
-        const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
+        const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
         for (const qi of qs) {
           // Shuffle options so correct answer isn't always in the same position
@@ -938,6 +980,7 @@ const CreateQuestionDialog = ({
               prerequisites: qi.prerequisites ?? [],
               category: qi.category ?? undefined,
               subcategory: qi.subcategory ?? undefined,
+              conceptDescriptions: qi.concept_descriptions ?? [],
             });
           }
         }
@@ -1843,7 +1886,7 @@ const PasteQuestionsDialog = ({
     setSaving(true);
     try {
       const toSave = parsedQuestions.filter((_, i) => selectedIds.has(i));
-      const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string }[] = [];
+      const questionConceptPairs: { questionId: string; conceptNames: string[]; prerequisites?: string[]; category?: string; subcategory?: string; conceptDescriptions?: { name: string; description: string }[] }[] = [];
 
       for (const q of toSave) {
         const { data: inserted } = await supabase.from('deck_questions' as any).insert({

@@ -1212,6 +1212,7 @@ export type Database = {
           concept_tag_id: string | null
           correct_count: number
           created_at: string
+          description: string | null
           difficulty: number
           id: string
           last_reviewed_at: string | null
@@ -1232,6 +1233,7 @@ export type Database = {
           concept_tag_id?: string | null
           correct_count?: number
           created_at?: string
+          description?: string | null
           difficulty?: number
           id?: string
           last_reviewed_at?: string | null
@@ -1252,6 +1254,7 @@ export type Database = {
           concept_tag_id?: string | null
           correct_count?: number
           created_at?: string
+          description?: string | null
           difficulty?: number
           id?: string
           last_reviewed_at?: string | null
