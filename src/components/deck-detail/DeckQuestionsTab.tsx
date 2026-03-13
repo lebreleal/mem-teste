@@ -944,7 +944,7 @@ const CreateQuestionDialog = ({
 
         // Link all questions to global concepts (fire-and-forget)
         if (questionConceptPairs.length > 0) {
-          linkQuestionsToConcepts(user.id, questionConceptPairs).catch(console.error);
+          linkQuestionsToConcepts(user.id, questionConceptPairs, { denseBatchLinking: true }).catch(console.error);
         }
 
         return qs.length;
