@@ -1,79 +1,135 @@
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
+## Implementado
 
-## Plano: Caderno de Erros Completo com Deck de Erros Automático
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-### Conceito Central
-Quando o usuário **erra um card** (rating=1, state vira 3/reaprendendo), o card é **movido** para um deck especial "Caderno de Erros" auto-criado. O card mantém todo seu FSRS. Quando o card **amadurece** (state=2, dominado), ele **volta automaticamente** para o deck de origem. O usuário é notificado visualmente quando isso acontece.
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-### 1. Migração de Banco de Dados
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-Adicionar coluna `origin_deck_id` na tabela `cards`:
-```sql
-ALTER TABLE cards ADD COLUMN origin_deck_id uuid DEFAULT NULL;
-```
-Essa coluna guarda de onde o card veio. Se `origin_deck_id IS NOT NULL`, o card está temporariamente no deck de erros.
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-### 2. Lógica de Movimentação (studyService.ts)
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-**No `submitCardReview`**, após calcular o resultado FSRS:
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
-- **Se rating=1 (Errei) e card não está já no deck de erros:**
-  - Busca/cria o deck "📕 Caderno de Erros" do usuário (flag especial ou nome fixo)
-  - Salva `origin_deck_id = card.deck_id`
-  - Move card para o deck de erros (`deck_id = errorDeckId`)
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-- **Se state resultado = 2 (Dominado) e `origin_deck_id` existe:**
-  - Move card de volta: `deck_id = origin_deck_id`, `origin_deck_id = null`
-  - Toast: "Card dominado! Voltou para o deck original."
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-### 3. Serviço do Deck de Erros (errorDeckService.ts)
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-Novo serviço com funções:
-- `getOrCreateErrorDeck(userId)` — busca ou cria o deck especial
-- `getErrorDeckCards(userId)` — cards no deck de erros com info do deck de origem
-- `getErrorDeckStats(userId)` — contadores por status (aprendendo, reaprendendo, dominados hoje)
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-### 4. Página ErrorNotebook Aprimorada
+### 11. Princípios de Neurociência Aplicados (Learning Science)
 
-**Header com tabs/filtros:**
-- "Todos" | "Para Revisar" (due) | "Aprendendo" | "Dominados Hoje"
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
 
-**Multi-select + bulk delete:**
-- Botão "Selecionar" no header → ativa modo de seleção com checkboxes
-- Barra flutuante inferior com contagem + botão "Excluir" (deleta os cards selecionados do deck de erros e limpa `origin_deck_id`)
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
 
-**Card Row melhorado:**
-- Mostra nome do deck de origem (badge com nome do deck)
-- Progress bar de acertos
-- Status FSRS (aprendendo/reaprendendo)
-- Clicável → abre detail sheet
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
 
-### 5. Detail Sheet (ConceptErrorDetailSheet)
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
 
-Bottom sheet ao clicar em um card/conceito:
-- **Header:** nome do conceito, badge de saúde
-- **Deck de origem:** link para navegar ao deck
-- **Questões vinculadas:** lista scrollável das questions ligadas
-- **Botão "Estudar agora":** navega para `/study/{errorDeckId}` (estuda o deck de erros)
-- **Ações:** "Devolver ao deck" (força retorno), "Excluir"
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
-### 6. Feedback Visual no Estudo
+## Correções Arquiteturais — Unificação Cards ↔ Temas
 
-Quando o card é movido para o caderno de erros durante a sessão:
-- Toast: "Card movido para o Caderno de Erros. Domine-o para devolvê-lo ao deck original."
+### 12. Card Review → Concept Mastery Sync (Fase 1a)
+- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
+- Se rating≥3: incrementa correct_count do tema vinculado
+- Se rating=1: incrementa wrong_count do tema vinculado
+- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
 
-Quando o card é dominado e volta:
-- Toast: "Card dominado! Devolvido ao deck [nome]."
+### 13. Temas Due → Flashcard Retrieval (Fase 1b)
+- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
+- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
+- Fallback para `/conceitos` se não houver deck vinculado
+- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
 
-### 7. Dashboard Integration
+### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
+- Novo componente `DiagnosticBanner.tsx` no Dashboard
+- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
+- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
+- Dismissível com persistência em localStorage
 
-O atalho "Caderno de Erros" já existe. O badge mostrará a contagem de cards no deck de erros (não mais baseado em concepts, mas em cards reais).
+### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
+- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
+- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
+- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
+- Guard contra execução duplicada via `_autoMapInFlight` Set
 
-### Arquivos Afetados
-- **Migração SQL:** adicionar `origin_deck_id` em `cards`
-- **Novo:** `src/services/errorDeckService.ts`
-- **Editar:** `src/services/studyService.ts` (lógica de mover on error/mastery)
-- **Reescrever:** `src/pages/ErrorNotebook.tsx` (tabs, multi-select, detail sheet)
-- **Novo:** `src/components/error-notebook/ErrorDetailSheet.tsx`
-- **Editar:** `src/pages/Dashboard.tsx` (badge conta cards no error deck)
+### 16. Daily Theme Limit (Fase 3a)
+- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
+- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
+- Exposto no hook para UI consumir (banners, limites)
 
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |
+| `src/pages/Study.tsx` | Sync card review → concept mastery |
+| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
+| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
+| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |

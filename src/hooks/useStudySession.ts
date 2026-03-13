@@ -26,11 +26,16 @@ export const useStudySession = (deckId: string, folderId?: string) => {
         user.id, card, rating, algorithmMode, studyQueue.data?.deckConfig, elapsedMs,
       );
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.setQueryData(['study-stats', user?.id], (old: any) => {
         if (!old) return old;
         return { ...old, todayCards: (old.todayCards ?? 0) + 1 };
       });
+      // Invalidate error deck counts when cards move
+      if (result?.movedToError || result?.returnedFromError) {
+        queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
+        queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });

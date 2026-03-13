@@ -133,6 +133,7 @@ const SuggestCorrectionModal = ({ open, onOpenChange, card, deckId, deckName }: 
       last_reviewed_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      origin_deck_id: null,
     };
 
     if (card.card_type === 'cloze') {

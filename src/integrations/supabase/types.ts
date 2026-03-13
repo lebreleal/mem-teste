@@ -249,6 +249,7 @@ export type Database = {
           id: string
           last_reviewed_at: string | null
           learning_step: number
+          origin_deck_id: string | null
           scheduled_date: string
           stability: number
           state: number
@@ -264,6 +265,7 @@ export type Database = {
           id?: string
           last_reviewed_at?: string | null
           learning_step?: number
+          origin_deck_id?: string | null
           scheduled_date?: string
           stability?: number
           state?: number
@@ -279,6 +281,7 @@ export type Database = {
           id?: string
           last_reviewed_at?: string | null
           learning_step?: number
+          origin_deck_id?: string | null
           scheduled_date?: string
           stability?: number
           state?: number
@@ -3021,6 +3024,7 @@ export type Database = {
           id: string
           last_reviewed_at: string | null
           learning_step: number
+          origin_deck_id: string | null
           scheduled_date: string
           stability: number
           state: number
