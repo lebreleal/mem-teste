@@ -242,7 +242,7 @@ const ErrorNotebook = () => {
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-bold text-destructive text-lg">{dueConcepts.length}</span>{' '}
-                    conceitos para revisar agora
+                    temas para revisar agora
                   </p>
                   <Badge variant="destructive" className="gap-1">
                     <BrainCircuit className="h-3 w-3" />
