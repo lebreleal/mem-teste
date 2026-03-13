@@ -506,6 +506,23 @@ const QuestionPractice = ({
 
     }
 
+    // Move wrong questions to error deck as flashcards
+    if (!isCorrect) {
+      moveQuestionToErrorDeck(user.id, {
+        id: q.id,
+        question_text: q.question_text,
+        correct_answer: q.correct_answer,
+        explanation: q.explanation,
+        options: q.options,
+        correct_indices: q.correct_indices,
+      }, deckId).then(created => {
+        if (created) {
+          queryClient.invalidateQueries({ queryKey: ['error-deck-cards'] });
+          queryClient.invalidateQueries({ queryKey: ['error-notebook-count'] });
+        }
+      }).catch(console.error);
+    }
+
     queryClient.invalidateQueries({ queryKey: ['question-attempts', deckId] });
   }, [selected, q, user, deckId, queryClient]);
 
