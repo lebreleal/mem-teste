@@ -131,6 +131,25 @@ const Dashboard = () => {
     return map;
   }, [plans]);
 
+  // Handle query param actions (from StudyNowHero empty state buttons)
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'ai-deck') {
+      state.setAiDeckOpen(true);
+      setSearchParams({}, { replace: true });
+    } else if (action === 'create-deck') {
+      state.setCreateType('deck');
+      state.setCreateName('');
+      state.setCreateParentDeckId(null);
+      setSearchParams({}, { replace: true });
+    } else if (action === 'import') {
+      state.setImportOpen(true);
+      state.setImportDeckId(null);
+      state.setImportDeckName('');
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
+
   // Handle payment return
   useEffect(() => {
     const payment = searchParams.get('payment');
