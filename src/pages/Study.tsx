@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Rating } from '@/lib/fsrs';
-import { getCardConcepts, getConceptRelatedCards, generateReinforcementCards, type GlobalConcept } from '@/services/globalConceptService';
+import { getCardConcepts, getConceptRelatedCards, generateReinforcementCards, updateConceptMastery, type GlobalConcept } from '@/services/globalConceptService';
 
 const ProModelConfirmDialog = lazy(() => import('@/components/ProModelConfirmDialog'));
 const StudyChatModal = lazy(() => import('@/components/StudyChatModal'));
