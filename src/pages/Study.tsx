@@ -267,8 +267,24 @@ const Study = () => {
       setLocalQueue([...queue]);
       setInitialQueueSize(queue.length);
       setQueueInitialized(true);
+      sessionStartRef.current = Date.now();
+
+      // Initialize per-deck stats
+      const statsMap = new Map<string, DeckSessionStats>();
+      for (const card of queue) {
+        const did = card.deck_id as string;
+        if (!statsMap.has(did)) {
+          // Resolve deck name from deckConfigs or fallback
+          const cfg = deckConfigs[did];
+          const name = cfg?.name || (deckConfig?.name) || 'Baralho';
+          statsMap.set(did, { deckId: did, deckName: name, total: 0, done: 0, correct: 0, wrong: 0 });
+        }
+        statsMap.get(did)!.total += 1;
+      }
+      deckStatsRef.current = statsMap;
+      setDeckStatsSnapshot(Array.from(statsMap.values()));
     }
-  }, [queue, queueInitialized]);
+  }, [queue, queueInitialized, deckConfigs, deckConfig]);
 
   // Restore leech fail counters for this study context
   useEffect(() => {
