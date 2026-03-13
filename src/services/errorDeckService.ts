@@ -175,3 +175,60 @@ export async function deleteErrorCards(cardIds: string[]): Promise<void> {
     .in('id', cardIds);
   if (error) throw error;
 }
+
+/**
+ * Move a wrong question into the error deck as a flashcard.
+ * Checks if a card for this question already exists in the error deck to avoid duplicates.
+ * Returns true if a new card was created.
+ */
+export async function moveQuestionToErrorDeck(
+  userId: string,
+  question: { id: string; question_text: string; correct_answer: string; explanation?: string; options?: any; correct_indices?: number[] | null },
+  originDeckId: string,
+): Promise<boolean> {
+  const errorDeckId = await getOrCreateErrorDeck(userId);
+
+  // Check if a card for this question already exists in the error deck (by matching front content with question id marker)
+  const marker = `<!-- q:${question.id} -->`;
+  const { data: existing } = await supabase
+    .from('cards')
+    .select('id')
+    .eq('deck_id', errorDeckId)
+    .like('front_content', `%${marker}%`)
+    .limit(1)
+    .single();
+
+  if (existing) return false; // Already exists
+
+  // Build front (question) and back (answer + explanation)
+  const front = `${marker}${question.question_text}`;
+
+  let back = '';
+  if (question.options && question.correct_indices && question.correct_indices.length > 0) {
+    const opts = Array.isArray(question.options) ? question.options : [];
+    const correctTexts = question.correct_indices
+      .map(i => opts[i])
+      .filter(Boolean)
+      .map(o => (typeof o === 'string' ? o : (o as any).text ?? JSON.stringify(o)));
+    back = `<p><strong>Resposta:</strong> ${correctTexts.join(', ')}</p>`;
+  } else if (question.correct_answer) {
+    back = `<p><strong>Resposta:</strong> ${question.correct_answer}</p>`;
+  }
+  if (question.explanation) {
+    back += `<p>${question.explanation}</p>`;
+  }
+
+  const { error } = await supabase.from('cards').insert({
+    deck_id: errorDeckId,
+    front_content: front,
+    back_content: back || '<p>—</p>',
+    card_type: 'basic',
+    origin_deck_id: originDeckId,
+    state: 0,
+    stability: 0,
+    difficulty: 0,
+  });
+
+  if (error) throw error;
+  return true;
+}
