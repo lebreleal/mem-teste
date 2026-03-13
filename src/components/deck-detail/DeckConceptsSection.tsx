@@ -128,7 +128,7 @@ const DeckConceptsSection = ({ deckId, sourceDeckId }: { deckId: string; sourceD
             </>
           ) : (
             <>
-              <ChevronDown className="h-3 w-3" /> Ver mais {hiddenCount} conceitos
+              <ChevronDown className="h-3 w-3" /> Ver mais {hiddenCount} tags
             </>
           )}
         </button>
