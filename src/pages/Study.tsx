@@ -504,9 +504,10 @@ const Study = () => {
       setLocalQueue(prev => {
         let filtered = prev.filter(c => c.id !== card.id);
         if (card.card_type === 'cloze') {
-          const buryNew = deckConfig?.bury_new_siblings !== false;
-          const buryReview = deckConfig?.bury_review_siblings !== false;
-          const buryLearning = deckConfig?.bury_learning_siblings !== false;
+          const cardCfg = getCardDeckConfig(card);
+          const buryNew = cardCfg?.bury_new_siblings !== false;
+          const buryReview = cardCfg?.bury_review_siblings !== false;
+          const buryLearning = cardCfg?.bury_learning_siblings !== false;
           if (buryNew || buryReview || buryLearning) {
             const siblingIds = getSiblingIds(card, filtered);
             if (siblingIds.length > 0) {
