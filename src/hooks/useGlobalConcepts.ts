@@ -1,14 +1,19 @@
 /**
  * useGlobalConcepts — hook for global concept FSRS study.
  * Provides: all concepts, due concepts, review mutation.
+ * Enforces DAILY_NEW_THEME_LIMIT to prevent cognitive overload.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import * as globalConceptService from '@/services/globalConceptService';
 import type { GlobalConcept } from '@/services/globalConceptService';
 import { fsrsSchedule, DEFAULT_FSRS_PARAMS, type FSRSCard, type Rating } from '@/lib/fsrs';
+import { useMemo } from 'react';
 
 export type { GlobalConcept } from '@/services/globalConceptService';
+
+/** Max new themes a user can study per day (prevents cognitive overload) */
+const DAILY_NEW_THEME_LIMIT = 5;
 
 export const useGlobalConcepts = () => {
   const { user } = useAuth();
