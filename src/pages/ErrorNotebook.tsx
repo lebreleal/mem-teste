@@ -126,7 +126,7 @@ const ConceptRow = ({
           onClick={() => onStudy(concept)}
         >
           <PlayCircle className="h-4 w-4" />
-          Estudar conceito
+          Estudar tema
           <ChevronRight className="h-3.5 w-3.5 ml-auto" />
         </Button>
       )}
