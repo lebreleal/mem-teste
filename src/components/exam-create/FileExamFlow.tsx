@@ -12,8 +12,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import ExamConfigWizard from './ExamConfigWizard';
+import AISourceSelector from '@/components/AISourceSelector';
 import type { PageItem } from './types';
 import type { AIModel } from '@/hooks/useAIModel';
+import type { AISource } from '@/hooks/useAISources';
 
 interface FileExamFlowProps {
   userId: string;
