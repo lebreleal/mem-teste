@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { X as XIcon, BrainCircuit, Wand2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { X as XIcon, BrainCircuit, Wand2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { Rating } from '@/lib/fsrs';
 
 const MASTERY_THRESHOLD = 2; // consecutive correct answers needed
@@ -26,6 +27,14 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+
+  // Elaborative Interrogation state
+  const [elaboration, setElaboration] = useState('');
+  const [showElaboration, setShowElaboration] = useState(false); // true after error, before showing explanation
+  const [elaborationSubmitted, setElaborationSubmitted] = useState(false);
+
+  // Confidence check state
+  const [awaitingConfidence, setAwaitingConfidence] = useState(false);
 
   async function loadQuestion(concept: GlobalConcept) {
     setLoading(true);
@@ -57,31 +66,59 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
   const handleAnswer = () => {
     if (selectedOption === null || !question) return;
     setConfirmed(true);
+
+    if (isCorrect) {
+      // Show confidence check
+      setAwaitingConfidence(true);
+    } else {
+      // Show elaborative interrogation prompt
+      setShowElaboration(true);
+      setElaboration('');
+      setElaborationSubmitted(false);
+    }
   };
 
-  const advanceConcept = useCallback(async (correct: boolean) => {
-    if (!concept || !user) return;
+  // Confidence response handler
+  const handleConfidence = useCallback(async (wasConfident: boolean) => {
+    setAwaitingConfidence(false);
 
-    if (correct) {
+    if (wasConfident) {
       const newStreak = consecutiveCorrect + 1;
       if (newStreak >= MASTERY_THRESHOLD) {
-        // Mastered — submit good rating and move to next concept
         await onRate(concept, 3, true);
         moveToNextConcept();
         return;
       }
-      // Need more correct answers — load another question for same concept
       setConsecutiveCorrect(newStreak);
-      setSelectedOption(null);
-      setConfirmed(false);
-      setGenerating(false);
-      loadQuestion(concept);
+      resetForNextQuestion(concept);
     } else {
-      // Failed — submit again rating and move on
-      await onRate(concept, 1, false);
-      moveToNextConcept();
+      // Not confident — don't increment streak, load another question
+      resetForNextQuestion(concept);
     }
-  }, [concept, user, consecutiveCorrect, onRate, queue, index]);
+  }, [concept, consecutiveCorrect, onRate, queue, index]);
+
+  // Elaboration submit — reveal explanation
+  const handleElaborationSubmit = () => {
+    setElaborationSubmitted(true);
+  };
+
+  // After error + elaboration, advance
+  const handleAdvanceAfterError = useCallback(async () => {
+    if (!concept || !user) return;
+    await onRate(concept, 1, false);
+    moveToNextConcept();
+  }, [concept, user, onRate, queue, index]);
+
+  function resetForNextQuestion(c: GlobalConcept) {
+    setSelectedOption(null);
+    setConfirmed(false);
+    setGenerating(false);
+    setShowElaboration(false);
+    setElaboration('');
+    setElaborationSubmitted(false);
+    setAwaitingConfidence(false);
+    loadQuestion(c);
+  }
 
   function moveToNextConcept() {
     const nextIdx = index + 1;
@@ -90,12 +127,13 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
       return;
     }
     setIndex(nextIdx);
-    setSelectedOption(null);
-    setConfirmed(false);
-    setGenerating(false);
     setConsecutiveCorrect(0);
-    loadQuestion(queue[nextIdx]);
+    resetForNextQuestion(queue[nextIdx]);
   }
+
+  // Correct answer option index for elaboration prompt
+  const correctOptionIndex = question?.correctIndices?.[0] ?? 0;
+  const correctOptionLetter = String.fromCharCode(65 + correctOptionIndex);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -135,7 +173,7 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
             <CardContent className="py-8 text-center">
               <BrainCircuit className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Não foi possível gerar questões para este conceito.</p>
-              <Button variant="outline" className="mt-4" onClick={() => advanceConcept(false)}>Pular</Button>
+              <Button variant="outline" className="mt-4" onClick={handleAdvanceAfterError}>Pular</Button>
             </CardContent>
           </Card>
         ) : (
@@ -178,26 +216,90 @@ const StudyMode = ({ queue, onClose, onRate }: StudyModeProps) => {
               })}
             </div>
 
-            {!confirmed ? (
+            {/* Pre-confirmation */}
+            {!confirmed && (
               <Button className="w-full" disabled={selectedOption === null} onClick={handleAnswer}>Confirmar</Button>
-            ) : (
+            )}
+
+            {/* Post-confirmation: CORRECT → Confidence check */}
+            {confirmed && isCorrect && awaitingConfidence && (
               <div className="space-y-3">
-                <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
-                  {isCorrect
-                    ? consecutiveCorrect + 1 >= MASTERY_THRESHOLD
-                      ? '✅ Conceito dominado!'
-                      : `✅ Correto! Mais ${MASTERY_THRESHOLD - consecutiveCorrect - 1} para confirmar domínio.`
-                    : '❌ Incorreto — conceito marcado para revisão futura'}
-                  {question.explanation && (
-                    <p className="mt-2 text-xs text-muted-foreground">{question.explanation}</p>
-                  )}
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                  ✅ Correto!
                 </div>
-                <Button className="w-full" onClick={() => advanceConcept(isCorrect)}>
-                  {isCorrect && consecutiveCorrect + 1 < MASTERY_THRESHOLD
-                    ? 'Próxima questão'
-                    : index + 1 >= queue.length
-                      ? 'Finalizar'
-                      : 'Próximo conceito'}
+                <p className="text-xs text-muted-foreground text-center">Você tinha certeza da resposta?</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 gap-1.5" onClick={() => handleConfidence(false)}>
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                    Chutei
+                  </Button>
+                  <Button className="flex-1 gap-1.5" onClick={() => handleConfidence(true)}>
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                    Tinha certeza
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Post-confirmation: CORRECT → after confidence resolved */}
+            {confirmed && isCorrect && !awaitingConfidence && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                  {consecutiveCorrect >= MASTERY_THRESHOLD
+                    ? '✅ Conceito dominado!'
+                    : `✅ Correto! Mais ${MASTERY_THRESHOLD - consecutiveCorrect} para confirmar domínio.`}
+                </div>
+              </div>
+            )}
+
+            {/* Post-confirmation: INCORRECT → Elaborative Interrogation */}
+            {confirmed && !isCorrect && showElaboration && !elaborationSubmitted && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  ❌ Incorreto
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Antes de ver a explicação: por que a alternativa <strong>{correctOptionLetter}</strong> está correta?
+                  </p>
+                  <Textarea
+                    value={elaboration}
+                    onChange={e => setElaboration(e.target.value)}
+                    placeholder="Tente explicar com suas palavras..."
+                    className="min-h-[60px] text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={handleElaborationSubmit}>
+                      Pular
+                    </Button>
+                    <Button size="sm" className="flex-1" disabled={elaboration.trim().length < 5} onClick={handleElaborationSubmit}>
+                      Ver explicação
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Post-elaboration: show explanation and advance */}
+            {confirmed && !isCorrect && elaborationSubmitted && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  ❌ Incorreto — conceito marcado para revisão futura
+                </div>
+                {question.explanation && (
+                  <div className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-1">Explicação:</p>
+                    {question.explanation}
+                  </div>
+                )}
+                {elaboration.trim().length >= 5 && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground mb-1">Sua elaboração:</p>
+                    {elaboration}
+                  </div>
+                )}
+                <Button className="w-full" onClick={handleAdvanceAfterError}>
+                  {index + 1 >= queue.length ? 'Finalizar' : 'Próximo conceito'}
                 </Button>
               </div>
             )}

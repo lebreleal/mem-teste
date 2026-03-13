@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { X as XIcon, BrainCircuit, Stethoscope, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const MASTERY_THRESHOLD = 2;
+
 interface DiagnosticModeProps {
   queue: GlobalConcept[];
   onClose: () => void;
@@ -27,6 +29,7 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState({ correct: 0, wrong: 0 });
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
 
   async function loadQuestion(concept: GlobalConcept) {
     setLoading(true);
@@ -50,7 +53,8 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
 
   const concept = queue[index];
   const isCorrect = question?.correctIndices?.includes(selected) ?? false;
-  const progress = queue.length > 0 ? ((index + 1) / queue.length) * 100 : 0;
+  const totalConceptsDone = results.correct + results.wrong;
+  const progress = queue.length > 0 ? ((totalConceptsDone + 1) / queue.length) * 100 : 0;
 
   const handleAnswer = () => {
     if (selected === null || !question) return;
@@ -61,18 +65,34 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
     if (!concept || !user) return;
 
     if (wasCorrect) {
-      await markConceptMastered(concept.id);
-      setResults(r => ({ ...r, correct: r.correct + 1 }));
+      const newStreak = consecutiveCorrect + 1;
+      if (newStreak >= MASTERY_THRESHOLD) {
+        // Confirmed mastery — advance to next concept
+        await markConceptMastered(concept.id);
+        setResults(r => ({ ...r, correct: r.correct + 1 }));
+        advanceToNextConcept();
+        return;
+      }
+      // Need more correct answers — load another question
+      setConsecutiveCorrect(newStreak);
+      setSelected(null);
+      setConfirmed(false);
+      setGenerating(false);
+      loadQuestion(concept);
     } else {
       await markConceptWeak(concept.id);
       setResults(r => ({ ...r, wrong: r.wrong + 1 }));
+      advanceToNextConcept();
     }
+  };
 
+  function advanceToNextConcept() {
     const nextIdx = index + 1;
     if (nextIdx >= queue.length) {
       queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
       queryClient.invalidateQueries({ queryKey: ['ready-to-learn'] });
-      toast.success(`Diagnóstico concluído: ${results.correct + (wasCorrect ? 1 : 0)} acertos, ${results.wrong + (wasCorrect ? 0 : 1)} erros`);
+      const finalCorrect = results.correct + (consecutiveCorrect >= MASTERY_THRESHOLD ? 1 : 0);
+      toast.success(`Diagnóstico concluído: ${finalCorrect} dominados, ${results.wrong} para revisão`);
       onClose();
       return;
     }
@@ -81,8 +101,9 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
     setSelected(null);
     setConfirmed(false);
     setGenerating(false);
+    setConsecutiveCorrect(0);
     loadQuestion(queue[nextIdx]);
-  };
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -91,8 +112,12 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
           <XIcon className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <p className="text-xs text-muted-foreground">Diagnóstico {index + 1}/{queue.length}</p>
-          <p className="text-sm font-semibold text-foreground truncate">{concept?.name}</p>
+          <p className="text-xs text-muted-foreground">Diagnóstico — {concept?.name}</p>
+          <p className="text-sm font-semibold text-foreground truncate">
+            {consecutiveCorrect > 0
+              ? `Acerto ${consecutiveCorrect}/${MASTERY_THRESHOLD}`
+              : `Conceito ${index + 1}/${queue.length}`}
+          </p>
         </div>
         <Badge variant="outline" className="text-[10px]">
           <Stethoscope className="h-3 w-3 mr-1" /> Knowledge Check
@@ -165,10 +190,18 @@ const DiagnosticMode = ({ queue, onClose }: DiagnosticModeProps) => {
             ) : (
               <div className="space-y-3">
                 <div className={`rounded-xl border px-4 py-3 text-sm ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300' : 'border-destructive/30 bg-destructive/5 text-destructive'}`}>
-                  {isCorrect ? '✅ Correto — conceito dominado!' : '❌ Incorreto — conceito marcado para revisão'}
+                  {isCorrect
+                    ? consecutiveCorrect + 1 >= MASTERY_THRESHOLD
+                      ? '✅ Correto — conceito dominado!'
+                      : `✅ Correto! Mais ${MASTERY_THRESHOLD - consecutiveCorrect - 1} para confirmar.`
+                    : '❌ Incorreto — conceito marcado para revisão'}
                 </div>
                 <Button className="w-full" onClick={() => handleNext(isCorrect)}>
-                  {index + 1 >= queue.length ? 'Finalizar Diagnóstico' : 'Próximo Conceito'}
+                  {isCorrect && consecutiveCorrect + 1 < MASTERY_THRESHOLD
+                    ? 'Próxima questão'
+                    : index + 1 >= queue.length && (isCorrect ? consecutiveCorrect + 1 >= MASTERY_THRESHOLD : true)
+                      ? 'Finalizar Diagnóstico'
+                      : 'Próximo Conceito'}
                 </Button>
               </div>
             )}
