@@ -83,13 +83,44 @@
 - Impede que chutes sortudos confirmem domínio
 - Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
+## Correções Arquiteturais — Unificação Cards ↔ Temas
+
+### 12. Card Review → Concept Mastery Sync (Fase 1a)
+- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
+- Se rating≥3: incrementa correct_count do tema vinculado
+- Se rating=1: incrementa wrong_count do tema vinculado
+- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+
+### 13. Temas Due → Flashcard Retrieval (Fase 1b)
+- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
+- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
+- Fallback para `/conceitos` se não houver deck vinculado
+- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+
+### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
+- Novo componente `DiagnosticBanner.tsx` no Dashboard
+- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
+- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
+- Dismissível com persistência em localStorage
+
+### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
+- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
+- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
+- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
+- Guard contra execução duplicada via `_autoMapInFlight` Set
+
+### 16. Daily Theme Limit (Fase 3a)
+- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
+- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
+- Exposto no hook para UI consumir (banners, limites)
+
 ## Arquivos Modificados
 | Arquivo | Mudança |
 |---|---|
 | Supabase migration | `parent_concept_id` + index |
 | `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
-| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak` |
-| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1 |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
 | `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
 | `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
 | `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
@@ -98,3 +129,7 @@
 | `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
 | `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
 | `supabase/config.toml` | Adicionada config map-prerequisites |
+| `src/pages/Study.tsx` | Sync card review → concept mastery |
+| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
+| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
+| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
