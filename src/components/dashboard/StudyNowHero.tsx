@@ -99,18 +99,47 @@ const StudyNowHero = () => {
             <Progress value={100} className="h-2" />
           </div>
         ) : isEmpty ? (
-          /* No content state */
-          <div className="text-center py-4 space-y-3">
+          /* No content state — clear actions for new users (monkey test) */
+          <div className="text-center py-6 space-y-5">
             <div className="flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <Sparkles className="h-8 w-8 text-muted-foreground" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-10 w-10 text-primary" />
               </div>
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Comece sua jornada</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Crie um baralho ou importe cards para começar a estudar.
+              <h2 className="text-xl font-bold text-foreground">Bem-vindo ao Memo Cards!</h2>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                Crie seu primeiro baralho para começar a estudar.
               </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                size="lg"
+                className="w-full h-14 text-base font-bold gap-2.5 rounded-xl shadow-md"
+                onClick={() => navigate('/dashboard?action=ai-deck')}
+              >
+                <Sparkles className="h-5 w-5" />
+                Criar com IA
+                <span className="text-sm font-normal opacity-80">envie PDF ou texto</span>
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-11 gap-1.5 rounded-xl"
+                  onClick={() => navigate('/dashboard?action=create-deck')}
+                >
+                  <SquarePlus className="h-4 w-4" />
+                  Criar Baralho
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 h-11 gap-1.5 rounded-xl"
+                  onClick={() => navigate('/dashboard?action=import')}
+                >
+                  <Layers className="h-4 w-4" />
+                  Importar
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
