@@ -130,7 +130,10 @@ Rules for SIBLING GROUPS:
     }
 
     const parsed = JSON.parse(toolCall.function.arguments);
-    return new Response(JSON.stringify({ pairs: parsed.pairs ?? [] }), {
+    return new Response(JSON.stringify({ 
+      pairs: parsed.pairs ?? [],
+      sibling_groups: parsed.sibling_groups ?? [],
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
