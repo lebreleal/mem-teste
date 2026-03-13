@@ -146,7 +146,7 @@ export const QuestionsSheet = ({ conceptId, questions, loading, onClose, onUnlin
                   <p className="text-xs text-foreground line-clamp-2">{q.questionText}</p>
                   {q.deckName && <p className="text-[10px] text-muted-foreground mt-0.5">Baralho: {q.deckName}</p>}
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary" title="Adicionar conceito" onClick={() => onAddConcept(q.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary" title="Adicionar tema" onClick={() => onAddConcept(q.id)}>
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" title="Desvincular" onClick={() => onUnlink(q.id)}>
