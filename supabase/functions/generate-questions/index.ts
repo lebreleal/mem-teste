@@ -205,7 +205,7 @@ Para cada questão, retorne:
               prerequisites: {
                 type: "array",
                 items: { type: "string" },
-                description: "0-2 Knowledge Components que são PRÉ-REQUISITOS dos conceitos desta questão. São conceitos mais básicos que o aluno precisa dominar ANTES de entender os conceitos testados. Mesmo formato: 2-6 palavras. Exemplo: se o conceito é 'Tratamento de IC', o pré-requisito poderia ser 'Fisiologia Cardíaca'. Deixe vazio se não houver pré-requisito claro.",
+                description: "0-2 Knowledge Components que são PRÉ-REQUISITOS dos conceitos desta questão. DEVEM ser temas que aparecem ou são implícitos nos cartões fornecidos. NÃO invente temas aleatórios. Se os conceitos são 'Apoptose Fisiológica' e 'Apoptose por Câncer', o pré-requisito é 'Apoptose'. Se não há pré-requisito claro no material, deixe array vazio [].",
               },
               source_card_ids: {
                 type: "array",
