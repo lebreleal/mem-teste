@@ -224,68 +224,6 @@ const CardReviewStep = ({
     const card = cards[editingIdx];
     if (!card) return null;
 
-    if (card.type === 'multiple_choice') {
-      return (
-        <div className="space-y-4">
-          <div>
-            <Label className="mb-1.5 block">Pergunta</Label>
-            <LazyRichEditor
-              content={editFront}
-              onChange={onEditFrontChange}
-              placeholder="Qual organela é responsável pela produção de energia?"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="block">Opções</Label>
-            <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-              {editMcOptions.map((opt, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setEditMcCorrectIndex(idx)}
-                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                    editMcCorrectIndex === idx ? 'bg-success/10' : 'hover:bg-muted/50'
-                  }`}
-                >
-                  <div className={`flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
-                    editMcCorrectIndex === idx ? 'border-success bg-success text-white' : 'border-muted-foreground/30'
-                  }`}>
-                    {editMcCorrectIndex === idx && <span className="text-[10px] font-bold">✓</span>}
-                  </div>
-                  <Input
-                    value={opt}
-                    onChange={e => {
-                      e.stopPropagation();
-                      const newOpts = [...editMcOptions];
-                      newOpts[idx] = e.target.value;
-                      setEditMcOptions(newOpts);
-                    }}
-                    onClick={e => e.stopPropagation()}
-                    placeholder={`Opção ${idx + 1}`}
-                    className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-auto py-0"
-                  />
-                  {editMcOptions.length > 2 && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); removeMcOption(idx); }}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {editMcOptions.length < 6 && (
-              <Button variant="ghost" size="sm" onClick={addMcOption} className="gap-1 w-full text-muted-foreground hover:text-foreground">
-                <Plus className="h-3 w-3" /> Adicionar opção
-              </Button>
-            )}
-            <p className="text-[10px] text-muted-foreground">Clique na linha para marcar a resposta correta</p>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
-            <Button onClick={handleSaveEditClick}>Salvar</Button>
-          </div>
-        </div>
-      );
-    }
-
     if (card.type === 'cloze') {
       return (
         <div className="space-y-3">
@@ -315,7 +253,7 @@ const CardReviewStep = ({
       );
     }
 
-    // Basic (qa) — matches ManageDeck exactly
+    // Basic (qa)
     return (
       <div className="space-y-4">
         <div>
