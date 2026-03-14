@@ -230,9 +230,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     const rows: { frontContent: string; backContent: string; cardType: string }[] = [];
     for (const c of generatedCards) {
-      if (c.type === 'multiple_choice' && c.options) {
-        rows.push({ frontContent: c.front, backContent: JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 }), cardType: 'multiple_choice' });
-      } else if (c.type === 'cloze') {
+      if (c.type === 'cloze') {
         // Expand cloze card into one DB row per unique cloze number
         const plain = c.front.replace(/<[^>]*>/g, '');
         const matches = [...plain.matchAll(/\{\{c(\d+)::/g)];

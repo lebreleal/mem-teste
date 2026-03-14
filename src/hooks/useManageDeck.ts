@@ -195,19 +195,11 @@ export function useManageDeck() {
   const applyImprovement = useCallback(() => {
     if (!improvePreview) return;
     setFront(improvePreview.front);
-    if (editorType === 'multiple_choice') {
-      try {
-        const data = JSON.parse(improvePreview.back);
-        setMcOptions(data.options || mcOptions);
-        setMcCorrectIndex(data.correctIndex ?? mcCorrectIndex);
-      } catch {}
-    } else {
-      setBack(improvePreview.back);
-    }
+    setBack(improvePreview.back);
     setImproveModalOpen(false);
     setImprovePreview(null);
     toast({ title: 'Melhoria aplicada!' });
-  }, [improvePreview, editorType, mcOptions, mcCorrectIndex, toast]);
+  }, [improvePreview, toast]);
 
   return {
     deckId, navigate, cards, isLoading, isCommunityDeck,

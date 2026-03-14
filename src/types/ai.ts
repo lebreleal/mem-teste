@@ -18,7 +18,7 @@ export interface PageItem {
 }
 
 export type DetailLevel = 'essential' | 'standard' | 'comprehensive';
-export type CardFormat = 'cloze' | 'qa' | 'multiple_choice';
+export type CardFormat = 'cloze' | 'qa';
 
 export const DETAIL_OPTIONS: { value: DetailLevel; label: string; desc: string }[] = [
   { value: 'essential', label: 'Essencial', desc: 'Conceitos básicos para revisão rápida' },
@@ -29,7 +29,6 @@ export const DETAIL_OPTIONS: { value: DetailLevel; label: string; desc: string }
 export const FORMAT_OPTIONS: { value: CardFormat; label: string }[] = [
   { value: 'qa', label: 'Pergunta / resposta' },
   { value: 'cloze', label: 'Preencha o espaço' },
-  { value: 'multiple_choice', label: 'Múltipla escolha' },
 ];
 
 export const CREDITS_PER_PAGE = 2;
