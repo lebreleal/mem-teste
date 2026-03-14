@@ -4,10 +4,11 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, ChevronDown, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Info, Minus, Plus, RotateCcw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,23 +30,25 @@ interface DeckSetting {
   isEnabled: boolean;
   isMateria: boolean;
   isSubDeck: boolean;
+  isErrorNotebook: boolean;
   subCount: number;
   totalCards: number;
 }
+
+const ERROR_NOTEBOOK_PREFIX = '📕';
 
 const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats, currentFolderId }: StudySettingsSheetProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  // All root decks in this sala (both matérias and loose decks)
+
   const salaDecks = useMemo(() => {
     if (!currentFolderId) return [];
     return decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
   }, [currentFolderId, decks]);
 
-  // Build ordered list: matéria → its sub-decks → loose decks
   const initialSettings = useMemo(() => {
     const map: Record<string, DeckSetting> = {};
     const order: string[] = [];
@@ -53,6 +56,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     for (const d of salaDecks) {
       const subs = getSubDecks(d.id);
       const isMateria = subs.length > 0;
+      const isErrorNotebook = d.name.startsWith(ERROR_NOTEBOOK_PREFIX);
 
       map[d.id] = {
         id: d.id,
@@ -61,12 +65,12 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         isEnabled: (d.daily_new_limit ?? 20) > 0,
         isMateria,
         isSubDeck: false,
+        isErrorNotebook,
         subCount: subs.length,
         totalCards: d.total_cards,
       };
       order.push(d.id);
 
-      // Add sub-decks right after the matéria
       if (isMateria) {
         const sortedSubs = [...subs].sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
         for (const sub of sortedSubs) {
@@ -77,6 +81,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
             isEnabled: (sub.daily_new_limit ?? 20) > 0,
             isMateria: false,
             isSubDeck: true,
+            isErrorNotebook: false,
             subCount: 0,
             totalCards: sub.total_cards,
           };
@@ -89,7 +94,6 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
   const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
-  // Sync settings when sheet opens with new data
   useMemo(() => {
     if (open) setSettings(initialSettings.map);
   }, [open, initialSettings]);
@@ -115,7 +119,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      const updates = Object.values(settings).map(s => 
+      const updates = Object.values(settings).map(s =>
         supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit }).eq('id', s.id)
       );
       await Promise.all(updates);
@@ -137,7 +141,6 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     });
   }, [settings, initialSettings]);
 
-  // Group items: matérias show only header; sub-decks shown on expand
   const rootItems = initialSettings.order
     .map(id => settings[id])
     .filter(Boolean)
@@ -148,7 +151,6 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     for (const id of initialSettings.order) {
       const item = settings[id];
       if (!item?.isSubDeck) continue;
-      // find parent: previous matéria in order
       const idx = initialSettings.order.indexOf(id);
       let parentId: string | null = null;
       for (let i = idx - 1; i >= 0; i--) {
@@ -167,6 +169,50 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const renderNewLimitControl = (item: DeckSetting) => (
+    <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">Novos por dia</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="text-muted-foreground hover:text-foreground transition-colors">
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-64 text-xs">
+            <p className="font-semibold text-foreground mb-1">Limite de novos cards por dia</p>
+            <p className="text-muted-foreground">
+              Define quantos cards novos (nunca estudados) serão introduzidos por dia neste deck. 
+              Cards de revisão (já estudados anteriormente) não são afetados por este limite e continuarão aparecendo normalmente.
+            </p>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => updateLimit(item.id, -5)}
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
+          {item.dailyNewLimit}
+        </span>
+        <button
+          onClick={() => updateLimit(item.id, 5)}
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderSubtitle = (item: DeckSetting) => {
+    if (item.isMateria) return `${item.subCount} decks`;
+    return `${item.totalCards} cards`;
+  };
+
   const renderDeckRow = (item: DeckSetting, indented = false) => (
     <div
       key={item.id}
@@ -174,38 +220,34 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     >
       <div className="flex items-center gap-3 mb-2">
         <div className="min-w-0 flex-1">
-          <h3 className={`font-display font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
-            {item.name}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {item.isMateria ? `${item.subCount} decks · ` : ''}{item.totalCards} cards
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className={`font-display font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
+              {item.name}
+            </h3>
+            {item.isErrorNotebook && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" className="w-64 text-xs">
+                  <p className="font-semibold text-foreground mb-1">Caderno de Erros</p>
+                  <p className="text-muted-foreground">
+                    Cards que você errou são movidos automaticamente para cá. 
+                    Quando você dominar o card novamente (estado "Dominado"), ele volta automaticamente para o deck original. 
+                    Isso garante que seus pontos fracos recebam atenção extra.
+                  </p>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{renderSubtitle(item)}</p>
         </div>
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {item.isEnabled && (
-        <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-          <span className="text-xs text-muted-foreground">Novos por dia</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => updateLimit(item.id, -5)}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
-              {item.dailyNewLimit}
-            </span>
-            <button
-              onClick={() => updateLimit(item.id, 5)}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
+      {item.isEnabled && renderNewLimitControl(item)}
     </div>
   );
 
@@ -233,32 +275,17 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
             if (item.isMateria && subs?.length) {
               return (
                 <div key={item.id}>
-                  {/* Matéria header row */}
                   <div className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="min-w-0 flex-1">
                         <h3 className="font-display font-semibold text-sm text-foreground truncate">{item.name}</h3>
-                        <p className="text-xs text-muted-foreground">{item.subCount} decks · {item.totalCards} cards</p>
+                        <p className="text-xs text-muted-foreground">{item.subCount} decks</p>
                       </div>
                       <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
                     </div>
 
-                    {item.isEnabled && (
-                      <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-                        <span className="text-xs text-muted-foreground">Novos por dia</span>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updateLimit(item.id, -5)} className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">{item.dailyNewLimit}</span>
-                          <button onClick={() => updateLimit(item.id, 5)} className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {item.isEnabled && renderNewLimitControl(item)}
 
-                    {/* Expand toggle */}
                     <button
                       onClick={() => toggleExpand(item.id)}
                       className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -268,13 +295,11 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
                     </button>
                   </div>
 
-                  {/* Collapsible sub-decks */}
                   {isExpanded && subs.map(sub => renderDeckRow(sub, true))}
                 </div>
               );
             }
 
-            // Loose deck (no sub-decks)
             return renderDeckRow(item);
           })}
 
