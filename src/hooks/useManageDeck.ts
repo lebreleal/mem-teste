@@ -175,9 +175,6 @@ export function useManageDeck() {
     setIsImproving(true);
     try {
       let backToSend = back;
-      if (editorType === 'multiple_choice') {
-        backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-      }
       const { data, error } = await supabase.functions.invoke('enhance-card', {
         body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
       });
