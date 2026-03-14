@@ -21,10 +21,11 @@ import {
 const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
 /**
- * 4-color progress bar by card classification:
- *  - green (dominado): mastered, not due
- *  - primary/blue (revisão): due for review
- *  - destructive/red (errando): learning/relearning
+ * 4-color progress bar matching the deck detail gauge classification:
+ *  - info/blue (fácil/revisão): review state cards
+ *  - success/green (bom/dominado): mastered cards  
+ *  - warning/yellow (difícil): learning cards
+ *  - destructive/red (errei): relearning cards (shown via learningPct overflow)
  *  - muted/gray (novo): never seen
  */
 const ClassificationBar = ({ newPct, learningPct, reviewPct, masteredPct, className = '' }: {
@@ -40,14 +41,14 @@ const ClassificationBar = ({ newPct, learningPct, reviewPct, masteredPct, classN
       )}
       {reviewPct > 0 && (
         <div
-          className="h-full bg-primary transition-all duration-500"
-          style={{ width: `${reviewPct}%` }}
+          className="h-full transition-all duration-500"
+          style={{ width: `${reviewPct}%`, backgroundColor: 'hsl(var(--info))' }}
         />
       )}
       {learningPct > 0 && (
         <div
           className="h-full transition-all duration-500"
-          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(0 84% 60%)' }}
+          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(var(--warning))' }}
         />
       )}
       {newPct > 0 && (
