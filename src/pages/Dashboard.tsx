@@ -655,6 +655,7 @@ const Dashboard = () => {
           <StudyWeightsSheet
             open={studyWeightsOpen}
             onOpenChange={setStudyWeightsOpen}
+            folders={state.folders}
             decks={state.decks}
             getSubDecks={state.getSubDecks}
             getAggregateStats={state.getAggregateStats}
