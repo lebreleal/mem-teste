@@ -57,24 +57,18 @@ async function resolveSourceDeckId(deck: any): Promise<string | null> {
 const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
   const navigate = useNavigate();
 
-  const getCardCount = (deckId: string): number => {
+  const getMastery = (deckId: string): { total: number; mastered: number } => {
     const deck = allDecks.find((d: any) => d.id === deckId);
-    if (!deck) return 0;
-    let total = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0) + (deck.reviewed_today ?? 0);
-    // Include children recursively
+    if (!deck) return { total: 0, mastered: 0 };
+    let total = deck.total_cards ?? 0;
+    let mastered = deck.mastered_cards ?? 0;
     const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) total += getCardCount(child.id);
-    return total;
-  };
-
-  const getTotalCards = (deckId: string): number => {
-    const deck = allDecks.find((d: any) => d.id === deckId);
-    if (!deck) return 0;
-    // total_count includes all card states
-    let total = (deck.total_count as number) ?? ((deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0) + (deck.reviewed_today ?? 0));
-    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) total += getTotalCards(child.id);
-    return total;
+    for (const child of children) {
+      const cm = getMastery(child.id);
+      total += cm.total;
+      mastered += cm.mastered;
+    }
+    return { total, mastered };
   };
 
   const getDueCount = (deckId: string): number => {
@@ -86,29 +80,136 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
     return due;
   };
 
-  const getStudiedCount = (deckId: string): number => {
+  const getNewCount = (deckId: string): number => {
     const deck = allDecks.find((d: any) => d.id === deckId);
     if (!deck) return 0;
-    let studied = deck.reviewed_today ?? 0;
+    let n = deck.new_count ?? 0;
     const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
-    for (const child of children) studied += getStudiedCount(child.id);
-    return studied;
+    for (const child of children) n += getNewCount(child.id);
+    return n;
+  };
+
+  const getLearningCount = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let l = deck.learning_count ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) l += getLearningCount(child.id);
+    return l;
+  };
+
+  const getReviewCount = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let r = deck.review_count ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) r += getReviewCount(child.id);
+    return r;
+  };
+
+  const totalDue = getDueCount(parentDeckId);
+  const totalNew = getNewCount(parentDeckId);
+  const totalLearning = getLearningCount(parentDeckId);
+  const totalReview = getReviewCount(parentDeckId);
+
+  // Fetch question counts for all descendant deck IDs
+  const allDescendantIds = useMemo(() => {
+    const collect = (id: string): string[] => {
+      const children = allDecks.filter(d => d.parent_deck_id === id && !d.is_archived);
+      return [id, ...children.flatMap(c => collect(c.id))];
+    };
+    return collect(parentDeckId);
+  }, [parentDeckId, allDecks]);
+
+  const { data: questionCounts } = useQuery({
+    queryKey: ['sub-deck-question-counts', parentDeckId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('deck_questions')
+        .select('deck_id')
+        .in('deck_id', allDescendantIds);
+      const map = new Map<string, number>();
+      if (data) {
+        for (const q of data as any[]) {
+          map.set(q.deck_id, (map.get(q.deck_id) ?? 0) + 1);
+        }
+      }
+      return map;
+    },
+    enabled: allDescendantIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const getQuestionCount = (deckId: string): number => {
+    let count = questionCounts?.get(deckId) ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) count += getQuestionCount(child.id);
+    return count;
   };
 
   const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        {subDecks.length} sub-deck{subDecks.length !== 1 ? 's' : ''}
-      </p>
-      <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+    <div className="space-y-4">
+      {/* Stats summary card */}
+      <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-center mb-3">
+          <div className="text-center">
+            <span className="font-display text-4xl font-bold text-foreground">{totalDue}</span>
+            <p className="text-xs text-muted-foreground mt-0.5">cartões para hoje</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-6 mb-4">
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <SquarePlus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-lg font-bold text-foreground">{totalNew}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">Novos</span>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <RotateCcw className="h-4 w-4 text-green-500" />
+              <span className="text-lg font-bold text-foreground">{totalLearning}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">Aprendendo</span>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <Layers className="h-4 w-4 text-primary" />
+              <span className="text-lg font-bold text-foreground">{totalReview}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">Dominados</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
+            className="flex-1 h-12 text-base font-semibold gap-2"
+            disabled={totalDue === 0}
+          >
+            <BookOpen className="h-5 w-5" />
+            Estudar
+          </Button>
+          <Button
+            variant="outline"
+            className="h-12 gap-2 px-4"
+            title="Criar Prova com IA"
+          >
+            <Brain className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Sub-deck list */}
+      <div className="divide-y divide-border/50">
         {sorted.map(sub => {
-          const totalCards = getTotalCards(sub.id);
-          const studied = getStudiedCount(sub.id);
-          const due = getDueCount(sub.id);
-          const pct = totalCards > 0 ? Math.round((studied / totalCards) * 100) : 0;
-          const hasChildren = allDecks.some(d => d.parent_deck_id === sub.id && !d.is_archived);
+          const mastery = getMastery(sub.id);
+          const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
+          const qCount = getQuestionCount(sub.id);
+          const allCaughtUp = getDueCount(sub.id) === 0 && mastery.mastered > 0;
 
           return (
             <div
@@ -116,19 +217,23 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
               className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
               onClick={() => navigate(`/decks/${sub.id}`)}
             >
+              {allCaughtUp && <CheckCircle2 className="h-5 w-5 text-success shrink-0" />}
               <div className="flex-1 min-w-0">
                 <h3 className="font-display font-semibold text-foreground truncate">{sub.name}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs text-muted-foreground">
-                    {studied > 0 && <span className="text-primary font-medium">{studied}/{totalCards} cards estudados</span>}
-                    {studied === 0 && <span>{totalCards} cards</span>}
-                  </p>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Layers className="h-3 w-3" />
+                    {mastery.total}
+                  </span>
+                  {qCount > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <HelpCircle className="h-3 w-3" />
+                      {qCount}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
                 </div>
-                {studied > 0 && totalCards > 0 && (
-                  <div className="mt-1.5 h-1 w-full max-w-[120px] rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                )}
+                <Progress value={masteryPct} className="h-1 mt-1.5" />
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </div>
