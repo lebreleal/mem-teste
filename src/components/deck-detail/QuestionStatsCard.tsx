@@ -1,12 +1,12 @@
 /**
- * QuestionStatsCard — hero card for the Questions tab, matching DeckStatsCard layout.
+ * QuestionStatsCard — compact study action bar with mastery indicator for questions.
  */
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { PlayCircle, Sparkles, HelpCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { PlayCircle, Sparkles } from 'lucide-react';
 
 interface QuestionStatsCardProps {
   deckId: string;
@@ -20,7 +20,6 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
   const { user } = useAuth();
   const effectiveDeckId = sourceDeckId || deckId;
 
-  // Fetch hierarchy deck IDs
   const { data: hierarchyDeckIds = [effectiveDeckId] } = useQuery({
     queryKey: ['deck-hierarchy-ids', effectiveDeckId],
     queryFn: async () => {
@@ -70,80 +69,64 @@ const QuestionStatsCard = ({ deckId, sourceDeckId, isReadOnly, onPractice, onCre
     staleTime: 30_000,
   });
 
-  const stats = useMemo(() => {
+  const masteryPct = useMemo(() => {
     const total = questions.length;
+    if (total === 0) return 0;
     const latestByQ = new Map<string, { is_correct: boolean; answered_at: string }>();
     for (const a of attempts) {
       const prev = latestByQ.get(a.question_id);
       if (!prev || a.answered_at > prev.answered_at) latestByQ.set(a.question_id, a);
     }
-    let correct = 0, wrong = 0;
+    let correct = 0;
     for (const [, a] of latestByQ) {
-      if (a.is_correct) correct++; else wrong++;
+      if (a.is_correct) correct++;
     }
-    const unanswered = total - latestByQ.size;
-    return { total, correct, wrong, unanswered };
+    return Math.round((correct / total) * 100);
   }, [questions, attempts]);
 
+  const total = questions.length;
+
   return (
-    <div className="rounded-2xl border border-border/50 bg-card p-4 sm:p-6 shadow-sm">
-      {/* Big number */}
-      <div className="flex items-center justify-center mb-4">
-        <div className="text-center">
-          <span className="font-display text-4xl sm:text-5xl font-bold text-foreground">
-            {stats.total}
-          </span>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            questões no banco
-          </p>
-        </div>
-      </div>
-
-      {/* 3-column stats */}
-      <div className="flex items-center justify-center gap-6 sm:gap-8 mb-4 sm:mb-6">
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <HelpCircle className="h-4 w-4 text-muted-foreground" />
-            <span className="text-lg sm:text-2xl font-bold text-foreground">{stats.unanswered}</span>
-          </div>
-          <span className="text-[10px] sm:text-xs text-muted-foreground">A responder</span>
-        </div>
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4" style={{ color: 'hsl(142 71% 45%)' }} />
-            <span className="text-lg sm:text-2xl font-bold text-foreground">{stats.correct}</span>
-          </div>
-          <span className="text-[10px] sm:text-xs text-muted-foreground">Corretas</span>
-        </div>
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <XCircle className="h-4 w-4 text-destructive" />
-            <span className="text-lg sm:text-2xl font-bold text-foreground">{stats.wrong}</span>
-          </div>
-          <span className="text-[10px] sm:text-xs text-muted-foreground">Erradas</span>
-        </div>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex gap-3">
-        <Button
-          onClick={onPractice}
-          className="flex-1 h-12 text-base font-semibold gap-2"
-          disabled={stats.total === 0}
-        >
-          <PlayCircle className="h-5 w-5" />
-          Estudar
-        </Button>
-        {!isReadOnly && (
+    <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex-1 flex gap-3">
           <Button
-            variant="outline"
-            onClick={onCreateAI}
-            className="h-12 gap-2 px-4"
-            title="Gerar questões com IA"
+            onClick={onPractice}
+            className="flex-1 h-12 text-base font-semibold gap-2"
+            disabled={total === 0}
           >
-            <Sparkles className="h-5 w-5" />
-            <span className="hidden sm:inline">Gerar</span>
+            <PlayCircle className="h-5 w-5" />
+            Estudar
           </Button>
+          {!isReadOnly && (
+            <Button
+              variant="outline"
+              onClick={onCreateAI}
+              className="h-12 gap-2 px-4"
+              title="Gerar questões com IA"
+            >
+              <Sparkles className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
+        {total > 0 && (
+          <div className="relative flex-shrink-0" title={`${masteryPct}% domínio`}>
+            <svg width="48" height="48" viewBox="0 0 48 48" className="-rotate-90">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+              <circle
+                cx="24" cy="24" r="20" fill="none"
+                stroke="hsl(var(--primary))"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 20}`}
+                strokeDashoffset={`${2 * Math.PI * 20 * (1 - masteryPct / 100)}`}
+                className="transition-all duration-500"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[10px] font-bold text-foreground">{masteryPct}%</span>
+            </div>
+          </div>
         )}
       </div>
     </div>
