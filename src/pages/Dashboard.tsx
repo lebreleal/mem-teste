@@ -258,10 +258,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader 
-        onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
-        onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
-      />
+      {!state.isInsideSala && (
+        <DashboardHeader 
+          onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
+          onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
+        />
+      )}
 
       <main className="pb-24">
         {/* Inside a Sala: back button + sala name + options menu */}
