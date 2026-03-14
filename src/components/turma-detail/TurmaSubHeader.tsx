@@ -1,5 +1,5 @@
 /**
- * Sala info sub-header: sala name, settings, members, share, rating.
+ * Classe info sub-header: classe name, settings, members, share, rating.
  * Removed: invite codes, community creation.
  */
 
