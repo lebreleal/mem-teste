@@ -21,6 +21,7 @@ const DeckStatsCard = () => {
       state: c.state,
       stability: c.stability,
       difficulty: c.difficulty,
+      scheduled_date: c.scheduled_date,
       last_reviewed_at: c.last_reviewed_at,
     })),
     [allCards]
