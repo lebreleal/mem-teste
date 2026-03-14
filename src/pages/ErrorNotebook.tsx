@@ -3,10 +3,11 @@
  * Cards move here when the user fails them (rating=1).
  * They return to their origin deck when mastered (state=2).
  */
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,8 +81,16 @@ const CardRow = ({
 const ErrorNotebook = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Block non-admin users
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate('/dashboard');
+    }
+  }, [isAdmin, navigate]);
 
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectionMode, setSelectionMode] = useState(false);

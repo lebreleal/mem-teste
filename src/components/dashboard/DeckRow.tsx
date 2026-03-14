@@ -7,10 +7,11 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers } from 'lucide-react';
+import { Info, ChevronDown, Layers, Lock } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import {
   Dialog,
   DialogContent,
@@ -52,8 +53,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   expandedAccordionId, onAccordionToggle,
 }, ref) => {
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showDevModal, setShowDevModal] = useState(false);
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
@@ -84,7 +87,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       return;
     }
     if (isErrorDeck) {
-      navigate('/caderno-de-erros');
+      if (isAdmin) {
+        navigate('/caderno-de-erros');
+      } else {
+        setShowDevModal(true);
+      }
       return;
     }
     // If has children, toggle expand; otherwise navigate
@@ -183,6 +190,33 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-2">
               Este deck reúne automaticamente os cartões que você errou durante suas sessões de estudo.
               Revise-os aqui para fortalecer os pontos mais fracos e melhorar sua retenção geral.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dev modal for non-admin users */}
+      <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-amber-500" />
+              🚧 Em Desenvolvimento
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-3 space-y-3">
+              <p>
+                O <strong>Caderno de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
+              </p>
+              <p>Veja como vai funcionar:</p>
+              <ul className="list-disc pl-4 space-y-1.5 text-left">
+                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Caderno de Erros.</li>
+                <li>Você poderá revisar seus pontos fracos em um só lugar, com foco total na recuperação.</li>
+                <li>Quando dominar o cartão (estado "Dominado"), ele <strong>voltará automaticamente</strong> ao deck original.</li>
+                <li>Questões erradas em simulados também gerarão cartões de revisão aqui.</li>
+              </ul>
+              <p className="text-xs text-muted-foreground/70 pt-1">
+                Fique ligado — em breve essa funcionalidade estará disponível para todos! 🎉
+              </p>
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
