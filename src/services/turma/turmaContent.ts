@@ -103,41 +103,22 @@ export async function updateLessonContent(id: string, params: { summary?: string
 }
 
 export async function shareDeck(turmaId: string, userId: string, params: { deckId: string; subjectId?: string | null; lessonId?: string | null; price?: number; priceType?: string; allowDownload?: boolean }) {
-  const { data: allDecks } = await supabase.from('decks').select('id, parent_deck_id, name').eq('user_id', userId);
-  const decks = allDecks ?? [];
+  // Only share the selected deck (no sub-deck expansion)
+  const { data: existingShares } = await supabase.from('turma_decks').select('id, deck_id').eq('turma_id', turmaId).eq('deck_id', params.deckId);
+  if (existingShares && existingShares.length > 0) return; // Already shared
 
-  const collectDescendants = (parentId: string): string[] => {
-    const children = decks.filter(d => d.parent_deck_id === parentId);
-    const result: string[] = [];
-    for (const child of children) {
-      result.push(child.id);
-      result.push(...collectDescendants(child.id));
-    }
-    return result;
-  };
+  await supabase.from('decks').update({ is_public: true } as any).eq('id', params.deckId);
 
-  const allDeckIds = [params.deckId, ...collectDescendants(params.deckId)];
-
-  const { data: existingShares } = await supabase.from('turma_decks').select('id, deck_id').eq('turma_id', turmaId).in('deck_id', allDeckIds);
-  const alreadyShared = new Set((existingShares ?? []).map(s => s.deck_id));
-
-  const toInsert = allDeckIds.filter(id => !alreadyShared.has(id));
-  if (toInsert.length === 0) return;
-
-  const rows = toInsert.map(deckId => ({
+  const { error } = await supabase.from('turma_decks').insert({
     turma_id: turmaId,
-    deck_id: deckId,
+    deck_id: params.deckId,
     subject_id: params.subjectId ?? null,
     lesson_id: params.lessonId ?? null,
     shared_by: userId,
     price: params.price ?? 0,
     price_type: params.priceType ?? 'free',
     allow_download: params.allowDownload ?? false,
-  }));
-
-  await supabase.from('decks').update({ is_public: true } as any).in('id', toInsert);
-
-  const { error } = await supabase.from('turma_decks').insert(rows as any);
+  } as any);
   if (error) throw error;
 }
 
