@@ -563,6 +563,57 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sala image change dialog */}
+      <Dialog open={salaImageOpen} onOpenChange={setSalaImageOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mudar imagem da sala</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:bg-muted/30 transition-colors">
+              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                {salaImageFile ? salaImageFile.name : 'Selecionar imagem'}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setSalaImageFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <Button
+              className="w-full"
+              disabled={!salaImageFile}
+              onClick={async () => {
+                if (!salaImageFile || !state.currentFolderId) return;
+                try {
+                  const ext = salaImageFile.name.split('.').pop() || 'jpg';
+                  const filePath = `sala-images/${state.currentFolderId}.${ext}`;
+                  const { error: uploadErr } = await supabase.storage
+                    .from('deck-covers')
+                    .upload(filePath, salaImageFile, { upsert: true });
+                  if (uploadErr) throw uploadErr;
+                  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
+                  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
+                  await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', state.currentFolderId);
+                  await queryClient.invalidateQueries({ queryKey: ['folders'] });
+                  toast({ title: 'Imagem atualizada!' });
+                  setSalaImageOpen(false);
+                  setSalaImageFile(null);
+                } catch (err) {
+                  console.error(err);
+                  toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
+                }
+              }}
+            >
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   );
