@@ -212,22 +212,22 @@ const Dashboard = () => {
 
       <main className="pb-24">
         {/* Study CTA */}
-        <div className="flex items-center gap-3 px-4 py-4">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-md mx-auto md:max-w-lg">
           <button
             onClick={() => setStudyWeightsOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+            className="flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
             aria-label="Ajustar pesos"
           >
-            <SlidersHorizontal className="h-5 w-5" />
+            <SlidersHorizontal className="h-4 w-4" />
           </button>
           <Button
             onClick={() => navigate('/study')}
-            className="flex-1 h-12 rounded-full text-base font-bold gap-2"
+            className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
             size="lg"
             disabled={totalDueToday === 0}
           >
             ESTUDAR
-            <Play className="h-5 w-5 fill-current" />
+            <Play className="h-4 w-4 fill-current" />
           </Button>
         </div>
 

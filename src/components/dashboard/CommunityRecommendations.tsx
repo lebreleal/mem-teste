@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ChevronRight, RectangleHorizontal, HelpCircle } from 'lucide-react';
+import { ChevronRight, Layers, HelpCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /** Map of keywords → cover image paths */
@@ -85,18 +85,7 @@ interface CommunityDeck {
   link: string;
 }
 
-/** Fallback categories when no marketplace data exists */
-const FALLBACK_DECKS: CommunityDeck[] = [
-  { id: 'f-med', title: 'Medicina', deck_id: '', deck_count: 12, card_count: 333, question_count: 9, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/explorar' },
-  { id: 'f-dir', title: 'Direito', deck_id: '', deck_count: 8, card_count: 245, question_count: 15, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/explorar' },
-  { id: 'f-prog', title: 'Programação', deck_id: '', deck_count: 6, card_count: 180, question_count: 12, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/explorar' },
-  { id: 'f-mat', title: 'Matemática', deck_id: '', deck_count: 10, card_count: 290, question_count: 20, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/explorar' },
-  { id: 'f-bio', title: 'Biologia', deck_id: '', deck_count: 7, card_count: 210, question_count: 8, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/explorar' },
-  { id: 'f-fis', title: 'Física', deck_id: '', deck_count: 5, card_count: 150, question_count: 6, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/explorar' },
-  { id: 'f-qui', title: 'Química', deck_id: '', deck_count: 4, card_count: 120, question_count: 5, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/explorar' },
-  { id: 'f-neuro', title: 'Neurociência', deck_id: '', deck_count: 3, card_count: 95, question_count: 4, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/explorar' },
-  { id: 'f-idiom', title: 'Idiomas', deck_id: '', deck_count: 9, card_count: 310, question_count: 11, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/explorar' },
-];
+/** No fallback — only show real data */
 
 const CommunityRecommendations = () => {
   const navigate = useNavigate();
@@ -184,7 +173,10 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
+  const displayDecks = recommendations ?? [];
+
+  // Don't render if no real data
+  if (!isLoading && displayDecks.length === 0) return null;
 
   if (isLoading) {
     return (
@@ -214,13 +206,8 @@ const CommunityRecommendations = () => {
 
       {/* Horizontal scrollable list */}
       <div
-        className="flex gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2"
+        className="flex gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2 scrollbar-hide"
         style={{ WebkitOverflowScrolling: 'touch' }}
-        onWheel={(event) => {
-          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-          event.preventDefault();
-          event.currentTarget.scrollLeft += event.deltaY;
-        }}
       >
         {displayDecks.map(deck => (
           <button
@@ -243,7 +230,7 @@ const CommunityRecommendations = () => {
               <div className="flex items-center gap-3 mt-0.5">
                 <span className="text-xs text-muted-foreground">{deck.deck_count} decks</span>
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <RectangleHorizontal className="h-3 w-3" />
+                  <Layers className="h-3 w-3" />
                   {deck.card_count}
                 </span>
                 {deck.question_count > 0 && (
