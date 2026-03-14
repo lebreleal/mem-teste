@@ -105,6 +105,7 @@ const Dashboard = () => {
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
+  const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
