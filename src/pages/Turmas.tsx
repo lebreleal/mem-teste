@@ -189,7 +189,7 @@ const Turmas = () => {
           </Button>
           <div>
             <h1 className="font-display text-xl font-bold text-foreground">Explorar</h1>
-            <p className="text-[10px] text-muted-foreground">Descubra salas de aula e decks públicos</p>
+            <p className="text-[10px] text-muted-foreground">Descubra classes e decks públicos</p>
           </div>
         </div>
       </header>
