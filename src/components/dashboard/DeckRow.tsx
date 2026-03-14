@@ -49,6 +49,7 @@ interface DeckRowProps {
   toggleExpand: (id: string) => void;
   expandedAccordionId?: string | null;
   onAccordionToggle?: (deckId: string) => void;
+  questionCountMap?: Map<string, number>;
 }
 
 
