@@ -243,27 +243,6 @@ const Dashboard = () => {
           </button>
         )}
 
-        {/* Quick access — compact, BELOW the CTA */}
-        <div className="mb-4 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-          {[
-            { label: 'Comunidade', icon: Users, path: '/turmas' },
-            { label: 'Missões', icon: GraduationCap, path: '/missoes', badge: claimableCount },
-            { label: 'Provas', icon: BookOpen, path: '/exam/new' },
-            { label: 'Questões', icon: Library, path: '/banco-questoes' },
-            { label: 'Caderno de Erros', icon: BookX, path: '/caderno-de-erros', badge: errorCount },
-            { label: 'Plano', icon: CalendarCheck, path: '/plano' },
-          ].map(item => (
-            <button key={item.path} onClick={() => navigate(item.path)} className="relative flex items-center gap-1 rounded-full border border-border/30 bg-muted/30 px-2.5 py-1 hover:bg-muted/60 transition-all shrink-0">
-              <item.icon className="h-3 w-3 text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap">{item.label}</span>
-              {'badge' in item && (item as any).badge > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
-                  {(item as any).badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
 
         {/* 📚 Meus Baralhos */}
         <div className="mb-4 space-y-2">
