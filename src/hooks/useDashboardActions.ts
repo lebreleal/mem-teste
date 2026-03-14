@@ -135,21 +135,6 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   }, [state, queryClient, toast]);
 
   const handleDeleteDeckRequest = useCallback(async (deck: { id: string; name: string }) => {
-    const allIds = [deck.id];
-    const collectChildren = (parentIds: string[]) => {
-      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
-      children.forEach(c => allIds.push(c.id));
-      if (children.length > 0) collectChildren(children.map(c => c.id));
-    };
-    collectChildren([deck.id]);
-
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
-    if (turmaRefs && turmaRefs.length > 0) {
-      const blockedId = turmaRefs[0].deck_id;
-      const blockedDeck = state.decks.find(d => d.id === blockedId);
-      setCommunityBlockTarget({ id: deck.id, name: blockedDeck ? blockedDeck.name : deck.name, type: 'deck' });
-      return;
-    }
     state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
   }, [state]);
 
