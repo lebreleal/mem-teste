@@ -210,6 +210,11 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       source_updated_at: sourceUpdatedAt,
       total_cards: cardCountMap.get(deck.id)?.total ?? 0,
       mastered_cards: cardCountMap.get(deck.id)?.mastered ?? 0,
+      class_novo: cardCountMap.get(deck.id)?.novo ?? 0,
+      class_facil: cardCountMap.get(deck.id)?.facil ?? 0,
+      class_bom: cardCountMap.get(deck.id)?.bom ?? 0,
+      class_dificil: cardCountMap.get(deck.id)?.dificil ?? 0,
+      class_errei: cardCountMap.get(deck.id)?.errei ?? 0,
     };
   });
 }
