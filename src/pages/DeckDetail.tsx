@@ -398,7 +398,22 @@ const DeckDetailContent = () => {
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-4 gap-2 overflow-hidden">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Button variant="ghost" size="icon" onClick={() => fromCommunity && communityTurmaId ? navigate(`/turmas/${communityTurmaId}`, { replace: true }) : navigate('/dashboard', { replace: true })}>
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (fromCommunity && communityTurmaId) {
+                navigate(`/turmas/${communityTurmaId}`, { replace: true });
+              } else {
+                // Find the folder_id: if sub-deck, walk up to root parent
+                let folderId = (deck as any)?.folder_id;
+                if (!folderId && (deck as any)?.parent_deck_id && decks) {
+                  let current = deck as any;
+                  while (current?.parent_deck_id) {
+                    current = decks.find((d: any) => d.id === current.parent_deck_id);
+                  }
+                  folderId = current?.folder_id;
+                }
+                navigate(folderId ? `/dashboard?folder=${folderId}` : '/dashboard', { replace: true });
+              }
+            }}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0 flex-1">
