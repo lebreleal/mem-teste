@@ -5,7 +5,7 @@
 export interface GeneratedCard {
   front: string;
   back: string;
-  type: 'basic' | 'cloze' | 'multiple_choice';
+  type: 'basic' | 'cloze';
   options?: string[];
   correctIndex?: number;
 }
