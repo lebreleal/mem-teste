@@ -1,11 +1,12 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
- * Simplified: shows name, sub-deck count, cards for today, chevron.
+ * Shows name, sub-deck count, mastery % with progress bar.
  */
 
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CheckCircle2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 
@@ -39,16 +40,28 @@ function countAllSubDecks(deckId: string, getSubDecks: (id: string) => DeckWithS
   return count;
 }
 
+/** Recursively aggregate total_cards and mastered_cards */
+function getAggregateMastery(deck: DeckWithStats, getSubDecks: (id: string) => DeckWithStats[]): { total: number; mastered: number } {
+  let total = deck.total_cards;
+  let mastered = deck.mastered_cards;
+  const subs = getSubDecks(deck.id);
+  for (const sub of subs) {
+    const sub_m = getAggregateMastery(sub, getSubDecks);
+    total += sub_m.total;
+    mastered += sub_m.mastered;
+  }
+  return { total, mastered };
+}
+
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, depth = 0, deckSelectionMode, selectedDeckIds,
-  toggleDeckSelection, getSubDecks, getAggregateStats,
+  toggleDeckSelection, getSubDecks,
   dragHandlers, hasPendingUpdate,
 }, ref) => {
   const navigate = useNavigate();
-  const stats = getAggregateStats(deck);
-  const totalDue = stats.new_count + stats.learning_count + stats.review_count;
   const subDeckCount = useMemo(() => countAllSubDecks(deck.id, getSubDecks), [deck.id, getSubDecks]);
-  const allCaughtUp = totalDue === 0 && (stats.reviewed_today > 0 || subDeckCount > 0);
+  const mastery = useMemo(() => getAggregateMastery(deck, getSubDecks), [deck, getSubDecks]);
+  const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
 
   return (
     <div
@@ -67,18 +80,18 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
-          {allCaughtUp && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
           {hasPendingUpdate && (
             <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {subDeckCount > 0 && <span>{subDeckCount} sub-deck{subDeckCount !== 1 ? 's' : ''} · </span>}
-          {totalDue > 0
-            ? <span className="text-primary font-medium">{totalDue} cartões para hoje</span>
-            : <span>Nenhum cartão para hoje</span>
-          }
-        </p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-xs text-muted-foreground">
+            {subDeckCount > 0 && <span>{subDeckCount} deck{subDeckCount !== 1 ? 's' : ''}</span>}
+            {subDeckCount === 0 && <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''}</span>}
+          </p>
+          <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
+        </div>
+        <Progress value={masteryPct} className="h-1 mt-1.5" />
       </div>
 
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />

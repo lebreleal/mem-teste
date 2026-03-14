@@ -200,6 +200,8 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       community_id: (deck as any).community_id ?? null,
       updated_at: deck.updated_at ?? deck.created_at,
       source_updated_at: sourceUpdatedAt,
+      total_cards: cardCountMap.get(deck.id)?.total ?? 0,
+      mastered_cards: cardCountMap.get(deck.id)?.mastered ?? 0,
     };
   });
 }
