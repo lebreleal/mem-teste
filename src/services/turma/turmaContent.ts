@@ -28,75 +28,15 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
   if (!data || data.length === 0) return [];
 
   const deckIds = data.map((d: any) => d.deck_id);
-  const tdByDeckId = new Map<string, any>(data.map((d: any) => [d.deck_id, d]));
 
-  const { data: sharedDecks } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('id', deckIds);
+  // Fetch deck names (no sub-deck expansion)
+  const { data: sharedDecks } = await supabase.from('decks').select('id, name, user_id').in('id', deckIds);
+  const deckMap = new Map((sharedDecks ?? []).map((d: any) => [d.id, { name: d.name }]));
 
-  let allDecks = [...(sharedDecks ?? [])];
-  const seenIds = new Set(deckIds);
-  let parentIdsToCheck = [...deckIds];
-
-  while (parentIdsToCheck.length > 0) {
-    const { data: children } = await supabase.from('decks').select('id, name, parent_deck_id, user_id').in('parent_deck_id', parentIdsToCheck);
-    const newChildren = (children ?? []).filter((c: any) => !seenIds.has(c.id));
-    if (newChildren.length === 0) break;
-    newChildren.forEach((c: any) => seenIds.add(c.id));
-    allDecks.push(...newChildren);
-    parentIdsToCheck = newChildren.map((c: any) => c.id);
-  }
-
-  const missingChildren = allDecks.filter((d: any) => !tdByDeckId.has(d.id));
-  if (missingChildren.length > 0) {
-    const rows = missingChildren.map((child: any) => {
-      let parentTd: any = null;
-      let cur: any = child;
-      while (cur?.parent_deck_id) {
-        parentTd = tdByDeckId.get(cur.parent_deck_id);
-        if (parentTd) break;
-        cur = allDecks.find((d: any) => d.id === cur.parent_deck_id);
-      }
-      return {
-        turma_id: turmaId,
-        deck_id: child.id,
-        subject_id: parentTd?.subject_id ?? null,
-        lesson_id: parentTd?.lesson_id ?? null,
-        shared_by: parentTd?.shared_by ?? child.user_id,
-        price: 0,
-        price_type: 'free',
-        allow_download: parentTd?.allow_download ?? false,
-      };
-    });
-    try {
-      const { data: inserted } = await supabase.from('turma_decks').insert(rows as any).select();
-      if (inserted) {
-        inserted.forEach((td: any) => {
-          data.push(td);
-          tdByDeckId.set(td.deck_id, td);
-        });
-      }
-    } catch {
-      // Permission denied for non-admin – ignore
-    }
-  }
-
-  const allDeckIdsExpanded = allDecks.map((d: any) => d.id);
-  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIdsExpanded });
+  // Count cards per deck (direct only, no sub-tree aggregation)
+  const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
   const directCountMap = new Map<string, number>();
   (countRows ?? []).forEach((r: any) => directCountMap.set(r.deck_id, Number(r.card_count)));
-
-  const deckMap = new Map(allDecks.map((d: any) => [d.id, { name: d.name, parent_deck_id: d.parent_deck_id }]));
-
-  const collectPublishedSubtree = (rootDeckId: string): string[] => {
-    const result: string[] = [rootDeckId];
-    const children = allDecks.filter((d: any) => d.parent_deck_id === rootDeckId);
-    for (const child of children) {
-      const td = tdByDeckId.get(child.id);
-      if (!td || td.is_published !== false) {
-        result.push(...collectPublishedSubtree(child.id));
-      }
-    }
-    return result;
-  };
 
   // Fetch sharer profile names
   const sharerIds = [...new Set(data.map((d: any) => d.shared_by).filter(Boolean))];
@@ -108,13 +48,11 @@ export async function fetchTurmaDecks(turmaId: string): Promise<TurmaDeck[]> {
 
   return data.map((d: any) => {
     const deckInfo = deckMap.get(d.deck_id);
-    const subtreeIds = collectPublishedSubtree(d.deck_id);
-    const aggregatedCount = subtreeIds.reduce((sum, id) => sum + (directCountMap.get(id) ?? 0), 0);
     return {
       ...d,
       deck_name: deckInfo?.name || 'Sem nome',
-      card_count: aggregatedCount,
-      parent_deck_id: deckInfo?.parent_deck_id ?? null,
+      card_count: directCountMap.get(d.deck_id) ?? 0,
+      parent_deck_id: null,
       is_published: d.is_published ?? true,
       shared_by_name: sharerNameMap.get(d.shared_by) || null,
     };
