@@ -429,7 +429,7 @@ const Dashboard = () => {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
             <Button
-              onClick={() => navigate('/study')}
+              onClick={() => setStudySalaSheetOpen(true)}
               className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
               size="lg"
               disabled={totalDueToday === 0}
