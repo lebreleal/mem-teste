@@ -305,58 +305,88 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Sala study button + info */}
+        {/* Sala study card with circular progress */}
         {state.isInsideSala && salaStudyStats && (
-          <div className="flex items-center gap-3 px-4 py-4 max-w-md mx-auto md:max-w-lg">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                  aria-label="Detalhes do estudo"
-                >
-                  <Info className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                      <span className="text-xs text-muted-foreground">Novos</span>
-                    </div>
-                    <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                      <span className="text-xs text-muted-foreground">Aprendendo</span>
-                    </div>
-                    <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Layers className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-xs text-muted-foreground">Revisão</span>
-                    </div>
-                    <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
-                  </div>
-                  <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">Tempo estimado</span>
-                    </div>
-                    <span className="text-xs font-semibold text-foreground">~{salaStudyStats.timeLabel}</span>
-                  </div>
-                  {salaStudyStats.reviewedToday > 0 && (
+          <div className="flex items-center gap-4 px-4 py-4 max-w-md mx-auto md:max-w-lg">
+            {/* Settings icon */}
+            <button
+              onClick={() => setStudyWeightsOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+              aria-label="Ajustar pesos"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+
+            {/* Circular progress with info */}
+            <div className="relative shrink-0">
+              <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
+                <circle cx="26" cy="26" r="22" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                <circle
+                  cx="26" cy="26" r="22" fill="none"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 22}`}
+                  strokeDashoffset={`${2 * Math.PI * 22 * (1 - salaStudyStats.progressPct / 100)}`}
+                  className="transition-all duration-700"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
+                {salaStudyStats.progressPct}%
+              </span>
+              {/* Info popover on top-right of circle */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    aria-label="Detalhes do estudo"
+                  >
+                    <Info className="h-3 w-3" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                  <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Feitos hoje</span>
-                      <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewedToday}</span>
+                      <div className="flex items-center gap-2">
+                        <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                        <span className="text-xs text-muted-foreground">Novos</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
                     </div>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                        <span className="text-xs text-muted-foreground">Aprendendo</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs text-muted-foreground">Revisão</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                    </div>
+                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Tempo estimado</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">~{salaStudyStats.timeLabel}</span>
+                    </div>
+                    {salaStudyStats.reviewedToday > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Feitos hoje</span>
+                        <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewedToday}</span>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Study button */}
             <Button
               onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
               className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
