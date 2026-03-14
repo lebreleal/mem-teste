@@ -25,6 +25,10 @@ export interface DeckWithStats {
   community_id?: string | null;
   /** The original (source) deck's updated_at timestamp, for community decks */
   source_updated_at?: string | null;
+  /** Total number of cards in this deck */
+  total_cards: number;
+  /** Cards that have graduated to review state (state >= 2) */
+  mastered_cards: number;
 }
 
 /** Raw card row from the cards table. */
