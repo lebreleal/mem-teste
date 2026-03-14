@@ -229,34 +229,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
 
   const getAggregateStats = (deck: DeckWithStats): { new_count: number; learning_count: number; review_count: number; reviewed_today: number } => {
     const raw = getRawAggregateStats(deck);
-
-    // Find root ancestor — its config governs the entire hierarchy
-    let rootDeck = deck;
-    while (rootDeck.parent_deck_id) {
-      const parent = decks.find(d => d.id === rootDeck.parent_deck_id);
-      if (!parent) break;
-      rootDeck = parent;
-    }
-
-    const dailyNewLimit = rootDeck.daily_new_limit ?? 20;
-    const dailyReviewLimit = rootDeck.daily_review_limit ?? 100;
-
-    // Count newReviewed across the ENTIRE root hierarchy (not just this deck's subtree)
-    const rootRaw = rootDeck.id === deck.id ? raw : getRawAggregateStats(rootDeck);
-
-    // When plan exists, all decks share the same global remaining; otherwise use deck limit
-    const hasPlanActive = planRootIds && planRootIds.size > 0;
-    const deckRemaining = Math.max(0, dailyNewLimit - rootRaw.newReviewed);
-    let effectiveNew: number;
-    if (hasPlanActive && planRootIds!.has(rootDeck.id)) {
-      effectiveNew = Math.max(0, Math.min(raw.new_count, globalNewRemaining));
-    } else {
-      // No plan: only deck limit applies (global limit is a Study Plan feature)
-      effectiveNew = Math.max(0, Math.min(raw.new_count, deckRemaining));
-    }
-    const reviewReviewedToday = Math.max(0, rootRaw.reviewed - rootRaw.newGraduated);
-    const effectiveReview = Math.max(0, Math.min(raw.review_count, dailyReviewLimit - reviewReviewedToday));
-    return { new_count: effectiveNew, learning_count: raw.learning_count, review_count: effectiveReview, reviewed_today: raw.reviewed };
+    return { new_count: raw.new_count, learning_count: raw.learning_count, review_count: raw.review_count, reviewed_today: raw.reviewed };
   };
 
   const getDescendantIds = (folderId: string): string[] => {
