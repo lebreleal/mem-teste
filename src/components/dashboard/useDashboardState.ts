@@ -115,7 +115,26 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   /** A deck is community-imported if it has source_turma_deck_id, source_listing_id, or is_live_deck */
   const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
 
+  /** Are we at the root level (showing salas) or inside a folder? */
+  const isInsideSala = currentFolderId !== null;
+
+  /** Virtual sala ID for orphan decks */
+  const VIRTUAL_SALA_ID = '__meus_estudos__';
+  const isVirtualSala = currentFolderId === VIRTUAL_SALA_ID;
+
   const currentDecks = useMemo(
+    () => {
+      if (!isInsideSala) return []; // At root, we show salas, not decks
+      const filtered = isVirtualSala
+        ? decks.filter(d => !d.parent_deck_id && !d.is_archived && !d.folder_id)
+        : decks.filter(d => !d.parent_deck_id && !d.is_archived && d.folder_id === currentFolderId);
+      return filtered.sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+    },
+    [decks, currentFolderId, isInsideSala, isVirtualSala]
+  );
+
+  /** All root decks (used by SalaList at the root level) */
+  const allRootDecks = useMemo(
     () => decks.filter(d => !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
     [decks]
@@ -334,7 +353,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     // Data
     decks, folders, isLoading,
     currentFolderId, setCurrentFolderId,
-    currentFolders, currentDecks, communityDecks, decksWithPendingUpdates,
+    isInsideSala, isVirtualSala,
+    currentFolders, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
     expandedDecks, toggleExpand,

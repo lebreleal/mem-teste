@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Timer, Play, BookOpen, Brain, Download } from 'lucide-react';
+import { Timer, Play, BookOpen, Brain, Download, FolderPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +18,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isOnDashboard = location.pathname === '/dashboard';
+  const isInsideSala = isOnDashboard && !!searchParams.get('folder');
   const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
@@ -118,15 +121,26 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <SheetTitle className="text-base">Adicionar</SheetTitle>
           </SheetHeader>
           <div className="grid gap-2 pt-4">
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck'); }}>
-              <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck'); }}>
-              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import'); }}>
-              <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
-            </Button>
+            {/* At dashboard root (not inside a sala): show "Criar Sala" */}
+            {isOnDashboard && !isInsideSala && (
+              <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
+                <FolderPlus className="h-5 w-5 text-primary" /> Criar sala
+              </Button>
+            )}
+            {/* Inside a sala or not on dashboard: show deck actions */}
+            {(!isOnDashboard || isInsideSala) && (
+              <>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
+                </Button>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
+                </Button>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+                </Button>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>

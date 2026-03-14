@@ -1,12 +1,13 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
  * Shows name, sub-deck count, mastery % with progress bar.
- * Special rendering for the "📕 Caderno de Erros" deck (same style, with info icon).
+ * Special rendering for the "📕 Caderno de Erros" deck.
+ * Supports inline accordion expansion of sub-decks.
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Info } from 'lucide-react';
+import { ChevronRight, ChevronDown, Info } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -40,6 +41,10 @@ interface DeckRowProps {
   onDetachCommunityDeck?: (deck: DeckWithStats) => void;
   dragHandlers?: DragReorderHandlers;
   hasPendingUpdate?: boolean;
+  /** Accordion mode: the ID of the currently expanded deck (only one at a time) */
+  expandedAccordionId?: string | null;
+  /** Called when this deck's accordion toggle is clicked */
+  onAccordionToggle?: (deckId: string) => void;
 }
 
 /** Recursively count all descendant decks */
@@ -67,6 +72,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, depth = 0, deckSelectionMode, selectedDeckIds,
   toggleDeckSelection, getSubDecks,
   dragHandlers, hasPendingUpdate,
+  expandedAccordionId, onAccordionToggle,
 }, ref) => {
   const navigate = useNavigate();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
@@ -74,6 +80,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const subDeckCount = useMemo(() => countAllSubDecks(deck.id, getSubDecks), [deck.id, getSubDecks]);
   const mastery = useMemo(() => getAggregateMastery(deck, getSubDecks), [deck, getSubDecks]);
   const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
+  const hasSubDecks = subDeckCount > 0;
+  const isExpanded = expandedAccordionId === deck.id;
+  const subDecks = useMemo(() => hasSubDecks && isExpanded ? getSubDecks(deck.id) : [], [hasSubDecks, isExpanded, deck.id, getSubDecks]);
 
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
 
@@ -89,9 +98,19 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           onDrop: dragHandlers.onDrop,
           onDragEnd: dragHandlers.onDragEnd,
         } : {})}
-        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
+        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${depth === 0 && dragHandlers ? dragHandlers.className : ''} ${depth > 0 ? 'pl-8 bg-muted/20' : ''}`}
         onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/caderno-de-erros' : `/decks/${deck.id}`)}
       >
+        {/* Accordion toggle for parent decks */}
+        {hasSubDecks && depth === 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAccordionToggle?.(deck.id); }}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors -ml-1"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+          </button>
+        )}
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
@@ -112,7 +131,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               {isErrorDeck
                 ? <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''} para revisar</span>
                 : subDeckCount > 0
-                  ? <span>{subDeckCount} deck{subDeckCount !== 1 ? 's' : ''}</span>
+                  ? <span>{subDeckCount} sub-deck{subDeckCount !== 1 ? 's' : ''}</span>
                   : <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''}</span>
               }
             </p>
@@ -123,6 +142,33 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
       </div>
+
+      {/* Expanded sub-decks (accordion) */}
+      {isExpanded && subDecks.length > 0 && (
+        <div className="border-l-2 border-primary/20 ml-4">
+          {subDecks.map(sub => {
+            const subMastery = getAggregateMastery(sub, getSubDecks);
+            const subPct = subMastery.total > 0 ? Math.round((subMastery.mastered / subMastery.total) * 1000) / 10 : 0;
+            return (
+              <div
+                key={sub.id}
+                className="flex items-center gap-3 pl-4 pr-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
+                onClick={() => navigate(`/decks/${sub.id}`)}
+              >
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[11px] text-muted-foreground">{subMastery.total} cartão{subMastery.total !== 1 ? 'ões' : ''}</span>
+                    <span className="text-[11px] text-muted-foreground ml-auto">{subPct}%</span>
+                  </div>
+                  <Progress value={subPct} className="h-0.5 mt-1" />
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Info modal for error deck */}
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>

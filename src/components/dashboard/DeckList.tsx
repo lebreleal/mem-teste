@@ -1,10 +1,10 @@
 /**
- * Renders the list of decks in the dashboard.
+ * Renders the list of decks inside a Sala.
+ * Supports accordion for sub-decks (only one open at a time).
  * Includes pending (background-generating) decks as ghost items.
- * Supports drag-to-reorder via grip handles.
- * Folders have been removed — flat deck list only.
  */
 
+import { useState } from 'react';
 import {
   GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
@@ -56,6 +56,7 @@ const DeckList = ({
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
+  const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
   const filteredDecks = q ? currentDecks.filter(d => d.name.toLowerCase().includes(q)) : currentDecks;
@@ -67,6 +68,10 @@ const DeckList = ({
   });
 
   const visiblePending = q ? [] : pendingDecks.filter(p => !p.folderId);
+
+  const handleAccordionToggle = (deckId: string) => {
+    setExpandedAccordionId(prev => prev === deckId ? null : deckId);
+  };
 
   if (isLoading) {
     return (
@@ -97,9 +102,9 @@ const DeckList = ({
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
           <GraduationCap className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="font-display text-lg font-bold text-foreground">Nenhum baralho ainda</h3>
+        <h3 className="font-display text-lg font-bold text-foreground">Nenhum baralho nesta sala</h3>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">Crie seu primeiro baralho para começar a estudar.</p>
-        <p className="mt-3 text-xs text-muted-foreground">Use o botão <strong>+ Adicionar</strong> acima para criar</p>
+        <p className="mt-3 text-xs text-muted-foreground">Use o botão <strong>+</strong> para adicionar</p>
       </div>
     );
   }
@@ -163,7 +168,7 @@ const DeckList = ({
         );
       })}
 
-      {/* Decks */}
+      {/* Decks (Matérias) with accordion */}
       {deckDrag.displayItems.map(deck => {
         const dragHandlers = deckDrag.getHandlers(deck);
         return (
@@ -178,6 +183,8 @@ const DeckList = ({
             navigateToCommunity={navigateToCommunity}
             dragHandlers={dragHandlers}
             hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
+            expandedAccordionId={expandedAccordionId}
+            onAccordionToggle={handleAccordionToggle}
             {...deckRowProps}
           />
         );

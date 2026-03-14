@@ -1,6 +1,7 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
@@ -35,6 +36,8 @@ import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DeckList from '@/components/dashboard/DeckList';
+import SalaList from '@/components/dashboard/SalaList';
+import { VIRTUAL_SALA_ID } from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
@@ -114,17 +117,21 @@ const Dashboard = () => {
     const action = searchParams.get('action');
     if (action === 'ai-deck') {
       state.setAiDeckOpen(true);
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     } else if (action === 'create-deck') {
       state.setCreateType('deck');
       state.setCreateName('');
       state.setCreateParentDeckId(null);
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     } else if (action === 'import') {
       state.setImportOpen(true);
       state.setImportDeckId(null);
       state.setImportDeckName('');
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
+    } else if (action === 'create-sala') {
+      state.setCreateType('folder');
+      state.setCreateName('');
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     }
   }, [searchParams]);
 
@@ -192,16 +199,42 @@ const Dashboard = () => {
     }
   }, [state]);
 
-  // Compute total due for the study button
+  // Compute total due for the study button (use allRootDecks when at root level)
   const totalDueToday = useMemo(() => {
-    const roots = state.currentDecks;
+    const roots = state.isInsideSala ? state.currentDecks : state.allRootDecks;
     let total = 0;
     for (const deck of roots) {
       const s = state.getAggregateStats(deck);
       total += s.new_count + s.learning_count + s.review_count;
     }
     return total;
-  }, [state.currentDecks, state.getAggregateStats]);
+  }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
+
+  // Handle virtual sala click: create a real folder and move orphan decks into it
+  const handleCreateVirtualSala = useCallback(async () => {
+    try {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+      // Create the "Meus Estudos" folder
+      const { data: newFolder, error } = await supabase
+        .from('folders')
+        .insert({ name: 'Meus Estudos', user_id: u.id, section: 'personal' } as any)
+        .select()
+        .single();
+      if (error || !newFolder) throw error;
+      // Move all orphan root decks into this folder
+      const orphanDecks = state.decks.filter(d => !d.parent_deck_id && !d.is_archived && !d.folder_id);
+      for (const d of orphanDecks) {
+        await supabase.from('decks').update({ folder_id: (newFolder as any).id } as any).eq('id', d.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['decks'] });
+      await queryClient.invalidateQueries({ queryKey: ['folders'] });
+      state.setCurrentFolderId((newFolder as any).id);
+    } catch (err) {
+      console.error('Error creating virtual sala:', err);
+      toast({ title: 'Erro ao criar sala', variant: 'destructive' });
+    }
+  }, [state.decks, queryClient, toast, state]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -211,6 +244,26 @@ const Dashboard = () => {
       />
 
       <main className="pb-24">
+        {/* Inside a Sala: back button + sala name */}
+        {state.isInsideSala && (
+          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+            <button
+              onClick={() => state.setCurrentFolderId(null)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Salas</span>
+            </button>
+            <span className="text-sm text-muted-foreground">/</span>
+            <span className="text-sm font-semibold text-foreground truncate">
+              {state.isVirtualSala
+                ? 'Meus Estudos'
+                : state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'
+              }
+            </span>
+          </div>
+        )}
+
         {/* Study CTA */}
         <div className="flex items-center gap-3 px-4 py-4 max-w-md mx-auto md:max-w-lg">
           <button
@@ -231,30 +284,50 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Deck List */}
-        <DeckList
-          isLoading={state.isLoading}
-          currentDecks={state.currentDecks}
-          searchQuery={searchQuery}
-          deckSelectionMode={state.deckSelectionMode}
-          selectedDeckIds={state.selectedDeckIds}
-          expandedDecks={state.expandedDecks}
-          toggleExpand={state.toggleExpand}
-          toggleDeckSelection={state.toggleDeckSelection}
-          getSubDecks={state.getSubDecks}
-          getAggregateStats={state.getAggregateStats}
-          getCommunityLinkId={state.getCommunityLinkId}
-          navigateToCommunity={actions.handleNavigateCommunity}
-          onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-          onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-          onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-          onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-          onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-          onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
-          onPendingClick={handlePendingClick}
-          decksWithPendingUpdates={state.decksWithPendingUpdates}
-        />
+        {/* Root level: Sala List */}
+        {!state.isInsideSala && (
+          <SalaList
+            folders={state.folders}
+            decks={state.decks}
+            isLoading={state.isLoading}
+            getAggregateStats={state.getAggregateStats}
+            onSalaClick={(folderId, isVirtual) => {
+              if (isVirtual) {
+                // Create real folder for orphan decks
+                handleCreateVirtualSala();
+              } else {
+                state.setCurrentFolderId(folderId);
+              }
+            }}
+          />
+        )}
+
+        {/* Inside Sala: Deck List */}
+        {state.isInsideSala && (
+          <DeckList
+            isLoading={state.isLoading}
+            currentDecks={state.currentDecks}
+            searchQuery={searchQuery}
+            deckSelectionMode={state.deckSelectionMode}
+            selectedDeckIds={state.selectedDeckIds}
+            expandedDecks={state.expandedDecks}
+            toggleExpand={state.toggleExpand}
+            toggleDeckSelection={state.toggleDeckSelection}
+            getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
+            getCommunityLinkId={state.getCommunityLinkId}
+            navigateToCommunity={actions.handleNavigateCommunity}
+            onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+            onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
+            onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+            onPendingClick={handlePendingClick}
+            decksWithPendingUpdates={state.decksWithPendingUpdates}
+          />
+        )}
 
         {/* Archived section */}
         {state.totalArchived > 0 && (
