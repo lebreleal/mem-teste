@@ -8,11 +8,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHtml } from '@/lib/sanitize';
 
-export type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
+export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
 export const CARD_TYPES: { value: EditorCardType; label: string; desc: string }[] = [
   { value: 'basic', label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'multiple_choice', label: 'Múltipla escolha', desc: 'Pergunta com alternativas' },
   { value: 'cloze', label: 'Cloze', desc: 'Texto com lacunas para preencher' },
   { value: 'image_occlusion', label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
 ];
