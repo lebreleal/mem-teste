@@ -612,10 +612,10 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
   useEffect(() => {
-    const handler = () => setQuestionAction('practice');
+    const handler = () => { setQuestionAction('practice'); setActiveTab('questions'); };
     window.addEventListener('start-question-practice', handler);
     return () => window.removeEventListener('start-question-practice', handler);
-  }, []);
+  }, [setActiveTab]);
 
   return (
     <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
