@@ -219,35 +219,6 @@ const Dashboard = () => {
         {/* 📚 Meus Baralhos */}
         <div className="mb-4 space-y-2">
 
-            <DashboardActions
-              mode="personal"
-              currentFolderId={state.currentFolderId}
-              breadcrumb={state.breadcrumb}
-              onNavigateFolder={state.setCurrentFolderId}
-              onNavigateUp={() => {
-                const current = state.folders.find(f => f.id === state.currentFolderId);
-                state.setCurrentFolderId(current?.parent_id ?? null);
-              }}
-              hasDecks={state.currentDecks.length > 0}
-              deckSelectionMode={state.deckSelectionMode}
-              selectedCount={state.selectedDeckIds.size}
-              isAllSelected={state.currentDecks.length > 0 && state.selectedDeckIds.size === state.currentDecks.length}
-              toggleSelectionMode={() => { state.setDeckSelectionMode(!state.deckSelectionMode); state.setSelectedDeckIds(new Set()); }}
-              toggleSelectAll={() => {
-                if (state.selectedDeckIds.size === state.currentDecks.length) state.setSelectedDeckIds(new Set());
-                else state.setSelectedDeckIds(new Set(state.currentDecks.map(d => d.id)));
-              }}
-              onCreateFolder={() => { state.setCreateType('folder'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-              onCreateDeck={() => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-              onCreateAI={() => state.setAiDeckOpen(true)}
-              onImport={() => { state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
-              onBulkMove={() => { state.setBulkMoveDeckOpen(true); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-              onBulkArchive={actions.handleBulkArchive}
-              onBulkDelete={actions.handleBulkDelete}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
-
             <DeckList
               isLoading={state.isLoading}
               currentFolders={state.currentFolders}
