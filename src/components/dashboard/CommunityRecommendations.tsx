@@ -203,17 +203,25 @@ const CommunityRecommendations = () => {
     <div className="mt-6 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between px-4 mb-3">
-        <h2 className="text-base font-bold text-foreground">You Might Also Like...</h2>
+        <h2 className="text-base font-bold text-foreground">Você também pode gostar...</h2>
         <button
           onClick={() => navigate('/explorar')}
           className="flex items-center gap-0.5 text-xs font-medium text-foreground hover:opacity-70"
         >
-          See more <ChevronRight className="h-3.5 w-3.5" />
+          Ver mais <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {/* Horizontal scrollable list */}
-      <div className="flex gap-3 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+      <div
+        className="flex gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+        onWheel={(event) => {
+          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+          event.preventDefault();
+          event.currentTarget.scrollLeft += event.deltaY;
+        }}
+      >
         {displayDecks.map(deck => (
           <button
             key={deck.id}
@@ -224,7 +232,7 @@ const CommunityRecommendations = () => {
             <img
               src={deck.cover}
               alt={deck.title}
-              className="h-12 w-12 rounded-lg object-cover shrink-0"
+              className="h-12 w-12 object-cover shrink-0"
               loading="lazy"
               decoding="async"
             />
@@ -233,16 +241,10 @@ const CommunityRecommendations = () => {
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-foreground truncate">{deck.title}</h3>
               <div className="flex items-center gap-3 mt-0.5">
+                <span className="text-xs text-muted-foreground">{deck.deck_count} decks</span>
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Layers className="h-3 w-3" />
-                  {deck.deck_count} decks
-                </span>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="4" width="20" height="16" rx="2" />
-                    <path d="M12 4v16" />
-                  </svg>
-                  {deck.card_count} cards
+                  <RectangleHorizontal className="h-3 w-3" />
+                  {deck.card_count}
                 </span>
                 {deck.question_count > 0 && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
