@@ -482,16 +482,9 @@ const ContentTab = () => {
   // ── Deck handlers ──
   const handleAddDeck = () => {
     if (selectedDeckIds.size === 0) return;
-    // Only share root-level selected decks (parent NOT also selected)
-    // The sharing system auto-publishes the subtree
     const allAvailable = importLogic.availableDecks;
-    const rootsToShare = Array.from(selectedDeckIds).filter(id => {
-      const deck = allAvailable.find(d => d.id === id);
-      if (!deck?.parent_deck_id) return true;
-      return !selectedDeckIds.has(deck.parent_deck_id);
-    });
-    if (rootsToShare.length === 0) return;
     let completed = 0;
+    const rootsToShare = Array.from(selectedDeckIds);
     rootsToShare.forEach(deckId => {
       const finalPrice = priceType === 'free' ? 0 : 0;
       mutations.shareDeck.mutate({ deckId, subjectId: addDeckSectionId, lessonId: undefined, price: finalPrice, priceType, allowDownload } as any, {
