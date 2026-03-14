@@ -145,14 +145,34 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
-            {hasChildren && !isErrorDeck && (
-              <button
-                onClick={(e) => { e.stopPropagation(); navigate(`/decks/${deck.id}/settings`); }}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-auto"
-                title="Configurações"
-              >
-                <Settings className="h-4 w-4" />
-              </button>
+            {!isErrorDeck && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => onRename(deck)}>
+                    <Pencil className="h-4 w-4 mr-2" /> Renomear
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
+                    <Settings className="h-4 w-4 mr-2" /> Configurações
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMove(deck)}>
+                    <FolderInput className="h-4 w-4 mr-2" /> Mover
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onArchive(deck.id)}>
+                    <Archive className="h-4 w-4 mr-2" /> Arquivar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDelete(deck)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
