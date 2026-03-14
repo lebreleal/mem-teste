@@ -1,32 +1,24 @@
 /**
- * Renders the list of folders and decks in the current view.
+ * Renders the list of decks in the dashboard.
  * Includes pending (background-generating) decks as ghost items.
  * Supports drag-to-reorder via grip handles.
+ * Folders have been removed — flat deck list only.
  */
 
 import {
-  FolderOpen, MoreVertical, Pencil, Trash2, Archive, ArrowUpRight,
-  ChevronRight, GraduationCap, Link2, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
+  GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import DeckRow from './DeckRow';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import type { DeckWithStats } from '@/hooks/useDecks';
 
-interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
-
 interface DeckListProps {
   isLoading: boolean;
-  currentFolders: Folder[];
   currentDecks: DeckWithStats[];
-  currentFolderId?: string | null;
   searchQuery?: string;
-  
+
   // DeckRow props
   deckSelectionMode: boolean;
   selectedDeckIds: Set<string>;
@@ -37,17 +29,8 @@ interface DeckListProps {
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
   getCommunityLinkId: (deck: DeckWithStats) => string | null;
   navigateToCommunity: (id: string) => void;
-  getFolderDueCount: (folderId: string) => number;
-  getFolderCommunityLinkId: (folderId: string) => string | null;
-  folderHasCommunityLink: (folderId: string) => boolean;
-  
+
   // Actions
-  onFolderClick: (id: string) => void;
-  onRenameFolder: (folder: Folder) => void;
-  onMoveFolder: (folder: Folder) => void;
-  onArchiveFolder: (id: string) => void;
-  onDeleteFolder: (folder: Folder) => void;
-  
   onCreateSubDeck: (deckId: string) => void;
   onRenameDeck: (deck: DeckWithStats) => void;
   onMoveDeck: (deck: DeckWithStats) => void;
@@ -56,7 +39,6 @@ interface DeckListProps {
   onDetachCommunityDeck?: (deck: DeckWithStats) => void;
 
   // Reorder callbacks
-  onReorderFolders?: (reordered: Folder[]) => void;
   onReorderDecks?: (reordered: DeckWithStats[]) => void;
 
   // Pending updates for community decks
@@ -67,25 +49,16 @@ interface DeckListProps {
 }
 
 const DeckList = ({
-  isLoading, currentFolders, currentDecks, currentFolderId, searchQuery = '',
-  onFolderClick, onRenameFolder, onMoveFolder, onArchiveFolder, onDeleteFolder,
+  isLoading, currentDecks, searchQuery = '',
   onRenameDeck, onMoveDeck, onArchiveDeck, onDeleteDeck, onDetachCommunityDeck,
-  getFolderDueCount, getFolderCommunityLinkId,
-  folderHasCommunityLink, navigateToCommunity, onReorderFolders, onReorderDecks,
+  navigateToCommunity, onReorderDecks,
   decksWithPendingUpdates, onPendingClick,
   ...deckRowProps
 }: DeckListProps) => {
   const { pendingDecks } = usePendingDecks();
 
   const q = searchQuery.toLowerCase();
-  const filteredFolders = q ? currentFolders.filter(f => f.name.toLowerCase().includes(q)) : currentFolders;
   const filteredDecks = q ? currentDecks.filter(d => d.name.toLowerCase().includes(q)) : currentDecks;
-
-  const folderDrag = useDragReorder({
-    items: filteredFolders,
-    getId: (f) => f.id,
-    onReorder: (reordered) => onReorderFolders?.(reordered),
-  });
 
   const deckDrag = useDragReorder({
     items: filteredDecks,
@@ -93,23 +66,16 @@ const DeckList = ({
     onReorder: (reordered) => onReorderDecks?.(reordered),
   });
 
-  // Filter pending decks for current folder
-  const visiblePending = q ? [] : pendingDecks.filter(p => p.folderId === (currentFolderId ?? null));
+  const visiblePending = q ? [] : pendingDecks.filter(p => !p.folderId);
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+      <div className="divide-y divide-border/50">
         {[1, 2, 3].map(i => (
           <div key={i} className="flex items-center gap-3 px-5 py-4 animate-pulse">
-            <div className="h-6 w-6 rounded bg-muted shrink-0" />
             <div className="flex-1 min-w-0 space-y-2">
               <div className="h-4 w-36 rounded bg-muted" />
               <div className="h-3 w-20 rounded bg-muted" />
-            </div>
-            <div className="flex gap-1.5">
-              <div className="h-5 w-8 rounded-full bg-muted" />
-              <div className="h-5 w-8 rounded-full bg-muted" />
-              <div className="h-5 w-8 rounded-full bg-muted" />
             </div>
           </div>
         ))}
@@ -117,17 +83,17 @@ const DeckList = ({
     );
   }
 
-  if (filteredFolders.length === 0 && filteredDecks.length === 0 && visiblePending.length === 0) {
+  if (filteredDecks.length === 0 && visiblePending.length === 0) {
     if (q) {
       return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center px-4">
+        <div className="flex flex-col items-center justify-center py-8 text-center px-4">
           <Search className="h-7 w-7 text-muted-foreground/40 mb-2" />
           <p className="text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</p>
         </div>
       );
     }
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 sm:py-12 text-center px-4">
+      <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-4">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
           <GraduationCap className="h-7 w-7 text-primary" />
         </div>
@@ -159,7 +125,7 @@ const DeckList = ({
   };
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+    <div className="divide-y divide-border/50">
       {/* Pending (background generating) decks */}
       {visiblePending.map(pending => {
         const progressPct = pending.progress.total > 0 ? (pending.progress.current / pending.progress.total) * 100 : 0;
@@ -191,75 +157,6 @@ const DeckList = ({
                   {pending.status === 'review_ready' && pending.cards && ` · ${pending.cards.length} cartões`}
                 </p>
               </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-          </div>
-        );
-      })}
-
-      {/* Folders */}
-      {folderDrag.displayItems.map(folder => {
-        const dragHandlers = folderDrag.getHandlers(folder);
-        const hasCommunityItems = folderHasCommunityLink(folder.id);
-        return (
-          <div
-            key={folder.id}
-            draggable={dragHandlers.draggable}
-            onDragStart={dragHandlers.onDragStart}
-            onDragOver={dragHandlers.onDragOver}
-            onDragEnter={dragHandlers.onDragEnter}
-            onDragLeave={dragHandlers.onDragLeave}
-            onDrop={dragHandlers.onDrop}
-            onDragEnd={dragHandlers.onDragEnd}
-            className={`group flex items-center gap-3 px-3 sm:px-5 py-4 hover:bg-muted/50 transition-all cursor-pointer ${dragHandlers.className}`}
-            onClick={() => onFolderClick(folder.id)}
-          >
-            <FolderOpen className="h-6 w-6 text-primary fill-primary/10 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-display font-semibold text-foreground truncate">{folder.name}</h3>
-                {(() => {
-                  const linkId = getFolderCommunityLinkId(folder.id);
-                  return linkId ? (
-                    <button className="shrink-0 text-info hover:text-info/70 transition-colors" onClick={(e) => { e.stopPropagation(); navigateToCommunity(linkId); }} title="Ver na comunidade">
-                      <Link2 className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null;
-                })()}
-              </div>
-              {(() => {
-                const due = getFolderDueCount(folder.id);
-                return (
-                  <p className="text-xs text-muted-foreground">
-                    {due > 0 ? `Cartões para hoje: ${due}` : 'Pasta'}
-                  </p>
-                );
-              })()}
-            </div>
-            <div className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onRenameFolder(folder)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Renomear
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onMoveFolder(folder)}>
-                    <ArrowUpRight className="mr-2 h-4 w-4" /> Mover para...
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onArchiveFolder(folder.id)}>
-                    <Archive className="mr-2 h-4 w-4" /> Arquivar
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => onDeleteFolder(folder)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </div>

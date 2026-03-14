@@ -116,9 +116,9 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
 
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
+    () => decks.filter(d => !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [decks, currentFolderId]
+    [decks]
   );
 
   /** Community decks: imported from turma or marketplace. Only shown at root level. */

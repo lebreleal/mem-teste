@@ -4,9 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Users, GraduationCap, BookOpen, Archive, ArchiveRestore, ChevronDown, FolderOpen, Trash2, CalendarCheck, BookX, Library } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -35,12 +34,11 @@ const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'))
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import DashboardActions from '@/components/dashboard/DashboardActions';
 import DeckList from '@/components/dashboard/DeckList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
-import DeckCarousel from '@/components/dashboard/DeckCarousel';
+const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
 
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
@@ -96,6 +94,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
+  const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -108,19 +107,6 @@ const Dashboard = () => {
 
   // Extracted actions hook
   const actions = useDashboardActions({ ...state, dashboardSection: activeSection }, defaultAlgorithm);
-
-  // Carousel helpers
-  const hasPlan = plans.length > 0;
-  const planDeckIds = allDeckIds;
-  const plansByDeckId = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const p of plans) {
-      for (const id of (p.deck_ids ?? [])) {
-        if (!map[id]) map[id] = p.name;
-      }
-    }
-    return map;
-  }, [plans]);
 
   // Handle query param actions (from StudyNowHero empty state buttons)
   useEffect(() => {
@@ -162,18 +148,15 @@ const Dashboard = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error('Not authenticated');
 
-      // Duplicate the deck as a personal copy (no community links)
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', detachTarget.id).single();
       if (!originalDeck) throw new Error('Deck not found');
 
       const { data: newDeck, error } = await supabase.from('decks').insert({
         name: `${(originalDeck as any).name}`,
         user_id: currentUser.id,
-        folder_id: null,
       } as any).select().single();
       if (error || !newDeck) throw error || new Error('Failed to create deck');
 
-      // Copy cards
       const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', detachTarget.id);
       if (cards && cards.length > 0) {
         const newCards = cards.map((c: any) => ({
@@ -208,6 +191,17 @@ const Dashboard = () => {
     }
   }, [state]);
 
+  // Compute total due for the study button
+  const totalDueToday = useMemo(() => {
+    const roots = state.currentDecks;
+    let total = 0;
+    for (const deck of roots) {
+      const s = state.getAggregateStats(deck);
+      total += s.new_count + s.learning_count + s.review_count;
+    }
+    return total;
+  }, [state.currentDecks, state.getAggregateStats]);
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader 
@@ -216,95 +210,84 @@ const Dashboard = () => {
       />
 
       <main className="pb-24">
-        {/* 📚 Meus Baralhos */}
-        <div className="mb-4 space-y-2">
+        {/* Study CTA */}
+        <div className="flex items-center gap-3 px-4 py-4">
+          <button
+            onClick={() => setStudyWeightsOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+            aria-label="Ajustar pesos"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+          </button>
+          <Button
+            onClick={() => navigate('/study')}
+            className="flex-1 h-12 rounded-full text-base font-bold gap-2"
+            size="lg"
+            disabled={totalDueToday === 0}
+          >
+            ESTUDAR
+            <Play className="h-5 w-5 fill-current" />
+          </Button>
+        </div>
 
-            <DeckList
-              isLoading={state.isLoading}
-              currentFolders={state.currentFolders}
-              currentDecks={state.currentDecks}
-              currentFolderId={state.currentFolderId}
-              searchQuery={searchQuery}
-              deckSelectionMode={state.deckSelectionMode}
-              selectedDeckIds={state.selectedDeckIds}
-              expandedDecks={state.expandedDecks}
-              toggleExpand={state.toggleExpand}
-              toggleDeckSelection={state.toggleDeckSelection}
-              getSubDecks={state.getSubDecks}
-              getAggregateStats={state.getAggregateStats}
-              getCommunityLinkId={state.getCommunityLinkId}
-              folderHasCommunityLink={state.folderHasCommunityLink}
-              getFolderDueCount={state.getFolderDueCount}
-              getFolderCommunityLinkId={state.getFolderCommunityLinkId}
-              navigateToCommunity={actions.handleNavigateCommunity}
-              onFolderClick={state.setCurrentFolderId}
-              onRenameFolder={(f) => { state.setRenameTarget({ type: 'folder', id: f.id, name: f.name }); state.setRenameName(f.name); }}
-              onMoveFolder={(f) => { state.setMoveTarget({ type: 'folder', id: f.id, name: f.name }); state.setMoveBrowseFolderId(null); }}
-              onArchiveFolder={(id) => state.archiveFolder.mutate(id)}
-              onDeleteFolder={(f) => state.setDeleteTarget({ type: 'folder', id: f.id, name: f.name })}
-              onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-              onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-              onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
-              onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-              onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-              onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-              onReorderFolders={(reordered) => state.reorderFolders.mutate(reordered.map(f => f.id))}
-              onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
-              onPendingClick={handlePendingClick}
-              decksWithPendingUpdates={state.decksWithPendingUpdates}
-            />
+        {/* Deck List */}
+        <DeckList
+          isLoading={state.isLoading}
+          currentDecks={state.currentDecks}
+          searchQuery={searchQuery}
+          deckSelectionMode={state.deckSelectionMode}
+          selectedDeckIds={state.selectedDeckIds}
+          expandedDecks={state.expandedDecks}
+          toggleExpand={state.toggleExpand}
+          toggleDeckSelection={state.toggleDeckSelection}
+          getSubDecks={state.getSubDecks}
+          getAggregateStats={state.getAggregateStats}
+          getCommunityLinkId={state.getCommunityLinkId}
+          navigateToCommunity={actions.handleNavigateCommunity}
+          onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+          onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+          onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+          onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
+          onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
+          onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
+          onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+          onPendingClick={handlePendingClick}
+          decksWithPendingUpdates={state.decksWithPendingUpdates}
+        />
 
-            {/* Archived section */}
-            {state.totalArchived > 0 && (
-              <div className="mt-4">
-                <button
-                  onClick={() => state.setShowArchived(!state.showArchived)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-                >
-                  <Archive className="h-4 w-4" />
-                  <span>Arquivados ({state.totalArchived})</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${state.showArchived ? 'rotate-180' : ''}`} />
-                </button>
-                {state.showArchived && (
-                  <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
-                    {state.archivedFolders.map(folder => (
-                      <div key={folder.id} className="flex items-center gap-3 px-5 py-4">
-                        <FolderOpen className="h-6 w-6 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-display font-semibold text-muted-foreground truncate">{folder.name}</h3>
-                          <p className="text-xs text-muted-foreground">Pasta arquivada</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveFolder.mutate(folder.id)}>
-                            <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {state.archivedDecks.map(deck => (
-                      <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
-                          <p className="text-xs text-muted-foreground">Baralho arquivado</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
-                            <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => actions.handleDeleteDeckRequest(deck)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+        {/* Archived section */}
+        {state.totalArchived > 0 && (
+          <div className="mt-4 px-4">
+            <button
+              onClick={() => state.setShowArchived(!state.showArchived)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
+            >
+              <Archive className="h-4 w-4" />
+              <span>Arquivados ({state.totalArchived})</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${state.showArchived ? 'rotate-180' : ''}`} />
+            </button>
+            {state.showArchived && (
+              <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
+                {state.archivedDecks.map(deck => (
+                  <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
+                      <p className="text-xs text-muted-foreground">Baralho arquivado</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveDeck.mutate(deck.id)}>
+                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => actions.handleDeleteDeckRequest(deck)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             )}
-        </div>
+          </div>
+        )}
       </main>
 
       <DashboardDialogs
@@ -349,7 +332,7 @@ const Dashboard = () => {
               pendingStore.addPending({
                 id: pendingId,
                 name: deckName,
-                folderId: state.currentFolderId ?? null,
+                folderId: null,
                 status: 'saving',
                 progress: { current: 0, total: totalCards },
               });
@@ -364,14 +347,14 @@ const Dashboard = () => {
                 let result: { insertedCount: number; totalCards: number };
                 if (subdecks && subdecks.length > 0) {
                   const r = await importDeckWithSubdecks(
-                    user!.id, deckName, state.currentFolderId,
+                    user!.id, deckName, null,
                     cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
                     subdecks, defaultAlgorithm, revlog as any, progressCb,
                   );
                   result = { insertedCount: r.insertedCount, totalCards: r.totalCards };
                 } else {
                   const r = await importDeck(
-                    user!.id, deckName, state.currentFolderId,
+                    user!.id, deckName, null,
                     cards.map(c => ({ frontContent: c.frontContent, backContent: c.backContent, cardType: c.cardType, progress: (c as any).progress })),
                     defaultAlgorithm, revlog as any, progressCb,
                   );
@@ -386,7 +369,6 @@ const Dashboard = () => {
                 }
                 pendingStore.updatePending(pendingId, { status: 'done', progress: { current: result.insertedCount, total: result.totalCards } });
                 await queryClient.invalidateQueries({ queryKey: ['decks'] });
-                await queryClient.invalidateQueries({ queryKey: ['folders'] });
                 await queryClient.invalidateQueries({ queryKey: ['allDeckStats'] });
                 setTimeout(() => pendingStore.removePending(pendingId), 2000);
               } catch (err) {
@@ -407,7 +389,7 @@ const Dashboard = () => {
               state.setAiDeckOpen(open);
               if (!open) setPendingReviewData(null);
             }}
-            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
+            folderId={pendingReviewData?.folderId ?? null}
             pendingReviewData={pendingReviewData}
           />
         )}
@@ -428,6 +410,18 @@ const Dashboard = () => {
               actions.setCommunityBlockTarget(null);
               toast({ title: 'Baralho arquivado!' });
             }}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {studyWeightsOpen && (
+          <StudyWeightsSheet
+            open={studyWeightsOpen}
+            onOpenChange={setStudyWeightsOpen}
+            decks={state.decks}
+            getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
           />
         )}
       </Suspense>
