@@ -44,26 +44,6 @@ interface DeckRowProps {
   onAccordionToggle?: (deckId: string) => void;
 }
 
-/** Recursively count all descendant decks */
-function countAllSubDecks(deckId: string, getSubDecks: (id: string) => DeckWithStats[]): number {
-  const subs = getSubDecks(deckId);
-  let count = subs.length;
-  for (const sub of subs) count += countAllSubDecks(sub.id, getSubDecks);
-  return count;
-}
-
-/** Recursively aggregate total_cards and mastered_cards */
-function getAggregateMastery(deck: DeckWithStats, getSubDecks: (id: string) => DeckWithStats[]): { total: number; mastered: number } {
-  let total = deck.total_cards;
-  let mastered = deck.mastered_cards;
-  const subs = getSubDecks(deck.id);
-  for (const sub of subs) {
-    const sub_m = getAggregateMastery(sub, getSubDecks);
-    total += sub_m.total;
-    mastered += sub_m.mastered;
-  }
-  return { total, mastered };
-}
 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
