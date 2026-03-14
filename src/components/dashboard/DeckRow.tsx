@@ -20,43 +20,15 @@ import {
 
 const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
-/**
- * 4-color progress bar:
- *  - green (dominado): mastered, not due
- *  - primary/blue (revisão): due for review
- *  - amber (aprendendo): learning
- *  - muted/gray (novo): new cards
- */
-const MultiColorProgress = ({ newPct, learningPct, reviewPct, masteredPct, className = '' }: {
-  newPct: number; learningPct: number; reviewPct: number; masteredPct: number; className?: string;
-}) => (
+/** Single-color mastery bar showing domínio percentage */
+const MasteryBar = ({ masteryPct, className = '' }: { masteryPct: number; className?: string }) => (
   <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
-    <div className="absolute inset-y-0 left-0 flex w-full">
-      {masteredPct > 0 && (
-        <div
-          className="h-full transition-all duration-500 rounded-l-full"
-          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(142 71% 45%)' }}
-        />
-      )}
-      {reviewPct > 0 && (
-        <div
-          className="h-full bg-primary transition-all duration-500"
-          style={{ width: `${reviewPct}%` }}
-        />
-      )}
-      {learningPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(45 93% 47%)' }}
-        />
-      )}
-      {newPct > 0 && (
-        <div
-          className="h-full bg-muted transition-all duration-500 rounded-r-full"
-          style={{ width: `${newPct}%` }}
-        />
-      )}
-    </div>
+    {masteryPct > 0 && (
+      <div
+        className="absolute inset-y-0 left-0 h-full bg-primary rounded-full transition-all duration-500"
+        style={{ width: `${masteryPct}%` }}
+      />
+    )}
   </div>
 );
 
@@ -122,26 +94,11 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
 }
 
-/**
- * Compute 4-segment progress percentages:
- *  - Dominado (mastered, not due): total - new - learning - review
- *  - Revisão (due for review)
- *  - Aprendendo (learning)
- *  - Novo (new)
- */
-function computeProgressPcts(stats: { new_count: number; learning_count: number; review_count: number; reviewed_today: number }, totalCards: number) {
-  if (totalCards === 0) return { newPct: 0, learningPct: 0, reviewPct: 0, masteredPct: 0 };
-  const newCount = stats.new_count;
-  const learningCount = stats.learning_count;
-  const reviewCount = stats.review_count;
-  const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
-  const total = totalCards;
-  return {
-    newPct: (newCount / total) * 100,
-    learningPct: (learningCount / total) * 100,
-    reviewPct: (reviewCount / total) * 100,
-    masteredPct: (masteredCount / total) * 100,
-  };
+/** Compute mastery percentage: mastered = total - new - learning - review */
+function computeMasteryPct(stats: { new_count: number; learning_count: number; review_count: number }, totalCards: number): number {
+  if (totalCards === 0) return 0;
+  const masteredCount = Math.max(0, totalCards - stats.new_count - stats.learning_count - stats.review_count);
+  return (masteredCount / totalCards) * 100;
 }
 
 
@@ -177,7 +134,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     return { totalCards: total, aggStats: getAggregateStats(deck) };
   }, [deck, getSubDecks, getAggregateStats]);
 
-  const progressPcts = computeProgressPcts(aggStats, totalCards);
+  const masteryPct = computeMasteryPct(aggStats, totalCards);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
@@ -279,13 +236,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             </p>
           </div>
           {!isErrorDeck && (
-            <MultiColorProgress
-              newPct={progressPcts.newPct}
-              learningPct={progressPcts.learningPct}
-              reviewPct={progressPcts.reviewPct}
-              masteredPct={progressPcts.masteredPct}
-              className="mt-1.5"
-            />
+            <MasteryBar masteryPct={masteryPct} className="mt-1.5" />
           )}
         </div>
 
@@ -320,7 +271,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         <div className="bg-muted/30">
           {subDecks.map(sub => {
             const subStats = getAggregateStats(sub);
-            const subPcts = computeProgressPcts(subStats, sub.total_cards);
+            const subMasteryPct = computeMasteryPct(subStats, sub.total_cards);
             const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
             return (
               <div
@@ -347,13 +298,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       </>
                     )}
                   </div>
-                  <MultiColorProgress
-                    newPct={subPcts.newPct}
-                    learningPct={subPcts.learningPct}
-                    reviewPct={subPcts.reviewPct}
-                    masteredPct={subPcts.masteredPct}
-                    className="mt-1"
-                  />
+                  <MasteryBar masteryPct={subMasteryPct} className="mt-1" />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
                   {subHasDue && (

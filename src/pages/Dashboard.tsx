@@ -5,13 +5,12 @@ import { ArrowLeft } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
@@ -315,7 +314,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Sala study card with circular progress */}
+        {/* Sala study card with circular domínio progress */}
         {state.isInsideSala && salaStudyStats && (
           <div className="flex items-center gap-4 px-4 py-4 max-w-md mx-auto md:max-w-lg">
             {/* Settings icon */}
@@ -327,114 +326,31 @@ const Dashboard = () => {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
 
-            {/* Circular progress with multi-color segments */}
+            {/* Circular domínio progress */}
             {(() => {
               const R = 22;
               const C = 2 * Math.PI * R;
               const total = salaStudyStats.totalCards;
-              if (total === 0) return (
-                <div className="relative shrink-0">
-                  <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
-                    <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
-                </div>
-              );
-              // 4 segments: mastered (green), review (blue/primary), learning (amber), new (gray)
-              const masteredPct = salaStudyStats.masteredCount / total;
-              const reviewPct = salaStudyStats.reviewCount / total;
-              const learningPct = salaStudyStats.learningCount / total;
-              const newPct = salaStudyStats.newCount / total;
-              let offset = 0;
-              const segments = [
-                { len: C * masteredPct, color: 'hsl(142 71% 45%)', key: 'mastered' },
-                { len: C * reviewPct, color: 'hsl(var(--primary))', key: 'review' },
-                { len: C * learningPct, color: 'hsl(45 93% 47%)', key: 'learning' },
-                { len: C * newPct, color: 'hsl(var(--muted))', key: 'new' },
-              ];
+              const masteryPct = total > 0 ? Math.round((salaStudyStats.masteredCount / total) * 100) : 0;
+              const fillLen = (masteryPct / 100) * C;
               return (
                 <div className="relative shrink-0">
                   <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
-                    {/* Background circle */}
                     <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="4" />
-                    {segments.map(seg => {
-                      if (seg.len <= 0) return null;
-                      const el = (
-                        <circle
-                          key={seg.key}
-                          cx="26" cy="26" r={R} fill="none"
-                          stroke={seg.color}
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeDasharray={`${seg.len} ${C - seg.len}`}
-                          strokeDashoffset={`${-offset}`}
-                          className="transition-all duration-700"
-                        />
-                      );
-                      offset += seg.len;
-                      return el;
-                    })}
+                    {fillLen > 0 && (
+                      <circle
+                        cx="26" cy="26" r={R} fill="none"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray={`${fillLen} ${C - fillLen}`}
+                        className="transition-all duration-700"
+                      />
+                    )}
                   </svg>
                   <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
-                    {salaStudyStats.progressPct}%
+                    {masteryPct}%
                   </span>
-                  {/* Info popover on top-right of circle */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                        aria-label="Detalhes do estudo"
-                      >
-                        <Info className="h-3 w-3" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                      <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
-                            <span className="text-xs text-muted-foreground">Dominado</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.masteredCount}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
-                            <span className="text-xs text-muted-foreground">Revisão</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(45 93% 47%)' }} />
-                            <span className="text-xs text-muted-foreground">Aprendendo</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full bg-muted" />
-                            <span className="text-xs text-muted-foreground">Novos</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
-                        </div>
-                        <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Tempo estimado</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">~{salaStudyStats.timeLabel}</span>
-                        </div>
-                        {salaStudyStats.reviewedToday > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">Feitos hoje</span>
-                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewedToday}</span>
-                          </div>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
                 </div>
               );
             })()}
