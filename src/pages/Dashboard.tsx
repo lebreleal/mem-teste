@@ -48,7 +48,7 @@ import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
-
+const StudySalaSheet = lazy(() => import('@/components/dashboard/StudySalaSheet'));
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
