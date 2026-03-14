@@ -73,72 +73,77 @@ export const useContentImport = () => {
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
   const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
 
-  // ── Add to collection (independent copy, supports hierarchy) ──
+  // ── Add to collection (flat copy + linked folder) ──
   const addToCollection = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
       if (!isDeckFree(td) && !isSubscriber && !isAdmin && !isMod && td.shared_by !== user.id) throw new Error('SUBSCRIBER_ONLY');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
-      const latestDecks = (freshDecks || []) as any[];
-      const importMode: 'hierarchy' | 'flat' = td._importMode ?? 'hierarchy';
-      const childTds: any[] = td._childTds ?? [];
 
+      // 1. Ensure a linked folder (sala) exists for this community
+      const { data: existingFolders } = await supabase.from('folders')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .eq('source_turma_id', turmaId);
+      
+      let targetFolderId: string | null = null;
+      if (existingFolders && existingFolders.length > 0) {
+        targetFolderId = existingFolders[0].id;
+      } else {
+        // Create a linked folder for this community
+        const folderName = turma.name || 'Comunidade';
+        const { data: newFolder, error: folderErr } = await supabase.from('folders')
+          .insert({
+            user_id: user.id,
+            name: folderName,
+            section: 'community',
+            source_turma_id: turmaId,
+          } as any)
+          .select()
+          .single();
+        if (folderErr) throw folderErr;
+        targetFolderId = (newFolder as any).id;
+      }
+
+      // 2. Copy the deck (flat, no hierarchy)
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
 
-      const targetFolderId: string | null = null;
-      let parentDeckId: string | null = null;
+      const { data: freshDecks } = await supabase.from('decks').select('name').eq('user_id', user.id).eq('folder_id', targetFolderId);
+      const existingNames = (freshDecks ?? []).map((d: any) => d.name);
+      const deckName = resolveNameConflict(od.name, existingNames);
 
-      // Helper to copy a single deck
-      const copyDeck = async (sourceDeckId: string, deckName: string, deckParentId: string | null, sourceTurmaDeckId: string) => {
-        const { data: srcDeck } = await supabase.from('decks').select('algorithm_mode, daily_new_limit, daily_review_limit').eq('id', sourceDeckId).single();
-        const sd = srcDeck as any;
-        const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === deckParentId).map((d: any) => d.name);
-        const childName = resolveNameConflict(deckName, existingChildNames);
-        const { data: newDeck } = await supabase.from('decks').insert({
-          name: childName, user_id: user!.id, folder_id: targetFolderId,
-          parent_deck_id: deckParentId, algorithm_mode: sd?.algorithm_mode ?? 'fsrs',
-          daily_new_limit: sd?.daily_new_limit ?? 20, daily_review_limit: sd?.daily_review_limit ?? 9999,
-          source_turma_deck_id: sourceTurmaDeckId,
-        } as any).select().single();
-        if (newDeck) {
-          const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', sourceDeckId);
-          if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
-        }
-        return newDeck;
-      };
+      const { data: newDeck } = await supabase.from('decks').insert({
+        name: deckName,
+        user_id: user.id,
+        folder_id: targetFolderId,
+        algorithm_mode: od.algorithm_mode ?? 'fsrs',
+        daily_new_limit: od.daily_new_limit ?? 20,
+        daily_review_limit: od.daily_review_limit ?? 9999,
+        source_turma_deck_id: td.id,
+      } as any).select().single();
 
-      if (importMode === 'flat' && childTds.length > 0) {
-        // Flat import: create one deck with all cards from parent + children
-        const existingChildNames = latestDecks.filter((d: any) => d.parent_deck_id === parentDeckId).map((d: any) => d.name);
-        const childName = resolveNameConflict(od.name, existingChildNames);
-        const { data: newDeck } = await supabase.from('decks').insert({
-          name: childName, user_id: user.id, folder_id: targetFolderId,
-          parent_deck_id: parentDeckId, algorithm_mode: od.algorithm_mode,
-          daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
-          source_turma_deck_id: td.id,
-        } as any).select().single();
-        if (newDeck) {
-          // Collect all cards from parent + children
-          const allSourceIds = [td.deck_id, ...childTds.map((c: any) => c.deck_id)];
-          const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').in('deck_id', allSourceIds);
-          if (cards?.length) await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: (newDeck as any).id, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type, state: 0, stability: 0, difficulty: 0 })) as any);
-        }
-        return newDeck;
-      }
-
-      // Hierarchy import: create parent deck, then children
-      const mainDeck = await copyDeck(td.deck_id, od.name, parentDeckId, td.id);
-      if (childTds.length > 0 && mainDeck) {
-        for (const childTd of childTds) {
-          await copyDeck(childTd.deck_id, childTd.deck_name || 'Sub-deck', (mainDeck as any).id, childTd.id);
+      if (newDeck) {
+        const { data: cards } = await supabase.from('cards')
+          .select('front_content, back_content, card_type')
+          .eq('deck_id', td.deck_id);
+        if (cards?.length) {
+          await supabase.from('cards').insert(
+            cards.map((c: any) => ({
+              deck_id: (newDeck as any).id,
+              front_content: c.front_content,
+              back_content: c.back_content,
+              card_type: c.card_type,
+              state: 0, stability: 0, difficulty: 0,
+            })) as any,
+          );
         }
       }
-      return mainDeck;
+      return newDeck;
     },
-    onSuccess: (newDeck: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
       toast({ title: '✅ Baralho adicionado à sua coleção!' });
     },
     onError: (err: any) => {
