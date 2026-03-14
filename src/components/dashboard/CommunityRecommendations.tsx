@@ -80,6 +80,7 @@ interface CommunityDeck {
   seller_id: string;
   seller_name?: string;
   cover: string;
+  link: string;
 }
 
 const CommunityRecommendations = () => {
