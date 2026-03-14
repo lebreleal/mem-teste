@@ -88,7 +88,7 @@ const TurmaSubHeader = ({
                 <button
                   onClick={openRatingDialog}
                   className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
-                  title={myRating ? 'Sua avaliação' : 'Avaliar sala'}
+                  title={myRating ? 'Sua avaliação' : 'Avaliar classe'}
                 >
                   <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
                 </button>
