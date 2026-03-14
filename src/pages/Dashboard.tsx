@@ -664,7 +664,18 @@ const Dashboard = () => {
         )}
       </Suspense>
 
-      {/* Copy community deck dialog */}
+      <Suspense fallback={null}>
+        {studySalaSheetOpen && (
+          <StudySalaSheet
+            open={studySalaSheetOpen}
+            onOpenChange={setStudySalaSheetOpen}
+            folders={state.folders}
+            decks={state.decks}
+            getAggregateStats={state.getAggregateStats}
+          />
+        )}
+      </Suspense>
+
       <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
