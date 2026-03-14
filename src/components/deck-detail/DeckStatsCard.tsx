@@ -31,11 +31,10 @@ const DeckStatsCard = () => {
     return { novo, facil, bom, dificil, errei };
   }, [allCards]);
 
-  // Mastery % = cards classified as Fácil or Bom (well-known cards)
+  // Progress % = cards already reviewed (any state > 0, i.e. not new)
   const total = allCards.length;
-  const masteredCount = counts.facil + counts.bom;
-  const masteryPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
-  const toDominate = total - masteredCount;
+  const reviewedCount = total - counts.novo;
+  const progressPct = total > 0 ? Math.round((reviewedCount / total) * 100) : 0;
 
   // Time estimate for this deck
   const totalDue = studyPending;
