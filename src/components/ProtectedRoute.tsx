@@ -3,25 +3,29 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNav from '@/components/BottomNav';
 import PomodoroFloater from '@/components/PomodoroFloater';
-import DraggableFab from '@/components/DraggableFab';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
-import { Brain } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Timer, Play } from 'lucide-react';
+import { Timer, Play, BookOpen, Brain, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas', '/desempenho'];
+  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
   const { toast } = useToast();
+
+  // Add menu state
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   // Pomodoro state
   const [showPomodoro, setShowPomodoro] = useState(false);
@@ -34,11 +38,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   const totalPomodoroSeconds = useRef(0);
 
-  // Listen for open-pomodoro event from other components
+  // Listen for events from other components
   useEffect(() => {
-    const handler = () => setShowPomodoro(true);
-    window.addEventListener('open-pomodoro', handler);
-    return () => window.removeEventListener('open-pomodoro', handler);
+    const pomodoroHandler = () => setShowPomodoro(true);
+    const addMenuHandler = () => setShowAddMenu(true);
+    window.addEventListener('open-pomodoro', pomodoroHandler);
+    window.addEventListener('open-add-menu', addMenuHandler);
+    return () => {
+      window.removeEventListener('open-pomodoro', pomodoroHandler);
+      window.removeEventListener('open-add-menu', addMenuHandler);
+    };
   }, []);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
@@ -102,14 +111,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Floating AI FAB */}
-      {showNav && (
-        <DraggableFab
-          actions={[
-            { icon: Brain, label: 'Agente IA', onClick: () => navigate('/ia') },
-          ]}
-        />
-      )}
+      {/* Add menu sheet */}
+      <Sheet open={showAddMenu} onOpenChange={setShowAddMenu}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-8">
+          <SheetHeader>
+            <SheetTitle className="text-base">Adicionar</SheetTitle>
+          </SheetHeader>
+          <div className="grid gap-2 pt-4">
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck'); }}>
+              <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
+            </Button>
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck'); }}>
+              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
+            </Button>
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import'); }}>
+              <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Brain, Flame, Timer, Crown, Bell, Menu, Moon, Sun, LogOut, UserCircle,
-  Lightbulb, FileText, X,
+  Lightbulb, FileText, X, BarChart3,
 } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -109,6 +109,8 @@ const DashboardHeader = ({ onCreditsOpen, onPremiumOpen }: DashboardHeaderProps)
             <DropdownMenuContent align="end" className="w-56">
               <div className="px-3 py-2 border-b border-border/50"><p className="text-sm font-medium text-foreground truncate">{user?.email}</p></div>
               <DropdownMenuItem onClick={() => navigate('/profile')}><UserCircle className="mr-2 h-4 w-4" /> Perfil</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/ia')}><Brain className="mr-2 h-4 w-4" /> Agente IA</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/desempenho')}><BarChart3 className="mr-2 h-4 w-4" /> Desempenho</DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/feedback')}><Lightbulb className="mr-2 h-4 w-4" /> Sugerir Melhorias</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={signOut}><LogOut className="mr-2 h-4 w-4" /> Sair</DropdownMenuItem>
