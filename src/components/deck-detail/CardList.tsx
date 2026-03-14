@@ -249,27 +249,6 @@ const CardList = () => {
         </div>
       )}
 
-      {/* Progress bar – hidden in quick review mode */}
-      {totalCards > 0 && !selectionMode && !isQuickReview && (
-        <div>
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="bg-muted-foreground/30 transition-all" style={{ width: `${newPct}%` }} />
-            <div className="transition-all" style={{ width: `${learningPct}%`, backgroundColor: '#47c700' }} />
-            <div className="bg-primary transition-all" style={{ width: `${masteredPct}%` }} />
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{actualNewCount}</strong> Novos
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#47c700' }} /> <strong className="text-foreground">{learningCount}</strong> Aprendendo
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-primary" /> <strong className="text-foreground">{totalReviewStateCards}</strong> Dominados
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Search + Filters */}
       {totalCards > 0 && (
