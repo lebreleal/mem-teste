@@ -555,9 +555,9 @@ const DeckDetailContent = () => {
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
         {isLinkedDeck ? (
-          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} activeTab={activeTab} setActiveTab={setActiveTab} />
         ) : (
-          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
+          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} activeTab={activeTab} setActiveTab={setActiveTab} />
         )}
       </main>
 
