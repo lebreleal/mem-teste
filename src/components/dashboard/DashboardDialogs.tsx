@@ -191,7 +191,7 @@ const MoveBrowser = ({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
           {!isInsideDeck && onCreateFolderInMove ? (
             <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0 w-full sm:w-auto">
-              <CirclePlus className="h-3.5 w-3.5" /> Nova pasta
+              <CirclePlus className="h-3.5 w-3.5" /> Nova sala
             </Button>
           ) : <div />}
           <div className="flex gap-2 shrink-0 w-full sm:w-auto">
