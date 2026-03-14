@@ -15,16 +15,28 @@ const DeckStatsCard = () => {
     allCards, cardCounts,
   } = useDeckDetail();
 
-  // Mastery = state >= 2 (dominados)
+  // Classification by difficulty (last rating proxy)
+  const counts = useMemo(() => {
+    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+    for (const c of allCards) {
+      if (c.state === 0) { novo++; continue; }
+      const d = c.difficulty ?? 5;
+      if (d <= 3) facil++;
+      else if (d <= 5) bom++;
+      else if (d <= 7) dificil++;
+      else errei++;
+    }
+    return { novo, facil, bom, dificil, errei };
+  }, [allCards]);
+
+  // Mastery = state >= 2
   const masteryPct = useMemo(() => {
     if (allCards.length === 0) return 0;
     const mastered = allCards.filter(c => c.state >= 2).length;
     return Math.round((mastered / allCards.length) * 1000) / 10;
   }, [allCards]);
 
-  const newCount = cardCounts?.new_count ?? 0;
-  const learningCount = cardCounts?.learning_count ?? 0;
-  const masteredCount = Math.max(0, (cardCounts?.total ?? 0) - newCount - learningCount - (cardCounts?.frozen_count ?? 0));
+  const toDominate = allCards.length - counts.facil - counts.bom;
 
   return (
     <div className="space-y-2 py-2">
@@ -38,20 +50,48 @@ const DeckStatsCard = () => {
               <Info className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-48 p-3" side="bottom" align="end">
-            <p className="text-xs font-semibold text-foreground mb-2">Domínio do deck</p>
+          <PopoverContent className="w-52 p-3" side="bottom" align="end">
+            <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Novos</span>
-                <span className="text-xs font-semibold text-foreground">{newCount}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2 w-2 rounded-full bg-[#1679CA]" /> Fácil
+                </span>
+                <span className="text-xs font-semibold text-foreground">{counts.facil}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Aprendendo</span>
-                <span className="text-xs font-semibold text-foreground">{learningCount}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Bom
+                </span>
+                <span className="text-xs font-semibold text-foreground">{counts.bom}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Dominados</span>
-                <span className="text-xs font-semibold text-foreground">{masteredCount}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2 w-2 rounded-full bg-orange-500" /> Difícil
+                </span>
+                <span className="text-xs font-semibold text-foreground">{counts.dificil}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2 w-2 rounded-full bg-destructive" /> Errei
+                </span>
+                <span className="text-xs font-semibold text-foreground">{counts.errei}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Novo
+                </span>
+                <span className="text-xs font-semibold text-foreground">{counts.novo}</span>
+              </div>
+            </div>
+            <div className="border-t border-border/50 mt-2 pt-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Cards a dominar</span>
+                <span className="text-xs font-semibold text-foreground">{toDominate}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Total de cards</span>
+                <span className="text-xs font-semibold text-foreground">{allCards.length}</span>
               </div>
             </div>
           </PopoverContent>
