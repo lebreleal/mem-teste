@@ -15,33 +15,6 @@ export const useTurmas = () => {
     enabled: !!user,
   });
 
-  const createTurma = useMutation({
-    mutationFn: ({ name, description }: { name: string; description?: string }) => {
-      if (!user) throw new Error('Not authenticated');
-      return turmaService.createTurma(user.id, name, description);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turmas'] }),
-  });
-
-  const joinTurma = useMutation({
-    mutationFn: (inviteCode: string) => {
-      if (!user) throw new Error('Not authenticated');
-      return turmaService.joinTurmaByCode(user.id, inviteCode);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['turmas'] }),
-  });
-
-  const joinTurmaById = useMutation({
-    mutationFn: (turmaId: string) => {
-      if (!user) throw new Error('Not authenticated');
-      return turmaService.joinTurmaById(user.id, turmaId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turmas'] });
-      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
-    },
-  });
-
   const leaveTurma = useMutation({
     mutationFn: (turmaId: string) => {
       if (!user) throw new Error('Not authenticated');
@@ -61,7 +34,7 @@ export const useTurmas = () => {
     },
   });
 
-  return { turmas: turmasQuery.data ?? [], isLoading: turmasQuery.isLoading, createTurma, joinTurma, joinTurmaById, leaveTurma, updateTurma };
+  return { turmas: turmasQuery.data ?? [], isLoading: turmasQuery.isLoading, leaveTurma, updateTurma };
 };
 
 export const useDiscoverTurmas = (searchQuery: string) => {
