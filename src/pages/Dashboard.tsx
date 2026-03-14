@@ -244,7 +244,7 @@ const Dashboard = () => {
       />
 
       <main className="pb-24">
-        {/* Inside a Sala: back button + sala name */}
+        {/* Inside a Sala: back button + sala name + options menu */}
         {state.isInsideSala && (
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <button
@@ -255,12 +255,44 @@ const Dashboard = () => {
               <span>Salas</span>
             </button>
             <span className="text-sm text-muted-foreground">/</span>
-            <span className="text-sm font-semibold text-foreground truncate">
+            <span className="text-sm font-semibold text-foreground truncate flex-1">
               {state.isVirtualSala
                 ? 'Meus Estudos'
                 : state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'
               }
             </span>
+            {!state.isVirtualSala && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => {
+                    const folder = state.folders.find(f => f.id === state.currentFolderId);
+                    if (folder) { state.setRenameTarget({ type: 'folder', id: folder.id, name: folder.name }); state.setRenameName(folder.name); }
+                  }}>
+                    <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                    <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => state.archiveFolder.mutate(state.currentFolderId!)}>
+                    <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      const folder = state.folders.find(f => f.id === state.currentFolderId);
+                      if (folder) state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         )}
 
