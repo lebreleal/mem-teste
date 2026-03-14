@@ -107,10 +107,30 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
     return r;
   };
 
-  const totalDue = getDueCount(parentDeckId);
-  const totalNew = getNewCount(parentDeckId);
+  // Apply parent deck governance: cap new cards by daily_new_limit
+  const parentDeck = allDecks.find((d: any) => d.id === parentDeckId);
+  const dailyNewLimit = parentDeck?.daily_new_limit ?? 20;
+  const newReviewedToday = parentDeck?.new_reviewed_today ?? 0;
+  // Also account for new_graduated_today from all children
+  const getNewGraduatedToday = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let n = deck.new_graduated_today ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) n += getNewGraduatedToday(child.id);
+    return n;
+  };
+  const totalNewGraduatedToday = getNewGraduatedToday(parentDeckId);
+  const totalNewReviewedToday = Math.max(newReviewedToday, totalNewGraduatedToday);
+
+  const rawNew = getNewCount(parentDeckId);
+  const remainingNewBudget = Math.max(0, dailyNewLimit - totalNewReviewedToday);
+  const totalNew = Math.min(rawNew, remainingNewBudget);
   const totalLearning = getLearningCount(parentDeckId);
-  const totalReview = getReviewCount(parentDeckId);
+  const dailyReviewLimit = parentDeck?.daily_review_limit ?? 100;
+  const rawReview = getReviewCount(parentDeckId);
+  const totalReview = Math.min(rawReview, dailyReviewLimit);
+  const totalDue = totalNew + totalLearning + totalReview;
 
   // Fetch question counts for all descendant deck IDs
   const allDescendantIds = useMemo(() => {
