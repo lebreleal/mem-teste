@@ -1,5 +1,5 @@
 /**
- * Explorar — grid of published salas + public decks with search and tag filters.
+ * Explorar — grid of published classes + public decks with search and tag filters.
  */
 
 import { useState, useMemo } from 'react';
@@ -33,8 +33,8 @@ const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   );
 };
 
-/* ── Sala Card ── */
-const SalaCard = ({
+/* ── Classe Card ── */
+const ClasseCard = ({
   turma,
   onClick,
   isMine,
@@ -71,7 +71,7 @@ const SalaCard = ({
       </span>
     ) : (
       <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-        Ver sala
+        Ver classe
       </span>
     )}
   </div>
@@ -189,7 +189,7 @@ const Turmas = () => {
           </Button>
           <div>
             <h1 className="font-display text-xl font-bold text-foreground">Explorar</h1>
-            <p className="text-[10px] text-muted-foreground">Descubra salas de aula e decks públicos</p>
+            <p className="text-[10px] text-muted-foreground">Descubra classes e decks públicos</p>
           </div>
         </div>
       </header>
@@ -200,7 +200,7 @@ const Turmas = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar salas e decks..."
+              placeholder="Buscar classes e decks..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -245,13 +245,13 @@ const Turmas = () => {
           </div>
         ) : (
           <>
-            {/* ── Salas Section ── */}
+            {/* ── Classes Section ── */}
             {communities.length > 0 && (
               <section className="mb-8">
-                <h2 className="font-display text-base font-bold text-foreground mb-3">Salas de Aula</h2>
+                <h2 className="font-display text-base font-bold text-foreground mb-3">Classes</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {communities.map(turma => (
-                    <SalaCard
+                    <ClasseCard
                       key={turma.id}
                       turma={turma}
                       onClick={() => navigate(`/turmas/${turma.id}`)}

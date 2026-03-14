@@ -1,5 +1,5 @@
 /**
- * TurmaDetail page — Sala de Aula view.
+ * TurmaDetail page — Classe view.
  * Owner sees full management, followers see read-only content.
  * Non-members see public preview with "Seguir" button.
  */
@@ -28,8 +28,8 @@ import { useTurmas } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
-// ─── Public Sala View (visitor / non-follower) ───
-const PublicSalaView = () => {
+// ─── Public Classe View (visitor / non-follower) ───
+const PublicClasseView = () => {
   const ctx = useTurmaDetail();
   const { turma, turmaId, isMember, members } = ctx;
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ const PublicSalaView = () => {
   const subjects = (fullPreview?.subjects ?? []) as any[];
   const memberCount = fullPreview?.member_count ?? 0;
 
-  // Follow sala = join + create linked folder + download first deck as live deck
+  // Follow classe = join + create linked folder + download first deck as live deck
   const handleFollow = async () => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
@@ -75,7 +75,7 @@ const PublicSalaView = () => {
         folderId = existingFolders[0].id;
       } else {
         const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
+          .insert({ user_id: user.id, name: turma?.name || 'Classe', section: 'community', source_turma_id: turmaId } as any)
           .select().single();
         folderId = (newFolder as any)?.id ?? null;
       }
@@ -120,11 +120,11 @@ const PublicSalaView = () => {
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: '✅ Seguindo sala! O primeiro deck foi adicionado à sua coleção.' });
+      toast({ title: '✅ Seguindo classe! O primeiro deck foi adicionado à sua coleção.' });
     } catch (e: any) {
       if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
         queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
-        toast({ title: 'Você já segue esta sala' });
+        toast({ title: 'Você já segue esta classe' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
       }
@@ -172,7 +172,7 @@ const PublicSalaView = () => {
       <div className="container mx-auto max-w-2xl px-4 py-4">
         <Button className="w-full gap-2" size="lg" onClick={handleFollow} disabled={following || isMember}>
           <Heart className="h-4 w-4" />
-          {isMember ? 'Você segue esta sala' : following ? 'Seguindo...' : 'Seguir Sala'}
+          {isMember ? 'Você segue esta classe' : following ? 'Seguindo...' : 'Seguir Classe'}
         </Button>
       </div>
 
@@ -208,7 +208,7 @@ const PublicSalaView = () => {
 };
 
 // ─── Member View (full management for owner, read-only for followers) ───
-const MemberSalaView = () => {
+const MemberClasseView = () => {
   const ctx = useTurmaDetail();
   const {
     turmaId, turma, members, turmaDecks, turmaExams,
@@ -320,11 +320,11 @@ const TurmaDetailInner = () => {
     return null;
   }
 
-  // Non-member → show public sala view with "Seguir" button
-  if (!isMember) return <PublicSalaView />;
+  // Non-member → show public classe view with "Seguir" button
+  if (!isMember) return <PublicClasseView />;
 
   // Member → full view
-  return <MemberSalaView />;
+  return <MemberClasseView />;
 };
 
 const TurmaDetail = () => (

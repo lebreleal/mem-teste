@@ -1,5 +1,5 @@
 /**
- * SalaCard — visual card for a "Sala" (folder) on the dashboard root.
+ * SalaCard — visual card for a "Classe" (folder) on the dashboard root.
  * Shows custom image (or default icon), name, deck/card/question counts, mastery bar.
  */
 

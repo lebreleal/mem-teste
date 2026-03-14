@@ -1,5 +1,5 @@
 /**
- * Sala info sub-header: sala name, settings, members, share, rating.
+ * Classe info sub-header: classe name, settings, members, share, rating.
  * Removed: invite codes, community creation.
  */
 
@@ -88,7 +88,7 @@ const TurmaSubHeader = ({
                 <button
                   onClick={openRatingDialog}
                   className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
-                  title={myRating ? 'Sua avaliação' : 'Avaliar sala'}
+                  title={myRating ? 'Sua avaliação' : 'Avaliar classe'}
                 >
                   <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
                 </button>
@@ -130,7 +130,7 @@ const TurmaSubHeader = ({
                   : `${window.location.origin}/c/${turmaId}`;
                 navigator.clipboard.writeText(link);
                 toast({ title: 'Link copiado!', description: link });
-              }} title="Compartilhar sala">
+              }} title="Compartilhar classe">
                 <Share2 className="h-4 w-4 text-muted-foreground" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Seguidores">
@@ -203,7 +203,7 @@ const TurmaSubHeader = ({
         <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-amber-400" /> Avaliar Sala
+              <Star className="h-5 w-5 text-amber-400" /> Avaliar Classe
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4">

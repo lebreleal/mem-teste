@@ -82,8 +82,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Sala criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar sala', variant: 'destructive' }),
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Classe criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar classe', variant: 'destructive' }),
       });
     }
   }, [state, defaultAlgorithm, toast]);
@@ -148,7 +148,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.deleteTarget.id);
         const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
         if (error) throw error;
-        toast({ title: 'Sala excluída' });
+        toast({ title: 'Classe excluída' });
       } else {
         await deleteDeckCascade(state.deleteTarget.id);
         toast({ title: 'Baralho excluído' });
@@ -179,7 +179,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Sala movida!' }); },
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Classe movida!' }); },
         onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
       });
     }
