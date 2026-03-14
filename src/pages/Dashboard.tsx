@@ -126,6 +126,7 @@ const Dashboard = () => {
       let turmaId = userTurma?.id;
       const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
       const folderName = currentFolder?.name ?? 'Minha Sala';
+      const folderImage = currentFolder?.image_url ?? null;
 
       // Auto-create turma if user doesn't have one
       if (!turmaId) {
@@ -136,6 +137,7 @@ const Dashboard = () => {
           owner_id: user.id,
           invite_code: inviteCode,
           is_private: false,
+          cover_image_url: folderImage,
         } as any).select('id').single();
         if (createErr || !newTurma) throw createErr || new Error('Failed to create turma');
         turmaId = (newTurma as any).id;
@@ -147,12 +149,13 @@ const Dashboard = () => {
         } as any);
       } else {
         const newPrivate = !userTurma!.is_private;
-        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName } as any).eq('id', turmaId);
+        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName, cover_image_url: folderImage } as any).eq('id', turmaId);
         if (newPrivate) {
           // Unpublishing
           await refetchTurma();
           queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
           toast({ title: 'Sala despublicada' });
+          setPublishing(false);
           return;
         }
       }
