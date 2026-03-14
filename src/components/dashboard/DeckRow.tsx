@@ -194,6 +194,33 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </DialogHeader>
         </DialogContent>
       </Dialog>
+
+      {/* Dev modal for non-admin users */}
+      <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-amber-500" />
+              🚧 Em Desenvolvimento
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-3 space-y-3">
+              <p>
+                O <strong>Caderno de Erros</strong> é uma funcionalidade especial que estamos preparando para você!
+              </p>
+              <p>Veja como vai funcionar:</p>
+              <ul className="list-disc pl-4 space-y-1.5 text-left">
+                <li>Quando você errar um cartão (avaliação "De novo"), ele será <strong>automaticamente movido</strong> para o Caderno de Erros.</li>
+                <li>Você poderá revisar seus pontos fracos em um só lugar, com foco total na recuperação.</li>
+                <li>Quando dominar o cartão (estado "Dominado"), ele <strong>voltará automaticamente</strong> ao deck original.</li>
+                <li>Questões erradas em simulados também gerarão cartões de revisão aqui.</li>
+              </ul>
+              <p className="text-xs text-muted-foreground/70 pt-1">
+                Fique ligado — em breve essa funcionalidade estará disponível para todos! 🎉
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </>
   );
 });
