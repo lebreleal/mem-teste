@@ -1,5 +1,6 @@
 import { useState, useMemo, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
@@ -356,6 +357,30 @@ const DeckDetailContent = () => {
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
 
+  // Resolve folder image for blurred hero background
+  const folderImage = useMemo(() => {
+    if (!deck || !decks) return null;
+    let folderId = (deck as any)?.folder_id;
+    if (!folderId && (deck as any)?.parent_deck_id) {
+      let current = deck as any;
+      while (current?.parent_deck_id) {
+        current = decks.find((d: any) => d.id === current.parent_deck_id);
+      }
+      folderId = current?.folder_id;
+    }
+    return folderId;
+  }, [deck, decks]);
+
+  const { data: folderImageUrl } = useQuery({
+    queryKey: ['folder-image', folderImage],
+    queryFn: async () => {
+      const { data } = await supabase.from('folders').select('image_url').eq('id', folderImage!).single();
+      return data?.image_url ?? null;
+    },
+    enabled: !!folderImage,
+    staleTime: 300_000,
+  });
+
   // Resolve back destination: folder name for label
   const backInfo = useMemo(() => {
     if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
@@ -426,9 +451,9 @@ const DeckDetailContent = () => {
     <div className="min-h-screen bg-background">
       {/* Hero banner */}
       <div className="relative bg-muted/50 overflow-hidden">
-        {/* Blurred background */}
+        {/* Blurred background image (same style as Sala) */}
         <div className="absolute inset-0">
-          <div className="w-full h-full bg-primary/10" />
+          <img src={folderImageUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 
