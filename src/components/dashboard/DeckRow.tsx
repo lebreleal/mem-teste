@@ -188,7 +188,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   const handleStudy = (e: React.MouseEvent, deckId: string) => {
     e.stopPropagation();
-    navigate(`/study/${deckId}`);
+    navigate(`/decks/${deckId}`);
   };
 
   return (
