@@ -424,7 +424,14 @@ const Dashboard = () => {
         onMoveSubmit={actions.handleMoveSubmit}
         onCreateFolderInMove={() => { state.setCreateType('folder'); state.setCreateName(''); }}
         deleteTarget={state.deleteTarget} setDeleteTarget={state.setDeleteTarget}
-        onDeleteSubmit={actions.handleDeleteSubmit}
+        onDeleteSubmit={async () => {
+          const isFolder = state.deleteTarget?.type === 'folder';
+          await actions.handleDeleteSubmit();
+          if (isFolder) {
+            state.setCurrentFolderId(null);
+            setSearchParams({}, { replace: true });
+          }
+        }}
         duplicateWarning={state.duplicateWarning} setDuplicateWarning={state.setDuplicateWarning}
         setCreateNameFromDuplicate={state.setCreateName}
         bulkMoveDeckOpen={state.bulkMoveDeckOpen} setBulkMoveDeckOpen={state.setBulkMoveDeckOpen}
