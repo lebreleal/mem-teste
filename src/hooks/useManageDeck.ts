@@ -60,14 +60,7 @@ export function useManageDeck() {
   const openEdit = useCallback((card: { id: string; front_content: string; back_content: string; card_type: string }) => {
     setEditingId(card.id);
     setFront(card.front_content);
-    if (card.card_type === 'multiple_choice') {
-      setEditorType('multiple_choice');
-      try {
-        const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-      } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'cloze') {
+    if (card.card_type === 'cloze') {
       setEditorType('cloze');
       try {
         const parsed = JSON.parse(card.back_content);
