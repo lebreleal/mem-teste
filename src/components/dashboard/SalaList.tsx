@@ -1,6 +1,6 @@
 /**
- * SalaList — renders the list of Salas (folders) at the dashboard root level.
- * Orphan decks (without folder) are shown directly at root, not in a virtual sala.
+ * SalaList — renders the list of Classes (folders) at the dashboard root level.
+ * Orphan decks (without folder) are shown directly at root, not in a virtual classe.
  */
 
 import { GraduationCap } from 'lucide-react';

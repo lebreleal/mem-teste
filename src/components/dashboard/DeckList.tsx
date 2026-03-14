@@ -1,5 +1,5 @@
 /**
- * Renders the list of decks inside a Sala.
+ * Renders the list of decks inside a Classe.
  * Supports accordion for sub-decks (only one open at a time).
  * Includes pending (background-generating) decks as ghost items.
  */
