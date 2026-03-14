@@ -111,7 +111,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Add menu triggered from BottomNav */}
+      {/* Add menu sheet */}
+      <Sheet open={showAddMenu} onOpenChange={setShowAddMenu}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-8">
+          <SheetHeader>
+            <SheetTitle className="text-base">Adicionar</SheetTitle>
+          </SheetHeader>
+          <div className="grid gap-2 pt-4">
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create'); }}>
+              <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
+            </Button>
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck'); }}>
+              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
+            </Button>
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import'); }}>
+              <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (
