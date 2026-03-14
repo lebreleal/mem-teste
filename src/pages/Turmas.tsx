@@ -245,13 +245,13 @@ const Turmas = () => {
           </div>
         ) : (
           <>
-            {/* ── Salas Section ── */}
+            {/* ── Classes Section ── */}
             {communities.length > 0 && (
               <section className="mb-8">
-                <h2 className="font-display text-base font-bold text-foreground mb-3">Salas de Aula</h2>
+                <h2 className="font-display text-base font-bold text-foreground mb-3">Classes</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {communities.map(turma => (
-                    <SalaCard
+                    <ClasseCard
                       key={turma.id}
                       turma={turma}
                       onClick={() => navigate(`/turmas/${turma.id}`)}
