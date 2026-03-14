@@ -5,7 +5,7 @@ import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
 import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
 import DeckConceptsSection from '@/components/deck-detail/DeckConceptsSection';
-import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
+import { useDeckTags } from '@/hooks/useTags';
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
