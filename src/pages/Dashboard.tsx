@@ -26,7 +26,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
+import { calculateRealStudyTime } from '@/lib/studyUtils';
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
 const SuspenseLoading = () => {
@@ -327,8 +327,9 @@ const Dashboard = () => {
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-    const avgSec = avgSecondsPerCard;
-    const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+    // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, reviewCount, realStudyMetrics);
+    const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
@@ -353,7 +354,7 @@ const Dashboard = () => {
       masteredCount,
       ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, avgSecondsPerCard]);
+  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
