@@ -467,20 +467,11 @@ const DeckDetailContent = () => {
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {(() => {
-          const subDecks = (decks ?? []).filter(d => d.parent_deck_id === deckId && !d.is_archived);
-          const hasSubDecks = subDecks.length > 0;
-
-          if (hasSubDecks) {
-            return <SubDeckList parentDeckId={deckId!} subDecks={subDecks} allDecks={decks ?? []} />;
-          }
-
-          return isLinkedDeck ? (
-            <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
-          ) : (
-            <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
-          );
-        })()}
+        {isLinkedDeck ? (
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
+        ) : (
+          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
+        )}
       </main>
 
       <DeckDetailDialogs />
