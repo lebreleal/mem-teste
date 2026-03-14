@@ -6,12 +6,12 @@ import { CardTagsInline } from './CardTagWidgets';
 function getCardBorderColor(card: any): string {
   // State 0 = new (never reviewed)
   if (card.state === 0) return 'border-l-muted-foreground/40';
-  // Reviewed cards: color by difficulty (proxy for last rating)
+  // Reviewed cards: color by difficulty (matches study rating buttons)
   const d = card.difficulty ?? 5;
-  if (d <= 3) return 'border-l-[#1679CA]';   // Fácil
-  if (d <= 5) return 'border-l-emerald-500';  // Bom
-  if (d <= 7) return 'border-l-orange-500';   // Difícil
-  return 'border-l-destructive';              // Errei
+  if (d <= 3) return 'border-l-info';       // Fácil
+  if (d <= 5) return 'border-l-success';    // Bom
+  if (d <= 7) return 'border-l-warning';    // Difícil
+  return 'border-l-destructive';            // Errei
 }
 
 interface ManageDeckCardListProps {
