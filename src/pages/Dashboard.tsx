@@ -434,7 +434,7 @@ const Dashboard = () => {
                   {/* Time estimate with info tooltip */}
                   {salaStudyStats && salaStudyStats.totalDue > 0 && (
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-xs text-muted-foreground">Estimativa: ~{salaStudyStats.timeLabel}</span>
+                      <span className="text-xs text-muted-foreground">~{salaStudyStats.timeLabel} restantes hoje</span>
                       <Popover>
                         <PopoverTrigger asChild>
                           <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -442,7 +442,7 @@ const Dashboard = () => {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent side="top" className="text-xs w-56 p-2">
-                          Tempo estimado para revisar todos os cartões pendentes desta sala, com base na sua velocidade média de estudo.
+                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje.
                         </PopoverContent>
                       </Popover>
                     </div>
