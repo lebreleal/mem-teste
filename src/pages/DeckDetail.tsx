@@ -425,13 +425,7 @@ const DeckDetailContent = () => {
                 </p>
               ) : (
                 <button
-                  onClick={() => {
-                    if ((deck as any)?.parent_deck_id) {
-                      toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai. Altere pelo pai.' });
-                      return;
-                    }
-                    setAlgorithmModalOpen(true);
-                  }}
+                  onClick={() => setAlgorithmModalOpen(true)}
                   className="text-xs cursor-pointer transition-colors hover:underline"
                 >
                   <span className="text-foreground">Algoritmo:</span>{' '}
