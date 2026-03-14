@@ -89,7 +89,9 @@ const CommunityRecommendations = () => {
   const { data: recommendations, isLoading } = useQuery({
     queryKey: ['community-recommendations', user?.id],
     queryFn: async () => {
-      // Fetch published marketplace listings
+      const results: CommunityDeck[] = [];
+
+      // 1) Try marketplace listings first
       const { data: listings } = await supabase
         .from('marketplace_listings')
         .select('id, title, deck_id, card_count, category, seller_id')
@@ -97,46 +99,69 @@ const CommunityRecommendations = () => {
         .order('downloads', { ascending: false })
         .limit(20);
 
-      if (!listings || listings.length === 0) return [];
+      if (listings && listings.length > 0) {
+        const sellerIds = [...new Set(listings.map(l => l.seller_id))];
+        const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sellerIds);
+        const profileMap = new Map<string, string>();
+        if (profiles) for (const p of profiles) profileMap.set(p.id, p.name);
 
-      // Fetch seller names
-      const sellerIds = [...new Set(listings.map(l => l.seller_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .in('id', sellerIds);
-      const profileMap = new Map<string, string>();
-      if (profiles) for (const p of profiles) profileMap.set(p.id, p.name);
+        let ownedSourceIds = new Set<string>();
+        if (user) {
+          const { data: ownedDecks } = await supabase.from('decks').select('source_listing_id').eq('user_id', user.id).not('source_listing_id', 'is', null);
+          if (ownedDecks) ownedSourceIds = new Set(ownedDecks.map((d: any) => d.source_listing_id));
+        }
 
-      // Filter out decks the user already owns
-      let ownedSourceIds = new Set<string>();
-      if (user) {
-        const { data: ownedDecks } = await supabase
-          .from('decks')
-          .select('source_listing_id')
-          .eq('user_id', user.id)
-          .not('source_listing_id', 'is', null);
-        if (ownedDecks) {
-          ownedSourceIds = new Set(ownedDecks.map((d: any) => d.source_listing_id));
+        for (const l of listings) {
+          if (l.seller_id === user?.id) continue;
+          if (ownedSourceIds.has(l.id)) continue;
+          results.push({
+            id: l.id, title: l.title, deck_id: l.deck_id, card_count: l.card_count,
+            category: l.category, seller_id: l.seller_id, seller_name: profileMap.get(l.seller_id),
+            cover: getCoverForName(l.title), link: `/deck-preview/${l.id}`,
+          });
         }
       }
 
-      // Also filter own listings
-      const results: CommunityDeck[] = [];
-      for (const l of listings) {
-        if (l.seller_id === user?.id) continue;
-        if (ownedSourceIds.has(l.id)) continue;
-        results.push({
-          id: l.id,
-          title: l.title,
-          deck_id: l.deck_id,
-          card_count: l.card_count,
-          category: l.category,
-          seller_id: l.seller_id,
-          seller_name: profileMap.get(l.seller_id),
-          cover: getCoverForName(l.title),
-        });
+      // 2) If not enough from marketplace, add community (turma) shared decks
+      if (results.length < 6) {
+        const { data: turmaDecks } = await supabase
+          .from('turma_decks')
+          .select('id, deck_id, turma_id')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (turmaDecks && turmaDecks.length > 0) {
+          const tdDeckIds = turmaDecks.map(td => td.deck_id);
+          const { data: decks } = await supabase.from('decks').select('id, name, user_id').in('id', tdDeckIds);
+          const deckMap = new Map<string, { name: string; user_id: string }>();
+          if (decks) for (const d of decks as any[]) deckMap.set(d.id, { name: d.name, user_id: d.user_id });
+
+          // Get turma names
+          const turmaIds = [...new Set(turmaDecks.map(td => td.turma_id))];
+          const { data: turmas } = await supabase.from('turmas').select('id, name').in('id', turmaIds);
+          const turmaMap = new Map<string, string>();
+          if (turmas) for (const t of turmas as any[]) turmaMap.set(t.id, t.name);
+
+          // Card counts
+          const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', tdDeckIds);
+          const countMap = new Map<string, number>();
+          if (cardCounts) for (const c of cardCounts as any[]) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
+
+          const seenIds = new Set(results.map(r => r.deck_id));
+          for (const td of turmaDecks) {
+            if (seenIds.has(td.deck_id)) continue;
+            const deck = deckMap.get(td.deck_id);
+            if (!deck || deck.user_id === user?.id) continue;
+            seenIds.add(td.deck_id);
+            results.push({
+              id: td.id, title: deck.name, deck_id: td.deck_id, card_count: countMap.get(td.deck_id) ?? 0,
+              category: '', seller_id: deck.user_id, seller_name: turmaMap.get(td.turma_id),
+              cover: getCoverForName(deck.name), link: `/turmas/${td.turma_id}`,
+            });
+          }
+        }
       }
+
       return results.slice(0, 12);
     },
     staleTime: 5 * 60_000,
