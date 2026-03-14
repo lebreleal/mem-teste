@@ -281,15 +281,11 @@ const Dashboard = () => {
             <>
               {/* Hero banner */}
               <div className="relative bg-muted/50 overflow-hidden">
-                {/* Background image (blurred) or gradient */}
-                {folderImage ? (
-                  <div className="absolute inset-0">
-                    <img src={folderImage} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-b from-muted/80 to-background" />
-                )}
+                {/* Background image (blurred) */}
+                <div className="absolute inset-0">
+                  <img src={folderImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
+                </div>
 
                 <div className="relative px-4 pt-3 pb-4">
                   {/* Top bar: back + actions */}
