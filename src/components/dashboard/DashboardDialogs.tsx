@@ -2,6 +2,7 @@
  * All Dashboard dialogs — create, rename, move, delete, bulk move, duplicate warning.
  */
 
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, FolderOpen } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, FolderOpen, Search, Layers } from 'lucide-react';
 import type { BreadcrumbItem } from './useDashboardState';
 
 interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
@@ -104,6 +105,7 @@ const MoveBrowser = ({
 }) => {
   const isInsideDeck = !!moveParentDeckId;
   const canGoBack = !!moveBrowseFolderId || !!moveParentDeckId;
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleBreadcrumbClick = (itemId: string | null) => {
     if (itemId === null) {
@@ -132,26 +134,55 @@ const MoveBrowser = ({
   /** Check if a deck has sub-decks */
   const deckHasChildren = (deckId: string) => decks.some(d => d.parent_deck_id === deckId);
 
+  // Filter by search
+  const q = searchQuery.toLowerCase().trim();
+  const filteredFolders = q
+    ? folders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
+    : movableFolders;
+  const filteredDecks = q && showDecks
+    ? decks.filter(d => !d.parent_deck_id && d.name.toLowerCase().includes(q) && !movableDecks.every(md => md.id !== d.id || false))
+        .filter(d => {
+          // When searching, show all root decks matching query (across all folders)
+          return decks.some(child => child.parent_deck_id === d.id); // Only matérias
+        })
+        .map(d => ({ id: d.id, name: d.name, parent_deck_id: d.parent_deck_id }))
+    : (showDecks ? movableDecks : []);
+
+  const isSearching = q.length > 0;
+
   return (
     <div className="space-y-3">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 text-xs sm:text-sm flex-wrap min-w-0 overflow-hidden">
-        {moveBreadcrumb.map((item, i) => (
-          <span key={item.id ?? 'root'} className="flex items-center gap-1 min-w-0">
-            {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
-            <button
-              onClick={() => handleBreadcrumbClick(item.id)}
-              className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted truncate max-w-[100px] sm:max-w-[140px] ${i === moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
-            >
-              {item.name}
-            </button>
-          </span>
-        ))}
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Buscar sala ou matéria..."
+          className="pl-9 h-9 text-sm"
+        />
       </div>
+
+      {/* Breadcrumb (hide when searching) */}
+      {!isSearching && (
+        <div className="flex items-center gap-1 text-xs sm:text-sm flex-wrap min-w-0 overflow-hidden">
+          {moveBreadcrumb.map((item, i) => (
+            <span key={item.id ?? 'root'} className="flex items-center gap-1 min-w-0">
+              {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+              <button
+                onClick={() => handleBreadcrumbClick(item.id)}
+                className={`rounded px-1.5 py-0.5 transition-colors hover:bg-muted truncate max-w-[100px] sm:max-w-[140px] ${i === moveBreadcrumb.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+              >
+                {item.name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Items list */}
       <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
-        {canGoBack && (
+        {canGoBack && !isSearching && (
           <button onClick={handleBack} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
             <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-muted-foreground">Voltar</span>
@@ -159,31 +190,48 @@ const MoveBrowser = ({
         )}
 
         {/* Folders (only when not inside a deck) */}
-        {!isInsideDeck && movableFolders.map(f => (
-          <button key={f.id} onClick={() => { setMoveBrowseFolderId(f.id); setMoveParentDeckId(null); }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+        {!isInsideDeck && filteredFolders.map(f => (
+          <button
+            key={f.id}
+            onClick={() => {
+              setMoveBrowseFolderId(f.id);
+              setMoveParentDeckId(null);
+              setSearchQuery('');
+            }}
+            className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+          >
             <FolderOpen className="h-4 w-4 text-primary shrink-0" />
             <span className="flex-1 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         ))}
 
-        {/* Decks as potential parents */}
-        {showDecks && movableDecks.map(d => {
+        {/* Decks as potential parents (matérias) */}
+        {filteredDecks.map(d => {
           const hasChildren = deckHasChildren(d.id);
           return (
             <button
               key={d.id}
-              onClick={() => hasChildren ? setMoveParentDeckId(d.id) : setMoveParentDeckId(d.id)}
+              onClick={() => {
+                setMoveParentDeckId(d.id);
+                setSearchQuery('');
+              }}
               className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
             >
+              <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="flex-1 text-left font-medium truncate">{d.name}</span>
               {hasChildren && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
             </button>
           );
         })}
 
-        {!canGoBack && movableFolders.length === 0 && (!showDecks || movableDecks.length === 0) && (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum item aqui</div>
+        {filteredFolders.length === 0 && filteredDecks.length === 0 && !canGoBack && (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+            {isSearching ? 'Nenhum resultado encontrado' : 'Nenhum item aqui'}
+          </div>
+        )}
+        {isSearching && filteredFolders.length === 0 && filteredDecks.length === 0 && (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Nenhum resultado para "{searchQuery}"</div>
         )}
       </div>
 
@@ -206,6 +254,13 @@ const MoveBrowser = ({
 
 const DashboardDialogs = (props: DashboardDialogsProps) => {
   const isInsideDeck = !!props.moveParentDeckId;
+
+  // Determine submit label for move
+  const getMoveSubmitLabel = () => {
+    if (isInsideDeck) return 'Mover como sub-deck';
+    if (props.moveBrowseFolderId) return 'Mover para esta sala';
+    return 'Mover aqui';
+  };
 
   return (
     <>
@@ -274,7 +329,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
                 onCreateFolderInMove={props.onCreateFolderInMove}
                 onMoveSubmit={props.onMoveSubmit}
                 onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
-                submitLabel={isInsideDeck ? 'Mover como sub-deck' : 'Mover aqui'}
+                submitLabel={getMoveSubmitLabel()}
               />
             );
           })()}
@@ -316,7 +371,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk move decks dialog — uses same navigation browser as single move */}
+      {/* Bulk move decks dialog */}
       <Dialog open={props.bulkMoveDeckOpen} onOpenChange={open => { if (!open) { props.setBulkMoveDeckOpen(false); props.setMoveBrowseFolderId(null); props.setMoveParentDeckId(null); } }}>
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
           <DialogHeader>
