@@ -185,7 +185,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     [folders, currentFolderId]
   );
 
-  const totalArchived = archivedDecks.length + archivedFolders.length;
+  // Context-aware: at root show archived folders count, inside sala show archived decks count
+  const totalArchived = isInsideSala ? archivedDecks.length : archivedFolders.length;
 
   const getSubDecks = (parentId: string) =>
     decks.filter(d => d.parent_deck_id === parentId && !d.is_archived);

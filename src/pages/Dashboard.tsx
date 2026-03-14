@@ -284,7 +284,11 @@ const Dashboard = () => {
                   <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
                     <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => state.archiveFolder.mutate(state.currentFolderId!)}>
+                  <DropdownMenuItem onClick={async () => {
+                    await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                    state.setCurrentFolderId(null);
+                    setSearchParams({}, { replace: true });
+                  }}>
                     <Archive className="h-4 w-4 mr-2" /> Arquivar sala
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -380,7 +384,25 @@ const Dashboard = () => {
             </button>
             {state.showArchived && (
               <div className="rounded-xl border border-border/50 bg-card/50 shadow-sm divide-y divide-border/50 opacity-70">
-                {state.archivedDecks.map(deck => (
+                {/* At root level: show archived salas (folders) */}
+                {!state.isInsideSala && state.archivedFolders.map(folder => (
+                  <div key={folder.id} className="flex items-center gap-3 px-5 py-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-muted-foreground truncate">{folder.name}</h3>
+                      <p className="text-xs text-muted-foreground">Sala arquivada</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => state.archiveFolder.mutate(folder.id)}>
+                        <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> Restaurar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {/* Inside a sala: show archived decks */}
+                {state.isInsideSala && state.archivedDecks.map(deck => (
                   <div key={deck.id} className="flex items-center gap-3 px-5 py-4">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-display font-semibold text-muted-foreground truncate">{deck.name}</h3>
