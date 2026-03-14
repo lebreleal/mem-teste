@@ -443,14 +443,15 @@ const CardListContent = ({
         const isSelected = selectedCards.has(card.id);
         const frozen = isFrozenCard(card);
 
-        const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
-        const typeBadgeClass = isCloze
-          ? 'bg-primary/15 text-primary border-primary/30'
-          : isMultiple
-          ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
-          : isOcclusion
-          ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
-          : 'bg-muted text-muted-foreground border-border';
+        // Difficulty-based border color (matches ManageDeckCardList)
+        const borderColor = (() => {
+          if (card.state === 0 || card.state == null) return 'border-l-muted-foreground/40';
+          const d = card.difficulty ?? 5;
+          if (d <= 3) return 'border-l-info';
+          if (d <= 5) return 'border-l-success';
+          if (d <= 7) return 'border-l-warning';
+          return 'border-l-destructive';
+        })();
 
         let mcOptions: string[] = [];
         let mcCorrectIdx = -1;
@@ -470,7 +471,7 @@ const CardListContent = ({
               <div className="absolute inset-x-1 -bottom-1 h-2 rounded-b-xl border border-t-0 border-border/40 bg-card/50" />
             )}
             <div
-              className={`group rounded-xl border bg-card p-4 transition-colors cursor-pointer relative ${
+              className={`group rounded-xl border border-l-4 ${borderColor} bg-card p-4 transition-colors cursor-pointer relative ${
                 frozen ? 'opacity-50' : ''
               } ${
                 isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
@@ -586,14 +587,6 @@ const CardListContent = ({
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className={`inline-flex items-center gap-0.5 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadgeClass}`}>
-                    {isCloze && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
-                        <path fillRule="evenodd" d="M3 17.25V19a2 2 0 0 0 2 2h1.75v-2H5v-1.75zm0-3.5h2v-3.5H3zm0-7h2V5h1.75V3H5a2 2 0 0 0-2 2zM10.25 3v2h3.5V3zm7 0v2H19v1.75h2V5a2 2 0 0 0-2-2zM21 10.25h-2v3.5h2zm0 7h-2V19h-1.75v2H19a2 2 0 0 0 2-2zM13.75 21v-2h-3.5v2z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    {typeLabel}
-                  </span>
                   {!selectionMode && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
