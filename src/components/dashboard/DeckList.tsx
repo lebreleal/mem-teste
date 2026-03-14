@@ -83,7 +83,13 @@ const DeckList = ({
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
-  const filteredDecks = q ? currentDecks.filter(d => d.name.toLowerCase().includes(q)) : currentDecks;
+  // Sort: matérias (decks with sub-decks) first, then loose decks
+  const sortedDecks = useMemo(() => {
+    const materias = currentDecks.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
+    const loose = currentDecks.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
+    return [...materias, ...loose];
+  }, [currentDecks, deckRowProps.getSubDecks]);
+  const filteredDecks = q ? sortedDecks.filter(d => d.name.toLowerCase().includes(q)) : sortedDecks;
 
   const deckDrag = useDragReorder({
     items: filteredDecks,
