@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Brain, Flame, Timer, Crown, Bell, Menu, Moon, Sun, LogOut, UserCircle,
-  Lightbulb, FileText, X,
+  Lightbulb, FileText, X, BarChart3,
 } from 'lucide-react';
 
 interface DashboardHeaderProps {
