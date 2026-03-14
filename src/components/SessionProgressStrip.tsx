@@ -2,8 +2,8 @@
  * SessionProgressStrip — ALEKS-style real-time progress dashboard during study.
  * Shows per-deck completion, accuracy, time elapsed, and current card counter.
  */
-import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, CheckCircle2, Flame, Target, Clock, Layers } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, CheckCircle2, Target, Clock, Layers } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 export interface DeckSessionStats {
@@ -33,10 +33,11 @@ function formatElapsed(ms: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const MAX_VISIBLE_DECKS = 10;
+
 const SessionProgressStrip = ({
   reviewCount,
   correctCount,
-  wrongCount,
   initialQueueSize,
   remainingCount,
   elapsedMs,
@@ -45,11 +46,9 @@ const SessionProgressStrip = ({
   const [expanded, setExpanded] = useState(false);
 
   const accuracy = reviewCount > 0 ? Math.round((correctCount / reviewCount) * 100) : 0;
-  const progressPercent = initialQueueSize > 0 ? Math.round(((initialQueueSize - remainingCount) / initialQueueSize) * 100) : 0;
 
   const completedDecks = deckStats.filter(d => d.done >= d.total && d.total > 0);
   const activeDecks = deckStats.filter(d => d.total > 0).sort((a, b) => {
-    // Show in-progress first, completed last
     const aDone = a.done >= a.total ? 1 : 0;
     const bDone = b.done >= b.total ? 1 : 0;
     if (aDone !== bDone) return aDone - bDone;
@@ -63,56 +62,56 @@ const SessionProgressStrip = ({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-3 py-1.5 text-xs gap-2"
       >
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 font-bold text-foreground tabular-nums">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex items-center gap-1 font-bold text-foreground tabular-nums shrink-0">
             <Layers className="h-3 w-3 text-primary" />
             {reviewCount}/{initialQueueSize}
           </span>
           {accuracy > 0 && (
-            <span className="flex items-center gap-1 tabular-nums" style={{ color: accuracy >= 80 ? 'hsl(var(--primary))' : accuracy >= 60 ? 'hsl(var(--warning, 45 100% 50%))' : 'hsl(var(--destructive))' }}>
+            <span className="flex items-center gap-1 tabular-nums shrink-0" style={{ color: accuracy >= 80 ? 'hsl(var(--primary))' : accuracy >= 60 ? 'hsl(var(--warning, 45 100% 50%))' : 'hsl(var(--destructive))' }}>
               <Target className="h-3 w-3" />
               {accuracy}%
             </span>
           )}
-          <span className="flex items-center gap-1 text-muted-foreground tabular-nums">
+          <span className="flex items-center gap-1 text-muted-foreground tabular-nums shrink-0">
             <Clock className="h-3 w-3" />
             {formatElapsed(elapsedMs)}
           </span>
           {completedDecks.length > 0 && (
-            <span className="flex items-center gap-1 text-primary">
+            <span className="flex items-center gap-1 text-primary shrink-0">
               <CheckCircle2 className="h-3 w-3" />
               {completedDecks.length}
             </span>
           )}
         </div>
         {activeDecks.length > 1 && (
-          expanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          expanded ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
         )}
       </button>
 
       {/* Expanded per-deck breakdown */}
       {expanded && activeDecks.length > 1 && (
-        <div className="px-3 pb-2 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-          {activeDecks.slice(0, 8).map(deck => {
+        <div className="px-3 pb-2 max-h-[40vh] overflow-y-auto space-y-1 animate-in slide-in-from-top-2 duration-200">
+          {activeDecks.slice(0, MAX_VISIBLE_DECKS).map(deck => {
             const pct = deck.total > 0 ? Math.round((deck.done / deck.total) * 100) : 0;
             const isDone = deck.done >= deck.total;
             return (
-              <div key={deck.deckId} className="flex items-center gap-2">
-                <span className={`text-[11px] truncate flex-1 min-w-0 ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+              <div key={deck.deckId} className="flex items-center gap-2 min-w-0">
+                <span className={`text-[11px] truncate min-w-0 flex-1 ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                   {isDone && <CheckCircle2 className="h-3 w-3 text-primary inline mr-1" />}
                   {deck.deckName}
                 </span>
-                <div className="w-16 flex-shrink-0">
+                <div className="w-14 sm:w-20 flex-shrink-0">
                   <Progress value={pct} className="h-1" />
                 </div>
-                <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">
+                <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right shrink-0">
                   {deck.done}/{deck.total}
                 </span>
               </div>
             );
           })}
-          {activeDecks.length > 8 && (
-            <p className="text-[10px] text-muted-foreground">+{activeDecks.length - 8} baralhos</p>
+          {activeDecks.length > MAX_VISIBLE_DECKS && (
+            <p className="text-[10px] text-muted-foreground">+{activeDecks.length - MAX_VISIBLE_DECKS} baralhos</p>
           )}
         </div>
       )}
