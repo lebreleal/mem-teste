@@ -184,10 +184,7 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  const displayDecks = recommendations ?? [];
-
-  // Don't render if no real data
-  if (!isLoading && displayDecks.length === 0) return null;
+  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
 
   if (isLoading) {
     return (
