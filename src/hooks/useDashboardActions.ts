@@ -88,31 +88,33 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     }
   }, [state, defaultAlgorithm, toast]);
 
+  /** Generate a unique name by appending (1), (2), etc. if duplicate exists */
+  const getUniqueName = useCallback((baseName: string, existingNames: string[]): string => {
+    const lower = existingNames.map(n => n.toLowerCase());
+    if (!lower.includes(baseName.toLowerCase())) return baseName;
+    let i = 1;
+    while (lower.includes(`${baseName} (${i})`.toLowerCase())) i++;
+    return `${baseName} (${i})`;
+  }, []);
+
   const handleCreateSubmit = useCallback(() => {
     if (!state.createName.trim()) return;
     const trimmed = state.createName.trim();
-    let hasDuplicate = false;
+
+    let finalName = trimmed;
     if (state.createType === 'deck') {
       const siblings = state.createParentDeckId
         ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
-      hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
+      finalName = getUniqueName(trimmed, siblings.map(d => d.name));
     } else {
       const siblingFolders = state.folders.filter(
         f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === state.dashboardSection
       );
-      hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
+      finalName = getUniqueName(trimmed, siblingFolders.map(f => f.name));
     }
-    if (hasDuplicate) {
-      state.setDuplicateWarning({
-        name: trimmed,
-        type: state.createType!,
-        action: () => { doCreate(trimmed); state.setDuplicateWarning(null); },
-      });
-      return;
-    }
-    doCreate(trimmed);
-  }, [state, doCreate]);
+    doCreate(finalName);
+  }, [state, doCreate, getUniqueName]);
 
   const handleRenameSubmit = useCallback(async () => {
     if (!state.renameTarget || !state.renameName.trim()) return;
