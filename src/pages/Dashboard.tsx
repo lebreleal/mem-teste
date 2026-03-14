@@ -337,12 +337,6 @@ const Dashboard = () => {
               </Button>
             </div>
           </div>
-              >
-                <Play className="h-5 w-5" />
-              </Button>
-            </div>
-            <Progress value={dashProgressPct} className="h-1.5 mt-2.5" />
-          </div>
         </div>
 
         {/* Deck List */}
