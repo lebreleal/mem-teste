@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Minus, Plus, RotateCcw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -37,7 +37,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // All root decks in this sala (both matérias and loose decks)
   const salaDecks = useMemo(() => {
     if (!currentFolderId) return [];
@@ -137,7 +137,77 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     });
   }, [settings, initialSettings]);
 
-  const items = initialSettings.order.map(id => settings[id]).filter(Boolean);
+  // Group items: matérias show only header; sub-decks shown on expand
+  const rootItems = initialSettings.order
+    .map(id => settings[id])
+    .filter(Boolean)
+    .filter(item => !item.isSubDeck);
+
+  const subDecksByParent = useMemo(() => {
+    const map: Record<string, DeckSetting[]> = {};
+    for (const id of initialSettings.order) {
+      const item = settings[id];
+      if (!item?.isSubDeck) continue;
+      // find parent: previous matéria in order
+      const idx = initialSettings.order.indexOf(id);
+      let parentId: string | null = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        const prev = settings[initialSettings.order[i]];
+        if (prev && prev.isMateria) { parentId = prev.id; break; }
+      }
+      if (parentId) {
+        if (!map[parentId]) map[parentId] = [];
+        map[parentId].push(item);
+      }
+    }
+    return map;
+  }, [initialSettings.order, settings]);
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const renderDeckRow = (item: DeckSetting, indented = false) => (
+    <div
+      key={item.id}
+      className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${indented ? 'pl-8 bg-muted/20' : ''}`}
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className={`font-display font-semibold text-foreground truncate ${indented ? 'text-xs' : 'text-sm'}`}>
+            {item.name}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {item.isMateria ? `${item.subCount} decks · ` : ''}{item.totalCards} cards
+          </p>
+        </div>
+        <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
+      </div>
+
+      {item.isEnabled && (
+        <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+          <span className="text-xs text-muted-foreground">Novos por dia</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => updateLimit(item.id, -5)}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
+              {item.dailyNewLimit}
+            </span>
+            <button
+              onClick={() => updateLimit(item.id, 5)}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -156,49 +226,59 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto divide-y divide-border/50">
-          {items.map(item => (
-            <div
-              key={item.id}
-              className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${item.isSubDeck ? 'pl-8 bg-muted/20' : ''}`}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="min-w-0 flex-1">
-                  <h3 className={`font-display font-semibold text-foreground truncate ${item.isSubDeck ? 'text-xs' : 'text-sm'}`}>
-                    {item.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {item.isMateria ? `${item.subCount} decks · ` : ''}{item.totalCards} cards
-                  </p>
-                </div>
-                <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
-              </div>
+          {rootItems.map(item => {
+            const subs = subDecksByParent[item.id];
+            const isExpanded = expanded[item.id] ?? false;
 
-              {item.isEnabled && (
-                <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-                  <span className="text-xs text-muted-foreground">Novos por dia</span>
-                  <div className="flex items-center gap-2">
+            if (item.isMateria && subs?.length) {
+              return (
+                <div key={item.id}>
+                  {/* Matéria header row */}
+                  <div className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-display font-semibold text-sm text-foreground truncate">{item.name}</h3>
+                        <p className="text-xs text-muted-foreground">{item.subCount} decks · {item.totalCards} cards</p>
+                      </div>
+                      <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
+                    </div>
+
+                    {item.isEnabled && (
+                      <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+                        <span className="text-xs text-muted-foreground">Novos por dia</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => updateLimit(item.id, -5)} className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">{item.dailyNewLimit}</span>
+                          <button onClick={() => updateLimit(item.id, 5)} className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expand toggle */}
                     <button
-                      onClick={() => updateLimit(item.id, -5)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      onClick={() => toggleExpand(item.id)}
+                      className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="text-sm font-bold text-foreground tabular-nums w-10 text-center">
-                      {item.dailyNewLimit}
-                    </span>
-                    <button
-                      onClick={() => updateLimit(item.id, 5)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      {isExpanded ? 'Ocultar decks' : `Ver ${subs.length} decks`}
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
 
-          {items.length === 0 && (
+                  {/* Collapsible sub-decks */}
+                  {isExpanded && subs.map(sub => renderDeckRow(sub, true))}
+                </div>
+              );
+            }
+
+            // Loose deck (no sub-decks)
+            return renderDeckRow(item);
+          })}
+
+          {rootItems.length === 0 && (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               Nenhum deck nesta sala
             </div>
