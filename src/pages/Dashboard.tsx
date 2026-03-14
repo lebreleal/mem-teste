@@ -229,45 +229,45 @@ const Dashboard = () => {
       <main className="pb-24">
         {/* Study strip */}
         <div className="px-4 pt-4 pb-2">
-          <div className="rounded-2xl border border-border/50 bg-card p-3 shadow-sm">
-            <div className="flex items-center gap-3">
+          <div className="rounded-2xl border border-border/50 bg-card px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-2">
               {/* Circular progress */}
               <div className="relative flex-shrink-0">
-                <svg width="48" height="48" viewBox="0 0 48 48" className="-rotate-90">
-                  <circle cx="24" cy="24" r="20" fill="none" stroke="hsl(var(--muted))" strokeWidth="3.5" />
+                <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90">
+                  <circle cx="20" cy="20" r="17" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
                   <circle
-                    cx="24" cy="24" r="20" fill="none"
+                    cx="20" cy="20" r="17" fill="none"
                     stroke="hsl(var(--primary))"
-                    strokeWidth="3.5"
+                    strokeWidth="3"
                     strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 20}`}
-                    strokeDashoffset={`${2 * Math.PI * 20 * (1 - dashProgressPct / 100)}`}
+                    strokeDasharray={`${2 * Math.PI * 17}`}
+                    strokeDashoffset={`${2 * Math.PI * 17 * (1 - dashProgressPct / 100)}`}
                     className="transition-all duration-500"
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-foreground">{dashProgressPct}%</span>
+                  <span className="text-[9px] font-bold text-foreground">{dashProgressPct}%</span>
                 </div>
               </div>
 
-              {/* Inline counts */}
+              {/* Counts + time */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1">
-                    <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                    <SquarePlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                     <span className="text-sm font-bold text-foreground tabular-nums">{totalNew}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                    <RotateCcw className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                     <span className="text-sm font-bold text-foreground tabular-nums">{totalLearning}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Layers className="h-3.5 w-3.5 text-primary" />
+                    <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
                     <span className="text-sm font-bold text-foreground tabular-nums">{totalReview}</span>
                   </div>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors">
+                      <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors shrink-0">
                         <Info className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                     </PopoverTrigger>
@@ -313,31 +313,30 @@ const Dashboard = () => {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">~{dashTimeLabel}</span>
-                  {reviewedToday > 0 && (
-                    <>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-green-500 font-medium">{reviewedToday} feitos</span>
-                    </>
-                  )}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="text-[11px] text-muted-foreground">~{dashTimeLabel}</span>
                 </div>
               </div>
 
               {/* Preferences + Study */}
               <button
                 onClick={() => setStudyWeightsOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
                 aria-label="Ajustar pesos"
               >
-                <SlidersHorizontal className="h-4 w-4" />
+                <SlidersHorizontal className="h-3.5 w-3.5" />
               </button>
               <Button
                 onClick={() => navigate('/study')}
                 size="icon"
                 className="h-10 w-10 rounded-full flex-shrink-0"
                 disabled={totalDueToday === 0}
+              >
+                <Play className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
               >
                 <Play className="h-5 w-5" />
               </Button>
