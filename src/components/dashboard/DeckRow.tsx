@@ -44,26 +44,6 @@ interface DeckRowProps {
   onAccordionToggle?: (deckId: string) => void;
 }
 
-/** Recursively count all descendant decks */
-function countAllSubDecks(deckId: string, getSubDecks: (id: string) => DeckWithStats[]): number {
-  const subs = getSubDecks(deckId);
-  let count = subs.length;
-  for (const sub of subs) count += countAllSubDecks(sub.id, getSubDecks);
-  return count;
-}
-
-/** Recursively aggregate total_cards and mastered_cards */
-function getAggregateMastery(deck: DeckWithStats, getSubDecks: (id: string) => DeckWithStats[]): { total: number; mastered: number } {
-  let total = deck.total_cards;
-  let mastered = deck.mastered_cards;
-  const subs = getSubDecks(deck.id);
-  for (const sub of subs) {
-    const sub_m = getAggregateMastery(sub, getSubDecks);
-    total += sub_m.total;
-    mastered += sub_m.mastered;
-  }
-  return { total, mastered };
-}
 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
@@ -73,9 +53,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const navigate = useNavigate();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const subDeckCount = useMemo(() => countAllSubDecks(deck.id, getSubDecks), [deck.id, getSubDecks]);
-  const mastery = useMemo(() => getAggregateMastery(deck, getSubDecks), [deck, getSubDecks]);
-  const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
+  const masteryPct = deck.total_cards > 0 ? Math.round((deck.mastered_cards / deck.total_cards) * 1000) / 10 : 0;
 
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
 
@@ -112,10 +90,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
               {isErrorDeck
-                ? <span>{mastery.total} {mastery.total === 1 ? 'cartão' : 'cartões'} para revisar</span>
-                : subDeckCount > 0
-                  ? <span>{subDeckCount} {subDeckCount === 1 ? 'deck' : 'decks'}</span>
-                  : <span>{mastery.total} {mastery.total === 1 ? 'cartão' : 'cartões'}</span>
+                ? <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'} para revisar</span>
+                : <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'}</span>
               }
             </p>
             <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>

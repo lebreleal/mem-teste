@@ -55,8 +55,8 @@ async function resolveSourceDeckId(deck: any): Promise<string | null> {
   return null;
 }
 
-/** Sub-deck list view — shown when a parent deck has children */
-const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
+/** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
+const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
   const navigate = useNavigate();
 
   const getMastery = (deckId: string): { total: number; mastered: number } => {
@@ -425,13 +425,7 @@ const DeckDetailContent = () => {
                 </p>
               ) : (
                 <button
-                  onClick={() => {
-                    if ((deck as any)?.parent_deck_id) {
-                      toast({ title: 'Algoritmo herdado', description: 'Este sub-baralho herda o algoritmo do baralho pai. Altere pelo pai.' });
-                      return;
-                    }
-                    setAlgorithmModalOpen(true);
-                  }}
+                  onClick={() => setAlgorithmModalOpen(true)}
                   className="text-xs cursor-pointer transition-colors hover:underline"
                 >
                   <span className="text-foreground">Algoritmo:</span>{' '}
@@ -467,20 +461,11 @@ const DeckDetailContent = () => {
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {(() => {
-          const subDecks = (decks ?? []).filter(d => d.parent_deck_id === deckId && !d.is_archived);
-          const hasSubDecks = subDecks.length > 0;
-
-          if (hasSubDecks) {
-            return <SubDeckList parentDeckId={deckId!} subDecks={subDecks} allDecks={decks ?? []} />;
-          }
-
-          return isLinkedDeck ? (
-            <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
-          ) : (
-            <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
-          );
-        })()}
+        {isLinkedDeck ? (
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
+        ) : (
+          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
+        )}
       </main>
 
       <DeckDetailDialogs />
