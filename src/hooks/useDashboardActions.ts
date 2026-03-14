@@ -162,7 +162,10 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   }, [state, queryClient, toast]);
 
   const handleMoveSubmit = useCallback(() => {
-    if (!state.moveTarget) return;
+    if (!state.moveTarget) {
+      console.warn('[Move] No moveTarget set');
+      return;
+    }
     if (state.moveTarget.type === 'deck') {
       const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
       let folderId = targetFolderId;
@@ -173,14 +176,29 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       state.moveDeck.mutate(
         { id: state.moveTarget.id, folderId, parentDeckId: state.moveParentDeckId ?? null },
         {
-          onSuccess: () => { state.setMoveTarget(null); state.setMoveParentDeckId(null); toast({ title: 'Baralho movido!' }); },
-          onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+          onSuccess: () => {
+            state.setMoveTarget(null);
+            state.setMoveParentDeckId(null);
+            state.setMoveBrowseFolderId(null);
+            toast({ title: 'Baralho movido!' });
+          },
+          onError: (err) => {
+            console.error('[Move] Error:', err);
+            toast({ title: 'Erro ao mover', variant: 'destructive' });
+          },
         }
       );
     } else {
       state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Classe movida!' }); },
-        onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
+        onSuccess: () => {
+          state.setMoveTarget(null);
+          state.setMoveBrowseFolderId(null);
+          toast({ title: 'Classe movida!' });
+        },
+        onError: (err) => {
+          console.error('[Move] Error:', err);
+          toast({ title: 'Erro ao mover', variant: 'destructive' });
+        },
       });
     }
   }, [state, toast]);
