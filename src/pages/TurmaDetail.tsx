@@ -208,7 +208,7 @@ const PublicClasseView = () => {
 };
 
 // ─── Member View (full management for owner, read-only for followers) ───
-const MemberSalaView = () => {
+const MemberClasseView = () => {
   const ctx = useTurmaDetail();
   const {
     turmaId, turma, members, turmaDecks, turmaExams,
