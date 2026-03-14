@@ -130,7 +130,7 @@ const TurmaSubHeader = ({
                   : `${window.location.origin}/c/${turmaId}`;
                 navigator.clipboard.writeText(link);
                 toast({ title: 'Link copiado!', description: link });
-              }} title="Compartilhar sala">
+              }} title="Compartilhar classe">
                 <Share2 className="h-4 w-4 text-muted-foreground" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Seguidores">
