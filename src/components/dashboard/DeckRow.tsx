@@ -138,6 +138,15 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
             )}
+            {hasChildren && !isErrorDeck && (
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate(`/decks/${deck.id}/settings`); }}
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                title="Configurações"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
