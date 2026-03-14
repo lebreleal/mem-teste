@@ -53,8 +53,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   expandedAccordionId, onAccordionToggle,
 }, ref) => {
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showDevModal, setShowDevModal] = useState(false);
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
@@ -85,7 +87,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       return;
     }
     if (isErrorDeck) {
-      navigate('/caderno-de-erros');
+      if (isAdmin) {
+        navigate('/caderno-de-erros');
+      } else {
+        setShowDevModal(true);
+      }
       return;
     }
     // If has children, toggle expand; otherwise navigate
