@@ -159,7 +159,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.deleteTarget.id);
         const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
         if (error) throw error;
-        toast({ title: 'Pasta excluída' });
+        toast({ title: 'Sala excluída' });
       } else {
         await deleteDeckCascade(state.deleteTarget.id);
         toast({ title: 'Baralho excluído' });
