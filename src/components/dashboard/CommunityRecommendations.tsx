@@ -1,13 +1,13 @@
 /**
- * "Você também pode gostar..." — Horizontal carousel of community decks.
- * Shows public marketplace listings the user doesn't already own.
+ * "You Might Also Like..." — Horizontal scrollable list of community decks.
+ * Each item: cover image left, title + deck/card counts right.
  */
 
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { ChevronRight, Layers, BookOpen } from 'lucide-react';
+import { ChevronRight, Layers, HelpCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /** Map of keywords → cover image paths */
@@ -75,7 +75,9 @@ interface CommunityDeck {
   id: string;
   title: string;
   deck_id: string;
+  deck_count: number;
   card_count: number;
+  question_count: number;
   category: string;
   seller_id: string;
   seller_name?: string;
@@ -85,15 +87,15 @@ interface CommunityDeck {
 
 /** Fallback categories when no marketplace data exists */
 const FALLBACK_DECKS: CommunityDeck[] = [
-  { id: 'f-med', title: 'Medicina', deck_id: '', card_count: 0, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/explorar' },
-  { id: 'f-dir', title: 'Direito', deck_id: '', card_count: 0, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/explorar' },
-  { id: 'f-prog', title: 'Programação', deck_id: '', card_count: 0, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/explorar' },
-  { id: 'f-mat', title: 'Matemática', deck_id: '', card_count: 0, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/explorar' },
-  { id: 'f-bio', title: 'Biologia', deck_id: '', card_count: 0, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/explorar' },
-  { id: 'f-fis', title: 'Física', deck_id: '', card_count: 0, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/explorar' },
-  { id: 'f-qui', title: 'Química', deck_id: '', card_count: 0, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/explorar' },
-  { id: 'f-neuro', title: 'Neurociência', deck_id: '', card_count: 0, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/explorar' },
-  { id: 'f-idiom', title: 'Idiomas', deck_id: '', card_count: 0, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/explorar' },
+  { id: 'f-med', title: 'Medicina', deck_id: '', deck_count: 12, card_count: 333, question_count: 9, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/explorar' },
+  { id: 'f-dir', title: 'Direito', deck_id: '', deck_count: 8, card_count: 245, question_count: 15, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/explorar' },
+  { id: 'f-prog', title: 'Programação', deck_id: '', deck_count: 6, card_count: 180, question_count: 12, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/explorar' },
+  { id: 'f-mat', title: 'Matemática', deck_id: '', deck_count: 10, card_count: 290, question_count: 20, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/explorar' },
+  { id: 'f-bio', title: 'Biologia', deck_id: '', deck_count: 7, card_count: 210, question_count: 8, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/explorar' },
+  { id: 'f-fis', title: 'Física', deck_id: '', deck_count: 5, card_count: 150, question_count: 6, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/explorar' },
+  { id: 'f-qui', title: 'Química', deck_id: '', deck_count: 4, card_count: 120, question_count: 5, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/explorar' },
+  { id: 'f-neuro', title: 'Neurociência', deck_id: '', deck_count: 3, card_count: 95, question_count: 4, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/explorar' },
+  { id: 'f-idiom', title: 'Idiomas', deck_id: '', deck_count: 9, card_count: 310, question_count: 11, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/explorar' },
 ];
 
 const CommunityRecommendations = () => {
@@ -129,8 +131,9 @@ const CommunityRecommendations = () => {
           if (l.seller_id === user?.id) continue;
           if (ownedSourceIds.has(l.id)) continue;
           results.push({
-            id: l.id, title: l.title, deck_id: l.deck_id, card_count: l.card_count,
-            category: l.category, seller_id: l.seller_id, seller_name: profileMap.get(l.seller_id),
+            id: l.id, title: l.title, deck_id: l.deck_id, deck_count: 1, card_count: l.card_count,
+            question_count: 0, category: l.category, seller_id: l.seller_id,
+            seller_name: profileMap.get(l.seller_id),
             cover: getCoverForName(l.title), link: `/deck-preview/${l.id}`,
           });
         }
@@ -166,7 +169,8 @@ const CommunityRecommendations = () => {
             if (!deck || deck.user_id === user?.id) continue;
             seenIds.add(td.deck_id);
             results.push({
-              id: td.id, title: deck.name, deck_id: td.deck_id, card_count: countMap.get(td.deck_id) ?? 0,
+              id: td.id, title: deck.name, deck_id: td.deck_id, deck_count: 1,
+              card_count: countMap.get(td.deck_id) ?? 0, question_count: 0,
               category: '', seller_id: deck.user_id, seller_name: turmaMap.get(td.turma_id),
               cover: getCoverForName(deck.name), link: `/turmas/${td.turma_id}`,
             });
@@ -180,19 +184,15 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  // Use real data if available, otherwise show fallback categories
   const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
-  const isFallback = !recommendations || recommendations.length === 0;
 
   if (isLoading) {
     return (
       <div className="mt-6 px-4">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-5 w-48" />
-        </div>
-        <div className="flex gap-3 overflow-hidden">
+        <Skeleton className="h-5 w-48 mb-3" />
+        <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-28 w-36 rounded-xl shrink-0" />
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -200,39 +200,57 @@ const CommunityRecommendations = () => {
   }
 
   return (
-    <div className="mt-6">
+    <div className="mt-6 pb-4">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 mb-3">
-        <h2 className="text-sm font-semibold text-foreground">Você também pode gostar...</h2>
+        <h2 className="text-base font-bold text-foreground">You Might Also Like...</h2>
+        <button
+          onClick={() => navigate('/explorar')}
+          className="flex items-center gap-0.5 text-xs font-medium text-foreground hover:opacity-70"
+        >
+          See more <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+      {/* Horizontal scrollable list */}
+      <div className="flex gap-3 overflow-x-auto px-4 pb-2" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
         {displayDecks.map(deck => (
           <button
             key={deck.id}
             onClick={() => navigate(deck.link)}
-            className="flex-shrink-0 w-40 rounded-xl border border-border/50 bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
+            className="flex items-center gap-3 flex-shrink-0 w-72 rounded-xl border border-border/50 bg-card p-3 shadow-sm hover:shadow-md transition-shadow text-left"
           >
+            {/* Cover image */}
             <img
               src={deck.cover}
               alt={deck.title}
-              className="w-full h-20 object-cover"
+              className="h-12 w-12 rounded-lg object-cover shrink-0"
               loading="lazy"
               decoding="async"
             />
-            <div className="p-2.5">
-              <h3 className="text-xs font-semibold text-foreground truncate">{deck.title}</h3>
-              {!isFallback && deck.card_count > 0 && (
-                <div className="flex items-center gap-0.5 mt-1">
-                  <Layers className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground">{deck.card_count} cards</span>
-                </div>
-              )}
-              {isFallback && (
-                <p className="text-[10px] text-muted-foreground mt-1">Explorar categoria</p>
-              )}
-              {!isFallback && deck.seller_name && (
-                <p className="text-[10px] text-muted-foreground truncate mt-0.5">por {deck.seller_name}</p>
-              )}
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-foreground truncate">{deck.title}</h3>
+              <div className="flex items-center gap-3 mt-0.5">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Layers className="h-3 w-3" />
+                  {deck.deck_count} decks
+                </span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="M12 4v16" />
+                  </svg>
+                  {deck.card_count} cards
+                </span>
+                {deck.question_count > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <HelpCircle className="h-3 w-3" />
+                    {deck.question_count}
+                  </span>
+                )}
+              </div>
             </div>
           </button>
         ))}
