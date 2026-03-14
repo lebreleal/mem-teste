@@ -1,12 +1,10 @@
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
-import QuestionStatsCard from '@/components/deck-detail/QuestionStatsCard';
-import { TagInput } from '@/components/TagInput';
-import DeckConceptsSection from '@/components/deck-detail/DeckConceptsSection';
-import { useDeckTags, useDeckTagMutations } from '@/hooks/useTags';
+
 import DeckDetailDialogs from '@/components/deck-detail/DeckDetailDialogs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -16,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -350,11 +348,54 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const fromCommunity = (location.state as any)?.from === 'community';
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [activeTab, setActiveTab] = useState('cards');
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
+
+  // Resolve folder image for blurred hero background
+  const folderImage = useMemo(() => {
+    if (!deck || !decks) return null;
+    let folderId = (deck as any)?.folder_id;
+    if (!folderId && (deck as any)?.parent_deck_id) {
+      let current = deck as any;
+      while (current?.parent_deck_id) {
+        current = decks.find((d: any) => d.id === current.parent_deck_id);
+      }
+      folderId = current?.folder_id;
+    }
+    return folderId;
+  }, [deck, decks]);
+
+  const { data: folderImageUrl } = useQuery({
+    queryKey: ['folder-image', folderImage],
+    queryFn: async () => {
+      const { data } = await supabase.from('folders').select('image_url').eq('id', folderImage!).single();
+      return data?.image_url ?? null;
+    },
+    enabled: !!folderImage,
+    staleTime: 300_000,
+  });
+
+  // Resolve back destination: folder name for label
+  const backInfo = useMemo(() => {
+    if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
+    let folderId = (deck as any)?.folder_id;
+    if (!folderId && (deck as any)?.parent_deck_id && decks) {
+      let current = deck as any;
+      while (current?.parent_deck_id) {
+        current = decks.find((d: any) => d.id === current.parent_deck_id);
+      }
+      folderId = current?.folder_id;
+    }
+    if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
+    return { label: 'Dashboard', path: '/dashboard' };
+  }, [deck, decks, fromCommunity, communityTurmaId]);
 
   // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
@@ -363,9 +404,8 @@ const DeckDetailContent = () => {
       const sourceDeckId = await resolveSourceDeckId(deck);
       if (!sourceDeckId) return null;
 
-      const [deckResult, profileResult] = await Promise.all([
+      const [deckResult] = await Promise.all([
         supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single(),
-        // We'll get the profile after we know the user_id
         Promise.resolve(null),
       ]);
 
@@ -383,6 +423,20 @@ const DeckDetailContent = () => {
     staleTime: 120_000,
   });
 
+  const handleRename = async () => {
+    const trimmed = renameName.trim();
+    if (!trimmed || trimmed === (deck as any)?.name) { setIsRenaming(false); return; }
+    try {
+      const { renameDeck } = await import('@/services/deckService');
+      await renameDeck(deckId!, trimmed);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Renomeado!' });
+    } catch {
+      toast({ title: 'Erro ao renomear', variant: 'destructive' });
+    }
+    setIsRenaming(false);
+  };
+
   if (deckLoading || allCardsLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -392,79 +446,118 @@ const DeckDetailContent = () => {
   }
 
   const totalCards = cardCounts?.total ?? 0;
+  const deckName = (deck as any)?.name ?? 'Baralho';
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4 gap-2 overflow-hidden">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Button variant="ghost" size="icon" onClick={() => fromCommunity && communityTurmaId ? navigate(`/turmas/${communityTurmaId}`, { replace: true }) : navigate('/dashboard', { replace: true })}>
+      {/* Hero banner */}
+      <div className="relative bg-muted/50 overflow-hidden">
+        {/* Blurred background image (same style as Sala) */}
+        <div className="absolute inset-0">
+          <img src={folderImageUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
+        </div>
+
+        <div className="relative container mx-auto max-w-2xl px-4 pt-3 pb-4">
+          {/* Top bar: back + actions */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => navigate(backInfo.path, { replace: true })}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-base sm:text-xl font-bold text-foreground truncate">
-                {(deck as any)?.name ?? 'Baralho'}
-              </h1>
-              {isLinkedDeck && sourceData ? (
-                <p className="text-[11px] text-muted-foreground">
-                  por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
-                  <span className="mx-1.5 text-border">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Layers className="h-3 w-3" />
-                    {totalCards} cards
+              <span>{backInfo.label}</span>
+            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isLinkedDeck && (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
+                    Inscrito <Check className="h-3 w-3" />
                   </span>
-                  {sourceData.updatedAt && (
-                    <>
-                      <span className="mx-1.5 text-border">·</span>
-                      <span className="inline-flex items-center gap-1">
-                        <RefreshCw className="h-2.5 w-2.5" />
-                        {formatDistanceToNow(new Date(sourceData.updatedAt), { addSuffix: true, locale: ptBR })}
-                      </span>
-                    </>
-                  )}
-                </p>
-              ) : (
-                <button
-                  onClick={() => setAlgorithmModalOpen(true)}
-                  className="text-xs cursor-pointer transition-colors hover:underline"
-                >
-                  <span className="text-foreground">Algoritmo:</span>{' '}
-                  <span className="font-medium text-info">
-                    {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
-                  </span>
-                </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setSuggestOpen(true)}
+                    title="Sugerir correção"
+                  >
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </>
               )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isLinkedDeck && (
-              <>
-                <span className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
-                  Inscrito <Check className="h-3 w-3" />
+
+          {/* Deck name + edit + algorithm */}
+          <div className="mb-1">
+            <div className="flex items-center gap-1.5">
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameName}
+                  onChange={e => setRenameName(e.target.value)}
+                  onBlur={handleRename}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setIsRenaming(false); }}
+                  className="text-lg font-display font-bold text-foreground bg-transparent border-b border-primary outline-none flex-1 min-w-0"
+                />
+              ) : (
+                <>
+                  <h1 className="text-lg font-display font-bold text-foreground truncate">{deckName}</h1>
+                  {!isLinkedDeck && (
+                    <button
+                      onClick={() => { setRenameName(deckName); setIsRenaming(true); }}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {isLinkedDeck && sourceData ? (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
+                <span className="mx-1.5 text-border">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Layers className="h-3 w-3" />
+                  {totalCards} cards
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSuggestOpen(true)}
-                  title="Sugerir correção"
-                >
-                  <Pencil className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </>
+                {sourceData.updatedAt && (
+                  <>
+                    <span className="mx-1.5 text-border">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      {formatDistanceToNow(new Date(sourceData.updatedAt), { addSuffix: true, locale: ptBR })}
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <button
+                onClick={() => setAlgorithmModalOpen(true)}
+                className="text-xs cursor-pointer transition-colors hover:underline mt-0.5"
+              >
+                <span className="text-foreground">Algoritmo:</span>{' '}
+                <span className="font-medium text-info">
+                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
+                </span>
+              </button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10 shrink-0" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
           </div>
+
+          {/* DeckStatsCard – time estimate + study bar */}
+          <DeckStatsCard mode={activeTab as 'cards' | 'questions'} />
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
         {isLinkedDeck ? (
-          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} />
+          <LinkedDeckTabs deckId={deckId!} resolvedSourceDeckId={sourceData?.sourceDeckId ?? null} isLinkedDeck={isLinkedDeck} activeTab={activeTab} setActiveTab={setActiveTab} />
         ) : (
-          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} />
+          <PersonalDeckTabs deckId={deckId!} isLinkedDeck={isLinkedDeck} activeTab={activeTab} setActiveTab={setActiveTab} />
         )}
       </main>
 
@@ -484,10 +577,9 @@ const DeckDetailContent = () => {
 };
 
 /** Tabs component for linked decks: Cards + Questões + Sugestões */
-const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId: string; resolvedSourceDeckId: string | null; isLinkedDeck: boolean }) => {
+const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab, setActiveTab }: { deckId: string; resolvedSourceDeckId: string | null; isLinkedDeck: boolean; activeTab: string; setActiveTab: (v: string) => void }) => {
   const { cardCounts } = useDeckDetail();
   const effectiveDeckId = resolvedSourceDeckId ?? deckId;
-  const [activeTab, setActiveTab] = useState('cards');
 
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['suggestion-count', effectiveDeckId],
@@ -517,111 +609,82 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
   });
 
   const totalCards = cardCounts?.total ?? 0;
-
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
+  useEffect(() => {
+    const handler = () => setQuestionAction('practice');
+    window.addEventListener('start-question-practice', handler);
+    return () => window.removeEventListener('start-question-practice', handler);
+  }, []);
+
   return (
-    <>
-      {activeTab === 'cards' && <DeckStatsCard />}
-      {activeTab === 'questions' && (
-        <QuestionStatsCard
-          deckId={deckId}
-          sourceDeckId={resolvedSourceDeckId}
-          isReadOnly
-          onPractice={() => setQuestionAction('practice')}
-          onCreateAI={() => setQuestionAction('ai')}
-        />
-      )}
-      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} sourceDeckId={resolvedSourceDeckId} />
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-          <TabsTrigger
-            value="cards"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <Layers className="h-4 w-4" /> Cards ({totalCards})
-          </TabsTrigger>
-          <TabsTrigger
-            value="questions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <HelpCircle className="h-4 w-4" /> Questões ({questionCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="suggestions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <MessageSquare className="h-4 w-4" /> Sugestões ({suggestionCount})
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="cards" className="mt-4">
-          <CardList />
-        </TabsContent>
-        <TabsContent value="questions" className="mt-4">
-          <Suspense fallback={null}>
-            <DeckQuestionsTab
-              deckId={deckId}
-              isReadOnly
-              sourceDeckId={effectiveDeckId}
-              autoStart={questionAction === 'practice'}
-              autoCreate={questionAction === 'ai' ? 'ai' : null}
-            />
-          </Suspense>
-        </TabsContent>
-        <TabsContent value="suggestions" className="mt-4">
-          <SuggestionsList deckId={effectiveDeckId} />
-        </TabsContent>
-      </Tabs>
-    </>
+    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+      <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger value="cards" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger value="questions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <HelpCircle className="h-4 w-4" /> Questões ({questionCount})
+        </TabsTrigger>
+        <TabsTrigger value="suggestions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <MessageSquare className="h-4 w-4" /> Sugestões ({suggestionCount})
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab
+            deckId={deckId}
+            isReadOnly
+            sourceDeckId={effectiveDeckId}
+            autoStart={questionAction === 'practice'}
+            autoCreate={questionAction === 'ai' ? 'ai' : null}
+          />
+        </Suspense>
+      </TabsContent>
+      <TabsContent value="suggestions" className="mt-4">
+        <SuggestionsList deckId={effectiveDeckId} />
+      </TabsContent>
+    </Tabs>
   );
 };
 
-const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
+const PersonalDeckTabs = ({ deckId, isLinkedDeck, activeTab, setActiveTab }: { deckId: string; isLinkedDeck: boolean; activeTab: string; setActiveTab: (v: string) => void }) => {
   const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
-  const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
+  useEffect(() => {
+    const handler = () => setQuestionAction('practice');
+    window.addEventListener('start-question-practice', handler);
+    return () => window.removeEventListener('start-question-practice', handler);
+  }, []);
+
   return (
-    <>
-      {activeTab === 'cards' && <DeckStatsCard />}
-      {activeTab === 'questions' && (
-        <QuestionStatsCard
-          deckId={deckId}
-          onPractice={() => setQuestionAction('practice')}
-          onCreateAI={() => setQuestionAction('ai')}
-        />
-      )}
-      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-          <TabsTrigger
-            value="cards"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <Layers className="h-4 w-4" /> Cards ({totalCards})
-          </TabsTrigger>
-          <TabsTrigger
-            value="questions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <HelpCircle className="h-4 w-4" /> Questões
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="cards" className="mt-4">
-          <CardList />
-        </TabsContent>
-        <TabsContent value="questions" className="mt-4">
-          <Suspense fallback={null}>
-            <DeckQuestionsTab
-              deckId={deckId}
-              autoStart={questionAction === 'practice'}
-              autoCreate={questionAction === 'ai' ? 'ai' : null}
-            />
-          </Suspense>
-        </TabsContent>
-      </Tabs>
-    </>
+    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger value="cards" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger value="questions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <HelpCircle className="h-4 w-4" /> Questões
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab
+            deckId={deckId}
+            autoStart={questionAction === 'practice'}
+            autoCreate={questionAction === 'ai' ? 'ai' : null}
+          />
+        </Suspense>
+      </TabsContent>
+    </Tabs>
   );
 };
 
@@ -694,43 +757,6 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
   );
 };
 
-const DeckTagsSection = ({ deckId, isLinkedDeck, sourceDeckId }: { deckId: string; isLinkedDeck: boolean; sourceDeckId?: string | null }) => {
-  const { data: tags = [] } = useDeckTags(deckId);
-  const { addTag, removeTag } = useDeckTagMutations(deckId);
-
-  if (isLinkedDeck) {
-    if (tags.length === 0) return null;
-    return (
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Tags</p>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag: any) => (
-            <span key={tag.id} className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              {tag.name}
-            </span>
-          ))}
-        </div>
-        <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
-      </div>
-    );
-  }
-
-  const { deck } = useDeckDetail();
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">Tags</p>
-      <TagInput
-        tags={tags}
-        onAdd={(tag) => addTag.mutate(tag)}
-        onRemove={(tagId) => removeTag.mutate(tagId)}
-        placeholder="Buscar ou criar tag..."
-        aiContext={{ deckName: (deck as any)?.name }}
-      />
-      <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
-    </div>
-  );
-};
 
 const DeckDetail = () => (
   <DeckDetailProvider>

@@ -1,11 +1,13 @@
 // ============= Refactored Dashboard.tsx =============
 
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import {} from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User } from 'lucide-react';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -48,7 +50,8 @@ import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
-
+const StudySalaSheet = lazy(() => import('@/components/dashboard/StudySalaSheet'));
+const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
@@ -59,6 +62,7 @@ import { useIsAdmin } from '@/hooks/useIsAdmin';
 import type { GeneratedCard } from '@/types/ai';
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -105,6 +109,8 @@ const Dashboard = () => {
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
+  const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
@@ -218,16 +224,75 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
+  // Collect all deck IDs in the current sala (including nested sub-decks)
+  const salaDeckIds = useMemo(() => {
+    if (!state.isInsideSala) return [] as string[];
+    const ids: string[] = [];
+    const collect = (deckId: string) => {
+      ids.push(deckId);
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) collect(c.id);
+    };
+    for (const deck of state.currentDecks) collect(deck.id);
+    return ids;
+  }, [state.isInsideSala, state.currentDecks, allDecks]);
+
+  // Fetch difficulty-based classification for the sala's cards
+  const { data: salaDifficultyStats } = useQuery({
+    queryKey: ['sala-difficulty-stats', salaDeckIds.join(',')],
+    queryFn: async () => {
+      if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+      let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+      const BATCH = 200;
+      const PAGE = 1000;
+      for (let i = 0; i < salaDeckIds.length; i += BATCH) {
+        const batch = salaDeckIds.slice(i, i + BATCH);
+        // Paginate to get ALL cards (Supabase default limit is 1000)
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from('cards')
+            .select('state, difficulty')
+            .in('deck_id', batch)
+            .range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
+          for (const c of data) {
+            if (c.state === 0) { novo++; continue; }
+            const d = c.difficulty ?? 5;
+            if (d <= 3) facil++;
+            else if (d <= 5) bom++;
+            else if (d <= 7) dificil++;
+            else errei++;
+          }
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+      return { novo, facil, bom, dificil, errei };
+    },
+    enabled: salaDeckIds.length > 0,
+    staleTime: 30_000,
+  });
+
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0, totalCards = 0;
+    const collectTotalCards = (deckId: string): number => {
+      const dk = allDecks.find(d => d.id === deckId);
+      if (!dk) return 0;
+      let t = dk.total_cards;
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) t += collectTotalCards(c.id);
+      return t;
+    };
     for (const deck of state.currentDecks) {
       const s = state.getAggregateStats(deck);
       newCount += s.new_count;
       learningCount += s.learning_count;
       reviewCount += s.review_count;
       reviewedToday += s.reviewed_today;
+      totalCards += collectTotalCards(deck.id);
     }
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
@@ -237,8 +302,16 @@ const Dashboard = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats]);
+
+    // Difficulty-based classification — use sum of classifications as authoritative total
+    const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
+    // Use classified total when available (more accurate), fallback to deck stats
+    const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
+    const masteredCount = effectiveTotal - ds.novo;
+
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
@@ -247,176 +320,267 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader 
-        onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
-        onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
-      />
+      {!state.isInsideSala && (
+        <DashboardHeader 
+          onCreditsOpen={() => { state.setPremiumTab('credits'); state.setPremiumOpen(true); }}
+          onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
+        />
+      )}
 
       <main className="pb-24">
-        {/* Inside a Sala: back button + sala name + options menu */}
-        {state.isInsideSala && (
-          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-            <button
-              onClick={() => state.setCurrentFolderId(null)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Salas</span>
-            </button>
-            <span className="text-sm text-muted-foreground">/</span>
-            <span className="text-sm font-semibold text-foreground truncate flex-1">
-              {state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'}
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => {
-                  const folder = state.folders.find(f => f.id === state.currentFolderId);
-                  if (folder) { state.setRenameTarget({ type: 'folder', id: folder.id, name: folder.name }); state.setRenameName(folder.name); }
-                }}>
-                  <Pencil className="h-4 w-4 mr-2" /> Renomear sala
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                  <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={async () => {
-                  await state.archiveFolder.mutateAsync(state.currentFolderId!);
-                  state.setCurrentFolderId(null);
-                  setSearchParams({}, { replace: true });
-                }}>
-                  <Archive className="h-4 w-4 mr-2" /> Arquivar sala
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => {
-                    const folder = state.folders.find(f => f.id === state.currentFolderId);
-                    if (folder) state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name });
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+        {/* Inside a Sala: Hero banner with image, name, creator, time estimate */}
+        {state.isInsideSala && (() => {
+          const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+          const folderName = currentFolder?.name ?? 'Sala';
+          const folderImage = currentFolder?.image_url;
+          const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+          const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você';
 
-        {/* Sala study stats card */}
-        {state.isInsideSala && salaStudyStats && (
-          <div className="px-4 pt-2 pb-1">
-            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                {/* Circular progress */}
-                <div className="relative flex-shrink-0">
-                  <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
-                    <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-                    <circle
-                      cx="28" cy="28" r="24" fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 24}`}
-                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - salaStudyStats.progressPct / 100)}`}
-                      className="transition-all duration-500"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-foreground">{salaStudyStats.progressPct}%</span>
-                  </div>
+          return (
+            <>
+              {/* Hero banner */}
+              <div className="relative bg-muted/50 overflow-hidden">
+                {/* Background image (blurred) */}
+                <div className="absolute inset-0">
+                  <img src={folderImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
                 </div>
 
-                {/* Counts */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                      <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                      <span className="text-sm font-bold text-foreground">{salaStudyStats.newCount}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                      <span className="text-sm font-bold text-foreground">{salaStudyStats.learningCount}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Layers className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-sm font-bold text-foreground">{salaStudyStats.reviewCount}</span>
-                    </div>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors">
-                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                <div className="relative px-4 pt-3 pb-4">
+                  {/* Top bar: back + actions */}
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={() => state.setCurrentFolderId(null)}
+                      className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span>Dashboard</span>
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                          <MoreVertical className="h-4 w-4" />
                         </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                        <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                              <span className="text-xs text-muted-foreground">Novos</span>
-                            </div>
-                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                              <span className="text-xs text-muted-foreground">Aprendendo</span>
-                            </div>
-                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Layers className="h-3.5 w-3.5 text-primary" />
-                              <span className="text-xs text-muted-foreground">Revisão</span>
-                            </div>
-                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
-                          </div>
-                          <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">Tempo estimado</span>
-                            </div>
-                            <span className="text-xs font-semibold text-foreground">~{salaStudyStats.timeLabel}</span>
-                          </div>
-                          {salaStudyStats.reviewedToday > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Feitos hoje</span>
-                              <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewedToday}</span>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => {
+                          if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
+                        }}>
+                          <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                          <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={async () => {
+                          await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                          state.setCurrentFolderId(null);
+                          setSearchParams({}, { replace: true });
+                        }}>
+                          <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => {
+                            if (currentFolder) state.setDeleteTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name });
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Sala image + name + edit */}
+                  <div className="flex items-center gap-3 mb-2">
+                    {/* Sala image with change-image overlay */}
+                    <div className="relative shrink-0">
+                      <img src={folderImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+                      <button
+                        onClick={() => setSalaImageOpen(true)}
+                        className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Trocar imagem da sala"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h1 className="text-lg font-display font-bold text-foreground truncate">{folderName}</h1>
+                        <button
+                          onClick={() => {
+                            if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
+                          }}
+                          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-muted-foreground">Por:</span>
+                        <span className="text-xs font-medium text-foreground">{userName}</span>
+                        <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <User className="h-3 w-3 text-muted-foreground" />
                             </div>
                           )}
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">~{salaStudyStats.timeLabel}</span>
-                    {salaStudyStats.reviewedToday > 0 && (
-                      <>
-                        <span className="text-xs text-muted-foreground">·</span>
-                        <span className="text-xs text-green-500 font-medium">{salaStudyStats.reviewedToday} feitos</span>
-                      </>
-                    )}
-                  </div>
-                </div>
 
-                {/* Study button */}
-                <Button
-                  onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
-                  size="icon"
-                  className="h-10 w-10 rounded-full flex-shrink-0"
-                  disabled={salaStudyStats.totalDue === 0}
-                >
-                  <Play className="h-5 w-5" />
-                </Button>
+                  {/* Time estimate with info tooltip */}
+                  {salaStudyStats && salaStudyStats.totalDue > 0 && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-muted-foreground">Estimativa: ~{salaStudyStats.timeLabel}</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground transition-colors">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="text-xs w-56 p-2">
+                          Tempo estimado para revisar todos os cartões pendentes desta sala, com base na sua velocidade média de estudo.
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <Progress value={salaStudyStats.progressPct} className="h-1.5 mt-3" />
-            </div>
-          </div>
-        )}
+              {/* Study bar with circle + button */}
+              {salaStudyStats && (
+                <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
+                  <button
+                    onClick={() => setStudySettingsOpen(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+                    aria-label="Configurar estudo"
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </button>
+
+                  {/* Circular 5-segment classification progress */}
+                  {(() => {
+                    const R = 22;
+                    const C = 2 * Math.PI * R;
+                    const total = salaStudyStats.totalCards;
+                    const masteryPct = total > 0 ? Math.round((salaStudyStats.masteredCount / total) * 100) : 0;
+                    if (total === 0) return (
+                      <div className="relative shrink-0">
+                        <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
+                          <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
+                      </div>
+                    );
+                    const segments = [
+                      { pct: salaStudyStats.facil / total, color: 'hsl(var(--info))', key: 'facil' },
+                      { pct: salaStudyStats.bom / total, color: 'hsl(var(--success))', key: 'bom' },
+                      { pct: salaStudyStats.dificil / total, color: 'hsl(var(--warning))', key: 'dificil' },
+                      { pct: salaStudyStats.errei / total, color: 'hsl(var(--destructive))', key: 'errei' },
+                      { pct: salaStudyStats.novo / total, color: 'hsl(var(--muted))', key: 'novo' },
+                    ];
+                    let offset = 0;
+                    return (
+                      <div className="relative shrink-0">
+                        <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
+                          <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="4" />
+                          {segments.map(seg => {
+                            const len = C * seg.pct;
+                            if (len <= 0) return null;
+                            const el = (
+                              <circle
+                                key={seg.key}
+                                cx="26" cy="26" r={R} fill="none"
+                                stroke={seg.color}
+                                strokeWidth="4"
+                                strokeLinecap="round"
+                                strokeDasharray={`${len} ${C - len}`}
+                                strokeDashoffset={`${-offset}`}
+                                className="transition-all duration-700"
+                              />
+                            );
+                            offset += len;
+                            return el;
+                          })}
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
+                          {masteryPct}%
+                        </span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted border border-border/50 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                              aria-label="Classificação dos cards"
+                            >
+                              <Info className="h-3 w-3" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                            <p className="text-xs font-semibold text-foreground mb-2">Classificação dos cards</p>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full bg-info" />
+                                  <span className="text-xs text-muted-foreground">Fácil</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.facil}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full bg-success" />
+                                  <span className="text-xs text-muted-foreground">Bom</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.bom}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full bg-warning" />
+                                  <span className="text-xs text-muted-foreground">Difícil</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.dificil}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
+                                  <span className="text-xs text-muted-foreground">Errei</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.errei}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full bg-muted" />
+                                  <span className="text-xs text-muted-foreground">Novo</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.novo}</span>
+                              </div>
+                              <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">Total de cards</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.totalCards}</span>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    );
+                  })()}
+
+                  <Button
+                    onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
+                    className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
+                    size="lg"
+                    disabled={salaStudyStats.totalDue === 0}
+                  >
+                    ESTUDAR
+                    <Play className="h-4 w-4 fill-current" />
+                  </Button>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Study CTA (root level only) */}
         {!state.isInsideSala && (
@@ -429,7 +593,7 @@ const Dashboard = () => {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
             <Button
-              onClick={() => navigate('/study')}
+              onClick={() => setStudySalaSheetOpen(true)}
               className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
               size="lg"
               disabled={totalDueToday === 0}
@@ -468,7 +632,7 @@ const Dashboard = () => {
             navigateToCommunity={actions.handleNavigateCommunity}
             onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
             onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
@@ -655,14 +819,40 @@ const Dashboard = () => {
           <StudyWeightsSheet
             open={studyWeightsOpen}
             onOpenChange={setStudyWeightsOpen}
+            folders={state.folders}
             decks={state.decks}
             getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
+            currentFolderId={state.currentFolderId}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {studySalaSheetOpen && (
+          <StudySalaSheet
+            open={studySalaSheetOpen}
+            onOpenChange={setStudySalaSheetOpen}
+            folders={state.folders}
+            decks={state.decks}
             getAggregateStats={state.getAggregateStats}
           />
         )}
       </Suspense>
 
-      {/* Copy community deck dialog */}
+      <Suspense fallback={null}>
+        {studySettingsOpen && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={state.decks}
+            getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
+            currentFolderId={state.currentFolderId}
+          />
+        )}
+      </Suspense>
+
       <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

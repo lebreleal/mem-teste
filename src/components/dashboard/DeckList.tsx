@@ -4,7 +4,7 @@
  * Includes pending (background-generating) decks as ghost items.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
@@ -83,9 +83,17 @@ const DeckList = ({
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
   const q = searchQuery.toLowerCase();
-  const filteredDecks = q ? currentDecks.filter(d => d.name.toLowerCase().includes(q)) : currentDecks;
+  // Sort: error deck first, then matérias (decks with sub-decks), then loose decks
+  const sortedDecks = useMemo(() => {
+    const errorDeck = currentDecks.filter(d => d.name === '📕 Caderno de Erros');
+    const rest = currentDecks.filter(d => d.name !== '📕 Caderno de Erros');
+    const materias = rest.filter(d => deckRowProps.getSubDecks(d.id).length > 0);
+    const loose = rest.filter(d => deckRowProps.getSubDecks(d.id).length === 0);
+    return [...errorDeck, ...materias, ...loose];
+  }, [currentDecks, deckRowProps.getSubDecks]);
+  const filteredDecks = q ? sortedDecks.filter(d => d.name.toLowerCase().includes(q)) : sortedDecks;
 
-  const deckDrag = useDragReorder({
+  const deckDrag = useDragReorder<DeckWithStats>({
     items: filteredDecks,
     getId: (d) => d.id,
     onReorder: (reordered) => onReorderDecks?.(reordered),

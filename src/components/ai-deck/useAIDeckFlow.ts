@@ -67,7 +67,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   // Config
   const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
-  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze', 'multiple_choice']);
+  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze']);
   const [customInstructions, setCustomInstructions] = useState('');
   const [targetCardCount, setTargetCardCount] = useState(0);
 
@@ -106,7 +106,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const resetState = useCallback(() => {
     setStep('upload'); setDeckName(''); setInputMode(null); setFileName(''); setRawText('');
     setPages([]); setLoadProgress({ current: 0, total: 0 });
-    setDetailLevel('standard'); setCardFormats(['qa', 'cloze', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
+    setDetailLevel('standard'); setCardFormats(['qa', 'cloze']); setCustomInstructions(''); setTargetCardCount(0);
     setGenProgress({ current: 0, total: 0, creditsUsed: 0, startedAt: 0, lastBatchMs: 0, avgBatchMs: 0 });
     setCards([]); setEditingIdx(null);
     setIsLoading(false); setIsSaving(false);
@@ -230,9 +230,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
     const rows: { frontContent: string; backContent: string; cardType: string }[] = [];
     for (const c of generatedCards) {
-      if (c.type === 'multiple_choice' && c.options) {
-        rows.push({ frontContent: c.front, backContent: JSON.stringify({ options: c.options, correctIndex: c.correctIndex ?? 0 }), cardType: 'multiple_choice' });
-      } else if (c.type === 'cloze') {
+      if (c.type === 'cloze') {
         // Expand cloze card into one DB row per unique cloze number
         const plain = c.front.replace(/<[^>]*>/g, '');
         const matches = [...plain.matchAll(/\{\{c(\d+)::/g)];
@@ -537,7 +535,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const toggleType = useCallback((i: number) => {
     setCards(p => p.map((c, j) => {
       if (j !== i) return c;
-      const types: Array<'basic' | 'cloze' | 'multiple_choice'> = ['basic', 'cloze', 'multiple_choice'];
+      const types: Array<'basic' | 'cloze'> = ['basic', 'cloze'];
       const currentIdx = types.indexOf(c.type);
       return { ...c, type: types[(currentIdx + 1) % types.length] };
     }));

@@ -695,7 +695,7 @@ export function ForecastSimulator({
                   />
                   <Tooltip content={<SimulatorTooltip summary={summary} />} />
                   <Bar dataKey="reviewCards" stackId="cards" name="Revisões" fill="hsl(217 91% 60%)" opacity={0.8} radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(142 71% 45%)" opacity={0.8} radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="newCards" stackId="cards" name="Novos" fill="hsl(var(--success))" opacity={0.8} radius={[0, 0, 0, 0]} />
                   <Bar dataKey="learningTotal" stackId="cards" name="Aprendendo" fill="hsl(38 92% 50%)" opacity={0.75} radius={[3, 3, 0, 0]} />
                   {objectiveLines.map(ol => (
                     <ReferenceLine

@@ -8,11 +8,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { sanitizeHtml } from '@/lib/sanitize';
 
-export type EditorCardType = 'basic' | 'cloze' | 'multiple_choice' | 'image_occlusion';
+export type EditorCardType = 'basic' | 'cloze' | 'image_occlusion';
 
 export const CARD_TYPES: { value: EditorCardType; label: string; desc: string }[] = [
   { value: 'basic', label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'multiple_choice', label: 'Múltipla escolha', desc: 'Pergunta com alternativas' },
   { value: 'cloze', label: 'Cloze', desc: 'Texto com lacunas para preencher' },
   { value: 'image_occlusion', label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
 ];
@@ -61,14 +60,7 @@ export function useManageDeck() {
   const openEdit = useCallback((card: { id: string; front_content: string; back_content: string; card_type: string }) => {
     setEditingId(card.id);
     setFront(card.front_content);
-    if (card.card_type === 'multiple_choice') {
-      setEditorType('multiple_choice');
-      try {
-        const data = JSON.parse(card.back_content);
-        setMcOptions(data.options || ['', '', '', '']);
-        setMcCorrectIndex(data.correctIndex ?? 0);
-      } catch { setBack(card.back_content); }
-    } else if (card.card_type === 'cloze') {
+    if (card.card_type === 'cloze') {
       setEditorType('cloze');
       try {
         const parsed = JSON.parse(card.back_content);
@@ -106,15 +98,7 @@ export function useManageDeck() {
     let cardType: string;
     let backContent: string;
 
-    if (editorType === 'multiple_choice') {
-      const filledOptions = mcOptions.filter(o => o.trim());
-      if (filledOptions.length < 2) {
-        toast({ title: 'Adicione pelo menos 2 opções', variant: 'destructive' });
-        return;
-      }
-      cardType = 'multiple_choice';
-      backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-    } else if (editorType === 'cloze') {
+    if (editorType === 'cloze') {
       if (!front.includes('{{c')) {
         toast({ title: 'Use a sintaxe {{c1::resposta}} para criar lacunas', variant: 'destructive' });
         return;
@@ -191,9 +175,6 @@ export function useManageDeck() {
     setIsImproving(true);
     try {
       let backToSend = back;
-      if (editorType === 'multiple_choice') {
-        backToSend = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-      }
       const { data, error } = await supabase.functions.invoke('enhance-card', {
         body: { front, back: backToSend, cardType: editorType || 'basic', aiModel: model, energyCost: 1 },
       });
@@ -214,19 +195,11 @@ export function useManageDeck() {
   const applyImprovement = useCallback(() => {
     if (!improvePreview) return;
     setFront(improvePreview.front);
-    if (editorType === 'multiple_choice') {
-      try {
-        const data = JSON.parse(improvePreview.back);
-        setMcOptions(data.options || mcOptions);
-        setMcCorrectIndex(data.correctIndex ?? mcCorrectIndex);
-      } catch {}
-    } else {
-      setBack(improvePreview.back);
-    }
+    setBack(improvePreview.back);
     setImproveModalOpen(false);
     setImprovePreview(null);
     toast({ title: 'Melhoria aplicada!' });
-  }, [improvePreview, editorType, mcOptions, mcCorrectIndex, toast]);
+  }, [improvePreview, toast]);
 
   return {
     deckId, navigate, cards, isLoading, isCommunityDeck,

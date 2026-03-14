@@ -20,33 +20,6 @@ export const ImprovePreviewDialog = ({ open, onOpenChange, improvePreview, edito
   if (!improvePreview) return null;
 
   const renderPreview = () => {
-    if (editorType === 'multiple_choice') {
-      let mcData: { options: string[]; correctIndex: number } | null = null;
-      try { mcData = JSON.parse(improvePreview.back); } catch {}
-      return (
-        <div className="space-y-4">
-          <div>
-            <Label className="mb-1.5 block text-xs text-muted-foreground">Pergunta melhorada</Label>
-            <div className="rounded-lg border border-border bg-muted/30 p-3 prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(improvePreview.front) }} />
-          </div>
-          {mcData && (
-            <div>
-              <Label className="mb-1.5 block text-xs text-muted-foreground">Opções melhoradas</Label>
-              <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-                {mcData.options.map((opt, idx) => (
-                  <div key={idx} className={`flex items-center gap-3 px-3 py-2.5 ${idx === mcData!.correctIndex ? 'bg-success/10' : ''}`}>
-                    <div className={`flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center ${idx === mcData!.correctIndex ? 'border-success bg-success text-white' : 'border-muted-foreground/30'}`}>
-                      {idx === mcData!.correctIndex && <span className="text-[10px] font-bold">✓</span>}
-                    </div>
-                    <span className="text-sm">{opt}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
     return (
       <div className="space-y-4">
         <div>

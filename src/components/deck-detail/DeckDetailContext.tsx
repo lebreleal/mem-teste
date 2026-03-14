@@ -473,7 +473,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const newPct = totalCards > 0 ? (actualNewCount / totalCards) * 100 : 0;
   const learningPct = totalCards > 0 ? (learningCount / totalCards) * 100 : 0;
   const masteredPct = totalCards > 0 ? (totalReviewStateCards / totalCards) * 100 : 0;
-  const otherDecks = decks.filter(d => d.id !== deckId && !d.is_archived);
+  // Exclude "Matérias" (decks that have children) — cards can only move into leaf decks
+  const otherDecks = decks.filter(d => {
+    if (d.id === deckId || d.is_archived) return false;
+    const hasChildren = decks.some(child => child.parent_deck_id === d.id && !child.is_archived);
+    return !hasChildren;
+  });
   const isSaving = createCard.isPending || updateCard.isPending;
   const canImprove = !!cardType && cardType !== 'image_occlusion';
 
@@ -506,6 +511,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       else if (stateFilter === 'learning') result = result.filter(c => c.state === 1 && !isFrozenCard(c));
       else if (stateFilter === 'relearning') result = result.filter(c => c.state === 3 && !isFrozenCard(c));
       else if (stateFilter === 'mastered') result = result.filter(c => c.state === 2 && !isFrozenCard(c));
+      // Difficulty-based filters
+      else if (stateFilter === 'facil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) <= 3);
+      else if (stateFilter === 'bom') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 3 && (c.difficulty ?? 5) <= 5);
+      else if (stateFilter === 'dificil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 5 && (c.difficulty ?? 5) <= 7);
+      else if (stateFilter === 'errei') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 7);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
