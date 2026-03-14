@@ -4,7 +4,7 @@
  * Includes pending (background-generating) decks as ghost items.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   GraduationCap, ChevronRight, Loader2, Search, Tag as TagIcon, CheckCircle2, XCircle,
 } from 'lucide-react';
