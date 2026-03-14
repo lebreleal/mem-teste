@@ -277,7 +277,14 @@ const Dashboard = () => {
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0, totalCards = 0;
+
+    let rawNewCount = 0;
+    let newCountTodayByDeckLimits = 0;
+    let learningCount = 0;
+    let reviewCount = 0;
+    let reviewedToday = 0;
+    let totalCards = 0;
+
     const collectTotalCards = (deckId: string): number => {
       const dk = allDecks.find(d => d.id === deckId);
       if (!dk) return 0;
@@ -286,17 +293,40 @@ const Dashboard = () => {
       for (const c of children) t += collectTotalCards(c.id);
       return t;
     };
+
+    const collectStudyStats = (deckId: string) => {
+      const dk = allDecks.find(d => d.id === deckId);
+      if (!dk || dk.is_archived) return;
+
+      const deckNewCount = dk.new_count ?? 0;
+      const deckLearningCount = dk.learning_count ?? 0;
+      const deckReviewCount = dk.review_count ?? 0;
+      const deckNewReviewedToday = dk.new_reviewed_today ?? 0;
+      const deckDailyNewLimit = dk.daily_new_limit ?? 20;
+
+      rawNewCount += deckNewCount;
+      learningCount += deckLearningCount;
+      reviewCount += deckReviewCount;
+      reviewedToday += dk.reviewed_today ?? 0;
+
+      const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
+      newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);
+
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) collectStudyStats(c.id);
+    };
+
     for (const deck of state.currentDecks) {
-      const s = state.getAggregateStats(deck);
-      newCount += s.new_count;
-      learningCount += s.learning_count;
-      reviewCount += s.review_count;
-      reviewedToday += s.reviewed_today;
+      collectStudyStats(deck.id);
       totalCards += collectTotalCards(deck.id);
     }
-    const totalDue = newCount + learningCount + reviewCount;
+
+    // Global daily cap still applies across all decks/salas
+    const newCountToday = Math.min(newCountTodayByDeckLimits, state.globalNewRemaining);
+    const totalDue = newCountToday + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
+
     const avgSec = avgSecondsPerCard;
     const remainingMin = Math.ceil((totalDue * avgSec) / 60);
     const timeLabel = remainingMin >= 60
@@ -310,8 +340,20 @@ const Dashboard = () => {
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
     const masteredCount = effectiveTotal - ds.novo;
 
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
+    return {
+      newCount: rawNewCount,
+      newCountToday,
+      learningCount,
+      reviewCount,
+      reviewedToday,
+      totalDue,
+      progressPct,
+      timeLabel,
+      totalCards: effectiveTotal,
+      masteredCount,
+      ...ds,
+    };
+  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, avgSecondsPerCard]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
