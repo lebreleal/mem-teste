@@ -836,6 +836,8 @@ const Dashboard = () => {
             folders={state.folders}
             decks={state.decks}
             getAggregateStats={state.getAggregateStats}
+            globalNewRemaining={state.globalNewRemaining}
+            avgSecondsPerCard={avgSecondsPerCard}
           />
         )}
       </Suspense>
