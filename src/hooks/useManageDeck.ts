@@ -98,15 +98,7 @@ export function useManageDeck() {
     let cardType: string;
     let backContent: string;
 
-    if (editorType === 'multiple_choice') {
-      const filledOptions = mcOptions.filter(o => o.trim());
-      if (filledOptions.length < 2) {
-        toast({ title: 'Adicione pelo menos 2 opções', variant: 'destructive' });
-        return;
-      }
-      cardType = 'multiple_choice';
-      backContent = JSON.stringify({ options: mcOptions.filter(o => o.trim()), correctIndex: mcCorrectIndex });
-    } else if (editorType === 'cloze') {
+    if (editorType === 'cloze') {
       if (!front.includes('{{c')) {
         toast({ title: 'Use a sintaxe {{c1::resposta}} para criar lacunas', variant: 'destructive' });
         return;
