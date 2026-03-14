@@ -286,7 +286,7 @@ const CardList = () => {
               {/* State filter */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                  {isQuickReview ? 'Estado (Revisão Rápida)' : 'Estado de aprendizagem'}
+                  {isQuickReview ? 'Estado (Revisão Rápida)' : 'Classificação'}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {stateOptions.map(s => (
