@@ -31,11 +31,10 @@ const DeckStatsCard = () => {
     return { novo, facil, bom, dificil, errei };
   }, [allCards]);
 
-  // Mastery % = cards classified as Fácil or Bom (well-known cards)
+  // Progress % = cards already reviewed (any state > 0, i.e. not new)
   const total = allCards.length;
-  const masteredCount = counts.facil + counts.bom;
-  const masteryPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
-  const toDominate = total - masteredCount;
+  const reviewedCount = total - counts.novo;
+  const progressPct = total > 0 ? Math.round((reviewedCount / total) * 100) : 0;
 
   // Time estimate for this deck
   const totalDue = studyPending;
@@ -104,7 +103,7 @@ const DeckStatsCard = () => {
           })}
         </svg>
         <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
-          {masteryPct}%
+          {progressPct}%
         </span>
         <Popover>
           <PopoverTrigger asChild>
@@ -154,10 +153,6 @@ const DeckStatsCard = () => {
                 <span className="text-xs font-semibold text-foreground">{counts.novo}</span>
               </div>
               <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Cards a dominar</span>
-                <span className="text-xs font-semibold text-foreground">{toDominate}</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Total de cards</span>
                 <span className="text-xs font-semibold text-foreground">{total}</span>
               </div>
