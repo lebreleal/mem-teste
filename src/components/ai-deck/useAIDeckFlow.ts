@@ -535,7 +535,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const toggleType = useCallback((i: number) => {
     setCards(p => p.map((c, j) => {
       if (j !== i) return c;
-      const types: Array<'basic' | 'cloze' | 'multiple_choice'> = ['basic', 'cloze', 'multiple_choice'];
+      const types: Array<'basic' | 'cloze'> = ['basic', 'cloze'];
       const currentIdx = types.indexOf(c.type);
       return { ...c, type: types[(currentIdx + 1) % types.length] };
     }));

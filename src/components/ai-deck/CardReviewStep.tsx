@@ -303,11 +303,7 @@ const CardReviewStep = ({
                   className="text-sm font-medium text-card-foreground line-clamp-1 prose prose-sm max-w-none [&_img]:max-h-20 [&_img]:rounded"
                   dangerouslySetInnerHTML={{ __html: sanitizeHtml(card.front) }}
                 />
-                {card.type === 'multiple_choice' && card.options ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {card.options.length} opções · Resposta: {card.options[card.correctIndex ?? 0]}
-                  </p>
-                ) : card.type === 'cloze' ? (
+                {card.type === 'cloze' ? (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {(() => {
                       const plain = card.front.replace(/<[^>]*>/g, '');
