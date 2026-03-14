@@ -126,6 +126,7 @@ const Dashboard = () => {
       let turmaId = userTurma?.id;
       const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
       const folderName = currentFolder?.name ?? 'Minha Sala';
+      const folderImage = currentFolder?.image_url ?? null;
 
       // Auto-create turma if user doesn't have one
       if (!turmaId) {
