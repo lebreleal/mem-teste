@@ -137,6 +137,7 @@ const Dashboard = () => {
           owner_id: user.id,
           invite_code: inviteCode,
           is_private: false,
+          cover_image_url: folderImage,
         } as any).select('id').single();
         if (createErr || !newTurma) throw createErr || new Error('Failed to create turma');
         turmaId = (newTurma as any).id;
