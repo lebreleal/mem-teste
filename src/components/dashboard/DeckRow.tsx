@@ -53,9 +53,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const navigate = useNavigate();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const subDeckCount = useMemo(() => countAllSubDecks(deck.id, getSubDecks), [deck.id, getSubDecks]);
-  const mastery = useMemo(() => getAggregateMastery(deck, getSubDecks), [deck, getSubDecks]);
-  const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
+  const masteryPct = deck.total_cards > 0 ? Math.round((deck.mastered_cards / deck.total_cards) * 1000) / 10 : 0;
 
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
 
