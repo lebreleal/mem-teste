@@ -336,13 +336,23 @@ const Dashboard = () => {
 
                   {/* Sala image + name + edit */}
                   <div className="flex items-center gap-3 mb-2">
-                    {folderImage ? (
-                      <img src={folderImage} alt={folderName} className="h-14 w-14 rounded-xl object-cover shrink-0 border border-border/30 shadow-sm" />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 shrink-0 border border-border/30">
-                        <Layers className="h-7 w-7 text-primary" />
-                      </div>
-                    )}
+                    {/* Sala image with change-image overlay */}
+                    <div className="relative shrink-0">
+                      {folderImage ? (
+                        <img src={folderImage} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 border border-border/30">
+                          <Layers className="h-7 w-7 text-primary" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setSalaImageOpen(true)}
+                        className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Trocar imagem da sala"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                      </button>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <h1 className="text-lg font-display font-bold text-foreground truncate">{folderName}</h1>
@@ -371,11 +381,20 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  {/* Time estimate */}
+                  {/* Time estimate with info tooltip */}
                   {salaStudyStats && salaStudyStats.totalDue > 0 && (
                     <div className="flex items-center gap-1.5 mt-1">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">Estimativa: ~{salaStudyStats.timeLabel}</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground transition-colors">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="text-xs w-56 p-2">
+                          Tempo estimado para revisar todos os cartões pendentes desta sala, com base na sua velocidade média de estudo.
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
                 </div>
