@@ -1,5 +1,5 @@
 /**
- * Explorar — grid of published salas + public decks with search and tag filters.
+ * Explorar — grid of published classes + public decks with search and tag filters.
  */
 
 import { useState, useMemo } from 'react';
