@@ -240,6 +240,15 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       <Layers className="h-3 w-3" />
                       {sub.total_cards}
                     </span>
+                    {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
+                      <>
+                        <span className="text-[11px] text-muted-foreground">·</span>
+                        <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+                          <HelpCircle className="h-3 w-3" />
+                          {questionCountMap.get(sub.id)}
+                        </span>
+                      </>
+                    )}
                     <span className="text-[11px] text-muted-foreground ml-auto">{subMastery}%</span>
                   </div>
                   <Progress value={subMastery} className="h-1 mt-1" />
