@@ -105,6 +105,69 @@ const Dashboard = () => {
     },
     staleTime: 60_000,
   });
+
+  // Fetch user's turma for publish toggle
+  const { data: userTurma, refetch: refetchTurma } = useQuery({
+    queryKey: ['user-turma', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('turmas').select('id, name, is_private').eq('owner_id', user.id).limit(1).maybeSingle();
+      return data as { id: string; name: string; is_private: boolean } | null;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  });
+
+  const [publishing, setPublishing] = useState(false);
+  const handleTogglePublish = useCallback(async () => {
+    if (!user || !userTurma || !state.currentFolderId) return;
+    setPublishing(true);
+    try {
+      const newPrivate = !userTurma.is_private;
+      // Update turma visibility
+      await supabase.from('turmas').update({ is_private: newPrivate } as any).eq('id', userTurma.id);
+
+      if (!newPrivate) {
+        // Publishing: sync folder decks to turma_decks
+        const folderDecks = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
+        const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', userTurma.id);
+        const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
+
+        const newDecks = folderDecks.filter(d => !existingIds.has(d.id));
+        if (newDecks.length > 0) {
+          await supabase.from('turma_decks').insert(
+            newDecks.map(d => ({
+              turma_id: userTurma.id,
+              deck_id: d.id,
+              shared_by: user.id,
+              price: 0,
+              price_type: 'free',
+              allow_download: true,
+              is_published: true,
+            }) as any)
+          );
+          // Mark decks as public
+          await supabase.from('decks').update({ is_public: true } as any).in('id', newDecks.map(d => d.id));
+        }
+
+        // Update turma name to match folder
+        const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+        if (currentFolder) {
+          await supabase.from('turmas').update({ name: currentFolder.name } as any).eq('id', userTurma.id);
+        }
+      }
+
+      await refetchTurma();
+      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      toast({ title: newPrivate ? 'Sala despublicada' : '🌍 Sala publicada no Explorar!' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erro ao publicar', variant: 'destructive' });
+    } finally {
+      setPublishing(false);
+    }
+  }, [user, userTurma, state.currentFolderId, state.folders, allDecks, refetchTurma, queryClient, toast]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
