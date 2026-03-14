@@ -1,6 +1,6 @@
 /**
  * SalaCard — visual card for a "Sala" (folder) on the dashboard root.
- * Shows custom image (or default brain icon), name, subject count, mastery bar.
+ * Shows custom image (or default icon), name, deck/card counts, mastery bar.
  */
 
 import { ChevronRight } from 'lucide-react';
@@ -9,7 +9,7 @@ import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 interface SalaCardProps {
   name: string;
-  subjectCount: number;
+  deckCount: number;
   totalCards: number;
   masteredCards: number;
   dueCount: number;
@@ -18,7 +18,7 @@ interface SalaCardProps {
   onClick: () => void;
 }
 
-const SalaCard = ({ name, subjectCount, totalCards, masteredCards, dueCount, isVirtual, imageUrl, onClick }: SalaCardProps) => {
+const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirtual, imageUrl, onClick }: SalaCardProps) => {
   const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
 
   return (
@@ -38,7 +38,7 @@ const SalaCard = ({ name, subjectCount, totalCards, masteredCards, dueCount, isV
         </h3>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-xs text-muted-foreground">
-            {subjectCount} matéria{subjectCount !== 1 ? 's' : ''}
+            {deckCount} baralho{deckCount !== 1 ? 's' : ''}
             {totalCards > 0 && <span> · {totalCards} cartão{totalCards !== 1 ? 'ões' : ''}</span>}
           </p>
           <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>

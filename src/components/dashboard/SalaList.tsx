@@ -13,7 +13,7 @@ interface SalaInfo {
   name: string;
   isVirtual?: boolean;
   imageUrl?: string | null;
-  subjectCount: number;
+  deckCount: number;
   totalCards: number;
   masteredCards: number;
   dueCount: number;
@@ -29,6 +29,18 @@ interface SalaListProps {
 
 const VIRTUAL_SALA_ID = '__meus_estudos__';
 
+/** Count all decks recursively (root + sub-decks) */
+const countAllDecks = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): number => {
+  let count = rootDecks.length;
+  const collectSubs = (parentIds: string[]) => {
+    const subs = allDecks.filter(s => s.parent_deck_id && parentIds.includes(s.parent_deck_id) && !s.is_archived);
+    count += subs.length;
+    if (subs.length > 0) collectSubs(subs.map(s => s.id));
+  };
+  collectSubs(rootDecks.map(d => d.id));
+  return count;
+};
+
 const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }: SalaListProps) => {
   const rootDecks = decks.filter(d => !d.parent_deck_id && !d.is_archived);
 
@@ -42,7 +54,6 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       for (const d of folderDecks) {
         totalCards += d.total_cards;
         masteredCards += d.mastered_cards;
-        // Aggregate sub-deck cards too
         const collectSubs = (parentId: string) => {
           const subs = decks.filter(s => s.parent_deck_id === parentId && !s.is_archived);
           for (const sub of subs) {
@@ -59,7 +70,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         id: f.id,
         name: f.name,
         imageUrl: f.image_url,
-        subjectCount: folderDecks.length,
+        deckCount: countAllDecks(folderDecks, decks),
         totalCards,
         masteredCards,
         dueCount,
@@ -90,7 +101,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       id: VIRTUAL_SALA_ID,
       name: 'Meus Estudos',
       isVirtual: true,
-      subjectCount: orphanDecks.length,
+      deckCount: countAllDecks(orphanDecks, decks),
       totalCards,
       masteredCards,
       dueCount,
@@ -134,7 +145,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         <SalaCard
           key={sala.id}
           name={sala.name}
-          subjectCount={sala.subjectCount}
+          deckCount={sala.deckCount}
           totalCards={sala.totalCards}
           masteredCards={sala.masteredCards}
           dueCount={sala.dueCount}
