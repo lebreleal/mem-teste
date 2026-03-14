@@ -355,7 +355,6 @@ const DeckDetailContent = () => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
-  const [renameName, setRenameName] = useState('');
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
 
