@@ -218,6 +218,28 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
+  // Sala-scoped study stats for the compact study card
+  const salaStudyStats = useMemo(() => {
+    if (!state.isInsideSala) return null;
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    for (const deck of state.currentDecks) {
+      const s = state.getAggregateStats(deck);
+      newCount += s.new_count;
+      learningCount += s.learning_count;
+      reviewCount += s.review_count;
+      reviewedToday += s.reviewed_today;
+    }
+    const totalDue = newCount + learningCount + reviewCount;
+    const totalSession = totalDue + reviewedToday;
+    const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
+    const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
+    const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+    const timeLabel = remainingMin >= 60
+      ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
+      : `${remainingMin}min`;
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats]);
+
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
