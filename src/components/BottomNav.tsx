@@ -26,11 +26,13 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
               onClick={item.onClick}
               className={cn(
                 'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors',
-                item.active ? 'text-primary' : 'text-muted-foreground'
+                item.accent
+                  ? 'text-primary-foreground bg-primary rounded-full h-10 w-10 flex items-center justify-center shadow-md -mt-2'
+                  : item.active ? 'text-primary' : 'text-muted-foreground'
               )}
             >
-              <Icon className="h-5 w-5" />
-              {item.label && <span className="text-[10px] font-semibold">{item.label}</span>}
+              <Icon className={cn('h-5 w-5', item.accent && 'h-5 w-5')} />
+              {!item.accent && item.label && <span className="text-[10px] font-semibold">{item.label}</span>}
             </button>
           );
         })}
