@@ -201,7 +201,11 @@ const MoveBrowser = ({
             }}
             className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
           >
-            <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+            <img
+              src={f.image_url || defaultSalaIcon}
+              alt={f.name}
+              className="h-8 w-8 rounded-lg object-cover shrink-0"
+            />
             <span className="flex-1 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
