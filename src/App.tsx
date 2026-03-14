@@ -104,6 +104,7 @@ const App = () => (
                 <Route path="/decks/:deckId/settings" element={<ProtectedRoute><DeckSettings /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/preview" element={<PublicDeckPreview />} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/explorar" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId/lessons/:lessonId" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />

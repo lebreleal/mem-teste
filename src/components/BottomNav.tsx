@@ -12,7 +12,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const items = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Plus, label: 'Adicionar', onClick: () => window.dispatchEvent(new CustomEvent('open-add-menu')), active: false, accent: true },
-    { icon: Compass, label: 'Explorar', onClick: () => navigate('/turmas'), active: isActive('/turmas') },
+    { icon: Compass, label: 'Explorar', onClick: () => navigate('/explorar'), active: isActive('/explorar') || isActive('/turmas') },
   ];
 
   return (
