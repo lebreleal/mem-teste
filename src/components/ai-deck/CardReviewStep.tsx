@@ -101,7 +101,6 @@ const ClozePreview = ({ text }: { text: string }) => {
 
 const getTypeBadge = (type: string) => {
   if (type === 'cloze') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-primary/40 bg-primary/10 text-primary">Cloze</span>;
-  if (type === 'multiple_choice') return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-warning/40 bg-warning/10 text-warning">Múltipla</span>;
   return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-border">Básico</span>;
 };
 
