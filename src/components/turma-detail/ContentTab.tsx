@@ -456,9 +456,9 @@ const ContentTab = () => {
   // ── Current folder's decks (when tag is active, search across ALL folders) ──
   const currentDecks = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const filterByFolder = !activeTagIds; // skip folder filter when tag is active
+    const skipFolderFilter = !!activeTagIds || !!q; // search and tag filter across ALL folders
     return turmaDecks
-      .filter((d: any) => filterByFolder ? d.subject_id === contentFolderId : true)
+      .filter((d: any) => skipFolderFilter ? true : d.subject_id === contentFolderId)
       .filter((d: any) => isAdmin || d.is_published !== false)
       .filter((d: any) => !q || (d.deck_name || '').toLowerCase().includes(q))
       .filter((d: any) => {
