@@ -256,21 +256,6 @@ const MemberSalaView = () => {
         <ContentTab />
       </main>
 
-      {isAdmin && (
-        <CommunitySettingsDialog
-          open={showSettings}
-          onOpenChange={setShowSettings}
-          turma={turma}
-          members={members.map(m => ({ user_id: m.user_id, user_name: m.user_name, role: m.role, is_subscriber: m.is_subscriber }))}
-          onSave={({ name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }) => {
-            updateTurma.mutate({ turmaId, name, description, isPrivate, coverImageUrl, subscriptionPrice, shareSlug }, {
-              onSuccess: () => { setShowSettings(false); toast({ title: 'Sala atualizada!' }); },
-              onError: (e: any) => toast({ title: 'Erro ao atualizar', description: e?.message?.includes('turmas_share_slug_key') ? 'Esse link já está em uso.' : undefined, variant: 'destructive' }),
-            });
-          }}
-          isSaving={updateTurma.isPending}
-        />
-      )}
 
       <CreateSubjectDialog
         open={showAddSubject} onOpenChange={setShowAddSubject}
