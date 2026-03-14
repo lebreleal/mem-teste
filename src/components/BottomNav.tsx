@@ -11,7 +11,11 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const { isAdmin } = useIsAdmin();
   const { toast } = useToast();
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const isActive = (path: string) => {
+    // When inside a sala (folder param present), Home should NOT be active
+    if (path === '/dashboard' && location.search.includes('folder=')) return false;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
 
   const handleExplorar = () => {
     if (isAdmin) {
