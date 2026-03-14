@@ -2,12 +2,12 @@
  * DeckRow — a single deck item in the dashboard list.
  * Shows name, card count, multi-color progress bar (new/learning/review).
  * If the deck has sub-decks, shows an expand/collapse icon.
- * 3-dot menu only visible when matéria is expanded or on sub-decks.
+ * 3-dot menu + play icon: only visible when matéria is expanded or deck is focused.
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus, Play } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
@@ -25,7 +25,6 @@ const MultiColorProgress = ({ newPct, learningPct, reviewPct, className = '' }: 
   newPct: number; learningPct: number; reviewPct: number; className?: string;
 }) => (
   <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
-    {/* Stack segments left to right: review (primary), learning (amber), new (muted) */}
     <div className="absolute inset-y-0 left-0 flex w-full">
       {reviewPct > 0 && (
         <div
@@ -116,11 +115,9 @@ function computeProgressPcts(stats: { new_count: number; learning_count: number;
   if (totalCards === 0) return { newPct: 0, learningPct: 0, reviewPct: 0 };
   const newCount = stats.new_count;
   const learningCount = stats.learning_count;
-  // "Review" = review due + already reviewed today (mastered portion)
   const reviewCount = stats.review_count + stats.reviewed_today;
   const total = newCount + learningCount + reviewCount;
   if (total === 0) {
-    // All cards mastered (no due), show full primary
     return { newPct: 0, learningPct: 0, reviewPct: 100 };
   }
   return {
@@ -144,10 +141,14 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
   const hasChildren = subDecks.length > 0;
   const isExpanded = expandedAccordionId === deck.id;
+
+  // Show actions (3-dot + play) when: matéria is expanded, or loose deck is focused
+  const showActions = hasChildren ? isExpanded : focused;
 
   // Aggregate totals: this deck + all sub-decks
   const { totalCards, aggStats } = useMemo(() => {
@@ -165,6 +166,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
 
   const progressPcts = computeProgressPcts(aggStats, totalCards);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
+  const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
   const handleClick = () => {
     if (deckSelectionMode) {
@@ -182,8 +184,19 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     if (hasChildren) {
       onAccordionToggle?.(deck.id);
     } else {
-      navigate(`/decks/${deck.id}`);
+      // Toggle focused state for loose decks
+      setFocused(prev => !prev);
     }
+  };
+
+  const handleNavigate = (e: React.MouseEvent, deckId: string) => {
+    e.stopPropagation();
+    navigate(`/decks/${deckId}`);
+  };
+
+  const handleStudy = (e: React.MouseEvent, deckId: string) => {
+    e.stopPropagation();
+    navigate(`/study/deck/${deckId}`);
   };
 
   return (
@@ -198,7 +211,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           onDrop: dragHandlers.onDrop,
           onDragEnd: dragHandlers.onDragEnd,
         } : {})}
-        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
+        className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''} ${focused && !hasChildren ? 'bg-muted/30' : ''}`}
         onClick={handleClick}
       >
         {/* Expand/collapse icon for decks with children */}
@@ -221,12 +234,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             )}
             {hasPendingUpdate && (
               <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
-            )}
-            {/* 3-dot menu: only show when matéria is expanded */}
-            {!isErrorDeck && hasChildren && isExpanded && (
-              <span className="ml-auto">
-                <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-              </span>
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -273,8 +280,24 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           )}
         </div>
 
-        {/* Chevron arrow for navigation (loose decks only) */}
-        {!deckSelectionMode && !isErrorDeck && !hasChildren && (
+        {/* Actions: play + 3-dot — only visible when expanded/focused */}
+        {!isErrorDeck && !deckSelectionMode && showActions && (
+          <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in-0 duration-200">
+            {hasDueCards && (
+              <button
+                onClick={(e) => handleStudy(e, deck.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                aria-label="Estudar"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+              </button>
+            )}
+            <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+          </div>
+        )}
+
+        {/* Chevron arrow for navigation (loose decks, not focused) */}
+        {!deckSelectionMode && !isErrorDeck && !hasChildren && !focused && (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
         )}
       </div>
@@ -285,6 +308,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           {subDecks.map(sub => {
             const subStats = getAggregateStats(sub);
             const subPcts = computeProgressPcts(subStats, sub.total_cards);
+            const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
             return (
               <div
                 key={sub.id}
@@ -294,9 +318,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
-                    <span className="ml-auto">
-                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                    </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
@@ -320,7 +341,18 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                     className="mt-1"
                   />
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {subHasDue && (
+                    <button
+                      onClick={(e) => handleStudy(e, sub.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      aria-label="Estudar"
+                    >
+                      <Play className="h-3 w-3 fill-current" />
+                    </button>
+                  )}
+                  <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                </div>
               </div>
             );
           })}
