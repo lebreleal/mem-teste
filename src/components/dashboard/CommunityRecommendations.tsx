@@ -155,7 +155,7 @@ const CommunityRecommendations = () => {
           for (const td of turmaDecks) {
             if (seenIds.has(td.deck_id)) continue;
             const deck = deckMap.get(td.deck_id);
-            if (!deck || deck.user_id === user?.id) continue;
+            if (!deck) continue;
             seenIds.add(td.deck_id);
             results.push({
               id: td.id, title: deck.name, deck_id: td.deck_id, deck_count: 1,
