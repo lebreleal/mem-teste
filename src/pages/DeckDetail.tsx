@@ -357,6 +357,30 @@ const DeckDetailContent = () => {
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
 
+  // Resolve folder image for blurred hero background
+  const folderImage = useMemo(() => {
+    if (!deck || !decks) return null;
+    let folderId = (deck as any)?.folder_id;
+    if (!folderId && (deck as any)?.parent_deck_id) {
+      let current = deck as any;
+      while (current?.parent_deck_id) {
+        current = decks.find((d: any) => d.id === current.parent_deck_id);
+      }
+      folderId = current?.folder_id;
+    }
+    return folderId;
+  }, [deck, decks]);
+
+  const { data: folderImageUrl } = useQuery({
+    queryKey: ['folder-image', folderImage],
+    queryFn: async () => {
+      const { data } = await supabase.from('folders').select('image_url').eq('id', folderImage!).single();
+      return data?.image_url ?? null;
+    },
+    enabled: !!folderImage,
+    staleTime: 300_000,
+  });
+
   // Resolve back destination: folder name for label
   const backInfo = useMemo(() => {
     if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
