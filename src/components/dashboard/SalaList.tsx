@@ -4,6 +4,9 @@
  */
 
 import { GraduationCap } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import SalaCard from './SalaCard';
 import type { Folder } from '@/types/folder';
 import type { DeckWithStats } from '@/types/deck';
@@ -16,6 +19,7 @@ interface SalaInfo {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
+  questionCount: number;
   dueCount: number;
 }
 
@@ -41,8 +45,46 @@ const countAllDecks = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): n
   return count;
 };
 
+/** Collect all deck IDs recursively */
+const collectAllDeckIds = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): string[] => {
+  const ids = rootDecks.map(d => d.id);
+  const collectSubs = (parentIds: string[]) => {
+    const subs = allDecks.filter(s => s.parent_deck_id && parentIds.includes(s.parent_deck_id) && !s.is_archived);
+    subs.forEach(s => ids.push(s.id));
+    if (subs.length > 0) collectSubs(subs.map(s => s.id));
+  };
+  collectSubs(rootDecks.map(d => d.id));
+  return ids;
+};
+
 const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }: SalaListProps) => {
+  const { user } = useAuth();
   const rootDecks = decks.filter(d => !d.parent_deck_id && !d.is_archived);
+
+  // Fetch question counts per deck (batch query)
+  const allDeckIds = decks.filter(d => !d.is_archived).map(d => d.id);
+  const { data: questionCounts } = useQuery({
+    queryKey: ['deck-question-counts', user?.id],
+    queryFn: async () => {
+      if (allDeckIds.length === 0) return new Map<string, number>();
+      const { data } = await supabase
+        .from('deck_questions')
+        .select('deck_id')
+        .in('deck_id', allDeckIds);
+      const counts = new Map<string, number>();
+      for (const row of data ?? []) {
+        counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
+      }
+      return counts;
+    },
+    enabled: !!user && allDeckIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const getQuestionCount = (deckIds: string[]): number => {
+    if (!questionCounts) return 0;
+    return deckIds.reduce((sum, id) => sum + (questionCounts.get(id) ?? 0), 0);
+  };
 
   // Build sala info for each real folder
   const realSalas: SalaInfo[] = folders
@@ -66,6 +108,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         const stats = getAggregateStats(d);
         dueCount += stats.new_count + stats.learning_count + stats.review_count;
       }
+      const allIds = collectAllDeckIds(folderDecks, decks);
       return {
         id: f.id,
         name: f.name,
@@ -73,6 +116,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
         deckCount: countAllDecks(folderDecks, decks),
         totalCards,
         masteredCards,
+        questionCount: getQuestionCount(allIds),
         dueCount,
       };
     });
@@ -97,6 +141,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       const stats = getAggregateStats(d);
       dueCount += stats.new_count + stats.learning_count + stats.review_count;
     }
+    const allIds = collectAllDeckIds(orphanDecks, decks);
     virtualSala = {
       id: VIRTUAL_SALA_ID,
       name: 'Meus Estudos',
@@ -104,6 +149,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       deckCount: countAllDecks(orphanDecks, decks),
       totalCards,
       masteredCards,
+      questionCount: getQuestionCount(allIds),
       dueCount,
     };
   }
@@ -148,6 +194,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           deckCount={sala.deckCount}
           totalCards={sala.totalCards}
           masteredCards={sala.masteredCards}
+          questionCount={sala.questionCount}
           dueCount={sala.dueCount}
           isVirtual={sala.isVirtual}
           imageUrl={sala.imageUrl}
