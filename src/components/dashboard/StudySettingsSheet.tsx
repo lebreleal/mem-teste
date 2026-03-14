@@ -28,6 +28,7 @@ interface DeckSetting {
   dailyNewLimit: number;
   isEnabled: boolean;
   isMateria: boolean;
+  isSubDeck: boolean;
   subCount: number;
   totalCards: number;
 }
@@ -37,41 +38,60 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
+  // All root decks in this sala (both matérias and loose decks)
   const salaDecks = useMemo(() => {
     if (!currentFolderId) return [];
     return decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
   }, [currentFolderId, decks]);
 
+  // Build ordered list: matéria → its sub-decks → loose decks
   const initialSettings = useMemo(() => {
     const map: Record<string, DeckSetting> = {};
+    const order: string[] = [];
+
     for (const d of salaDecks) {
       const subs = getSubDecks(d.id);
-      const collectTotal = (deckId: string): number => {
-        const dk = decks.find(x => x.id === deckId);
-        if (!dk) return 0;
-        let t = dk.total_cards;
-        for (const c of decks.filter(x => x.parent_deck_id === deckId && !x.is_archived)) t += collectTotal(c.id);
-        return t;
-      };
+      const isMateria = subs.length > 0;
+
       map[d.id] = {
         id: d.id,
         name: d.name,
         dailyNewLimit: d.daily_new_limit ?? 20,
         isEnabled: (d.daily_new_limit ?? 20) > 0,
-        isMateria: subs.length > 0,
+        isMateria,
+        isSubDeck: false,
         subCount: subs.length,
-        totalCards: collectTotal(d.id),
+        totalCards: d.total_cards,
       };
+      order.push(d.id);
+
+      // Add sub-decks right after the matéria
+      if (isMateria) {
+        const sortedSubs = [...subs].sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+        for (const sub of sortedSubs) {
+          map[sub.id] = {
+            id: sub.id,
+            name: sub.name,
+            dailyNewLimit: sub.daily_new_limit ?? 20,
+            isEnabled: (sub.daily_new_limit ?? 20) > 0,
+            isMateria: false,
+            isSubDeck: true,
+            subCount: 0,
+            totalCards: sub.total_cards,
+          };
+          order.push(sub.id);
+        }
+      }
     }
-    return map;
+    return { map, order };
   }, [salaDecks, getSubDecks, decks]);
 
-  const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings);
+  const [settings, setSettings] = useState<Record<string, DeckSetting>>(initialSettings.map);
 
   // Sync settings when sheet opens with new data
   useMemo(() => {
-    if (open) setSettings(initialSettings);
+    if (open) setSettings(initialSettings.map);
   }, [open, initialSettings]);
 
   const updateLimit = useCallback((deckId: string, delta: number) => {
@@ -96,7 +116,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
     setSaving(true);
     try {
       const updates = Object.values(settings).map(s => 
-        supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit } as any).eq('id', s.id)
+        supabase.from('decks').update({ daily_new_limit: s.dailyNewLimit }).eq('id', s.id)
       );
       await Promise.all(updates);
       queryClient.invalidateQueries({ queryKey: ['decks'] });
@@ -111,13 +131,13 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
   const hasChanges = useMemo(() => {
     return Object.keys(settings).some(id => {
-      const init = initialSettings[id];
+      const init = initialSettings.map[id];
       const curr = settings[id];
       return init && curr && init.dailyNewLimit !== curr.dailyNewLimit;
     });
   }, [settings, initialSettings]);
 
-  const items = Object.values(settings);
+  const items = initialSettings.order.map(id => settings[id]).filter(Boolean);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -137,10 +157,15 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
 
         <div className="flex-1 overflow-y-auto divide-y divide-border/50">
           {items.map(item => (
-            <div key={item.id} className={`px-4 py-4 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
-              <div className="flex items-center gap-3 mb-3">
+            <div
+              key={item.id}
+              className={`px-4 py-3 transition-opacity ${item.isEnabled ? '' : 'opacity-40'} ${item.isSubDeck ? 'pl-8 bg-muted/20' : ''}`}
+            >
+              <div className="flex items-center gap-3 mb-2">
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-display font-semibold text-foreground truncate text-sm">{item.name}</h3>
+                  <h3 className={`font-display font-semibold text-foreground truncate ${item.isSubDeck ? 'text-xs' : 'text-sm'}`}>
+                    {item.name}
+                  </h3>
                   <p className="text-xs text-muted-foreground">
                     {item.isMateria ? `${item.subCount} decks · ` : ''}{item.totalCards} cards
                   </p>
@@ -183,7 +208,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         <div className="p-4 border-t border-border/50 flex gap-2">
           <Button
             variant="outline"
-            onClick={() => setSettings(initialSettings)}
+            onClick={() => setSettings(initialSettings.map)}
             disabled={!hasChanges}
             className="gap-1.5"
           >
