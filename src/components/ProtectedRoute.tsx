@@ -24,6 +24,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     && !hideNavPatterns.some(p => location.pathname.includes(p));
   const { toast } = useToast();
 
+  // Add menu state
+  const [showAddMenu, setShowAddMenu] = useState(false);
+
   // Pomodoro state
   const [showPomodoro, setShowPomodoro] = useState(false);
   const [pomodoroMinutes, setPomodoroMinutes] = useState(25);
@@ -35,11 +38,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   const totalPomodoroSeconds = useRef(0);
 
-  // Listen for open-pomodoro event from other components
+  // Listen for events from other components
   useEffect(() => {
-    const handler = () => setShowPomodoro(true);
-    window.addEventListener('open-pomodoro', handler);
-    return () => window.removeEventListener('open-pomodoro', handler);
+    const pomodoroHandler = () => setShowPomodoro(true);
+    const addMenuHandler = () => setShowAddMenu(true);
+    window.addEventListener('open-pomodoro', pomodoroHandler);
+    window.addEventListener('open-add-menu', addMenuHandler);
+    return () => {
+      window.removeEventListener('open-pomodoro', pomodoroHandler);
+      window.removeEventListener('open-add-menu', addMenuHandler);
+    };
   }, []);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
