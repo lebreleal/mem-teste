@@ -12,14 +12,12 @@ import OcclusionEditor from '@/components/manage-deck/OcclusionEditor';
 
 const CARD_TYPE_ICONS: Record<EditorCardType, React.ReactNode> = {
   basic: <MessageSquareText className="h-5 w-5 text-muted-foreground" />,
-  multiple_choice: <CheckSquare className="h-5 w-5 text-muted-foreground" />,
   cloze: <PenLine className="h-5 w-5 text-muted-foreground" />,
   image_occlusion: <Image className="h-5 w-5 text-muted-foreground" />,
 };
 
 const CARD_TYPES_UI = [
   { value: 'basic' as EditorCardType, label: 'Texto', desc: 'Pergunta na frente, resposta no verso' },
-  { value: 'multiple_choice' as EditorCardType, label: 'Múltipla escolha', desc: 'Pergunta com alternativas' },
   { value: 'cloze' as EditorCardType, label: 'Cloze', desc: 'Texto com lacunas para preencher' },
   { value: 'image_occlusion' as EditorCardType, label: 'Oclusão de imagem', desc: 'Oculte partes de uma imagem' },
 ];
