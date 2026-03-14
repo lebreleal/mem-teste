@@ -21,41 +21,33 @@ import {
 const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
 /**
- * 4-color progress bar matching the deck detail gauge classification:
- *  - info/blue (fácil/revisão): review state cards
- *  - success/green (bom/dominado): mastered cards  
- *  - warning/yellow (difícil): learning cards
- *  - destructive/red (errei): relearning cards (shown via learningPct overflow)
- *  - muted/gray (novo): never seen
+/**
+ * 5-segment classification bar matching the deck detail gauge:
+ *  - info/blue: fácil (d ≤ 3)
+ *  - success/green: bom (d ≤ 5)
+ *  - warning/yellow: difícil (d ≤ 7)
+ *  - destructive/red: errei (d > 7)
+ *  - muted/gray: novo (state 0)
  */
-const ClassificationBar = ({ newPct, learningPct, reviewPct, masteredPct, className = '' }: {
-  newPct: number; learningPct: number; reviewPct: number; masteredPct: number; className?: string;
+const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, className = '' }: {
+  facilPct: number; bomPct: number; dificilPct: number; erreiPct: number; novoPct: number; className?: string;
 }) => (
   <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
     <div className="absolute inset-y-0 left-0 flex w-full">
-      {masteredPct > 0 && (
-        <div
-          className="h-full transition-all duration-500 rounded-l-full"
-          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(var(--success))' }}
-        />
+      {facilPct > 0 && (
+        <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />
       )}
-      {reviewPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${reviewPct}%`, backgroundColor: 'hsl(var(--info))' }}
-        />
+      {bomPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />
       )}
-      {learningPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(var(--warning))' }}
-        />
+      {dificilPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />
       )}
-      {newPct > 0 && (
-        <div
-          className="h-full bg-muted transition-all duration-500 rounded-r-full"
-          style={{ width: `${newPct}%` }}
-        />
+      {erreiPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />
+      )}
+      {novoPct > 0 && (
+        <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${novoPct}%` }} />
       )}
     </div>
   </div>
