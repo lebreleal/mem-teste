@@ -85,7 +85,18 @@ interface CommunityDeck {
   link: string;
 }
 
-/** No fallback — only show real data */
+/** Fallback categories when no marketplace data exists */
+const FALLBACK_DECKS: CommunityDeck[] = [
+  { id: 'f-med', title: 'Medicina', deck_id: '', deck_count: 12, card_count: 333, question_count: 9, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/turmas' },
+  { id: 'f-dir', title: 'Direito', deck_id: '', deck_count: 8, card_count: 245, question_count: 15, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/turmas' },
+  { id: 'f-prog', title: 'Programação', deck_id: '', deck_count: 6, card_count: 180, question_count: 12, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/turmas' },
+  { id: 'f-mat', title: 'Matemática', deck_id: '', deck_count: 10, card_count: 290, question_count: 20, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/turmas' },
+  { id: 'f-bio', title: 'Biologia', deck_id: '', deck_count: 7, card_count: 210, question_count: 8, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/turmas' },
+  { id: 'f-fis', title: 'Física', deck_id: '', deck_count: 5, card_count: 150, question_count: 6, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/turmas' },
+  { id: 'f-qui', title: 'Química', deck_id: '', deck_count: 4, card_count: 120, question_count: 5, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/turmas' },
+  { id: 'f-neuro', title: 'Neurociência', deck_id: '', deck_count: 3, card_count: 95, question_count: 4, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/turmas' },
+  { id: 'f-idiom', title: 'Idiomas', deck_id: '', deck_count: 9, card_count: 310, question_count: 11, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/turmas' },
+];
 
 const CommunityRecommendations = () => {
   const navigate = useNavigate();
@@ -173,10 +184,7 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  const displayDecks = recommendations ?? [];
-
-  // Don't render if no real data
-  if (!isLoading && displayDecks.length === 0) return null;
+  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
 
   if (isLoading) {
     return (
