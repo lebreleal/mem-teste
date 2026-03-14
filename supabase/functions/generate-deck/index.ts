@@ -354,7 +354,7 @@ ${getOutputExamples(formats)}`;
     const cardProperties: Record<string, any> = {
       front: { type: "string", description: "Card front content" },
       back: { type: "string", description: "Card back content (empty string for cloze)" },
-      type: { type: "string", enum: ["basic", "cloze", "multiple_choice"], description: "Card type" },
+      type: { type: "string", enum: ["basic", "cloze"], description: "Card type" },
     };
     const toolSchema: any = {
       type: "object",
@@ -365,8 +365,6 @@ ${getOutputExamples(formats)}`;
             type: "object",
             properties: {
               ...cardProperties,
-              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (exactly 4 items, max 8 words each)" },
-              correctIndex: { type: "integer", description: "0-based index of correct option" },
             },
             required: ["front", "back", "type"],
             additionalProperties: false,
