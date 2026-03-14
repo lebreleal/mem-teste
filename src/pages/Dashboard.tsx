@@ -284,7 +284,11 @@ const Dashboard = () => {
                   <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
                     <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => state.archiveFolder.mutate(state.currentFolderId!)}>
+                  <DropdownMenuItem onClick={async () => {
+                    await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                    state.setCurrentFolderId(null);
+                    setSearchParams({}, { replace: true });
+                  }}>
                     <Archive className="h-4 w-4 mr-2" /> Arquivar sala
                   </DropdownMenuItem>
                   <DropdownMenuItem
