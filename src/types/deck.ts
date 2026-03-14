@@ -29,6 +29,12 @@ export interface DeckWithStats {
   total_cards: number;
   /** Cards that have graduated to review state (state >= 2) */
   mastered_cards: number;
+  /** Difficulty-based classification counts (matches gauge in deck detail) */
+  class_novo: number;
+  class_facil: number;
+  class_bom: number;
+  class_dificil: number;
+  class_errei: number;
 }
 
 /** Raw card row from the cards table. */

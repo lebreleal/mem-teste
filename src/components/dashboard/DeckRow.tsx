@@ -21,41 +21,33 @@ import {
 const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
 /**
- * 4-color progress bar matching the deck detail gauge classification:
- *  - info/blue (fácil/revisão): review state cards
- *  - success/green (bom/dominado): mastered cards  
- *  - warning/yellow (difícil): learning cards
- *  - destructive/red (errei): relearning cards (shown via learningPct overflow)
- *  - muted/gray (novo): never seen
+/**
+ * 5-segment classification bar matching the deck detail gauge:
+ *  - info/blue: fácil (d ≤ 3)
+ *  - success/green: bom (d ≤ 5)
+ *  - warning/yellow: difícil (d ≤ 7)
+ *  - destructive/red: errei (d > 7)
+ *  - muted/gray: novo (state 0)
  */
-const ClassificationBar = ({ newPct, learningPct, reviewPct, masteredPct, className = '' }: {
-  newPct: number; learningPct: number; reviewPct: number; masteredPct: number; className?: string;
+const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, className = '' }: {
+  facilPct: number; bomPct: number; dificilPct: number; erreiPct: number; novoPct: number; className?: string;
 }) => (
   <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
     <div className="absolute inset-y-0 left-0 flex w-full">
-      {masteredPct > 0 && (
-        <div
-          className="h-full transition-all duration-500 rounded-l-full"
-          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(var(--success))' }}
-        />
+      {facilPct > 0 && (
+        <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />
       )}
-      {reviewPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${reviewPct}%`, backgroundColor: 'hsl(var(--info))' }}
-        />
+      {bomPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />
       )}
-      {learningPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(var(--warning))' }}
-        />
+      {dificilPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />
       )}
-      {newPct > 0 && (
-        <div
-          className="h-full bg-muted transition-all duration-500 rounded-r-full"
-          style={{ width: `${newPct}%` }}
-        />
+      {erreiPct > 0 && (
+        <div className="h-full transition-all duration-500" style={{ width: `${erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />
+      )}
+      {novoPct > 0 && (
+        <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${novoPct}%` }} />
       )}
     </div>
   </div>
@@ -123,15 +115,27 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
 }
 
-/** Compute 4-segment percentages for classification bar */
-function computeClassificationPcts(stats: { new_count: number; learning_count: number; review_count: number }, totalCards: number) {
-  if (totalCards === 0) return { newPct: 0, learningPct: 0, reviewPct: 0, masteredPct: 0 };
-  const masteredCount = Math.max(0, totalCards - stats.new_count - stats.learning_count - stats.review_count);
+/** Aggregate 5-segment classification counts across deck + descendants */
+function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) => DeckWithStats[]) {
+  let facil = deck.class_facil ?? 0, bom = deck.class_bom ?? 0, dificil = deck.class_dificil ?? 0, errei = deck.class_errei ?? 0, novo = deck.class_novo ?? 0;
+  let total = deck.total_cards;
+  const collect = (parentId: string) => {
+    const subs = getSubDecks(parentId);
+    for (const s of subs) {
+      facil += s.class_facil ?? 0; bom += s.class_bom ?? 0; dificil += s.class_dificil ?? 0; errei += s.class_errei ?? 0; novo += s.class_novo ?? 0;
+      total += s.total_cards;
+      collect(s.id);
+    }
+  };
+  collect(deck.id);
+  if (total === 0) return { facilPct: 0, bomPct: 0, dificilPct: 0, erreiPct: 0, novoPct: 0, totalCards: 0 };
   return {
-    newPct: (stats.new_count / totalCards) * 100,
-    learningPct: (stats.learning_count / totalCards) * 100,
-    reviewPct: (stats.review_count / totalCards) * 100,
-    masteredPct: (masteredCount / totalCards) * 100,
+    facilPct: (facil / total) * 100,
+    bomPct: (bom / total) * 100,
+    dificilPct: (dificil / total) * 100,
+    erreiPct: (errei / total) * 100,
+    novoPct: (novo / total) * 100,
+    totalCards: total,
   };
 }
 
@@ -154,21 +158,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const hasChildren = subDecks.length > 0;
   const isExpanded = expandedAccordionId === deck.id;
 
-  // Aggregate totals: this deck + all sub-decks
-  const { totalCards, aggStats } = useMemo(() => {
-    let total = deck.total_cards;
-    const collectSubs = (parentId: string) => {
-      const subs = getSubDecks(parentId);
-      for (const s of subs) {
-        total += s.total_cards;
-        collectSubs(s.id);
-      }
-    };
-    collectSubs(deck.id);
-    return { totalCards: total, aggStats: getAggregateStats(deck) };
-  }, [deck, getSubDecks, getAggregateStats]);
-
-  const classPcts = computeClassificationPcts(aggStats, totalCards);
+  // Aggregate classification across deck + all descendants
+  const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
+  const totalCards = classPcts.totalCards;
+  const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
@@ -271,10 +264,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </div>
           {!isErrorDeck && (
             <ClassificationBar
-              newPct={classPcts.newPct}
-              learningPct={classPcts.learningPct}
-              reviewPct={classPcts.reviewPct}
-              masteredPct={classPcts.masteredPct}
+              facilPct={classPcts.facilPct}
+              bomPct={classPcts.bomPct}
+              dificilPct={classPcts.dificilPct}
+              erreiPct={classPcts.erreiPct}
+              novoPct={classPcts.novoPct}
               className="mt-1.5"
             />
           )}
@@ -311,7 +305,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         <div className="bg-muted/30">
           {subDecks.map(sub => {
             const subStats = getAggregateStats(sub);
-            const subClassPcts = computeClassificationPcts(subStats, sub.total_cards);
+            const subClass = aggregateClassification(sub, getSubDecks);
             const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
             return (
               <div
@@ -339,10 +333,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                     )}
                   </div>
                   <ClassificationBar
-                    newPct={subClassPcts.newPct}
-                    learningPct={subClassPcts.learningPct}
-                    reviewPct={subClassPcts.reviewPct}
-                    masteredPct={subClassPcts.masteredPct}
+                    facilPct={subClass.facilPct}
+                    bomPct={subClass.bomPct}
+                    dificilPct={subClass.dificilPct}
+                    erreiPct={subClass.erreiPct}
+                    novoPct={subClass.novoPct}
                     className="mt-1"
                   />
                 </div>
