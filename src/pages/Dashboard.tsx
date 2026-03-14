@@ -155,6 +155,7 @@ const Dashboard = () => {
           await refetchTurma();
           queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
           toast({ title: 'Sala despublicada' });
+          setPublishing(false);
           return;
         }
       }
