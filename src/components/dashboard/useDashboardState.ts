@@ -348,7 +348,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     // Data
     decks, folders, isLoading,
     currentFolderId, setCurrentFolderId,
-    isInsideSala, isVirtualSala,
+    isInsideSala,
     currentFolders, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
