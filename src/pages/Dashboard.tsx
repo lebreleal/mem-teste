@@ -224,6 +224,49 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
+  // Collect all deck IDs in the current sala (including nested sub-decks)
+  const salaDeckIds = useMemo(() => {
+    if (!state.isInsideSala) return [] as string[];
+    const ids: string[] = [];
+    const collect = (deckId: string) => {
+      ids.push(deckId);
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) collect(c.id);
+    };
+    for (const deck of state.currentDecks) collect(deck.id);
+    return ids;
+  }, [state.isInsideSala, state.currentDecks, allDecks]);
+
+  // Fetch difficulty-based classification for the sala's cards
+  const { data: salaDifficultyStats } = useQuery({
+    queryKey: ['sala-difficulty-stats', salaDeckIds.join(',')],
+    queryFn: async () => {
+      if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+      let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+      const BATCH = 200;
+      for (let i = 0; i < salaDeckIds.length; i += BATCH) {
+        const batch = salaDeckIds.slice(i, i + BATCH);
+        const { data } = await supabase
+          .from('cards')
+          .select('state, difficulty')
+          .in('deck_id', batch);
+        if (data) {
+          for (const c of data) {
+            if (c.state === 0) { novo++; continue; }
+            const d = c.difficulty ?? 5;
+            if (d <= 3) facil++;
+            else if (d <= 5) bom++;
+            else if (d <= 7) dificil++;
+            else errei++;
+          }
+        }
+      }
+      return { novo, facil, bom, dificil, errei };
+    },
+    enabled: salaDeckIds.length > 0,
+    staleTime: 30_000,
+  });
+
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
@@ -244,7 +287,6 @@ const Dashboard = () => {
       reviewedToday += s.reviewed_today;
       totalCards += collectTotalCards(deck.id);
     }
-    const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
@@ -253,8 +295,13 @@ const Dashboard = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks]);
+
+    // Difficulty-based classification
+    const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const masteredCount = ds.facil + ds.bom; // "dominou" = cards classified as Fácil or Bom
+
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount, ...ds };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
