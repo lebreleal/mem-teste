@@ -303,11 +303,14 @@ const Dashboard = () => {
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
-    // Difficulty-based classification
+    // Difficulty-based classification — use sum of classifications as authoritative total
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-    const masteredCount = totalCards - ds.novo; // "feito" = any card already reviewed (not new)
+    const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
+    // Use classified total when available (more accurate), fallback to deck stats
+    const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
+    const masteredCount = effectiveTotal - ds.novo;
 
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount, ...ds };
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds };
   }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
 
   // Handle sala click: navigate into it
