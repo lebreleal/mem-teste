@@ -286,8 +286,9 @@ Deno.serve(async (req) => {
 
     const trimmedContent = textContent;
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
-    const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
-    const detail = detailLevel || "standard";
+    // Filter out multiple_choice from formats (no longer supported)
+    const formats = (cardFormats?.length ? cardFormats : ["qa", "cloze"]).filter((f: string) => f !== "multiple_choice");
+    if (formats.length === 0) formats.push("qa", "cloze");
 
     // Flash-lite uses simplified prompt; Pro/Flash use full prompt
     let systemPrompt: string;
