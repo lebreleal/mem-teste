@@ -175,6 +175,7 @@ const DeckStatsCard = () => {
         ESTUDAR
         <Play className="h-4 w-4 fill-current" />
       </Button>
+      </div>
     </div>
   );
 };
