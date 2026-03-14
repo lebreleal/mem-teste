@@ -335,13 +335,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-3 mb-2">
                     {/* Sala image with change-image overlay */}
                     <div className="relative shrink-0">
-                      {folderImage ? (
-                        <img src={folderImage} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
-                      ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 border border-border/30">
-                          <Layers className="h-7 w-7 text-primary" />
-                        </div>
-                      )}
+                      <img src={folderImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
                       <button
                         onClick={() => setSalaImageOpen(true)}
                         className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
