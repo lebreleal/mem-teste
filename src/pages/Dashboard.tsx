@@ -222,14 +222,24 @@ const Dashboard = () => {
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0, totalCards = 0;
+    const collectTotalCards = (deckId: string): number => {
+      const dk = allDecks.find(d => d.id === deckId);
+      if (!dk) return 0;
+      let t = dk.total_cards;
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) t += collectTotalCards(c.id);
+      return t;
+    };
     for (const deck of state.currentDecks) {
       const s = state.getAggregateStats(deck);
       newCount += s.new_count;
       learningCount += s.learning_count;
       reviewCount += s.review_count;
       reviewedToday += s.reviewed_today;
+      totalCards += collectTotalCards(deck.id);
     }
+    const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
@@ -238,8 +248,8 @@ const Dashboard = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats]);
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
