@@ -118,19 +118,13 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   /** Are we at the root level (showing salas) or inside a folder? */
   const isInsideSala = currentFolderId !== null;
 
-  /** Virtual sala ID for orphan decks */
-  const VIRTUAL_SALA_ID = '__meus_estudos__';
-  const isVirtualSala = currentFolderId === VIRTUAL_SALA_ID;
-
   const currentDecks = useMemo(
     () => {
       if (!isInsideSala) return []; // At root, we show salas, not decks
-      const filtered = isVirtualSala
-        ? decks.filter(d => !d.parent_deck_id && !d.is_archived && !d.folder_id)
-        : decks.filter(d => !d.parent_deck_id && !d.is_archived && d.folder_id === currentFolderId);
+      const filtered = decks.filter(d => !d.parent_deck_id && !d.is_archived && d.folder_id === currentFolderId);
       return filtered.sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
     },
-    [decks, currentFolderId, isInsideSala, isVirtualSala]
+    [decks, currentFolderId, isInsideSala]
   );
 
   /** All root decks (used by SalaList at the root level) */
