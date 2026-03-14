@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -297,7 +297,7 @@ const Dashboard = () => {
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
-    const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
+    const avgSec = avgSecondsPerCard;
     const remainingMin = Math.ceil((totalDue * avgSec) / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
@@ -442,7 +442,7 @@ const Dashboard = () => {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent side="top" className="text-xs w-56 p-2">
-                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje.
+                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
                         </PopoverContent>
                       </Popover>
                     </div>
