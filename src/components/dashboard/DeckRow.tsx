@@ -199,6 +199,16 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   </div>
                   <Progress value={subMastery} className="h-1 mt-1" />
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/study/${sub.id}`);
+                  }}
+                  className="shrink-0 h-8 w-8 rounded-full bg-primary/90 flex items-center justify-center text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+                  title="Estudar"
+                >
+                  <Play className="h-3.5 w-3.5 ml-0.5" />
+                </button>
               </div>
             );
           })}
