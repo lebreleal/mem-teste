@@ -121,15 +121,26 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <SheetTitle className="text-base">Adicionar</SheetTitle>
           </SheetHeader>
           <div className="grid gap-2 pt-4">
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck'); }}>
-              <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck'); }}>
-              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import'); }}>
-              <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
-            </Button>
+            {/* At dashboard root (not inside a sala): show "Criar Sala" */}
+            {isOnDashboard && !isInsideSala && (
+              <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
+                <FolderPlus className="h-5 w-5 text-primary" /> Criar sala
+              </Button>
+            )}
+            {/* Inside a sala or not on dashboard: show deck actions */}
+            {(!isOnDashboard || isInsideSala) && (
+              <>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
+                </Button>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
+                </Button>
+                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                  <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+                </Button>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>
