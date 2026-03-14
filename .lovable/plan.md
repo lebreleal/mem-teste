@@ -1,157 +1,82 @@
-# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
-## Implementado
 
-### 1. Coluna `parent_concept_id` em `global_concepts`
-- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
-- Índice criado para queries eficientes
+## Reorganização: Salas → Matérias → Sub-decks (Accordion)
 
-### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
-- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
-- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
-- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
+### Resumo
 
-### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
-- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
-- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
+O Dashboard passa a ter 2 níveis de navegação:
 
-### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
-- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
-- Seção visual com badges clicáveis na aba "Meus"
+```text
+Home (lista de Salas)
+├── 📚 Turma 11 B Uninove     [tap → entra]
+│   ├── Biologia               (deck raiz = "matéria")
+│   │   ├── ▸ Citologia         (sub-deck, accordion)
+│   │   └── ▸ Genética
+│   ├── Matemática
+│   └── 📕 Caderno de Erros
+├── 📚 Meus Estudos            (sala padrão para decks órfãos)
+└── [+ Criar Sala]
+```
 
-### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
-- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
-- Tool schema inclui `prerequisites` como campo obrigatório
-- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
+Apenas um accordion aberto por vez. Ao abrir outro, o anterior fecha.
 
-### 6. ErrorNotebook atualizado para grafo de conceitos
-- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
-- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
-- Suporta múltiplos source concepts
+### Análise de Usabilidade
 
-### 7. Donut Chart de Progresso por Categoria
-- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
-- Cada fatia = uma grande área médica, colorida por % de domínio
-- Clicar na fatia filtra a lista por aquela categoria
-- Exibe % total de domínio no centro
+Sim, fica melhor. Razões concretas:
 
-### 8. Fronteira Enforced (Conceitos Bloqueados)
-- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
-- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
-- Conceitos bloqueados não podem ser estudados diretamente
+1. **Redução de carga cognitiva** — Hick's Law: menos itens por tela = decisão mais rápida. Em vez de 15 decks soltos, o usuário vê 2-3 salas.
+2. **Agrupamento natural** — Gestalt (proximidade): decks de uma mesma turma/contexto ficam juntos.
+3. **Progressive disclosure** — Sub-decks ficam escondidos até o usuário pedir. Menos ruído visual.
+4. **Modelo mental claro** — Sala = contexto real (turma, curso, concurso). Matéria = disciplina. Sub-deck = tópico.
 
-### 9. Auto-mapeamento de Pré-requisitos via IA
-- Botão "Mapear pré-requisitos com IA" na página de Conceitos
-- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
-- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
-- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
+### Plano Técnico
 
-### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
-- Botão "Diagnóstico Inicial" na página de Conceitos
-- Seleciona ~20 conceitos distribuídos por profundidade no grafo
-- Para cada conceito, busca uma questão vinculada
-- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
-- Se erra → marca como fraco (state=0) para revisão futura
-- Exibe resultado final com contagem de acertos/erros
+#### 1. Dashboard nível raiz: Lista de Salas
 
-### 11. Princípios de Neurociência Aplicados (Learning Science)
+**`Dashboard.tsx`** — Quando `currentFolderId === null`, renderizar `SalaList` (novo componente) em vez de `DeckList`.
 
-#### Rating Automático Binário (StudyMode)
-- Removidos botões manuais "Errei/Bom/Fácil"
-- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
-- Base: Dunning-Kruger — alunos são maus autoavaliadores
+**Novo `SalaCard.tsx`** — Card para cada folder mostrando:
+- Nome da sala
+- Contagem de matérias (decks raiz naquela folder)
+- Barra de progresso agregada (mastery média)
+- Tap → seta `?folder=ID` via `setCurrentFolderId`
 
-#### Mastery Threshold (MASTERY_THRESHOLD = 2)
-- Exige 2 acertos consecutivos para confirmar domínio de um conceito
-- Aplicado tanto no StudyMode quanto no DiagnosticMode
-- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
+**Migração automática de decks órfãos** — No `useDashboardState`, se existirem decks raiz sem `folder_id`, mostrar uma Sala virtual "Meus Estudos" que agrupa esses decks. Ao clicar, cria a folder no banco e move os decks.
 
-#### Interleaved Practice (ErrorNotebook)
-- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
-- Fisher-Yates shuffle garante aleatoriedade uniforme
-- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
+#### 2. Dentro da Sala: Matérias com Accordion
 
-#### Elaborative Interrogation (StudyMode)
-- Após erro, campo de texto: "Por que a alternativa X está correta?"
-- Aluno tenta explicar antes de ver a explicação da IA
-- Opcional (pode pular), mas ativa encoding profundo
-- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
+**`DeckRow.tsx`** — Adicionar botão de expand/collapse (ChevronDown) quando o deck tem sub-decks. Sub-decks renderizados inline com indent. Estado controlado: só um expandido por vez (ao expandir deck X, colapsar o que estava aberto).
 
-#### Confidence-Based Assessment (StudyMode)
-- Após acertar, pergunta "Você tinha certeza?"
-- Se "Chutei" → não incrementa streak, exige mais uma questão
-- Impede que chutes sortudos confirmem domínio
-- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
+**`DeckList.tsx`** — Receber prop `accordionMode` para ativar o comportamento de "só um aberto".
 
-## Correções Arquiteturais — Unificação Cards ↔ Temas
+#### 3. Navegação e Breadcrumb
 
-### 12. Card Review → Concept Mastery Sync (Fase 1a)
-- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
-- Se rating≥3: incrementa correct_count do tema vinculado
-- Se rating=1: incrementa wrong_count do tema vinculado
-- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
+- Botão de voltar no topo quando dentro de uma Sala (já existe `breadcrumb` no state)
+- Header mostra nome da Sala atual
 
-### 13. Temas Due → Flashcard Retrieval (Fase 1b)
-- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
-- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
-- Fallback para `/conceitos` se não houver deck vinculado
-- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
+#### 4. Menu "+" Atualizado
 
-### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
-- Novo componente `DiagnosticBanner.tsx` no Dashboard
-- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
-- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
-- Dismissível com persistência em localStorage
+**`ProtectedRoute.tsx`** — Sheet do "+" muda conforme contexto:
+- Na raiz: "Criar Sala" como opção principal
+- Dentro de uma Sala: "Criar Baralho", "Criar com IA", "Importar Cartões" (associados à sala atual)
 
-### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
-- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
-- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
-- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
-- Guard contra execução duplicada via `_autoMapInFlight` Set
+#### 5. Filtro de decks por folder_id
 
-### 16. Daily Theme Limit (Fase 3a)
-- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
-- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
-- Exposto no hook para UI consumir (banners, limites)
+**`useDashboardState.ts`** — `currentDecks` passa a filtrar por `folder_id === currentFolderId` quando dentro de uma sala. Na raiz, não mostra decks (mostra salas).
 
-## Arquivos Modificados
+### Arquivos Afetados
+
 | Arquivo | Mudança |
 |---|---|
-| Supabase migration | `parent_concept_id` + index |
-| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
-| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
-| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
-| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
-| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
-| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
-| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
-| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
-| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
-| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
-| `supabase/config.toml` | Adicionada config map-prerequisites |
-| `src/pages/Study.tsx` | Sync card review → concept mastery |
-| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
-| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
-| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
+| `src/pages/Dashboard.tsx` | Condicional raiz vs dentro-da-sala, breadcrumb, botão voltar |
+| `src/components/dashboard/useDashboardState.ts` | Filtrar decks por `folder_id`, lógica de sala virtual "Meus Estudos" |
+| `src/components/dashboard/DeckList.tsx` | Accordion mode (só um aberto) |
+| `src/components/dashboard/DeckRow.tsx` | Botão expand sub-decks, renderização inline |
+| `src/components/ProtectedRoute.tsx` | Menu "+" contextual (Sala vs Deck) |
+| **Novo**: `src/components/dashboard/SalaCard.tsx` | Card visual para cada Sala |
+| **Novo**: `src/components/dashboard/SalaList.tsx` | Lista de salas na raiz |
 
-### 17. Edição de Conceitos no EditQuestionDialog
-- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
-- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
-- Campo de explicação editável
-- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
+### Sem Migração de Banco
 
-### 18. Reuso Inteligente de Conceitos pela IA
-- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
-- Fallback: top 100 conceitos do usuário por uso
-- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
-- Custo: ~500 tokens extras (~centavos)
-- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
+A tabela `folders` já existe com `user_id`, `name`, `parent_id`, `sort_order`, `is_archived`. Os decks já têm `folder_id`. Nenhum SQL necessário.
 
-### 19. Descrição Contextual por Questão (context_description)
-- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
-  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
-  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
-- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
-- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
-- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
-- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
