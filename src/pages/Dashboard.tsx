@@ -649,21 +649,6 @@ const Dashboard = () => {
         {state.premiumOpen && <PremiumModal open={state.premiumOpen} onClose={() => state.setPremiumOpen(false)} defaultTab={state.premiumTab} />}
       </Suspense>
 
-      <Suspense fallback={null}>
-        {!!actions.communityBlockTarget && (
-          <CommunityDeleteBlockDialog
-            open={!!actions.communityBlockTarget}
-            onOpenChange={(open) => !open && actions.setCommunityBlockTarget(null)}
-            itemName={actions.communityBlockTarget?.name ?? ''}
-            itemType="deck"
-            onArchive={() => {
-              state.archiveDeck.mutate(actions.communityBlockTarget!.id);
-              actions.setCommunityBlockTarget(null);
-              toast({ title: 'Baralho arquivado!' });
-            }}
-          />
-        )}
-      </Suspense>
 
       <Suspense fallback={null}>
         {studyWeightsOpen && (
