@@ -94,26 +94,11 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
 }
 
-/**
- * Compute 4-segment progress percentages:
- *  - Dominado (mastered, not due): total - new - learning - review
- *  - Revisão (due for review)
- *  - Aprendendo (learning)
- *  - Novo (new)
- */
-function computeProgressPcts(stats: { new_count: number; learning_count: number; review_count: number; reviewed_today: number }, totalCards: number) {
-  if (totalCards === 0) return { newPct: 0, learningPct: 0, reviewPct: 0, masteredPct: 0 };
-  const newCount = stats.new_count;
-  const learningCount = stats.learning_count;
-  const reviewCount = stats.review_count;
-  const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
-  const total = totalCards;
-  return {
-    newPct: (newCount / total) * 100,
-    learningPct: (learningCount / total) * 100,
-    reviewPct: (reviewCount / total) * 100,
-    masteredPct: (masteredCount / total) * 100,
-  };
+/** Compute mastery percentage: mastered = total - new - learning - review */
+function computeMasteryPct(stats: { new_count: number; learning_count: number; review_count: number }, totalCards: number): number {
+  if (totalCards === 0) return 0;
+  const masteredCount = Math.max(0, totalCards - stats.new_count - stats.learning_count - stats.review_count);
+  return (masteredCount / totalCards) * 100;
 }
 
 
