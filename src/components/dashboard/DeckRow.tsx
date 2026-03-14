@@ -20,43 +20,15 @@ import {
 
 const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
-/**
- * 4-color progress bar:
- *  - green (dominado): mastered, not due
- *  - primary/blue (revisão): due for review
- *  - amber (aprendendo): learning
- *  - muted/gray (novo): new cards
- */
-const MultiColorProgress = ({ newPct, learningPct, reviewPct, masteredPct, className = '' }: {
-  newPct: number; learningPct: number; reviewPct: number; masteredPct: number; className?: string;
-}) => (
+/** Single-color mastery bar showing domínio percentage */
+const MasteryBar = ({ masteryPct, className = '' }: { masteryPct: number; className?: string }) => (
   <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
-    <div className="absolute inset-y-0 left-0 flex w-full">
-      {masteredPct > 0 && (
-        <div
-          className="h-full transition-all duration-500 rounded-l-full"
-          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(142 71% 45%)' }}
-        />
-      )}
-      {reviewPct > 0 && (
-        <div
-          className="h-full bg-primary transition-all duration-500"
-          style={{ width: `${reviewPct}%` }}
-        />
-      )}
-      {learningPct > 0 && (
-        <div
-          className="h-full transition-all duration-500"
-          style={{ width: `${learningPct}%`, backgroundColor: 'hsl(45 93% 47%)' }}
-        />
-      )}
-      {newPct > 0 && (
-        <div
-          className="h-full bg-muted transition-all duration-500 rounded-r-full"
-          style={{ width: `${newPct}%` }}
-        />
-      )}
-    </div>
+    {masteryPct > 0 && (
+      <div
+        className="absolute inset-y-0 left-0 h-full bg-primary rounded-full transition-all duration-500"
+        style={{ width: `${masteryPct}%` }}
+      />
+    )}
   </div>
 );
 
