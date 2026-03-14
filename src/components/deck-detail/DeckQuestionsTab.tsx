@@ -290,7 +290,7 @@ const ConceptMasterySection = ({
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden flex">
             {strongCount > 0 && (
-              <div className="h-full transition-all duration-500" style={{ width: `${(strongCount / concepts.length) * 100}%`, background: 'hsl(142 71% 45%)' }} />
+              <div className="h-full transition-all duration-500" style={{ width: `${(strongCount / concepts.length) * 100}%`, background: 'hsl(var(--success))' }} />
             )}
             {learningCount > 0 && (
               <div className="h-full transition-all duration-500" style={{ width: `${(learningCount / concepts.length) * 100}%`, background: 'hsl(38 92% 50%)' }} />
