@@ -402,7 +402,15 @@ const DeckDetailContent = () => {
               if (fromCommunity && communityTurmaId) {
                 navigate(`/turmas/${communityTurmaId}`, { replace: true });
               } else {
-                const folderId = (deck as any)?.folder_id;
+                // Find the folder_id: if sub-deck, walk up to root parent
+                let folderId = (deck as any)?.folder_id;
+                if (!folderId && (deck as any)?.parent_deck_id && decks) {
+                  let current = deck as any;
+                  while (current?.parent_deck_id) {
+                    current = decks.find((d: any) => d.id === current.parent_deck_id);
+                  }
+                  folderId = current?.folder_id;
+                }
                 navigate(folderId ? `/dashboard?folder=${folderId}` : '/dashboard', { replace: true });
               }
             }}>
