@@ -64,7 +64,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
+  
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
