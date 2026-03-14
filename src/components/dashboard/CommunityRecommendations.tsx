@@ -83,6 +83,19 @@ interface CommunityDeck {
   link: string;
 }
 
+/** Fallback categories when no marketplace data exists */
+const FALLBACK_DECKS: CommunityDeck[] = [
+  { id: 'f-med', title: 'Medicina', deck_id: '', card_count: 0, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/explorar' },
+  { id: 'f-dir', title: 'Direito', deck_id: '', card_count: 0, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/explorar' },
+  { id: 'f-prog', title: 'Programação', deck_id: '', card_count: 0, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/explorar' },
+  { id: 'f-mat', title: 'Matemática', deck_id: '', card_count: 0, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/explorar' },
+  { id: 'f-bio', title: 'Biologia', deck_id: '', card_count: 0, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/explorar' },
+  { id: 'f-fis', title: 'Física', deck_id: '', card_count: 0, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/explorar' },
+  { id: 'f-qui', title: 'Química', deck_id: '', card_count: 0, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/explorar' },
+  { id: 'f-neuro', title: 'Neurociência', deck_id: '', card_count: 0, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/explorar' },
+  { id: 'f-idiom', title: 'Idiomas', deck_id: '', card_count: 0, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/explorar' },
+];
+
 const CommunityRecommendations = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -137,13 +150,11 @@ const CommunityRecommendations = () => {
           const deckMap = new Map<string, { name: string; user_id: string }>();
           if (decks) for (const d of decks as any[]) deckMap.set(d.id, { name: d.name, user_id: d.user_id });
 
-          // Get turma names
           const turmaIds = [...new Set(turmaDecks.map(td => td.turma_id))];
           const { data: turmas } = await supabase.from('turmas').select('id, name').in('id', turmaIds);
           const turmaMap = new Map<string, string>();
           if (turmas) for (const t of turmas as any[]) turmaMap.set(t.id, t.name);
 
-          // Card counts
           const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', tdDeckIds);
           const countMap = new Map<string, number>();
           if (cardCounts) for (const c of cardCounts as any[]) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
@@ -169,6 +180,10 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
+  // Use real data if available, otherwise show fallback categories
+  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
+  const isFallback = !recommendations || recommendations.length === 0;
+
   if (isLoading) {
     return (
       <div className="mt-6 px-4">
@@ -184,22 +199,14 @@ const CommunityRecommendations = () => {
     );
   }
 
-  if (!recommendations || recommendations.length === 0) return null;
-
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between px-4 mb-3">
         <h2 className="text-sm font-semibold text-foreground">Você também pode gostar...</h2>
-        <button
-          onClick={() => navigate('/explorar')}
-          className="flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          Ver mais <ChevronRight className="h-3 w-3" />
-        </button>
       </div>
 
       <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-        {recommendations.map(deck => (
+        {displayDecks.map(deck => (
           <button
             key={deck.id}
             onClick={() => navigate(deck.link)}
@@ -214,13 +221,16 @@ const CommunityRecommendations = () => {
             />
             <div className="p-2.5">
               <h3 className="text-xs font-semibold text-foreground truncate">{deck.title}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="flex items-center gap-0.5">
+              {!isFallback && deck.card_count > 0 && (
+                <div className="flex items-center gap-0.5 mt-1">
                   <Layers className="h-3 w-3 text-muted-foreground" />
                   <span className="text-[10px] text-muted-foreground">{deck.card_count} cards</span>
                 </div>
-              </div>
-              {deck.seller_name && (
+              )}
+              {isFallback && (
+                <p className="text-[10px] text-muted-foreground mt-1">Explorar categoria</p>
+              )}
+              {!isFallback && deck.seller_name && (
                 <p className="text-[10px] text-muted-foreground truncate mt-0.5">por {deck.seller_name}</p>
               )}
             </div>
