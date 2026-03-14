@@ -13,10 +13,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, FolderOpen, Search, Layers } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers } from 'lucide-react';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import type { BreadcrumbItem } from './useDashboardState';
 
-interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean }
+interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null }
 interface MovableDeck { id: string; name: string; parent_deck_id: string | null }
 
 interface DashboardDialogsProps {
@@ -200,7 +201,11 @@ const MoveBrowser = ({
             }}
             className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
           >
-            <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+            <img
+              src={f.image_url || defaultSalaIcon}
+              alt={f.name}
+              className="h-8 w-8 rounded-lg object-cover shrink-0"
+            />
             <span className="flex-1 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
