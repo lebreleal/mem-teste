@@ -155,6 +155,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     if (!state.deleteTarget) return;
     try {
       if (state.deleteTarget.type === 'folder') {
+        // Move all decks out of this folder before deleting (avoid FK constraint)
+        await supabase.from('decks').update({ folder_id: null } as any).eq('folder_id', state.deleteTarget.id);
         // Clear source_turma references before deleting to avoid FK issues
         await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.deleteTarget.id);
         const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
