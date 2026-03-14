@@ -1793,7 +1793,7 @@ const DeckQuestionsTab = ({
               <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{statsData.total - statsData.answered}</strong> A responder
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} /> <strong className="text-foreground">{statsData.correct}</strong> Corretas
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'hsl(var(--success))' }} /> <strong className="text-foreground">{statsData.correct}</strong> Corretas
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-destructive" /> <strong className="text-foreground">{statsData.wrong}</strong> Erradas
