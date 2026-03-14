@@ -35,6 +35,8 @@ import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DeckList from '@/components/dashboard/DeckList';
+import SalaList from '@/components/dashboard/SalaList';
+import { VIRTUAL_SALA_ID } from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
