@@ -58,6 +58,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       return {
         id: f.id,
         name: f.name,
+        imageUrl: f.image_url,
         subjectCount: folderDecks.length,
         totalCards,
         masteredCards,
