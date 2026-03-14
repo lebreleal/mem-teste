@@ -167,7 +167,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     return { totalCards: total, aggStats: getAggregateStats(deck) };
   }, [deck, getSubDecks, getAggregateStats]);
 
-  const masteryPct = computeMasteryPct(aggStats, totalCards);
+  const classPcts = computeClassificationPcts(aggStats, totalCards);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
