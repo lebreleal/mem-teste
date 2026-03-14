@@ -171,58 +171,140 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
 
   const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
 
+  // Compute reviewed today across hierarchy for progress
+  const getReviewedToday = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let r = deck.reviewed_today ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) r += getReviewedToday(child.id);
+    return r;
+  };
+  const reviewedToday = getReviewedToday(parentDeckId);
+  const totalSession = totalDue + reviewedToday;
+  const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
+
+  // Estimated remaining time
+  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
+  const remainingSeconds = totalDue * avgSec;
+  const remainingMin = Math.ceil(remainingSeconds / 60);
+  const timeLabel = remainingMin >= 60
+    ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
+    : `${remainingMin}min`;
+
   return (
     <div className="space-y-4">
-      {/* Stats summary card */}
+      {/* Compact study header */}
       <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
-        <div className="flex items-center justify-center mb-3">
-          <div className="text-center">
-            <span className="font-display text-4xl font-bold text-foreground">{totalDue}</span>
-            <p className="text-xs text-muted-foreground mt-0.5">cartões para hoje</p>
+        <div className="flex items-center gap-3">
+          {/* Circular progress */}
+          <div className="relative flex-shrink-0">
+            <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
+              <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+              <circle
+                cx="28" cy="28" r="24" fill="none"
+                stroke="hsl(var(--primary))"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 24}`}
+                strokeDashoffset={`${2 * Math.PI * 24 * (1 - progressPct / 100)}`}
+                className="transition-all duration-500"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xs font-bold text-foreground">{progressPct}%</span>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-2xl font-bold text-foreground">{totalDue}</span>
+              <span className="text-sm text-muted-foreground">restantes</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="ml-1 p-0.5 rounded-full hover:bg-muted/50 transition-colors">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                  <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                        <span className="text-xs text-muted-foreground">Novos</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{totalNew}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                        <span className="text-xs text-muted-foreground">Aprendendo</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{totalLearning}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs text-muted-foreground">Revisão</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{totalReview}</span>
+                    </div>
+                    <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Tempo estimado</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">~{timeLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-xs text-muted-foreground">Feitos hoje</span>
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">{reviewedToday}</span>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">~{timeLabel}</span>
+              {reviewedToday > 0 && (
+                <>
+                  <span className="text-xs text-muted-foreground">·</span>
+                  <span className="text-xs text-green-500 font-medium">{reviewedToday} feitos</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 w-9 p-0"
+              title="Criar Prova com IA"
+            >
+              <Brain className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
+              size="sm"
+              className="h-9 gap-1.5 px-4 font-semibold"
+              disabled={totalDue === 0}
+            >
+              <Play className="h-4 w-4" />
+              Estudar
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-6 mb-4">
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <SquarePlus className="h-4 w-4 text-muted-foreground" />
-              <span className="text-lg font-bold text-foreground">{totalNew}</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">Novos</span>
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <RotateCcw className="h-4 w-4 text-green-500" />
-              <span className="text-lg font-bold text-foreground">{totalLearning}</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">Aprendendo</span>
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <Layers className="h-4 w-4 text-primary" />
-              <span className="text-lg font-bold text-foreground">{totalReview}</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">Dominados</span>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
-            className="flex-1 h-12 text-base font-semibold gap-2"
-            disabled={totalDue === 0}
-          >
-            <BookOpen className="h-5 w-5" />
-            Estudar
-          </Button>
-          <Button
-            variant="outline"
-            className="h-12 gap-2 px-4"
-            title="Criar Prova com IA"
-          >
-            <Brain className="h-5 w-5" />
-          </Button>
-        </div>
+        {/* Full-width progress bar */}
+        <Progress value={progressPct} className="h-1.5 mt-3" />
       </div>
 
       {/* Sub-deck list */}
