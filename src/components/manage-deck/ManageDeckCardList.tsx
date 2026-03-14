@@ -3,13 +3,15 @@ import { Pencil, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CardTagsInline } from './CardTagWidgets';
 
-function getCardTypeBadge(type: string) {
-  switch (type) {
-    case 'cloze': return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-primary/40 bg-primary/10 text-primary">Cloze</span>;
-    case 'multiple_choice': return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-warning/40 bg-warning/10 text-warning">Múltipla</span>;
-    case 'image_occlusion': return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-info/40 bg-info/10 text-info">Oclusão</span>;
-    default: return <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border border-border">Básico</span>;
-  }
+function getCardBorderColor(card: any): string {
+  // State 0 = new
+  if (card.state === 0) return 'border-l-muted-foreground/40';
+  // Reviewed cards: color by difficulty
+  const d = card.difficulty ?? 0;
+  if (d <= 3) return 'border-l-emerald-500';
+  if (d <= 5) return 'border-l-amber-500';
+  if (d <= 7) return 'border-l-orange-500';
+  return 'border-l-destructive';
 }
 
 interface ManageDeckCardListProps {
@@ -44,9 +46,8 @@ export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew,
   return (
     <div className="space-y-3">
       {cards.map(card => (
-        <div key={card.id} className="group flex items-center gap-4 rounded-xl border border-border/50 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div key={card.id} className={`group flex items-center gap-4 rounded-xl border border-border/50 border-l-4 ${getCardBorderColor(card)} bg-card p-4 shadow-sm transition-shadow hover:shadow-md`}>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">{getCardTypeBadge(card.card_type)}</div>
             {card.card_type === 'image_occlusion' ? (() => {
               try {
                 const data = JSON.parse(card.front_content);
