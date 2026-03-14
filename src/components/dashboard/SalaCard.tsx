@@ -1,9 +1,9 @@
 /**
  * SalaCard — visual card for a "Sala" (folder) on the dashboard root.
- * Shows custom image (or default icon), name, deck/card counts, mastery bar.
+ * Shows custom image (or default icon), name, deck/card/question counts, mastery bar.
  */
 
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Layers, HelpCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
@@ -12,13 +12,14 @@ interface SalaCardProps {
   deckCount: number;
   totalCards: number;
   masteredCards: number;
+  questionCount: number;
   dueCount: number;
   isVirtual?: boolean;
   imageUrl?: string | null;
   onClick: () => void;
 }
 
-const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirtual, imageUrl, onClick }: SalaCardProps) => {
+const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, dueCount, isVirtual, imageUrl, onClick }: SalaCardProps) => {
   const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
 
   return (
@@ -37,9 +38,26 @@ const SalaCard = ({ name, deckCount, totalCards, masteredCards, dueCount, isVirt
           {name}
         </h3>
         <div className="flex items-center gap-2 mt-1">
-          <p className="text-xs text-muted-foreground">
-            {deckCount} baralho{deckCount !== 1 ? 's' : ''}
-            {totalCards > 0 && <span> · {totalCards} cartão{totalCards !== 1 ? 'ões' : ''}</span>}
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{deckCount} {deckCount === 1 ? 'baralho' : 'baralhos'}</span>
+            {totalCards > 0 && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <Layers className="h-3 w-3" />
+                  {totalCards}
+                </span>
+              </>
+            )}
+            {questionCount > 0 && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <HelpCircle className="h-3 w-3" />
+                  {questionCount}
+                </span>
+              </>
+            )}
           </p>
           <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
         </div>
