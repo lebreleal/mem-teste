@@ -312,14 +312,7 @@ const Dashboard = () => {
             decks={state.decks}
             isLoading={state.isLoading}
             getAggregateStats={state.getAggregateStats}
-            onSalaClick={(folderId, isVirtual) => {
-              if (isVirtual) {
-                // Create real folder for orphan decks
-                handleCreateVirtualSala();
-              } else {
-                state.setCurrentFolderId(folderId);
-              }
-            }}
+            onSalaClick={handleSalaClick}
           />
         )}
 
