@@ -58,7 +58,7 @@ const PublicClasseView = () => {
   const subjects = (fullPreview?.subjects ?? []) as any[];
   const memberCount = fullPreview?.member_count ?? 0;
 
-  // Follow sala = join + create linked folder + download first deck as live deck
+  // Follow classe = join + create linked folder + download first deck as live deck
   const handleFollow = async () => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
