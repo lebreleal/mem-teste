@@ -1,5 +1,6 @@
 import { useState, useMemo, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
