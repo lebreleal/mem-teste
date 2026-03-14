@@ -442,7 +442,7 @@ const Dashboard = () => {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent side="top" className="text-xs w-56 p-2">
-                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje.
+                          Tempo de estudo restante para completar os cartões novos e revisões configurados nos ajustes de hoje, com base na sua velocidade média de estudo.
                         </PopoverContent>
                       </Popover>
                     </div>
