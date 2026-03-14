@@ -6,7 +6,7 @@ import PomodoroFloater from '@/components/PomodoroFloater';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Timer, Play, BookOpen, Brain, Download } from 'lucide-react';
+import { Timer, Play, BookOpen, Brain, Download, FolderPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
