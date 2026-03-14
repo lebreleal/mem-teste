@@ -8,7 +8,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import errorNotebookIcon from '@/assets/error-notebook-icon.png';
+import { FileX2 } from 'lucide-react';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
 
