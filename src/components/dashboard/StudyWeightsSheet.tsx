@@ -1,7 +1,6 @@
 /**
- * StudyWeightsSheet — adjust study weight per root deck for today's session.
+ * StudyWeightsSheet — adjust study weight per Sala (folder) for today's session.
  * Weights are ephemeral (stored in state only, reset on next day/reload).
- * The system distributes study proportionally based on weights.
  */
 
 import { useState, useMemo } from 'react';
@@ -12,44 +11,52 @@ import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DeckWithStats } from '@/hooks/useDecks';
+import type { Folder } from '@/types/folder';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 interface StudyWeightsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  folders: Folder[];
   decks: DeckWithStats[];
   getSubDecks: (parentId: string) => DeckWithStats[];
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
 }
 
-/** Count sub-decks recursively */
-function countAllSubDecks(deckId: string, getSubDecks: (id: string) => DeckWithStats[]): number {
-  const subs = getSubDecks(deckId);
-  let count = subs.length;
-  for (const sub of subs) count += countAllSubDecks(sub.id, getSubDecks);
-  return count;
-}
-
-const StudyWeightsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregateStats }: StudyWeightsSheetProps) => {
+const StudyWeightsSheet = ({ open, onOpenChange, folders, decks, getSubDecks, getAggregateStats }: StudyWeightsSheetProps) => {
   const navigate = useNavigate();
 
-  // Root decks only (no parent, not archived)
-  const rootDecks = useMemo(() => decks.filter(d => !d.parent_deck_id && !d.is_archived), [decks]);
+  const rootFolders = useMemo(
+    () => folders.filter(f => !f.parent_id && !f.is_archived)
+      .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0) || a.name.localeCompare(b.name)),
+    [folders]
+  );
 
-  // Ephemeral weights — 100 means full weight, 0 means skip
+  // Compute stats per folder
+  const folderStats = useMemo(() => {
+    const map = new Map<string, { deckCount: number; totalDue: number }>();
+    for (const f of rootFolders) {
+      const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
+      let totalDue = 0;
+      for (const d of folderDecks) {
+        const s = getAggregateStats(d);
+        totalDue += s.new_count + s.learning_count + s.review_count;
+      }
+      map.set(f.id, { deckCount: folderDecks.length, totalDue });
+    }
+    return map;
+  }, [rootFolders, decks, getAggregateStats]);
+
   const [weights, setWeights] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
-    for (const d of rootDecks) {
-      initial[d.id] = 100;
-    }
+    for (const f of rootFolders) initial[f.id] = 100;
     return initial;
   });
 
   const activeCount = useMemo(() => Object.values(weights).filter(w => w > 0).length, [weights]);
 
   const handleStudy = () => {
-    // Navigate to study with the active deck IDs and weights
-    const activeDeckIds = rootDecks.filter(d => (weights[d.id] ?? 100) > 0).map(d => d.id);
-    if (activeDeckIds.length === 0) return;
+    if (activeCount === 0) return;
     onOpenChange(false);
     navigate('/study');
   };
@@ -63,8 +70,8 @@ const StudyWeightsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregat
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div className="flex-1 text-center">
-              <SheetTitle className="font-display text-base font-bold">Ajustar Pesos de Estudo</SheetTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">{activeCount} matéria{activeCount !== 1 ? 's' : ''} ativa{activeCount !== 1 ? 's' : ''} no mix</p>
+              <SheetTitle className="font-display text-base font-bold">Ajustar Carga de Estudo</SheetTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">{activeCount} sala{activeCount !== 1 ? 's' : ''} ativa{activeCount !== 1 ? 's' : ''} no mix</p>
             </div>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -73,28 +80,31 @@ const StudyWeightsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregat
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-[200px] text-xs">
-                Ajuste o peso de cada matéria para a sessão de hoje. Amanhã os valores voltam ao padrão.
+                Ajuste o peso de cada sala para a sessão de hoje. Amanhã os valores voltam ao padrão.
               </TooltipContent>
             </Tooltip>
           </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto divide-y divide-border/50">
-          {rootDecks.map(deck => {
-            const weight = weights[deck.id] ?? 100;
+          {rootFolders.map(folder => {
+            const weight = weights[folder.id] ?? 100;
             const isActive = weight > 0;
-            const subCount = countAllSubDecks(deck.id, getSubDecks);
-            const stats = getAggregateStats(deck);
-            const totalDue = stats.new_count + stats.learning_count + stats.review_count;
+            const stats = folderStats.get(folder.id);
 
             return (
-              <div key={deck.id} className={`px-4 py-4 transition-opacity ${isActive ? '' : 'opacity-40'}`}>
-                <div className="flex items-center justify-between mb-1">
+              <div key={folder.id} className={`px-4 py-4 transition-opacity ${isActive ? '' : 'opacity-40'}`}>
+                <div className="flex items-center gap-3 mb-1">
+                  <img
+                    src={folder.image_url || defaultSalaIcon}
+                    alt={folder.name}
+                    className="h-8 w-8 rounded-lg object-cover shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
+                    <h3 className="font-display font-semibold text-foreground truncate">{folder.name}</h3>
                     <p className="text-xs text-muted-foreground">
-                      {subCount > 0 ? `${subCount} deck${subCount !== 1 ? 's' : ''}` : `${deck.total_cards} cartões`}
-                      {totalDue > 0 && ` · ${totalDue} para hoje`}
+                      {stats?.deckCount ?? 0} deck{(stats?.deckCount ?? 0) !== 1 ? 's' : ''}
+                      {(stats?.totalDue ?? 0) > 0 && ` · ${stats!.totalDue} para hoje`}
                     </p>
                   </div>
                   <span className={`text-sm font-bold tabular-nums shrink-0 ml-3 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -103,7 +113,7 @@ const StudyWeightsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggregat
                 </div>
                 <Slider
                   value={[weight]}
-                  onValueChange={([val]) => setWeights(prev => ({ ...prev, [deck.id]: val }))}
+                  onValueChange={([val]) => setWeights(prev => ({ ...prev, [folder.id]: val }))}
                   max={100}
                   step={5}
                   className="mt-2"

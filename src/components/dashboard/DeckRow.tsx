@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings, Plus, Minus } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -126,11 +126,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
         onClick={handleClick}
       >
-        {/* Expand/collapse chevron for decks with children */}
+        {/* Expand/collapse icon for decks with children */}
         {hasChildren && (
-          <ChevronDown
-            className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}`}
-          />
+          isExpanded
+            ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
+            : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
         )}
 
         <div className="flex-1 min-w-0">

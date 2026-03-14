@@ -48,7 +48,7 @@ import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
-
+const StudySalaSheet = lazy(() => import('@/components/dashboard/StudySalaSheet'));
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
@@ -105,6 +105,7 @@ const Dashboard = () => {
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
+  const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
@@ -429,7 +430,7 @@ const Dashboard = () => {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
             <Button
-              onClick={() => navigate('/study')}
+              onClick={() => setStudySalaSheetOpen(true)}
               className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
               size="lg"
               disabled={totalDueToday === 0}
@@ -655,6 +656,7 @@ const Dashboard = () => {
           <StudyWeightsSheet
             open={studyWeightsOpen}
             onOpenChange={setStudyWeightsOpen}
+            folders={state.folders}
             decks={state.decks}
             getSubDecks={state.getSubDecks}
             getAggregateStats={state.getAggregateStats}
@@ -662,7 +664,18 @@ const Dashboard = () => {
         )}
       </Suspense>
 
-      {/* Copy community deck dialog */}
+      <Suspense fallback={null}>
+        {studySalaSheetOpen && (
+          <StudySalaSheet
+            open={studySalaSheetOpen}
+            onOpenChange={setStudySalaSheetOpen}
+            folders={state.folders}
+            decks={state.decks}
+            getAggregateStats={state.getAggregateStats}
+          />
+        )}
+      </Suspense>
+
       <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
