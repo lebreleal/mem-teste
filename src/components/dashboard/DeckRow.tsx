@@ -152,7 +152,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         <div className="bg-muted/30">
           {subDecks.map(sub => {
             const subMastery = sub.total_cards > 0 ? Math.round((sub.mastered_cards / sub.total_cards) * 1000) / 10 : 0;
-            const stats = getAggregateStats(sub);
             return (
               <div
                 key={sub.id}
@@ -166,8 +165,6 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       <Layers className="h-3 w-3" />
                       {sub.total_cards}
                     </span>
-                    {stats.new_count > 0 && <span className="text-[11px] text-blue-500">{stats.new_count} novos</span>}
-                    {stats.review_count > 0 && <span className="text-[11px] text-green-500">{stats.review_count} revisão</span>}
                     <span className="text-[11px] text-muted-foreground ml-auto">{subMastery}%</span>
                   </div>
                   <Progress value={subMastery} className="h-1 mt-1" />

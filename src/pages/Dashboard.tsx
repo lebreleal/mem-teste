@@ -404,7 +404,7 @@ const Dashboard = () => {
 
                 {/* Study button */}
                 <Button
-                  onClick={() => navigate('/study')}
+                  onClick={() => navigate(`/study/folder/${state.currentFolderId}`)}
                   size="icon"
                   className="h-10 w-10 rounded-full flex-shrink-0"
                   disabled={salaStudyStats.totalDue === 0}
