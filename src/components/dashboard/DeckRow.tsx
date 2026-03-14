@@ -158,21 +158,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   const hasChildren = subDecks.length > 0;
   const isExpanded = expandedAccordionId === deck.id;
 
-  // Aggregate totals: this deck + all sub-decks
-  const { totalCards, aggStats } = useMemo(() => {
-    let total = deck.total_cards;
-    const collectSubs = (parentId: string) => {
-      const subs = getSubDecks(parentId);
-      for (const s of subs) {
-        total += s.total_cards;
-        collectSubs(s.id);
-      }
-    };
-    collectSubs(deck.id);
-    return { totalCards: total, aggStats: getAggregateStats(deck) };
-  }, [deck, getSubDecks, getAggregateStats]);
-
-  const classPcts = computeClassificationPcts(aggStats, totalCards);
+  // Aggregate classification across deck + all descendants
+  const classPcts = useMemo(() => aggregateClassification(deck, getSubDecks), [deck, getSubDecks]);
+  const totalCards = classPcts.totalCards;
+  const aggStats = useMemo(() => getAggregateStats(deck), [deck, getAggregateStats]);
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
   const hasDueCards = aggStats.new_count + aggStats.learning_count + aggStats.review_count > 0;
 
