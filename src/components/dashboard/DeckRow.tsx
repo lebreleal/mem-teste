@@ -59,6 +59,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   onRename, onMove, onArchive, onDelete,
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
+  questionCountMap,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
