@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -347,11 +347,29 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const fromCommunity = (location.state as any)?.from === 'community';
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameName, setRenameName] = useState('');
 
   const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
+
+  // Resolve back destination: folder name for label
+  const backInfo = useMemo(() => {
+    if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
+    let folderId = (deck as any)?.folder_id;
+    if (!folderId && (deck as any)?.parent_deck_id && decks) {
+      let current = deck as any;
+      while (current?.parent_deck_id) {
+        current = decks.find((d: any) => d.id === current.parent_deck_id);
+      }
+      folderId = current?.folder_id;
+    }
+    if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
+    return { label: 'Dashboard', path: '/dashboard' };
+  }, [deck, decks, fromCommunity, communityTurmaId]);
 
   // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
@@ -360,9 +378,8 @@ const DeckDetailContent = () => {
       const sourceDeckId = await resolveSourceDeckId(deck);
       if (!sourceDeckId) return null;
 
-      const [deckResult, profileResult] = await Promise.all([
+      const [deckResult] = await Promise.all([
         supabase.from('decks').select('user_id, updated_at').eq('id', sourceDeckId).single(),
-        // We'll get the profile after we know the user_id
         Promise.resolve(null),
       ]);
 
@@ -380,6 +397,20 @@ const DeckDetailContent = () => {
     staleTime: 120_000,
   });
 
+  const handleRename = async () => {
+    const trimmed = renameName.trim();
+    if (!trimmed || trimmed === (deck as any)?.name) { setIsRenaming(false); return; }
+    try {
+      const { renameDeck } = await import('@/services/deckService');
+      await renameDeck(deckId!, trimmed);
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      toast({ title: 'Renomeado!' });
+    } catch {
+      toast({ title: 'Erro ao renomear', variant: 'destructive' });
+    }
+    setIsRenaming(false);
+  };
+
   if (deckLoading || allCardsLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -389,34 +420,27 @@ const DeckDetailContent = () => {
   }
 
   const totalCards = cardCounts?.total ?? 0;
+  const deckName = (deck as any)?.name ?? 'Baralho';
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero banner – sala-style layout */}
-      <div className="bg-background">
-        <div className="container mx-auto max-w-2xl px-4">
+      {/* Hero banner */}
+      <div className="relative bg-muted/50 overflow-hidden">
+        {/* Blurred background */}
+        <div className="absolute inset-0">
+          <div className="w-full h-full bg-primary/10" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
+        </div>
+
+        <div className="relative container mx-auto max-w-2xl px-4 pt-3 pb-4">
           {/* Top bar: back + actions */}
-          <div className="flex items-center justify-between pt-3 mb-3">
+          <div className="flex items-center justify-between mb-3">
             <button
-              onClick={() => {
-                if (fromCommunity && communityTurmaId) {
-                  navigate(`/turmas/${communityTurmaId}`, { replace: true });
-                } else {
-                  let folderId = (deck as any)?.folder_id;
-                  if (!folderId && (deck as any)?.parent_deck_id && decks) {
-                    let current = deck as any;
-                    while (current?.parent_deck_id) {
-                      current = decks.find((d: any) => d.id === current.parent_deck_id);
-                    }
-                    folderId = current?.folder_id;
-                  }
-                  navigate(folderId ? `/dashboard?folder=${folderId}` : '/dashboard', { replace: true });
-                }
-              }}
+              onClick={() => navigate(backInfo.path, { replace: true })}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Dashboard</span>
+              <span>{backInfo.label}</span>
             </button>
             <div className="flex items-center gap-1.5 shrink-0">
               {isLinkedDeck && (
@@ -441,11 +465,32 @@ const DeckDetailContent = () => {
             </div>
           </div>
 
-          {/* Deck name + algorithm info */}
+          {/* Deck name + edit + algorithm */}
           <div className="mb-1">
-            <h1 className="text-lg font-display font-bold text-foreground truncate">
-              {(deck as any)?.name ?? 'Baralho'}
-            </h1>
+            <div className="flex items-center gap-1.5">
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameName}
+                  onChange={e => setRenameName(e.target.value)}
+                  onBlur={handleRename}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setIsRenaming(false); }}
+                  className="text-lg font-display font-bold text-foreground bg-transparent border-b border-primary outline-none flex-1 min-w-0"
+                />
+              ) : (
+                <>
+                  <h1 className="text-lg font-display font-bold text-foreground truncate">{deckName}</h1>
+                  {!isLinkedDeck && (
+                    <button
+                      onClick={() => { setRenameName(deckName); setIsRenaming(true); }}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
             {isLinkedDeck && sourceData ? (
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
