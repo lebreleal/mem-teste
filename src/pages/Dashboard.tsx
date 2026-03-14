@@ -227,8 +227,8 @@ const Dashboard = () => {
 
       <main className="pb-24">
         {/* Study strip */}
-        <div className="px-4 pt-4 pb-2">
-          <div className="rounded-2xl border border-border/50 bg-card px-3 py-2.5 shadow-sm">
+        <div>
+          <div className="bg-card px-4 py-2.5 border-b border-border/50">
             <div className="flex items-center gap-2">
               {/* Circular progress */}
               <div className="relative flex-shrink-0">
