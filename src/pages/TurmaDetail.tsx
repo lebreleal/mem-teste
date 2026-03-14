@@ -320,11 +320,11 @@ const TurmaDetailInner = () => {
     return null;
   }
 
-  // Non-member → show public sala view with "Seguir" button
-  if (!isMember) return <PublicSalaView />;
+  // Non-member → show public classe view with "Seguir" button
+  if (!isMember) return <PublicClasseView />;
 
   // Member → full view
-  return <MemberSalaView />;
+  return <MemberClasseView />;
 };
 
 const TurmaDetail = () => (
