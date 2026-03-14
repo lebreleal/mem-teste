@@ -611,8 +611,6 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab,
   const totalCards = cardCounts?.total ?? 0;
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
-  // Listen for study button triggering question practice from hero
-  import { useEffect } from 'react';
 
   return (
     <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
