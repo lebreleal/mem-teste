@@ -71,7 +71,6 @@ export const useContentImport = () => {
   };
 
   const sharedDeckIds = new Set(turmaDecks.map(d => d.deck_id));
-  // Show all decks (including sub-decks) so the user can pick from the full hierarchy
   const availableDecks = userDecks.filter(d => !sharedDeckIds.has(d.id) && !d.is_archived && !(d as any).source_turma_deck_id);
 
   // ── Add to collection (independent copy, supports hierarchy) ──
