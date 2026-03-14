@@ -200,11 +200,7 @@ const CardReviewStep = ({
   };
 
   const handleSaveEditClick = () => {
-    if (editingIdx !== null && cards[editingIdx]?.type === 'multiple_choice') {
-      onSaveEdit({ mcOptions: editMcOptions, mcCorrectIndex: editMcCorrectIndex });
-    } else {
-      onSaveEdit();
-    }
+    onSaveEdit();
     setDialogOpen(false);
   };
 
