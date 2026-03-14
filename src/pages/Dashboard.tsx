@@ -222,14 +222,24 @@ const Dashboard = () => {
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
-    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0, totalCards = 0;
+    const collectTotalCards = (deckId: string): number => {
+      const dk = allDecks.find(d => d.id === deckId);
+      if (!dk) return 0;
+      let t = dk.total_cards;
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) t += collectTotalCards(c.id);
+      return t;
+    };
     for (const deck of state.currentDecks) {
       const s = state.getAggregateStats(deck);
       newCount += s.new_count;
       learningCount += s.learning_count;
       reviewCount += s.review_count;
       reviewedToday += s.reviewed_today;
+      totalCards += collectTotalCards(deck.id);
     }
+    const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
@@ -238,8 +248,8 @@ const Dashboard = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats]);
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
@@ -321,7 +331,7 @@ const Dashboard = () => {
             {(() => {
               const R = 22;
               const C = 2 * Math.PI * R;
-              const total = salaStudyStats.newCount + salaStudyStats.learningCount + salaStudyStats.reviewCount + salaStudyStats.reviewedToday;
+              const total = salaStudyStats.totalCards;
               if (total === 0) return (
                 <div className="relative shrink-0">
                   <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
@@ -330,22 +340,17 @@ const Dashboard = () => {
                   <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
                 </div>
               );
-              // Segments: reviewed (green/primary), review due (primary lighter), learning (amber), new (muted)
-              const reviewedPct = salaStudyStats.reviewedToday / total;
+              // 4 segments: mastered (green), review (blue/primary), learning (amber), new (gray)
+              const masteredPct = salaStudyStats.masteredCount / total;
               const reviewPct = salaStudyStats.reviewCount / total;
               const learningPct = salaStudyStats.learningCount / total;
               const newPct = salaStudyStats.newCount / total;
-              // Offsets accumulate
-              const reviewedLen = C * reviewedPct;
-              const reviewLen = C * reviewPct;
-              const learningLen = C * learningPct;
-              const newLen = C * newPct;
               let offset = 0;
               const segments = [
-                { len: reviewedLen, color: 'hsl(var(--primary))', key: 'reviewed' },
-                { len: reviewLen, color: 'hsl(var(--primary) / 0.4)', key: 'review' },
-                { len: learningLen, color: 'hsl(45 93% 47%)', key: 'learning' },
-                { len: newLen, color: 'hsl(var(--muted))', key: 'new' },
+                { len: C * masteredPct, color: 'hsl(142 71% 45%)', key: 'mastered' },
+                { len: C * reviewPct, color: 'hsl(var(--primary))', key: 'review' },
+                { len: C * learningPct, color: 'hsl(45 93% 47%)', key: 'learning' },
+                { len: C * newPct, color: 'hsl(var(--muted))', key: 'new' },
               ];
               return (
                 <div className="relative shrink-0">
@@ -388,24 +393,31 @@ const Dashboard = () => {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                            <span className="text-xs text-muted-foreground">Novos</span>
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
+                            <span className="text-xs text-muted-foreground">Dominado</span>
                           </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.masteredCount}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                            <span className="text-xs text-muted-foreground">Revisão</span>
+                          </div>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(45 93% 47%)' }} />
                             <span className="text-xs text-muted-foreground">Aprendendo</span>
                           </div>
                           <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Layers className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-xs text-muted-foreground">Revisão</span>
+                            <div className="h-2.5 w-2.5 rounded-full bg-muted" />
+                            <span className="text-xs text-muted-foreground">Novos</span>
                           </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
                         </div>
                         <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
