@@ -52,6 +52,92 @@ async function resolveSourceDeckId(deck: any): Promise<string | null> {
   return null;
 }
 
+/** Sub-deck list view — shown when a parent deck has children */
+const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
+  const navigate = useNavigate();
+
+  const getCardCount = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let total = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0) + (deck.reviewed_today ?? 0);
+    // Include children recursively
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) total += getCardCount(child.id);
+    return total;
+  };
+
+  const getTotalCards = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    // total_count includes all card states
+    let total = (deck.total_count as number) ?? ((deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0) + (deck.reviewed_today ?? 0));
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) total += getTotalCards(child.id);
+    return total;
+  };
+
+  const getDueCount = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let due = (deck.new_count ?? 0) + (deck.learning_count ?? 0) + (deck.review_count ?? 0);
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) due += getDueCount(child.id);
+    return due;
+  };
+
+  const getStudiedCount = (deckId: string): number => {
+    const deck = allDecks.find((d: any) => d.id === deckId);
+    if (!deck) return 0;
+    let studied = deck.reviewed_today ?? 0;
+    const children = allDecks.filter((d: any) => d.parent_deck_id === deckId && !d.is_archived);
+    for (const child of children) studied += getStudiedCount(child.id);
+    return studied;
+  };
+
+  const sorted = [...subDecks].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {subDecks.length} sub-deck{subDecks.length !== 1 ? 's' : ''}
+      </p>
+      <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+        {sorted.map(sub => {
+          const totalCards = getTotalCards(sub.id);
+          const studied = getStudiedCount(sub.id);
+          const due = getDueCount(sub.id);
+          const pct = totalCards > 0 ? Math.round((studied / totalCards) * 100) : 0;
+          const hasChildren = allDecks.some(d => d.parent_deck_id === sub.id && !d.is_archived);
+
+          return (
+            <div
+              key={sub.id}
+              className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => navigate(`/decks/${sub.id}`)}
+            >
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-foreground truncate">{sub.name}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-muted-foreground">
+                    {studied > 0 && <span className="text-primary font-medium">{studied}/{totalCards} cards estudados</span>}
+                    {studied === 0 && <span>{totalCards} cards</span>}
+                  </p>
+                </div>
+                {studied > 0 && totalCards > 0 && (
+                  <div className="mt-1.5 h-1 w-full max-w-[120px] rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const DeckDetailContent = () => {
   const { deck, deckLoading, allCardsLoading, deckId, navigate, toast, setAlgorithmModalOpen, cardCounts, decks } = useDeckDetail();
   const location = useLocation();
