@@ -35,7 +35,7 @@ const ClassificationBar = ({ newPct, learningPct, reviewPct, masteredPct, classN
       {masteredPct > 0 && (
         <div
           className="h-full transition-all duration-500 rounded-l-full"
-          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(142 71% 45%)' }}
+          style={{ width: `${masteredPct}%`, backgroundColor: 'hsl(var(--success))' }}
         />
       )}
       {reviewPct > 0 && (

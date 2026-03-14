@@ -290,7 +290,7 @@ const ConceptMasterySection = ({
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden flex">
             {strongCount > 0 && (
-              <div className="h-full transition-all duration-500" style={{ width: `${(strongCount / concepts.length) * 100}%`, background: 'hsl(142 71% 45%)' }} />
+              <div className="h-full transition-all duration-500" style={{ width: `${(strongCount / concepts.length) * 100}%`, background: 'hsl(var(--success))' }} />
             )}
             {learningCount > 0 && (
               <div className="h-full transition-all duration-500" style={{ width: `${(learningCount / concepts.length) * 100}%`, background: 'hsl(38 92% 50%)' }} />
@@ -692,7 +692,7 @@ const QuestionPractice = ({
               className="h-full rounded-full transition-all"
               style={{
                 width: `${pct}%`,
-                background: pct >= 70 ? 'hsl(142 71% 45%)' : pct >= 40 ? 'hsl(40 90% 60%)' : 'hsl(var(--destructive))',
+                background: pct >= 70 ? 'hsl(var(--success))' : pct >= 40 ? 'hsl(40 90% 60%)' : 'hsl(var(--destructive))',
               }}
             />
           </div>
@@ -1785,7 +1785,7 @@ const DeckQuestionsTab = ({
       {statsData.total > 0 && !selectionMode && (
         <div>
           <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="transition-all" style={{ width: `${correctPct}%`, backgroundColor: 'hsl(142 71% 45%)' }} />
+            <div className="transition-all" style={{ width: `${correctPct}%`, backgroundColor: 'hsl(var(--success))' }} />
             <div className="transition-all bg-destructive" style={{ width: `${wrongPct}%` }} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -1793,7 +1793,7 @@ const DeckQuestionsTab = ({
               <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> <strong className="text-foreground">{statsData.total - statsData.answered}</strong> A responder
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} /> <strong className="text-foreground">{statsData.correct}</strong> Corretas
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'hsl(var(--success))' }} /> <strong className="text-foreground">{statsData.correct}</strong> Corretas
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-destructive" /> <strong className="text-foreground">{statsData.wrong}</strong> Erradas
