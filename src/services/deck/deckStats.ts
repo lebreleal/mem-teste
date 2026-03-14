@@ -30,10 +30,9 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     return allDecks;
   };
 
-  const [decks, statsResult, cardCountsResult] = await Promise.all([
+  const [decks, statsResult] = await Promise.all([
     fetchAllDecks(),
     supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: TZ_OFFSET_SP }),
-    supabase.from('cards').select('deck_id, state') as any,
   ]);
 
   const allStats = statsResult.data;
@@ -45,6 +44,33 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
         review_count: s.review_count, reviewed_today: s.reviewed_today ?? 0,
         new_reviewed_today: s.new_reviewed_today ?? 0, new_graduated_today: s.new_graduated_today ?? 0,
       });
+    }
+  }
+
+  // ── Card counts for mastery calculation ──
+  const deckIds = (decks || []).map((d: any) => d.id);
+  const cardCountMap = new Map<string, { total: number; mastered: number }>();
+  if (deckIds.length > 0) {
+    // Paginate to handle large collections
+    const PAGE = 1000;
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: cards } = await supabase
+        .from('cards')
+        .select('deck_id, state')
+        .in('deck_id', deckIds)
+        .range(offset, offset + PAGE - 1);
+      if (cards) {
+        for (const c of cards as any[]) {
+          const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0 };
+          entry.total++;
+          if (c.state >= 2) entry.mastered++;
+          cardCountMap.set(c.deck_id, entry);
+        }
+      }
+      hasMore = (cards?.length ?? 0) === PAGE;
+      offset += PAGE;
     }
   }
 
