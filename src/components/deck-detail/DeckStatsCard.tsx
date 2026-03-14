@@ -96,9 +96,9 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
     : (allCards.length > 0 ? Math.round(((allCards.length - cardCounts.novo) / allCards.length) * 100) : 0);
 
-  // Time estimate — total cards not yet reviewed (all cards in collection)
+  // Time estimate — based on ALL cards in the collection (not just today's due)
   const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : studyPending;
+  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : allCards.length;
   const remainingMin = Math.ceil((pendingForTime * avgSec) / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
