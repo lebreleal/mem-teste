@@ -206,13 +206,8 @@ const CommunityRecommendations = () => {
 
       {/* Horizontal scrollable list */}
       <div
-        className="flex gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2"
+        className="flex gap-3 overflow-x-auto overflow-y-hidden px-4 pb-2 scrollbar-hide"
         style={{ WebkitOverflowScrolling: 'touch' }}
-        onWheel={(event) => {
-          if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-          event.preventDefault();
-          event.currentTarget.scrollLeft += event.deltaY;
-        }}
       >
         {displayDecks.map(deck => (
           <button
