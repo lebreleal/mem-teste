@@ -184,20 +184,29 @@ const CommunityRecommendations = () => {
   const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
   const isFallback = !recommendations || recommendations.length === 0;
 
+  if (isLoading) {
+    return (
+      <div className="mt-6 px-4">
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton className="h-5 w-48" />
+        </div>
+        <div className="flex gap-3 overflow-hidden">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-28 w-36 rounded-xl shrink-0" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between px-4 mb-3">
         <h2 className="text-sm font-semibold text-foreground">Você também pode gostar...</h2>
-        <button
-          onClick={() => navigate('/explorar')}
-          className="flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          Ver mais <ChevronRight className="h-3 w-3" />
-        </button>
       </div>
 
       <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-        {recommendations.map(deck => (
+        {displayDecks.map(deck => (
           <button
             key={deck.id}
             onClick={() => navigate(deck.link)}
@@ -212,13 +221,16 @@ const CommunityRecommendations = () => {
             />
             <div className="p-2.5">
               <h3 className="text-xs font-semibold text-foreground truncate">{deck.title}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="flex items-center gap-0.5">
+              {!isFallback && deck.card_count > 0 && (
+                <div className="flex items-center gap-0.5 mt-1">
                   <Layers className="h-3 w-3 text-muted-foreground" />
                   <span className="text-[10px] text-muted-foreground">{deck.card_count} cards</span>
                 </div>
-              </div>
-              {deck.seller_name && (
+              )}
+              {isFallback && (
+                <p className="text-[10px] text-muted-foreground mt-1">Explorar categoria</p>
+              )}
+              {!isFallback && deck.seller_name && (
                 <p className="text-[10px] text-muted-foreground truncate mt-0.5">por {deck.seller_name}</p>
               )}
             </div>
