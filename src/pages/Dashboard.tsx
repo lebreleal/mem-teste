@@ -477,6 +477,13 @@ const Dashboard = () => {
                         <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
                           <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
+                          {userTurma?.is_private === false ? (
+                            <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
+                          ) : (
+                            <><Globe className="h-4 w-4 mr-2" /> Publicar no Explorar</>
+                          )}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={async () => {
                           await state.archiveFolder.mutateAsync(state.currentFolderId!);
                           state.setCurrentFolderId(null);
