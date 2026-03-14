@@ -521,7 +521,6 @@ ${getOutputExamples(formats)}`;
         front: c.front || "",
         back: mappedType === "cloze" ? "" : (c.back || ""),
         type: mappedType,
-        ...(mappedType === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
       };
     });
 
