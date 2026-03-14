@@ -121,10 +121,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <SheetTitle className="text-base">Adicionar</SheetTitle>
           </SheetHeader>
           <div className="grid gap-2 pt-4">
-            {/* At dashboard root (not inside a sala): show "Criar Sala" */}
+            {/* At dashboard root (not inside a classe): show "Criar Classe" */}
             {isOnDashboard && !isInsideSala && (
               <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
-                <FolderPlus className="h-5 w-5 text-primary" /> Criar sala
+                <FolderPlus className="h-5 w-5 text-primary" /> Criar classe
               </Button>
             )}
             {/* Inside a sala or not on dashboard: show deck actions */}
