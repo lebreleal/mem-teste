@@ -354,7 +354,7 @@ const Dashboard = () => {
       masteredCount,
       ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, avgSecondsPerCard]);
+  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
