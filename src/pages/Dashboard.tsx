@@ -331,7 +331,7 @@ const Dashboard = () => {
             {(() => {
               const R = 22;
               const C = 2 * Math.PI * R;
-              const total = salaStudyStats.newCount + salaStudyStats.learningCount + salaStudyStats.reviewCount + salaStudyStats.reviewedToday;
+              const total = salaStudyStats.totalCards;
               if (total === 0) return (
                 <div className="relative shrink-0">
                   <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
@@ -340,22 +340,17 @@ const Dashboard = () => {
                   <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
                 </div>
               );
-              // Segments: reviewed (green/primary), review due (primary lighter), learning (amber), new (muted)
-              const reviewedPct = salaStudyStats.reviewedToday / total;
+              // 4 segments: mastered (green), review (blue/primary), learning (amber), new (gray)
+              const masteredPct = salaStudyStats.masteredCount / total;
               const reviewPct = salaStudyStats.reviewCount / total;
               const learningPct = salaStudyStats.learningCount / total;
               const newPct = salaStudyStats.newCount / total;
-              // Offsets accumulate
-              const reviewedLen = C * reviewedPct;
-              const reviewLen = C * reviewPct;
-              const learningLen = C * learningPct;
-              const newLen = C * newPct;
               let offset = 0;
               const segments = [
-                { len: reviewedLen, color: 'hsl(var(--primary))', key: 'reviewed' },
-                { len: reviewLen, color: 'hsl(var(--primary) / 0.4)', key: 'review' },
-                { len: learningLen, color: 'hsl(45 93% 47%)', key: 'learning' },
-                { len: newLen, color: 'hsl(var(--muted))', key: 'new' },
+                { len: C * masteredPct, color: 'hsl(142 71% 45%)', key: 'mastered' },
+                { len: C * reviewPct, color: 'hsl(var(--primary))', key: 'review' },
+                { len: C * learningPct, color: 'hsl(45 93% 47%)', key: 'learning' },
+                { len: C * newPct, color: 'hsl(var(--muted))', key: 'new' },
               ];
               return (
                 <div className="relative shrink-0">
