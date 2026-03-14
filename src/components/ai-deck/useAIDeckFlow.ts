@@ -67,7 +67,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
 
   // Config
   const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
-  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze', 'multiple_choice']);
+  const [cardFormats, setCardFormats] = useState<CardFormat[]>(['qa', 'cloze']);
   const [customInstructions, setCustomInstructions] = useState('');
   const [targetCardCount, setTargetCardCount] = useState(0);
 
