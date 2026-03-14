@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, Lock, Settings } from 'lucide-react';
+import { Info, ChevronDown, Layers, Lock, Settings, Play } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -161,6 +161,20 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           </div>
           <Progress value={masteryPct} className="h-1 mt-1.5" />
         </div>
+
+        {/* Play button for studying */}
+        {!deckSelectionMode && !isErrorDeck && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/study/${deck.id}`);
+            }}
+            className="shrink-0 h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+            title={hasChildren ? 'Estudar todos os decks' : 'Estudar'}
+          >
+            <Play className="h-4 w-4 ml-0.5" />
+          </button>
+        )}
       </div>
 
       {/* Sub-decks (expanded) */}
@@ -185,6 +199,16 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   </div>
                   <Progress value={subMastery} className="h-1 mt-1" />
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/study/${sub.id}`);
+                  }}
+                  className="shrink-0 h-8 w-8 rounded-full bg-primary/90 flex items-center justify-center text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+                  title="Estudar"
+                >
+                  <Play className="h-3.5 w-3.5 ml-0.5" />
+                </button>
               </div>
             );
           })}
