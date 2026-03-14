@@ -607,7 +607,7 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
           onCreateAI={() => setQuestionAction('ai')}
         />
       )}
-      <DeckTagsSection deckId={deckId} isLinkedDeck={isLinkedDeck} />
+      
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
         <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
           <TabsTrigger
