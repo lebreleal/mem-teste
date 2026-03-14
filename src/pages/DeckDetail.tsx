@@ -606,7 +606,6 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
 
   return (
     <>
-      {activeTab === 'cards' && <DeckStatsCard />}
       {activeTab === 'questions' && (
         <QuestionStatsCard
           deckId={deckId}
