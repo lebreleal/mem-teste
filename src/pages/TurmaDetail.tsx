@@ -172,7 +172,7 @@ const PublicClasseView = () => {
       <div className="container mx-auto max-w-2xl px-4 py-4">
         <Button className="w-full gap-2" size="lg" onClick={handleFollow} disabled={following || isMember}>
           <Heart className="h-4 w-4" />
-          {isMember ? 'Você segue esta sala' : following ? 'Seguindo...' : 'Seguir Sala'}
+          {isMember ? 'Você segue esta classe' : following ? 'Seguindo...' : 'Seguir Classe'}
         </Button>
       </div>
 
