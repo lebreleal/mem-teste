@@ -209,6 +209,7 @@ const DeckList = ({
             hasPendingUpdate={decksWithPendingUpdates?.has(deck.id)}
             expandedAccordionId={expandedAccordionId}
             onAccordionToggle={handleAccordionToggle}
+            questionCountMap={questionCountMap}
             {...deckRowProps}
           />
         );
