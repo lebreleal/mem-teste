@@ -82,8 +82,8 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Sala criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar sala', variant: 'destructive' }),
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Classe criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar classe', variant: 'destructive' }),
       });
     }
   }, [state, defaultAlgorithm, toast]);
