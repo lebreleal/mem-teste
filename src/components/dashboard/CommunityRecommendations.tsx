@@ -230,7 +230,7 @@ const CommunityRecommendations = () => {
               <div className="flex items-center gap-3 mt-0.5">
                 <span className="text-xs text-muted-foreground">{deck.deck_count} decks</span>
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <RectangleHorizontal className="h-3 w-3" />
+                  <Layers className="h-3 w-3" />
                   {deck.card_count}
                 </span>
                 {deck.question_count > 0 && (
