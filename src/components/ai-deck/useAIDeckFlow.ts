@@ -106,7 +106,7 @@ export function useAIDeckFlow({ onOpenChange, folderId, existingDeckId, existing
   const resetState = useCallback(() => {
     setStep('upload'); setDeckName(''); setInputMode(null); setFileName(''); setRawText('');
     setPages([]); setLoadProgress({ current: 0, total: 0 });
-    setDetailLevel('standard'); setCardFormats(['qa', 'cloze', 'multiple_choice']); setCustomInstructions(''); setTargetCardCount(0);
+    setDetailLevel('standard'); setCardFormats(['qa', 'cloze']); setCustomInstructions(''); setTargetCardCount(0);
     setGenProgress({ current: 0, total: 0, creditsUsed: 0, startedAt: 0, lastBatchMs: 0, avgBatchMs: 0 });
     setCards([]); setEditingIdx(null);
     setIsLoading(false); setIsSaving(false);
