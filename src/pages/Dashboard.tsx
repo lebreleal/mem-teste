@@ -224,6 +224,49 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
+  // Collect all deck IDs in the current sala (including nested sub-decks)
+  const salaDeckIds = useMemo(() => {
+    if (!state.isInsideSala) return [] as string[];
+    const ids: string[] = [];
+    const collect = (deckId: string) => {
+      ids.push(deckId);
+      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
+      for (const c of children) collect(c.id);
+    };
+    for (const deck of state.currentDecks) collect(deck.id);
+    return ids;
+  }, [state.isInsideSala, state.currentDecks, allDecks]);
+
+  // Fetch difficulty-based classification for the sala's cards
+  const { data: salaDifficultyStats } = useQuery({
+    queryKey: ['sala-difficulty-stats', salaDeckIds.join(',')],
+    queryFn: async () => {
+      if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+      let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+      const BATCH = 200;
+      for (let i = 0; i < salaDeckIds.length; i += BATCH) {
+        const batch = salaDeckIds.slice(i, i + BATCH);
+        const { data } = await supabase
+          .from('cards')
+          .select('state, difficulty')
+          .in('deck_id', batch);
+        if (data) {
+          for (const c of data) {
+            if (c.state === 0) { novo++; continue; }
+            const d = c.difficulty ?? 5;
+            if (d <= 3) facil++;
+            else if (d <= 5) bom++;
+            else if (d <= 7) dificil++;
+            else errei++;
+          }
+        }
+      }
+      return { novo, facil, bom, dificil, errei };
+    },
+    enabled: salaDeckIds.length > 0,
+    staleTime: 30_000,
+  });
+
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
@@ -244,7 +287,6 @@ const Dashboard = () => {
       reviewedToday += s.reviewed_today;
       totalCards += collectTotalCards(deck.id);
     }
-    const masteredCount = Math.max(0, totalCards - newCount - learningCount - reviewCount);
     const totalDue = newCount + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
@@ -253,8 +295,13 @@ const Dashboard = () => {
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount };
-  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks]);
+
+    // Difficulty-based classification
+    const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const masteredCount = ds.facil + ds.bom; // "dominou" = cards classified as Fácil or Bom
+
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount, ...ds };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
@@ -404,7 +451,7 @@ const Dashboard = () => {
                     <SlidersHorizontal className="h-4 w-4" />
                   </button>
 
-                  {/* Circular 4-segment classification progress */}
+                  {/* Circular 5-segment classification progress */}
                   {(() => {
                     const R = 22;
                     const C = 2 * Math.PI * R;
@@ -419,10 +466,11 @@ const Dashboard = () => {
                       </div>
                     );
                     const segments = [
-                      { pct: salaStudyStats.masteredCount / total, color: 'hsl(142 71% 45%)', key: 'mastered' },
-                      { pct: salaStudyStats.reviewCount / total, color: 'hsl(var(--primary))', key: 'review' },
-                      { pct: salaStudyStats.learningCount / total, color: 'hsl(0 84% 60%)', key: 'learning' },
-                      { pct: salaStudyStats.newCount / total, color: 'hsl(var(--muted))', key: 'new' },
+                      { pct: salaStudyStats.facil / total, color: '#1679CA', key: 'facil' },
+                      { pct: salaStudyStats.bom / total, color: 'hsl(142 71% 45%)', key: 'bom' },
+                      { pct: salaStudyStats.dificil / total, color: 'hsl(25 95% 53%)', key: 'dificil' },
+                      { pct: salaStudyStats.errei / total, color: 'hsl(0 84% 60%)', key: 'errei' },
+                      { pct: salaStudyStats.novo / total, color: 'hsl(var(--muted))', key: 'novo' },
                     ];
                     let offset = 0;
                     return (
@@ -465,35 +513,42 @@ const Dashboard = () => {
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
-                                  <span className="text-xs text-muted-foreground">Dominado</span>
+                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#1679CA' }} />
+                                  <span className="text-xs text-muted-foreground">Fácil</span>
                                 </div>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.masteredCount}</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.facil}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full bg-primary" />
-                                  <span className="text-xs text-muted-foreground">Revisão</span>
+                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
+                                  <span className="text-xs text-muted-foreground">Bom</span>
                                 </div>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.bom}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(25 95% 53%)' }} />
+                                  <span className="text-xs text-muted-foreground">Difícil</span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.dificil}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(0 84% 60%)' }} />
-                                  <span className="text-xs text-muted-foreground">Errando</span>
+                                  <span className="text-xs text-muted-foreground">Errei</span>
                                 </div>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.errei}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <div className="h-2.5 w-2.5 rounded-full bg-muted" />
                                   <span className="text-xs text-muted-foreground">Novo</span>
                                 </div>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.novo}</span>
                               </div>
                               <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground">Cards a dominar</span>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.totalDue}</span>
+                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.totalCards - salaStudyStats.masteredCount}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground">Total de cards</span>
