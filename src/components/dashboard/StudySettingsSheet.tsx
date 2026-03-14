@@ -37,7 +37,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // All root decks in this sala (both matérias and loose decks)
   const salaDecks = useMemo(() => {
     if (!currentFolderId) return [];
