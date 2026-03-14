@@ -451,9 +451,9 @@ const DeckDetailContent = () => {
     <div className="min-h-screen bg-background">
       {/* Hero banner */}
       <div className="relative bg-muted/50 overflow-hidden">
-        {/* Blurred background */}
+        {/* Blurred background image (same style as Sala) */}
         <div className="absolute inset-0">
-          <div className="w-full h-full bg-primary/10" />
+          <img src={folderImageUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
 
