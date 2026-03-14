@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, Lock } from 'lucide-react';
+import { Info, ChevronDown, Layers, Lock, Settings } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
