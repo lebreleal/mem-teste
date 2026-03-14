@@ -2,17 +2,29 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Compass, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { useToast } from '@/hooks/use-toast';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useIsAdmin();
+  const { toast } = useToast();
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+
+  const handleExplorar = () => {
+    if (isAdmin) {
+      navigate('/explorar');
+    } else {
+      toast({ title: '🚧 Em desenvolvimento', description: 'A seção Explorar estará disponível em breve!' });
+    }
+  };
 
   const items = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
     { icon: Plus, label: 'Adicionar', onClick: () => window.dispatchEvent(new CustomEvent('open-add-menu')), active: false, accent: true },
-    { icon: Compass, label: 'Explorar', onClick: () => navigate('/explorar'), active: isActive('/explorar') || isActive('/turmas') },
+    { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
   ];
 
   return (

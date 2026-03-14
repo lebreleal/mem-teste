@@ -530,8 +530,8 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Community recommendations */}
-        <CommunityRecommendations />
+        {/* Community recommendations — disabled until Explorar is ready */}
+        {/* <CommunityRecommendations /> */}
       </main>
 
       <DashboardDialogs
