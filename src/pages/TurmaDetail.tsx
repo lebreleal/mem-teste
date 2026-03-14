@@ -124,7 +124,7 @@ const PublicClasseView = () => {
     } catch (e: any) {
       if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
         queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
-        toast({ title: 'Você já segue esta sala' });
+        toast({ title: 'Você já segue esta classe' });
       } else {
         toast({ title: 'Erro ao seguir', variant: 'destructive' });
       }
