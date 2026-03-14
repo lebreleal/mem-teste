@@ -1,5 +1,5 @@
 import { useState, useMemo, lazy, Suspense } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { DeckDetailProvider, useDeckDetail } from '@/components/deck-detail/DeckDetailContext';
 import DeckStatsCard from '@/components/deck-detail/DeckStatsCard';
 import CardList from '@/components/deck-detail/CardList';
