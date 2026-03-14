@@ -59,6 +59,7 @@ import { useIsAdmin } from '@/hooks/useIsAdmin';
 import type { GeneratedCard } from '@/types/ai';
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
