@@ -65,7 +65,8 @@ FORMATOS:
   ✅ "O principal músculo da inspiração é o {{c1::diafragma}}."
   ❌ "Qual é o principal músculo? {{c1::diafragma}}" (PROIBIDO: pergunta com cloze)
 - type:"basic" → Pergunta no front, resposta curta no back. Perguntas de raciocínio, não definição.
-- type:"multiple_choice" → Pergunta no front, back:"", options: exatamente 4, correctIndex: 0-3.
+
+PROIBIDO: NÃO gere cartões do tipo "multiple_choice". Use apenas "basic" e "cloze".
 
 Responda APENAS com o JSON solicitado.`;
 
