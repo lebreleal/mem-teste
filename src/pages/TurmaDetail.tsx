@@ -75,7 +75,7 @@ const PublicClasseView = () => {
         folderId = existingFolders[0].id;
       } else {
         const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
+          .insert({ user_id: user.id, name: turma?.name || 'Classe', section: 'community', source_turma_id: turmaId } as any)
           .select().single();
         folderId = (newFolder as any)?.id ?? null;
       }
