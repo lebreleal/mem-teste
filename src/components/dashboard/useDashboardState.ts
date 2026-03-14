@@ -121,7 +121,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   const currentDecks = useMemo(
     () => {
       if (!isInsideSala) return []; // At root, we show salas, not decks
-      const filtered = decks.filter(d => !d.is_archived && d.folder_id === currentFolderId);
+      // Show only root-level decks in this folder (sub-decks rendered via expand)
+      const filtered = decks.filter(d => !d.is_archived && d.folder_id === currentFolderId && !d.parent_deck_id);
       return filtered.sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
     },
     [decks, currentFolderId, isInsideSala]
