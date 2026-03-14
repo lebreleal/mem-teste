@@ -46,9 +46,8 @@ export const ManageDeckCardList = ({ cards, isLoading, isCommunityDeck, openNew,
   return (
     <div className="space-y-3">
       {cards.map(card => (
-        <div key={card.id} className="group flex items-center gap-4 rounded-xl border border-border/50 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div key={card.id} className={`group flex items-center gap-4 rounded-xl border border-border/50 border-l-4 ${getCardBorderColor(card)} bg-card p-4 shadow-sm transition-shadow hover:shadow-md`}>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">{getCardTypeBadge(card.card_type)}</div>
             {card.card_type === 'image_occlusion' ? (() => {
               try {
                 const data = JSON.parse(card.front_content);
