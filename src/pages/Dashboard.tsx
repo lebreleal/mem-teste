@@ -244,13 +244,18 @@ const Dashboard = () => {
       if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
       let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
       const BATCH = 200;
+      const PAGE = 1000;
       for (let i = 0; i < salaDeckIds.length; i += BATCH) {
         const batch = salaDeckIds.slice(i, i + BATCH);
-        const { data } = await supabase
-          .from('cards')
-          .select('state, difficulty')
-          .in('deck_id', batch);
-        if (data) {
+        // Paginate to get ALL cards (Supabase default limit is 1000)
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from('cards')
+            .select('state, difficulty')
+            .in('deck_id', batch)
+            .range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
           for (const c of data) {
             if (c.state === 0) { novo++; continue; }
             const d = c.difficulty ?? 5;
@@ -259,6 +264,8 @@ const Dashboard = () => {
             else if (d <= 7) dificil++;
             else errei++;
           }
+          if (data.length < PAGE) break;
+          from += PAGE;
         }
       }
       return { novo, facil, bom, dificil, errei };
@@ -296,11 +303,14 @@ const Dashboard = () => {
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
-    // Difficulty-based classification
+    // Difficulty-based classification — use sum of classifications as authoritative total
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-    const masteredCount = totalCards - ds.novo; // "feito" = any card already reviewed (not new)
+    const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
+    // Use classified total when available (more accurate), fallback to deck stats
+    const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
+    const masteredCount = effectiveTotal - ds.novo;
 
-    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount, ...ds };
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds };
   }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
 
   // Handle sala click: navigate into it
