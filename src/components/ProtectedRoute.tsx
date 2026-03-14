@@ -118,7 +118,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <SheetTitle className="text-base">Adicionar</SheetTitle>
           </SheetHeader>
           <div className="grid gap-2 pt-4">
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create'); }}>
+            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck'); }}>
               <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
             </Button>
             <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck'); }}>
