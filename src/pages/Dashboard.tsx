@@ -396,6 +396,9 @@ const Dashboard = () => {
             )}
           </div>
         )}
+
+        {/* Community recommendations */}
+        <CommunityRecommendations />
       </main>
 
       <DashboardDialogs
