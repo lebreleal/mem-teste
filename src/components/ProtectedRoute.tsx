@@ -17,7 +17,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const showNavRoutes = ['/dashboard', '/ia', '/profile', '/turmas', '/desempenho'];
+  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
