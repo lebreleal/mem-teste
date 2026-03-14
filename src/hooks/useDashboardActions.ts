@@ -179,7 +179,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Sala movida!' }); },
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Classe movida!' }); },
         onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
       });
     }

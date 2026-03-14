@@ -127,7 +127,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
                 <FolderPlus className="h-5 w-5 text-primary" /> Criar classe
               </Button>
             )}
-            {/* Inside a sala or not on dashboard: show deck actions */}
+            {/* Inside a classe or not on dashboard: show deck actions */}
             {(!isOnDashboard || isInsideSala) && (
               <>
                 {isInsideSala && (
