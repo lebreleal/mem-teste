@@ -692,7 +692,7 @@ const QuestionPractice = ({
               className="h-full rounded-full transition-all"
               style={{
                 width: `${pct}%`,
-                background: pct >= 70 ? 'hsl(142 71% 45%)' : pct >= 40 ? 'hsl(40 90% 60%)' : 'hsl(var(--destructive))',
+                background: pct >= 70 ? 'hsl(var(--success))' : pct >= 40 ? 'hsl(40 90% 60%)' : 'hsl(var(--destructive))',
               }}
             />
           </div>
