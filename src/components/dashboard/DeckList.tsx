@@ -91,7 +91,7 @@ const DeckList = ({
   }, [currentDecks, deckRowProps.getSubDecks]);
   const filteredDecks = q ? sortedDecks.filter(d => d.name.toLowerCase().includes(q)) : sortedDecks;
 
-  const deckDrag = useDragReorder({
+  const deckDrag = useDragReorder<DeckWithStats>({
     items: filteredDecks,
     getId: (d) => d.id,
     onReorder: (reordered) => onReorderDecks?.(reordered),
