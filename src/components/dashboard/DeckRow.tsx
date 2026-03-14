@@ -310,7 +310,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         <div className="bg-muted/30">
           {subDecks.map(sub => {
             const subStats = getAggregateStats(sub);
-            const subMasteryPct = computeMasteryPct(subStats, sub.total_cards);
+            const subClassPcts = computeClassificationPcts(subStats, sub.total_cards);
             const subHasDue = subStats.new_count + subStats.learning_count + subStats.review_count > 0;
             return (
               <div
@@ -337,7 +337,13 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       </>
                     )}
                   </div>
-                  <MasteryBar masteryPct={subMasteryPct} className="mt-1" />
+                  <ClassificationBar
+                    newPct={subClassPcts.newPct}
+                    learningPct={subClassPcts.learningPct}
+                    reviewPct={subClassPcts.reviewPct}
+                    masteredPct={subClassPcts.masteredPct}
+                    className="mt-1"
+                  />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
                   {subHasDue && (
