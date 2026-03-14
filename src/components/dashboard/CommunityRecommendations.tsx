@@ -173,7 +173,9 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
+  const displayDecks = recommendations ?? [];
+
+  if (!isLoading && displayDecks.length === 0) return null;
 
   if (isLoading) {
     return (
