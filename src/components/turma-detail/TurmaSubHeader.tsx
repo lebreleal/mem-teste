@@ -203,7 +203,7 @@ const TurmaSubHeader = ({
         <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-amber-400" /> Avaliar Sala
+              <Star className="h-5 w-5 text-amber-400" /> Avaliar Classe
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4">
