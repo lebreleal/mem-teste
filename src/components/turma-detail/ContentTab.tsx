@@ -752,61 +752,18 @@ const ContentTab = () => {
               const q = deckSearchQuery.toLowerCase();
               const allAvailable = importLogic.availableDecks;
               const filtered = allAvailable.filter(d => !q || d.name.toLowerCase().includes(q));
-              const filteredIds = new Set(filtered.map(d => d.id));
               const allSelected = filtered.length > 0 && filtered.every(d => selectedDeckIds.has(d.id));
 
-              // Build hierarchy
-              const roots = filtered.filter(d => !d.parent_deck_id || !filteredIds.has(d.parent_deck_id));
-              const childrenMap = new Map<string, typeof filtered>();
-              filtered.forEach(d => {
-                const pid = d.parent_deck_id;
-                if (pid && filteredIds.has(pid)) {
-                  if (!childrenMap.has(pid)) childrenMap.set(pid, []);
-                  childrenMap.get(pid)!.push(d);
-                }
-              });
-              const flatList: { deck: typeof filtered[0]; depth: number }[] = [];
-              const walk = (items: typeof filtered, depth: number) => {
-                items.forEach(d => {
-                  flatList.push({ deck: d, depth });
-                  const kids = childrenMap.get(d.id);
-                  if (kids) walk(kids, depth + 1);
-                });
-              };
-              walk(roots, 0);
-
-              // Collect all descendants of a deck
-              const getDescendants = (id: string): string[] => {
-                const kids = childrenMap.get(id) ?? [];
-                const result: string[] = [];
-                kids.forEach(k => { result.push(k.id); result.push(...getDescendants(k.id)); });
-                return result;
-              };
-
-              // Toggle with cascading to descendants
               const toggleDeck = (id: string) => {
                 const next = new Set(selectedDeckIds);
-                const descendants = getDescendants(id);
-                if (next.has(id)) {
-                  next.delete(id);
-                  descendants.forEach(cid => next.delete(cid));
-                } else {
-                  next.add(id);
-                  descendants.forEach(cid => next.add(cid));
-                }
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
                 setSelectedDeckIds(next);
-              };
-
-              // Recursive card count: sum own cards + all descendants
-              const getCardCount = (d: typeof filtered[0]): number => {
-                const own = (d.new_count ?? 0) + (d.learning_count ?? 0) + (d.review_count ?? 0);
-                const kids = childrenMap.get(d.id) ?? [];
-                return own + kids.reduce((sum, kid) => sum + getCardCount(kid), 0);
               };
 
               return (
                 <div className="flex-1 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                  {flatList.length === 0 ? (
+                  {filtered.length === 0 ? (
                     <div className="py-8 text-center">
                       <Layers className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground">Nenhum baralho disponível</p>
@@ -824,21 +781,24 @@ const ContentTab = () => {
                         />
                         <span className="text-xs font-semibold text-muted-foreground">Selecionar todos ({filtered.length})</span>
                       </label>
-                      {flatList.map(({ deck: d, depth }) => (
-                        <label key={d.id} className="flex items-center gap-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors" style={{ paddingLeft: `${12 + depth * 16}px`, paddingRight: 12 }}>
-                          <Checkbox
-                            checked={selectedDeckIds.has(d.id)}
-                            onCheckedChange={() => toggleDeck(d.id)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm truncate ${depth === 0 ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}`}>{d.name}</p>
-                          </div>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                            <Layers className="h-3 w-3" /> {getCardCount(d)}
-                          </span>
-                        </label>
-                      ))}
+                      {filtered.map(d => {
+                        const cardCount = d.total_cards ?? 0;
+                        return (
+                          <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors">
+                            <Checkbox
+                              checked={selectedDeckIds.has(d.id)}
+                              onCheckedChange={() => toggleDeck(d.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">{d.name}</p>
+                            </div>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                              <Layers className="h-3 w-3" /> {cardCount}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </>
                   )}
                 </div>
