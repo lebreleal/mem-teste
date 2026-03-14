@@ -90,7 +90,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           onDragEnd: dragHandlers.onDragEnd,
         } : {})}
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
-        onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/error-notebook' : `/decks/${deck.id}`)}
+        onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/caderno-de-erros' : `/decks/${deck.id}`)}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
