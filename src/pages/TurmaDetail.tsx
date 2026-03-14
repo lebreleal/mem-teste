@@ -214,7 +214,7 @@ const PublicClasseView = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero banner — same style as dashboard Sala */}
+      {/* Hero banner — identical to Dashboard sala view */}
       <div className="relative bg-muted/50 overflow-hidden">
         <div className="absolute inset-0">
           <img src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
@@ -233,12 +233,12 @@ const PublicClasseView = () => {
             </button>
           </div>
 
-          {/* Sala image + name + creator */}
+          {/* Sala image + name + creator — same structure as Dashboard */}
           <div className="flex items-center gap-3 mb-2">
             <img src={coverUrl || defaultSalaIcon} alt={turma?.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-display font-bold text-foreground truncate">{turma?.name}</h1>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-xs text-muted-foreground">Por:</span>
                 <span className="text-xs font-medium text-foreground">{ownerName}</span>
               </div>
@@ -255,10 +255,15 @@ const PublicClasseView = () => {
         </div>
       </div>
 
-      {/* Follow CTA */}
+      {/* Follow CTA — same style as Dashboard ESTUDAR button */}
       {!isMember && (
-        <div className="px-4 py-3">
-          <Button className="w-full gap-2 rounded-full h-11 font-bold" size="lg" onClick={handleFollow} disabled={following}>
+        <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
+          <Button
+            onClick={handleFollow}
+            disabled={following}
+            className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
+            size="lg"
+          >
             <Heart className="h-4 w-4" />
             {following ? 'Seguindo...' : 'Seguir Sala'}
           </Button>
@@ -266,20 +271,17 @@ const PublicClasseView = () => {
       )}
 
       {/* Description */}
-      <main className="px-4 pb-24 space-y-4">
+      <main className="pb-24">
         {turma?.description && (
-          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
+          <div className="px-4 mb-3">
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
+          </div>
         )}
 
-        {/* Deck list — same as dashboard DeckList style */}
-        <div>
-          <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary" />
-            Decks ({publishedDecks.length})
-          </h2>
-
+        {/* Deck list — same visual as DeckList in Dashboard */}
+        <div className="px-4">
           {decksLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
             </div>
           ) : publishedDecks.length === 0 ? (
@@ -293,9 +295,17 @@ const PublicClasseView = () => {
                 const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
                 const isDownloading = downloadingDeck === deck.turmaDeckId;
                 return (
-                  <div key={deck.turmaDeckId} className="flex items-center gap-3 px-4 py-3">
+                  <div
+                    key={deck.turmaDeckId}
+                    className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => !isDownloaded && handleDownloadDeck(deck)}
+                  >
+                    {/* Deck icon — same as DeckRow */}
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{deck.name}</h3>
+                      <h3 className="text-sm font-display font-semibold text-foreground truncate">{deck.name}</h3>
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                         <Layers className="h-3 w-3" /> {deck.cardCount} cards
                       </p>
@@ -308,9 +318,9 @@ const PublicClasseView = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 text-xs gap-1.5"
+                        className="h-8 text-xs gap-1.5 shrink-0"
                         disabled={isDownloading}
-                        onClick={() => handleDownloadDeck(deck)}
+                        onClick={(e) => { e.stopPropagation(); handleDownloadDeck(deck); }}
                       >
                         <Download className="h-3.5 w-3.5" />
                         {isDownloading ? 'Baixando...' : 'Baixar'}
