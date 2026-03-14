@@ -82,8 +82,6 @@ function getFlashFormatInstructions(formats: string[]): string {
   REGRA: cloze é SEMPRE afirmação, NUNCA pergunta. Se o front não contém {{c1::, o card será descartado.
   ✅ "A {{c1::hematose}} ocorre nos {{c2::alvéolos pulmonares}}."
   ❌ "Qual processo ocorre nos alvéolos? {{c1::hematose}}" (PROIBIDO)` },
-    { key: "multiple_choice", aliases: ["multiple_choice"], typeName: "multiple_choice",
-      instruction: '- type:"multiple_choice": Só quando existem 3+ conceitos similares para diferenciar. front: pergunta. back:"". options: EXATAMENTE 4 (max 8 palavras cada). correctIndex: 0-3. Distratores devem ser conceitos REAIS do material.' },
   ];
 
   for (const f of allFormats) {
@@ -96,23 +94,15 @@ function getFlashFormatInstructions(formats: string[]): string {
 
   if (parts.length === 0) parts.push(allFormats[0].instruction);
 
-  // Simple distribution rules
   const hasCloze = formats.includes("cloze");
   const hasBasic = formats.includes("qa") || formats.includes("definition");
-  const hasMC = formats.includes("multiple_choice");
-  const formatCount = [hasCloze, hasBasic, hasMC].filter(Boolean).length;
 
-  if (formatCount > 1) {
-    if (hasCloze && hasBasic && hasMC) {
-      parts.push("\nDISTRIBUIÇÃO: ~55% cloze, ~35% basic, ~10% multiple_choice.");
-    } else if (hasCloze && hasBasic) {
-      parts.push("\nDISTRIBUIÇÃO: ~60% cloze, ~40% basic.");
-    } else if (hasCloze && hasMC) {
-      parts.push("\nDISTRIBUIÇÃO: ~70% cloze, ~30% multiple_choice.");
-    } else {
-      parts.push("\nDISTRIBUIÇÃO: ~70% basic, ~30% multiple_choice.");
-    }
+  if (hasCloze && hasBasic) {
+    parts.push("\nDISTRIBUIÇÃO: ~60% cloze, ~40% basic.");
   }
+
+  // Always forbid multiple_choice
+  forbiddenNames.push("multiple_choice");
 
   if (forbiddenNames.length > 0) {
     parts.push(`\nPROIBIDO: NÃO gere tipo ${forbiddenNames.map(n => `"${n}"`).join(", ")}.`);
