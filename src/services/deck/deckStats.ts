@@ -47,6 +47,33 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
+  // ── Card counts for mastery calculation ──
+  const deckIds = (decks || []).map((d: any) => d.id);
+  const cardCountMap = new Map<string, { total: number; mastered: number }>();
+  if (deckIds.length > 0) {
+    // Paginate to handle large collections
+    const PAGE = 1000;
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: cards } = await supabase
+        .from('cards')
+        .select('deck_id, state')
+        .in('deck_id', deckIds)
+        .range(offset, offset + PAGE - 1);
+      if (cards) {
+        for (const c of cards as any[]) {
+          const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0 };
+          entry.total++;
+          if (c.state >= 2) entry.mastered++;
+          cardCountMap.set(c.deck_id, entry);
+        }
+      }
+      hasMore = (cards?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+  }
+
   // ── 1. Author via marketplace listing ──
   const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
   const authorMap = new Map<string, string | null>();
@@ -173,6 +200,8 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       community_id: (deck as any).community_id ?? null,
       updated_at: deck.updated_at ?? deck.created_at,
       source_updated_at: sourceUpdatedAt,
+      total_cards: cardCountMap.get(deck.id)?.total ?? 0,
+      mastered_cards: cardCountMap.get(deck.id)?.mastered ?? 0,
     };
   });
 }

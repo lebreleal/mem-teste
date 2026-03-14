@@ -9,6 +9,7 @@ import ExamModeSelector from '@/components/exam-create/ExamModeSelector';
 import AIExamConfig from '@/components/exam-create/AIExamConfig';
 import FileExamFlow from '@/components/exam-create/FileExamFlow';
 import ManualQuestionsEditor from '@/components/exam-create/ManualQuestionsEditor';
+import ProModelConfirmDialog from '@/components/ProModelConfirmDialog';
 import { useExamCreateFlow } from '@/hooks/useExamCreateFlow';
 
 const ExamCreate = () => {
@@ -86,6 +87,8 @@ const ExamCreate = () => {
               exampleText={flow.exampleText} setExampleText={flow.setExampleText}
               exampleImageUrl={flow.exampleImageUrl} setExampleImageUrl={flow.setExampleImageUrl}
               exampleImageUploading={flow.exampleImageUploading} setExampleImageUploading={flow.setExampleImageUploading}
+              selectedSourceId={flow.selectedSourceId}
+              onLoadSource={flow.handleLoadSource}
             />
           )}
 
@@ -107,6 +110,7 @@ const ExamCreate = () => {
       </div>
 
       <BuyCreditsDialog open={flow.creditsOpen} onOpenChange={flow.setCreditsOpen} currentBalance={flow.energy} />
+      <ProModelConfirmDialog open={flow.pendingPro} onConfirm={flow.confirmPro} onCancel={flow.cancelPro} baseCost={flow.totalQuestions * 2} />
     </div>
   );
 };

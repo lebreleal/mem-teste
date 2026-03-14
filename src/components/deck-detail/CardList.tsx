@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Search, Plus, Trash2, X, CheckCheck, ArrowUpRight, PenLine, Sparkles, Download, Filter,
   MoreVertical, Eye, Flame, ChevronDown,
 } from 'lucide-react';
@@ -20,6 +23,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import SuggestCorrectionModal from '@/components/SuggestCorrectionModal';
+import { shortDisplayId } from '@/lib/shortId';
 
 const PAGE_SIZE_UI = 50;
 
@@ -392,6 +396,7 @@ const CardListContent = ({
   isLinkedDeck, deckId,
 }: any) => {
   const [suggestCard, setSuggestCard] = useState<any>(null);
+  const [communityWarningOpen, setCommunityWarningOpen] = useState(false);
   // Only show first N cards from already-loaded set
   const visibleCards = useMemo(() => filteredCards.slice(0, visibleCount), [filteredCards, visibleCount]);
   const hasMoreVisible = visibleCount < filteredCards.length;
@@ -472,18 +477,28 @@ const CardListContent = ({
                 isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-border hover:shadow-sm'
               }`}
               onClick={() => {
-                if (selectionMode) { toggleCardSelection(card.id); return; }
+                if (selectionMode) {
+                  if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
+                  toggleCardSelection(card.id);
+                  return;
+                }
                 const flatIdx = filteredCards.findIndex((c: any) => c.id === card.id);
                 setPreviewIndex(flatIdx >= 0 ? flatIdx : 0);
               }}
             >
               <div className="flex items-start gap-3">
                 {selectionMode && (
-                  <div className="pt-0.5 shrink-0">
+                  <div
+                    className="pt-0.5 shrink-0"
+                    onClick={(e: any) => {
+                      e.stopPropagation();
+                      if (isLinkedDeck) { setCommunityWarningOpen(true); return; }
+                      toggleCardSelection(card.id);
+                    }}
+                  >
                     <Checkbox
                       checked={isSelected}
-                      onCheckedChange={() => toggleCardSelection(card.id)}
-                      onClick={(e: any) => e.stopPropagation()}
+                      className={isLinkedDeck ? 'opacity-40 cursor-not-allowed' : ''}
                     />
                   </div>
                 )}
@@ -492,6 +507,7 @@ const CardListContent = ({
                     const stateInfo = getStateInfo(card);
                     return (
                       <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-mono text-muted-foreground/60">{shortDisplayId(card.id)}</span>
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateInfo.color}`}>
                           {stateInfo.label}
                         </span>
@@ -659,6 +675,22 @@ const CardListContent = ({
         deckId={deckId}
       />
     )}
+
+    {/* Community warning dialog */}
+    <Dialog open={communityWarningOpen} onOpenChange={setCommunityWarningOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Conteúdo da comunidade</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Cartões vindos da comunidade não podem ser selecionados para mover ou excluir.
+          Apenas cartões criados por você podem ser gerenciados.
+        </p>
+        <DialogFooter>
+          <Button onClick={() => setCommunityWarningOpen(false)}>Entendi</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };

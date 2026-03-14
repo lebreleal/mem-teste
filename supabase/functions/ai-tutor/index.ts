@@ -17,10 +17,18 @@ Deno.serve(async (req) => {
   let userId = "";
 
   try {
-    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost } = await req.json();
+    const body = await req.json();
+    const { frontContent, backContent, action, mcOptions, correctIndex, selectedIndex, aiModel, energyCost, type, question, options, correctIndex: qCorrectIndex, userAnswer, concept, deckId } = body;
     const { apiKey: AI_KEY, url: AI_URL } = getAIConfig();
     if (!AI_KEY) return jsonResponse({ error: "GOOGLE_AI_KEY não configurada" }, 500);
-    if (!frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
+
+    // Support flashcard tutor, question hint/explain, concept extraction, concept card generation, concept explanation, and option explanation
+    const isQuestionMode = type === 'question-hint' || type === 'question-explain';
+    const isConceptMode = type === 'question-concepts';
+    const isConceptCardMode = type === 'generate-concept-cards';
+    const isConceptExplainMode = type === 'explain-concept';
+    const isOptionExplainMode = type === 'explain-option';
+    if (!isQuestionMode && !isConceptMode && !isConceptCardMode && !isConceptExplainMode && !isOptionExplainMode && !frontContent) return jsonResponse({ error: "frontContent is required" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return jsonResponse({ error: "Não autenticado" }, 401);
@@ -42,9 +50,282 @@ Deno.serve(async (req) => {
     const promptConfig = await fetchPromptConfig(supabase, "ai_tutor");
     const MODEL_MAP = await getModelMap(supabase);
     const selectedModel = MODEL_MAP[aiModel || promptConfig?.default_model || "flash"] || "gemini-2.5-flash";
-    const temperature = promptConfig?.temperature ?? 0.5;
+
+    // ─── Concept Extraction (non-streaming, returns JSON) ───
+    if (isConceptMode) {
+      const qText = (question || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+
+      // Fetch existing concepts for reuse (contextual)
+      let existingConceptNames: string[] = [];
+      try {
+        if (deckId) {
+          const { data: deckConcepts } = await supabase.rpc('get_deck_concept_names' as any, {
+            p_deck_id: deckId,
+            p_user_id: userId,
+          });
+          if (deckConcepts && (deckConcepts as any[]).length > 0) {
+            existingConceptNames = (deckConcepts as any[]).map((r: any) => r.name);
+          }
+        }
+        if (existingConceptNames.length === 0) {
+          const { data: topConcepts } = await supabase
+            .from('global_concepts')
+            .select('name')
+            .eq('user_id', userId)
+            .order('correct_count', { ascending: false })
+            .limit(100);
+          existingConceptNames = (topConcepts ?? []).map((r: any) => r.name);
+        }
+      } catch { /* non-blocking */ }
+
+      const reuseBlock = existingConceptNames.length > 0
+        ? `\n\nCONCEITOS EXISTENTES DO ALUNO (REUTILIZE nomes existentes se aplicável, em vez de criar sinônimos):\n${existingConceptNames.join(', ')}\n`
+        : '';
+
+      const cPrompt = `Analise esta questão de múltipla escolha e extraia os CONCEITOS-CHAVE (Knowledge Components) que o aluno precisa dominar para acertá-la.
+
+QUESTÃO: ${qText}
+
+ALTERNATIVAS:
+${qOpts}
+${reuseBlock}
+Para CADA conceito, forneça:
+- "name": nome curto (2-6 palavras), específico e reutilizável (ex: "Critérios de Light", "Fisiopatologia da ICC")
+- "description": frase concisa (15-30 palavras) explicando COMO este conceito se aplica NESTA QUESTÃO ESPECÍFICA. Não defina o conceito genericamente — explique o que o aluno precisa saber SOBRE este conceito PARA acertar esta questão. Ex: "Nesta questão, aplicar os critérios de Light ao caso permite diferenciar exsudato de transudato."
+
+Exemplo:
+[
+  {"name": "Critérios de Light", "description": "Nesta questão, aplicar os critérios de Light ao caso clínico permite diferenciar exsudato de transudato e identificar a etiologia do derrame."},
+  {"name": "Derrame Pleural Transudativo", "description": "Reconhecer que o desequilíbrio hidrostático (ICC, cirrose) causa transudato é essencial para eliminar as alternativas incorretas."}
+]
+
+Retorne 2-5 conceitos. Responda SOMENTE o JSON array, sem markdown.`;
+
+      const cResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "Você extrai conceitos de questões. Responda APENAS JSON." },
+            { role: "user", content: cPrompt },
+          ],
+          max_tokens: 600,
+          temperature: 0.2,
+        }),
+      });
+
+      if (!cResponse.ok) return jsonResponse({ concepts: [] });
+
+      const cData = await cResponse.json();
+      const rawText = cData.choices?.[0]?.message?.content || "[]";
+      try {
+        const cleaned = rawText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (!Array.isArray(parsed)) return jsonResponse({ concepts: [] });
+
+        // Support both old format (string[]) and new format ({name, description}[])
+        const concepts = parsed.slice(0, 5).map((item: any) => {
+          if (typeof item === 'string') return { name: item, description: null };
+          return { name: item.name || '', description: item.description || null };
+        }).filter((c: any) => c.name);
+
+        // Return both formats for backward compatibility
+        return jsonResponse({
+          concepts: concepts.map((c: any) => c.name),
+          conceptsWithDescriptions: concepts,
+        });
+      } catch {
+        return jsonResponse({ concepts: [] });
+      }
+    }
+
+    // ─── Concept Card Generation (non-streaming, returns JSON) ───
+    if (isConceptCardMode) {
+      const conceptName = concept || "";
+      if (!conceptName) return jsonResponse({ error: "concept is required" }, 400);
+
+      const gcPrompt = `Crie 2-3 flashcards para ajudar um aluno a DOMINAR este conceito:
+
+CONCEITO: ${conceptName}
+
+Para cada card, forneça:
+- front: pergunta clara e direta (pode usar formato Cloze com {{c1::...}} se apropriado)
+- back: resposta completa e didática
+- card_type: "basic" ou "cloze"
+
+Retorne APENAS um JSON array, sem markdown:
+[{"front": "...", "back": "...", "card_type": "basic"}]
+
+Regras:
+- Cards devem ser ESPECÍFICOS sobre o conceito
+- Responda na mesma língua do conceito
+- Frente do card: min 10 palavras para contexto
+- Verso: explicação completa com 20-50 palavras`;
+
+      const gcResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "Você cria flashcards educacionais. Responda APENAS JSON." },
+            { role: "user", content: gcPrompt },
+          ],
+          max_tokens: 1000,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!gcResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const gcData = await gcResponse.json();
+      const gcRaw = gcData.choices?.[0]?.message?.content || "[]";
+      try {
+        const cleaned = gcRaw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const cards = JSON.parse(cleaned);
+        return jsonResponse({ cards: Array.isArray(cards) ? cards : [] });
+      } catch {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ cards: [] });
+      }
+    }
+
+    // ─── Concept Explanation (non-streaming, returns text) ───
+    if (isConceptExplainMode) {
+      const conceptName = concept || "";
+      if (!conceptName) return jsonResponse({ error: "concept is required" }, 400);
+
+      const cePrompt = `Explique de forma didática e completa o seguinte conceito para um aluno que está estudando:
+
+CONCEITO: ${conceptName}
+
+Use a seguinte estrutura com títulos Markdown (##) e separadores (---) obrigatórios:
+
+## Explicação
+Explique o conceito de forma clara e didática, como uma aula particular.
+- Use analogias e exemplos práticos
+- Destaque termos-chave em **negrito**
+- Se relevante, use listas para organizar sub-conceitos
+
+---
+
+## Dica de Estudo
+Uma dica prática para fixar este conceito.
+
+Responda na mesma língua do conceito. Máximo 300 palavras. Seja direto e objetivo.`;
+
+      const ceResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto. Você é um tutor educacional." },
+            { role: "user", content: cePrompt },
+          ],
+          max_tokens: 1500,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!ceResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const ceData = await ceResponse.json();
+      const ceText = ceData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: ceText });
+    }
+
+    // ─── Option Explanation (non-streaming) ───
+    if (isOptionExplainMode) {
+      const { question: oQuestion, options: oOptions, optionIndex, isCorrect, correctIndex: oCorrectIdx } = body;
+      const qText = (oQuestion || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (oOptions || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+      const targetLetter = String.fromCharCode(65 + (optionIndex ?? 0));
+      const targetText = oOptions?.[optionIndex] || "";
+      const correctLetter = String.fromCharCode(65 + (oCorrectIdx ?? 0));
+
+      const oePrompt = isCorrect
+        ? `O aluno quer entender por que a alternativa ${targetLetter} está CORRETA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nExplique de forma clara e didática por que a alternativa ${targetLetter} ("${targetText}") é a resposta correta. Use 2-3 frases. Responda na mesma língua da questão.`
+        : `O aluno quer entender por que a alternativa ${targetLetter} está ERRADA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é: ${correctLetter}\n\nExplique de forma clara e didática por que a alternativa ${targetLetter} ("${targetText}") está incorreta e o que a torna diferente da correta. Use 2-3 frases. Responda na mesma língua da questão.`;
+
+      const oeResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto." },
+            { role: "user", content: oePrompt },
+          ],
+          max_tokens: 500,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!oeResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const oeData = await oeResponse.json();
+      const oeText = oeData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: oeText });
+    }
+
+    // ─── Question Hint / Explain (non-streaming, returns JSON) ───
+    if (isQuestionMode) {
+      const qText = (question || "").replace(/<[^>]*>/g, "").trim();
+      const qOpts = (options || []).map((o: string, i: number) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+      const qCIdx = qCorrectIndex ?? 0;
+
+      let qPrompt: string;
+      let qMax = 600;
+      if (type === 'question-hint') {
+        qPrompt = `O aluno está resolvendo uma questão de múltipla escolha e pediu uma DICA.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é a alternativa ${String.fromCharCode(65 + qCIdx)}.\n\nDê uma dica que AJUDE o aluno a raciocinar e chegar na resposta correta, mas SEM revelar diretamente qual é a alternativa correta. Use pistas conceituais, elimine caminhos errados de forma sutil, ou dê uma analogia. Máximo 3 frases. Responda na mesma língua da questão.`;
+      } else {
+        const userIdx = userAnswer !== undefined ? userAnswer : null;
+        qPrompt = `O aluno respondeu uma questão de múltipla escolha e quer entender TODAS as alternativas.\n\nQUESTÃO: ${qText}\n\nALTERNATIVAS:\n${qOpts}\n\nA resposta correta é: ${String.fromCharCode(65 + qCIdx)}\n${userIdx !== null ? `O aluno marcou: ${String.fromCharCode(65 + userIdx)}` : ""}\n\nExplique detalhadamente:\n1. Por que a alternativa correta está certa (2-3 frases)\n2. Para CADA alternativa incorreta, explique por que está errada (1-2 frases cada)\n3. Uma dica prática para lembrar\n\nUse Markdown. Responda na mesma língua da questão. Máximo 400 palavras.`;
+        qMax = 2000;
+      }
+
+      const antiPreamble = `COMECE IMEDIATAMENTE pelo conteúdo. PROIBIDO saudações, elogios ou preâmbulos. Vá direto ao ponto.`;
+
+      const qResponse = await fetchWithRetry(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_KEY}` },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: antiPreamble },
+            { role: "user", content: qPrompt },
+          ],
+          max_tokens: qMax,
+          temperature: 0.4,
+        }),
+      });
+
+      if (!qResponse.ok) {
+        if (energyDeducted) await refundEnergy(supabase, userId, deductedCost);
+        return jsonResponse({ error: "Serviço de IA indisponível" }, 502);
+      }
+
+      const qData = await qResponse.json();
+      const responseText = qData.choices?.[0]?.message?.content || "";
+      return jsonResponse({ response: responseText });
+    }
+
+    // ─── Flashcard tutor (streaming) ───
     const cleanFront = frontContent.replace(/<[^>]*>/g, "").trim();
     const cleanBack = backContent ? backContent.replace(/<[^>]*>/g, "").trim() : "";
+    const temperature = promptConfig?.temperature ?? 0.5;
 
     let prompt: string;
     let maxTokens = 800;

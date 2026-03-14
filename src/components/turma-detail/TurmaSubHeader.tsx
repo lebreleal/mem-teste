@@ -1,5 +1,6 @@
 /**
- * Community info sub-header: turma name, settings, members, invite, subscribe, rating.
+ * Classe info sub-header: classe name, settings, members, share, rating.
+ * Removed: invite codes, community creation.
  */
 
 import { useState } from 'react';
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useMyTurmaRating, useAllTurmaRatings } from '@/hooks/useTurmaRating';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowLeft, Crown, Settings, Users, Check, Star, BarChart3, Share2, RefreshCw,
@@ -78,7 +79,7 @@ const TurmaSubHeader = ({
       <div className="border-b border-border/30 bg-card/50">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate('/turmas')}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1 min-w-0">
@@ -87,7 +88,7 @@ const TurmaSubHeader = ({
                 <button
                   onClick={openRatingDialog}
                   className="shrink-0 p-0.5 rounded-full transition-colors hover:bg-muted/50"
-                  title={myRating ? 'Sua avaliação' : 'Avaliar comunidade'}
+                  title={myRating ? 'Sua avaliação' : 'Avaliar classe'}
                 >
                   <Star className={`h-3.5 w-3.5 ${myRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`} />
                 </button>
@@ -128,11 +129,11 @@ const TurmaSubHeader = ({
                   ? `${window.location.origin}/c/${shareSlug}`
                   : `${window.location.origin}/c/${turmaId}`;
                 navigator.clipboard.writeText(link);
-                toast({ title: 'Link público copiado!', description: link });
-              }} title="Compartilhar comunidade">
+                toast({ title: 'Link copiado!', description: link });
+              }} title="Compartilhar classe">
                 <Share2 className="h-4 w-4 text-muted-foreground" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Membros">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMembers(true)} title="Seguidores">
                 <Users className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
@@ -143,7 +144,7 @@ const TurmaSubHeader = ({
       {/* Members Dialog */}
       <Dialog open={showMembers} onOpenChange={setShowMembers}>
         <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Membros</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Seguidores</DialogTitle></DialogHeader>
           <div className="flex-1 overflow-y-auto">
             <MembersTab
               members={members}
@@ -169,15 +170,14 @@ const TurmaSubHeader = ({
               <p className="text-sm font-semibold text-foreground">O que você desbloqueia:</p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-center gap-2"><Check className="h-4 w-4 text-[hsl(270,70%,55%)] shrink-0" /> Acesso a baralhos exclusivos para assinantes</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-[hsl(270,70%,55%)] shrink-0" /> Conteúdos e materiais premium das aulas</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-[hsl(270,70%,55%)] shrink-0" /> Badge de assinante na comunidade</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-[hsl(270,70%,55%)] shrink-0" /> Conteúdos e materiais premium</li>
+                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-[hsl(270,70%,55%)] shrink-0" /> Badge de assinante</li>
               </ul>
             </div>
 
             {activeSubscription && isSubscriber ? (
               <div className="rounded-xl border border-[hsl(270,70%,55%)]/30 bg-[hsl(270,70%,55%)]/5 p-4 text-center space-y-1">
                 <p className="text-sm font-semibold text-foreground">Assinatura ativa</p>
-                <p className="text-xs text-muted-foreground">Vence em {format(new Date(activeSubscription.expires_at), "dd 'de' MMMM, HH:mm", { locale: ptBR })}</p>
               </div>
             ) : (
               <div className="rounded-xl border border-border/50 p-4 text-center space-y-1">
@@ -203,11 +203,10 @@ const TurmaSubHeader = ({
         <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-amber-400" /> Avaliar Comunidade
+              <Star className="h-5 w-5 text-amber-400" /> Avaliar Classe
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto space-y-4">
-            {/* Star selector */}
             <div className="flex items-center justify-center gap-1">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} onClick={() => setRatingValue(n)} className="p-1 transition-transform hover:scale-110">
@@ -215,8 +214,6 @@ const TurmaSubHeader = ({
                 </button>
               ))}
             </div>
-
-            {/* Comment */}
             <Textarea
               placeholder="Comentário (opcional)"
               value={ratingComment}
@@ -224,16 +221,9 @@ const TurmaSubHeader = ({
               className="resize-none"
               rows={2}
             />
-
-            <Button
-              className="w-full"
-              onClick={handleSaveRating}
-              disabled={ratingValue < 1 || submitRating.isPending}
-            >
+            <Button className="w-full" onClick={handleSaveRating} disabled={ratingValue < 1 || submitRating.isPending}>
               {submitRating.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
-
-            {/* All ratings */}
             {allRatings.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-border/50">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avaliações</p>

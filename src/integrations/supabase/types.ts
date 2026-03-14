@@ -249,6 +249,7 @@ export type Database = {
           id: string
           last_reviewed_at: string | null
           learning_step: number
+          origin_deck_id: string | null
           scheduled_date: string
           stability: number
           state: number
@@ -264,6 +265,7 @@ export type Database = {
           id?: string
           last_reviewed_at?: string | null
           learning_step?: number
+          origin_deck_id?: string | null
           scheduled_date?: string
           stability?: number
           state?: number
@@ -279,6 +281,7 @@ export type Database = {
           id?: string
           last_reviewed_at?: string | null
           learning_step?: number
+          origin_deck_id?: string | null
           scheduled_date?: string
           stability?: number
           state?: number
@@ -350,6 +353,233 @@ export type Database = {
             columns: ["subscription_id"]
             isOneToOne: false
             referencedRelation: "turma_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      concept_cards: {
+        Row: {
+          card_id: string
+          concept_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          card_id: string
+          concept_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          card_id?: string
+          concept_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_cards_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "deck_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_concept_mastery: {
+        Row: {
+          concept: string
+          correct_count: number
+          deck_id: string
+          id: string
+          mastery_level: string
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          concept: string
+          correct_count?: number
+          deck_id: string
+          id?: string
+          mastery_level?: string
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          concept?: string
+          correct_count?: number
+          deck_id?: string
+          id?: string
+          mastery_level?: string
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_concept_mastery_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_concepts: {
+        Row: {
+          created_at: string
+          deck_id: string
+          difficulty: number
+          id: string
+          last_reviewed_at: string | null
+          learning_step: number
+          name: string
+          scheduled_date: string
+          sort_order: number
+          stability: number
+          state: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deck_id: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name: string
+          scheduled_date?: string
+          sort_order?: number
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deck_id?: string
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name?: string
+          scheduled_date?: string
+          sort_order?: number
+          stability?: number
+          state?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_concepts_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_question_attempts: {
+        Row: {
+          answered_at: string
+          id: string
+          is_correct: boolean
+          question_id: string
+          selected_indices: number[] | null
+          user_answer: string | null
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id: string
+          selected_indices?: number[] | null
+          user_answer?: string | null
+          user_id: string
+        }
+        Update: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          selected_indices?: number[] | null
+          user_answer?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_question_attempts_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "deck_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deck_questions: {
+        Row: {
+          concepts: string[] | null
+          correct_answer: string
+          correct_indices: number[] | null
+          created_at: string
+          created_by: string
+          deck_id: string
+          explanation: string
+          id: string
+          options: Json | null
+          question_text: string
+          question_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          concepts?: string[] | null
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by: string
+          deck_id: string
+          explanation?: string
+          id?: string
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          concepts?: string[] | null
+          correct_answer?: string
+          correct_indices?: number[] | null
+          created_at?: string
+          created_by?: string
+          deck_id?: string
+          explanation?: string
+          id?: string
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_questions_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
             referencedColumns: ["id"]
           },
         ]
@@ -916,9 +1146,11 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          image_url: string | null
           is_archived: boolean
           name: string
           parent_id: string | null
+          section: string
           sort_order: number
           source_turma_id: string | null
           source_turma_subject_id: string | null
@@ -928,9 +1160,11 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          image_url?: string | null
           is_archived?: boolean
           name: string
           parent_id?: string | null
+          section?: string
           sort_order?: number
           source_turma_id?: string | null
           source_turma_subject_id?: string | null
@@ -940,9 +1174,11 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          image_url?: string | null
           is_archived?: boolean
           name?: string
           parent_id?: string | null
+          section?: string
           sort_order?: number
           source_turma_id?: string | null
           source_turma_subject_id?: string | null
@@ -969,6 +1205,87 @@ export type Database = {
             columns: ["source_turma_subject_id"]
             isOneToOne: false
             referencedRelation: "turma_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_concepts: {
+        Row: {
+          category: string | null
+          concept_tag_id: string | null
+          correct_count: number
+          created_at: string
+          description: string | null
+          difficulty: number
+          id: string
+          last_reviewed_at: string | null
+          learning_step: number
+          name: string
+          parent_concept_id: string | null
+          scheduled_date: string
+          slug: string
+          stability: number
+          state: number
+          subcategory: string | null
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          category?: string | null
+          concept_tag_id?: string | null
+          correct_count?: number
+          created_at?: string
+          description?: string | null
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name: string
+          parent_concept_id?: string | null
+          scheduled_date?: string
+          slug: string
+          stability?: number
+          state?: number
+          subcategory?: string | null
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          category?: string | null
+          concept_tag_id?: string | null
+          correct_count?: number
+          created_at?: string
+          description?: string | null
+          difficulty?: number
+          id?: string
+          last_reviewed_at?: string | null
+          learning_step?: number
+          name?: string
+          parent_concept_id?: string | null
+          scheduled_date?: string
+          slug?: string
+          stability?: number
+          state?: number
+          subcategory?: string | null
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_concepts_concept_tag_id_fkey"
+            columns: ["concept_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "global_concepts_parent_concept_id_fkey"
+            columns: ["parent_concept_id"]
+            isOneToOne: false
+            referencedRelation: "global_concepts"
             referencedColumns: ["id"]
           },
         ]
@@ -1295,6 +1612,45 @@ export type Database = {
           },
         ]
       }
+      question_concepts: {
+        Row: {
+          concept_id: string
+          context_description: string | null
+          created_at: string
+          id: string
+          question_id: string
+        }
+        Insert: {
+          concept_id: string
+          context_description?: string | null
+          created_at?: string
+          id?: string
+          question_id: string
+        }
+        Update: {
+          concept_id?: string
+          context_description?: string | null
+          created_at?: string
+          id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_concepts_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "global_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_concepts_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "deck_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_logs: {
         Row: {
           card_id: string
@@ -1459,6 +1815,7 @@ export type Database = {
           created_by: string | null
           description: string
           id: string
+          is_concept: boolean
           is_official: boolean
           merged_into_id: string | null
           name: string
@@ -1473,6 +1830,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_concept?: boolean
           is_official?: boolean
           merged_into_id?: string | null
           name: string
@@ -1487,6 +1845,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
+          is_concept?: boolean
           is_official?: boolean
           merged_into_id?: string | null
           name?: string
@@ -2345,6 +2704,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ai_sources: {
+        Row: {
+          created_at: string
+          expires_at: string
+          file_path: string | null
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          name: string
+          source_type: string
+          text_content: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name: string
+          source_type?: string
+          text_content?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name?: string
+          source_type?: string
+          text_content?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_card_metadata: {
         Row: {
           card_id: string
@@ -2651,6 +3049,12 @@ export type Database = {
         Args: { p_turma_id: string }
         Returns: Json
       }
+      get_deck_concept_names: {
+        Args: { p_deck_id: string; p_user_id: string }
+        Returns: {
+          name: string
+        }[]
+      }
       get_deck_stats: {
         Args: { p_deck_id: string; p_tz_offset_minutes?: number }
         Returns: {
@@ -2674,6 +3078,7 @@ export type Database = {
           id: string
           last_reviewed_at: string | null
           learning_step: number
+          origin_deck_id: string | null
           scheduled_date: string
           stability: number
           state: number
@@ -2781,6 +3186,10 @@ export type Database = {
         Args: { _permission: string; _turma_id: string; _user_id: string }
         Returns: boolean
       }
+      increment_concept_count: {
+        Args: { p_concept_id: string; p_field: string }
+        Returns: undefined
+      }
       insert_review_batch: { Args: { p_reviews: Json }; Returns: undefined }
       is_turma_member: {
         Args: { _turma_id: string; _user_id: string }
@@ -2798,6 +3207,10 @@ export type Database = {
       refund_energy: {
         Args: { p_cost: number; p_user_id: string }
         Returns: undefined
+      }
+      resolve_community_deck_source: {
+        Args: { p_deck_id: string }
+        Returns: Json
       }
       restore_subscription_status: {
         Args: { p_turma_id: string }

@@ -1,0 +1,1 @@
+UPDATE deck_questions SET concepts = '{}' WHERE concepts IS NOT NULL AND array_length(concepts, 1) > 0;

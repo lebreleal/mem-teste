@@ -188,15 +188,15 @@ const MoveBrowser = ({
       </div>
 
       <div className="flex flex-col gap-2 pt-1">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
           {!isInsideDeck && onCreateFolderInMove ? (
-            <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0">
-              <CirclePlus className="h-3.5 w-3.5" /> Nova pasta
+            <Button variant="outline" size="sm" onClick={onCreateFolderInMove} className="gap-1.5 text-xs shrink-0 w-full sm:w-auto">
+              <CirclePlus className="h-3.5 w-3.5" /> Nova sala
             </Button>
           ) : <div />}
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-            <Button size="sm" onClick={onMoveSubmit} className="whitespace-nowrap">{submitLabel}</Button>
+          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+            <Button variant="outline" size="sm" onClick={onCancel} className="flex-1 sm:flex-none">Cancelar</Button>
+            <Button size="sm" onClick={onMoveSubmit} className="flex-1 sm:flex-none whitespace-nowrap truncate">{submitLabel}</Button>
           </div>
         </div>
       </div>
@@ -214,7 +214,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {props.createType === 'folder' ? 'Nova Pasta' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+              {props.createType === 'folder' ? 'Nova Sala' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
@@ -246,11 +246,11 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] overflow-hidden">
+        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] w-full overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 min-w-0 overflow-hidden">
               <ArrowUpRight className="h-5 w-5 shrink-0" />
-              <span className="truncate block max-w-[calc(100%-2rem)]">Mover "{props.moveTarget?.name}"</span>
+              <span className="truncate block">{`Mover "${props.moveTarget?.name}"`}</span>
             </DialogTitle>
           </DialogHeader>
           <MoveBrowser
@@ -279,7 +279,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
             <AlertDialogTitle className="font-display">Excluir "{props.deleteTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
               {props.deleteTarget?.type === 'folder'
-                ? 'A pasta será excluída. Baralhos não arquivados dentro dela serão excluídos permanentemente. Itens arquivados serão preservados e movidos para o Início.'
+                ? 'A sala será excluída. Baralhos não arquivados dentro dela serão excluídos permanentemente. Itens arquivados serão preservados e movidos para o Início.'
                 : 'Todos os cards, sub-decks e registros de revisão serão excluídos permanentemente.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -296,7 +296,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Nome duplicado</AlertDialogTitle>
             <AlertDialogDescription>
-              Já existe {props.duplicateWarning?.type === 'folder' ? 'uma pasta' : 'um baralho'} com o nome "{props.duplicateWarning?.name}" neste local.
+              Já existe {props.duplicateWarning?.type === 'folder' ? 'uma sala' : 'um baralho'} com o nome "{props.duplicateWarning?.name}" neste local.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">

@@ -13,8 +13,9 @@ import {
 } from '@/services/deckService';
 
 interface DashboardState {
+  dashboardSection: 'personal' | 'community';
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null; is_archived: boolean }[];
-  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean }[];
+  folders: { id: string; name: string; parent_id: string | null; is_archived: boolean; section?: 'personal' | 'community' }[];
   currentFolderId: string | null;
   currentDecks: { id: string }[];
 
@@ -63,7 +64,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [communityBlockTarget, setCommunityBlockTarget] = useState<{ id: string; name: string; type: 'deck' | 'folder' } | null>(null);
+  
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
@@ -80,36 +81,40 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
         }
       );
     } else {
-      state.createFolder.mutate({ name, parentId: state.currentFolderId }, {
-        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Pasta criada!' }); },
-        onError: () => toast({ title: 'Erro ao criar pasta', variant: 'destructive' }),
+      state.createFolder.mutate({ name, parentId: state.currentFolderId, section: state.dashboardSection }, {
+        onSuccess: () => { state.setCreateType(null); state.setCreateName(''); toast({ title: 'Classe criada!' }); },
+        onError: () => toast({ title: 'Erro ao criar classe', variant: 'destructive' }),
       });
     }
   }, [state, defaultAlgorithm, toast]);
 
+  /** Generate a unique name by appending (1), (2), etc. if duplicate exists */
+  const getUniqueName = useCallback((baseName: string, existingNames: string[]): string => {
+    const lower = existingNames.map(n => n.toLowerCase());
+    if (!lower.includes(baseName.toLowerCase())) return baseName;
+    let i = 1;
+    while (lower.includes(`${baseName} (${i})`.toLowerCase())) i++;
+    return `${baseName} (${i})`;
+  }, []);
+
   const handleCreateSubmit = useCallback(() => {
     if (!state.createName.trim()) return;
     const trimmed = state.createName.trim();
-    let hasDuplicate = false;
+
+    let finalName = trimmed;
     if (state.createType === 'deck') {
       const siblings = state.createParentDeckId
         ? state.decks.filter(d => d.parent_deck_id === state.createParentDeckId && !d.is_archived)
         : state.decks.filter(d => d.folder_id === state.currentFolderId && !d.parent_deck_id && !d.is_archived);
-      hasDuplicate = siblings.some(d => d.name.toLowerCase() === trimmed.toLowerCase());
+      finalName = getUniqueName(trimmed, siblings.map(d => d.name));
     } else {
-      const siblingFolders = state.folders.filter(f => f.parent_id === state.currentFolderId && !f.is_archived);
-      hasDuplicate = siblingFolders.some(f => f.name.toLowerCase() === trimmed.toLowerCase());
+      const siblingFolders = state.folders.filter(
+        f => f.parent_id === state.currentFolderId && !f.is_archived && (f.section ?? 'personal') === state.dashboardSection
+      );
+      finalName = getUniqueName(trimmed, siblingFolders.map(f => f.name));
     }
-    if (hasDuplicate) {
-      state.setDuplicateWarning({
-        name: trimmed,
-        type: state.createType!,
-        action: () => { doCreate(trimmed); state.setDuplicateWarning(null); },
-      });
-      return;
-    }
-    doCreate(trimmed);
-  }, [state, doCreate]);
+    doCreate(finalName);
+  }, [state, doCreate, getUniqueName]);
 
   const handleRenameSubmit = useCallback(async () => {
     if (!state.renameTarget || !state.renameName.trim()) return;
@@ -130,21 +135,6 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   }, [state, queryClient, toast]);
 
   const handleDeleteDeckRequest = useCallback(async (deck: { id: string; name: string }) => {
-    const allIds = [deck.id];
-    const collectChildren = (parentIds: string[]) => {
-      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
-      children.forEach(c => allIds.push(c.id));
-      if (children.length > 0) collectChildren(children.map(c => c.id));
-    };
-    collectChildren([deck.id]);
-
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds).limit(1);
-    if (turmaRefs && turmaRefs.length > 0) {
-      const blockedId = turmaRefs[0].deck_id;
-      const blockedDeck = state.decks.find(d => d.id === blockedId);
-      setCommunityBlockTarget({ id: deck.id, name: blockedDeck ? blockedDeck.name : deck.name, type: 'deck' });
-      return;
-    }
     state.setDeleteTarget({ type: 'deck', id: deck.id, name: deck.name });
   }, [state]);
 
@@ -152,11 +142,13 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     if (!state.deleteTarget) return;
     try {
       if (state.deleteTarget.type === 'folder') {
+        // Move all decks out of this folder before deleting (avoid FK constraint)
+        await supabase.from('decks').update({ folder_id: null } as any).eq('folder_id', state.deleteTarget.id);
         // Clear source_turma references before deleting to avoid FK issues
         await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.deleteTarget.id);
         const { error } = await supabase.from('folders').delete().eq('id', state.deleteTarget.id);
         if (error) throw error;
-        toast({ title: 'Pasta excluída' });
+        toast({ title: 'Classe excluída' });
       } else {
         await deleteDeckCascade(state.deleteTarget.id);
         toast({ title: 'Baralho excluído' });
@@ -187,7 +179,7 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
       );
     } else {
       state.moveFolder.mutate({ id: state.moveTarget.id, parentId: state.moveBrowseFolderId }, {
-        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Pasta movida!' }); },
+        onSuccess: () => { state.setMoveTarget(null); toast({ title: 'Classe movida!' }); },
         onError: () => toast({ title: 'Erro ao mover', variant: 'destructive' }),
       });
     }
@@ -224,23 +216,6 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
   const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(state.selectedDeckIds);
-    const allRelatedIds = new Set(ids);
-    const collectChildren = (parentIds: string[]) => {
-      const children = state.decks.filter(d => d.parent_deck_id && parentIds.includes(d.parent_deck_id));
-      children.forEach(c => allRelatedIds.add(c.id));
-      if (children.length > 0) collectChildren(children.map(c => c.id));
-    };
-    collectChildren(ids);
-
-    const allIds = Array.from(allRelatedIds);
-    const { data: turmaRefs } = await supabase.from('turma_decks').select('deck_id').in('deck_id', allIds);
-    const communityLinkedIds = new Set((turmaRefs ?? []).map((r: any) => r.deck_id));
-    const blocked = allIds.filter(id => communityLinkedIds.has(id));
-    if (blocked.length > 0) {
-      const blockedNames = blocked.map(id => state.decks.find(d => d.id === id)?.name ?? id).join(', ');
-      setCommunityBlockTarget({ id: blocked[0], name: blockedNames, type: 'deck' });
-      return;
-    }
     try {
       await bulkDeleteDecks(ids);
       toast({ title: `${ids.length} baralho(s) excluído(s)!` });
@@ -261,8 +236,6 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   }, [navigate]);
 
   return {
-    communityBlockTarget,
-    setCommunityBlockTarget,
     handleCreateSubmit,
     handleRenameSubmit,
     handleDeleteDeckRequest,

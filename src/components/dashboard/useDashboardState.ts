@@ -115,10 +115,24 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   /** A deck is community-imported if it has source_turma_deck_id, source_listing_id, or is_live_deck */
   const isCommunityDeck = (d: DeckWithStats) => !!(d.source_turma_deck_id || d.source_listing_id || (d as any).is_live_deck);
 
+  /** Are we at the root level (showing salas) or inside a folder? */
+  const isInsideSala = currentFolderId !== null;
+
   const currentDecks = useMemo(
-    () => decks.filter(d => d.folder_id === currentFolderId && !d.parent_deck_id && !d.is_archived && !isCommunityDeck(d))
+    () => {
+      if (!isInsideSala) return []; // At root, we show salas, not decks
+      // Show only root-level decks in this folder (sub-decks rendered via expand)
+      const filtered = decks.filter(d => !d.is_archived && d.folder_id === currentFolderId && !d.parent_deck_id);
+      return filtered.sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name));
+    },
+    [decks, currentFolderId, isInsideSala]
+  );
+
+  /** All root decks (used by SalaList at the root level) */
+  const allRootDecks = useMemo(
+    () => decks.filter(d => !d.parent_deck_id && !d.is_archived)
       .sort((a, b) => (a as any).sort_order - (b as any).sort_order || a.name.localeCompare(b.name)),
-    [decks, currentFolderId]
+    [decks]
   );
 
   /** Community decks: imported from turma or marketplace. Only shown at root level. */
@@ -166,7 +180,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     [folders, currentFolderId]
   );
 
-  const totalArchived = archivedDecks.length + archivedFolders.length;
+  // Context-aware: at root show archived folders count, inside sala show archived decks count
+  const totalArchived = isInsideSala ? archivedDecks.length : archivedFolders.length;
 
   const getSubDecks = (parentId: string) =>
     decks.filter(d => d.parent_deck_id === parentId && !d.is_archived);
@@ -334,7 +349,8 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     // Data
     decks, folders, isLoading,
     currentFolderId, setCurrentFolderId,
-    currentFolders, currentDecks, communityDecks, decksWithPendingUpdates,
+    isInsideSala,
+    currentFolders, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
     archivedDecks, archivedFolders, totalArchived,
     breadcrumb, moveBreadcrumb, movableFolders,
     expandedDecks, toggleExpand,

@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { getOrCreateErrorDeck, getErrorDeckId } from '@/services/errorDeckService';
 import { fsrsSchedule, type Rating, type FSRSCard, type FSRSParams, DEFAULT_FSRS_PARAMS } from '@/lib/fsrs';
 import { sm2Schedule, type SM2Card, type SM2Params } from '@/lib/sm2';
 import { parseStepToMinutes, shuffleArray, collectDescendantIds, collectFolderDeckIds, findRootAncestorId } from '@/lib/studyUtils';
@@ -21,7 +22,7 @@ export interface StudyQueueResult {
   isLiveDeck: boolean;
 }
 
-const DECK_SELECT_COLS = 'id, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
+const DECK_SELECT_COLS = 'id, name, parent_deck_id, folder_id, daily_new_limit, daily_review_limit, algorithm_mode, learning_steps, requested_retention, max_interval, interval_modifier, easy_bonus, easy_graduating_interval, shuffle_cards, is_live_deck, source_turma_deck_id, source_listing_id, bury_siblings, bury_new_siblings, bury_review_siblings, bury_learning_siblings, is_archived' as const;
 
 /** Fetch the study queue for a deck or folder. */
 export async function fetchStudyQueue(
@@ -73,7 +74,10 @@ export async function fetchStudyQueue(
       .order('created_at', { ascending: true });
     if (error) throw error;
     const cards = data ?? [];
-    const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
+    const isLiveDeck = deckIds.some(id => {
+      const d = activeDecks.find(dd => dd.id === id);
+      return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+    });
     return { cards: shuffle ? shuffleArray(cards) : cards, algorithmMode, deckConfig, isLiveDeck };
   }
 
@@ -223,9 +227,15 @@ export async function fetchStudyQueue(
   const orderedNonLearning = shuffle ? shuffleArray(nonLearning) : nonLearning;
   const queue = [...allLearning, ...orderedNonLearning];
 
-  const isLiveDeck = deckIds.some(id => activeDecks.find(d => d.id === id)?.is_live_deck);
+  const isLiveDeck = deckIds.some(id => {
+    const d = activeDecks.find(dd => dd.id === id);
+    return d?.is_live_deck || d?.source_turma_deck_id || d?.source_listing_id;
+  });
   return { cards: queue, algorithmMode, deckConfig, isLiveDeck };
 }
+
+
+
 
 /** Submit a card review and update scheduling. */
 export async function submitCardReview(
@@ -241,16 +251,66 @@ export async function submitCardReview(
     : null;
 
   if (algorithmMode === 'quick_review') {
+    const nowIso = new Date().toISOString();
     const newState = rating > 2 ? 2 : 1;
-    await supabase
-      .from('cards')
-      .update({ state: newState, last_reviewed_at: new Date().toISOString() } as any)
-      .eq('id', card.id);
-    await supabase.from('review_logs').insert({
-      user_id: userId, card_id: card.id, rating, stability: 0, difficulty: 0,
-      scheduled_date: new Date().toISOString(), elapsed_ms: cappedMs,
-    } as any);
-    return { state: newState, stability: 0, difficulty: 0, scheduled_date: card.scheduled_date, interval_days: 1 };
+    const isRatingFail = rating === 1;
+    const isInErrorDeck = !!card.origin_deck_id;
+
+    const updatePayload: any = {
+      state: newState,
+      last_reviewed_at: nowIso,
+    };
+
+    let movedToError = false;
+    let returnedFromError = false;
+    let originDeckName: string | null = null;
+
+    if (isRatingFail && !isInErrorDeck) {
+      const errorDeckId = await getOrCreateErrorDeck(userId);
+      updatePayload.origin_deck_id = card.deck_id;
+      updatePayload.deck_id = errorDeckId;
+      movedToError = true;
+    }
+
+    if (newState === 2 && isInErrorDeck) {
+      updatePayload.deck_id = card.origin_deck_id;
+      updatePayload.origin_deck_id = null;
+      returnedFromError = true;
+
+      const { data: originDeck } = await supabase
+        .from('decks')
+        .select('name')
+        .eq('id', card.origin_deck_id)
+        .single();
+      originDeckName = originDeck?.name ?? null;
+    }
+
+    const [updateResult, logResult] = await Promise.all([
+      supabase.from('cards').update(updatePayload).eq('id', card.id),
+      supabase.from('review_logs').insert({
+        user_id: userId,
+        card_id: card.id,
+        rating,
+        stability: 0,
+        difficulty: 0,
+        scheduled_date: nowIso,
+        elapsed_ms: cappedMs,
+      } as any),
+    ]);
+
+    if (updateResult.error) throw updateResult.error;
+    if (logResult.error) throw logResult.error;
+
+    return {
+      state: newState,
+      stability: 0,
+      difficulty: 0,
+      scheduled_date: nowIso,
+      interval_days: 1,
+      movedToError,
+      returnedFromError,
+      originDeckName,
+    };
   }
 
   const learningStepsRaw: string[] = deckConfig?.learning_steps || ['1m', '10m'];
@@ -290,12 +350,46 @@ export async function submitCardReview(
     result = sm2Schedule(sm2Card, rating, sm2Params);
   }
 
+  // --- Error deck movement logic ---
+  const isRatingFail = rating === 1;
+  const cardBecomeMastered = result.state === 2;
+  const isInErrorDeck = !!card.origin_deck_id;
+
+  // Build update payload
+  const updatePayload: any = {
+    stability: result.stability, difficulty: result.difficulty,
+    state: result.state, scheduled_date: result.scheduled_date,
+    last_reviewed_at: new Date().toISOString(), learning_step: result.learning_step ?? 0,
+  };
+
+  // Move to error deck on fail (if not already there)
+  let movedToError = false;
+  let returnedFromError = false;
+  let originDeckName: string | null = null;
+
+  if (isRatingFail && !isInErrorDeck) {
+    const errorDeckId = await getOrCreateErrorDeck(userId);
+    updatePayload.origin_deck_id = card.deck_id;
+    updatePayload.deck_id = errorDeckId;
+    movedToError = true;
+  }
+
+  // Return to origin deck when mastered
+  if (cardBecomeMastered && isInErrorDeck) {
+    updatePayload.deck_id = card.origin_deck_id;
+    updatePayload.origin_deck_id = null;
+    returnedFromError = true;
+    // Fetch origin deck name for toast
+    const { data: originDeck } = await supabase
+      .from('decks')
+      .select('name')
+      .eq('id', card.origin_deck_id)
+      .single();
+    originDeckName = originDeck?.name ?? null;
+  }
+
   const [updateResult, logResult] = await Promise.all([
-    supabase.from('cards').update({
-      stability: result.stability, difficulty: result.difficulty,
-      state: result.state, scheduled_date: result.scheduled_date,
-      last_reviewed_at: new Date().toISOString(), learning_step: result.learning_step ?? 0,
-    } as any).eq('id', card.id),
+    supabase.from('cards').update(updatePayload).eq('id', card.id),
     supabase.from('review_logs').insert({
       user_id: userId, card_id: card.id, rating,
       stability: result.stability, difficulty: result.difficulty,
@@ -305,7 +399,7 @@ export async function submitCardReview(
   if (updateResult.error) throw updateResult.error;
   if (logResult.error) throw logResult.error;
 
-  return result;
+  return { ...result, movedToError, returnedFromError, originDeckName };
 }
 
 import type { StudyStats } from '@/types/study';

@@ -1,17 +1,30 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Gauge } from 'lucide-react';
+import { Home, Compass, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
+import { useToast } from '@/hooks/use-toast';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useIsAdmin();
+  const { toast } = useToast();
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  const handleExplorar = () => {
+    if (isAdmin) {
+      navigate('/explorar');
+    } else {
+      toast({ title: '🚧 Em desenvolvimento', description: 'A seção Explorar estará disponível em breve!' });
+    }
+  };
+
   const items = [
-    { icon: Home, label: null, onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: Gauge, label: null, onClick: () => navigate('/desempenho'), active: isActive('/desempenho') },
+    { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
+    { icon: Plus, label: 'Adicionar', onClick: () => window.dispatchEvent(new CustomEvent('open-add-menu')), active: false, accent: true },
+    { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
   ];
 
   return (
@@ -25,11 +38,13 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
               onClick={item.onClick}
               className={cn(
                 'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors',
-                item.active ? 'text-primary' : 'text-muted-foreground'
+                item.accent
+                  ? 'text-primary-foreground bg-primary rounded-full h-10 w-10 flex items-center justify-center shadow-md -mt-2'
+                  : item.active ? 'text-primary' : 'text-muted-foreground'
               )}
             >
-              <Icon className="h-5 w-5" />
-              {item.label && <span className="text-[10px] font-semibold">{item.label}</span>}
+              <Icon className={cn('h-5 w-5', item.accent && 'h-5 w-5')} />
+              {!item.accent && item.label && <span className="text-[10px] font-semibold">{item.label}</span>}
             </button>
           );
         })}

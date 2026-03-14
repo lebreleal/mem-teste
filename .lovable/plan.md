@@ -1,204 +1,157 @@
-# Melhorar cobertura de conteúdo na geração de decks por IA
+# Sistema ALEKS — Grafo de Pré-requisitos entre Conceitos
 
 ## Implementado
 
-### 1. PAGES_PER_BATCH reduzido de 10 → 3
-Menos texto por chamada = análise mais profunda e exaustiva do conteúdo.
+### 1. Coluna `parent_concept_id` em `global_concepts`
+- `ALTER TABLE global_concepts ADD parent_concept_id uuid REFERENCES global_concepts(id) ON DELETE SET NULL`
+- Índice criado para queries eficientes
 
-### 2. densityFactor reduzido
-- Essential: 600 → 400
-- Standard: 250 → 150
-- Comprehensive: 120 → 80
-Mais cards solicitados por batch, forçando cobertura mais completa.
+### 2. `conceptHierarchyService.ts` reescrito para grafo de conceitos
+- `buildHierarchyDiagnostic` navega `parent_concept_id` (ancestors/descendants/siblings) em vez de `parent_deck_id`
+- ConceptNode agora inclui `depth` (profundidade no grafo) e `parent_concept_id`
+- Removidas dependências de deck hierarchy (getAncestorDeckIds, getSiblingDeckIds, etc.)
 
-### 3. Structured Output (tool calling) no generate-deck
-Substituído JSON livre por tool calling com schema definido. Elimina truncamento de JSON e garante schema correto.
+### 3. Cascade automático no erro (`useGlobalConcepts.ts`)
+- Quando rating = 1 (Again) e conceito tem parent_concept_id, chama `cascadeOnError`
+- `cascadeOnError` caminha ancestrais e reagenda os que estão em state 0/3 ou stability < 5
 
-### 4. Threshold de deduplicação: 0.8 → 0.9
-Apenas cards com 90%+ de palavras idênticas são removidos, preservando subtópicos similares.
+### 4. Fronteira de aprendizagem "Prontos para aprender" (`Concepts.tsx`)
+- `fetchReadyToLearnConcepts`: conceitos em state=0 cujo parent está em state=2 (dominado)
+- Seção visual com badges clicáveis na aba "Meus"
 
-### 5. Checklist de cobertura no prompt
-Instrução adicionada ao final do prompt para o modelo verificar que cada parágrafo tem pelo menos 1 card.
+### 5. Auto-linking de pré-requisitos via IA (`generate-questions`)
+- Prompt atualizado para retornar campo `prerequisites` (0-2 Knowledge Components)
+- Tool schema inclui `prerequisites` como campo obrigatório
+- `linkQuestionsToConcepts` agora seta `parent_concept_id` automaticamente com o primeiro pré-requisito
 
-### 6. Otimização de Múltipla Escolha (MC)
-- Distribuição: Cloze 55%, Basic 35%, MC 10% (antes 50/30/20)
-- MC só para diferenciação de 3+ conceitos similares
-- Opções limitadas a exatamente 4, max 8 palavras cada
-- Economia estimada: ~25% tokens de output
+### 6. ErrorNotebook atualizado para grafo de conceitos
+- Breadcrumb mostra caminho de pré-requisitos (conceitos, não decks)
+- "Lacunas Fundacionais" → "Pré-requisitos Fracos"
+- Suporta múltiplos source concepts
 
----
+### 7. Donut Chart de Progresso por Categoria
+- Gráfico de rosca (Recharts) na aba "Meus" agrupando conceitos por `category`
+- Cada fatia = uma grande área médica, colorida por % de domínio
+- Clicar na fatia filtra a lista por aquela categoria
+- Exibe % total de domínio no centro
 
-# Refatoração de Monolitos (Fase 1)
+### 8. Fronteira Enforced (Conceitos Bloqueados)
+- Conceitos cujo `parent_concept_id` aponta para conceito com `state !== 2` ficam bloqueados
+- UI: opacity reduzida, ícone de cadeado, tooltip "Domine {prereq} primeiro"
+- Conceitos bloqueados não podem ser estudados diretamente
 
-## Implementado
+### 9. Auto-mapeamento de Pré-requisitos via IA
+- Botão "Mapear pré-requisitos com IA" na página de Conceitos
+- Edge function `map-prerequisites` usa Lovable AI (gemini-2.5-flash) com tool calling
+- Analisa todos os conceitos do usuário e retorna pares `{ concept, prerequisite }`
+- Atualiza `parent_concept_id` em batch (não sobrescreve mapeamentos manuais)
 
-### StudyPlan.tsx: 1.580 → ~500 linhas
-Extraídos 3 módulos:
-- `StudyPlanDialogs.tsx` — WhatCanIDoDialog + CatchUpDialog (~250 linhas)
-- `DeckHierarchySelector.tsx` — DeckHierarchySelector + ObjectiveDecksExpanded (~210 linhas)
-- `ForecastSimulatorSection.tsx` — wrapper do simulador com state local (~120 linhas)
+### 10. Avaliação Diagnóstica Inicial (Knowledge Check)
+- Botão "Diagnóstico Inicial" na página de Conceitos
+- Seleciona ~20 conceitos distribuídos por profundidade no grafo
+- Para cada conceito, busca uma questão vinculada
+- Se acerta 2x consecutivas → marca conceito como dominado (state=2, stability=10)
+- Se erra → marca como fraco (state=0) para revisão futura
+- Exibe resultado final com contagem de acertos/erros
 
-### ManageDeck.tsx: 1.169 → ~900 linhas
-Extraído:
-- `manage-deck/OcclusionEditor.tsx` — editor de oclusão de imagem (~250 linhas)
+### 11. Princípios de Neurociência Aplicados (Learning Science)
 
-### DeckDetailContext.tsx: 1.064 → ~530 linhas (Fase 2)
-Extraído:
-- `DeckDetailHandlers.ts` — todos os useCallback handlers (~510 linhas)
+#### Rating Automático Binário (StudyMode)
+- Removidos botões manuais "Errei/Bom/Fácil"
+- Sistema atribui rating=3 (correto) ou rating=1 (incorreto) automaticamente
+- Base: Dunning-Kruger — alunos são maus autoavaliadores
 
-### DeckSettings.tsx: 1.002 → ~660 linhas (Fase 2)
-Extraído:
-- `DeckSettingsModals.tsx` — todos os modais/dialogs (~400 linhas)
+#### Mastery Threshold (MASTERY_THRESHOLD = 2)
+- Exige 2 acertos consecutivos para confirmar domínio de um conceito
+- Aplicado tanto no StudyMode quanto no DiagnosticMode
+- Base: Bloom 1968 (mastery learning), reduz falso positivo de 25% (chute em 4 alternativas)
 
-### FlashCard.tsx: 956 → ~480 linhas (Fase 2)
-Extraído:
-- `FlashCardMultipleChoice.tsx` — componente MultipleChoiceCard (~310 linhas)
+#### Interleaved Practice (ErrorNotebook)
+- Botão "Estudar todos (prática intercalada)" embaralha todos os conceitos fracos
+- Fisher-Yates shuffle garante aleatoriedade uniforme
+- Base: Rohrer & Taylor 2007 (+20-40% retenção vs blocked practice)
 
----
+#### Elaborative Interrogation (StudyMode)
+- Após erro, campo de texto: "Por que a alternativa X está correta?"
+- Aluno tenta explicar antes de ver a explicação da IA
+- Opcional (pode pular), mas ativa encoding profundo
+- Base: Chi et al. 1994, Dunlosky et al. 2013 (+30% retenção)
 
-# Rebalanceamento da Economia de Créditos IA
+#### Confidence-Based Assessment (StudyMode)
+- Após acertar, pergunta "Você tinha certeza?"
+- Se "Chutei" → não incrementa streak, exige mais uma questão
+- Impede que chutes sortudos confirmem domínio
+- Base: Hunt 2003, Dunlosky & Rawson 2012 (calibração metacognitiva)
 
-## Implementado
+## Correções Arquiteturais — Unificação Cards ↔ Temas
 
-### 1. Redução de recompensas de missões (~75%)
-| Missão | Antes | Depois |
-|--------|-------|--------|
-| daily_study_5 | 3 | 1 |
-| daily_study_20 | 5 | 2 |
-| daily_study_50 | 10 | 3 |
-| daily_minutes_10 | 3 | 1 |
-| daily_minutes_30 | 8 | 2 |
-| weekly_100 | 15 | 5 |
-| weekly_300 | 30 | 8 |
+### 12. Card Review → Concept Mastery Sync (Fase 1a)
+- `Study.tsx` → `executeReview()` agora chama `getCardConcepts` + `updateConceptMastery` após cada review
+- Se rating≥3: incrementa correct_count do tema vinculado
+- Se rating=1: incrementa wrong_count do tema vinculado
+- Execução non-blocking (fire-and-forget) para não impactar performance do estudo
 
-Total mensal free: ~1.500 → ~270 créditos.
+### 13. Temas Due → Flashcard Retrieval (Fase 1b)
+- `DashboardDueThemes.tsx` agora navega para `/study/{deckId}` ao clicar em um tema
+- Busca deck vinculado via `question_concepts` → `deck_questions` → `deck_id`
+- Fallback para `/conceitos` se não houver deck vinculado
+- Removido StudyMode inline — temas due sugerem flashcards (recall real > recognition)
 
-### 2. Milestones de estudo removidos
-Removidos os bônus de +5 (50 cards) e +10 (100 cards) do energyService.ts.
+### 14. Auto-trigger Diagnóstico Inicial (Fase 2a)
+- Novo componente `DiagnosticBanner.tsx` no Dashboard
+- Aparece automaticamente quando 10+ conceitos existem sem `last_reviewed_at`
+- Botão "Iniciar diagnóstico" abre `DiagnosticMode` inline
+- Dismissível com persistência em localStorage
 
-### 3. Bônus mensal premium implementado
-500 créditos/mês concedidos automaticamente via check-subscription.
-Usa reference_id único por período para evitar duplicatas.
+### 15. Auto-trigger Mapeamento de Pré-requisitos (Fase 2b)
+- Função `tryAutoMapPrerequisites` adicionada em `globalConceptService.ts`
+- Chamada automaticamente após `linkQuestionsToConcepts` (fire-and-forget)
+- Só executa se >80% dos conceitos não têm `parent_concept_id` (first-time scenario)
+- Guard contra execução duplicada via `_autoMapInFlight` Set
 
-### 4. Copy do PremiumModal atualizado
-"1.500 créditos por mês" → "500 créditos por mês".
+### 16. Daily Theme Limit (Fase 3a)
+- Constante `DAILY_NEW_THEME_LIMIT = 5` em `useGlobalConcepts.ts`
+- `newThemeRemaining` calculado com base em temas revisados hoje pela primeira vez
+- Exposto no hook para UI consumir (banners, limites)
 
----
+## Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| Supabase migration | `parent_concept_id` + index |
+| `src/services/conceptHierarchyService.ts` | Reescrito: grafo de conceitos |
+| `src/services/globalConceptService.ts` | `parent_concept_id` no tipo, `cascadeOnError`, `fetchReadyToLearnConcepts`, `linkQuestionsToConcepts` com prerequisites, `mapPrerequisitesViaAI`, `fetchDiagnosticConcepts`, `markConceptMastered`, `markConceptWeak`, `tryAutoMapPrerequisites` |
+| `src/hooks/useGlobalConcepts.ts` | Cascade automático no rating=1, `DAILY_NEW_THEME_LIMIT`, `newThemeRemaining` |
+| `src/pages/Concepts.tsx` | Donut chart, fronteira enforced, botão diagnóstico, botão mapear prereqs |
+| `src/pages/ErrorNotebook.tsx` | Interleaved practice, botão "Estudar todos" com shuffle |
+| `src/components/concepts/StudyMode.tsx` | Rating binário automático, mastery threshold, elaborative interrogation, confidence check |
+| `src/components/concepts/DiagnosticMode.tsx` | Mastery threshold de 2 questões, useEffect fix |
+| `src/components/deck-detail/DeckQuestionsTab.tsx` | Passa prerequisites no linking |
+| `supabase/functions/generate-questions/index.ts` | Campo prerequisites no schema + prompt |
+| `supabase/functions/map-prerequisites/index.ts` | Nova edge function para IA mapear pré-requisitos |
+| `supabase/config.toml` | Adicionada config map-prerequisites |
+| `src/pages/Study.tsx` | Sync card review → concept mastery |
+| `src/components/dashboard/DashboardDueThemes.tsx` | Navega para deck ao invés de StudyMode |
+| `src/components/dashboard/DiagnosticBanner.tsx` | **Novo** — Auto-trigger diagnóstico |
+| `src/pages/Dashboard.tsx` | Adicionado DiagnosticBanner |
 
-# Transação com Rollback de Créditos em Edge Functions
+### 17. Edição de Conceitos no EditQuestionDialog
+- EditQuestionDialog expandido com: chips de conceitos removíveis, busca debounced em `global_concepts`, criação inline de novos conceitos
+- Clique no chip abre editor inline (nome + descrição) com `updateConceptMeta`
+- Campo de explicação editável
+- Ao salvar, sincroniza `question_concepts` via `linkQuestionsToConcepts`
 
-## Implementado
+### 18. Reuso Inteligente de Conceitos pela IA
+- `generate-questions` e `ai-tutor` (type `question-concepts`) agora buscam conceitos do deck via `get_deck_concept_names` RPC
+- Fallback: top 100 conceitos do usuário por uso
+- Lista curta injetada no prompt: "REUTILIZE estes conceitos se aplicável"
+- Custo: ~500 tokens extras (~centavos)
+- RPC `get_deck_concept_names` criada: `question_concepts → deck_questions → global_concepts` filtrado por deck_id e user_id, LIMIT 200
 
-### 1. RPC `refund_energy` criada no banco
-Função PostgreSQL que incrementa `energy` no perfil do usuário para devolver créditos.
-
-### 2. `refundEnergy()` em `_shared/utils.ts`
-Helper que chama a RPC com tratamento de erro silencioso (log only).
-
-### 3. Rollback em todas as 5 edge functions
-- `generate-deck`: refund em erros AI (429/502/503), parse errors, 0 cards gerados
-- `enhance-card`: refund em erros AI e parse errors
-- `enhance-import`: refund em erros AI e parse errors
-- `ai-tutor`: refund em erros pré-stream (429/502/503/connection error)
-- `ai-chat`: refund em erros pré-stream (429/502/503/connection error)
-
-### Nota sobre streaming
-Para `ai-tutor` e `ai-chat`, o refund só ocorre se a API falhar ANTES de iniciar o stream.
-Se o stream já começou, os créditos são considerados consumidos legitimamente.
-
----
-
-# Dashboard Performance & Bug Fixes
-
-## Implementado
-
-### 1. FIX CRÍTICO: `get_study_stats_summary` RPC corrigida
-- Bug: `operator does not exist: date = text` causava streak=0 no Dashboard
-- Fix: Cast explícito `COALESCE(v_profile.last_study_reset_date, '')::text = v_today::text`
-- Resultado: Streak (foginho) agora mostra valor correto, consistente com ActivityView
-
-### 2. Community deck updates consolidada em RPC server-side
-- Antes: 3 queries sequenciais (turma_decks → decks → cards) no cliente
-- Depois: 1 RPC `get_community_deck_updates(p_user_id)` que retorna IDs com updates pendentes
-- Redução: 3 requests → 1
-
-### 3. useDecks com staleTime de 2 minutos
-- Antes: sem staleTime → refetch em cada re-render/focus
-- Depois: `staleTime: 2 * 60_000` — cache de 2 minutos
-- Redução de refetches desnecessários no Dashboard
-
-### 4. DeckCarousel: aggregate stats O(1) via Map
-- Antes: `getAggregateRaw()` recursivo O(n²) chamado para cada deck no carousel
-- Depois: `buildAggregateMap()` pre-computa stats uma vez em O(n), lookup O(1) via Map
-- Impacto: eliminação de milhares de `.filter()` por render em decks com sub-decks
-
-## Resumo de impacto
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Streak display | BUG (sempre 0) | ✅ Correto |
-| Community update queries | 3 sequenciais | 1 RPC |
-| staleTime useDecks | 0 (default) | 2min |
-| DeckCarousel aggregate | O(n²) recursivo | O(1) Map lookup |
-
----
-
-# Otimização de Requisições do Dashboard
-
-## Implementado
-
-### Fase A: useStudyPlan com opção `full` (economia: -3 queries no Dashboard)
-- `retentionQuery`, `planHealthQuery`, `forecastQuery` agora só disparam com `{ full: true }`
-- Dashboard chama `useStudyPlan()` (core), StudyPlan chama `useStudyPlan({ full: true })`
-
-### Fase B: deck-hierarchy via cache (economia: -1 query)
-- Removida query separada `['deck-hierarchy']`
-- Usa `queryClient.getQueryData(['decks', userId])` do cache de `useDecks`
-
-### Fase C: Missões com cache (economia: -2 queries)
-- `missionService.fetchMissions` aceita `cachedDailyCards`, `cachedTotalCards`, `cachedDeckCount`
-- `useMissions` passa dados de `useProfile` e `useDecks`, evitando re-buscar profile e deck count
-
-### Fase D: useIsAdmin com useQuery (economia: cache compartilhado)
-- Convertido de useState/useEffect para `useQuery` com `staleTime: 10min`
-
-### Fase E: Subscription polling 5min (economia: -80% Edge Function calls)
-- `refetchInterval` de 60s → 5min, com `refetchOnWindowFocus: true`
-
-### Fase F: Aggregate stats memoizado (economia: CPU)
-- `getRawAggregateStats` em `useDashboardState` agora usa `useMemo` + Map
-- Build O(n) uma vez, lookup O(1) por deck
-
-## Resumo de impacto
-| Otimização | Economia |
-|------------|----------|
-| useStudyPlan split (A) | -3 queries |
-| deck-hierarchy cache (B) | -1 query |
-| Missões com cache (C) | -2 queries |
-| useIsAdmin useQuery (D) | cache 10min |
-| Subscription polling (E) | -80% calls |
-| AggregateStats memo (F) | O(n²) → O(1) |
-| **TOTAL Dashboard load** | **~20-24 → ~14-16 req** |
-
----
-
-# Métricas Reais de Repetições por Sessão
-
-## Implementado
-
-### 1. RPC `get_user_real_study_metrics` atualizada
-Adicionados 2 novos campos:
-- `avg_reviews_per_new_card`: Mediana de interações por card novo no primeiro dia (fallback: 3)
-- `avg_lapse_rate`: Taxa de lapso real — % de reviews com rating=1 (fallback: 0.10)
-
-### 2. `calculateRealStudyTime` reescrita
-- Cards novos: `newCards × avgReviewsPerNewCard × avgNewSeconds` (antes: `newCards × avgNewSeconds`)
-- Cards de revisão: separa sucessos e lapsos, lapsos contam `avgRelearningSeconds × 2`
-- Resultado: estimativa ~2-3x mais precisa para sessões com muitos cards novos
-
-### 3. Interface `RealStudyMetrics` expandida
-- `avgReviewsPerNewCard: number` (mediana do histórico real)
-- `avgLapseRate: number` (taxa de erro em revisões)
-
-### 4. `useStudyPlan` mapeia novos campos da RPC
-- Fallbacks para contas sem histórico suficiente
+### 19. Descrição Contextual por Questão (context_description)
+- **Arquitetura**: `context_description` vive em `question_concepts` (junção), não em `global_concepts`
+  - **Conceito** = Knowledge Component reutilizável entre questões/usuários (nome curto, 2-6 palavras)
+  - **context_description** = como esse conceito se aplica NESTA questão específica (15-30 palavras)
+- Dados limpos: todos os `global_concepts` e `question_concepts` foram deletados para recomeço limpo
+- AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
+- UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
+- `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`

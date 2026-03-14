@@ -1,0 +1,136 @@
+/**
+ * useGlobalConcepts — hook for global concept FSRS study.
+ * Provides: all concepts, due concepts, review mutation.
+ * Enforces DAILY_NEW_THEME_LIMIT to prevent cognitive overload.
+ */
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import * as globalConceptService from '@/services/globalConceptService';
+import type { GlobalConcept } from '@/services/globalConceptService';
+import { fsrsSchedule, DEFAULT_FSRS_PARAMS, type FSRSCard, type Rating } from '@/lib/fsrs';
+import { useMemo } from 'react';
+
+export type { GlobalConcept } from '@/services/globalConceptService';
+
+/** Max new themes a user can study per day (prevents cognitive overload) */
+const DAILY_NEW_THEME_LIMIT = 5;
+
+export const useGlobalConcepts = () => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const allQuery = useQuery({
+    queryKey: ['global-concepts', user?.id],
+    queryFn: () => globalConceptService.fetchGlobalConcepts(user!.id),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+
+  const dueQuery = useQuery({
+    queryKey: ['global-concepts-due', user?.id],
+    queryFn: () => globalConceptService.fetchDueConcepts(user!.id),
+    enabled: !!user,
+    staleTime: 10_000,
+  });
+
+  const submitConceptReview = useMutation({
+    mutationFn: async ({ concept, rating, isCorrect }: { concept: GlobalConcept; rating: Rating; isCorrect: boolean }) => {
+      // Apply FSRS to the concept
+      const card: FSRSCard = {
+        stability: concept.stability,
+        difficulty: concept.difficulty,
+        state: concept.state,
+        scheduled_date: concept.scheduled_date,
+        learning_step: concept.learning_step,
+        last_reviewed_at: concept.last_reviewed_at ?? undefined,
+      };
+
+      const result = fsrsSchedule(card, rating, {
+        ...DEFAULT_FSRS_PARAMS,
+        learningSteps: [10, 1440],
+        relearningSteps: [10],
+      });
+
+      // Update FSRS fields
+      await globalConceptService.updateConceptFsrs(concept.id, {
+        state: result.state,
+        stability: result.stability,
+        difficulty: result.difficulty,
+        scheduled_date: result.scheduled_date,
+        learning_step: result.learning_step,
+        last_reviewed_at: new Date().toISOString(),
+      });
+
+      // Update mastery counts
+      await globalConceptService.updateConceptMastery(concept.id, isCorrect);
+
+      // CASCADE: If rating = 1 (Again), check ancestors and reschedule weak ones
+      if (rating === 1 && concept.parent_concept_id) {
+        try {
+          await globalConceptService.cascadeOnError(concept.id, user!.id);
+        } catch (err) {
+          console.error('Cascade on error failed (non-blocking):', err);
+        }
+      }
+
+      return result;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
+    },
+  });
+
+  const getVariedQuestion = async (conceptId: string) => {
+    if (!user) return null;
+    return globalConceptService.getVariedQuestion(conceptId, user.id);
+  };
+
+  const updateMeta = useMutation({
+    mutationFn: ({ conceptId, fields }: { conceptId: string; fields: { name?: string; category?: string | null; subcategory?: string | null } }) =>
+      globalConceptService.updateConceptMeta(conceptId, fields),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+    },
+  });
+
+  const deleteConcept = useMutation({
+    mutationFn: (conceptId: string) => globalConceptService.deleteConcept(conceptId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+      queryClient.invalidateQueries({ queryKey: ['global-concepts-due'] });
+    },
+  });
+
+  const unlinkQuestion = useMutation({
+    mutationFn: ({ conceptId, questionId }: { conceptId: string; questionId: string }) =>
+      globalConceptService.unlinkQuestion(conceptId, questionId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['global-concepts'] });
+    },
+  });
+
+  // Count new themes studied today (reviewed today for the first time)
+  const newThemesStudiedToday = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return (allQuery.data ?? []).filter(c =>
+      c.last_reviewed_at && c.last_reviewed_at.slice(0, 10) === today && c.state !== 0
+    ).length;
+  }, [allQuery.data]);
+
+  const newThemeRemaining = Math.max(0, DAILY_NEW_THEME_LIMIT - newThemesStudiedToday);
+
+  return {
+    concepts: allQuery.data ?? [],
+    dueConcepts: dueQuery.data ?? [],
+    isLoading: allQuery.isLoading,
+    isDueLoading: dueQuery.isLoading,
+    submitConceptReview,
+    getVariedQuestion,
+    updateMeta,
+    deleteConcept,
+    unlinkQuestion,
+    newThemeRemaining,
+    DAILY_NEW_THEME_LIMIT,
+  };
+};

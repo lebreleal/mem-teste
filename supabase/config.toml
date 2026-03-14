@@ -47,3 +47,12 @@ verify_jwt = false
 
 [functions.auto-tag-cards]
 verify_jwt = false
+
+[functions.generate-questions]
+verify_jwt = false
+
+[functions.parse-questions]
+verify_jwt = false
+
+[functions.map-prerequisites]
+verify_jwt = false

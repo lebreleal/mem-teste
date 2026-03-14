@@ -59,6 +59,9 @@ const AdminUsers = lazyRetry(() => import("./pages/AdminUsers"));
 const AdminLogs = lazyRetry(() => import("./pages/AdminLogs"));
 const AdminTags = lazyRetry(() => import("./pages/AdminTags"));
 const AdminUsageReport = lazyRetry(() => import("./pages/AdminUsageReport"));
+const ErrorNotebook = lazyRetry(() => import("./pages/ErrorNotebook"));
+
+const QuestionBank = lazyRetry(() => import("./pages/QuestionBank"));
 
 const Install = lazyRetry(() => import("./pages/Install"));
 const PrivacyPolicy = lazyRetry(() => import("./pages/PrivacyPolicy"));
@@ -93,12 +96,15 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/decks/:deckId" element={<ProtectedRoute><DeckDetail /></ProtectedRoute>} />
+                
+                <Route path="/study" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/study/folder/:folderId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/study/:deckId" element={<ProtectedRoute><Study /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/manage" element={<ProtectedRoute><ManageDeck /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/settings" element={<ProtectedRoute><DeckSettings /></ProtectedRoute>} />
                 <Route path="/decks/:deckId/preview" element={<PublicDeckPreview />} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/explorar" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas" element={<ProtectedRoute><Turmas /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId" element={<ProtectedRoute><TurmaDetail /></ProtectedRoute>} />
                 <Route path="/turmas/:turmaId/lessons/:lessonId" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />
@@ -119,6 +125,9 @@ const App = () => (
                 <Route path="/missoes" element={<ProtectedRoute><Missions /></ProtectedRoute>} />
                 <Route path="/ia" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
                 <Route path="/desempenho" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
+                <Route path="/caderno-de-erros" element={<ProtectedRoute><ErrorNotebook /></ProtectedRoute>} />
+                
+                <Route path="/banco-questoes" element={<ProtectedRoute><QuestionBank /></ProtectedRoute>} />
                 <Route path="/admin/ia" element={<ProtectedRoute><AdminIA /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />

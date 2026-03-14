@@ -1,5 +1,5 @@
 /**
- * Upload step: choose between text input or file upload.
+ * Upload step: choose between text input, file upload, or loading a saved source.
  */
 
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { FileText, Upload, ChevronLeft } from 'lucide-react';
 import { ACCEPTED_FILE_TYPES } from '@/types/ai';
+import AISourceSelector from '@/components/AISourceSelector';
+import type { AISource } from '@/hooks/useAISources';
 import type { RefObject } from 'react';
 
 interface UploadStepProps {
@@ -20,17 +22,28 @@ interface UploadStepProps {
   fileInputRef: RefObject<HTMLInputElement>;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onTextContinue: () => void;
+  selectedSourceId?: string | null;
+  onLoadSource?: (source: AISource | null) => void;
 }
 
 const UploadStep = ({
   deckName, onDeckNameChange, inputMode, onInputModeChange,
   rawText, onRawTextChange, fileInputRef, onFileSelect, onTextContinue,
+  selectedSourceId, onLoadSource,
 }: UploadStepProps) => (
   <div className="space-y-4">
     <div className="space-y-2">
       <Label>Nome da coleção</Label>
       <Input autoFocus value={deckName} onChange={e => onDeckNameChange(e.target.value)} placeholder="Ex: Calcificações Patológicas 2026" maxLength={100} />
     </div>
+
+    {/* AI Source Selector — load from saved sources */}
+    {onLoadSource && (
+      <AISourceSelector
+        selectedSourceId={selectedSourceId ?? null}
+        onSelectSource={onLoadSource}
+      />
+    )}
 
     {!inputMode && (
       <div className="grid grid-cols-2 gap-3">
