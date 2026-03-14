@@ -37,6 +37,14 @@ const DeckStatsCard = () => {
   const masteryPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
   const toDominate = total - masteredCount;
 
+  // Time estimate for this deck
+  const totalDue = studyPending;
+  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
+  const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+  const timeLabel = remainingMin >= 60
+    ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
+    : `${remainingMin}min`;
+
   const R = 22;
   const C = 2 * Math.PI * R;
 
@@ -51,7 +59,27 @@ const DeckStatsCard = () => {
   let offset = 0;
 
   return (
-    <div className="flex items-center gap-4 py-2">
+    <div className="space-y-1">
+      {/* Time estimate */}
+      {totalDue > 0 && (
+        <div className="flex items-center gap-1.5 px-1">
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Estimativa: ~{timeLabel}</span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" className="text-xs w-56 p-2">
+              Tempo estimado para revisar todos os cartões pendentes deste baralho, com base na sua velocidade média de estudo.
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+
+      {/* Study bar */}
+      <div className="flex items-center gap-4 py-2">
       {/* Circular 5-segment classification gauge */}
       <div className="relative shrink-0">
         <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
