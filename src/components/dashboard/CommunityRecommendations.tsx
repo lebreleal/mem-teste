@@ -91,7 +91,7 @@ const CommunityRecommendations = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const { data: recommendations, isLoading } = useQuery({
+  const { data: recommendations, isLoading, isFetching } = useQuery({
     queryKey: ['community-recommendations', user?.id],
     queryFn: async () => {
       const results: CommunityDeck[] = [];
@@ -169,15 +169,14 @@ const CommunityRecommendations = () => {
 
       return results.slice(0, 12);
     },
-    staleTime: 5 * 60_000,
+    staleTime: 30_000,
+    refetchOnMount: 'always',
     enabled: !!user,
   });
 
   const displayDecks = recommendations ?? [];
 
-  if (!isLoading && displayDecks.length === 0) return null;
-
-  if (isLoading) {
+  if ((isLoading || isFetching) && displayDecks.length === 0) {
     return (
       <div className="mt-6 px-4">
         <Skeleton className="h-5 w-48 mb-3" />
@@ -189,6 +188,8 @@ const CommunityRecommendations = () => {
       </div>
     );
   }
+
+  if (!isFetching && !isLoading && displayDecks.length === 0) return null;
 
   return (
     <div className="mt-6 pb-4">
