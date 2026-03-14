@@ -33,8 +33,8 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Perguntas "O que é X?" com respostas de dicionário
 ❌ Respostas que são listas ("A, B, C e D")
 ❌ Cards que agrupam múltiplos conceitos
-❌ Múltipla escolha com distratores absurdos/inventados
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
+❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
 ❌ Cards que testam informação ÓBVIA que qualquer leigo saberia (ex: "O coração bombeia {{c1::sangue}}")
@@ -65,7 +65,8 @@ FORMATOS:
   ✅ "O principal músculo da inspiração é o {{c1::diafragma}}."
   ❌ "Qual é o principal músculo? {{c1::diafragma}}" (PROIBIDO: pergunta com cloze)
 - type:"basic" → Pergunta no front, resposta curta no back. Perguntas de raciocínio, não definição.
-- type:"multiple_choice" → Pergunta no front, back:"", options: exatamente 4, correctIndex: 0-3.
+
+PROIBIDO: NÃO gere cartões do tipo "multiple_choice". Use apenas "basic" e "cloze".
 
 Responda APENAS com o JSON solicitado.`;
 
@@ -81,8 +82,6 @@ function getFlashFormatInstructions(formats: string[]): string {
   REGRA: cloze é SEMPRE afirmação, NUNCA pergunta. Se o front não contém {{c1::, o card será descartado.
   ✅ "A {{c1::hematose}} ocorre nos {{c2::alvéolos pulmonares}}."
   ❌ "Qual processo ocorre nos alvéolos? {{c1::hematose}}" (PROIBIDO)` },
-    { key: "multiple_choice", aliases: ["multiple_choice"], typeName: "multiple_choice",
-      instruction: '- type:"multiple_choice": Só quando existem 3+ conceitos similares para diferenciar. front: pergunta. back:"". options: EXATAMENTE 4 (max 8 palavras cada). correctIndex: 0-3. Distratores devem ser conceitos REAIS do material.' },
   ];
 
   for (const f of allFormats) {
@@ -95,23 +94,15 @@ function getFlashFormatInstructions(formats: string[]): string {
 
   if (parts.length === 0) parts.push(allFormats[0].instruction);
 
-  // Simple distribution rules
   const hasCloze = formats.includes("cloze");
   const hasBasic = formats.includes("qa") || formats.includes("definition");
-  const hasMC = formats.includes("multiple_choice");
-  const formatCount = [hasCloze, hasBasic, hasMC].filter(Boolean).length;
 
-  if (formatCount > 1) {
-    if (hasCloze && hasBasic && hasMC) {
-      parts.push("\nDISTRIBUIÇÃO: ~55% cloze, ~35% basic, ~10% multiple_choice.");
-    } else if (hasCloze && hasBasic) {
-      parts.push("\nDISTRIBUIÇÃO: ~60% cloze, ~40% basic.");
-    } else if (hasCloze && hasMC) {
-      parts.push("\nDISTRIBUIÇÃO: ~70% cloze, ~30% multiple_choice.");
-    } else {
-      parts.push("\nDISTRIBUIÇÃO: ~70% basic, ~30% multiple_choice.");
-    }
+  if (hasCloze && hasBasic) {
+    parts.push("\nDISTRIBUIÇÃO: ~60% cloze, ~40% basic.");
   }
+
+  // Always forbid multiple_choice
+  forbiddenNames.push("multiple_choice");
 
   if (forbiddenNames.length > 0) {
     parts.push(`\nPROIBIDO: NÃO gere tipo ${forbiddenNames.map(n => `"${n}"`).join(", ")}.`);
@@ -181,7 +172,6 @@ function getFormatInstructions(formats: string[]): string {
   const allFormats = [
     { key: "qa", aliases: ["definition", "qa"], instruction: '- type:"basic": Pergunta direta e DESAFIADORA na frente. Resposta concisa no verso: MÁXIMO 15 palavras. Se precisa de mais, divida em 2 cartões. REGRA DE OURO: se a resposta não cabe em 1 linha, o cartão está mal formulado. OBRIGATÓRIO: perguntas de MECANISMO ("Como funciona?"), CAUSA-EFEITO ("Por que X causa Y?"), COMPARAÇÃO ("Qual a diferença entre X e Y?") e APLICAÇÃO PRÁTICA. PROIBIDO: perguntas de dicionário ("O que é X?") — o estudante deve RACIOCINAR, não recitar.', name: "pergunta/resposta", typeName: "basic" },
     { key: "cloze", aliases: ["cloze"], instruction: clozeInstruction + '\n  Foque em TERMINOLOGIA TÉCNICA crucial, VALORES NUMÉRICOS, NOMES PRÓPRIOS e LOCAIS ANATÔMICOS. A lacuna deve ocultar a informação que o estudante PRECISA saber de cor.', name: "cloze", typeName: "cloze" },
-    { key: "multiple_choice", aliases: ["multiple_choice"], instruction: '- type:"multiple_choice": Use EXCLUSIVAMENTE quando existirem 3+ conceitos similares no material que precisam ser DIFERENCIADOS. Se não há conceitos confundíveis, NÃO gere MC — use cloze ou basic.\n  "front": pergunta clínica/aplicada. "back": string vazia. "options": EXATAMENTE 4 alternativas (nunca 3, nunca 5). Cada opção com MÁXIMO 8 PALAVRAS — seja conciso. "correctIndex": índice correto (0-based).\n  REGRA CRÍTICA: As alternativas incorretas DEVEM ser conceitos que EXISTEM no material mas estão INCORRETOS para aquela pergunta específica. NUNCA use distratores absurdos ou inventados.\n  OBJETIVO: forçar DIFERENCIAÇÃO entre conceitos similares (ex: enzimas, receptores, síndromes parecidas).', name: "múltipla escolha", typeName: "multiple_choice" },
   ];
 
   for (const f of allFormats) {
@@ -198,33 +188,23 @@ function getFormatInstructions(formats: string[]): string {
     formatNames.push(allFormats[0].name);
   }
 
+  // Always forbid multiple_choice
+  forbiddenNames.push("multiple_choice");
+
   const count = formatNames.length;
   if (count === 1) {
     parts.push(`\nUse EXCLUSIVAMENTE o formato "${formatNames[0]}" para TODOS os cartões. Qualquer cartão de outro formato será DESCARTADO.`);
   } else {
-    const hasAll3 = formatNames.length === 3;
     const hasCloze = formats.includes("cloze");
     const hasBasic = formats.includes("qa") || formats.includes("definition");
-    const hasMCQ = formats.includes("multiple_choice");
 
     let distributionText: string;
-    if (hasAll3) {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA (SuperMemo) — OBRIGATÓRIA, todos os formatos DEVEM aparecer:
-- Cloze: ~55% dos cartões — formato com MAIOR poder mnemônico. Use para fatos, termos, valores, nomes.
-- Pergunta/Resposta (basic): ~35% dos cartões — para raciocínio, mecanismos, causa-efeito.
-- Múltipla Escolha: ~10% dos cartões — APENAS para diferenciação de conceitos similares. Se gerar 20 cartões, 2 devem ser MC. Se não houver conceitos confundíveis no material, substitua MC por cloze/basic.`;
-    } else if (hasCloze && hasBasic) {
+    if (hasCloze && hasBasic) {
       distributionText = `DISTRIBUIÇÃO PEDAGÓGICA:
 - Cloze: ~60% dos cartões — formato dominante para retenção.
 - Pergunta/Resposta (basic): ~40% dos cartões — para raciocínio e compreensão.`;
-    } else if (hasCloze && hasMCQ) {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
-- Cloze: ~70% dos cartões — formato dominante para retenção.
-- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
     } else {
-      distributionText = `DISTRIBUIÇÃO PEDAGÓGICA — OBRIGATÓRIA, ambos os formatos DEVEM aparecer:
-- Pergunta/Resposta (basic): ~70% dos cartões — para raciocínio e compreensão.
-- Múltipla Escolha: ~30% dos cartões (OBRIGATÓRIO) — para diferenciação de conceitos.`;
+      distributionText = `Use a distribuição que melhor se adapte ao conteúdo.`;
     }
 
     parts.push(`\nREGRAS DE DISTRIBUIÇÃO (OBRIGATÓRIA):
@@ -249,9 +229,6 @@ function getOutputExamples(formats: string[]): string {
   if (formats.includes("cloze")) {
     examples.push('{"front":"A {{c1::proteína p53}} atua como supressor tumoral ao induzir {{c2::apoptose}} em células com DNA danificado.","back":"","type":"cloze"}');
   }
-  if (formats.includes("multiple_choice")) {
-    examples.push('{"front":"Paciente com dispneia, murmúrio vesicular abolido à esquerda e desvio de traqueia para a direita. Qual o diagnóstico mais provável?","back":"","type":"multiple_choice","options":["Pneumotórax hipertensivo","Derrame pleural","Atelectasia","Pneumonia lobar"],"correctIndex":0}');
-  }
   if (examples.length === 0) {
     examples.push('{"front":"Por que a pressão intrapleural negativa é essencial para a ventilação?","back":"Porque ela mantém os pulmões expandidos contra a parede torácica.","type":"basic"}');
   }
@@ -260,11 +237,11 @@ function getOutputExamples(formats: string[]): string {
 
 function mapCardType(type: string, allowedFormats: string[]): string {
   if (type === "cloze" && allowedFormats.includes("cloze")) return "cloze";
-  if (type === "multiple_choice" && allowedFormats.includes("multiple_choice")) return "multiple_choice";
   if ((type === "basic" || type === "qa" || type === "definition") && (allowedFormats.includes("qa") || allowedFormats.includes("definition"))) return "basic";
+  // Map multiple_choice to basic (no longer supported)
+  if (type === "multiple_choice") return "basic";
   if (allowedFormats.includes("qa") || allowedFormats.includes("definition")) return "basic";
   if (allowedFormats.includes("cloze")) return "cloze";
-  if (allowedFormats.includes("multiple_choice")) return "multiple_choice";
   return "basic";
 }
 
@@ -309,8 +286,9 @@ Deno.serve(async (req) => {
 
     const trimmedContent = textContent;
     const requestedCount = cardCount > 0 ? Math.min(Math.max(cardCount, 3), 80) : 0;
-    const formats = cardFormats?.length ? cardFormats : ["qa", "cloze", "multiple_choice"];
-    const detail = detailLevel || "standard";
+    // Filter out multiple_choice from formats (no longer supported)
+    const formats = (cardFormats?.length ? cardFormats : ["qa", "cloze"]).filter((f: string) => f !== "multiple_choice");
+    if (formats.length === 0) formats.push("qa", "cloze");
 
     // Flash-lite uses simplified prompt; Pro/Flash use full prompt
     let systemPrompt: string;
@@ -376,7 +354,7 @@ ${getOutputExamples(formats)}`;
     const cardProperties: Record<string, any> = {
       front: { type: "string", description: "Card front content" },
       back: { type: "string", description: "Card back content (empty string for cloze)" },
-      type: { type: "string", enum: ["basic", "cloze", "multiple_choice"], description: "Card type" },
+      type: { type: "string", enum: ["basic", "cloze"], description: "Card type" },
     };
     const toolSchema: any = {
       type: "object",
@@ -387,8 +365,6 @@ ${getOutputExamples(formats)}`;
             type: "object",
             properties: {
               ...cardProperties,
-              options: { type: "array", items: { type: "string" }, description: "Multiple choice options (exactly 4 items, max 8 words each)" },
-              correctIndex: { type: "integer", description: "0-based index of correct option" },
             },
             required: ["front", "back", "type"],
             additionalProperties: false,
@@ -545,7 +521,6 @@ ${getOutputExamples(formats)}`;
         front: c.front || "",
         back: mappedType === "cloze" ? "" : (c.back || ""),
         type: mappedType,
-        ...(mappedType === "multiple_choice" && c.options ? { options: c.options, correctIndex: c.correctIndex ?? 0 } : {}),
       };
     });
 
