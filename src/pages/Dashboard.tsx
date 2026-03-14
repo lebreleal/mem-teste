@@ -5,11 +5,14 @@ import { ArrowLeft } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -215,6 +218,28 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
+  // Sala-scoped study stats for the compact study card
+  const salaStudyStats = useMemo(() => {
+    if (!state.isInsideSala) return null;
+    let newCount = 0, learningCount = 0, reviewCount = 0, reviewedToday = 0;
+    for (const deck of state.currentDecks) {
+      const s = state.getAggregateStats(deck);
+      newCount += s.new_count;
+      learningCount += s.learning_count;
+      reviewCount += s.review_count;
+      reviewedToday += s.reviewed_today;
+    }
+    const totalDue = newCount + learningCount + reviewCount;
+    const totalSession = totalDue + reviewedToday;
+    const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
+    const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
+    const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+    const timeLabel = remainingMin >= 60
+      ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
+      : `${remainingMin}min`;
+    return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel };
+  }, [state.isInsideSala, state.currentDecks, state.getAggregateStats]);
+
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
@@ -279,25 +304,141 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Study CTA */}
-        <div className="flex items-center gap-3 px-4 py-4 max-w-md mx-auto md:max-w-lg">
-          <button
-            onClick={() => setStudyWeightsOpen(true)}
-            className="flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-            aria-label="Ajustar pesos"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-          </button>
-          <Button
-            onClick={() => navigate('/study')}
-            className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
-            size="lg"
-            disabled={totalDueToday === 0}
-          >
-            ESTUDAR
-            <Play className="h-4 w-4 fill-current" />
-          </Button>
-        </div>
+        {/* Sala study stats card */}
+        {state.isInsideSala && salaStudyStats && (
+          <div className="px-4 pt-2 pb-1">
+            <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                {/* Circular progress */}
+                <div className="relative flex-shrink-0">
+                  <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
+                    <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                    <circle
+                      cx="28" cy="28" r="24" fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 24}`}
+                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - salaStudyStats.progressPct / 100)}`}
+                      className="transition-all duration-500"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-foreground">{salaStudyStats.progressPct}%</span>
+                  </div>
+                </div>
+
+                {/* Counts */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="text-sm font-bold text-foreground">{salaStudyStats.newCount}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-sm font-bold text-foreground">{salaStudyStats.learningCount}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-sm font-bold text-foreground">{salaStudyStats.reviewCount}</span>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors">
+                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-3" side="bottom" align="start">
+                        <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                              <span className="text-xs text-muted-foreground">Novos</span>
+                            </div>
+                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                              <span className="text-xs text-muted-foreground">Aprendendo</span>
+                            </div>
+                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Layers className="h-3.5 w-3.5 text-primary" />
+                              <span className="text-xs text-muted-foreground">Revisão</span>
+                            </div>
+                            <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                          </div>
+                          <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">Tempo estimado</span>
+                            </div>
+                            <span className="text-xs font-semibold text-foreground">~{salaStudyStats.timeLabel}</span>
+                          </div>
+                          {salaStudyStats.reviewedToday > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">Feitos hoje</span>
+                              <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewedToday}</span>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">~{salaStudyStats.timeLabel}</span>
+                    {salaStudyStats.reviewedToday > 0 && (
+                      <>
+                        <span className="text-xs text-muted-foreground">·</span>
+                        <span className="text-xs text-green-500 font-medium">{salaStudyStats.reviewedToday} feitos</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Study button */}
+                <Button
+                  onClick={() => navigate('/study')}
+                  size="icon"
+                  className="h-10 w-10 rounded-full flex-shrink-0"
+                  disabled={salaStudyStats.totalDue === 0}
+                >
+                  <Play className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <Progress value={salaStudyStats.progressPct} className="h-1.5 mt-3" />
+            </div>
+          </div>
+        )}
+
+        {/* Study CTA (root level only) */}
+        {!state.isInsideSala && (
+          <div className="flex items-center gap-3 px-4 py-4 max-w-md mx-auto md:max-w-lg">
+            <button
+              onClick={() => setStudyWeightsOpen(true)}
+              className="flex h-9 w-9 md:h-8 md:w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+              aria-label="Ajustar pesos"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+            <Button
+              onClick={() => navigate('/study')}
+              className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
+              size="lg"
+              disabled={totalDueToday === 0}
+            >
+              ESTUDAR
+              <Play className="h-4 w-4 fill-current" />
+            </Button>
+          </div>
+        )}
 
         {/* Root level: Sala List */}
         {!state.isInsideSala && (
