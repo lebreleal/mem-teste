@@ -61,23 +61,33 @@ const DeckList = ({
   const { user } = useAuth();
   const { pendingDecks } = usePendingDecks();
 
-  // Fetch question counts per deck
-  const allDeckIds = currentDecks.map(d => d.id);
+  // Fetch question counts per deck (including sub-decks so matérias aggregate)
+  const allDeckIdsWithSubs = useMemo(() => {
+    const ids = new Set<string>();
+    const collect = (parentId: string) => {
+      ids.add(parentId);
+      const subs = deckRowProps.getSubDecks(parentId);
+      for (const s of subs) collect(s.id);
+    };
+    for (const d of currentDecks) collect(d.id);
+    return [...ids];
+  }, [currentDecks, deckRowProps.getSubDecks]);
+
   const { data: questionCountMap } = useQuery({
-    queryKey: ['deck-question-counts-list', user?.id, allDeckIds.join(',')],
+    queryKey: ['deck-question-counts-list', user?.id, allDeckIdsWithSubs.join(',')],
     queryFn: async () => {
-      if (allDeckIds.length === 0) return new Map<string, number>();
+      if (allDeckIdsWithSubs.length === 0) return new Map<string, number>();
       const { data } = await supabase
         .from('deck_questions')
         .select('deck_id')
-        .in('deck_id', allDeckIds);
+        .in('deck_id', allDeckIdsWithSubs);
       const counts = new Map<string, number>();
       for (const row of data ?? []) {
         counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + 1);
       }
       return counts;
     },
-    enabled: !!user && allDeckIds.length > 0,
+    enabled: !!user && allDeckIdsWithSubs.length > 0,
     staleTime: 60_000,
   });
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
