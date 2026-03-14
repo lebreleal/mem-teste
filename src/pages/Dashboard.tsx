@@ -216,34 +216,6 @@ const Dashboard = () => {
       />
 
       <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
-        {/* ▶ Deck Carousel — primary daily study UI */}
-        {allDecks && (
-          <DeckCarousel
-            decks={allDecks}
-            avgSecondsPerCard={avgSecondsPerCard}
-            studyMetrics={realStudyMetrics}
-            hasPlan={hasPlan}
-            planDeckIds={planDeckIds}
-            planDeckOrder={planDeckOrderEarly}
-            plansByDeckId={plansByDeckId}
-            globalNewRemaining={hasPlan ? state.globalNewRemaining : undefined}
-            distributedNewByDeck={state.distributedNewByDeck}
-          />
-        )}
-
-        {/* Caderno de Erros — subtle inline, not a banner */}
-        {errorCount > 0 && (
-          <button
-            onClick={() => navigate('/caderno-de-erros')}
-            className="mb-3 w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-          >
-            <BookX className="h-3.5 w-3.5 text-destructive/60" />
-            <span>{errorCount} {errorCount === 1 ? 'questão errada' : 'questões erradas'} para revisar</span>
-            <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
-          </button>
-        )}
-
-
         {/* 📚 Meus Baralhos */}
         <div className="mb-4 space-y-2">
 
