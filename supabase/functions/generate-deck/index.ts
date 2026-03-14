@@ -34,7 +34,7 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Respostas que são listas ("A, B, C e D")
 ❌ Cards que agrupam múltiplos conceitos
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
-❌ Cloze com lacunas em palavras triviais (artigos, preposições)
+❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
 ❌ Cards que testam informação ÓBVIA que qualquer leigo saberia (ex: "O coração bombeia {{c1::sangue}}")
