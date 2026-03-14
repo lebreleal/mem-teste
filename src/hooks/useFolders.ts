@@ -25,7 +25,7 @@ export const useFolders = () => {
   });
 
   const updateFolder = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => folderService.updateFolder(id, name),
+    mutationFn: ({ id, name, image_url }: { id: string; name?: string; image_url?: string | null }) => folderService.updateFolder(id, { name, image_url }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
   });
 
