@@ -7,7 +7,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, ChevronDown, Layers, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings } from 'lucide-react';
+import { Info, ChevronDown, Layers, HelpCircle, Lock, MoreVertical, Pencil, FolderInput, Archive, Trash2, Settings } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -49,6 +49,7 @@ interface DeckRowProps {
   toggleExpand: (id: string) => void;
   expandedAccordionId?: string | null;
   onAccordionToggle?: (deckId: string) => void;
+  questionCountMap?: Map<string, number>;
 }
 
 
@@ -58,6 +59,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   onRename, onMove, onArchive, onDelete,
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
+  questionCountMap,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
@@ -176,13 +178,38 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-muted-foreground">
-              {isErrorDeck
-                ? <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'} para revisar</span>
-                : hasChildren
-                  ? <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'} · {totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-                  : <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              }
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+              {hasChildren && (
+                <>
+                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
+                  <span>·</span>
+                </>
+              )}
+              <span className="inline-flex items-center gap-0.5">
+                <Layers className="h-3 w-3" />
+                {totalCards}
+              </span>
+              {(() => {
+                const qCount = questionCountMap ? (() => {
+                  // Collect all deck IDs (this + sub-decks)
+                  const ids = [deck.id];
+                  const collectIds = (parentId: string) => {
+                    const subs = getSubDecks(parentId);
+                    for (const s of subs) { ids.push(s.id); collectIds(s.id); }
+                  };
+                  collectIds(deck.id);
+                  return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
+                })() : 0;
+                return qCount > 0 ? (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <HelpCircle className="h-3 w-3" />
+                      {qCount}
+                    </span>
+                  </>
+                ) : null;
+              })()}
             </p>
             <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
           </div>
@@ -213,6 +240,15 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       <Layers className="h-3 w-3" />
                       {sub.total_cards}
                     </span>
+                    {questionCountMap && (questionCountMap.get(sub.id) ?? 0) > 0 && (
+                      <>
+                        <span className="text-[11px] text-muted-foreground">·</span>
+                        <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+                          <HelpCircle className="h-3 w-3" />
+                          {questionCountMap.get(sub.id)}
+                        </span>
+                      </>
+                    )}
                     <span className="text-[11px] text-muted-foreground ml-auto">{subMastery}%</span>
                   </div>
                   <Progress value={subMastery} className="h-1 mt-1" />
