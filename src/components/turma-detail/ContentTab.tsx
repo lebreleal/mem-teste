@@ -714,7 +714,7 @@ const ContentTab = () => {
       )}
 
       {/* ── Confirm Import Dialog ── */}
-      <Dialog open={!!confirmImportItem} onOpenChange={(open) => { if (!open) { setConfirmImportItem(null); setImportMode('hierarchy'); } }}>
+      <Dialog open={!!confirmImportItem} onOpenChange={(open) => { if (!open) setConfirmImportItem(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Adicionar à coleção?</DialogTitle>
@@ -724,22 +724,12 @@ const ContentTab = () => {
               ? `O baralho "${confirmImportItem?.data?.deck_name}" será adicionado à sua pasta "${turma?.name}".`
               : `A prova "${confirmImportItem?.data?.title}" será adicionada à sua coleção de provas.`}
           </p>
-          {confirmImportItem?.type === 'deck' && turmaDecks.filter((d: any) => d.parent_deck_id === confirmImportItem?.data?.deck_id).length > 0 && (
-            <div className="space-y-2 mt-2">
-              <p className="text-xs font-semibold text-muted-foreground">Este deck possui sub-decks. Como importar?</p>
-              <div className="flex gap-2">
-                <Button variant={importMode === 'hierarchy' ? 'default' : 'outline'} size="sm" className="flex-1 text-xs" onClick={() => setImportMode('hierarchy')}>Manter hierarquia</Button>
-                <Button variant={importMode === 'flat' ? 'default' : 'outline'} size="sm" className="flex-1 text-xs" onClick={() => setImportMode('flat')}>Tudo em 1 deck</Button>
-              </div>
-            </div>
-          )}
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmImportItem(null)}>Cancelar</Button>
             <Button size="sm" onClick={() => {
               if (confirmImportItem?.type === 'deck') {
-                const children = turmaDecks.filter((d: any) => d.parent_deck_id === confirmImportItem.data.deck_id);
                 importLogic.addToCollection.mutate(
-                  { ...confirmImportItem.data, _importMode: importMode, _childTds: children.length > 0 ? children : [] },
+                  confirmImportItem.data,
                   { onSuccess: (newDeck: any) => { if (newDeck?.id) navigate(`/decks/${newDeck.id}`, { state: { from: 'community', turmaId } }); } },
                 );
               } else if (confirmImportItem?.type === 'exam') {
