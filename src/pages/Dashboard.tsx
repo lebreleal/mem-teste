@@ -4,10 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, SquarePlus, RotateCcw, Layers, Clock, Info, CheckCircle2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -194,30 +192,16 @@ const Dashboard = () => {
     }
   }, [state]);
 
-  // Compute total due + per-state counts for the study strip
-  const { totalDueToday, totalNew, totalLearning, totalReview, reviewedToday } = useMemo(() => {
+  // Compute total due for the study button
+  const totalDueToday = useMemo(() => {
     const roots = state.currentDecks;
-    let n = 0, l = 0, r = 0, done = 0;
+    let total = 0;
     for (const deck of roots) {
       const s = state.getAggregateStats(deck);
-      n += s.new_count;
-      l += s.learning_count;
-      r += s.review_count;
-      done += s.reviewed_today;
+      total += s.new_count + s.learning_count + s.review_count;
     }
-    return { totalDueToday: n + l + r, totalNew: n, totalLearning: l, totalReview: r, reviewedToday: done };
+    return total;
   }, [state.currentDecks, state.getAggregateStats]);
-
-  const dashProgressPct = useMemo(() => {
-    const total = totalDueToday + reviewedToday;
-    return total > 0 ? Math.round((reviewedToday / total) * 100) : 0;
-  }, [totalDueToday, reviewedToday]);
-
-  const dashTimeLabel = useMemo(() => {
-    const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-    const min = Math.ceil((totalDueToday * avgSec) / 60);
-    return min >= 60 ? `${Math.floor(min / 60)}h${min % 60 > 0 ? `${min % 60}min` : ''}` : `${min}min`;
-  }, [totalDueToday]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -227,116 +211,24 @@ const Dashboard = () => {
       />
 
       <main className="pb-24">
-        {/* Study strip */}
-        <div>
-          <div className="bg-card px-4 py-2.5 border-b border-border/50">
-            <div className="flex items-center gap-2">
-              {/* Circular progress */}
-              <div className="relative flex-shrink-0">
-                <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90">
-                  <circle cx="20" cy="20" r="17" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-                  <circle
-                    cx="20" cy="20" r="17" fill="none"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 17}`}
-                    strokeDashoffset={`${2 * Math.PI * 17 * (1 - dashProgressPct / 100)}`}
-                    className="transition-all duration-500"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[9px] font-bold text-foreground">{dashProgressPct}%</span>
-                </div>
-              </div>
-
-              {/* Counts + time */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <SquarePlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                    <span className="text-sm font-bold text-foreground tabular-nums">{totalNew}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <RotateCcw className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span className="text-sm font-bold text-foreground tabular-nums">{totalLearning}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
-                    <span className="text-sm font-bold text-foreground tabular-nums">{totalReview}</span>
-                  </div>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors shrink-0">
-                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-3" side="bottom" align="start">
-                      <p className="text-xs font-semibold text-foreground mb-2">Detalhes do dia</p>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                            <span className="text-xs text-muted-foreground">Novos</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{totalNew}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
-                            <span className="text-xs text-muted-foreground">Aprendendo</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{totalLearning}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Layers className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-xs text-muted-foreground">Revisão</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{totalReview}</span>
-                        </div>
-                        <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Tempo estimado</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">~{dashTimeLabel}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                            <span className="text-xs text-muted-foreground">Feitos hoje</span>
-                          </div>
-                          <span className="text-xs font-semibold text-foreground">{reviewedToday}</span>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="text-[11px] text-muted-foreground">~{dashTimeLabel}</span>
-                </div>
-              </div>
-
-              {/* Preferences + Study */}
-              <button
-                onClick={() => setStudyWeightsOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                aria-label="Ajustar pesos"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-              </button>
-              <Button
-                onClick={() => navigate('/study')}
-                size="icon"
-                className="h-10 w-10 rounded-full flex-shrink-0"
-                disabled={totalDueToday === 0}
-              >
-                <Play className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
+        {/* Study CTA */}
+        <div className="flex items-center gap-3 px-4 py-4">
+          <button
+            onClick={() => setStudyWeightsOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
+            aria-label="Ajustar pesos"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+          </button>
+          <Button
+            onClick={() => navigate('/study')}
+            className="flex-1 h-12 rounded-full text-base font-bold gap-2"
+            size="lg"
+            disabled={totalDueToday === 0}
+          >
+            ESTUDAR
+            <Play className="h-5 w-5 fill-current" />
+          </Button>
         </div>
 
         {/* Deck List */}
