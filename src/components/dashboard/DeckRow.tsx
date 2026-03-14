@@ -115,15 +115,27 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
 }
 
-/** Compute 4-segment percentages for classification bar */
-function computeClassificationPcts(stats: { new_count: number; learning_count: number; review_count: number }, totalCards: number) {
-  if (totalCards === 0) return { newPct: 0, learningPct: 0, reviewPct: 0, masteredPct: 0 };
-  const masteredCount = Math.max(0, totalCards - stats.new_count - stats.learning_count - stats.review_count);
+/** Aggregate 5-segment classification counts across deck + descendants */
+function aggregateClassification(deck: DeckWithStats, getSubDecks: (id: string) => DeckWithStats[]) {
+  let facil = deck.class_facil ?? 0, bom = deck.class_bom ?? 0, dificil = deck.class_dificil ?? 0, errei = deck.class_errei ?? 0, novo = deck.class_novo ?? 0;
+  let total = deck.total_cards;
+  const collect = (parentId: string) => {
+    const subs = getSubDecks(parentId);
+    for (const s of subs) {
+      facil += s.class_facil ?? 0; bom += s.class_bom ?? 0; dificil += s.class_dificil ?? 0; errei += s.class_errei ?? 0; novo += s.class_novo ?? 0;
+      total += s.total_cards;
+      collect(s.id);
+    }
+  };
+  collect(deck.id);
+  if (total === 0) return { facilPct: 0, bomPct: 0, dificilPct: 0, erreiPct: 0, novoPct: 0, totalCards: 0 };
   return {
-    newPct: (stats.new_count / totalCards) * 100,
-    learningPct: (stats.learning_count / totalCards) * 100,
-    reviewPct: (stats.review_count / totalCards) * 100,
-    masteredPct: (masteredCount / totalCards) * 100,
+    facilPct: (facil / total) * 100,
+    bomPct: (bom / total) * 100,
+    dificilPct: (dificil / total) * 100,
+    erreiPct: (errei / total) * 100,
+    novoPct: (novo / total) * 100,
+    totalCards: total,
   };
 }
 
