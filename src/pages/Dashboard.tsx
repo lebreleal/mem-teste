@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
 import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, SquarePlus, RotateCcw, Layers, Clock, Info, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
