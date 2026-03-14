@@ -1,13 +1,13 @@
 /**
- * DeckRow — a single deck (matéria) item in the dashboard list.
- * Shows name, deck count (children), mastery % with progress bar.
+ * DeckRow — a single deck item in the dashboard list.
+ * Shows name, card count, mastery % with progress bar.
+ * If the deck has sub-decks, shows an expand/collapse chevron.
  * Special rendering for the "📕 Caderno de Erros" deck.
- * No accordion/expansion — clicking always navigates to DeckDetail.
  */
 
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info } from 'lucide-react';
+import { Info, ChevronDown, Layers } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
@@ -47,15 +47,53 @@ interface DeckRowProps {
 
 const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   deck, deckSelectionMode, selectedDeckIds,
-  toggleDeckSelection, getSubDecks,
+  toggleDeckSelection, getSubDecks, getAggregateStats,
   dragHandlers, hasPendingUpdate,
+  expandedAccordionId, onAccordionToggle,
 }, ref) => {
   const navigate = useNavigate();
   const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const masteryPct = deck.total_cards > 0 ? Math.round((deck.mastered_cards / deck.total_cards) * 1000) / 10 : 0;
 
+  const subDecks = useMemo(() => getSubDecks(deck.id), [deck.id, getSubDecks]);
+  const hasChildren = subDecks.length > 0;
+  const isExpanded = expandedAccordionId === deck.id;
+
+  // Aggregate totals: this deck + all sub-decks
+  const { totalCards, masteredCards } = useMemo(() => {
+    let total = deck.total_cards;
+    let mastered = deck.mastered_cards;
+    const collectSubs = (parentId: string) => {
+      const subs = getSubDecks(parentId);
+      for (const s of subs) {
+        total += s.total_cards;
+        mastered += s.mastered_cards;
+        collectSubs(s.id);
+      }
+    };
+    collectSubs(deck.id);
+    return { totalCards: total, masteredCards: mastered };
+  }, [deck, getSubDecks]);
+
+  const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
   const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
+
+  const handleClick = () => {
+    if (deckSelectionMode) {
+      toggleDeckSelection(deck.id);
+      return;
+    }
+    if (isErrorDeck) {
+      navigate('/caderno-de-erros');
+      return;
+    }
+    // If has children, toggle expand; otherwise navigate
+    if (hasChildren) {
+      onAccordionToggle?.(deck.id);
+    } else {
+      navigate(`/decks/${deck.id}`);
+    }
+  };
 
   return (
     <>
@@ -70,8 +108,15 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           onDragEnd: dragHandlers.onDragEnd,
         } : {})}
         className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${dragHandlers ? dragHandlers.className : ''}`}
-        onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/caderno-de-erros' : `/decks/${deck.id}`)}
+        onClick={handleClick}
       >
+        {/* Expand/collapse chevron for decks with children */}
+        {hasChildren && (
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}`}
+          />
+        )}
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
@@ -90,8 +135,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
               {isErrorDeck
-                ? <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'} para revisar</span>
-                : <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'}</span>
+                ? <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'} para revisar</span>
+                : hasChildren
+                  ? <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'} · {totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
+                  : <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
               }
             </p>
             <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
@@ -99,6 +146,37 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <Progress value={masteryPct} className="h-1 mt-1.5" />
         </div>
       </div>
+
+      {/* Sub-decks (expanded) */}
+      {hasChildren && isExpanded && (
+        <div className="bg-muted/30">
+          {subDecks.map(sub => {
+            const subMastery = sub.total_cards > 0 ? Math.round((sub.mastered_cards / sub.total_cards) * 1000) / 10 : 0;
+            const stats = getAggregateStats(sub);
+            return (
+              <div
+                key={sub.id}
+                className="flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
+                onClick={() => navigate(`/decks/${sub.id}`)}
+              >
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+                      <Layers className="h-3 w-3" />
+                      {sub.total_cards}
+                    </span>
+                    {stats.new_count > 0 && <span className="text-[11px] text-blue-500">{stats.new_count} novos</span>}
+                    {stats.review_count > 0 && <span className="text-[11px] text-green-500">{stats.review_count} revisão</span>}
+                    <span className="text-[11px] text-muted-foreground ml-auto">{subMastery}%</span>
+                  </div>
+                  <Progress value={subMastery} className="h-1 mt-1" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Info modal for error deck */}
       <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
