@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
 import { Archive, ArchiveRestore, ChevronDown, ChevronLeft, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon, SquarePlus, RotateCcw, Layers, Clock, Info, User } from 'lucide-react';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -280,15 +281,11 @@ const Dashboard = () => {
             <>
               {/* Hero banner */}
               <div className="relative bg-muted/50 overflow-hidden">
-                {/* Background image (blurred) or gradient */}
-                {folderImage ? (
-                  <div className="absolute inset-0">
-                    <img src={folderImage} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-b from-muted/80 to-background" />
-                )}
+                {/* Background image (blurred) */}
+                <div className="absolute inset-0">
+                  <img src={folderImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
+                </div>
 
                 <div className="relative px-4 pt-3 pb-4">
                   {/* Top bar: back + actions */}
@@ -338,13 +335,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-3 mb-2">
                     {/* Sala image with change-image overlay */}
                     <div className="relative shrink-0">
-                      {folderImage ? (
-                        <img src={folderImage} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
-                      ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 border border-border/30">
-                          <Layers className="h-7 w-7 text-primary" />
-                        </div>
-                      )}
+                      <img src={folderImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
                       <button
                         onClick={() => setSalaImageOpen(true)}
                         className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
