@@ -46,7 +46,7 @@ import DeckList from '@/components/dashboard/DeckList';
 import SalaList from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
-const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
+
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
 
 
