@@ -640,6 +640,7 @@ const Dashboard = () => {
             decks={state.decks}
             getSubDecks={state.getSubDecks}
             getAggregateStats={state.getAggregateStats}
+            currentFolderId={state.currentFolderId}
           />
         )}
       </Suspense>
