@@ -506,6 +506,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
       else if (stateFilter === 'learning') result = result.filter(c => c.state === 1 && !isFrozenCard(c));
       else if (stateFilter === 'relearning') result = result.filter(c => c.state === 3 && !isFrozenCard(c));
       else if (stateFilter === 'mastered') result = result.filter(c => c.state === 2 && !isFrozenCard(c));
+      // Difficulty-based filters
+      else if (stateFilter === 'facil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) <= 3);
+      else if (stateFilter === 'bom') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 3 && (c.difficulty ?? 5) <= 5);
+      else if (stateFilter === 'dificil') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 5 && (c.difficulty ?? 5) <= 7);
+      else if (stateFilter === 'errei') result = result.filter(c => c.state !== 0 && c.state != null && !isFrozenCard(c) && (c.difficulty ?? 5) > 7);
     }
     if (search.trim()) {
       const q = search.toLowerCase();

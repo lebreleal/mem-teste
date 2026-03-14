@@ -118,6 +118,21 @@ const CardList = () => {
     return allCards.filter(c => c.state === 3 && new Date(c.scheduled_date).getTime() <= fiftyYears).length;
   }, [allCards]);
 
+  // Difficulty-based classification counts (matching Dashboard logic)
+  const diffCounts = useMemo(() => {
+    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0, frozen = 0;
+    for (const c of allCards) {
+      if (isFrozenCard(c)) { frozen++; continue; }
+      if (c.state === 0 || c.state == null) { novo++; continue; }
+      const d = c.difficulty ?? 5;
+      if (d <= 3) facil++;
+      else if (d <= 5) bom++;
+      else if (d <= 7) dificil++;
+      else errei++;
+    }
+    return { novo, facil, bom, dificil, errei, frozen };
+  }, [allCards, isFrozenCard]);
+
   const stateOptions = isQuickReview
     ? [
         { value: 'all', label: 'Todos' },
@@ -129,9 +144,10 @@ const CardList = () => {
     : [
         { value: 'all', label: 'Todos' },
         { value: 'new', label: 'Novos' },
-        { value: 'learning', label: 'Aprendendo' },
-        ...(relearningCount > 0 ? [{ value: 'relearning', label: 'Reaprendendo' }] : []),
-        { value: 'mastered', label: 'Dominados' },
+        { value: 'facil', label: 'Fácil' },
+        { value: 'bom', label: 'Bom' },
+        { value: 'dificil', label: 'Difícil' },
+        { value: 'errei', label: 'Errei' },
         ...(frozenCount > 0 ? [{ value: 'frozen', label: '❄️ Congelados' }] : []),
       ];
 
@@ -161,12 +177,16 @@ const CardList = () => {
   };
 
   const getStateCount = (value: string) => {
+    if (value === 'all') return allCards.length;
+    if (value === 'frozen') return diffCounts.frozen;
+    if (value === 'new') return diffCounts.novo;
+    if (value === 'facil') return diffCounts.facil;
+    if (value === 'bom') return diffCounts.bom;
+    if (value === 'dificil') return diffCounts.dificil;
+    if (value === 'errei') return diffCounts.errei;
+    // quickReview fallback
     if (!cardCounts) return 0;
-    if (value === 'all') return cardCounts.total;
-    if (value === 'frozen') return cardCounts.frozen_count;
-    if (value === 'new') return cardCounts.new_count;
     if (value === 'learning') return cardCounts.learning_count;
-    if (value === 'relearning') return relearningCount;
     return Math.max(0, cardCounts.total - cardCounts.new_count - cardCounts.learning_count - cardCounts.frozen_count);
   };
 
@@ -266,7 +286,7 @@ const CardList = () => {
               {/* State filter */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">
-                  {isQuickReview ? 'Estado (Revisão Rápida)' : 'Estado de aprendizagem'}
+                  {isQuickReview ? 'Estado (Revisão Rápida)' : 'Classificação'}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {stateOptions.map(s => (
