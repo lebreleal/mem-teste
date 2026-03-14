@@ -577,10 +577,9 @@ const DeckDetailContent = () => {
 };
 
 /** Tabs component for linked decks: Cards + Questões + Sugestões */
-const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId: string; resolvedSourceDeckId: string | null; isLinkedDeck: boolean }) => {
+const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck, activeTab, setActiveTab }: { deckId: string; resolvedSourceDeckId: string | null; isLinkedDeck: boolean; activeTab: string; setActiveTab: (v: string) => void }) => {
   const { cardCounts } = useDeckDetail();
   const effectiveDeckId = resolvedSourceDeckId ?? deckId;
-  const [activeTab, setActiveTab] = useState('cards');
 
   const { data: suggestionCount = 0 } = useQuery({
     queryKey: ['suggestion-count', effectiveDeckId],
@@ -610,110 +609,73 @@ const LinkedDeckTabs = ({ deckId, resolvedSourceDeckId, isLinkedDeck }: { deckId
   });
 
   const totalCards = cardCounts?.total ?? 0;
-
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
+  // Listen for study button triggering question practice from hero
+  import { useEffect } from 'react';
+
   return (
-    <>
-      {activeTab === 'cards' && <DeckStatsCard />}
-      {activeTab === 'questions' && (
-        <QuestionStatsCard
-          deckId={deckId}
-          sourceDeckId={resolvedSourceDeckId}
-          isReadOnly
-          onPractice={() => setQuestionAction('practice')}
-          onCreateAI={() => setQuestionAction('ai')}
-        />
-      )}
-      
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-          <TabsTrigger
-            value="cards"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <Layers className="h-4 w-4" /> Cards ({totalCards})
-          </TabsTrigger>
-          <TabsTrigger
-            value="questions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <HelpCircle className="h-4 w-4" /> Questões ({questionCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="suggestions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <MessageSquare className="h-4 w-4" /> Sugestões ({suggestionCount})
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="cards" className="mt-4">
-          <CardList />
-        </TabsContent>
-        <TabsContent value="questions" className="mt-4">
-          <Suspense fallback={null}>
-            <DeckQuestionsTab
-              deckId={deckId}
-              isReadOnly
-              sourceDeckId={effectiveDeckId}
-              autoStart={questionAction === 'practice'}
-              autoCreate={questionAction === 'ai' ? 'ai' : null}
-            />
-          </Suspense>
-        </TabsContent>
-        <TabsContent value="suggestions" className="mt-4">
-          <SuggestionsList deckId={effectiveDeckId} />
-        </TabsContent>
-      </Tabs>
-    </>
+    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+      <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger value="cards" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger value="questions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <HelpCircle className="h-4 w-4" /> Questões ({questionCount})
+        </TabsTrigger>
+        <TabsTrigger value="suggestions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <MessageSquare className="h-4 w-4" /> Sugestões ({suggestionCount})
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab
+            deckId={deckId}
+            isReadOnly
+            sourceDeckId={effectiveDeckId}
+            autoStart={questionAction === 'practice'}
+            autoCreate={questionAction === 'ai' ? 'ai' : null}
+          />
+        </Suspense>
+      </TabsContent>
+      <TabsContent value="suggestions" className="mt-4">
+        <SuggestionsList deckId={effectiveDeckId} />
+      </TabsContent>
+    </Tabs>
   );
 };
 
-const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDeck: boolean }) => {
+const PersonalDeckTabs = ({ deckId, isLinkedDeck, activeTab, setActiveTab }: { deckId: string; isLinkedDeck: boolean; activeTab: string; setActiveTab: (v: string) => void }) => {
   const { cardCounts } = useDeckDetail();
   const totalCards = cardCounts?.total ?? 0;
-  const [activeTab, setActiveTab] = useState('cards');
   const [questionAction, setQuestionAction] = useState<'practice' | 'ai' | null>(null);
 
   return (
-    <>
-      {activeTab === 'questions' && (
-        <QuestionStatsCard
-          deckId={deckId}
-          onPractice={() => setQuestionAction('practice')}
-          onCreateAI={() => setQuestionAction('ai')}
-        />
-      )}
-      
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
-          <TabsTrigger
-            value="cards"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <Layers className="h-4 w-4" /> Cards ({totalCards})
-          </TabsTrigger>
-          <TabsTrigger
-            value="questions"
-            className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5"
-          >
-            <HelpCircle className="h-4 w-4" /> Questões
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="cards" className="mt-4">
-          <CardList />
-        </TabsContent>
-        <TabsContent value="questions" className="mt-4">
-          <Suspense fallback={null}>
-            <DeckQuestionsTab
-              deckId={deckId}
-              autoStart={questionAction === 'practice'}
-              autoCreate={questionAction === 'ai' ? 'ai' : null}
-            />
-          </Suspense>
-        </TabsContent>
-      </Tabs>
-    </>
+    <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setQuestionAction(null); }} className="w-full">
+      <TabsList className="w-full grid grid-cols-2 bg-transparent border-b border-border/50 rounded-none h-auto p-0">
+        <TabsTrigger value="cards" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <Layers className="h-4 w-4" /> Cards ({totalCards})
+        </TabsTrigger>
+        <TabsTrigger value="questions" className="text-sm gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none py-2.5">
+          <HelpCircle className="h-4 w-4" /> Questões
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="cards" className="mt-4">
+        <CardList />
+      </TabsContent>
+      <TabsContent value="questions" className="mt-4">
+        <Suspense fallback={null}>
+          <DeckQuestionsTab
+            deckId={deckId}
+            autoStart={questionAction === 'practice'}
+            autoCreate={questionAction === 'ai' ? 'ai' : null}
+          />
+        </Suspense>
+      </TabsContent>
+    </Tabs>
   );
 };
 
