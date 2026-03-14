@@ -253,22 +253,31 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
               <span className="truncate block">{`Mover "${props.moveTarget?.name}"`}</span>
             </DialogTitle>
           </DialogHeader>
-          <MoveBrowser
-            folders={props.folders}
-            decks={props.decks}
-            movableFolders={props.movableFolders}
-            movableDecks={props.movableDecks}
-            moveBreadcrumb={props.moveBreadcrumb}
-            moveBrowseFolderId={props.moveBrowseFolderId}
-            setMoveBrowseFolderId={props.setMoveBrowseFolderId}
-            moveParentDeckId={props.moveParentDeckId}
-            setMoveParentDeckId={props.setMoveParentDeckId}
-            showDecks={props.moveTarget?.type === 'deck'}
-            onCreateFolderInMove={props.onCreateFolderInMove}
-            onMoveSubmit={props.onMoveSubmit}
-            onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
-            submitLabel={isInsideDeck ? 'Mover como sub-deck' : 'Mover aqui'}
-          />
+          {(() => {
+            // Matérias (decks with children) can only move between folders (classes)
+            // Loose decks can move between folders AND into matérias
+            const isMoveTargetMateria = props.moveTarget?.type === 'deck' &&
+              props.decks.some(d => d.parent_deck_id === props.moveTarget!.id);
+            const showDecksInMove = props.moveTarget?.type === 'deck' && !isMoveTargetMateria;
+            return (
+              <MoveBrowser
+                folders={props.folders}
+                decks={props.decks}
+                movableFolders={props.movableFolders}
+                movableDecks={props.movableDecks}
+                moveBreadcrumb={props.moveBreadcrumb}
+                moveBrowseFolderId={props.moveBrowseFolderId}
+                setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+                moveParentDeckId={props.moveParentDeckId}
+                setMoveParentDeckId={props.setMoveParentDeckId}
+                showDecks={showDecksInMove}
+                onCreateFolderInMove={props.onCreateFolderInMove}
+                onMoveSubmit={props.onMoveSubmit}
+                onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
+                submitLabel={isInsideDeck ? 'Mover como sub-deck' : 'Mover aqui'}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
