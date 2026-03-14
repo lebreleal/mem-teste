@@ -139,6 +139,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           masteredCards={sala.masteredCards}
           dueCount={sala.dueCount}
           isVirtual={sala.isVirtual}
+          imageUrl={sala.imageUrl}
           onClick={() => onSalaClick(sala.id, sala.isVirtual)}
         />
       ))}
