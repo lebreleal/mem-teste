@@ -547,10 +547,6 @@ const Dashboard = () => {
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.novo}</span>
                               </div>
                               <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground">Cards a dominar</span>
-                                <span className="text-xs font-semibold text-foreground">{salaStudyStats.totalCards - salaStudyStats.masteredCount}</span>
-                              </div>
-                              <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground">Total de cards</span>
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.totalCards}</span>
                               </div>
