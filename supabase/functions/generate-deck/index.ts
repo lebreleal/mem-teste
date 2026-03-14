@@ -33,7 +33,7 @@ ANTI-PADRÕES (PROIBIDO):
 ❌ Perguntas "O que é X?" com respostas de dicionário
 ❌ Respostas que são listas ("A, B, C e D")
 ❌ Cards que agrupam múltiplos conceitos
-❌ Múltipla escolha com distratores absurdos/inventados
+❌ Cloze com lacunas em palavras triviais (artigos, preposições)
 ❌ Cloze com lacunas em palavras triviais (artigos, preposições)
 ❌ Cards que copiam frases inteiras do texto sem reformulação
 ❌ Cards que dizem "de acordo com", "segundo o texto", "conforme mencionado" ou qualquer referência à fonte
