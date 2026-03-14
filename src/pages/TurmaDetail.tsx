@@ -120,7 +120,7 @@ const PublicClasseView = () => {
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['decks'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: '✅ Seguindo sala! O primeiro deck foi adicionado à sua coleção.' });
+      toast({ title: '✅ Seguindo classe! O primeiro deck foi adicionado à sua coleção.' });
     } catch (e: any) {
       if (e.code === '23505' || e.message?.includes('already') || e.message?.includes('já')) {
         queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
