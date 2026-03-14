@@ -1,5 +1,5 @@
 /**
- * TurmaDetail page — Sala de Aula view.
+ * TurmaDetail page — Classe view.
  * Owner sees full management, followers see read-only content.
  * Non-members see public preview with "Seguir" button.
  */
