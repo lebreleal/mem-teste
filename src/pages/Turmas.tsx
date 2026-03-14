@@ -33,8 +33,8 @@ const RatingStars = ({ rating, count }: { rating: number; count: number }) => {
   );
 };
 
-/* ── Sala Card ── */
-const SalaCard = ({
+/* ── Classe Card ── */
+const ClasseCard = ({
   turma,
   onClick,
   isMine,
