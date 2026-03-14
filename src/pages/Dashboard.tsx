@@ -51,6 +51,7 @@ const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 
 const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeightsSheet'));
 const StudySalaSheet = lazy(() => import('@/components/dashboard/StudySalaSheet'));
+const StudySettingsSheet = lazy(() => import('@/components/dashboard/StudySettingsSheet'));
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
@@ -109,6 +110,7 @@ const Dashboard = () => {
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
@@ -395,9 +397,9 @@ const Dashboard = () => {
               {salaStudyStats && (
                 <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
                   <button
-                    onClick={() => setStudyWeightsOpen(true)}
+                    onClick={() => setStudySettingsOpen(true)}
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                    aria-label="Ajustar pesos"
+                    aria-label="Configurar estudo"
                   >
                     <SlidersHorizontal className="h-4 w-4" />
                   </button>
@@ -569,7 +571,7 @@ const Dashboard = () => {
             navigateToCommunity={actions.handleNavigateCommunity}
             onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
             onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(null); state.setMoveParentDeckId(null); }}
+            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
             onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
             onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
             onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
@@ -773,6 +775,19 @@ const Dashboard = () => {
             folders={state.folders}
             decks={state.decks}
             getAggregateStats={state.getAggregateStats}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {studySettingsOpen && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={state.decks}
+            getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
+            currentFolderId={state.currentFolderId}
           />
         )}
       </Suspense>
