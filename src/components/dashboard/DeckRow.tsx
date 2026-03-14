@@ -85,7 +85,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
       onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/error-notebook' : `/decks/${deck.id}`)}
     >
       {isErrorDeck && (
-        <img src={errorNotebookIcon} alt="Caderno de Erros" className="h-10 w-10 shrink-0 object-contain" />
+        <div className="flex h-10 w-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 shrink-0">
+          <FileX2 className="h-5 w-5 text-destructive" />
+        </div>
       )}
 
       <div className="flex-1 min-w-0">
