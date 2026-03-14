@@ -443,14 +443,15 @@ const CardListContent = ({
         const isSelected = selectedCards.has(card.id);
         const frozen = isFrozenCard(card);
 
-        const typeLabel = isCloze ? 'CLOZE' : isMultiple ? 'MÚLTIPLA' : isOcclusion ? 'OCLUSÃO' : 'BÁSICO';
-        const typeBadgeClass = isCloze
-          ? 'bg-primary/15 text-primary border-primary/30'
-          : isMultiple
-          ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30 dark:text-emerald-400'
-          : isOcclusion
-          ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 dark:text-amber-400'
-          : 'bg-muted text-muted-foreground border-border';
+        // Difficulty-based border color (matches ManageDeckCardList)
+        const borderColor = (() => {
+          if (card.state === 0 || card.state == null) return 'border-l-muted-foreground/40';
+          const d = card.difficulty ?? 5;
+          if (d <= 3) return 'border-l-info';
+          if (d <= 5) return 'border-l-success';
+          if (d <= 7) return 'border-l-warning';
+          return 'border-l-destructive';
+        })();
 
         let mcOptions: string[] = [];
         let mcCorrectIdx = -1;
