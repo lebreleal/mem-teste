@@ -178,13 +178,38 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-xs text-muted-foreground">
-              {isErrorDeck
-                ? <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'} para revisar</span>
-                : hasChildren
-                  ? <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'} · {totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-                  : <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>
-              }
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+              {hasChildren && (
+                <>
+                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
+                  <span>·</span>
+                </>
+              )}
+              <span className="inline-flex items-center gap-0.5">
+                <Layers className="h-3 w-3" />
+                {totalCards}
+              </span>
+              {(() => {
+                const qCount = questionCountMap ? (() => {
+                  // Collect all deck IDs (this + sub-decks)
+                  const ids = [deck.id];
+                  const collectIds = (parentId: string) => {
+                    const subs = getSubDecks(parentId);
+                    for (const s of subs) { ids.push(s.id); collectIds(s.id); }
+                  };
+                  collectIds(deck.id);
+                  return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
+                })() : 0;
+                return qCount > 0 ? (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <HelpCircle className="h-3 w-3" />
+                      {qCount}
+                    </span>
+                  </>
+                ) : null;
+              })()}
             </p>
             <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
           </div>
