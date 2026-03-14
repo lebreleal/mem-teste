@@ -392,85 +392,95 @@ const DeckDetailContent = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4 gap-2 overflow-hidden">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Button variant="ghost" size="icon" onClick={() => {
-              if (fromCommunity && communityTurmaId) {
-                navigate(`/turmas/${communityTurmaId}`, { replace: true });
-              } else {
-                // Find the folder_id: if sub-deck, walk up to root parent
-                let folderId = (deck as any)?.folder_id;
-                if (!folderId && (deck as any)?.parent_deck_id && decks) {
-                  let current = deck as any;
-                  while (current?.parent_deck_id) {
-                    current = decks.find((d: any) => d.id === current.parent_deck_id);
+      {/* Hero banner – sala-style layout */}
+      <div className="bg-background">
+        <div className="container mx-auto max-w-2xl px-4">
+          {/* Top bar: back + actions */}
+          <div className="flex items-center justify-between pt-3 mb-3">
+            <button
+              onClick={() => {
+                if (fromCommunity && communityTurmaId) {
+                  navigate(`/turmas/${communityTurmaId}`, { replace: true });
+                } else {
+                  let folderId = (deck as any)?.folder_id;
+                  if (!folderId && (deck as any)?.parent_deck_id && decks) {
+                    let current = deck as any;
+                    while (current?.parent_deck_id) {
+                      current = decks.find((d: any) => d.id === current.parent_deck_id);
+                    }
+                    folderId = current?.folder_id;
                   }
-                  folderId = current?.folder_id;
+                  navigate(folderId ? `/dashboard?folder=${folderId}` : '/dashboard', { replace: true });
                 }
-                navigate(folderId ? `/dashboard?folder=${folderId}` : '/dashboard', { replace: true });
-              }
-            }}>
+              }}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-base sm:text-xl font-bold text-foreground truncate">
-                {(deck as any)?.name ?? 'Baralho'}
-              </h1>
-              {isLinkedDeck && sourceData ? (
-                <p className="text-[11px] text-muted-foreground">
-                  por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
-                  <span className="mx-1.5 text-border">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Layers className="h-3 w-3" />
-                    {totalCards} cards
+              <span>Dashboard</span>
+            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isLinkedDeck && (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
+                    Inscrito <Check className="h-3 w-3" />
                   </span>
-                  {sourceData.updatedAt && (
-                    <>
-                      <span className="mx-1.5 text-border">·</span>
-                      <span className="inline-flex items-center gap-1">
-                        <RefreshCw className="h-2.5 w-2.5" />
-                        {formatDistanceToNow(new Date(sourceData.updatedAt), { addSuffix: true, locale: ptBR })}
-                      </span>
-                    </>
-                  )}
-                </p>
-              ) : (
-                <button
-                  onClick={() => setAlgorithmModalOpen(true)}
-                  className="text-xs cursor-pointer transition-colors hover:underline"
-                >
-                  <span className="text-foreground">Algoritmo:</span>{' '}
-                  <span className="font-medium text-info">
-                    {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
-                  </span>
-                </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setSuggestOpen(true)}
+                    title="Sugerir correção"
+                  >
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </>
               )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isLinkedDeck && (
-              <>
-                <span className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
-                  Inscrito <Check className="h-3 w-3" />
+
+          {/* Deck name + algorithm info */}
+          <div className="mb-1">
+            <h1 className="text-lg font-display font-bold text-foreground truncate">
+              {(deck as any)?.name ?? 'Baralho'}
+            </h1>
+            {isLinkedDeck && sourceData ? (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                por <span className="font-semibold text-foreground">{sourceData.ownerName}</span>
+                <span className="mx-1.5 text-border">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Layers className="h-3 w-3" />
+                  {totalCards} cards
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSuggestOpen(true)}
-                  title="Sugerir correção"
-                >
-                  <Pencil className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </>
+                {sourceData.updatedAt && (
+                  <>
+                    <span className="mx-1.5 text-border">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      {formatDistanceToNow(new Date(sourceData.updatedAt), { addSuffix: true, locale: ptBR })}
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <button
+                onClick={() => setAlgorithmModalOpen(true)}
+                className="text-xs cursor-pointer transition-colors hover:underline mt-0.5"
+              >
+                <span className="text-foreground">Algoritmo:</span>{' '}
+                <span className="font-medium text-info">
+                  {(deck as any)?.algorithm_mode === 'quick_review' ? 'Revisão Rápida' : 'FSRS-6'}
+                </span>
+              </button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10 shrink-0" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
           </div>
+
+          {/* DeckStatsCard – time estimate + study bar */}
+          <DeckStatsCard />
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
         {isLinkedDeck ? (
@@ -596,7 +606,6 @@ const PersonalDeckTabs = ({ deckId, isLinkedDeck }: { deckId: string; isLinkedDe
 
   return (
     <>
-      {activeTab === 'cards' && <DeckStatsCard />}
       {activeTab === 'questions' && (
         <QuestionStatsCard
           deckId={deckId}
