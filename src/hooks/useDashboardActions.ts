@@ -236,8 +236,6 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
   }, [navigate]);
 
   return {
-    communityBlockTarget,
-    setCommunityBlockTarget,
     handleCreateSubmit,
     handleRenameSubmit,
     handleDeleteDeckRequest,
