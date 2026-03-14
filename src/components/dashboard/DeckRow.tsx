@@ -11,7 +11,7 @@ import { Info, ChevronDown, Layers } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
-import {
+import { useIsAdmin } from '@/hooks/useIsAdmin';
   Dialog,
   DialogContent,
   DialogHeader,
