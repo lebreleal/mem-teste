@@ -708,43 +708,6 @@ const SuggestionsList = ({ deckId }: { deckId: string }) => {
   );
 };
 
-const DeckTagsSection = ({ deckId, isLinkedDeck, sourceDeckId }: { deckId: string; isLinkedDeck: boolean; sourceDeckId?: string | null }) => {
-  const { data: tags = [] } = useDeckTags(deckId);
-  const { addTag, removeTag } = useDeckTagMutations(deckId);
-
-  if (isLinkedDeck) {
-    if (tags.length === 0) return null;
-    return (
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Tags</p>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag: any) => (
-            <span key={tag.id} className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              {tag.name}
-            </span>
-          ))}
-        </div>
-        <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
-      </div>
-    );
-  }
-
-  const { deck } = useDeckDetail();
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">Tags</p>
-      <TagInput
-        tags={tags}
-        onAdd={(tag) => addTag.mutate(tag)}
-        onRemove={(tagId) => removeTag.mutate(tagId)}
-        placeholder="Buscar ou criar tag..."
-        aiContext={{ deckName: (deck as any)?.name }}
-      />
-      <DeckConceptsSection deckId={deckId} sourceDeckId={sourceDeckId} />
-    </div>
-  );
-};
 
 const DeckDetail = () => (
   <DeckDetailProvider>
