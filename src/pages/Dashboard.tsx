@@ -215,8 +215,8 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Handle sala click: just navigate into it (virtual or real)
-  const handleSalaClick = useCallback((folderId: string, _isVirtual?: boolean) => {
+  // Handle sala click: navigate into it
+  const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
   }, [state]);
 
