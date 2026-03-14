@@ -269,7 +269,13 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
             </p>
           </div>
           {!isErrorDeck && (
-            <MasteryBar masteryPct={masteryPct} className="mt-1.5" />
+            <ClassificationBar
+              newPct={classPcts.newPct}
+              learningPct={classPcts.learningPct}
+              reviewPct={classPcts.reviewPct}
+              masteredPct={classPcts.masteredPct}
+              className="mt-1.5"
+            />
           )}
         </div>
 
