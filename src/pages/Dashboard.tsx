@@ -215,7 +215,7 @@ const Dashboard = () => {
         onPremiumOpen={() => { state.setPremiumTab('plans'); state.setPremiumOpen(true); }}
       />
 
-      <main className="container mx-auto px-4 py-6 pb-24 max-w-2xl">
+      <main className="pb-24">
         {/* 📚 Meus Baralhos */}
         <div className="mb-4 space-y-2">
 
