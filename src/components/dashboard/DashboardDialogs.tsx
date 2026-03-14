@@ -214,7 +214,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {props.createType === 'folder' ? 'Nova Pasta' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+              {props.createType === 'folder' ? 'Nova Sala' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
