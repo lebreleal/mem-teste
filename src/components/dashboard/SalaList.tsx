@@ -12,6 +12,7 @@ interface SalaInfo {
   id: string;
   name: string;
   isVirtual?: boolean;
+  imageUrl?: string | null;
   subjectCount: number;
   totalCards: number;
   masteredCards: number;
