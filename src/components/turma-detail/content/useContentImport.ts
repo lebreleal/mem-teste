@@ -155,16 +155,28 @@ export const useContentImport = () => {
   const downloadDeck = useMutation({
     mutationFn: async (td: any) => {
       if (!user || !turma) throw new Error('Not authenticated');
-      const { data: freshDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
-      const latestDecks = (freshDecks || []) as any[];
+
+      // Ensure linked folder exists
+      const { data: existingFolders } = await supabase.from('folders')
+        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+      let targetFolderId: string | null = null;
+      if (existingFolders && existingFolders.length > 0) {
+        targetFolderId = existingFolders[0].id;
+      } else {
+        const { data: newFolder } = await supabase.from('folders')
+          .insert({ user_id: user.id, name: turma.name || 'Comunidade', section: 'community', source_turma_id: turmaId } as any)
+          .select().single();
+        targetFolderId = (newFolder as any)?.id ?? null;
+      }
 
       const { data: originalDeck } = await supabase.from('decks').select('*').eq('id', td.deck_id).single();
       if (!originalDeck) throw new Error('Deck não encontrado');
       const od = originalDeck as any;
-      const existingNames = latestDecks.filter((d: any) => !d.parent_deck_id && !d.folder_id).map((d: any) => d.name);
+      const { data: freshDecks } = await supabase.from('decks').select('name').eq('user_id', user.id).eq('folder_id', targetFolderId);
+      const existingNames = (freshDecks ?? []).map((d: any) => d.name);
       const childName = resolveNameConflict(od.name, existingNames);
       const { data: newDeck } = await supabase.from('decks').insert({
-        name: childName, user_id: user.id,
+        name: childName, user_id: user.id, folder_id: targetFolderId,
         algorithm_mode: od.algorithm_mode, daily_new_limit: od.daily_new_limit, daily_review_limit: od.daily_review_limit,
         source_turma_deck_id: td.id,
       } as any).select().single();
