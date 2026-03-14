@@ -31,8 +31,8 @@ export async function createFolder(
   return data;
 }
 
-export async function updateFolder(id: string, name: string) {
-  const { error } = await supabase.from('folders').update({ name } as any).eq('id', id);
+export async function updateFolder(id: string, updates: { name?: string; image_url?: string | null }) {
+  const { error } = await supabase.from('folders').update(updates as any).eq('id', id);
   if (error) throw error;
 }
 

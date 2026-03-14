@@ -5,8 +5,11 @@ import { ArrowLeft } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { getNewCardsForDayGlobal } from '@/hooks/useStudyPlan';
-import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, Trash2, Play, SlidersHorizontal, MoreVertical, Pencil, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -17,6 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 
 /** Suspense fallback that shows global loading overlay while chunk loads */
@@ -99,6 +103,8 @@ const Dashboard = () => {
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
+  const [salaImageOpen, setSalaImageOpen] = useState(false);
+  const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -244,7 +250,7 @@ const Dashboard = () => {
       />
 
       <main className="pb-24">
-        {/* Inside a Sala: back button + sala name */}
+        {/* Inside a Sala: back button + sala name + options menu */}
         {state.isInsideSala && (
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <button
@@ -255,12 +261,44 @@ const Dashboard = () => {
               <span>Salas</span>
             </button>
             <span className="text-sm text-muted-foreground">/</span>
-            <span className="text-sm font-semibold text-foreground truncate">
+            <span className="text-sm font-semibold text-foreground truncate flex-1">
               {state.isVirtualSala
                 ? 'Meus Estudos'
                 : state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'
               }
             </span>
+            {!state.isVirtualSala && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => {
+                    const folder = state.folders.find(f => f.id === state.currentFolderId);
+                    if (folder) { state.setRenameTarget({ type: 'folder', id: folder.id, name: folder.name }); state.setRenameName(folder.name); }
+                  }}>
+                    <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                    <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => state.archiveFolder.mutate(state.currentFolderId!)}>
+                    <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      const folder = state.folders.find(f => f.id === state.currentFolderId);
+                      if (folder) state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         )}
 
@@ -526,6 +564,57 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sala image change dialog */}
+      <Dialog open={salaImageOpen} onOpenChange={setSalaImageOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mudar imagem da sala</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:bg-muted/30 transition-colors">
+              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                {salaImageFile ? salaImageFile.name : 'Selecionar imagem'}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setSalaImageFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <Button
+              className="w-full"
+              disabled={!salaImageFile}
+              onClick={async () => {
+                if (!salaImageFile || !state.currentFolderId) return;
+                try {
+                  const ext = salaImageFile.name.split('.').pop() || 'jpg';
+                  const filePath = `sala-images/${state.currentFolderId}.${ext}`;
+                  const { error: uploadErr } = await supabase.storage
+                    .from('deck-covers')
+                    .upload(filePath, salaImageFile, { upsert: true });
+                  if (uploadErr) throw uploadErr;
+                  const { data: urlData } = supabase.storage.from('deck-covers').getPublicUrl(filePath);
+                  const imageUrl = urlData.publicUrl + '?t=' + Date.now();
+                  await supabase.from('folders').update({ image_url: imageUrl } as any).eq('id', state.currentFolderId);
+                  await queryClient.invalidateQueries({ queryKey: ['folders'] });
+                  toast({ title: 'Imagem atualizada!' });
+                  setSalaImageOpen(false);
+                  setSalaImageFile(null);
+                } catch (err) {
+                  console.error(err);
+                  toast({ title: 'Erro ao enviar imagem', variant: 'destructive' });
+                }
+              }}
+            >
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   );

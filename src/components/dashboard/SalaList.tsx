@@ -12,6 +12,7 @@ interface SalaInfo {
   id: string;
   name: string;
   isVirtual?: boolean;
+  imageUrl?: string | null;
   subjectCount: number;
   totalCards: number;
   masteredCards: number;
@@ -57,6 +58,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       return {
         id: f.id,
         name: f.name,
+        imageUrl: f.image_url,
         subjectCount: folderDecks.length,
         totalCards,
         masteredCards,
@@ -137,6 +139,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           masteredCards={sala.masteredCards}
           dueCount={sala.dueCount}
           isVirtual={sala.isVirtual}
+          imageUrl={sala.imageUrl}
           onClick={() => onSalaClick(sala.id, sala.isVirtual)}
         />
       ))}
