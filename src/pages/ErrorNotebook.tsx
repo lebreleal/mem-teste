@@ -81,8 +81,16 @@ const CardRow = ({
 const ErrorNotebook = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Block non-admin users
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate('/dashboard');
+    }
+  }, [isAdmin, navigate]);
 
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectionMode, setSelectionMode] = useState(false);
