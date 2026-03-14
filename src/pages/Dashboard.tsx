@@ -327,8 +327,9 @@ const Dashboard = () => {
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-    const avgSec = avgSecondsPerCard;
-    const remainingMin = Math.ceil((totalDue * avgSec) / 60);
+    // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, reviewCount, realStudyMetrics);
+    const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
