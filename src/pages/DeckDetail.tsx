@@ -55,8 +55,8 @@ async function resolveSourceDeckId(deck: any): Promise<string | null> {
   return null;
 }
 
-/** Sub-deck list view — shown when a parent deck has children */
-const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
+/** @deprecated Sub-deck list view — no longer used, kept temporarily for reference */
+const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: string; subDecks: any[]; allDecks: any[] }) => {
   const navigate = useNavigate();
 
   const getMastery = (deckId: string): { total: number; mastered: number } => {

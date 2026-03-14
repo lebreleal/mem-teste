@@ -90,10 +90,8 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground">
               {isErrorDeck
-                ? <span>{mastery.total} {mastery.total === 1 ? 'cartão' : 'cartões'} para revisar</span>
-                : subDeckCount > 0
-                  ? <span>{subDeckCount} {subDeckCount === 1 ? 'deck' : 'decks'}</span>
-                  : <span>{mastery.total} {mastery.total === 1 ? 'cartão' : 'cartões'}</span>
+                ? <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'} para revisar</span>
+                : <span>{deck.total_cards} {deck.total_cards === 1 ? 'cartão' : 'cartões'}</span>
               }
             </p>
             <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
