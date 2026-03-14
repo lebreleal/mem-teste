@@ -1,14 +1,18 @@
 /**
  * DeckRow — a single deck item in the dashboard list.
  * Shows name, sub-deck count, mastery % with progress bar.
+ * Special rendering for the "📕 Caderno de Erros" deck.
  */
 
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import errorNotebookIcon from '@/assets/error-notebook-icon.png';
 import type { DeckWithStats } from '@/hooks/useDecks';
 import type { DragReorderHandlers } from '@/hooks/useDragReorder';
+
+const ERROR_DECK_NAME = '📕 Caderno de Erros';
 
 interface DeckRowProps {
   deck: DeckWithStats;
@@ -59,9 +63,12 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   dragHandlers, hasPendingUpdate,
 }, ref) => {
   const navigate = useNavigate();
+  const isErrorDeck = deck.name === ERROR_DECK_NAME;
   const subDeckCount = useMemo(() => countAllSubDecks(deck.id, getSubDecks), [deck.id, getSubDecks]);
   const mastery = useMemo(() => getAggregateMastery(deck, getSubDecks), [deck, getSubDecks]);
   const masteryPct = mastery.total > 0 ? Math.round((mastery.mastered / mastery.total) * 1000) / 10 : 0;
+
+  const displayName = isErrorDeck ? 'Caderno de Erros' : deck.name;
 
   return (
     <div
@@ -75,19 +82,27 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         onDragEnd: dragHandlers.onDragEnd,
       } : {})}
       className={`group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50 ${depth === 0 && dragHandlers ? dragHandlers.className : ''}`}
-      onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(`/decks/${deck.id}`)}
+      onClick={() => deckSelectionMode ? toggleDeckSelection(deck.id) : navigate(isErrorDeck ? '/error-notebook' : `/decks/${deck.id}`)}
     >
+      {isErrorDeck && (
+        <img src={errorNotebookIcon} alt="Caderno de Erros" className="h-10 w-10 shrink-0 object-contain" />
+      )}
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
+          <h3 className="font-display font-semibold text-foreground truncate">{displayName}</h3>
           {hasPendingUpdate && (
             <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-destructive animate-pulse" title="Atualização disponível" />
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-xs text-muted-foreground">
-            {subDeckCount > 0 && <span>{subDeckCount} deck{subDeckCount !== 1 ? 's' : ''}</span>}
-            {subDeckCount === 0 && <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''}</span>}
+            {isErrorDeck
+              ? <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''} para revisar</span>
+              : subDeckCount > 0
+                ? <span>{subDeckCount} deck{subDeckCount !== 1 ? 's' : ''}</span>
+                : <span>{mastery.total} cartão{mastery.total !== 1 ? 'ões' : ''}</span>
+            }
           </p>
           <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
         </div>
