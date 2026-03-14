@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, User } from 'lucide-react';
+import { Home, Compass, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
@@ -10,8 +10,9 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   const items = [
-    { icon: Home, label: null, onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: User, label: null, onClick: () => navigate('/profile'), active: isActive('/profile') },
+    { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
+    { icon: Plus, label: 'Adicionar', onClick: () => window.dispatchEvent(new CustomEvent('open-add-menu')), active: false, accent: true },
+    { icon: Compass, label: 'Explorar', onClick: () => navigate('/turmas'), active: isActive('/turmas') },
   ];
 
   return (
