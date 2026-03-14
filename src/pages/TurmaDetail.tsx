@@ -28,8 +28,8 @@ import { useTurmas } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
-// ─── Public Sala View (visitor / non-follower) ───
-const PublicSalaView = () => {
+// ─── Public Classe View (visitor / non-follower) ───
+const PublicClasseView = () => {
   const ctx = useTurmaDetail();
   const { turma, turmaId, isMember, members } = ctx;
   const navigate = useNavigate();
