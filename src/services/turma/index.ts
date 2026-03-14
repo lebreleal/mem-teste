@@ -12,10 +12,8 @@ export {
   leaveTurma,
   updateTurma,
   fetchDiscoverTurmas,
-  fetchPublicDecks,
   fetchCreatorStats,
   fetchCommunityContentStats,
-  type PublicDeckItem,
 } from './turmaCrud';
 
 // Members & Ranking
