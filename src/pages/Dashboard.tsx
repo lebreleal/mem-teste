@@ -393,24 +393,31 @@ const Dashboard = () => {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
-                            <span className="text-xs text-muted-foreground">Novos</span>
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
+                            <span className="text-xs text-muted-foreground">Dominado</span>
                           </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.masteredCount}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                            <span className="text-xs text-muted-foreground">Revisão</span>
+                          </div>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(45 93% 47%)' }} />
                             <span className="text-xs text-muted-foreground">Aprendendo</span>
                           </div>
                           <span className="text-xs font-semibold text-foreground">{salaStudyStats.learningCount}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Layers className="h-3.5 w-3.5 text-primary" />
-                            <span className="text-xs text-muted-foreground">Revisão</span>
+                            <div className="h-2.5 w-2.5 rounded-full bg-muted" />
+                            <span className="text-xs text-muted-foreground">Novos</span>
                           </div>
-                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.reviewCount}</span>
+                          <span className="text-xs font-semibold text-foreground">{salaStudyStats.newCount}</span>
                         </div>
                         <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
