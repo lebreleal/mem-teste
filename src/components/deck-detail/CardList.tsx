@@ -445,7 +445,7 @@ const CardListContent = ({
 
         // Difficulty-based border color (matches ManageDeckCardList)
         const borderColor = (() => {
-          if (card.state === 0 || card.state == null) return 'border-l-muted-foreground/40';
+          if (card.state === 0 || card.state == null) return 'border-l-muted';
           const d = card.difficulty ?? 5;
           if (d <= 3) return 'border-l-info';
           if (d <= 5) return 'border-l-success';

@@ -52,7 +52,6 @@ const StudyWeightsSheet = ({ open, onOpenChange, folders, decks, getSubDecks, ge
   const items = useMemo(() => {
     if (isInsideSala) {
       return salaDecks.map(d => {
-        const s = getAggregateStats(d);
         const subCount = getSubDecks(d.id).length;
         return {
           id: d.id,
@@ -60,29 +59,28 @@ const StudyWeightsSheet = ({ open, onOpenChange, folders, decks, getSubDecks, ge
           imageUrl: null as string | null,
           subtitle: subCount > 0
             ? `${subCount} sub-deck${subCount !== 1 ? 's' : ''}`
-            : `${s.new_count + s.learning_count + s.review_count} para hoje`,
-          totalDue: s.new_count + s.learning_count + s.review_count,
+            : `${d.total_cards ?? 0} cards`,
+          totalDue: 0,
           isMateria: subCount > 0,
         };
       });
     }
     return rootFolders.map(f => {
       const folderDecks = decks.filter(d => d.folder_id === f.id && !d.parent_deck_id && !d.is_archived);
-      let totalDue = 0;
+      let totalCards = 0;
       for (const d of folderDecks) {
-        const s = getAggregateStats(d);
-        totalDue += s.new_count + s.learning_count + s.review_count;
+        totalCards += d.total_cards ?? 0;
       }
       return {
         id: f.id,
         name: f.name,
         imageUrl: f.image_url || null,
-        subtitle: `${folderDecks.length} deck${folderDecks.length !== 1 ? 's' : ''}${totalDue > 0 ? ` · ${totalDue} para hoje` : ''}`,
-        totalDue,
+        subtitle: `${folderDecks.length} deck${folderDecks.length !== 1 ? 's' : ''} · ${totalCards} cards`,
+        totalDue: 0,
         isMateria: false,
       };
     });
-  }, [isInsideSala, salaDecks, rootFolders, decks, getAggregateStats, getSubDecks]);
+  }, [isInsideSala, salaDecks, rootFolders, decks, getSubDecks]);
 
   const [weights, setWeights] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};

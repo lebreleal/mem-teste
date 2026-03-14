@@ -47,30 +47,50 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // ── Card counts for mastery calculation ──
+  // ── Card counts for mastery + difficulty classification ──
   const deckIds = (decks || []).map((d: any) => d.id);
-  const cardCountMap = new Map<string, { total: number; mastered: number }>();
+  const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
   if (deckIds.length > 0) {
-    // Paginate to handle large collections
     const PAGE = 1000;
-    let offset = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data: cards } = await supabase
-        .from('cards')
-        .select('deck_id, state')
-        .in('deck_id', deckIds)
-        .range(offset, offset + PAGE - 1);
-      if (cards) {
-        for (const c of cards as any[]) {
-          const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0 };
-          entry.total++;
-          if (c.state >= 2) entry.mastered++;
-          cardCountMap.set(c.deck_id, entry);
+    const IN_BATCH = 200;
+
+    for (let i = 0; i < deckIds.length; i += IN_BATCH) {
+      const batch = deckIds.slice(i, i + IN_BATCH);
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: cards, error: cardsError } = await supabase
+          .from('cards')
+          .select('id, deck_id, state, difficulty')
+          .in('deck_id', batch)
+          .order('id', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+
+        if (cardsError) throw cardsError;
+
+        if (cards) {
+          for (const c of cards as any[]) {
+            const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+            entry.total++;
+            if (c.state >= 2) entry.mastered++;
+            // Difficulty-based classification (matches DeckStatsCard gauge)
+            if (c.state === 0) {
+              entry.novo++;
+            } else {
+              const d = c.difficulty ?? 5;
+              if (d <= 3) entry.facil++;
+              else if (d <= 5) entry.bom++;
+              else if (d <= 7) entry.dificil++;
+              else entry.errei++;
+            }
+            cardCountMap.set(c.deck_id, entry);
+          }
         }
+
+        hasMore = (cards?.length ?? 0) === PAGE;
+        offset += PAGE;
       }
-      hasMore = (cards?.length ?? 0) === PAGE;
-      offset += PAGE;
     }
   }
 
@@ -202,6 +222,11 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
       source_updated_at: sourceUpdatedAt,
       total_cards: cardCountMap.get(deck.id)?.total ?? 0,
       mastered_cards: cardCountMap.get(deck.id)?.mastered ?? 0,
+      class_novo: cardCountMap.get(deck.id)?.novo ?? 0,
+      class_facil: cardCountMap.get(deck.id)?.facil ?? 0,
+      class_bom: cardCountMap.get(deck.id)?.bom ?? 0,
+      class_dificil: cardCountMap.get(deck.id)?.dificil ?? 0,
+      class_errei: cardCountMap.get(deck.id)?.errei ?? 0,
     };
   });
 }
