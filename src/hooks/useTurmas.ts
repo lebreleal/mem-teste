@@ -34,7 +34,7 @@ export const useTurmas = () => {
     },
   });
 
-  return { turmas: turmasQuery.data ?? [], isLoading: turmasQuery.isLoading, createTurma, joinTurma, joinTurmaById, leaveTurma, updateTurma };
+  return { turmas: turmasQuery.data ?? [], isLoading: turmasQuery.isLoading, leaveTurma, updateTurma };
 };
 
 export const useDiscoverTurmas = (searchQuery: string) => {

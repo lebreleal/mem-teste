@@ -58,28 +58,6 @@ export async function fetchTurma(turmaId: string): Promise<Turma | null> {
   return data as Turma | null;
 }
 
-export async function createTurma(userId: string, name: string, description?: string) {
-  const { data, error } = await supabase
-    .from('turmas').insert({ name, description: description ?? '', owner_id: userId } as any).select().single();
-  if (error) throw error;
-  await supabase.from('turma_members').insert({ turma_id: (data as any).id, user_id: userId, role: 'admin' } as any);
-  return data;
-}
-
-export async function joinTurmaByCode(userId: string, inviteCode: string) {
-  const { data: results, error: findError } = await supabase
-    .rpc('find_turma_by_invite_code', { p_invite_code: inviteCode.trim() });
-  const turma = Array.isArray(results) ? results[0] : results;
-  if (findError || !turma) throw new Error('Código inválido');
-  const { error } = await supabase.from('turma_members').insert({ turma_id: turma.id, user_id: userId } as any);
-  if (error) { if (error.code === '23505') throw new Error('Você já está nesta comunidade'); throw error; }
-  return turma;
-}
-
-export async function joinTurmaById(userId: string, turmaId: string) {
-  const { error } = await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: userId } as any);
-  if (error) { if (error.code === '23505') throw new Error('Você já está nesta comunidade'); throw error; }
-}
 
 export async function leaveTurma(turmaId: string) {
   const { error } = await supabase.rpc('leave_turma', { _turma_id: turmaId } as any);
