@@ -298,7 +298,7 @@ const Dashboard = () => {
 
     // Difficulty-based classification
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-    const masteredCount = ds.facil + ds.bom; // "dominou" = cards classified as Fácil or Bom
+    const masteredCount = totalCards - ds.novo; // "feito" = any card already reviewed (not new)
 
     return { newCount, learningCount, reviewCount, reviewedToday, totalDue, progressPct, timeLabel, totalCards, masteredCount, ...ds };
   }, [state.isInsideSala, state.currentDecks, state.getAggregateStats, allDecks, salaDifficultyStats]);
