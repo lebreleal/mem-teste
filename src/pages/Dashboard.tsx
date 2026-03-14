@@ -195,16 +195,42 @@ const Dashboard = () => {
     }
   }, [state]);
 
-  // Compute total due for the study button
+  // Compute total due for the study button (use allRootDecks when at root level)
   const totalDueToday = useMemo(() => {
-    const roots = state.currentDecks;
+    const roots = state.isInsideSala ? state.currentDecks : state.allRootDecks;
     let total = 0;
     for (const deck of roots) {
       const s = state.getAggregateStats(deck);
       total += s.new_count + s.learning_count + s.review_count;
     }
     return total;
-  }, [state.currentDecks, state.getAggregateStats]);
+  }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
+
+  // Handle virtual sala click: create a real folder and move orphan decks into it
+  const handleCreateVirtualSala = useCallback(async () => {
+    try {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+      // Create the "Meus Estudos" folder
+      const { data: newFolder, error } = await supabase
+        .from('folders')
+        .insert({ name: 'Meus Estudos', user_id: u.id, section: 'personal' } as any)
+        .select()
+        .single();
+      if (error || !newFolder) throw error;
+      // Move all orphan root decks into this folder
+      const orphanDecks = state.decks.filter(d => !d.parent_deck_id && !d.is_archived && !d.folder_id);
+      for (const d of orphanDecks) {
+        await supabase.from('decks').update({ folder_id: (newFolder as any).id } as any).eq('id', d.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['decks'] });
+      await queryClient.invalidateQueries({ queryKey: ['folders'] });
+      state.setCurrentFolderId((newFolder as any).id);
+    } catch (err) {
+      console.error('Error creating virtual sala:', err);
+      toast({ title: 'Erro ao criar sala', variant: 'destructive' });
+    }
+  }, [state.decks, queryClient, toast, state]);
 
   return (
     <div className="min-h-screen bg-background">
