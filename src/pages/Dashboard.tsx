@@ -149,7 +149,7 @@ const Dashboard = () => {
         } as any);
       } else {
         const newPrivate = !userTurma!.is_private;
-        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName } as any).eq('id', turmaId);
+        await supabase.from('turmas').update({ is_private: newPrivate, name: folderName, cover_image_url: folderImage } as any).eq('id', turmaId);
         if (newPrivate) {
           // Unpublishing
           await refetchTurma();
