@@ -317,23 +317,62 @@ const Dashboard = () => {
               <SlidersHorizontal className="h-4 w-4" />
             </button>
 
-            {/* Circular progress with info */}
-            <div className="relative shrink-0">
-              <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
-                <circle cx="26" cy="26" r="22" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-                <circle
-                  cx="26" cy="26" r="22" fill="none"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 22}`}
-                  strokeDashoffset={`${2 * Math.PI * 22 * (1 - salaStudyStats.progressPct / 100)}`}
-                  className="transition-all duration-700"
-                />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
-                {salaStudyStats.progressPct}%
-              </span>
+            {/* Circular progress with multi-color segments */}
+            {(() => {
+              const R = 22;
+              const C = 2 * Math.PI * R;
+              const total = salaStudyStats.newCount + salaStudyStats.learningCount + salaStudyStats.reviewCount + salaStudyStats.reviewedToday;
+              if (total === 0) return (
+                <div className="relative shrink-0">
+                  <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
+                    <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">0%</span>
+                </div>
+              );
+              // Segments: reviewed (green/primary), review due (primary lighter), learning (amber), new (muted)
+              const reviewedPct = salaStudyStats.reviewedToday / total;
+              const reviewPct = salaStudyStats.reviewCount / total;
+              const learningPct = salaStudyStats.learningCount / total;
+              const newPct = salaStudyStats.newCount / total;
+              // Offsets accumulate
+              const reviewedLen = C * reviewedPct;
+              const reviewLen = C * reviewPct;
+              const learningLen = C * learningPct;
+              const newLen = C * newPct;
+              let offset = 0;
+              const segments = [
+                { len: reviewedLen, color: 'hsl(var(--primary))', key: 'reviewed' },
+                { len: reviewLen, color: 'hsl(var(--primary) / 0.4)', key: 'review' },
+                { len: learningLen, color: 'hsl(45 93% 47%)', key: 'learning' },
+                { len: newLen, color: 'hsl(var(--muted))', key: 'new' },
+              ];
+              return (
+                <div className="relative shrink-0">
+                  <svg width="52" height="52" viewBox="0 0 52 52" className="transform -rotate-90">
+                    {/* Background circle */}
+                    <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth="4" />
+                    {segments.map(seg => {
+                      if (seg.len <= 0) return null;
+                      const el = (
+                        <circle
+                          key={seg.key}
+                          cx="26" cy="26" r={R} fill="none"
+                          stroke={seg.color}
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeDasharray={`${seg.len} ${C - seg.len}`}
+                          strokeDashoffset={`${-offset}`}
+                          className="transition-all duration-700"
+                        />
+                      );
+                      offset += seg.len;
+                      return el;
+                    })}
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground tabular-nums">
+                    {salaStudyStats.progressPct}%
+                  </span>
               {/* Info popover on top-right of circle */}
               <Popover>
                 <PopoverTrigger asChild>
