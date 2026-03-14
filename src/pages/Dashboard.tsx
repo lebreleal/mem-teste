@@ -466,10 +466,10 @@ const Dashboard = () => {
                       </div>
                     );
                     const segments = [
-                      { pct: salaStudyStats.facil / total, color: '#1679CA', key: 'facil' },
-                      { pct: salaStudyStats.bom / total, color: 'hsl(142 71% 45%)', key: 'bom' },
-                      { pct: salaStudyStats.dificil / total, color: 'hsl(25 95% 53%)', key: 'dificil' },
-                      { pct: salaStudyStats.errei / total, color: 'hsl(0 84% 60%)', key: 'errei' },
+                      { pct: salaStudyStats.facil / total, color: 'hsl(var(--info))', key: 'facil' },
+                      { pct: salaStudyStats.bom / total, color: 'hsl(var(--success))', key: 'bom' },
+                      { pct: salaStudyStats.dificil / total, color: 'hsl(var(--warning))', key: 'dificil' },
+                      { pct: salaStudyStats.errei / total, color: 'hsl(var(--destructive))', key: 'errei' },
                       { pct: salaStudyStats.novo / total, color: 'hsl(var(--muted))', key: 'novo' },
                     ];
                     let offset = 0;
@@ -513,28 +513,28 @@ const Dashboard = () => {
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#1679CA' }} />
+                                  <div className="h-2.5 w-2.5 rounded-full bg-info" />
                                   <span className="text-xs text-muted-foreground">Fácil</span>
                                 </div>
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.facil}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(142 71% 45%)' }} />
+                                  <div className="h-2.5 w-2.5 rounded-full bg-success" />
                                   <span className="text-xs text-muted-foreground">Bom</span>
                                 </div>
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.bom}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(25 95% 53%)' }} />
+                                  <div className="h-2.5 w-2.5 rounded-full bg-warning" />
                                   <span className="text-xs text-muted-foreground">Difícil</span>
                                 </div>
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.dificil}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'hsl(0 84% 60%)' }} />
+                                  <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
                                   <span className="text-xs text-muted-foreground">Errei</span>
                                 </div>
                                 <span className="text-xs font-semibold text-foreground">{salaStudyStats.errei}</span>
