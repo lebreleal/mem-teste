@@ -78,20 +78,20 @@ const DeckMenu = ({ deck, onRename, onMove, onArchive, onDelete, navigate }: {
         <MoreVertical className="h-4 w-4" />
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-44">
-      <DropdownMenuItem onClick={() => onRename(deck)}>
+    <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(deck); }}>
         <Pencil className="h-4 w-4 mr-2" /> Renomear
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => navigate(`/decks/${deck.id}/settings`)}>
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/decks/${deck.id}/settings`); }}>
         <Settings className="h-4 w-4 mr-2" /> Configurações
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => onMove(deck)}>
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMove(deck); }}>
         <FolderInput className="h-4 w-4 mr-2" /> Mover
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => onArchive(deck.id)}>
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onArchive(deck.id); }}>
         <Archive className="h-4 w-4 mr-2" /> Arquivar
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => onDelete(deck)} className="text-destructive focus:text-destructive">
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(deck); }} className="text-destructive focus:text-destructive">
         <Trash2 className="h-4 w-4 mr-2" /> Excluir
       </DropdownMenuItem>
     </DropdownMenuContent>
