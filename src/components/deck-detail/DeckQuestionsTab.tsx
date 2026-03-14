@@ -1785,7 +1785,7 @@ const DeckQuestionsTab = ({
       {statsData.total > 0 && !selectionMode && (
         <div>
           <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="transition-all" style={{ width: `${correctPct}%`, backgroundColor: 'hsl(142 71% 45%)' }} />
+            <div className="transition-all" style={{ width: `${correctPct}%`, backgroundColor: 'hsl(var(--success))' }} />
             <div className="transition-all bg-destructive" style={{ width: `${wrongPct}%` }} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
