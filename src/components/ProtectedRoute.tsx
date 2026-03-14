@@ -130,8 +130,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             {/* Inside a sala or not on dashboard: show deck actions */}
             {(!isOnDashboard || isInsideSala) && (
               <>
+                {isInsideSala && (
+                  <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
+                    <BookOpen className="h-5 w-5 text-primary" /> Criar matéria
+                  </Button>
+                )}
                 <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <BookOpen className="h-5 w-5 text-primary" /> Criar baralho
+                  <BookOpen className="h-5 w-5 text-primary" /> Criar deck
                 </Button>
                 <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
                   <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA

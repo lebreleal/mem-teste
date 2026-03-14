@@ -41,7 +41,6 @@ import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DeckList from '@/components/dashboard/DeckList';
 import SalaList from '@/components/dashboard/SalaList';
-import { VIRTUAL_SALA_ID } from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
 const CommunityDeleteBlockDialog = lazy(() => import('@/components/CommunityDeleteBlockDialog'));
@@ -216,8 +215,8 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Handle sala click: just navigate into it (virtual or real)
-  const handleSalaClick = useCallback((folderId: string, _isVirtual?: boolean) => {
+  // Handle sala click: navigate into it
+  const handleSalaClick = useCallback((folderId: string) => {
     state.setCurrentFolderId(folderId);
   }, [state]);
 
@@ -241,47 +240,42 @@ const Dashboard = () => {
             </button>
             <span className="text-sm text-muted-foreground">/</span>
             <span className="text-sm font-semibold text-foreground truncate flex-1">
-              {state.isVirtualSala
-                ? 'Meus Estudos'
-                : state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'
-              }
+              {state.folders.find(f => f.id === state.currentFolderId)?.name ?? 'Sala'}
             </span>
-            {!state.isVirtualSala && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => {
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => {
+                  const folder = state.folders.find(f => f.id === state.currentFolderId);
+                  if (folder) { state.setRenameTarget({ type: 'folder', id: folder.id, name: folder.name }); state.setRenameName(folder.name); }
+                }}>
+                  <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                  <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={async () => {
+                  await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                  state.setCurrentFolderId(null);
+                  setSearchParams({}, { replace: true });
+                }}>
+                  <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => {
                     const folder = state.folders.find(f => f.id === state.currentFolderId);
-                    if (folder) { state.setRenameTarget({ type: 'folder', id: folder.id, name: folder.name }); state.setRenameName(folder.name); }
-                  }}>
-                    <Pencil className="h-4 w-4 mr-2" /> Renomear sala
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                    <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={async () => {
-                    await state.archiveFolder.mutateAsync(state.currentFolderId!);
-                    state.setCurrentFolderId(null);
-                    setSearchParams({}, { replace: true });
-                  }}>
-                    <Archive className="h-4 w-4 mr-2" /> Arquivar sala
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => {
-                      const folder = state.folders.find(f => f.id === state.currentFolderId);
-                      if (folder) state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name });
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                    if (folder) state.setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
 

@@ -1,6 +1,6 @@
 /**
  * SalaList — renders the list of Salas (folders) at the dashboard root level.
- * Includes a virtual "Meus Estudos" sala for orphan decks.
+ * Orphan decks (without folder) are shown directly at root, not in a virtual sala.
  */
 
 import { GraduationCap } from 'lucide-react';
@@ -14,7 +14,6 @@ import type { DeckWithStats } from '@/types/deck';
 interface SalaInfo {
   id: string;
   name: string;
-  isVirtual?: boolean;
   imageUrl?: string | null;
   deckCount: number;
   totalCards: number;
@@ -28,10 +27,8 @@ interface SalaListProps {
   decks: DeckWithStats[];
   isLoading: boolean;
   getAggregateStats: (deck: DeckWithStats) => { new_count: number; learning_count: number; review_count: number; reviewed_today: number };
-  onSalaClick: (folderId: string, isVirtual?: boolean) => void;
+  onSalaClick: (folderId: string) => void;
 }
-
-const VIRTUAL_SALA_ID = '__meus_estudos__';
 
 /** Count all decks recursively (root + sub-decks) */
 const countAllDecks = (rootDecks: DeckWithStats[], allDecks: DeckWithStats[]): number => {
@@ -121,41 +118,6 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       };
     });
 
-  // Orphan decks (no folder_id) → virtual "Meus Estudos"
-  const orphanDecks = rootDecks.filter(d => !d.folder_id);
-  let virtualSala: SalaInfo | null = null;
-  if (orphanDecks.length > 0) {
-    let totalCards = 0, masteredCards = 0, dueCount = 0;
-    for (const d of orphanDecks) {
-      totalCards += d.total_cards;
-      masteredCards += d.mastered_cards;
-      const collectSubs = (parentId: string) => {
-        const subs = decks.filter(s => s.parent_deck_id === parentId && !s.is_archived);
-        for (const sub of subs) {
-          totalCards += sub.total_cards;
-          masteredCards += sub.mastered_cards;
-          collectSubs(sub.id);
-        }
-      };
-      collectSubs(d.id);
-      const stats = getAggregateStats(d);
-      dueCount += stats.new_count + stats.learning_count + stats.review_count;
-    }
-    const allIds = collectAllDeckIds(orphanDecks, decks);
-    virtualSala = {
-      id: VIRTUAL_SALA_ID,
-      name: 'Meus Estudos',
-      isVirtual: true,
-      deckCount: countAllDecks(orphanDecks, decks),
-      totalCards,
-      masteredCards,
-      questionCount: getQuestionCount(allIds),
-      dueCount,
-    };
-  }
-
-  const allSalas = [...realSalas, ...(virtualSala ? [virtualSala] : [])];
-
   if (isLoading) {
     return (
       <div className="divide-y divide-border/50">
@@ -172,7 +134,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     );
   }
 
-  if (allSalas.length === 0) {
+  if (realSalas.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-4">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -187,7 +149,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
 
   return (
     <div className="divide-y divide-border/50">
-      {allSalas.map(sala => (
+      {realSalas.map(sala => (
         <SalaCard
           key={sala.id}
           name={sala.name}
@@ -196,14 +158,12 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           masteredCards={sala.masteredCards}
           questionCount={sala.questionCount}
           dueCount={sala.dueCount}
-          isVirtual={sala.isVirtual}
           imageUrl={sala.imageUrl}
-          onClick={() => onSalaClick(sala.id, sala.isVirtual)}
+          onClick={() => onSalaClick(sala.id)}
         />
       ))}
     </div>
   );
 };
 
-export { VIRTUAL_SALA_ID };
 export default SalaList;
