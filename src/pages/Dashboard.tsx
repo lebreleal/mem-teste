@@ -779,6 +779,19 @@ const Dashboard = () => {
         )}
       </Suspense>
 
+      <Suspense fallback={null}>
+        {studySettingsOpen && (
+          <StudySettingsSheet
+            open={studySettingsOpen}
+            onOpenChange={setStudySettingsOpen}
+            decks={state.decks}
+            getSubDecks={state.getSubDecks}
+            getAggregateStats={state.getAggregateStats}
+            currentFolderId={state.currentFolderId}
+          />
+        )}
+      </Suspense>
+
       <AlertDialog open={!!detachTarget} onOpenChange={(open) => !open && setDetachTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
