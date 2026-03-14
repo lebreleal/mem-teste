@@ -71,7 +71,7 @@ const ClasseCard = ({
       </span>
     ) : (
       <span className="inline-flex items-center justify-center w-full rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-        Ver sala
+        Ver classe
       </span>
     )}
   </div>
