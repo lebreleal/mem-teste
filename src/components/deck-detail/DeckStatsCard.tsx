@@ -153,10 +153,6 @@ const DeckStatsCard = () => {
                 <span className="text-xs font-semibold text-foreground">{counts.novo}</span>
               </div>
               <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Cards a dominar</span>
-                <span className="text-xs font-semibold text-foreground">{toDominate}</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Total de cards</span>
                 <span className="text-xs font-semibold text-foreground">{total}</span>
               </div>
