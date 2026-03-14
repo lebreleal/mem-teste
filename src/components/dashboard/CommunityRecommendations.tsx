@@ -202,7 +202,7 @@ const CommunityRecommendations = () => {
         {recommendations.map(deck => (
           <button
             key={deck.id}
-            onClick={() => navigate(`/deck-preview/${deck.id}`)}
+            onClick={() => navigate(deck.link)}
             className="flex-shrink-0 w-40 rounded-xl border border-border/50 bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
           >
             <img
