@@ -502,7 +502,7 @@ const Dashboard = () => {
                           {userTurma?.is_private === false ? (
                             <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
                           ) : (
-                            <><Globe className="h-4 w-4 mr-2" /> Publicar no Explorar</>
+                            <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
                           )}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={async () => {
