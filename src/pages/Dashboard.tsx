@@ -117,17 +117,21 @@ const Dashboard = () => {
     const action = searchParams.get('action');
     if (action === 'ai-deck') {
       state.setAiDeckOpen(true);
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     } else if (action === 'create-deck') {
       state.setCreateType('deck');
       state.setCreateName('');
       state.setCreateParentDeckId(null);
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     } else if (action === 'import') {
       state.setImportOpen(true);
       state.setImportDeckId(null);
       state.setImportDeckName('');
-      setSearchParams({}, { replace: true });
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
+    } else if (action === 'create-sala') {
+      state.setCreateType('folder');
+      state.setCreateName('');
+      setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('action'); return p; }, { replace: true });
     }
   }, [searchParams]);
 
