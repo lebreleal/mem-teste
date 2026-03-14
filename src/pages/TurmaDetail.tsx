@@ -4,7 +4,7 @@
  * Non-members see public preview with "Seguir" button.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,12 +23,15 @@ import {
   ArrowLeft, Users, Star, Crown, BookOpen,
   Info, Layers, Globe, Lock, Heart, Check,
   FolderOpen, FileText, Clock, ShieldCheck, User,
+  ChevronLeft, Play, Download, ChevronRight,
 } from 'lucide-react';
 import { useTurmas } from '@/hooks/useTurmas';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
 // ─── Public Classe View (visitor / non-follower) ───
+// Uses same visual layout as the dashboard Sala view
 const PublicClasseView = () => {
   const ctx = useTurmaDetail();
   const { turma, turmaId, isMember, members } = ctx;
@@ -43,8 +46,56 @@ const PublicClasseView = () => {
   const rating = Number(turma?.avg_rating ?? 0);
   const ratingCount = turma?.rating_count ?? 0;
 
-  // Full preview data
-  const { data: fullPreview, isLoading } = useQuery({
+  // Fetch published decks in this Sala
+  const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
+    queryKey: ['turma-published-decks', turmaId],
+    queryFn: async () => {
+      const { data: turmaDecks } = await supabase
+        .from('turma_decks')
+        .select('id, deck_id, is_published')
+        .eq('turma_id', turmaId)
+        .eq('is_published', true);
+      if (!turmaDecks || turmaDecks.length === 0) return [];
+
+      const deckIds = turmaDecks.map((td: any) => td.deck_id);
+      const { data: decks } = await supabase
+        .from('decks')
+        .select('id, name')
+        .in('id', deckIds);
+      
+      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
+      const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
+      const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d.name]));
+
+      return turmaDecks.map((td: any) => ({
+        turmaDeckId: td.id,
+        deckId: td.deck_id,
+        name: deckMap.get(td.deck_id) ?? 'Sem nome',
+        cardCount: countMap.get(td.deck_id) ?? 0,
+      }));
+    },
+    enabled: !!turmaId,
+    staleTime: 60_000,
+  });
+
+  // Check which decks user already downloaded
+  const { data: downloadedDeckIds = new Set<string>() } = useQuery({
+    queryKey: ['user-downloaded-turma-decks', turmaId, user?.id],
+    queryFn: async () => {
+      if (!user) return new Set<string>();
+      const { data } = await supabase
+        .from('decks')
+        .select('source_turma_deck_id')
+        .eq('user_id', user.id)
+        .not('source_turma_deck_id', 'is', null);
+      return new Set((data ?? []).map((d: any) => d.source_turma_deck_id));
+    },
+    enabled: !!user && !!turmaId,
+    staleTime: 30_000,
+  });
+
+  // Full preview data for member count
+  const { data: fullPreview } = useQuery({
     queryKey: ['community-full-preview', turmaId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_community_full_preview' as any, { p_turma_id: turmaId });
@@ -54,19 +105,15 @@ const PublicClasseView = () => {
     enabled: !!turmaId,
     staleTime: 60_000,
   });
-
-  const subjects = (fullPreview?.subjects ?? []) as any[];
   const memberCount = fullPreview?.member_count ?? 0;
 
-  // Follow classe = join + create linked folder + download first deck as live deck
+  // Follow classe = join + create linked folder + download first deck
   const handleFollow = async () => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
     try {
-      // 1. Join as member
       await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
 
-      // 2. Create linked folder on user's dashboard
       const { data: existingFolders } = await supabase.from('folders')
         .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
 
@@ -80,40 +127,9 @@ const PublicClasseView = () => {
         folderId = (newFolder as any)?.id ?? null;
       }
 
-      // 3. Auto-download first published deck as live deck
-      const { data: firstDeck } = await supabase.from('turma_decks')
-        .select('id, deck_id')
-        .eq('turma_id', turmaId)
-        .eq('is_published', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (firstDeck) {
-        const { data: originalDeck } = await supabase.from('decks')
-          .select('name, algorithm_mode, daily_new_limit, daily_review_limit')
-          .eq('id', (firstDeck as any).deck_id).single();
-
-        if (originalDeck) {
-          const od = originalDeck as any;
-          // Check if already downloaded
-          const { data: existing } = await supabase.from('decks')
-            .select('id').eq('user_id', user.id).eq('source_turma_deck_id', (firstDeck as any).id);
-
-          if (!existing || existing.length === 0) {
-            await supabase.from('decks').insert({
-              name: od.name,
-              user_id: user.id,
-              folder_id: folderId,
-              algorithm_mode: od.algorithm_mode ?? 'fsrs',
-              daily_new_limit: od.daily_new_limit ?? 20,
-              daily_review_limit: od.daily_review_limit ?? 9999,
-              source_turma_deck_id: (firstDeck as any).id,
-              is_live_deck: true,
-              community_id: turmaId,
-            } as any);
-          }
-        }
+      // Auto-download first published deck
+      if (publishedDecks.length > 0) {
+        await downloadDeck(publishedDecks[0].turmaDeckId, publishedDecks[0].deckId, publishedDecks[0].name, folderId);
       }
 
       queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
@@ -133,33 +149,104 @@ const PublicClasseView = () => {
     }
   };
 
+  const downloadDeck = useCallback(async (turmaDeckId: string, deckId: string, deckName: string, folderId?: string | null) => {
+    if (!user) return;
+    const { data: existing } = await supabase.from('decks')
+      .select('id').eq('user_id', user.id).eq('source_turma_deck_id', turmaDeckId);
+    if (existing && existing.length > 0) return;
+
+    const { data: originalDeck } = await supabase.from('decks')
+      .select('algorithm_mode, daily_new_limit, daily_review_limit')
+      .eq('id', deckId).single();
+    const od = originalDeck as any;
+
+    await supabase.from('decks').insert({
+      name: deckName,
+      user_id: user.id,
+      folder_id: folderId ?? null,
+      algorithm_mode: od?.algorithm_mode ?? 'fsrs',
+      daily_new_limit: od?.daily_new_limit ?? 20,
+      daily_review_limit: od?.daily_review_limit ?? 9999,
+      source_turma_deck_id: turmaDeckId,
+      is_live_deck: true,
+      community_id: turmaId,
+    } as any);
+  }, [user, turmaId]);
+
+  const [downloadingDeck, setDownloadingDeck] = useState<string | null>(null);
+  const handleDownloadDeck = useCallback(async (deck: typeof publishedDecks[0]) => {
+    if (!user) { navigate('/auth'); return; }
+    setDownloadingDeck(deck.turmaDeckId);
+    try {
+      // Ensure user is member
+      if (!isMember) {
+        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any).single();
+      }
+
+      // Get or create linked folder
+      const { data: existingFolders } = await supabase.from('folders')
+        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+      let folderId: string | null = null;
+      if (existingFolders && existingFolders.length > 0) {
+        folderId = existingFolders[0].id;
+      } else {
+        const { data: newFolder } = await supabase.from('folders')
+          .insert({ user_id: user.id, name: turma?.name || 'Classe', section: 'community', source_turma_id: turmaId } as any)
+          .select().single();
+        folderId = (newFolder as any)?.id ?? null;
+      }
+
+      await downloadDeck(deck.turmaDeckId, deck.deckId, deck.name, folderId);
+      queryClient.invalidateQueries({ queryKey: ['user-downloaded-turma-decks'] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      toast({ title: `✅ "${deck.name}" adicionado à sua coleção!` });
+    } catch (e: any) {
+      if (e.code === '23505') {
+        toast({ title: 'Deck já baixado' });
+      } else {
+        toast({ title: 'Erro ao baixar deck', variant: 'destructive' });
+      }
+    } finally {
+      setDownloadingDeck(null);
+    }
+  }, [user, turmaId, turma, isMember, downloadDeck, queryClient, toast, navigate]);
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero */}
-      <div className="relative">
-        <div className="h-40 sm:h-52 bg-muted/30 overflow-hidden">
-          {coverUrl ? (
-            <img src={coverUrl} alt={turma?.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-br from-primary/15 to-primary/5" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+      {/* Hero banner — same style as dashboard Sala */}
+      <div className="relative bg-muted/50 overflow-hidden">
+        <div className="absolute inset-0">
+          <img src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
         </div>
-        <div className="absolute top-4 left-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/60 backdrop-blur-sm" onClick={() => navigate('/explorar')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 container mx-auto max-w-2xl">
-          <div className="flex items-end gap-3">
+
+        <div className="relative px-4 pt-3 pb-4">
+          {/* Top bar */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => navigate('/explorar')}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Explorar</span>
+            </button>
+          </div>
+
+          {/* Sala image + name + creator */}
+          <div className="flex items-center gap-3 mb-2">
+            <img src={coverUrl || defaultSalaIcon} alt={turma?.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
             <div className="flex-1 min-w-0">
-              <h1 className="font-display text-2xl font-bold text-foreground">{turma?.name}</h1>
-              <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Crown className="h-3 w-3 text-warning" /> {ownerName}</span>
+              <h1 className="text-lg font-display font-bold text-foreground truncate">{turma?.name}</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-muted-foreground">Por:</span>
+                <span className="text-xs font-medium text-foreground">{ownerName}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {memberCount} seguidores</span>
                 {ratingCount > 0 && (
                   <span className="flex items-center gap-1">
-                    <Star className="h-3 w-3 text-warning fill-warning" /> {rating.toFixed(1)} ({ratingCount})
+                    <Star className="h-3 w-3 text-warning fill-warning" /> {rating.toFixed(1)}
                   </span>
                 )}
               </div>
@@ -169,45 +256,76 @@ const PublicClasseView = () => {
       </div>
 
       {/* Follow CTA */}
-      <div className="container mx-auto max-w-2xl px-4 py-4">
-        <Button className="w-full gap-2" size="lg" onClick={handleFollow} disabled={following || isMember}>
-          <Heart className="h-4 w-4" />
-          {isMember ? 'Você segue esta classe' : following ? 'Seguindo...' : 'Seguir Classe'}
-        </Button>
-      </div>
+      {!isMember && (
+        <div className="px-4 py-3">
+          <Button className="w-full gap-2 rounded-full h-11 font-bold" size="lg" onClick={handleFollow} disabled={following}>
+            <Heart className="h-4 w-4" />
+            {following ? 'Seguindo...' : 'Seguir Sala'}
+          </Button>
+        </div>
+      )}
 
-      <main className="container mx-auto max-w-2xl px-4 pb-10 space-y-5">
-        {/* Description */}
+      {/* Description */}
+      <main className="px-4 pb-24 space-y-4">
         {turma?.description && (
-          <div className="rounded-2xl border border-border/40 bg-card p-4">
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
-          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
         )}
 
-        {/* Content Preview */}
-        {isLoading ? (
-          <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)}</div>
-        ) : subjects.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border py-8 text-center">
-            <FolderOpen className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Nenhum conteúdo disponível</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {subjects.filter((s: any) => !s.parent_id).map((subject: any) => (
-              <div key={subject.id} className="rounded-xl border border-border/50 bg-card px-4 py-3">
-                <h3 className="text-sm font-semibold text-foreground">{subject.name}</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Conteúdo disponível para seguidores</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Deck list — same as dashboard DeckList style */}
+        <div>
+          <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary" />
+            Decks ({publishedDecks.length})
+          </h2>
+
+          {decksLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+            </div>
+          ) : publishedDecks.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-8 text-center">
+              <FolderOpen className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/50">
+              {publishedDecks.map((deck) => {
+                const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
+                const isDownloading = downloadingDeck === deck.turmaDeckId;
+                return (
+                  <div key={deck.turmaDeckId} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground truncate">{deck.name}</h3>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Layers className="h-3 w-3" /> {deck.cardCount} cards
+                      </p>
+                    </div>
+                    {isDownloaded ? (
+                      <span className="flex items-center gap-1 text-xs text-success font-medium">
+                        <Check className="h-3.5 w-3.5" /> Baixado
+                      </span>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5"
+                        disabled={isDownloading}
+                        onClick={() => handleDownloadDeck(deck)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {isDownloading ? 'Baixando...' : 'Baixar'}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );
 };
-
-// ─── Member View (full management for owner, read-only for followers) ───
 const MemberClasseView = () => {
   const ctx = useTurmaDetail();
   const {
