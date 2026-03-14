@@ -152,14 +152,7 @@ const CardReviewStep = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Parse MC data when starting edit on MC card
-  useEffect(() => {
-    if (editingIdx !== null && cards[editingIdx]?.type === 'multiple_choice') {
-      const card = cards[editingIdx];
-      setEditMcOptions(card.options || ['', '', '', '']);
-      setEditMcCorrectIndex(card.correctIndex ?? 0);
-    }
-  }, [editingIdx, cards]);
+  // No MC state needed anymore
 
   // Open dialog when editing starts
   useEffect(() => {
