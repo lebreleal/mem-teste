@@ -110,6 +110,7 @@ const Dashboard = () => {
   const [detaching, setDetaching] = useState(false);
   const [studyWeightsOpen, setStudyWeightsOpen] = useState(false);
   const [studySalaSheetOpen, setStudySalaSheetOpen] = useState(false);
+  const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
