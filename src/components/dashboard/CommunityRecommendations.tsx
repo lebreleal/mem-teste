@@ -83,6 +83,19 @@ interface CommunityDeck {
   link: string;
 }
 
+/** Fallback categories when no marketplace data exists */
+const FALLBACK_DECKS: CommunityDeck[] = [
+  { id: 'f-med', title: 'Medicina', deck_id: '', card_count: 0, category: 'medicina', seller_id: '', cover: '/deck-covers/medicina.webp', link: '/explorar' },
+  { id: 'f-dir', title: 'Direito', deck_id: '', card_count: 0, category: 'direito', seller_id: '', cover: '/deck-covers/direito.webp', link: '/explorar' },
+  { id: 'f-prog', title: 'Programação', deck_id: '', card_count: 0, category: 'programacao', seller_id: '', cover: '/deck-covers/programacao.webp', link: '/explorar' },
+  { id: 'f-mat', title: 'Matemática', deck_id: '', card_count: 0, category: 'matematica', seller_id: '', cover: '/deck-covers/matematica.webp', link: '/explorar' },
+  { id: 'f-bio', title: 'Biologia', deck_id: '', card_count: 0, category: 'biologia', seller_id: '', cover: '/deck-covers/biologia.webp', link: '/explorar' },
+  { id: 'f-fis', title: 'Física', deck_id: '', card_count: 0, category: 'fisica', seller_id: '', cover: '/deck-covers/fisica.webp', link: '/explorar' },
+  { id: 'f-qui', title: 'Química', deck_id: '', card_count: 0, category: 'quimica', seller_id: '', cover: '/deck-covers/quimica.webp', link: '/explorar' },
+  { id: 'f-neuro', title: 'Neurociência', deck_id: '', card_count: 0, category: 'neurociencia', seller_id: '', cover: '/deck-covers/neurociencia.webp', link: '/explorar' },
+  { id: 'f-idiom', title: 'Idiomas', deck_id: '', card_count: 0, category: 'idiomas', seller_id: '', cover: '/deck-covers/idiomas.webp', link: '/explorar' },
+];
+
 const CommunityRecommendations = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -137,13 +150,11 @@ const CommunityRecommendations = () => {
           const deckMap = new Map<string, { name: string; user_id: string }>();
           if (decks) for (const d of decks as any[]) deckMap.set(d.id, { name: d.name, user_id: d.user_id });
 
-          // Get turma names
           const turmaIds = [...new Set(turmaDecks.map(td => td.turma_id))];
           const { data: turmas } = await supabase.from('turmas').select('id, name').in('id', turmaIds);
           const turmaMap = new Map<string, string>();
           if (turmas) for (const t of turmas as any[]) turmaMap.set(t.id, t.name);
 
-          // Card counts
           const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', tdDeckIds);
           const countMap = new Map<string, number>();
           if (cardCounts) for (const c of cardCounts as any[]) countMap.set(c.deck_id, (countMap.get(c.deck_id) ?? 0) + 1);
@@ -169,22 +180,9 @@ const CommunityRecommendations = () => {
     enabled: !!user,
   });
 
-  if (isLoading) {
-    return (
-      <div className="mt-6 px-4">
-        <div className="flex items-center justify-between mb-3">
-          <Skeleton className="h-5 w-48" />
-        </div>
-        <div className="flex gap-3 overflow-hidden">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-28 w-36 rounded-xl shrink-0" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!recommendations || recommendations.length === 0) return null;
+  // Use real data if available, otherwise show fallback categories
+  const displayDecks = (recommendations && recommendations.length > 0) ? recommendations : FALLBACK_DECKS;
+  const isFallback = !recommendations || recommendations.length === 0;
 
   return (
     <div className="mt-6">
