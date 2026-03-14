@@ -296,7 +296,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Nome duplicado</AlertDialogTitle>
             <AlertDialogDescription>
-              Já existe {props.duplicateWarning?.type === 'folder' ? 'uma pasta' : 'um baralho'} com o nome "{props.duplicateWarning?.name}" neste local.
+              Já existe {props.duplicateWarning?.type === 'folder' ? 'uma sala' : 'um baralho'} com o nome "{props.duplicateWarning?.name}" neste local.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
