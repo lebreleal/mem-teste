@@ -318,7 +318,6 @@ const ContentTab = () => {
   const [editPriceType, setEditPriceType] = useState<'free' | 'money' | 'credits'>('free');
   const [editAllowDownload, setEditAllowDownload] = useState(false);
   const [confirmImportItem, setConfirmImportItem] = useState<{ type: 'deck' | 'exam'; data: any } | null>(null);
-  const [importMode, setImportMode] = useState<'hierarchy' | 'flat'>('hierarchy');
   const [gateDeck, setGateDeck] = useState<any>(null);
   const [trialDeck, setTrialDeck] = useState<{ deckId: string; deckName: string } | null>(null);
   
