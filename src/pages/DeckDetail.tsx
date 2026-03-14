@@ -216,15 +216,25 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
             </div>
           </div>
 
-          {/* Info */}
+          {/* Counts inline */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-display text-2xl font-bold text-foreground">{totalDue}</span>
-              <span className="text-sm text-muted-foreground">restantes</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <SquarePlus className="h-3.5 w-3.5 text-blue-500" />
+                <span className="text-sm font-bold text-foreground">{totalNew}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-sm font-bold text-foreground">{totalLearning}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Layers className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm font-bold text-foreground">{totalReview}</span>
+              </div>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="ml-1 p-0.5 rounded-full hover:bg-muted/50 transition-colors">
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                  <button className="p-0.5 rounded-full hover:bg-muted/50 transition-colors">
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-3" side="bottom" align="start">
@@ -281,26 +291,15 @@ const SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: strin
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 w-9 p-0"
-              title="Criar Prova com IA"
-            >
-              <Brain className="h-4 w-4" />
-            </Button>
-            <Button
-              onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
-              size="sm"
-              className="h-9 gap-1.5 px-4 font-semibold"
-              disabled={totalDue === 0}
-            >
-              <Play className="h-4 w-4" />
-              Estudar
-            </Button>
-          </div>
+          {/* Study button - circular icon only */}
+          <Button
+            onClick={() => navigate(`/study/${parentDeckId}`, { replace: true })}
+            size="icon"
+            className="h-10 w-10 rounded-full flex-shrink-0"
+            disabled={totalDue === 0}
+          >
+            <Play className="h-5 w-5" />
+          </Button>
         </div>
 
         {/* Full-width progress bar */}
