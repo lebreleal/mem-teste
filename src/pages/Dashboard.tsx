@@ -397,9 +397,9 @@ const Dashboard = () => {
               {salaStudyStats && (
                 <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
                   <button
-                    onClick={() => setStudyWeightsOpen(true)}
+                    onClick={() => setStudySettingsOpen(true)}
                     className="flex h-9 w-9 items-center justify-center rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
-                    aria-label="Ajustar pesos"
+                    aria-label="Configurar estudo"
                   >
                     <SlidersHorizontal className="h-4 w-4" />
                   </button>
