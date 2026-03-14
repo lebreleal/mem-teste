@@ -15,4 +15,5 @@ export interface Folder {
   section?: FolderSection;
   source_turma_id?: string | null;
   source_turma_subject_id?: string | null;
+  image_url?: string | null;
 }
