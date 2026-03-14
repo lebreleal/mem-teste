@@ -473,7 +473,12 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const newPct = totalCards > 0 ? (actualNewCount / totalCards) * 100 : 0;
   const learningPct = totalCards > 0 ? (learningCount / totalCards) * 100 : 0;
   const masteredPct = totalCards > 0 ? (totalReviewStateCards / totalCards) * 100 : 0;
-  const otherDecks = decks.filter(d => d.id !== deckId && !d.is_archived);
+  // Exclude "Matérias" (decks that have children) — cards can only move into leaf decks
+  const otherDecks = decks.filter(d => {
+    if (d.id === deckId || d.is_archived) return false;
+    const hasChildren = decks.some(child => child.parent_deck_id === d.id && !child.is_archived);
+    return !hasChildren;
+  });
   const isSaving = createCard.isPending || updateCard.isPending;
   const canImprove = !!cardType && cardType !== 'image_occlusion';
 
