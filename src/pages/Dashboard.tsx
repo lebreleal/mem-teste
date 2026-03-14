@@ -45,6 +45,7 @@ const StudyWeightsSheet = lazy(() => import('@/components/dashboard/StudyWeights
 
 import { importDeck, importDeckWithSubdecks } from '@/services/deckService';
 import BottomNav from '@/components/BottomNav';
+import CommunityRecommendations from '@/components/dashboard/CommunityRecommendations';
 import { usePendingDecks, type PendingDeck } from '@/stores/usePendingDecks';
 import { useMissions } from '@/hooks/useMissions';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
