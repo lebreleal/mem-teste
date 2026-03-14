@@ -20,7 +20,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isOnDashboard = location.pathname === '/dashboard';
-  const isInsideSala = isOnDashboard && !!searchParams.get('folder');
+  const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
     && !hideNavPatterns.some(p => location.pathname.includes(p));
