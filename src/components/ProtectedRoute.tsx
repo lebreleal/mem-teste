@@ -102,14 +102,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Floating AI FAB */}
-      {showNav && (
-        <DraggableFab
-          actions={[
-            { icon: Brain, label: 'Agente IA', onClick: () => navigate('/ia') },
-          ]}
-        />
-      )}
+      {/* Add menu triggered from BottomNav */}
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (
