@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
-import CommunitySettingsDialog from '@/components/community/CommunitySettingsDialog';
+
 import TurmaHeader from '@/components/turma-detail/TurmaHeader';
 import TurmaSubHeader from '@/components/turma-detail/TurmaSubHeader';
 import ContentTab from '@/components/turma-detail/ContentTab';
