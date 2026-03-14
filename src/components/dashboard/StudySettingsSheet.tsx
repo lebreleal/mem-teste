@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, GraduationCap, Layers, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, RotateCcw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -139,9 +139,6 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
           {items.map(item => (
             <div key={item.id} className={`px-4 py-4 transition-opacity ${item.isEnabled ? '' : 'opacity-40'}`}>
               <div className="flex items-center gap-3 mb-3">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  {item.isMateria ? <GraduationCap className="h-4 w-4 text-primary" /> : <Layers className="h-4 w-4 text-primary" />}
-                </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="font-display font-semibold text-foreground truncate text-sm">{item.name}</h3>
                   <p className="text-xs text-muted-foreground">
