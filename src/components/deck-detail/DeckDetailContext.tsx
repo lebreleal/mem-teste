@@ -280,17 +280,20 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
 
   // Card counts: use RPC for own decks, direct query for community decks
+  // For community decks, all cards are "new" from the viewer's perspective (owner's state is irrelevant)
   const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
     queryKey: ['card-counts', deckId, isCommunityDeck],
     queryFn: async () => {
       if (isCommunityDeck) {
         // Direct query — RLS allows viewing community deck cards
         const cards = await cardService.fetchCards(deckId);
+        const total = cards.length;
+        // All cards are "new" from the viewer's perspective — they haven't studied any
         return {
-          total: cards.length,
-          new_count: cards.filter((c: any) => c.state === 0).length,
-          learning_count: cards.filter((c: any) => c.state === 1 || c.state === 3).length,
-          review_count: cards.filter((c: any) => c.state === 2 && new Date(c.scheduled_date) <= new Date()).length,
+          total,
+          new_count: total,
+          learning_count: 0,
+          review_count: 0,
           basic_count: cards.filter((c: any) => c.card_type === 'basic').length,
           cloze_count: cards.filter((c: any) => c.card_type === 'cloze').length,
           mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
@@ -304,12 +307,21 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   });
 
   // Display cards: use RPC for own decks, direct query for community decks
+  // For community decks, override state/difficulty to show as "new" from viewer's perspective
   const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
     queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
     queryFn: async () => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
-        return cards.slice(0, displayLimit) as cardService.CardRow[];
+        // Reset state and difficulty so gauge shows 0% progress for the viewer
+        return cards.slice(0, displayLimit).map((c: any) => ({
+          ...c,
+          state: 0,
+          difficulty: 0,
+          stability: 0,
+          learning_step: 0,
+          last_reviewed_at: null,
+        })) as cardService.CardRow[];
       }
       return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
     },
