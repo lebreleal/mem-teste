@@ -233,13 +233,24 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
       const { data: existingFolders } = await supabase.from('folders')
         .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+      let folderId: string;
       if (!existingFolders || existingFolders.length === 0) {
-        await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
+        const { data: newFolder } = await supabase.from('folders')
+          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
+          .select('id').single();
+        folderId = (newFolder as any)?.id;
+      } else {
+        folderId = existingFolders[0].id;
+      }
+      // Bootstrap local deck copies
+      if (folderId) {
+        const { bootstrapFollowerDecks } = await import('@/services/followerBootstrap');
+        await bootstrapFollowerDecks(user.id, turmaId, folderId);
       }
       queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
       toast({ title: '✅ Seguindo sala! Ela aparece agora no seu menu Início.' });
     } catch (e: any) {
       if (e.code === '23505') {
