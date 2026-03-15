@@ -345,11 +345,16 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 <span className="text-xs text-muted-foreground">Por</span>
                 <span className="text-xs font-medium text-foreground">{ownerName}</span>
               </div>
-              <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {memberCount} seguidores</span>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
                 {ratingCount > 0 && (
                   <span className="flex items-center gap-1">
                     <Star className="h-3 w-3 text-warning fill-warning" /> {rating.toFixed(1)}
+                  </span>
+                )}
+                {turma?.created_at && (
+                  <span className="flex items-center gap-1">
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    {(() => { try { return formatDistanceToNow(new Date(turma.created_at), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
                   </span>
                 )}
               </div>

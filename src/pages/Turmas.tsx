@@ -45,35 +45,18 @@ const SalaCard = ({
         <div className="flex items-center gap-2 mt-0.5">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
             {(sala.deck_count ?? 0) > 0 && <span>{sala.deck_count} {(sala.deck_count ?? 0) === 1 ? 'deck' : 'decks'}</span>}
-            {(sala.card_count ?? 0) > 0 && (
-              <>
-                <span>·</span>
-                <span className="inline-flex items-center gap-0.5">
-                  <Layers className="h-3 w-3" />
-                  {sala.card_count}
-                </span>
-              </>
-            )}
-            {(sala.question_count ?? 0) > 0 && (
-              <>
-                <span>·</span>
-                <span className="inline-flex items-center gap-0.5">
-                  <HelpCircle className="h-3 w-3" />
-                  {sala.question_count}
-                </span>
-              </>
-            )}
+            {(sala.card_count ?? 0) > 0 && <span>{sala.card_count} {(sala.card_count ?? 0) === 1 ? 'cartão' : 'cartões'}</span>}
+            {(sala.question_count ?? 0) > 0 && <span>{sala.question_count} {(sala.question_count ?? 0) === 1 ? 'questão' : 'questões'}</span>}
           </p>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {sala.owner_name && (
-            <span className="text-[11px] text-muted-foreground">por <span className="font-medium text-foreground">{sala.owner_name}</span></span>
+            <span className="text-[11px] text-muted-foreground">Por <span className="font-medium text-foreground">{sala.owner_name}</span></span>
           )}
           {sala.last_updated && (
-            <>
-              <span className="text-[11px] text-muted-foreground">·</span>
-              <span className="text-[11px] text-muted-foreground">{formatRelative(sala.last_updated)}</span>
-            </>
+            <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+              <RefreshCw className="h-2.5 w-2.5" /> {formatRelative(sala.last_updated)}
+            </span>
           )}
         </div>
       </div>
