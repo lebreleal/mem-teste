@@ -302,7 +302,7 @@ Deno.serve(async (req) => {
 
     const countInstruction = requestedCount > 0
       ? `Crie exatamente ${requestedCount} cartões.`
-      : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detail}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
+      : `Crie a quantidade NECESSÁRIA de cartões para cobrir o material no nível "${detailLevel}". NÃO limite artificialmente — gere tantos cartões quantos forem necessários para garantir cobertura adequada.`;
 
     const formatInstructions = isFlashLite ? getFlashFormatInstructions(formats) : getFormatInstructions(formats);
 
@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
       ? `Crie flashcards para este conteúdo.
 
 - ${countInstruction}
-- ${getDetailInstruction(detail)}
+- ${getDetailInstruction(detailLevel)}
 - Idioma: mesmo do conteúdo.
 ${customInstructions ? `- INSTRUÇÃO DO USUÁRIO: ${customInstructions}` : ""}
 
@@ -327,7 +327,7 @@ Verifique: cada seção do conteúdo tem pelo menos 1 cartão?`
 
 REGRAS OBRIGATÓRIAS:
 - ${countInstruction}
-- ${getDetailInstruction(detail)}
+- ${getDetailInstruction(detailLevel)}
 - TUDO em PORTUGUÊS (ou na língua do conteúdo fornecido).
 - Varie os TIPOS de pergunta: mecanismo, comparação, aplicação clínica, causa-efeito, redundância estratégica.
 - SEM DECOREBA: Formule de modo que o estudante precise RACIOCINAR sobre o mecanismo, a causa ou a consequência. PROIBIDO perguntas de "O que é X?" com resposta de dicionário.
@@ -349,7 +349,7 @@ ${trimmedContent}
 FORMATO DE SAÍDA (apenas JSON array, sem texto extra, sem markdown):
 ${getOutputExamples(formats)}`;
 
-    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
+    console.log(`Using model: ${selectedModel}, textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detailLevel}`);
 
     const cardProperties: Record<string, any> = {
       front: { type: "string", description: "Card front content" },
