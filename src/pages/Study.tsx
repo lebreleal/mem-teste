@@ -953,15 +953,16 @@ const Study = () => {
   }
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
+    // Auto-navigate back after a brief moment
+    setTimeout(() => goBack(), 1500);
     return (
-      <SessionCompleteSummary
-        reviewCount={reviewCount}
-        correctCount={correctCount}
-        wrongCount={wrongCount}
-        elapsedMs={sessionElapsed}
-        deckStats={deckStatsSnapshot}
-        onGoBack={goBack}
-      />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <div className="animate-fade-in text-center space-y-3">
+          <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
+          <h1 className="font-display text-xl font-bold text-foreground">Seção completa!</h1>
+          <p className="text-sm text-muted-foreground">{reviewCount} cards estudados</p>
+        </div>
+      </div>
     );
   }
 
