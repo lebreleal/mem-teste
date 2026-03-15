@@ -14,6 +14,7 @@ export const useFolders = () => {
     queryKey: ['folders', user?.id],
     queryFn: () => folderService.fetchFolders(user!.id),
     enabled: !!user,
+    staleTime: 2 * 60_000,
   });
 
   const createFolder = useMutation({

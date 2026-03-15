@@ -30,9 +30,10 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     return allDecks;
   };
 
-  const [decks, statsResult] = await Promise.all([
+  const [decks, statsResult, cardCountsResult] = await Promise.all([
     fetchAllDecks(),
     supabase.rpc('get_all_user_deck_stats', { p_user_id: userId, p_tz_offset_minutes: TZ_OFFSET_SP }),
+    supabase.rpc('get_all_user_card_counts' as any, { p_user_id: userId }),
   ]);
 
   const allStats = statsResult.data;
@@ -47,50 +48,15 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // ── Card counts for mastery + difficulty classification ──
-  const deckIds = (decks || []).map((d: any) => d.id);
+  // ── Card counts from server-side RPC (single query) ──
   const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
-  if (deckIds.length > 0) {
-    const PAGE = 1000;
-    const IN_BATCH = 200;
-
-    for (let i = 0; i < deckIds.length; i += IN_BATCH) {
-      const batch = deckIds.slice(i, i + IN_BATCH);
-      let offset = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data: cards, error: cardsError } = await supabase
-          .from('cards')
-          .select('id, deck_id, state, difficulty')
-          .in('deck_id', batch)
-          .order('id', { ascending: true })
-          .range(offset, offset + PAGE - 1);
-
-        if (cardsError) throw cardsError;
-
-        if (cards) {
-          for (const c of cards as any[]) {
-            const entry = cardCountMap.get(c.deck_id) ?? { total: 0, mastered: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-            entry.total++;
-            if (c.state >= 2) entry.mastered++;
-            // Difficulty-based classification (matches DeckStatsCard gauge)
-            if (c.state === 0) {
-              entry.novo++;
-            } else {
-              const d = c.difficulty ?? 5;
-              if (d <= 3) entry.facil++;
-              else if (d <= 5) entry.bom++;
-              else if (d <= 7) entry.dificil++;
-              else entry.errei++;
-            }
-            cardCountMap.set(c.deck_id, entry);
-          }
-        }
-
-        hasMore = (cards?.length ?? 0) === PAGE;
-        offset += PAGE;
-      }
+  if (cardCountsResult.data) {
+    for (const r of cardCountsResult.data as any[]) {
+      cardCountMap.set(r.deck_id, {
+        total: Number(r.total), mastered: Number(r.mastered),
+        novo: Number(r.novo), facil: Number(r.facil),
+        bom: Number(r.bom), dificil: Number(r.dificil), errei: Number(r.errei),
+      });
     }
   }
 
