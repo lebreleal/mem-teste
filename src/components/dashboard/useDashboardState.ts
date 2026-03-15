@@ -62,6 +62,24 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
     ? weeklyNewCardsProfile[DAY_KEYS[new Date().getDay()]]
     : rawGlobalNewLimit;
 
+  // Pre-built O(1) lookup structures
+  const deckMap = useMemo(() => {
+    const m = new Map<string, DeckWithStats>();
+    for (const d of decks) m.set(d.id, d);
+    return m;
+  }, [decks]);
+
+  const childrenIndex = useMemo(() => {
+    const m = new Map<string, DeckWithStats[]>();
+    for (const d of decks) {
+      if (d.parent_deck_id) {
+        const arr = m.get(d.parent_deck_id);
+        if (arr) arr.push(d); else m.set(d.parent_deck_id, [d]);
+      }
+    }
+    return m;
+  }, [decks]);
+
   // Sum new_reviewed_today scoped to plan decks (when plan exists) or all decks
   const globalNewReviewedToday = useMemo(() => {
     const roots = decks.filter(d => !d.parent_deck_id && !d.is_archived);
@@ -70,15 +88,14 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
       : roots;
     return scopedRoots.reduce((sum, d) => {
       const collectNew = (id: string): number => {
-        const dk = decks.find(x => x.id === id);
+        const dk = deckMap.get(id);
         let nr = dk?.new_reviewed_today ?? 0;
-        const children = decks.filter(x => x.parent_deck_id === id && !x.is_archived);
-        for (const child of children) nr += collectNew(child.id);
+        for (const child of (childrenIndex.get(id) ?? [])) { if (!child.is_archived) nr += collectNew(child.id); }
         return nr;
       };
       return sum + collectNew(d.id);
     }, 0);
-  }, [decks, planRootIds]);
+  }, [decks, planRootIds, deckMap, childrenIndex]);
 
   const globalNewRemaining = Math.max(0, todayGlobalNewLimit - globalNewReviewedToday);
 
