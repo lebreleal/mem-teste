@@ -274,6 +274,7 @@ const Dashboard = () => {
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareSlugEdit, setShareSlugEdit] = useState('');
+  const [savingSlug, setSavingSlug] = useState(false);
   const [commAccordionId, setCommAccordionId] = useState<string | null>(null);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
