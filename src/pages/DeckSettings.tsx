@@ -599,7 +599,7 @@ const DeckSettings = () => {
             )}
 
             {/* ── Section: IA ─────────────────────────────────── */}
-            {!sourceTurmaDeckId && (
+            {!isCommunityDeck && (
               <SettingsGroup>
                 <SettingsRow
                   icon={<Download className="h-5 w-5" />}
