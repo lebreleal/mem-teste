@@ -958,7 +958,7 @@ const Dashboard = () => {
                   key={deck.id}
                   deck={deck}
                   readOnly
-                  readOnlyNavState={{ from: 'community', turmaId: sourceTurmaId }}
+                  readOnlyNavState={{ from: 'dashboard-sala', folderId: state.currentFolderId }}
                   deckSelectionMode={false}
                   selectedDeckIds={new Set()}
                   toggleDeckSelection={noopS}

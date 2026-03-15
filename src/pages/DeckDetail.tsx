@@ -350,6 +350,8 @@ const DeckDetailContent = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const fromCommunity = (location.state as any)?.from === 'community';
+  const fromDashboardSala = (location.state as any)?.from === 'dashboard-sala';
+  const dashboardSalaFolderId = (location.state as any)?.folderId;
   const communityTurmaId = (location.state as any)?.turmaId;
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -384,6 +386,7 @@ const DeckDetailContent = () => {
 
   // Resolve back destination: folder name for label
   const backInfo = useMemo(() => {
+    if (fromDashboardSala && dashboardSalaFolderId) return { label: 'Sala', path: `/dashboard?folder=${dashboardSalaFolderId}` };
     if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
     let folderId = (deck as any)?.folder_id;
     if (!folderId && (deck as any)?.parent_deck_id && decks) {
@@ -395,7 +398,7 @@ const DeckDetailContent = () => {
     }
     if (folderId) return { label: 'Sala', path: `/dashboard?folder=${folderId}` };
     return { label: 'Dashboard', path: '/dashboard' };
-  }, [deck, decks, fromCommunity, communityTurmaId]);
+  }, [deck, decks, fromCommunity, fromDashboardSala, dashboardSalaFolderId, communityTurmaId]);
 
   // Unified source resolution: resolves source deck ID, owner name, and updatedAt in one query
   const { data: sourceData } = useQuery({
