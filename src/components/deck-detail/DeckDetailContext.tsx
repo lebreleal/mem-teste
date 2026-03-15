@@ -307,12 +307,21 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   });
 
   // Display cards: use RPC for own decks, direct query for community decks
+  // For community decks, override state/difficulty to show as "new" from viewer's perspective
   const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
     queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
     queryFn: async () => {
       if (isCommunityDeck) {
         const cards = await cardService.fetchCards(deckId);
-        return cards.slice(0, displayLimit) as cardService.CardRow[];
+        // Reset state and difficulty so gauge shows 0% progress for the viewer
+        return cards.slice(0, displayLimit).map((c: any) => ({
+          ...c,
+          state: 0,
+          difficulty: 0,
+          stability: 0,
+          learning_step: 0,
+          last_reviewed_at: null,
+        })) as cardService.CardRow[];
       }
       return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
     },
