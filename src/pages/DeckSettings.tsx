@@ -560,7 +560,7 @@ const DeckSettings = () => {
             </SettingsGroup>
 
             {/* ── Section: Social ─────────────────────────────── */}
-            {!sourceTurmaDeckId && (
+            {!isCommunityDeck && (
               <SettingsGroup>
                 <SettingsRow
                   icon={<Globe className="h-5 w-5" />}
