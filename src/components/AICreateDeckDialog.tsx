@@ -39,7 +39,7 @@ const AICreateDeckDialog = ({ open, onOpenChange, folderId, existingDeckId, exis
 
   const stepTitle: Record<string, string> = {
     pages: 'Selecione as páginas',
-    config: 'Configurações de IA',
+    config: 'Configurações',
     review: 'Revisar Cartões',
   };
 
