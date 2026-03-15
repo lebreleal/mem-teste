@@ -231,39 +231,39 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
                         <div className="h-2.5 w-2.5 rounded-full bg-info" />
                         <span className="text-xs text-muted-foreground">Fácil</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.facil}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.facil}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-success" />
                         <span className="text-xs text-muted-foreground">Bom</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.bom}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.bom}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-warning" />
                         <span className="text-xs text-muted-foreground">Difícil</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.dificil}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.dificil}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
                         <span className="text-xs text-muted-foreground">Errei</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.errei}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.errei}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="h-2.5 w-2.5 rounded-full bg-muted" />
                         <span className="text-xs text-muted-foreground">Novo</span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">{cardCounts.novo}</span>
+                      <span className="text-xs font-semibold text-foreground">{diffCounts.novo}</span>
                     </div>
                     <div className="border-t border-border/50 pt-2 mt-2 flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Total de cards</span>
-                      <span className="text-xs font-semibold text-foreground">{allCards.length}</span>
+                      <span className="text-xs font-semibold text-foreground">{serverTotal}</span>
                     </div>
                   </div>
                 </>
