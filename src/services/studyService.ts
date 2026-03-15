@@ -94,6 +94,11 @@ export async function fetchStudyQueue(
     const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
     deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
 
+    // Guard: if still no decks after bootstrap, return empty queue
+    if (deckIds.length === 0) {
+      return { cards: [], algorithmMode: 'fsrs', deckConfig: {}, isLiveDeck: false };
+    }
+
     // Mark decks with zero new-card limit (their reviews still participate)
     deckIds.forEach(buildZeroLimitSet);
 
