@@ -13,13 +13,21 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  // "+" button only works on /dashboard (root, no folder param)
+  const isDashboardRoot = location.pathname === '/dashboard' && !location.search.includes('folder=');
+
   const handleExplorar = () => {
     navigate('/turmas');
   };
 
+  const handleAdd = () => {
+    if (!isDashboardRoot) return; // blocked outside dashboard root
+    window.dispatchEvent(new CustomEvent('open-add-menu'));
+  };
+
   const items = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: Plus, label: 'Adicionar', onClick: () => window.dispatchEvent(new CustomEvent('open-add-menu')), active: false, accent: true },
+    { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: !isDashboardRoot },
     { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
   ];
 
