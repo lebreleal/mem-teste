@@ -39,7 +39,8 @@ const SuspenseLoading = () => {
 
 const ImportCardsDialog = lazy(() => import('@/components/ImportCardsDialog'));
 const AICreateDeckDialog = lazy(() => import('@/components/AICreateDeckDialog'));
-
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
