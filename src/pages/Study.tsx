@@ -665,6 +665,7 @@ const Study = () => {
           leechKey,
           failCount: count,
           interruptedAt: new Date().toISOString(),
+          cardSnapshot: { ...currentCard },
         };
 
         // Small delay to let the transition finish before showing modal
