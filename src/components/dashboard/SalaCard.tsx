@@ -3,9 +3,15 @@
  * Shows custom image (or default icon), name, deck/card/question counts, mastery bar.
  */
 
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, RefreshCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+const formatRelative = (d: string) => {
+  try { return formatDistanceToNow(new Date(d), { addSuffix: true, locale: ptBR }); } catch { return ''; }
+};
 
 interface SalaCardProps {
   name: string;
@@ -16,11 +22,16 @@ interface SalaCardProps {
   dueCount: number;
   isVirtual?: boolean;
   imageUrl?: string | null;
+  /** Owner name for community-followed rooms */
+  ownerName?: string;
+  /** ISO date of last update for community-followed rooms */
+  lastUpdated?: string;
   onClick: () => void;
 }
 
-const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, dueCount, isVirtual, imageUrl, onClick }: SalaCardProps) => {
+const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, dueCount, isVirtual, imageUrl, ownerName, lastUpdated, onClick }: SalaCardProps) => {
   const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 1000) / 10 : 0;
+  const isCommunity = !!ownerName;
 
   return (
     <button
@@ -43,9 +54,20 @@ const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, d
             {totalCards > 0 && <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>}
             {questionCount > 0 && <span>{questionCount} {questionCount === 1 ? 'questão' : 'questões'}</span>}
           </p>
-          <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
+          {!isCommunity && <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>}
         </div>
-        <Progress value={masteryPct} className="h-1 mt-1.5" />
+        {!isCommunity && <Progress value={masteryPct} className="h-1 mt-1.5" />}
+        {ownerName && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Por <span className="font-medium text-foreground">{ownerName}</span>
+          </p>
+        )}
+        {lastUpdated && (
+          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+            <RefreshCw className="h-2.5 w-2.5" />
+            {formatRelative(lastUpdated)}
+          </p>
+        )}
       </div>
 
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
