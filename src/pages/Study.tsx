@@ -951,9 +951,10 @@ const Study = () => {
   }
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
-    sessionDoneRef.current = true;
-    // Auto-navigate back after a brief moment
-    setTimeout(() => goBack(), 1500);
+    if (!sessionDoneRef.current) {
+      sessionDoneRef.current = true;
+      setTimeout(() => goBack(), 1500);
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
         <div className="animate-fade-in text-center space-y-3">
