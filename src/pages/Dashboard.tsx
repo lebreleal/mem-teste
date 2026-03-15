@@ -188,8 +188,9 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
-  const [publishing, setPublishing] = useState(false);
+  const handleTogglePublish = useCallback(async () => {
     if (!user || !state.currentFolderId) return;
+
     setPublishing(true);
     try {
       let turmaId = userTurma?.id;
