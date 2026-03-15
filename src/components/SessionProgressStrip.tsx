@@ -2,7 +2,6 @@
  * SessionProgressStrip — compact real-time progress bar during study.
  * Shows card counter, accuracy, and time elapsed.
  */
-import { CheckCircle2, Target, Clock, Layers } from 'lucide-react';
 
 export interface DeckSessionStats {
   deckId: string;
@@ -33,37 +32,18 @@ function formatElapsed(ms: number) {
 
 const SessionProgressStrip = ({
   reviewCount,
-  correctCount,
   initialQueueSize,
   elapsedMs,
-  deckStats,
 }: SessionProgressStripProps) => {
-  const accuracy = reviewCount > 0 ? Math.round((correctCount / reviewCount) * 100) : 0;
-  const completedDecks = deckStats.filter(d => d.done >= d.total && d.total > 0);
-
   return (
     <div className="bg-card/80 backdrop-blur-sm border-b border-border/50">
-      <div className="flex items-center px-3 py-1.5 text-xs gap-3">
-        <span className="flex items-center gap-1 font-bold text-foreground tabular-nums">
-          <Layers className="h-3 w-3 text-primary" />
+      <div className="flex items-center justify-center px-3 py-1.5 text-xs gap-3">
+        <span className="font-bold text-foreground tabular-nums">
           {reviewCount}/{initialQueueSize}
         </span>
-        {accuracy > 0 && (
-          <span className="flex items-center gap-1 tabular-nums" style={{ color: accuracy >= 80 ? 'hsl(var(--primary))' : accuracy >= 60 ? 'hsl(var(--warning, 45 100% 50%))' : 'hsl(var(--destructive))' }}>
-            <Target className="h-3 w-3" />
-            {accuracy}%
-          </span>
-        )}
-        <span className="flex items-center gap-1 text-muted-foreground tabular-nums">
-          <Clock className="h-3 w-3" />
+        <span className="text-muted-foreground tabular-nums">
           {formatElapsed(elapsedMs)}
         </span>
-        {completedDecks.length > 0 && (
-          <span className="flex items-center gap-1 text-primary">
-            <CheckCircle2 className="h-3 w-3" />
-            {completedDecks.length}
-          </span>
-        )}
       </div>
     </div>
   );
