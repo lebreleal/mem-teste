@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play } from 'lucide-react';
+import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
@@ -262,13 +262,28 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     }
   };
 
-  // Study handler — navigate to first deck with cards
-  const handleStudy = () => {
+  // Study handler — auto-follow + navigate to first deck with cards
+  const handleStudy = async () => {
+    // Auto-follow if not already a follower
+    if (!isFollower && user) {
+      try {
+        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
+        const { data: existingFolders } = await supabase.from('folders')
+          .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
+        if (!existingFolders || existingFolders.length === 0) {
+          await supabase.from('folders')
+            .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
+        }
+        queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
+        queryClient.invalidateQueries({ queryKey: ['folders'] });
+      } catch { /* already following or error — continue to study */ }
+    }
+    if (!user) { navigate('/auth'); return; }
     const firstWithCards = salaDecks.find(d => d.total_cards > 0 && !salaDecks.some(s => s.parent_deck_id === d.id));
     if (firstWithCards) {
-      navigate(`/decks/${firstWithCards.id}`);
+      navigate(`/decks/${firstWithCards.id}`, { state: { from: 'community', turmaId } });
     } else if (rootDecks.length > 0) {
-      navigate(`/decks/${rootDecks[0].id}`);
+      navigate(`/decks/${rootDecks[0].id}`, { state: { from: 'community', turmaId } });
     }
   };
 
@@ -346,32 +361,31 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                   <span>{totalStats.totalQuestions} questões</span>
                 </>
               )}
-              <span>·</span>
-              <span>{totalStats.progressPct}% revisado</span>
             </div>
           )}
 
 
-          {/* Study + Follow buttons */}
-          <div className="flex items-center gap-2 mt-3">
+          {/* Study + Join buttons */}
+          <div className="flex items-center gap-3 mt-3">
             {!isFollower && (
-              <Button
+              <button
                 onClick={handleFollow}
                 disabled={following}
-                variant="outline"
-                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+                className="flex flex-col items-center gap-0.5 shrink-0"
               >
-                <Heart className="h-4 w-4" />
-                {following ? 'Seguindo...' : 'Seguir Sala'}
-              </Button>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary text-primary hover:bg-primary/10 transition-colors">
+                  <Plus className="h-5 w-5" />
+                </span>
+                <span className="text-[10px] font-bold text-primary uppercase">Entrar</span>
+              </button>
             )}
             {totalStats.totalCards > 0 && (
               <Button
                 onClick={handleStudy}
-                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+                className="h-12 rounded-full text-sm font-bold gap-2 flex-1"
               >
+                STUDY
                 <Play className="h-4 w-4 fill-current" />
-                ESTUDAR
               </Button>
             )}
           </div>
