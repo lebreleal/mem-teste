@@ -115,6 +115,8 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
   /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
   readOnly?: boolean;
+  /** When true, hides deck management menu (rename/move/archive/delete) but keeps study actions. */
+  disableManagementActions?: boolean;
   /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
   readOnlyNavState?: Record<string, any>;
 }
