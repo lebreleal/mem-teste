@@ -41,14 +41,18 @@ export function calculateRealStudyTime(
   reviewCards: number,
   metrics: RealStudyMetrics,
 ): number {
-  // New cards: each generates avgReviewsPerNewCard interactions on first day
-  const newInteractions = newCards * metrics.avgReviewsPerNewCard;
+  // Guardrails to avoid unrealistically low estimates (common with sparse/biased history)
+  const reviewsPerNewCard = Math.max(2, metrics.avgReviewsPerNewCard || DEFAULT_STUDY_METRICS.avgReviewsPerNewCard);
+  const avgNewSeconds = Math.max(15, metrics.avgNewSeconds || DEFAULT_STUDY_METRICS.avgNewSeconds);
+
+  // New cards: each generates multiple interactions on the first day
+  const newInteractions = newCards * reviewsPerNewCard;
   // Review cards: some will lapse → become relearning (each lapse ≈ 2 extra interactions)
   const expectedLapses = reviewCards * metrics.avgLapseRate;
   const successfulReviews = reviewCards - expectedLapses;
 
   return Math.round(
-    (newInteractions * metrics.avgNewSeconds) +
+    (newInteractions * avgNewSeconds) +
     (learningCards * metrics.avgLearningSeconds) +
     (successfulReviews * metrics.avgReviewSeconds) +
     (expectedLapses * metrics.avgRelearningSeconds * 2)

@@ -508,8 +508,8 @@ const Dashboard = () => {
       totalCards += collectTotalCards(deck.id);
     }
 
-    // Global daily cap still applies across all decks/salas
-    const newCountToday = Math.min(newCountTodayByDeckLimits, state.globalNewRemaining);
+    // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
+    const newCountToday = newCountTodayByDeckLimits;
     const totalDue = newCountToday + learningCount + reviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
@@ -541,7 +541,7 @@ const Dashboard = () => {
       masteredCount,
       ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, state.globalNewRemaining, realStudyMetrics]);
+  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
