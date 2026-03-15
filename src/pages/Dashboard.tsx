@@ -125,69 +125,60 @@ const Dashboard = () => {
   const sourceTurmaId = currentFolder?.source_turma_id;
   const isCommunityFolder = !!sourceTurmaId;
 
-  // Fetch turma info + decks for community folders
+  // Fetch turma info (owner name, cover) for community folders — lightweight query
   const { data: communityTurmaInfo } = useQuery({
-    queryKey: ['community-folder-turma', sourceTurmaId],
+    queryKey: ['community-folder-turma-info', sourceTurmaId],
     queryFn: async () => {
       const { data: turma } = await supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single();
       if (!turma) return null;
-      // Fetch owner name
       const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] });
       const ownerName = (profiles as any)?.[0]?.name || 'Anônimo';
-      // Fetch published decks
+      // Last updated from turma decks
       const { data: turmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true);
       const deckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
-      let decks: any[] = [];
-      if (deckIds.length > 0) {
-        const { data: d } = await supabase.from('decks').select('*').in('id', deckIds);
-        // Also fetch child decks
-        const { data: childDecks } = await supabase.from('decks').select('*').in('parent_deck_id', deckIds).eq('is_archived', false);
-        decks = [...(d ?? []), ...(childDecks ?? [])];
-      }
-      // Card counts
-      const allDeckIds = decks.map((d: any) => d.id);
-      const cardCountMap = new Map<string, { total: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
-      if (allDeckIds.length > 0) {
-        const PAGE = 1000;
-        for (let i = 0; i < allDeckIds.length; i += 200) {
-          const batch = allDeckIds.slice(i, i + 200);
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase.from('cards').select('deck_id, state, difficulty').in('deck_id', batch).range(offset, offset + PAGE - 1);
-            for (const c of (cards ?? []) as any[]) {
-              const entry = cardCountMap.get(c.deck_id) ?? { total: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-              entry.total++;
-              if (c.state === 0) entry.novo++;
-              else { const d = c.difficulty ?? 5; if (d <= 3) entry.facil++; else if (d <= 5) entry.bom++; else if (d <= 7) entry.dificil++; else entry.errei++; }
-              cardCountMap.set(c.deck_id, entry);
-            }
-            hasMore = (cards?.length ?? 0) === PAGE;
-            offset += PAGE;
-          }
-        }
-      }
-      // Map to DeckWithStats
-      const deckStats = decks.filter((d: any) => !d.name?.includes('Caderno de Erros')).map((d: any) => {
-        const cc = cardCountMap.get(d.id) ?? { total: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-        return {
-          id: d.id, name: d.name, created_at: d.created_at, updated_at: d.updated_at,
-          folder_id: d.folder_id, parent_deck_id: deckIds.includes(d.id) ? null : d.parent_deck_id,
-          is_archived: d.is_archived, new_count: cc.novo, learning_count: 0, review_count: 0,
-          reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0,
-          daily_new_limit: d.daily_new_limit, daily_review_limit: d.daily_review_limit,
-          total_cards: cc.total, mastered_cards: cc.total - cc.novo,
-          class_novo: cc.novo, class_facil: cc.facil, class_bom: cc.bom, class_dificil: cc.dificil, class_errei: cc.errei,
-        };
-      });
-      // Last updated
       let lastUpdated = '';
-      for (const d of decks) { if ((d as any).updated_at > lastUpdated) lastUpdated = (d as any).updated_at; }
-      return { ownerName, deckStats, lastUpdated, coverUrl: (turma as any).cover_image_url };
+      if (deckIds.length > 0) {
+        const { data: deckDates } = await supabase.from('decks').select('updated_at').in('id', deckIds).order('updated_at', { ascending: false }).limit(1);
+        lastUpdated = (deckDates as any)?.[0]?.updated_at ?? '';
+      }
+      return { ownerName, lastUpdated, coverUrl: (turma as any).cover_image_url };
     },
     enabled: !!sourceTurmaId,
     staleTime: 60_000,
   });
+
+  // Auto-bootstrap: ensure local deck copies exist for community folders
+  const bootstrapDoneRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!user || !isCommunityFolder || !sourceTurmaId || !state.currentFolderId) return;
+    if (bootstrapDoneRef.current.has(state.currentFolderId)) return;
+    bootstrapDoneRef.current.add(state.currentFolderId);
+    
+    // Check if local decks already exist in this folder
+    const localDecksInFolder = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
+    if (localDecksInFolder.length > 0) {
+      // Decks exist — run incremental sync in background
+      import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
+        syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
+          if (newCards > 0) {
+            queryClient.invalidateQueries({ queryKey: ['decks'] });
+            toast({ title: `${newCards} novos cartões sincronizados!` });
+          }
+        }).catch(console.error);
+      });
+      return;
+    }
+    
+    // No local decks — run full bootstrap
+    import('@/services/followerBootstrap').then(({ bootstrapFollowerDecks }) => {
+      bootstrapFollowerDecks(user.id, sourceTurmaId, state.currentFolderId!).then((result) => {
+        if (result.decks_created > 0) {
+          queryClient.invalidateQueries({ queryKey: ['decks'] });
+        }
+      }).catch(console.error);
+    });
+  }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
+
 
   // Leave sala confirmation
   const [leaveSalaConfirm, setLeaveSalaConfirm] = useState<{ folderId: string; turmaId: string } | null>(null);
