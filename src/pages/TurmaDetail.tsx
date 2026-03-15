@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play } from 'lucide-react';
+import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
