@@ -342,13 +342,12 @@ const Dashboard = () => {
     }
   }, [searchParams]);
 
-  // Listen for "+" button inside own sala → open create deck dialog
+  // Listen for "+" button inside own sala → open add menu sheet
+  const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   useEffect(() => {
     const handler = () => {
       if (state.isInsideSala && !isCommunityFolder) {
-        state.setCreateType('deck');
-        state.setCreateName('');
-        state.setCreateParentDeckId(null);
+        setSalaAddMenuOpen(true);
       }
     };
     window.addEventListener('open-sala-add-menu', handler);
