@@ -96,29 +96,38 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
     queryKey: ['sala-list-community-meta', turmaIds.join(',')],
     queryFn: async () => {
       if (turmaIds.length === 0) return new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
-      const { data: turmas } = await supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds);
+      // Fetch turmas + profiles + turma_decks in parallel
+      const [turmasRes, turmaDecksRes] = await Promise.all([
+        supabase.from('turmas').select('id, owner_id, cover_image_url').in('id', turmaIds),
+        supabase.from('turma_decks').select('turma_id, deck_id').in('turma_id', turmaIds).eq('is_published', true),
+      ]);
+      const turmas = turmasRes.data;
       if (!turmas) return new Map();
+
       const ownerIds = [...new Set((turmas as any[]).map(t => t.owner_id))];
-      const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds });
-      const profileMap = new Map((profiles as any[] ?? []).map((p: any) => [p.id, p.name]));
-      // Fetch published deck info per turma
-      const { data: turmaDecks } = await supabase.from('turma_decks').select('turma_id, deck_id').in('turma_id', turmaIds).eq('is_published', true);
       const deckIdsByTurma = new Map<string, string[]>();
-      for (const td of (turmaDecks ?? []) as any[]) {
+      for (const td of (turmaDecksRes.data ?? []) as any[]) {
         const arr = deckIdsByTurma.get(td.turma_id) ?? [];
         arr.push(td.deck_id);
         deckIdsByTurma.set(td.turma_id, arr);
       }
-      const allTDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
-      let lastUpdatedMap = new Map<string, string>();
-      if (allTDeckIds.length > 0) {
-        const { data: tDecks } = await supabase.from('decks').select('id, updated_at').in('id', allTDeckIds);
-        for (const d of (tDecks ?? []) as any[]) {
-          for (const [tid, dids] of deckIdsByTurma.entries()) {
-            if (dids.includes(d.id)) {
-              const cur = lastUpdatedMap.get(tid) ?? '';
-              if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
-            }
+      const allTDeckIds = (turmaDecksRes.data ?? []).map((td: any) => td.deck_id);
+
+      // Fetch profiles + deck dates in parallel
+      const [profilesRes, tDecksRes] = await Promise.all([
+        supabase.rpc('get_public_profiles' as any, { p_user_ids: ownerIds }),
+        allTDeckIds.length > 0
+          ? supabase.from('decks').select('id, updated_at').in('id', allTDeckIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const profileMap = new Map((profilesRes.data as any[] ?? []).map((p: any) => [p.id, p.name]));
+      const lastUpdatedMap = new Map<string, string>();
+      for (const d of ((tDecksRes as any).data ?? []) as any[]) {
+        for (const [tid, dids] of deckIdsByTurma.entries()) {
+          if (dids.includes(d.id)) {
+            const cur = lastUpdatedMap.get(tid) ?? '';
+            if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
           }
         }
       }

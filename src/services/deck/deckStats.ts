@@ -60,87 +60,71 @@ export async function fetchDecksWithStats(userId: string): Promise<DeckWithStats
     }
   }
 
-  // ── 1. Author via marketplace listing ──
+  // ── Author + source resolution (all 3 blocks in parallel) ──
   const listingIds = (decks || []).map((d: any) => d.source_listing_id).filter(Boolean);
-  const authorMap = new Map<string, string | null>();
-  if (listingIds.length > 0) {
-    const { data: listings } = await supabase
-      .from('marketplace_listings')
-      .select('id, seller_id')
-      .in('id', listingIds);
-    if (listings && listings.length > 0) {
+  const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
+  const orphanLiveDecks = (decks || []).filter(
+    (d: any) => d.is_live_deck && !d.source_turma_deck_id && !d.source_listing_id
+  );
+
+  const [authorMap, turmaAuthorResult, orphanAuthorMap] = await Promise.all([
+    // 1. Author via marketplace listing
+    (async () => {
+      const map = new Map<string, string | null>();
+      if (listingIds.length === 0) return map;
+      const { data: listings } = await supabase.from('marketplace_listings').select('id, seller_id').in('id', listingIds);
+      if (!listings || listings.length === 0) return map;
       const sellerIds = [...new Set(listings.map((l: any) => l.seller_id))];
       const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sellerIds);
       const profileMap = new Map<string, string>();
       if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
-      for (const l of listings as any[]) {
-        authorMap.set(l.id, profileMap.get(l.seller_id) || null);
-      }
-    }
-  }
-
-  // ── 2. Author via turma_decks.shared_by + source deck updated_at ──
-  const turmaDecksIds = (decks || []).map((d: any) => d.source_turma_deck_id).filter(Boolean);
-  const turmaAuthorMap = new Map<string, string | null>();
-  const sourceUpdatedAtMap = new Map<string, string>();
-  if (turmaDecksIds.length > 0) {
-    const { data: turmaDecks } = await supabase
-      .from('turma_decks')
-      .select('id, shared_by, deck_id')
-      .in('id', turmaDecksIds);
-    if (turmaDecks && turmaDecks.length > 0) {
-      // Resolve sharer names
+      for (const l of listings as any[]) map.set(l.id, profileMap.get(l.seller_id) || null);
+      return map;
+    })(),
+    // 2. Author via turma_decks + source deck updated_at
+    (async () => {
+      const aMap = new Map<string, string | null>();
+      const uMap = new Map<string, string>();
+      if (turmaDecksIds.length === 0) return { aMap, uMap };
+      const { data: turmaDecks } = await supabase.from('turma_decks').select('id, shared_by, deck_id').in('id', turmaDecksIds);
+      if (!turmaDecks || turmaDecks.length === 0) return { aMap, uMap };
       const sharerIds = [...new Set(turmaDecks.map((td: any) => td.shared_by))];
-      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', sharerIds);
-      const profileMap = new Map<string, string>();
-      if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
-      for (const td of turmaDecks as any[]) {
-        turmaAuthorMap.set(td.id, profileMap.get(td.shared_by) || null);
-      }
-      // Resolve source deck updated_at
       const sourceDeckIds = [...new Set(turmaDecks.map((td: any) => td.deck_id))];
-      const { data: sourceDecks } = await supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds);
+      const [profilesRes, sourceDecksRes] = await Promise.all([
+        supabase.from('profiles').select('id, name').in('id', sharerIds),
+        supabase.from('decks').select('id, updated_at').in('id', sourceDeckIds),
+      ]);
+      const profileMap = new Map<string, string>();
+      if (profilesRes.data) for (const p of profilesRes.data as any[]) profileMap.set(p.id, p.name);
       const srcMap = new Map<string, string>();
-      if (sourceDecks) for (const sd of sourceDecks as any[]) srcMap.set(sd.id, sd.updated_at);
+      if (sourceDecksRes.data) for (const sd of sourceDecksRes.data as any[]) srcMap.set(sd.id, sd.updated_at);
       for (const td of turmaDecks as any[]) {
+        aMap.set(td.id, profileMap.get(td.shared_by) || null);
         const ts = srcMap.get(td.deck_id);
-        if (ts) sourceUpdatedAtMap.set(td.id, ts);
+        if (ts) uMap.set(td.id, ts);
       }
-    }
-  }
-
-  // ── 3. For is_live_deck orphans (no source_turma_deck_id, no source_listing_id),
-  //       find the original public deck by name and resolve author + updated_at ──
-  const orphanLiveDecks = (decks || []).filter(
-    (d: any) => d.is_live_deck && !d.source_turma_deck_id && !d.source_listing_id
-  );
-  // Map: orphan deck name → { author, updated_at }
-  const orphanAuthorMap = new Map<string, { author: string | null; updatedAt: string | null }>();
-  if (orphanLiveDecks.length > 0) {
-    const orphanNames = [...new Set(orphanLiveDecks.map((d: any) => d.name))];
-    // Find original public decks with those names NOT owned by this user
-    const { data: originals } = await supabase
-      .from('decks')
-      .select('name, user_id, updated_at')
-      .in('name', orphanNames)
-      .neq('user_id', userId)
-      .eq('is_live_deck', false);
-    if (originals && originals.length > 0) {
+      return { aMap, uMap };
+    })(),
+    // 3. Orphan live decks author
+    (async () => {
+      const map = new Map<string, { author: string | null; updatedAt: string | null }>();
+      if (orphanLiveDecks.length === 0) return map;
+      const orphanNames = [...new Set(orphanLiveDecks.map((d: any) => d.name))];
+      const { data: originals } = await supabase.from('decks').select('name, user_id, updated_at').in('name', orphanNames).neq('user_id', userId).eq('is_live_deck', false);
+      if (!originals || originals.length === 0) return map;
       const ownerIds = [...new Set(originals.map((o: any) => o.user_id))];
       const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', ownerIds);
       const profileMap = new Map<string, string>();
       if (profiles) for (const p of profiles as any[]) profileMap.set(p.id, p.name);
-      // Use the first match per name
       for (const o of originals as any[]) {
-        if (!orphanAuthorMap.has(o.name)) {
-          orphanAuthorMap.set(o.name, {
-            author: profileMap.get(o.user_id) || null,
-            updatedAt: o.updated_at,
-          });
-        }
+        if (!map.has(o.name)) map.set(o.name, { author: profileMap.get(o.user_id) || null, updatedAt: o.updated_at });
       }
-    }
-  }
+      return map;
+    })(),
+  ]);
+
+  const turmaAuthorMap = turmaAuthorResult.aMap;
+  const sourceUpdatedAtMap = turmaAuthorResult.uMap;
 
   return (decks || []).map((deck: any) => {
     const s = statsMap.get(deck.id) ?? { new_count: 0, learning_count: 0, review_count: 0, reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0 };
