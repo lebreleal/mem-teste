@@ -113,6 +113,8 @@ interface DeckRowProps {
   expandedAccordionId?: string | null;
   onAccordionToggle?: (deckId: string) => void;
   questionCountMap?: Map<string, number>;
+  /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
+  readOnly?: boolean;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
