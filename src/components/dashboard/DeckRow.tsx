@@ -267,7 +267,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               })()}
             </p>
           </div>
-          {!isErrorDeck && (
+          {!isErrorDeck && !readOnly && (
             <ClassificationBar
               facilPct={classPcts.facilPct}
               bomPct={classPcts.bomPct}
@@ -337,14 +337,16 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                       </>
                     )}
                   </div>
-                  <ClassificationBar
-                    facilPct={subClass.facilPct}
-                    bomPct={subClass.bomPct}
-                    dificilPct={subClass.dificilPct}
-                    erreiPct={subClass.erreiPct}
-                    novoPct={subClass.novoPct}
-                    className="mt-1"
-                  />
+                  {!readOnly && (
+                    <ClassificationBar
+                      facilPct={subClass.facilPct}
+                      bomPct={subClass.bomPct}
+                      dificilPct={subClass.dificilPct}
+                      erreiPct={subClass.erreiPct}
+                      novoPct={subClass.novoPct}
+                      className="mt-1"
+                    />
+                  )}
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">

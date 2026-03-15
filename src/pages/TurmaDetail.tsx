@@ -351,28 +351,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             </div>
           )}
 
-          {/* Overall classification bar */}
-          {!decksLoading && totalStats.totalCards > 0 && (
-            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted/30">
-              <div className="absolute inset-y-0 left-0 flex w-full">
-                {overallBarPcts.facilPct > 0 && (
-                  <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${overallBarPcts.facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />
-                )}
-                {overallBarPcts.bomPct > 0 && (
-                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />
-                )}
-                {overallBarPcts.dificilPct > 0 && (
-                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />
-                )}
-                {overallBarPcts.erreiPct > 0 && (
-                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />
-                )}
-                {overallBarPcts.novoPct > 0 && (
-                  <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${overallBarPcts.novoPct}%` }} />
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Study + Follow buttons */}
           <div className="flex items-center gap-2 mt-3">
