@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDiscoverTurmas, type Turma } from '@/hooks/useTurmas';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, Sparkles, Layers, ChevronRight, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Search, Sparkles, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
