@@ -590,7 +590,7 @@ const Dashboard = () => {
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-muted-foreground">Por:</span>
+                        <span className="text-xs text-muted-foreground">Por</span>
                         <span className="text-xs font-medium text-foreground">{userName}</span>
                         <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
                           {avatarUrl ? (
