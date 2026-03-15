@@ -424,42 +424,21 @@ const Dashboard = () => {
     return ids;
   }, [state.isInsideSala, state.currentDecks, allDecks]);
 
-  // Fetch difficulty-based classification for the sala's cards
-  const { data: salaDifficultyStats } = useQuery({
-    queryKey: ['sala-difficulty-stats', salaDeckIds.join(',')],
-    queryFn: async () => {
-      if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
-      let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
-      const BATCH = 200;
-      const PAGE = 1000;
-      for (let i = 0; i < salaDeckIds.length; i += BATCH) {
-        const batch = salaDeckIds.slice(i, i + BATCH);
-        // Paginate to get ALL cards (Supabase default limit is 1000)
-        let from = 0;
-        while (true) {
-          const { data } = await supabase
-            .from('cards')
-            .select('state, difficulty')
-            .in('deck_id', batch)
-            .range(from, from + PAGE - 1);
-          if (!data || data.length === 0) break;
-          for (const c of data) {
-            if (c.state === 0) { novo++; continue; }
-            const d = c.difficulty ?? 5;
-            if (d <= 3) facil++;
-            else if (d <= 5) bom++;
-            else if (d <= 7) dificil++;
-            else errei++;
-          }
-          if (data.length < PAGE) break;
-          from += PAGE;
-        }
-      }
-      return { novo, facil, bom, dificil, errei };
-    },
-    enabled: salaDeckIds.length > 0,
-    staleTime: 30_000,
-  });
+  // Compute difficulty stats from already-loaded deck data (no extra query)
+  const salaDifficultyStats = useMemo(() => {
+    if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
+    for (const id of salaDeckIds) {
+      const dk = allDecks.find(d => d.id === id);
+      if (!dk) continue;
+      novo += dk.class_novo ?? 0;
+      facil += dk.class_facil ?? 0;
+      bom += dk.class_bom ?? 0;
+      dificil += dk.class_dificil ?? 0;
+      errei += dk.class_errei ?? 0;
+    }
+    return { novo, facil, bom, dificil, errei };
+  }, [salaDeckIds, allDecks]);
 
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
