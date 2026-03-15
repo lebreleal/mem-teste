@@ -215,8 +215,17 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const noopStr = useCallback((_s: string) => {}, []);
   const getCommunityLinkId = useCallback((_d: DeckWithStats) => null as string | null, []);
 
-  const [expandedDecks] = useState(new Set<string>());
+  const [expandedDecks, setExpandedDecks] = useState(new Set<string>());
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
+
+  const toggleExpand = useCallback((deckId: string) => {
+    setExpandedDecks(prev => {
+      const next = new Set(prev);
+      if (next.has(deckId)) next.delete(deckId);
+      else next.add(deckId);
+      return next;
+    });
+  }, []);
 
   // Follow handler
   const handleFollow = async () => {
