@@ -380,18 +380,18 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="font-display text-center">
-              {props.createType === 'folder' ? 'Nomeie sua nova classe' : props.createParentDeckId === '__materia__' ? 'Nova Matéria' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+              {props.createType === 'folder' ? 'Criar nova Sala' : props.createParentDeckId === '__materia__' ? 'Nova Matéria' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Deck'}
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">
-                Uma classe é um lugar para guardar seus decks de flashcards. (ex: "Biologia 101", "Fatos Aleatórios", "Treinamento Empresa", etc.)
+                Uma sala organiza seus decks e matérias em um só lugar. (ex: "Medicina 2026", "Concurso Federal", "Residência Cardio")
               </p>
             )}
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
             <div className="space-y-2">
               {props.createType !== 'folder' && <Label>Nome</Label>}
-              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? "ex: 'Medicina 101'" : 'Ex: Vocabulário'} autoFocus maxLength={100} />
+              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? "ex: 'Residência 2026'" : 'Ex: Vocabulário'} autoFocus maxLength={100} />
             </div>
             <div className={props.createType === 'folder' ? 'flex justify-center' : 'flex justify-end gap-2'}>
               {props.createType !== 'folder' && (
