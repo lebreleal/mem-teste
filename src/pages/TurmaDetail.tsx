@@ -10,10 +10,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
-import { ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ChevronLeft, Users, Star,
+  ChevronLeft, ChevronDown, Users, Star,
   Layers, Heart, FolderOpen, HelpCircle, Plus, Minus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -136,8 +135,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     staleTime: 60_000,
   });
 
-  // Check which decks user already downloaded (kept for potential future use)
-
+  // Member count
+  const { data: memberCount = 0 } = useQuery({
     queryKey: ['turma-member-count', turmaId],
     queryFn: async () => {
       const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
@@ -240,9 +239,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       setFollowing(false);
     }
   };
-
-
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -363,10 +359,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                           )}
                         </p>
                       </div>
-                      {/* Classification bar placeholder — no user stats in public view */}
                       <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
                     </div>
-                    <DownloadBtn deck={deck} />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
                   </div>
                 );
               }
@@ -407,9 +402,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                       </div>
                       <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
                     </div>
-
-                    {/* Download all button visible when expanded */}
-                    {isExpanded && <DownloadBtn deck={deck} />}
                   </div>
 
                   {/* Sub-decks (expanded) — same as DeckRow sub-decks */}
@@ -441,7 +433,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                             </div>
                             <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1" />
                           </div>
-                          <DownloadBtn deck={sub} />
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
                         </div>
                       ))}
                     </div>
