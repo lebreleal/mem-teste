@@ -13,21 +13,21 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  // "+" button only works on /dashboard (root, no folder param)
-  const isDashboardRoot = location.pathname === '/dashboard' && !location.search.includes('folder=');
+  // "+" works on /dashboard (root and inside own sala); ProtectedRoute handles community lock
+  const isOnDashboard = location.pathname === '/dashboard';
 
   const handleExplorar = () => {
     navigate('/turmas');
   };
 
   const handleAdd = () => {
-    if (!isDashboardRoot) return; // blocked outside dashboard root
+    if (!isOnDashboard) return;
     window.dispatchEvent(new CustomEvent('open-add-menu'));
   };
 
   const items = [
     { icon: Home, label: 'Home', onClick: () => navigate('/dashboard'), active: isActive('/dashboard') },
-    { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: !isDashboardRoot },
+    { icon: Plus, label: 'Adicionar', onClick: handleAdd, active: false, accent: true, disabled: !isOnDashboard },
     { icon: Compass, label: 'Explorar', onClick: handleExplorar, active: isActive('/explorar') || isActive('/turmas') },
   ];
 
