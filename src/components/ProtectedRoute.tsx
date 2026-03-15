@@ -60,15 +60,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const pomodoroHandler = () => setShowPomodoro(true);
     const addMenuHandler = () => {
-      // On dashboard root (not inside a sala): go directly to create-sala
-      if (isOnDashboard && !isInsideSala) {
-        navigate('/dashboard?action=create-sala');
-        return;
-      }
-      // Inside a community folder: do nothing
-      if (isCommunityFolder) return;
-      // Otherwise open the add menu
-      setShowAddMenu(true);
+      // "+" only works on dashboard root (not inside any sala, not on other pages)
+      if (!isOnDashboard || isInsideSala) return;
+      // On dashboard root: go directly to create-sala
+      navigate('/dashboard?action=create-sala');
     };
     window.addEventListener('open-pomodoro', pomodoroHandler);
     window.addEventListener('open-add-menu', addMenuHandler);
@@ -76,7 +71,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener('open-pomodoro', pomodoroHandler);
       window.removeEventListener('open-add-menu', addMenuHandler);
     };
-  }, [isOnDashboard, isInsideSala, isCommunityFolder, navigate]);
+  }, [isOnDashboard, isInsideSala, navigate]);
 
   const startPomodoro = (forceIsBreak?: boolean) => {
     // Always clear any existing interval first to prevent stacking
