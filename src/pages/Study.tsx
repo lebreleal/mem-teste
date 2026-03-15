@@ -106,17 +106,15 @@ const Study = () => {
   const deckStatsRef = useRef<Map<string, DeckSessionStats>>(new Map());
   const [deckStatsSnapshot, setDeckStatsSnapshot] = useState<DeckSessionStats[]>([]);
 
-  // Track if session is complete (to stop timer)
-  const sessionComplete = !currentCard && !allWaiting && reviewCount > 0;
-
-  // Elapsed time ticker — stops when session completes
+  // Elapsed time ticker — stopped via sessionDoneRef
+  const sessionDoneRef = useRef(false);
   useEffect(() => {
-    if (sessionComplete) return;
     const interval = setInterval(() => {
+      if (sessionDoneRef.current) return;
       setSessionElapsed(Date.now() - sessionStartRef.current);
     }, 1000);
     return () => clearInterval(interval);
-  }, [sessionComplete]);
+  }, []);
 
   // Leech trigger state
   const failCountRef = useRef<Map<string, number>>(new Map());
