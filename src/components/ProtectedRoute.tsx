@@ -39,8 +39,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     && !hideNavPatterns.some(p => location.pathname.includes(p));
   const { toast } = useToast();
 
-  // Add menu state
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  // Pomodoro state (add menu removed — "+" only triggers create-sala on dashboard root)
 
   // Pomodoro state
   const [showPomodoro, setShowPomodoro] = useState(false);
