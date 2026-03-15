@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import {
   ChevronLeft, ChevronDown, Users, Star,
-  Layers, Heart, Check, FolderOpen, Download, HelpCircle, Plus, Minus,
+  Layers, Heart, FolderOpen, HelpCircle, Plus, Minus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -58,7 +58,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const rating = Number(turma?.avg_rating ?? 0);
   const ratingCount = turma?.rating_count ?? 0;
 
-  // Fetch published decks in this Sala with hierarchy info
+  // Fetch published decks + their sub-decks
   const { data: publishedDecks = [], isLoading: decksLoading } = useQuery({
     queryKey: ['turma-published-decks', turmaId],
     queryFn: async () => {
@@ -69,13 +69,24 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         .eq('is_published', true);
       if (!turmaDecks || turmaDecks.length === 0) return [];
 
-      const deckIds = turmaDecks.map((td: any) => td.deck_id);
+      const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
+
+      // Also fetch child decks (sub-decks of published decks)
+      const { data: childDecks } = await supabase
+        .from('decks')
+        .select('id, name, parent_deck_id')
+        .in('parent_deck_id', rootDeckIds)
+        .eq('is_archived', false);
+
+      const allChildIds = (childDecks ?? []).map((d: any) => d.id);
+      const allDeckIds = [...rootDeckIds, ...allChildIds];
+
       const { data: decks } = await supabase
         .from('decks')
         .select('id, name, parent_deck_id')
-        .in('id', deckIds);
+        .in('id', allDeckIds);
 
-      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: deckIds });
+      const { data: countRows } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: allDeckIds });
       const countMap = new Map((countRows ?? []).map((r: any) => [r.deck_id, Number(r.card_count)]));
       const deckMap = new Map((decks ?? []).map((d: any) => [d.id, d]));
 
@@ -83,44 +94,45 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       const { data: qRows } = await supabase
         .from('deck_questions')
         .select('deck_id')
-        .in('deck_id', deckIds);
+        .in('deck_id', allDeckIds);
       const qCountMap = new Map<string, number>();
       for (const r of qRows ?? []) {
         qCountMap.set(r.deck_id, (qCountMap.get(r.deck_id) ?? 0) + 1);
       }
 
-      return turmaDecks
-        .map((td: any) => {
-          const dk = deckMap.get(td.deck_id);
-          return {
-            turmaDeckId: td.id,
-            deckId: td.deck_id,
-            name: dk?.name ?? 'Sem nome',
-            cardCount: countMap.get(td.deck_id) ?? 0,
-            questionCount: qCountMap.get(td.deck_id) ?? 0,
-            parentDeckId: dk?.parent_deck_id ?? null,
-          };
-        })
-        .filter((d: any) => !d.name.includes('Caderno de Erros'));
+      // Build results: root decks from turma_decks + their children
+      const results: PublishedDeck[] = [];
+
+      for (const td of turmaDecks) {
+        const dk = deckMap.get(td.deck_id);
+        if (!dk || dk.name?.includes('Caderno de Erros')) continue;
+        results.push({
+          turmaDeckId: td.id,
+          deckId: td.deck_id,
+          name: dk.name ?? 'Sem nome',
+          cardCount: countMap.get(td.deck_id) ?? 0,
+          questionCount: qCountMap.get(td.deck_id) ?? 0,
+          parentDeckId: null, // root level in turma
+        });
+      }
+
+      // Add child decks
+      for (const child of (childDecks ?? [])) {
+        if (child.name?.includes('Caderno de Erros')) continue;
+        results.push({
+          turmaDeckId: `child-${child.id}`,
+          deckId: child.id,
+          name: child.name ?? 'Sem nome',
+          cardCount: countMap.get(child.id) ?? 0,
+          questionCount: qCountMap.get(child.id) ?? 0,
+          parentDeckId: child.parent_deck_id,
+        });
+      }
+
+      return results;
     },
     enabled: !!turmaId,
     staleTime: 60_000,
-  });
-
-  // Check which decks user already downloaded
-  const { data: downloadedDeckIds = new Set<string>() } = useQuery({
-    queryKey: ['user-downloaded-turma-decks', turmaId, user?.id],
-    queryFn: async () => {
-      if (!user) return new Set<string>();
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id')
-        .eq('user_id', user.id)
-        .not('source_turma_deck_id', 'is', null);
-      return new Set((data ?? []).map((d: any) => d.source_turma_deck_id));
-    },
-    enabled: !!user && !!turmaId,
-    staleTime: 30_000,
   });
 
   // Member count
@@ -226,68 +238,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     } finally {
       setFollowing(false);
     }
-  };
-
-  const [downloadingDeck, setDownloadingDeck] = useState<string | null>(null);
-  const handleDownloadDeck = useCallback(async (deck: PublishedDeck) => {
-    if (!user) { navigate('/auth'); return; }
-    setDownloadingDeck(deck.turmaDeckId);
-    try {
-      if (!isMember) {
-        await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any).single();
-      }
-
-      const { data: existingFolders } = await supabase.from('folders')
-        .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-      let folderId: string | null = null;
-      if (existingFolders && existingFolders.length > 0) {
-        folderId = existingFolders[0].id;
-      } else {
-        const { data: newFolder } = await supabase.from('folders')
-          .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any)
-          .select().single();
-        folderId = (newFolder as any)?.id ?? null;
-      }
-
-      await downloadDeck(deck.turmaDeckId, deck.deckId, deck.name, folderId);
-      queryClient.invalidateQueries({ queryKey: ['user-downloaded-turma-decks'] });
-      queryClient.invalidateQueries({ queryKey: ['decks'] });
-      queryClient.invalidateQueries({ queryKey: ['folders'] });
-      toast({ title: `✅ "${deck.name}" adicionado à sua coleção!` });
-    } catch (e: any) {
-      if (e.code === '23505') {
-        toast({ title: 'Deck já baixado' });
-      } else {
-        toast({ title: 'Erro ao baixar deck', variant: 'destructive' });
-      }
-    } finally {
-      setDownloadingDeck(null);
-    }
-  }, [user, turmaId, turma, isMember, downloadDeck, queryClient, toast, navigate]);
-
-  /* ── Download button for a deck ── */
-  const DownloadBtn = ({ deck }: { deck: PublishedDeck }) => {
-    const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
-    const isDownloading = downloadingDeck === deck.turmaDeckId;
-    if (isDownloaded) {
-      return (
-        <span className="flex items-center gap-1 text-xs text-success font-medium shrink-0">
-          <Check className="h-3.5 w-3.5" /> Baixado
-        </span>
-      );
-    }
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8 text-xs gap-1.5 shrink-0"
-        disabled={isDownloading}
-        onClick={(e) => { e.stopPropagation(); handleDownloadDeck(deck); }}
-      >
-        <Download className="h-3.5 w-3.5" />
-        {isDownloading ? '...' : 'Baixar'}
-      </Button>
-    );
   };
 
   return (
@@ -409,10 +359,9 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                           )}
                         </p>
                       </div>
-                      {/* Classification bar placeholder — no user stats in public view */}
                       <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
                     </div>
-                    <DownloadBtn deck={deck} />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
                   </div>
                 );
               }
@@ -453,9 +402,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                       </div>
                       <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
                     </div>
-
-                    {/* Download all button visible when expanded */}
-                    {isExpanded && <DownloadBtn deck={deck} />}
                   </div>
 
                   {/* Sub-decks (expanded) — same as DeckRow sub-decks */}
@@ -487,7 +433,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                             </div>
                             <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1" />
                           </div>
-                          <DownloadBtn deck={sub} />
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
                         </div>
                       ))}
                     </div>
