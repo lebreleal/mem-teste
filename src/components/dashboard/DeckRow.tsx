@@ -286,7 +286,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 <Play className="h-3.5 w-3.5 fill-current" />
               </button>
             )}
-            <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            {!disableManagementActions && (
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            )}
           </div>
         )}
 
