@@ -908,14 +908,14 @@ const Dashboard = () => {
           />
         )}
 
-        {/* Inside Sala: Deck List */}
-        {state.isInsideSala && !isCommunityFolder && (
+        {/* Inside Sala: Deck List (unified for own + community folders) */}
+        {state.isInsideSala && (
           <DeckList
             isLoading={state.isLoading}
             currentDecks={state.currentDecks}
             searchQuery={searchQuery}
-            deckSelectionMode={state.deckSelectionMode}
-            selectedDeckIds={state.selectedDeckIds}
+            deckSelectionMode={isCommunityFolder ? false : state.deckSelectionMode}
+            selectedDeckIds={isCommunityFolder ? new Set<string>() : state.selectedDeckIds}
             expandedDecks={state.expandedDecks}
             toggleExpand={state.toggleExpand}
             toggleDeckSelection={state.toggleDeckSelection}
@@ -923,69 +923,17 @@ const Dashboard = () => {
             getAggregateStats={state.getAggregateStats}
             getCommunityLinkId={state.getCommunityLinkId}
             navigateToCommunity={actions.handleNavigateCommunity}
-            onCreateSubDeck={(deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
-            onRenameDeck={(d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
-            onMoveDeck={(d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
-            onArchiveDeck={(id) => state.archiveDeck.mutate(id)}
-            onDeleteDeck={(d) => actions.handleDeleteDeckRequest(d)}
-            onDetachCommunityDeck={(d) => setDetachTarget({ id: d.id, name: d.name })}
-            onReorderDecks={(reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
+            onCreateSubDeck={isCommunityFolder ? () => {} : (deckId) => { state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(deckId); }}
+            onRenameDeck={isCommunityFolder ? () => {} : (d) => { state.setRenameTarget({ type: 'deck', id: d.id, name: d.name }); state.setRenameName(d.name); }}
+            onMoveDeck={isCommunityFolder ? () => {} : (d) => { state.setMoveTarget({ type: 'deck', id: d.id, name: d.name }); state.setMoveBrowseFolderId(d.folder_id || state.currentFolderId); state.setMoveParentDeckId(null); }}
+            onArchiveDeck={isCommunityFolder ? () => {} : (id) => state.archiveDeck.mutate(id)}
+            onDeleteDeck={isCommunityFolder ? () => {} : (d) => actions.handleDeleteDeckRequest(d)}
+            onDetachCommunityDeck={isCommunityFolder ? undefined : (d) => setDetachTarget({ id: d.id, name: d.name })}
+            onReorderDecks={isCommunityFolder ? undefined : (reordered) => state.reorderDecks.mutate(reordered.map(d => d.id))}
             onPendingClick={handlePendingClick}
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
-
-        {/* Community followed sala: show turma decks in readOnly mode */}
-        {state.isInsideSala && isCommunityFolder && (() => {
-          const cDecks = communityTurmaInfo?.deckStats ?? [];
-          const cRootDecks = cDecks.filter((d: any) => !d.parent_deck_id);
-          const cGetSubDecks = (parentId: string) => cDecks.filter((d: any) => d.parent_deck_id === parentId);
-          const cGetAggStats = (deck: any) => ({ new_count: deck.new_count, learning_count: 0, review_count: 0, reviewed_today: 0 });
-          const noop = () => {};
-          const noopD = (_d: any) => {};
-          const noopS = (_s: string) => {};
-          const getCLinkId = (_d: any) => null as string | null;
-          
-          
-          if (cRootDecks.length === 0) {
-            return (
-              <div className="px-4 pt-3">
-                <div className="rounded-xl border border-dashed border-border py-8 text-center">
-                  <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div className="divide-y divide-border/50">
-              {cRootDecks.map((deck: any) => (
-                <DeckRow
-                  key={deck.id}
-                  deck={deck}
-                  readOnly
-                  readOnlyNavState={{ from: 'dashboard-sala', folderId: state.currentFolderId }}
-                  deckSelectionMode={false}
-                  selectedDeckIds={new Set()}
-                  toggleDeckSelection={noopS}
-                  getSubDecks={cGetSubDecks}
-                  getAggregateStats={cGetAggStats}
-                  getCommunityLinkId={getCLinkId}
-                  navigateToCommunity={noopS}
-                  onCreateSubDeck={noopS}
-                  onRename={noopD}
-                  onMove={noopD}
-                  onArchive={noopS}
-                  onDelete={noopD}
-                  expandedDecks={new Set()}
-                  toggleExpand={noopS}
-                  expandedAccordionId={commAccordionId}
-                  onAccordionToggle={(id) => setCommAccordionId(prev => prev === id ? null : id)}
-                />
-              ))}
-            </div>
-          );
-        })()}
 
         {/* Archived section */}
         {state.totalArchived > 0 && (
