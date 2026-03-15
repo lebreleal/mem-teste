@@ -236,14 +236,11 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
               {hasChildren && (
-                <>
-                  <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
-                  <span>·</span>
-                </>
+                <span>{subDecks.length} {subDecks.length === 1 ? 'deck' : 'decks'}</span>
               )}
               <span className="inline-flex items-center gap-0.5">
                 <Layers className="h-3 w-3" />
-                {totalCards}
+                {totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}
               </span>
               {(() => {
                 const qCount = questionCountMap ? (() => {
@@ -256,13 +253,10 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                   return ids.reduce((sum, id) => sum + (questionCountMap.get(id) ?? 0), 0);
                 })() : 0;
                 return qCount > 0 ? (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-0.5">
-                      <HelpCircle className="h-3 w-3" />
-                      {qCount}
-                    </span>
-                  </>
+                  <span className="inline-flex items-center gap-0.5">
+                    <HelpCircle className="h-3 w-3" />
+                    {qCount} {qCount === 1 ? 'questão' : 'questões'}
+                  </span>
                 ) : null;
               })()}
             </p>
