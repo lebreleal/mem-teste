@@ -219,7 +219,7 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveConfirmSala = () => {
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   // Phase: switching sala
