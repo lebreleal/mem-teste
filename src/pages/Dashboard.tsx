@@ -45,7 +45,7 @@ import { ptBR } from 'date-fns/locale';
 import { useDashboardState } from '@/components/dashboard/useDashboardState';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import DeckList from '@/components/dashboard/DeckList';
+import DeckRow from '@/components/dashboard/DeckRow';
 import SalaList from '@/components/dashboard/SalaList';
 import DashboardDialogs from '@/components/dashboard/DashboardDialogs';
 const PremiumModal = lazy(() => import('@/components/dashboard/PremiumModal'));
