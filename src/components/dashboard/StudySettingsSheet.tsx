@@ -247,7 +247,7 @@ const StudySettingsSheet = ({ open, onOpenChange, decks, getSubDecks, getAggrega
         <Switch checked={item.isEnabled} onCheckedChange={() => toggleEnabled(item.id)} />
       </div>
 
-      {item.isEnabled && renderNewLimitControl(item)}
+      {item.isEnabled && !item.isSubDeck && renderNewLimitControl(item)}
     </div>
   );
 
