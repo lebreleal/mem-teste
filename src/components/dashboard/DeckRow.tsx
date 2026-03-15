@@ -113,6 +113,8 @@ interface DeckRowProps {
   expandedAccordionId?: string | null;
   onAccordionToggle?: (deckId: string) => void;
   questionCountMap?: Map<string, number>;
+  /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
+  readOnly?: boolean;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
@@ -147,6 +149,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   dragHandlers, hasPendingUpdate,
   expandedAccordionId, onAccordionToggle,
   questionCountMap,
+  readOnly = false,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
@@ -275,7 +278,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
 
         {/* Actions on hover for loose decks, always when matéria expanded */}
-        {!isErrorDeck && !deckSelectionMode && (
+        {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
             hasChildren && isExpanded
               ? 'opacity-100'
@@ -341,18 +344,20 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                     className="mt-1"
                   />
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
-                  {subHasDue && (
-                    <button
-                      onClick={(e) => handleStudy(e, sub.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      aria-label="Estudar"
-                    >
-                      <Play className="h-3 w-3 fill-current" />
-                    </button>
-                  )}
-                  <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
+                    {subHasDue && (
+                      <button
+                        onClick={(e) => handleStudy(e, sub.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        aria-label="Estudar"
+                      >
+                        <Play className="h-3 w-3 fill-current" />
+                      </button>
+                    )}
+                    <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                  </div>
+                )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
               </div>
             );
