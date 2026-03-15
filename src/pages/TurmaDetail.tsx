@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
+import { ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   ChevronLeft, ChevronDown, Users, Star,
