@@ -136,24 +136,8 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     staleTime: 60_000,
   });
 
-  // Check which decks user already downloaded
-  const { data: downloadedDeckIds = new Set<string>() } = useQuery({
-    queryKey: ['user-downloaded-turma-decks', turmaId, user?.id],
-    queryFn: async () => {
-      if (!user) return new Set<string>();
-      const { data } = await supabase
-        .from('decks')
-        .select('source_turma_deck_id')
-        .eq('user_id', user.id)
-        .not('source_turma_deck_id', 'is', null);
-      return new Set((data ?? []).map((d: any) => d.source_turma_deck_id));
-    },
-    enabled: !!user && !!turmaId,
-    staleTime: 30_000,
-  });
+  // Check which decks user already downloaded (kept for potential future use)
 
-  // Member count
-  const { data: memberCount = 0 } = useQuery({
     queryKey: ['turma-member-count', turmaId],
     queryFn: async () => {
       const { count } = await supabase.from('turma_members').select('id', { count: 'exact', head: true }).eq('turma_id', turmaId);
