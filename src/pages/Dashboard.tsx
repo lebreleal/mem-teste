@@ -514,13 +514,15 @@ const Dashboard = () => {
     };
 
     for (const deck of state.currentDecks) {
-      collectStudyStats(deck.id);
+      collectStudyStats(deck.id, true);
       totalCards += collectTotalCards(deck.id);
     }
 
     // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
     const newCountToday = newCountTodayByDeckLimits;
-    const totalDue = newCountToday + learningCount + reviewCount;
+    // Cap review count by daily review limit (prevents inflated time estimates)
+    const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
+    const totalDue = newCountToday + learningCount + cappedReviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
