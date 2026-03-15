@@ -458,11 +458,15 @@ const Study = () => {
 
       if (reinforceCards.length === 0) {
         const conceptName = weakest?.name ?? `${card.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
-        reinforceCards = await generateReinforcementCards(conceptName, user.id, {
-          front_content: card.front_content,
-          back_content: card.back_content,
-        });
-        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+        try {
+          reinforceCards = await generateReinforcementCards(conceptName, user.id, {
+            front_content: card.front_content,
+            back_content: card.back_content,
+          });
+          reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+        } catch (genError) {
+          console.error('Leech: AI generation failed, using fallback', genError);
+        }
       }
 
       setLeechMode({
@@ -479,7 +483,8 @@ const Study = () => {
         correctCount: 0,
         wrongCount: 0,
       });
-    } catch {
+    } catch (err) {
+      console.error('Leech: startLeechModeForCard failed', err);
       setLeechMode(prev => prev ? { ...prev, loading: false } : null);
     }
   }, [user]);
