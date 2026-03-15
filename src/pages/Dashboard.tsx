@@ -188,7 +188,7 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
-  const handleTogglePublish = useCallback(async () => {
+  const [publishing, setPublishing] = useState(false);
     if (!user || !state.currentFolderId) return;
     setPublishing(true);
     try {
