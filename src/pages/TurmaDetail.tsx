@@ -350,10 +350,10 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                     <Star className="h-3 w-3 text-warning fill-warning" /> {rating.toFixed(1)}
                   </span>
                 )}
-                {turma?.created_at && (
+                {lastUpdated && (
                   <span className="flex items-center gap-1">
                     <RefreshCw className="h-2.5 w-2.5" />
-                    {(() => { try { return formatDistanceToNow(new Date(turma.created_at), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
+                    {(() => { try { return formatDistanceToNow(new Date(lastUpdated), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
                   </span>
                 )}
               </div>
