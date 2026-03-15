@@ -337,7 +337,7 @@ const DeckMoveDialog = ({
       {currentDeck?.parent_deck_id && (
         <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full gap-2 text-sm">
           <Layers className="h-4 w-4" />
-          Mover para raiz da sala
+          Tirar da matéria (mover para a sala)
         </Button>
       )}
 
