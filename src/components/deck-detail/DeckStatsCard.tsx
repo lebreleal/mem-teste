@@ -22,8 +22,11 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const {
     studyPending, isQuickReview, totalCards, deckId, navigate,
     cardCounts: serverCardCounts,
+    newCountToday, learningCount: ctxLearningCount, masteredToday,
+    dailyReviewLimit,
   } = useDeckDetail();
   const { user } = useAuth();
+  const { realStudyMetrics } = useStudyPlan();
 
   // === Card classification from server-side RPC (handles any deck size) ===
   const diffCounts = useMemo(() => {
