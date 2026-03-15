@@ -190,9 +190,8 @@ const _SubDeckList = ({ parentDeckId, subDecks, allDecks }: { parentDeckId: stri
   const totalSession = totalDue + reviewedToday;
   const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-  // Estimated remaining time
-  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const remainingSeconds = totalDue * avgSec;
+  // Estimated remaining time using real study metrics
+  const remainingSeconds = calculateRealStudyTime(totalNew, totalLearning, totalReview, DEFAULT_STUDY_METRICS);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
