@@ -119,7 +119,75 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
-  const [publishing, setPublishing] = useState(false);
+  // Detect if current folder is a community-followed sala
+  const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+  const sourceTurmaId = currentFolder?.source_turma_id;
+  const isCommunityFolder = !!sourceTurmaId;
+
+  // Fetch turma info + decks for community folders
+  const { data: communityTurmaInfo } = useQuery({
+    queryKey: ['community-folder-turma', sourceTurmaId],
+    queryFn: async () => {
+      const { data: turma } = await supabase.from('turmas').select('id, name, owner_id, cover_image_url').eq('id', sourceTurmaId!).single();
+      if (!turma) return null;
+      // Fetch owner name
+      const { data: profiles } = await supabase.rpc('get_public_profiles' as any, { p_user_ids: [(turma as any).owner_id] });
+      const ownerName = (profiles as any)?.[0]?.name || 'Anônimo';
+      // Fetch published decks
+      const { data: turmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', sourceTurmaId!).eq('is_published', true);
+      const deckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
+      let decks: any[] = [];
+      if (deckIds.length > 0) {
+        const { data: d } = await supabase.from('decks').select('*').in('id', deckIds);
+        // Also fetch child decks
+        const { data: childDecks } = await supabase.from('decks').select('*').in('parent_deck_id', deckIds).eq('is_archived', false);
+        decks = [...(d ?? []), ...(childDecks ?? [])];
+      }
+      // Card counts
+      const allDeckIds = decks.map((d: any) => d.id);
+      const cardCountMap = new Map<string, { total: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
+      if (allDeckIds.length > 0) {
+        const PAGE = 1000;
+        for (let i = 0; i < allDeckIds.length; i += 200) {
+          const batch = allDeckIds.slice(i, i + 200);
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            const { data: cards } = await supabase.from('cards').select('deck_id, state, difficulty').in('deck_id', batch).range(offset, offset + PAGE - 1);
+            for (const c of (cards ?? []) as any[]) {
+              const entry = cardCountMap.get(c.deck_id) ?? { total: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+              entry.total++;
+              if (c.state === 0) entry.novo++;
+              else { const d = c.difficulty ?? 5; if (d <= 3) entry.facil++; else if (d <= 5) entry.bom++; else if (d <= 7) entry.dificil++; else entry.errei++; }
+              cardCountMap.set(c.deck_id, entry);
+            }
+            hasMore = (cards?.length ?? 0) === PAGE;
+            offset += PAGE;
+          }
+        }
+      }
+      // Map to DeckWithStats
+      const deckStats = decks.filter((d: any) => !d.name?.includes('Caderno de Erros')).map((d: any) => {
+        const cc = cardCountMap.get(d.id) ?? { total: 0, novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+        return {
+          id: d.id, name: d.name, created_at: d.created_at, updated_at: d.updated_at,
+          folder_id: d.folder_id, parent_deck_id: deckIds.includes(d.id) ? null : d.parent_deck_id,
+          is_archived: d.is_archived, new_count: cc.novo, learning_count: 0, review_count: 0,
+          reviewed_today: 0, new_reviewed_today: 0, new_graduated_today: 0,
+          daily_new_limit: d.daily_new_limit, daily_review_limit: d.daily_review_limit,
+          total_cards: cc.total, mastered_cards: cc.total - cc.novo,
+          class_novo: cc.novo, class_facil: cc.facil, class_bom: cc.bom, class_dificil: cc.dificil, class_errei: cc.errei,
+        };
+      });
+      // Last updated
+      let lastUpdated = '';
+      for (const d of decks) { if ((d as any).updated_at > lastUpdated) lastUpdated = (d as any).updated_at; }
+      return { ownerName, deckStats, lastUpdated, coverUrl: (turma as any).cover_image_url };
+    },
+    enabled: !!sourceTurmaId,
+    staleTime: 60_000,
+  });
+
   const handleTogglePublish = useCallback(async () => {
     if (!user || !state.currentFolderId) return;
     setPublishing(true);
