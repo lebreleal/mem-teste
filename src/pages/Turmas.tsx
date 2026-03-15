@@ -49,16 +49,17 @@ const SalaCard = ({
             {(sala.question_count ?? 0) > 0 && <span>{sala.question_count} {(sala.question_count ?? 0) === 1 ? 'questão' : 'questões'}</span>}
           </p>
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {sala.owner_name && (
-            <span className="text-[11px] text-muted-foreground">Por <span className="font-medium text-foreground">{sala.owner_name}</span></span>
-          )}
-          {sala.last_updated && (
-            <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
-              <RefreshCw className="h-2.5 w-2.5" /> {formatRelative(sala.last_updated)}
-            </span>
-          )}
-        </div>
+        {sala.owner_name && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Por <span className="font-medium text-foreground">{sala.owner_name}</span>
+          </p>
+        )}
+        {sala.last_updated && (
+          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+            <RefreshCw className="h-2.5 w-2.5" />
+            {formatRelative(sala.last_updated)}
+          </p>
+        )}
       </div>
 
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
