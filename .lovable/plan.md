@@ -155,3 +155,19 @@
 - AI prompts atualizados: IA agora gera descrições contextuais ("Nesta questão, aplicar X permite Y") em vez de definições genéricas
 - UI (`ConceptMasterySection`): busca `context_description` de `question_concepts` em vez de `global_concepts.description`
 - `linkQuestionsToConcepts`: agora insere `context_description` no upsert de `question_concepts`
+
+### 20. Modelo de Cópia Local para Salas Seguidas (Explorar)
+- **RPC `bootstrap_follower_decks`**: Ao seguir uma sala, cria cópias locais dos decks (com `source_turma_deck_id`) e copia cards com `state=0`
+- **Auto-bootstrap no Dashboard**: Ao entrar em uma sala seguida sem decks locais, executa bootstrap automaticamente
+- **Sync incremental**: Ao entrar em uma sala com decks locais, sincroniza novos cards do dono
+- **Stats independentes**: Gauge, estudo e configurações usam os decks/cards LOCAIS do seguidor
+- **Dashboard unificado**: Removido `communityTurmaInfo` com rendering separado; salas seguidas usam o mesmo `DeckList`
+- **Cleanup ao sair**: `cleanupFollowerDecks` deleta decks e cards locais; `review_logs` ficam 30 dias
+
+#### Arquivos Modificados
+| Arquivo | Mudança |
+|---|---|
+| `supabase/migrations/` | RPC `bootstrap_follower_decks` |
+| `src/services/followerBootstrap.ts` | **Novo** — bootstrap, sync incremental, cleanup |
+| `src/pages/TurmaDetail.tsx` | `handleFollow` e `handleStudy` chamam bootstrap após criar folder |
+| `src/pages/Dashboard.tsx` | Auto-bootstrap via useEffect, DeckList unificado, cleanup on leave |
