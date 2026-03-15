@@ -189,6 +189,31 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
+  // Leave sala confirmation
+  const [leaveSalaConfirm, setLeaveSalaConfirm] = useState<{ folderId: string; turmaId: string } | null>(null);
+  const handleLeaveSala = async () => {
+    if (!user || !leaveSalaConfirm) return;
+    const { folderId, turmaId } = leaveSalaConfirm;
+    try {
+      await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
+      await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
+      await supabase.from('folders').delete().eq('id', folderId);
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-members'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-role'] });
+      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-public'] });
+      state.setCurrentFolderId(null);
+      setSearchParams({}, { replace: true });
+      toast({ title: 'Sala removida do seu menu Início', description: 'Suas estatísticas e progresso ficam salvos por 30 dias.' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao sair da sala', variant: 'destructive' });
+    } finally {
+      setLeaveSalaConfirm(null);
+    }
+  };
+
   const [publishing, setPublishing] = useState(false);
   const handleTogglePublish = useCallback(async () => {
     if (!user || !state.currentFolderId) return;
