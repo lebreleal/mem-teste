@@ -366,7 +366,7 @@ const DeckDetailContent = () => {
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
 
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
