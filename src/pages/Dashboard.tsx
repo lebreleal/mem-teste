@@ -1124,7 +1124,7 @@ const Dashboard = () => {
               state.setAiDeckOpen(open);
               if (!open) setPendingReviewData(null);
             }}
-            folderId={pendingReviewData?.folderId ?? null}
+            folderId={pendingReviewData?.folderId ?? state.currentFolderId}
             pendingReviewData={pendingReviewData}
           />
         )}
