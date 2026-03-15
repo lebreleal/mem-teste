@@ -501,6 +501,38 @@ const Dashboard = () => {
                         <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
                           <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={async () => {
+                          let turmaId = userTurma?.id;
+                          let slug = userTurma?.share_slug;
+                          if (!turmaId) {
+                            // Auto-create turma just for sharing
+                            const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+                            const folderName = currentFolder?.name ?? 'Minha Sala';
+                            const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                            const { data: newTurma } = await supabase.from('turmas').insert({
+                              name: folderName, description: '', owner_id: user!.id,
+                              invite_code: inviteCode, is_private: true,
+                            } as any).select('id, share_slug').single();
+                            if (newTurma) {
+                              turmaId = (newTurma as any).id;
+                              slug = (newTurma as any).share_slug;
+                              await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
+                              await refetchTurma();
+                            }
+                          }
+                          if (!slug && turmaId) {
+                            // Generate a share_slug if missing
+                            const generated = turmaId.substring(0, 8);
+                            await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
+                            slug = generated;
+                            await refetchTurma();
+                          }
+                          const link = `${window.location.origin}/c/${slug || turmaId}`;
+                          await navigator.clipboard.writeText(link);
+                          toast({ title: '🔗 Link copiado!' });
+                        }}>
+                          <Share2 className="h-4 w-4 mr-2" /> Compartilhar link
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
                           {userTurma?.is_private === false ? (
                             <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
