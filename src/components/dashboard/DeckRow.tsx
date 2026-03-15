@@ -344,18 +344,20 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                     className="mt-1"
                   />
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
-                  {subHasDue && (
-                    <button
-                      onClick={(e) => handleStudy(e, sub.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      aria-label="Estudar"
-                    >
-                      <Play className="h-3 w-3 fill-current" />
-                    </button>
-                  )}
-                  <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
-                </div>
+                {!readOnly && (
+                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/sub:opacity-100 transition-opacity duration-200">
+                    {subHasDue && (
+                      <button
+                        onClick={(e) => handleStudy(e, sub.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        aria-label="Estudar"
+                      >
+                        <Play className="h-3 w-3 fill-current" />
+                      </button>
+                    )}
+                    <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                  </div>
+                )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
               </div>
             );
