@@ -75,7 +75,28 @@ const Dashboard = () => {
   const planRootIdsRef = useRef<Set<string> | undefined>(undefined);
 
   const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
-  const state = useDashboardState(planRootIds, planDeckOrderEarly);
+  const state = useDashboardState(planRootIdsRef.current, planDeckOrderEarly);
+
+  // Compute planRootIds using state.decks (single source) — update ref for next render
+  const planRootIds = useMemo(() => {
+    if (plans.length === 0 || state.decks.length === 0) return undefined;
+    const deckMap = state.deckMap;
+    const getRootIdLocal = (deckId: string): string | null => {
+      const d = deckMap.get(deckId);
+      if (!d) return null;
+      if (!d.parent_deck_id) return d.id;
+      return getRootIdLocal(d.parent_deck_id);
+    };
+    const rootIds = new Set<string>();
+    for (const id of allDeckIds) {
+      const rootId = getRootIdLocal(id);
+      if (rootId) rootIds.add(rootId);
+    }
+    return rootIds;
+  }, [plans, allDeckIds, state.decks, state.deckMap]);
+
+  // Keep ref in sync for the next render cycle
+  planRootIdsRef.current = planRootIds;
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
