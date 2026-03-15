@@ -20,7 +20,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
-import { useDecks } from '@/hooks/useDecks';
+// useDecks removed — state.decks from useDashboardState is the single source of truth
 import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -71,11 +71,18 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks();
+  // planRootIds computed after state is created (uses state.decks)
+  const planRootIdsRef = useRef<Set<string> | undefined>(undefined);
+
+  const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
+  const state = useDashboardState(planRootIdsRef.current, planDeckOrderEarly);
+
+  // Compute planRootIds using state.decks (single source) — update ref for next render
   const planRootIds = useMemo(() => {
-    if (plans.length === 0 || !allDecks) return undefined;
+    if (plans.length === 0 || state.decks.length === 0) return undefined;
+    const deckMap = state.deckMap;
     const getRootIdLocal = (deckId: string): string | null => {
-      const d = allDecks.find(x => x.id === deckId);
+      const d = deckMap.get(deckId);
       if (!d) return null;
       if (!d.parent_deck_id) return d.id;
       return getRootIdLocal(d.parent_deck_id);
@@ -86,10 +93,10 @@ const Dashboard = () => {
       if (rootId) rootIds.add(rootId);
     }
     return rootIds;
-  }, [plans, allDeckIds, allDecks]);
+  }, [plans, allDeckIds, state.decks, state.deckMap]);
 
-  const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
-  const state = useDashboardState(planRootIds, planDeckOrderEarly);
+  // Keep ref in sync for the next render cycle
+  planRootIdsRef.current = planRootIds;
   const { isPremium, refreshStatus } = useSubscription();
   const { missions } = useMissions();
   const { isAdmin } = useIsAdmin();
@@ -155,27 +162,30 @@ const Dashboard = () => {
 
   // Auto-bootstrap: ensure local deck copies exist for community folders
   const bootstrapDoneRef = useRef(new Set<string>());
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     if (!user || !isCommunityFolder || !sourceTurmaId || !state.currentFolderId) return;
     if (bootstrapDoneRef.current.has(state.currentFolderId)) return;
     bootstrapDoneRef.current.add(state.currentFolderId);
     
     // Check if local decks already exist in this folder
-    const localDecksInFolder = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
+    const localDecksInFolder = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
     if (localDecksInFolder.length > 0) {
-      // Decks exist — run incremental sync in background
-      import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
-        syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
-          if (newCards > 0) {
-            queryClient.invalidateQueries({ queryKey: ['decks'] });
-            toast({ title: `${newCards} novos cartões sincronizados!` });
-          }
-        }).catch(console.error);
-      });
+      // Decks exist — debounce incremental sync (2s delay, non-blocking)
+      syncTimerRef.current = setTimeout(() => {
+        import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
+          syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
+            if (newCards > 0) {
+              queryClient.invalidateQueries({ queryKey: ['decks'] });
+              toast({ title: `${newCards} novos cartões sincronizados!` });
+            }
+          }).catch(console.error);
+        });
+      }, 2000);
       return;
     }
     
-    // No local decks — run full bootstrap
+    // No local decks — run full bootstrap (immediate)
     import('@/services/followerBootstrap').then(({ bootstrapFollowerDecks }) => {
       bootstrapFollowerDecks(user.id, sourceTurmaId, state.currentFolderId!).then((result) => {
         if (result.decks_created > 0) {
@@ -186,6 +196,7 @@ const Dashboard = () => {
         toast({ title: 'Erro ao carregar decks da sala. Tente recarregar a página.', variant: 'destructive' });
       });
     });
+    return () => { if (syncTimerRef.current) clearTimeout(syncTimerRef.current); };
   }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
 
 
@@ -263,7 +274,7 @@ const Dashboard = () => {
       }
 
       // Publishing: sync folder decks to turma_decks
-      const folderDecks = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
+      const folderDecks = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived && !d.parent_deck_id);
       const { data: existingTurmaDecks } = await supabase.from('turma_decks').select('deck_id').eq('turma_id', turmaId!);
       const existingIds = new Set((existingTurmaDecks ?? []).map((td: any) => td.deck_id));
 
@@ -292,7 +303,7 @@ const Dashboard = () => {
     } finally {
       setPublishing(false);
     }
-  }, [user, userTurma, state.currentFolderId, state.folders, allDecks, refetchTurma, queryClient, toast]);
+  }, [user, userTurma, state.currentFolderId, state.folders, state.decks, refetchTurma, queryClient, toast]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
@@ -429,25 +440,27 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Collect all deck IDs in the current sala (including nested sub-decks)
+  // Collect all deck IDs in the current sala (including nested sub-decks) — O(1) via childrenIndex
   const salaDeckIds = useMemo(() => {
     if (!state.isInsideSala) return [] as string[];
     const ids: string[] = [];
+    const childrenIndex = state.childrenIndex;
     const collect = (deckId: string) => {
       ids.push(deckId);
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collect(c.id);
+      const children = childrenIndex.get(deckId) ?? [];
+      for (const c of children) { if (!c.is_archived) collect(c.id); }
     };
     for (const deck of state.currentDecks) collect(deck.id);
     return ids;
-  }, [state.isInsideSala, state.currentDecks, allDecks]);
+  }, [state.isInsideSala, state.currentDecks, state.childrenIndex]);
 
-  // Compute difficulty stats from already-loaded deck data (no extra query)
+  // Compute difficulty stats from already-loaded deck data (no extra query) — O(n) via deckMap
   const salaDifficultyStats = useMemo(() => {
     if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const deckMap = state.deckMap;
     let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
     for (const id of salaDeckIds) {
-      const dk = allDecks.find(d => d.id === id);
+      const dk = deckMap.get(id);
       if (!dk) continue;
       novo += dk.class_novo ?? 0;
       facil += dk.class_facil ?? 0;
@@ -456,11 +469,13 @@ const Dashboard = () => {
       errei += dk.class_errei ?? 0;
     }
     return { novo, facil, bom, dificil, errei };
-  }, [salaDeckIds, allDecks]);
+  }, [salaDeckIds, state.deckMap]);
 
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
     if (!state.isInsideSala) return null;
+    const deckMap = state.deckMap;
+    const childrenIndex = state.childrenIndex;
 
     let rawNewCount = 0;
     let newCountTodayByDeckLimits = 0;
@@ -470,22 +485,20 @@ const Dashboard = () => {
     let totalCards = 0;
 
     const collectTotalCards = (deckId: string): number => {
-      const dk = allDecks.find(d => d.id === deckId);
+      const dk = deckMap.get(deckId);
       if (!dk) return 0;
       let t = dk.total_cards;
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) t += collectTotalCards(c.id);
+      for (const c of (childrenIndex.get(deckId) ?? [])) { if (!c.is_archived) t += collectTotalCards(c.id); }
       return t;
     };
 
     let totalDailyReviewLimit = 0;
     let totalReviewReviewedToday = 0;
 
-    // Helper: collect new_count and new_reviewed_today from a deck and all descendants
     const collectHierarchyNew = (parentId: string): { newCount: number; newReviewed: number } => {
       let nc = 0, nr = 0;
-      const children = allDecks.filter(d => d.parent_deck_id === parentId && !d.is_archived);
-      for (const c of children) {
+      for (const c of (childrenIndex.get(parentId) ?? [])) {
+        if (c.is_archived) continue;
         nc += c.new_count ?? 0;
         nr += c.new_reviewed_today ?? 0;
         const sub = collectHierarchyNew(c.id);
@@ -496,10 +509,9 @@ const Dashboard = () => {
     };
 
     const collectStudyStats = (deckId: string, isRoot: boolean) => {
-      const dk = allDecks.find(d => d.id === deckId);
+      const dk = deckMap.get(deckId);
       if (!dk || dk.is_archived) return;
 
-      // Accumulate learning + review from every deck (root and children)
       learningCount += dk.learning_count ?? 0;
       reviewCount += dk.review_count ?? 0;
       reviewedToday += dk.reviewed_today ?? 0;
@@ -508,24 +520,17 @@ const Dashboard = () => {
 
       if (isRoot) {
         totalDailyReviewLimit += dk.daily_review_limit ?? 100;
-
-        // Collect ALL new_count from this hierarchy (root + all descendants)
         let hierarchyNewCount = dk.new_count ?? 0;
         let hierarchyNewReviewed = dk.new_reviewed_today ?? 0;
         const childNew = collectHierarchyNew(deckId);
         hierarchyNewCount += childNew.newCount;
         hierarchyNewReviewed += childNew.newReviewed;
-
         rawNewCount += hierarchyNewCount;
-
-        // Apply daily_new_limit ONCE for the whole hierarchy
         const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
         newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
       }
 
-      // Recurse for learning/review/reviewedToday (but NOT new — handled above)
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collectStudyStats(c.id, false);
+      for (const c of (childrenIndex.get(deckId) ?? [])) { if (!c.is_archived) collectStudyStats(c.id, false); }
     };
 
     for (const deck of state.currentDecks) {
@@ -533,42 +538,28 @@ const Dashboard = () => {
       totalCards += collectTotalCards(deck.id);
     }
 
-    // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
     const newCountToday = newCountTodayByDeckLimits;
-    // Cap review count by daily review limit (prevents inflated time estimates)
     const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
     const totalDue = newCountToday + learningCount + cappedReviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
-    // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
     const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
       : `${remainingMin}min`;
 
-    // Difficulty-based classification — use sum of classifications as authoritative total
     const ds = salaDifficultyStats ?? { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
     const classifiedTotal = ds.novo + ds.facil + ds.bom + ds.dificil + ds.errei;
-    // Use classified total when available (more accurate), fallback to deck stats
     const effectiveTotal = classifiedTotal > 0 ? classifiedTotal : totalCards;
     const masteredCount = effectiveTotal - ds.novo;
 
     return {
-      newCount: rawNewCount,
-      newCountToday,
-      learningCount,
-      reviewCount,
-      reviewedToday,
-      totalDue,
-      progressPct,
-      timeLabel,
-      totalCards: effectiveTotal,
-      masteredCount,
-      ...ds,
+      newCount: rawNewCount, newCountToday, learningCount, reviewCount, reviewedToday,
+      totalDue, progressPct, timeLabel, totalCards: effectiveTotal, masteredCount, ...ds,
     };
-  }, [state.isInsideSala, state.currentDecks, allDecks, salaDifficultyStats, realStudyMetrics]);
+  }, [state.isInsideSala, state.currentDecks, state.deckMap, state.childrenIndex, salaDifficultyStats, realStudyMetrics]);
 
   // Handle sala click: navigate into it
   const handleSalaClick = useCallback((folderId: string) => {
