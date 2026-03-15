@@ -336,6 +336,19 @@ const Dashboard = () => {
     }
   }, [searchParams]);
 
+  // Listen for "+" button inside own sala → open create deck dialog
+  useEffect(() => {
+    const handler = () => {
+      if (state.isInsideSala && !isCommunityFolder) {
+        state.setCreateType('deck');
+        state.setCreateName('');
+        state.setCreateParentDeckId(null);
+      }
+    };
+    window.addEventListener('open-sala-add-menu', handler);
+    return () => window.removeEventListener('open-sala-add-menu', handler);
+  }, [state.isInsideSala, isCommunityFolder]);
+
   // Handle payment return
   useEffect(() => {
     const payment = searchParams.get('payment');
