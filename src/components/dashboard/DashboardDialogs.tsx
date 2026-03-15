@@ -99,29 +99,29 @@ const FolderBrowser = ({
     : ownMovable;
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
+    <div className="space-y-3 min-w-0">
+      <div className="relative min-w-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar sala..." className="pl-9 h-9 text-sm" />
       </div>
-      <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+      <div className="max-h-64 w-full min-w-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border divide-y divide-border">
         {moveBrowseFolderId && !q && (
           <button onClick={() => {
             const parent = folders.find(f => f.id === moveBrowseFolderId);
             setMoveBrowseFolderId(parent?.parent_id ?? null);
-          }} className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+          }} className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
             <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">Voltar</span>
+            <span className="text-muted-foreground truncate">Voltar</span>
           </button>
         )}
         {filteredFolders.map(f => (
           <button
             key={f.id}
             onClick={() => { setMoveBrowseFolderId(f.id); setSearchQuery(''); }}
-            className="flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+            className="flex w-full max-w-full min-w-0 items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
           >
             <img src={f.image_url || defaultSalaIcon} alt={f.name} className="h-8 w-8 rounded-lg object-cover shrink-0" />
-            <span className="flex-1 text-left font-medium truncate">{f.name}</span>
+            <span className="flex-1 min-w-0 text-left font-medium truncate">{f.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         ))}
@@ -131,9 +131,9 @@ const FolderBrowser = ({
           </div>
         )}
       </div>
-      <div className="flex gap-2 pt-1">
-        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1">Cancelar</Button>
-        <Button size="sm" onClick={onMoveSubmit} className="flex-1">{submitLabel}</Button>
+      <div className="flex gap-2 pt-1 min-w-0">
+        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1 min-w-0">Cancelar</Button>
+        <Button size="sm" onClick={onMoveSubmit} className="flex-1 min-w-0">{submitLabel}</Button>
       </div>
     </div>
   );
