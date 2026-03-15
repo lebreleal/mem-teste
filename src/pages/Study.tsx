@@ -59,6 +59,7 @@ type LeechInterruptionState = {
   leechKey: string;
   failCount: number;
   interruptedAt: string;
+  cardSnapshot?: any; // full card data at interruption time
 };
 
 const Study = () => {
@@ -457,11 +458,15 @@ const Study = () => {
 
       if (reinforceCards.length === 0) {
         const conceptName = weakest?.name ?? `${card.front_content}`.replace(/<[^>]*>/g, '').slice(0, 100);
-        reinforceCards = await generateReinforcementCards(conceptName, user.id, {
-          front_content: card.front_content,
-          back_content: card.back_content,
-        });
-        reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+        try {
+          reinforceCards = await generateReinforcementCards(conceptName, user.id, {
+            front_content: card.front_content,
+            back_content: card.back_content,
+          });
+          reinforceCards = reinforceCards.filter(c => c.id !== card.id).slice(0, 10);
+        } catch (genError) {
+          console.error('Leech: AI generation failed, using fallback', genError);
+        }
       }
 
       setLeechMode({
@@ -478,7 +483,8 @@ const Study = () => {
         correctCount: 0,
         wrongCount: 0,
       });
-    } catch {
+    } catch (err) {
+      console.error('Leech: startLeechModeForCard failed', err);
       setLeechMode(prev => prev ? { ...prev, loading: false } : null);
     }
   }, [user]);
@@ -594,14 +600,6 @@ const Study = () => {
             ));
           }
 
-          // Error deck toasts
-          if (result.movedToError) {
-            toast({ title: '📕 Card movido para o Caderno de Erros', description: 'Domine-o para devolvê-lo ao deck original.' });
-          }
-          if (result.returnedFromError && result.originDeckName) {
-            toast({ title: '✅ Card dominado!', description: `Devolvido ao deck "${result.originDeckName}".` });
-          }
-
           // ── Fase 1a: Sync card review → concept mastery (non-blocking) ──
           if (user) {
             const isCorrect = rating >= 3;
@@ -672,6 +670,7 @@ const Study = () => {
           leechKey,
           failCount: count,
           interruptedAt: new Date().toISOString(),
+          cardSnapshot: { ...currentCard },
         };
 
         // Small delay to let the transition finish before showing modal
@@ -1172,8 +1171,10 @@ const Study = () => {
                   clearLeechInterruption();
                   return;
                 }
-                // Find the card by ID in the queue (it may have moved after the review was submitted)
-                const targetCard = localQueue.find(c => c.id === leechInterruption.cardId) ?? currentCard;
+                // Use stored snapshot first, then try queue, then current card
+                const targetCard = leechInterruption.cardSnapshot
+                  ?? localQueue.find(c => c.id === leechInterruption.cardId)
+                  ?? currentCard;
                 if (!targetCard) {
                   clearLeechInterruption();
                   return;
