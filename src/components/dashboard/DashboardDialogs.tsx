@@ -418,7 +418,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)] w-full max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-w-[calc(100vw-2rem)] w-full">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2 min-w-0">
               <ArrowUpRight className="h-5 w-5 shrink-0" />
