@@ -440,25 +440,27 @@ const Dashboard = () => {
     return total;
   }, [state.currentDecks, state.allRootDecks, state.isInsideSala, state.getAggregateStats]);
 
-  // Collect all deck IDs in the current sala (including nested sub-decks)
+  // Collect all deck IDs in the current sala (including nested sub-decks) — O(1) via childrenIndex
   const salaDeckIds = useMemo(() => {
     if (!state.isInsideSala) return [] as string[];
     const ids: string[] = [];
+    const childrenIndex = state.childrenIndex;
     const collect = (deckId: string) => {
       ids.push(deckId);
-      const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collect(c.id);
+      const children = childrenIndex.get(deckId) ?? [];
+      for (const c of children) { if (!c.is_archived) collect(c.id); }
     };
     for (const deck of state.currentDecks) collect(deck.id);
     return ids;
-  }, [state.isInsideSala, state.currentDecks, allDecks]);
+  }, [state.isInsideSala, state.currentDecks, state.childrenIndex]);
 
-  // Compute difficulty stats from already-loaded deck data (no extra query)
+  // Compute difficulty stats from already-loaded deck data (no extra query) — O(n) via deckMap
   const salaDifficultyStats = useMemo(() => {
     if (salaDeckIds.length === 0) return { novo: 0, facil: 0, bom: 0, dificil: 0, errei: 0 };
+    const deckMap = state.deckMap;
     let novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0;
     for (const id of salaDeckIds) {
-      const dk = allDecks.find(d => d.id === id);
+      const dk = deckMap.get(id);
       if (!dk) continue;
       novo += dk.class_novo ?? 0;
       facil += dk.class_facil ?? 0;
@@ -467,7 +469,7 @@ const Dashboard = () => {
       errei += dk.class_errei ?? 0;
     }
     return { novo, facil, bom, dificil, errei };
-  }, [salaDeckIds, allDecks]);
+  }, [salaDeckIds, state.deckMap]);
 
   // Sala-scoped study stats for the compact study card
   const salaStudyStats = useMemo(() => {
