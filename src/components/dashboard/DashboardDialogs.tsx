@@ -188,10 +188,10 @@ const DeckMoveDialog = ({
     );
   }, [currentFolderId, decks, excludeIds]);
 
-  // All salas for switch mode
+  // All own salas for switch mode (exclude community/followed folders)
   const allSalas = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return folders.filter(f => !f.is_archived && !f.parent_id && (q ? f.name.toLowerCase().includes(q) : true));
+    return folders.filter(f => !f.is_archived && !f.parent_id && !f.source_turma_id && (q ? f.name.toLowerCase().includes(q) : true));
   }, [folders, searchQuery]);
 
   const handleClose = () => {
