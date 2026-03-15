@@ -38,13 +38,10 @@ export const useStudySession = (deckId: string, folderId?: string) => {
       }
     },
     onSettled: () => {
+      // Only invalidate lightweight queries per review.
+      // Heavy deck stats (fetchDecksWithStats) are invalidated on session exit
+      // via invalidateStudyQueries() in Study.tsx goBack/cleanup.
       queryClient.invalidateQueries({ queryKey: ['cards-aggregated'] });
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['decks'] });
-        queryClient.invalidateQueries({ queryKey: ['deck-stats'] });
-        queryClient.invalidateQueries({ queryKey: ['study-stats'] });
-        queryClient.invalidateQueries({ queryKey: ['activity-full'] });
-      }, 10_000);
     },
   });
 
