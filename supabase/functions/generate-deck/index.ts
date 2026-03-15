@@ -384,7 +384,7 @@ ${getOutputExamples(formats)}`;
     // Flash-lite already has inline coverage check; full checklist only for Pro
     const fullPrompt = isFlashLite ? prompt : prompt + coverageChecklist;
 
-    console.log(`Using model: ${selectedModel} (flashLite=${isFlashLite}), textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detail}`);
+    console.log(`Using model: ${selectedModel} (flashLite=${isFlashLite}), textLen: ${trimmedContent.length}, formats: ${formats.join(",")}, detail: ${detailLevel}`);
 
     const aiResponse = await fetchWithRetry(AI_URL, {
       method: "POST",
