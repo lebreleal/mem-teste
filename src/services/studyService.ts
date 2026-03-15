@@ -199,10 +199,13 @@ export async function fetchStudyQueue(
 
   const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
+  const folderRemaining = Math.max(0, folderNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
 
-  const effectiveNewLimit = hasPlanActive ? globalRemaining : deckRemaining;
-  const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
+  const effectiveNewLimit = folderId
+    ? Math.max(0, Math.min(folderRemaining, globalRemaining))
+    : (hasPlanActive ? globalRemaining : deckRemaining);
+  const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
   const buryNew = deckConfig?.bury_new_siblings !== false;

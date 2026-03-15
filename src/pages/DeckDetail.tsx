@@ -496,9 +496,11 @@ const DeckDetailContent = () => {
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-                <Settings className="h-4 w-4" />
-              </Button>
+              {!isLinkedDeck && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 

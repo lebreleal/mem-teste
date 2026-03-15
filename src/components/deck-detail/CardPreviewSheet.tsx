@@ -407,18 +407,26 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { onClose(); setMoveCardId(card.id); }}>
-                <ArrowUpRight className="mr-2 h-4 w-4" /> Mover
-              </DropdownMenuItem>
-              {isFrozenCard(card) && (
-                <DropdownMenuItem onClick={() => { unfreezeCard(card.id); }}>
-                  <Flame className="mr-2 h-4 w-4" /> Descongelar
+              {isLinkedDeck ? (
+                <DropdownMenuItem onClick={() => { setSuggestCard(card); }}>
+                  <PenLine className="mr-2 h-4 w-4" /> Sugerir edição
                 </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => { onClose(); setMoveCardId(card.id); }}>
+                    <ArrowUpRight className="mr-2 h-4 w-4" /> Mover
+                  </DropdownMenuItem>
+                  {isFrozenCard(card) && (
+                    <DropdownMenuItem onClick={() => { unfreezeCard(card.id); }}>
+                      <Flame className="mr-2 h-4 w-4" /> Descongelar
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                  </DropdownMenuItem>
+                </>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

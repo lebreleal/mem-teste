@@ -661,6 +661,7 @@ const DeckSettings = () => {
                 label="Excluir baralho"
                 destructive
                 onClick={() => setDeleteConfirm(true)}
+                disabled={isCommunityDeck}
               />
             </SettingsGroup>
 
