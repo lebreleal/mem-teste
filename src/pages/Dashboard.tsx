@@ -1334,6 +1334,35 @@ const Dashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Add menu sheet for own sala */}
+      <Sheet open={salaAddMenuOpen} onOpenChange={setSalaAddMenuOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold">Adicionar</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-2">
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+            >
+              Criar baralho
+            </button>
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setAiDeckOpen(true); }}
+            >
+              Criar com IA
+            </button>
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+            >
+              Importar cartões
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <BottomNav />
     </div>
   );
