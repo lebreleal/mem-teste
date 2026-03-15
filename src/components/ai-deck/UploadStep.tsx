@@ -1,5 +1,5 @@
 /**
- * Upload step: choose between text input, file upload, or loading a saved source.
+ * Upload step: choose between text input or file upload.
  */
 
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { FileText, Upload, ChevronLeft } from 'lucide-react';
 import { ACCEPTED_FILE_TYPES } from '@/types/ai';
-import AISourceSelector from '@/components/AISourceSelector';
-import type { AISource } from '@/hooks/useAISources';
 import type { RefObject } from 'react';
 
 interface UploadStepProps {
@@ -23,40 +21,34 @@ interface UploadStepProps {
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onTextContinue: () => void;
   selectedSourceId?: string | null;
-  onLoadSource?: (source: AISource | null) => void;
+  onLoadSource?: (source: any) => void;
 }
 
 const UploadStep = ({
   deckName, onDeckNameChange, inputMode, onInputModeChange,
   rawText, onRawTextChange, fileInputRef, onFileSelect, onTextContinue,
-  selectedSourceId, onLoadSource,
 }: UploadStepProps) => (
   <div className="space-y-4">
     <div className="space-y-2">
-      <Label>Nome da coleção</Label>
+      <Label>Nome do deck</Label>
       <Input autoFocus value={deckName} onChange={e => onDeckNameChange(e.target.value)} placeholder="Ex: Calcificações Patológicas 2026" maxLength={100} />
     </div>
 
-    {/* AI Source Selector — load from saved sources */}
-    {onLoadSource && (
-      <AISourceSelector
-        selectedSourceId={selectedSourceId ?? null}
-        onSelectSource={onLoadSource}
-      />
-    )}
-
     {!inputMode && (
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => onInputModeChange('text')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-5 transition-colors hover:border-primary hover:bg-primary/5">
-          <FileText className="h-7 w-7 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Colar texto</span>
-          <span className="text-[10px] text-muted-foreground">Cole o conteúdo diretamente</span>
-        </button>
-        <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-5 transition-colors hover:border-primary hover:bg-primary/5">
-          <Upload className="h-7 w-7 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Enviar arquivo</span>
-          <span className="text-[10px] text-muted-foreground">PDF, PPTX, DOCX, TXT</span>
-        </button>
+      <div className="space-y-2">
+        <Label className="text-xs text-muted-foreground">Envie seu material de estudo</Label>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => onInputModeChange('text')} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-5 transition-colors hover:border-primary hover:bg-primary/5">
+            <FileText className="h-7 w-7 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Colar texto</span>
+            <span className="text-[10px] text-muted-foreground">Cole o conteúdo diretamente</span>
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-5 transition-colors hover:border-primary hover:bg-primary/5">
+            <Upload className="h-7 w-7 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Enviar arquivo</span>
+            <span className="text-[10px] text-muted-foreground">PDF, PPTX, DOCX, TXT</span>
+          </button>
+        </div>
       </div>
     )}
 
