@@ -1105,6 +1105,63 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Share link modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Compartilhar sala</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Slug do link</label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+                <input
+                  type="text"
+                  value={shareSlugEdit}
+                  onChange={(e) => setShareSlugEdit(e.target.value.replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase())}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  placeholder="meu-link"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={async () => {
+                  const link = `${window.location.origin}/c/${shareSlugEdit}`;
+                  await navigator.clipboard.writeText(link);
+                  toast({ title: '🔗 Link copiado!' });
+                }}
+              >
+                Copiar link
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={savingSlug || !shareSlugEdit}
+                onClick={async () => {
+                  if (!userTurma?.id || !shareSlugEdit) return;
+                  setSavingSlug(true);
+                  try {
+                    await supabase.from('turmas').update({ share_slug: shareSlugEdit } as any).eq('id', userTurma.id);
+                    await refetchTurma();
+                    toast({ title: 'Link atualizado!' });
+                    setShareModalOpen(false);
+                  } catch {
+                    toast({ title: 'Erro ao salvar', variant: 'destructive' });
+                  } finally {
+                    setSavingSlug(false);
+                  }
+                }}
+              >
+                {savingSlug ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <BottomNav />
     </div>
   );

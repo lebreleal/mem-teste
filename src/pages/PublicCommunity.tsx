@@ -190,7 +190,7 @@ const PublicCommunity = () => {
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-display font-bold text-foreground truncate">{turma.name}</h1>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-xs text-muted-foreground">Por:</span>
+                <span className="text-xs text-muted-foreground">Por</span>
                 <span className="text-xs font-medium text-foreground">{ownerName}</span>
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
