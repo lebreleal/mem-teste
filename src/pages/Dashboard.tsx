@@ -162,27 +162,30 @@ const Dashboard = () => {
 
   // Auto-bootstrap: ensure local deck copies exist for community folders
   const bootstrapDoneRef = useRef(new Set<string>());
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     if (!user || !isCommunityFolder || !sourceTurmaId || !state.currentFolderId) return;
     if (bootstrapDoneRef.current.has(state.currentFolderId)) return;
     bootstrapDoneRef.current.add(state.currentFolderId);
     
     // Check if local decks already exist in this folder
-    const localDecksInFolder = allDecks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
+    const localDecksInFolder = state.decks.filter(d => d.folder_id === state.currentFolderId && !d.is_archived);
     if (localDecksInFolder.length > 0) {
-      // Decks exist — run incremental sync in background
-      import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
-        syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
-          if (newCards > 0) {
-            queryClient.invalidateQueries({ queryKey: ['decks'] });
-            toast({ title: `${newCards} novos cartões sincronizados!` });
-          }
-        }).catch(console.error);
-      });
+      // Decks exist — debounce incremental sync (2s delay, non-blocking)
+      syncTimerRef.current = setTimeout(() => {
+        import('@/services/followerBootstrap').then(({ syncFollowerDecks }) => {
+          syncFollowerDecks(user.id, state.currentFolderId!).then((newCards) => {
+            if (newCards > 0) {
+              queryClient.invalidateQueries({ queryKey: ['decks'] });
+              toast({ title: `${newCards} novos cartões sincronizados!` });
+            }
+          }).catch(console.error);
+        });
+      }, 2000);
       return;
     }
     
-    // No local decks — run full bootstrap
+    // No local decks — run full bootstrap (immediate)
     import('@/services/followerBootstrap').then(({ bootstrapFollowerDecks }) => {
       bootstrapFollowerDecks(user.id, sourceTurmaId, state.currentFolderId!).then((result) => {
         if (result.decks_created > 0) {
@@ -193,6 +196,7 @@ const Dashboard = () => {
         toast({ title: 'Erro ao carregar decks da sala. Tente recarregar a página.', variant: 'destructive' });
       });
     });
+    return () => { if (syncTimerRef.current) clearTimeout(syncTimerRef.current); };
   }, [user, isCommunityFolder, sourceTurmaId, state.currentFolderId]);
 
 
