@@ -258,11 +258,22 @@ interface Props {
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 
 const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialIndex, open, onClose }, _ref) => {
-  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck } = useDeckDetail();
+  const { openEdit, setDeleteId, setMoveCardId, isFrozenCard, unfreezeCard, deck, decks } = useDeckDetail();
   const isMobile = useIsMobile();
 
-  // Check if this is a community-linked deck
-  const isLinkedDeck = !!(deck?.source_turma_deck_id || deck?.source_listing_id || deck?.is_live_deck);
+  // Check if this is a linked deck (including linked ancestors)
+  const isLinkedDeck = useMemo(() => {
+    if (!deck) return false;
+    if ((deck as any).source_turma_deck_id || (deck as any).source_listing_id || (deck as any).is_live_deck) return true;
+    let parentId = (deck as any).parent_deck_id;
+    while (parentId) {
+      const parent = (decks as any[]).find((d: any) => d.id === parentId);
+      if (!parent) break;
+      if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
+  }, [deck, decks]);
   const [suggestCard, setSuggestCard] = useState<any>(null);
 
   const virtualCards = useMemo(() => {
@@ -396,18 +407,26 @@ const CardPreviewSheet = forwardRef<HTMLDivElement, Props>(({ cards, initialInde
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { onClose(); setMoveCardId(card.id); }}>
-                <ArrowUpRight className="mr-2 h-4 w-4" /> Mover
-              </DropdownMenuItem>
-              {isFrozenCard(card) && (
-                <DropdownMenuItem onClick={() => { unfreezeCard(card.id); }}>
-                  <Flame className="mr-2 h-4 w-4" /> Descongelar
+              {isLinkedDeck ? (
+                <DropdownMenuItem onClick={() => { setSuggestCard(card); }}>
+                  <PenLine className="mr-2 h-4 w-4" /> Sugerir edição
                 </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => { onClose(); setMoveCardId(card.id); }}>
+                    <ArrowUpRight className="mr-2 h-4 w-4" /> Mover
+                  </DropdownMenuItem>
+                  {isFrozenCard(card) && (
+                    <DropdownMenuItem onClick={() => { unfreezeCard(card.id); }}>
+                      <Flame className="mr-2 h-4 w-4" /> Descongelar
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                  </DropdownMenuItem>
+                </>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { onClose(); setDeleteId(card.id); }}>
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -21,10 +21,18 @@ import { toast } from '@/hooks/use-toast';
 const SuggestCorrectionModal = lazy(() => import('@/components/SuggestCorrectionModal'));
 const DeckQuestionsTab = lazy(() => import('@/components/deck-detail/DeckQuestionsTab'));
 
-/** Detect if a deck is linked to a community/marketplace source */
-function checkIsLinkedDeck(deck: any): boolean {
+/** Detect if a deck is linked to a community/marketplace source (including linked ancestors) */
+function checkIsLinkedDeck(deck: any, decks: any[]): boolean {
   if (!deck) return false;
-  return !!(deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck);
+  if (deck.source_turma_deck_id || deck.source_listing_id || deck.is_live_deck) return true;
+  let parentId = deck.parent_deck_id;
+  while (parentId) {
+    const parent = decks.find((d: any) => d.id === parentId);
+    if (!parent) break;
+    if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck) return true;
+    parentId = parent.parent_deck_id;
+  }
+  return false;
 }
 
 /** Resolve source deck ID from a linked deck — single unified query */
@@ -358,7 +366,7 @@ const DeckDetailContent = () => {
   const [renameName, setRenameName] = useState('');
   const [activeTab, setActiveTab] = useState('cards');
 
-  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck), [deck]);
+  const isLinkedDeck = useMemo(() => checkIsLinkedDeck(deck, decks), [deck, decks]);
 
   // Resolve folder image for blurred hero background
   const folderImage = useMemo(() => {
@@ -488,9 +496,11 @@ const DeckDetailContent = () => {
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
-                <Settings className="h-4 w-4" />
-              </Button>
+              {!isLinkedDeck && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/decks/${deckId}/settings`)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 

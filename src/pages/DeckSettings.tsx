@@ -96,6 +96,7 @@ const DeckSettings = () => {
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
   const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
+  const [sourceListingId, setSourceListingId] = useState<string | null>(null);
   const [communityId, setCommunityId] = useState<string | null>(null);
 
   // Modals
@@ -184,6 +185,7 @@ const DeckSettings = () => {
       setIsPublic((data as any).is_public ?? true);
       setAllowDuplication((data as any).allow_duplication ?? false);
       setSourceTurmaDeckId(data.source_turma_deck_id ?? null);
+      setSourceListingId((data as any).source_listing_id ?? null);
       setCommunityId((data as any).community_id ?? null);
       setBuryNewSiblings((data as any).bury_new_siblings !== false);
       setBuryReviewSiblings((data as any).bury_review_siblings !== false);
@@ -283,7 +285,18 @@ const DeckSettings = () => {
     });
   };
 
-  const isCommunityDeck = !!(sourceTurmaDeckId || communityId);
+  const isCommunityDeck = useMemo(() => {
+    if (sourceTurmaDeckId || sourceListingId || communityId) return true;
+    if (!deckId) return false;
+    let parentId = decks.find(d => d.id === deckId)?.parent_deck_id;
+    while (parentId) {
+      const parent = decks.find(d => d.id === parentId) as any;
+      if (!parent) break;
+      if (parent.source_turma_deck_id || parent.source_listing_id || parent.is_live_deck || parent.community_id) return true;
+      parentId = parent.parent_deck_id;
+    }
+    return false;
+  }, [sourceTurmaDeckId, sourceListingId, communityId, deckId, decks]);
 
   const handleDetachDeck = async () => {
     if (!deckId) return;
@@ -547,7 +560,7 @@ const DeckSettings = () => {
             </SettingsGroup>
 
             {/* ── Section: Social ─────────────────────────────── */}
-            {!sourceTurmaDeckId && (
+            {!isCommunityDeck && (
               <SettingsGroup>
                 <SettingsRow
                   icon={<Globe className="h-5 w-5" />}
@@ -586,7 +599,7 @@ const DeckSettings = () => {
             )}
 
             {/* ── Section: IA ─────────────────────────────────── */}
-            {!sourceTurmaDeckId && (
+            {!isCommunityDeck && (
               <SettingsGroup>
                 <SettingsRow
                   icon={<Download className="h-5 w-5" />}
@@ -602,6 +615,7 @@ const DeckSettings = () => {
                 icon={<Edit3 className="h-5 w-5" />}
                 label="Renomear baralho"
                 onClick={() => setRenameModal(true)}
+                disabled={isCommunityDeck}
               />
               {isCommunityDeck ? (
                 <SettingsRow
@@ -621,11 +635,13 @@ const DeckSettings = () => {
                 icon={<RotateCcw className="h-5 w-5" />}
                 label="Redefinir progresso"
                 onClick={() => setResetConfirm(true)}
+                disabled={isCommunityDeck}
               />
               <SettingsRow
                 icon={<Archive className="h-5 w-5" />}
                 label="Arquivar baralho"
                 onClick={handleArchive}
+                disabled={isCommunityDeck}
               />
               <SettingsRow
                 icon={<Upload className="h-5 w-5" />}
@@ -633,6 +649,9 @@ const DeckSettings = () => {
                 subtitle="CSV ou Anki (.apkg)"
                 onClick={() => setExportModal(true)}
               />
+              {isCommunityDeck && (
+                <p className="px-5 pb-2 text-xs text-muted-foreground">Para alterar conteúdo, envie uma sugestão ao dono da sala.</p>
+              )}
             </SettingsGroup>
 
             {/* ── Section: Danger ─────────────────────────────── */}
@@ -642,6 +661,7 @@ const DeckSettings = () => {
                 label="Excluir baralho"
                 destructive
                 onClick={() => setDeleteConfirm(true)}
+                disabled={isCommunityDeck}
               />
             </SettingsGroup>
 

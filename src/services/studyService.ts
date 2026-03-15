@@ -62,6 +62,13 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
+  const scopedDecks = activeDecks.filter(d => limitScopeIds.includes(d.id));
+  const folderNewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
+    : deckNewLimit;
+  const folderReviewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
+    : reviewLimit;
   const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
@@ -192,10 +199,13 @@ export async function fetchStudyQueue(
 
   const hasPlanActive = planDeckIdSet.size > 0;
   const deckRemaining = Math.max(0, deckNewLimit - newReviewedInHierarchy);
+  const folderRemaining = Math.max(0, folderNewLimit - newReviewedInHierarchy);
   const globalRemaining = Math.max(0, globalLimit - globalNewReviewedToday);
 
-  const effectiveNewLimit = hasPlanActive ? globalRemaining : deckRemaining;
-  const effectiveReviewLimit = Math.max(0, reviewLimit - reviewReviewedToday);
+  const effectiveNewLimit = folderId
+    ? Math.max(0, Math.min(folderRemaining, globalRemaining))
+    : (hasPlanActive ? globalRemaining : deckRemaining);
+  const effectiveReviewLimit = Math.max(0, (folderId ? folderReviewLimit : reviewLimit) - reviewReviewedToday);
 
   // --- Apply daily limits FIRST, then bury siblings among the surviving cards ---
   const buryNew = deckConfig?.bury_new_siblings !== false;
