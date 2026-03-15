@@ -13,11 +13,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, GraduationCap, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, RefreshCw } from 'lucide-react';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import type { BreadcrumbItem } from './useDashboardState';
 
-interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null }
+interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null; source_turma_id?: string | null }
 interface MovableDeck { id: string; name: string; parent_deck_id: string | null }
 
 interface DashboardDialogsProps {
@@ -92,9 +92,11 @@ const FolderBrowser = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const q = searchQuery.toLowerCase().trim();
+  const ownFolders = folders.filter(f => !f.source_turma_id);
+  const ownMovable = movableFolders.filter(f => !f.source_turma_id);
   const filteredFolders = q
-    ? folders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
-    : movableFolders;
+    ? ownFolders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
+    : ownMovable;
 
   return (
     <div className="space-y-3">
@@ -188,10 +190,10 @@ const DeckMoveDialog = ({
     );
   }, [currentFolderId, decks, excludeIds]);
 
-  // All salas for switch mode
+  // All own salas for switch mode (exclude community/followed folders)
   const allSalas = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return folders.filter(f => !f.is_archived && !f.parent_id && (q ? f.name.toLowerCase().includes(q) : true));
+    return folders.filter(f => !f.is_archived && !f.parent_id && !f.source_turma_id && (q ? f.name.toLowerCase().includes(q) : true));
   }, [folders, searchQuery]);
 
   const handleClose = () => {
@@ -289,7 +291,6 @@ const DeckMoveDialog = ({
                     onClick={() => handleMoveToMateria(m.id)}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                   >
-                    <GraduationCap className="h-4 w-4 text-primary shrink-0" />
                     <span className="flex-1 text-left truncate">{m.name}</span>
                   </button>
                 ))}
@@ -327,7 +328,6 @@ const DeckMoveDialog = ({
                 onClick={() => handleMoveToMateria(m.id)}
                 className={`flex w-full items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50 transition-colors ${currentDeck?.parent_deck_id === m.id ? 'bg-primary/5' : ''}`}
               >
-                <GraduationCap className="h-4 w-4 text-primary shrink-0" />
                 <span className="flex-1 text-left font-medium truncate">{m.name}</span>
                 {currentDeck?.parent_deck_id === m.id && <span className="text-xs text-primary font-medium shrink-0">Atual</span>}
               </button>
