@@ -365,26 +365,27 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           )}
 
 
-          {/* Study + Follow buttons */}
-          <div className="flex items-center gap-2 mt-3">
+          {/* Study + Join buttons */}
+          <div className="flex items-center gap-3 mt-3">
             {!isFollower && (
-              <Button
+              <button
                 onClick={handleFollow}
                 disabled={following}
-                variant="outline"
-                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+                className="flex flex-col items-center gap-0.5 shrink-0"
               >
-                <Heart className="h-4 w-4" />
-                {following ? 'Seguindo...' : 'Seguir Sala'}
-              </Button>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary text-primary hover:bg-primary/10 transition-colors">
+                  <Plus className="h-5 w-5" />
+                </span>
+                <span className="text-[10px] font-bold text-primary uppercase">Entrar</span>
+              </button>
             )}
             {totalStats.totalCards > 0 && (
               <Button
                 onClick={handleStudy}
-                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+                className="h-12 rounded-full text-sm font-bold gap-2 flex-1"
               >
+                STUDY
                 <Play className="h-4 w-4 fill-current" />
-                ESTUDAR
               </Button>
             )}
           </div>
