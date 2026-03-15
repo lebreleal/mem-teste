@@ -1,6 +1,6 @@
 /**
  * TurmaDetail page — Sala view for community/shared salas.
- * Uses the same hierarchy layout as the Dashboard (matérias expand/collapse).
+ * Uses the EXACT same layout as the Dashboard (matérias expand/collapse, classification bar).
  * Caderno de Erros is always filtered out (private per user).
  */
 
@@ -10,11 +10,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Users, Star, BookOpen,
-  Layers, Heart, Check, FolderOpen, Download, HelpCircle,
+  ChevronLeft, ChevronDown, Users, Star,
+  Layers, Heart, Check, FolderOpen, Download, HelpCircle, Plus, Minus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +27,21 @@ interface PublishedDeck {
   questionCount: number;
   parentDeckId: string | null;
 }
+
+/* ── Classification bar (same as DeckRow) ── */
+const ClassificationBar = ({ facilPct, bomPct, dificilPct, erreiPct, novoPct, className = '' }: {
+  facilPct: number; bomPct: number; dificilPct: number; erreiPct: number; novoPct: number; className?: string;
+}) => (
+  <div className={`relative h-1 w-full overflow-hidden rounded-full bg-muted/30 ${className}`}>
+    <div className="absolute inset-y-0 left-0 flex w-full">
+      {facilPct > 0 && <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />}
+      {bomPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />}
+      {dificilPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />}
+      {erreiPct > 0 && <div className="h-full transition-all duration-500" style={{ width: `${erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />}
+      {novoPct > 0 && <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${novoPct}%` }} />}
+    </div>
+  </div>
+);
 
 // ─── Shared deck list + follow logic ───
 const SalaView = ({ isFollower }: { isFollower: boolean }) => {
@@ -87,7 +101,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             parentDeckId: dk?.parent_deck_id ?? null,
           };
         })
-        // Filter out Caderno de Erros (always private)
         .filter((d: any) => !d.name.includes('Caderno de Erros'));
     },
     enabled: !!turmaId,
@@ -121,7 +134,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     staleTime: 60_000,
   });
 
-  // Build hierarchy: root decks (no parent or parent not in published set) and sub-decks
+  // Build hierarchy
   const { rootDecks, subDeckMap, aggregateStats } = useMemo(() => {
     const publishedIds = new Set(publishedDecks.map(d => d.deckId));
     const roots: PublishedDeck[] = [];
@@ -137,7 +150,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       }
     }
 
-    // Aggregate stats for parent decks (sum of children)
     const stats = new Map<string, { cards: number; questions: number; subCount: number }>();
     for (const root of roots) {
       const children = subs.get(root.deckId) ?? [];
@@ -253,52 +265,34 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     }
   }, [user, turmaId, turma, isMember, downloadDeck, queryClient, toast, navigate]);
 
-  const renderDeckRow = (deck: PublishedDeck, indent = false) => {
+  /* ── Download button for a deck ── */
+  const DownloadBtn = ({ deck }: { deck: PublishedDeck }) => {
     const isDownloaded = downloadedDeckIds.has(deck.turmaDeckId);
     const isDownloading = downloadingDeck === deck.turmaDeckId;
+    if (isDownloaded) {
+      return (
+        <span className="flex items-center gap-1 text-xs text-success font-medium shrink-0">
+          <Check className="h-3.5 w-3.5" /> Baixado
+        </span>
+      );
+    }
     return (
-      <div
-        key={deck.turmaDeckId}
-        className={`flex items-center gap-3 py-3.5 ${indent ? 'pl-8' : ''}`}
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs gap-1.5 shrink-0"
+        disabled={isDownloading}
+        onClick={(e) => { e.stopPropagation(); handleDownloadDeck(deck); }}
       >
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg shrink-0 ${indent ? 'bg-muted/50 text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
-          <BookOpen className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-display font-semibold text-foreground truncate">{deck.name}</h3>
-          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-            <Layers className="h-3 w-3" /> {deck.cardCount} cards
-            {deck.questionCount > 0 && (
-              <>
-                <span className="mx-0.5">·</span>
-                <HelpCircle className="h-3 w-3" /> {deck.questionCount}
-              </>
-            )}
-          </p>
-        </div>
-        {isDownloaded ? (
-          <span className="flex items-center gap-1 text-xs text-success font-medium">
-            <Check className="h-3.5 w-3.5" /> Baixado
-          </span>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs gap-1.5 shrink-0"
-            disabled={isDownloading}
-            onClick={() => handleDownloadDeck(deck)}
-          >
-            <Download className="h-3.5 w-3.5" />
-            {isDownloading ? '...' : 'Baixar'}
-          </Button>
-        )}
-      </div>
+        <Download className="h-3.5 w-3.5" />
+        {isDownloading ? '...' : 'Baixar'}
+      </Button>
     );
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero banner */}
+      {/* Hero banner — identical to Dashboard */}
       <div className="relative bg-muted/50 overflow-hidden">
         <div className="absolute inset-0">
           <img src={coverUrl || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
@@ -308,7 +302,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
         <div className="relative px-4 pt-3 pb-4">
           <div className="flex items-center justify-between mb-3">
             <button
-              onClick={() => navigate('/explorar')}
+              onClick={() => navigate('/turmas')}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -360,67 +354,149 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           </div>
         )}
 
-        {/* Deck hierarchy — mirrors Dashboard DeckList layout */}
-        <div className="px-4">
-          {decksLoading ? (
-            <div className="space-y-1">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
-            </div>
-          ) : rootDecks.length === 0 ? (
+        {/* Deck list — EXACT same layout as Dashboard DeckRow */}
+        {decksLoading ? (
+          <div className="divide-y divide-border/50">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-3 px-4 py-4 animate-pulse">
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="h-4 w-36 rounded bg-muted" />
+                  <div className="h-3 w-20 rounded bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : rootDecks.length === 0 ? (
+          <div className="px-4">
             <div className="rounded-xl border border-dashed border-border py-8 text-center">
               <FolderOpen className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
             </div>
-          ) : (
-            <div className="divide-y divide-border/50">
-              {rootDecks.map((deck) => {
-                const children = subDeckMap.get(deck.deckId) ?? [];
-                const stats = aggregateStats.get(deck.deckId);
-                const isMateria = children.length > 0;
-                const isExpanded = expandedId === deck.deckId;
+          </div>
+        ) : (
+          <div className="divide-y divide-border/50">
+            {rootDecks.map((deck) => {
+              const children = subDeckMap.get(deck.deckId) ?? [];
+              const stats = aggregateStats.get(deck.deckId);
+              const isMateria = children.length > 0;
+              const isExpanded = expandedId === deck.deckId;
+              const totalCards = stats?.cards ?? deck.cardCount;
+              const totalQ = stats?.questions ?? deck.questionCount;
 
-                if (!isMateria) {
-                  // Simple deck row
-                  return renderDeckRow(deck);
-                }
-
-                // Matéria (parent deck with sub-decks) — expandable
+              // For simple decks (no children) — same as DeckRow loose deck
+              if (!isMateria) {
                 return (
-                  <div key={deck.turmaDeckId}>
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : deck.deckId)}
-                      className="w-full flex items-center gap-3 py-3.5 text-left hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center shrink-0">
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-display font-bold text-foreground truncate">{deck.name}</h3>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span>{children.length + 1} decks</span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-0.5"><Layers className="h-3 w-3" /> {stats?.cards ?? 0}</span>
-                          {(stats?.questions ?? 0) > 0 && (
+                  <div
+                    key={deck.turmaDeckId}
+                    className="group flex items-center gap-3 px-4 py-4 transition-all hover:bg-muted/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-0.5">
+                            <Layers className="h-3 w-3" />
+                            {deck.cardCount}
+                          </span>
+                          {deck.questionCount > 0 && (
                             <>
                               <span>·</span>
-                              <span className="inline-flex items-center gap-0.5"><HelpCircle className="h-3 w-3" /> {stats?.questions ?? 0}</span>
+                              <span className="inline-flex items-center gap-0.5">
+                                <HelpCircle className="h-3 w-3" />
+                                {deck.questionCount}
+                              </span>
                             </>
                           )}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </button>
-                    {isExpanded && (
-                      <div className="divide-y divide-border/30 border-l-2 border-primary/20 ml-2">
-                        {children.map(child => renderDeckRow(child, true))}
-                      </div>
-                    )}
+                      {/* Classification bar placeholder — no user stats in public view */}
+                      <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
+                    </div>
+                    <DownloadBtn deck={deck} />
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </div>
+              }
+
+              // Matéria (parent deck with sub-decks) — same as DeckRow with children
+              return (
+                <div key={deck.turmaDeckId}>
+                  <div
+                    className="group flex items-center gap-3 px-4 py-4 cursor-pointer transition-all hover:bg-muted/50"
+                    onClick={() => setExpandedId(isExpanded ? null : deck.deckId)}
+                  >
+                    {/* +/- expand icon — same as Dashboard */}
+                    {isExpanded
+                      ? <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
+                      : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                    }
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold text-foreground truncate">{deck.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                          <span>{children.length} {children.length === 1 ? 'deck' : 'decks'}</span>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-0.5">
+                            <Layers className="h-3 w-3" />
+                            {totalCards}
+                          </span>
+                          {totalQ > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-0.5">
+                                <HelpCircle className="h-3 w-3" />
+                                {totalQ}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1.5" />
+                    </div>
+
+                    {/* Download all button visible when expanded */}
+                    {isExpanded && <DownloadBtn deck={deck} />}
+                  </div>
+
+                  {/* Sub-decks (expanded) — same as DeckRow sub-decks */}
+                  {isExpanded && (
+                    <div className="bg-muted/30">
+                      {children.map(sub => (
+                        <div
+                          key={sub.turmaDeckId}
+                          className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 transition-colors hover:bg-muted/50 border-t border-border/30"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-medium text-foreground truncate">{sub.name}</h4>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+                                <Layers className="h-3 w-3" />
+                                {sub.cardCount}
+                              </span>
+                              {sub.questionCount > 0 && (
+                                <>
+                                  <span className="text-[11px] text-muted-foreground">·</span>
+                                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5">
+                                    <HelpCircle className="h-3 w-3" />
+                                    {sub.questionCount}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <ClassificationBar facilPct={0} bomPct={0} dificilPct={0} erreiPct={0} novoPct={100} className="mt-1" />
+                          </div>
+                          <DownloadBtn deck={sub} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
