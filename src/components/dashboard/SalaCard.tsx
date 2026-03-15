@@ -54,9 +54,9 @@ const SalaCard = ({ name, deckCount, totalCards, masteredCards, questionCount, d
             {totalCards > 0 && <span>{totalCards} {totalCards === 1 ? 'cartão' : 'cartões'}</span>}
             {questionCount > 0 && <span>{questionCount} {questionCount === 1 ? 'questão' : 'questões'}</span>}
           </p>
-          {!isCommunity && <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>}
+          <span className="text-xs text-muted-foreground ml-auto">{masteryPct}%</span>
         </div>
-        {!isCommunity && <Progress value={masteryPct} className="h-1 mt-1.5" />}
+        <Progress value={masteryPct} className="h-1 mt-1.5" />
         {ownerName && (
           <p className="text-[11px] text-muted-foreground mt-0.5">
             Por <span className="font-medium text-foreground">{ownerName}</span>
