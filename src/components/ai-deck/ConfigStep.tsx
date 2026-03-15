@@ -220,6 +220,7 @@ const ConfigStep = ({
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
               <p><span className="font-bold text-foreground">{selectedPageCount}</span> páginas · <span className="font-bold text-foreground">{getCost(CREDITS_PER_PAGE, isPremium)}</span> créditos por página</p>
               <p>Total: <span className="font-bold" style={{ color: 'hsl(var(--energy-purple))' }}>{totalCredits} créditos IA</span></p>
+              <p>Disponível agora: <span className="font-bold text-foreground tabular-nums">{energy}</span> créditos</p>
             </div>
           </div>
         )}
