@@ -273,19 +273,47 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
 
   const allDeckIds = useMemo(() => [deckId, ...descendantIds], [deckId, descendantIds]);
 
+  // Detect community deck (belongs to another user) — RPCs filter by auth.uid(), so use direct queries instead
+  const isCommunityDeck = !!deck && !!user && (deck as any).user_id !== user.id;
+
   const CARDS_PAGE = 200;
   const [displayLimit, setDisplayLimit] = useState(CARDS_PAGE);
 
+  // Card counts: use RPC for own decks, direct query for community decks
   const { data: cardCounts, isLoading: cardCountsLoading } = useQuery({
-    queryKey: ['card-counts', deckId],
-    queryFn: () => cardService.fetchDescendantCardCounts(deckId),
-    enabled: !!user && !!deckId,
+    queryKey: ['card-counts', deckId, isCommunityDeck],
+    queryFn: async () => {
+      if (isCommunityDeck) {
+        // Direct query — RLS allows viewing community deck cards
+        const cards = await cardService.fetchCards(deckId);
+        return {
+          total: cards.length,
+          new_count: cards.filter((c: any) => c.state === 0).length,
+          learning_count: cards.filter((c: any) => c.state === 1 || c.state === 3).length,
+          review_count: cards.filter((c: any) => c.state === 2 && new Date(c.scheduled_date) <= new Date()).length,
+          basic_count: cards.filter((c: any) => c.card_type === 'basic').length,
+          cloze_count: cards.filter((c: any) => c.card_type === 'cloze').length,
+          mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
+          occlusion_count: cards.filter((c: any) => c.card_type === 'occlusion').length,
+          frozen_count: 0,
+        } as cardService.DescendantCardCounts;
+      }
+      return cardService.fetchDescendantCardCounts(deckId);
+    },
+    enabled: !!user && !!deckId && !deckLoading,
   });
 
+  // Display cards: use RPC for own decks, direct query for community decks
   const { data: displayCards = [], isLoading: displayCardsLoading } = useQuery({
-    queryKey: ['cards-display', deckId, displayLimit],
-    queryFn: () => cardService.fetchDescendantCardsPage(deckId, displayLimit, 0),
-    enabled: !!user && !!deckId,
+    queryKey: ['cards-display', deckId, displayLimit, isCommunityDeck],
+    queryFn: async () => {
+      if (isCommunityDeck) {
+        const cards = await cardService.fetchCards(deckId);
+        return cards.slice(0, displayLimit) as cardService.CardRow[];
+      }
+      return cardService.fetchDescendantCardsPage(deckId, displayLimit, 0);
+    },
+    enabled: !!user && !!deckId && !deckLoading,
   });
 
   const allCardsLoading = cardCountsLoading || displayCardsLoading;
