@@ -380,7 +380,7 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle className="font-display text-center">
-              {props.createType === 'folder' ? 'Nomeie sua nova classe' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+              {props.createType === 'folder' ? 'Nomeie sua nova classe' : props.createParentDeckId === '__materia__' ? 'Nova Matéria' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
             </DialogTitle>
             {props.createType === 'folder' && (
               <p className="text-sm text-muted-foreground text-center pt-1">

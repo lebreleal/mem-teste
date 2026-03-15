@@ -1340,24 +1340,34 @@ const Dashboard = () => {
           <SheetHeader className="mb-4">
             <SheetTitle className="text-base font-bold">Adicionar</SheetTitle>
           </SheetHeader>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <button
-              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
               onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
             >
-              Criar baralho
+              <span className="text-sm font-medium text-foreground">Criar baralho</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Um baralho de flashcards para estudar</span>
             </button>
             <button
-              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
+            >
+              <span className="text-sm font-medium text-foreground">Criar matéria</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Agrupa baralhos relacionados em uma pasta organizacional</span>
+            </button>
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
               onClick={() => { setSalaAddMenuOpen(false); state.setAiDeckOpen(true); }}
             >
-              Criar com IA
+              <span className="text-sm font-medium text-foreground">Criar com IA</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Gere flashcards automaticamente a partir de um tema</span>
             </button>
             <button
-              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted"
               onClick={() => { setSalaAddMenuOpen(false); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
             >
-              Importar cartões
+              <span className="text-sm font-medium text-foreground">Importar cartões</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Importe de arquivos Anki, CSV ou texto</span>
             </button>
           </div>
         </SheetContent>
