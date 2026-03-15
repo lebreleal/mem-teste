@@ -434,6 +434,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 key={deck.id}
                 deck={deck}
                 readOnly
+                readOnlyNavState={{ from: 'community', turmaId }}
                 deckSelectionMode={false}
                 selectedDeckIds={new Set()}
                 toggleDeckSelection={noopStr}
