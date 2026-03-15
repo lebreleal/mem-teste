@@ -96,6 +96,7 @@ const DeckSettings = () => {
   const [saving, setSaving] = useState(false);
   const [parentDeckId, setParentDeckId] = useState<string | null>(null);
   const [sourceTurmaDeckId, setSourceTurmaDeckId] = useState<string | null>(null);
+  const [sourceListingId, setSourceListingId] = useState<string | null>(null);
   const [communityId, setCommunityId] = useState<string | null>(null);
 
   // Modals

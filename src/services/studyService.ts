@@ -62,6 +62,13 @@ export async function fetchStudyQueue(
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
+  const scopedDecks = activeDecks.filter(d => limitScopeIds.includes(d.id));
+  const folderNewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
+    : deckNewLimit;
+  const folderReviewLimit = folderId
+    ? scopedDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
+    : reviewLimit;
   const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
