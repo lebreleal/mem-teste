@@ -336,78 +336,7 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
   const allCardsLoading = cardCountsLoading || displayCardsLoading;
   const allCards = displayCards;
 
-  // ─── Auto-sync: sync community decks (this deck + descendant community sub-decks) ───
-  const syncAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (syncAttemptedRef.current) return;
-    if (!deck || !user || !decks.length) return;
-    syncAttemptedRef.current = true;
-
-    // Collect all community decks in this hierarchy that might need syncing
-    const communityDecksToSync: { deckId: string; sourceTurmaDeckId: string | null; isLiveDeck: boolean; name: string }[] = [];
-
-    const collectCommunityDecks = (id: string) => {
-      const d = id === deckId ? deck : decks.find(dk => dk.id === id);
-      if (!d) return;
-      const src = (d as any).source_turma_deck_id;
-      const live = !!(d as any).is_live_deck;
-      if (src || live) {
-        communityDecksToSync.push({ deckId: id, sourceTurmaDeckId: src, isLiveDeck: live, name: (d as any).name });
-      }
-      const children = decks.filter(dk => dk.parent_deck_id === id && !dk.is_archived);
-      for (const child of children) collectCommunityDecks(child.id);
-    };
-    collectCommunityDecks(deckId);
-
-    if (communityDecksToSync.length === 0) return;
-
-    (async () => {
-      try {
-        // Check which of these decks have 0 cards
-        const idsToCheck = communityDecksToSync.map(d => d.deckId);
-        const { data: cardCountsData } = await supabase.rpc('count_cards_per_deck', { p_deck_ids: idsToCheck });
-        const countMap = new Map<string, number>();
-        if (cardCountsData) {
-          for (const row of cardCountsData as any[]) countMap.set(row.deck_id, row.card_count);
-        }
-
-        const emptyDecks = communityDecksToSync.filter(d => !countMap.has(d.deckId) || countMap.get(d.deckId) === 0);
-        if (emptyDecks.length === 0) return;
-
-        let synced = false;
-        for (const communityDeck of emptyDecks) {
-          let sourceDeckId: string | null = null;
-          if (communityDeck.sourceTurmaDeckId) {
-            const { data: td } = await supabase.from('turma_decks').select('deck_id').eq('id', communityDeck.sourceTurmaDeckId).maybeSingle();
-            sourceDeckId = td?.deck_id ?? null;
-          }
-          if (!sourceDeckId && communityDeck.isLiveDeck) {
-            const { data: candidates } = await supabase.from('decks').select('id').eq('name', communityDeck.name).eq('is_public', true).neq('user_id', user.id).limit(1);
-            sourceDeckId = candidates?.[0]?.id ?? null;
-          }
-          if (!sourceDeckId) continue;
-
-          const BATCH = 500;
-          let offset = 0;
-          let hasMore = true;
-          while (hasMore) {
-            const { data: cards } = await supabase.from('cards').select('front_content, back_content, card_type').eq('deck_id', sourceDeckId).range(offset, offset + BATCH - 1).order('created_at', { ascending: true });
-            if (!cards || cards.length === 0) { hasMore = false; break; }
-            await supabase.from('cards').insert(cards.map((c: any) => ({ deck_id: communityDeck.deckId, front_content: c.front_content, back_content: c.back_content, card_type: c.card_type ?? 'basic', state: 0, stability: 0, difficulty: 0 })) as any);
-            if (cards.length < BATCH) hasMore = false;
-            else offset += BATCH;
-          }
-          synced = true;
-        }
-
-        if (synced) {
-          queryClient.invalidateQueries({ queryKey: ['card-counts', deckId] });
-          queryClient.invalidateQueries({ queryKey: ['cards-display', deckId] });
-          queryClient.invalidateQueries({ queryKey: ['decks'] });
-        }
-      } catch (e) { console.error('Auto-sync cards failed:', e); }
-    })();
-  }, [deck, user, decks, deckId, queryClient]);
+  // Legacy auto-sync removed — bootstrap_follower_decks RPC handles card copying now
 
   const loadMoreCards = useCallback(() => { setDisplayLimit(prev => prev + CARDS_PAGE); }, []);
 
