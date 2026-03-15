@@ -92,9 +92,11 @@ const FolderBrowser = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const q = searchQuery.toLowerCase().trim();
+  const ownFolders = folders.filter(f => !f.source_turma_id);
+  const ownMovable = movableFolders.filter(f => !f.source_turma_id);
   const filteredFolders = q
-    ? folders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
-    : movableFolders;
+    ? ownFolders.filter(f => !f.is_archived && f.name.toLowerCase().includes(q))
+    : ownMovable;
 
   return (
     <div className="space-y-3">
