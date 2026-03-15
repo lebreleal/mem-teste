@@ -71,22 +71,8 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plans, allDeckIds, avgSecondsPerCard, realStudyMetrics, metrics, globalCapacity } = useStudyPlan();
-  const { decks: allDecks } = useDecks();
-  const planRootIds = useMemo(() => {
-    if (plans.length === 0 || !allDecks) return undefined;
-    const getRootIdLocal = (deckId: string): string | null => {
-      const d = allDecks.find(x => x.id === deckId);
-      if (!d) return null;
-      if (!d.parent_deck_id) return d.id;
-      return getRootIdLocal(d.parent_deck_id);
-    };
-    const rootIds = new Set<string>();
-    for (const id of allDeckIds) {
-      const rootId = getRootIdLocal(id);
-      if (rootId) rootIds.add(rootId);
-    }
-    return rootIds;
-  }, [plans, allDeckIds, allDecks]);
+  // planRootIds computed after state is created (uses state.decks)
+  const planRootIdsRef = useRef<Set<string> | undefined>(undefined);
 
   const planDeckOrderEarly = useMemo(() => plans.flatMap(p => p.deck_ids ?? []), [plans]);
   const state = useDashboardState(planRootIds, planDeckOrderEarly);
