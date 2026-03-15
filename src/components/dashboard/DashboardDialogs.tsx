@@ -379,18 +379,27 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
       <Dialog open={!!props.createType} onOpenChange={open => { if (!open) { props.setCreateType(null); props.setCreateParentDeckId(null); } }}>
         <DialogContent className="sm:max-w-md max-w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle className="font-display">
-              {props.createType === 'folder' ? 'Nova Sala' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
+            <DialogTitle className="font-display text-center">
+              {props.createType === 'folder' ? 'Nomeie sua nova classe' : props.createParentDeckId ? 'Novo Sub-deck' : 'Novo Baralho'}
             </DialogTitle>
+            {props.createType === 'folder' && (
+              <p className="text-sm text-muted-foreground text-center pt-1">
+                Uma classe é um lugar para guardar seus decks de flashcards. (ex: "Biologia 101", "Fatos Aleatórios", "Treinamento Empresa", etc.)
+              </p>
+            )}
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); props.onCreateSubmit(); }} className="space-y-4">
             <div className="space-y-2">
-              <Label>Nome</Label>
-              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? 'Ex: Medicina' : 'Ex: Vocabulário'} autoFocus maxLength={100} />
+              {props.createType !== 'folder' && <Label>Nome</Label>}
+              <Input value={props.createName} onChange={e => props.setCreateName(e.target.value)} placeholder={props.createType === 'folder' ? "ex: 'Medicina 101'" : 'Ex: Vocabulário'} autoFocus maxLength={100} />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { props.setCreateType(null); props.setCreateParentDeckId(null); }}>Cancelar</Button>
-              <Button type="submit" disabled={!props.createName.trim() || props.isCreating}>Criar</Button>
+            <div className={props.createType === 'folder' ? 'flex justify-center' : 'flex justify-end gap-2'}>
+              {props.createType !== 'folder' && (
+                <Button type="button" variant="outline" onClick={() => { props.setCreateType(null); props.setCreateParentDeckId(null); }}>Cancelar</Button>
+              )}
+              <Button type="submit" disabled={!props.createName.trim() || props.isCreating} className={props.createType === 'folder' ? 'px-8' : ''}>
+                {props.createType === 'folder' ? 'PRÓXIMO' : 'Criar'}
+              </Button>
             </div>
           </form>
         </DialogContent>
