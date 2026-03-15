@@ -189,6 +189,31 @@ const Dashboard = () => {
     staleTime: 60_000,
   });
 
+  // Leave sala confirmation
+  const [leaveSalaConfirm, setLeaveSalaConfirm] = useState<{ folderId: string; turmaId: string } | null>(null);
+  const handleLeaveSala = async () => {
+    if (!user || !leaveSalaConfirm) return;
+    const { folderId, turmaId } = leaveSalaConfirm;
+    try {
+      await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
+      await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
+      await supabase.from('folders').delete().eq('id', folderId);
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-members'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-role'] });
+      queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
+      queryClient.invalidateQueries({ queryKey: ['turma-public'] });
+      state.setCurrentFolderId(null);
+      setSearchParams({}, { replace: true });
+      toast({ title: 'Sala removida do seu menu Início', description: 'Suas estatísticas e progresso ficam salvos por 30 dias.' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao sair da sala', variant: 'destructive' });
+    } finally {
+      setLeaveSalaConfirm(null);
+    }
+  };
+
   const [publishing, setPublishing] = useState(false);
   const handleTogglePublish = useCallback(async () => {
     if (!user || !state.currentFolderId) return;
@@ -652,17 +677,7 @@ const Dashboard = () => {
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={async () => {
-                                if (!user || !sourceTurmaId) return;
-                                await supabase.from('turma_members').delete().eq('turma_id', sourceTurmaId).eq('user_id', user.id);
-                                await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.currentFolderId!);
-                                await supabase.from('folders').delete().eq('id', state.currentFolderId!);
-                                queryClient.invalidateQueries({ queryKey: ['folders'] });
-                                queryClient.invalidateQueries({ queryKey: ['turma-members'] });
-                                state.setCurrentFolderId(null);
-                                setSearchParams({}, { replace: true });
-                                toast({ title: 'Sala removida do seu menu Início' });
-                              }}
+                              onClick={() => setLeaveSalaConfirm({ folderId: state.currentFolderId!, turmaId: sourceTurmaId! })}
                             >
                               <LogOut className="h-4 w-4 mr-2" /> Sair da sala
                             </DropdownMenuItem>
@@ -1323,6 +1338,27 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Leave Sala Confirmation */}
+      <AlertDialog open={!!leaveSalaConfirm} onOpenChange={(open) => { if (!open) setLeaveSalaConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da sala?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span>Tem certeza que deseja sair desta sala?</span>
+              <span className="block text-sm font-medium text-foreground/80 mt-2">
+                📊 Suas estatísticas e progresso de estudo ficam salvos por 30 dias. Se voltar a entrar nesse período, tudo estará como antes.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveSala} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sair da sala
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
