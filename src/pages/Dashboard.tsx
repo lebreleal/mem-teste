@@ -303,7 +303,7 @@ const Dashboard = () => {
     } finally {
       setPublishing(false);
     }
-  }, [user, userTurma, state.currentFolderId, state.folders, allDecks, refetchTurma, queryClient, toast]);
+  }, [user, userTurma, state.currentFolderId, state.folders, state.decks, refetchTurma, queryClient, toast]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [detachTarget, setDetachTarget] = useState<{ id: string; name: string } | null>(null);
