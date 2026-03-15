@@ -361,8 +361,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                   <span>{totalStats.totalQuestions} questões</span>
                 </>
               )}
-              <span>·</span>
-              <span>{totalStats.progressPct}% revisado</span>
             </div>
           )}
 
