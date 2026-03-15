@@ -200,6 +200,9 @@ const Dashboard = () => {
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareSlugEdit, setShareSlugEdit] = useState('');
+  const [savingSlug, setSavingSlug] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
@@ -513,9 +516,8 @@ const Dashboard = () => {
                             slug = generated;
                             await refetchTurma();
                           }
-                          const link = `${window.location.origin}/c/${slug || turmaId}`;
-                          await navigator.clipboard.writeText(link);
-                          toast({ title: '🔗 Link copiado!' });
+                          setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
+                          setShareModalOpen(true);
                         }}
                         className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
                         aria-label="Compartilhar link da sala"
@@ -591,7 +593,7 @@ const Dashboard = () => {
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-muted-foreground">Por:</span>
+                        <span className="text-xs text-muted-foreground">Por</span>
                         <span className="text-xs font-medium text-foreground">{userName}</span>
                         <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
                           {avatarUrl ? (
@@ -1099,6 +1101,63 @@ const Dashboard = () => {
             >
               Salvar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share link modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Compartilhar sala</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Slug do link</label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">{window.location.origin}/c/</span>
+                <input
+                  type="text"
+                  value={shareSlugEdit}
+                  onChange={(e) => setShareSlugEdit(e.target.value.replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase())}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  placeholder="meu-link"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={async () => {
+                  const link = `${window.location.origin}/c/${shareSlugEdit}`;
+                  await navigator.clipboard.writeText(link);
+                  toast({ title: '🔗 Link copiado!' });
+                }}
+              >
+                Copiar link
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={savingSlug || !shareSlugEdit}
+                onClick={async () => {
+                  if (!userTurma?.id || !shareSlugEdit) return;
+                  setSavingSlug(true);
+                  try {
+                    await supabase.from('turmas').update({ share_slug: shareSlugEdit } as any).eq('id', userTurma.id);
+                    await refetchTurma();
+                    toast({ title: 'Link atualizado!' });
+                    setShareModalOpen(false);
+                  } catch {
+                    toast({ title: 'Erro ao salvar', variant: 'destructive' });
+                  } finally {
+                    setSavingSlug(false);
+                  }
+                }}
+              >
+                {savingSlug ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

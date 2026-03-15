@@ -1,6 +1,6 @@
 /**
  * Explorar Salas — lista Salas publicadas.
- * Layout idêntico ao SalaCard do Dashboard, mas com "por: criador" no lugar de %.
+ * Layout idêntico ao SalaCard do Dashboard.
  */
 
 import { useState } from 'react';
@@ -22,7 +22,7 @@ const SalaCard = ({
   sala,
   onClick,
 }: {
-  sala: Turma & { member_count?: number; card_count?: number; deck_count?: number; owner_name?: string };
+  sala: Turma & { member_count?: number; card_count?: number; deck_count?: number; question_count?: number; owner_name?: string; last_updated?: string };
   onClick: () => void;
 }) => {
   const cover = sala.cover_image_url || defaultSalaIcon;
@@ -35,7 +35,7 @@ const SalaCard = ({
       <img
         src={cover}
         alt={sala.name}
-        className="h-10 w-10 rounded-xl object-cover shrink-0"
+        className="h-12 w-12 rounded-xl object-cover shrink-0"
         loading="lazy"
         decoding="async"
       />
@@ -54,11 +54,26 @@ const SalaCard = ({
                 </span>
               </>
             )}
+            {(sala.question_count ?? 0) > 0 && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <HelpCircle className="h-3 w-3" />
+                  {sala.question_count}
+                </span>
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {sala.owner_name && (
-            <span className="text-[11px] text-muted-foreground">por: <span className="font-medium text-foreground">{sala.owner_name}</span></span>
+            <span className="text-[11px] text-muted-foreground">por <span className="font-medium text-foreground">{sala.owner_name}</span></span>
+          )}
+          {sala.last_updated && (
+            <>
+              <span className="text-[11px] text-muted-foreground">·</span>
+              <span className="text-[11px] text-muted-foreground">{formatRelative(sala.last_updated)}</span>
+            </>
           )}
         </div>
       </div>
