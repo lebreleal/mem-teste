@@ -354,7 +354,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                         <Play className="h-3 w-3 fill-current" />
                       </button>
                     )}
-                    {!disableManagementActions && (
+                    {!effectiveDisableManagement && (
                       <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
                     )}
                   </div>
