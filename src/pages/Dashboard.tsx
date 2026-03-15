@@ -16,6 +16,7 @@ import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { showGlobalLoading, hideGlobalLoading } from '@/components/GlobalLoading';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useStudyPlan } from '@/hooks/useStudyPlan';
@@ -341,13 +342,12 @@ const Dashboard = () => {
     }
   }, [searchParams]);
 
-  // Listen for "+" button inside own sala → open create deck dialog
+  // Listen for "+" button inside own sala → open add menu sheet
+  const [salaAddMenuOpen, setSalaAddMenuOpen] = useState(false);
   useEffect(() => {
     const handler = () => {
       if (state.isInsideSala && !isCommunityFolder) {
-        state.setCreateType('deck');
-        state.setCreateName('');
-        state.setCreateParentDeckId(null);
+        setSalaAddMenuOpen(true);
       }
     };
     window.addEventListener('open-sala-add-menu', handler);
@@ -1333,6 +1333,35 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add menu sheet for own sala */}
+      <Sheet open={salaAddMenuOpen} onOpenChange={setSalaAddMenuOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold">Adicionar</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-2">
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+            >
+              Criar baralho
+            </button>
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setAiDeckOpen(true); }}
+            >
+              Criar com IA
+            </button>
+            <button
+              className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={() => { setSalaAddMenuOpen(false); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+            >
+              Importar cartões
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <BottomNav />
     </div>
