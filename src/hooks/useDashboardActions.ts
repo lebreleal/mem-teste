@@ -165,20 +165,21 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
     }
   }, [state, queryClient, toast]);
 
-  const handleMoveSubmit = useCallback(() => {
+  const handleMoveSubmit = useCallback((overrideParentDeckId?: string | null) => {
     if (!state.moveTarget) {
       console.warn('[Move] No moveTarget set');
       return;
     }
     if (state.moveTarget.type === 'deck') {
-      const targetFolderId = state.moveParentDeckId ? null : state.moveBrowseFolderId;
-      let folderId = targetFolderId;
-      if (state.moveParentDeckId) {
-        const parentDeck = state.decks.find(d => d.id === state.moveParentDeckId);
-        folderId = parentDeck?.folder_id ?? null;
+      // Use override if provided (avoids React async state race condition)
+      const effectiveParentDeckId = overrideParentDeckId !== undefined ? overrideParentDeckId : (state.moveParentDeckId ?? null);
+      let folderId = state.moveBrowseFolderId;
+      if (effectiveParentDeckId) {
+        const parentDeck = state.decks.find(d => d.id === effectiveParentDeckId);
+        folderId = parentDeck?.folder_id ?? state.moveBrowseFolderId;
       }
       state.moveDeck.mutate(
-        { id: state.moveTarget.id, folderId, parentDeckId: state.moveParentDeckId ?? null },
+        { id: state.moveTarget.id, folderId, parentDeckId: effectiveParentDeckId },
         {
           onSuccess: () => {
             state.setMoveTarget(null);
