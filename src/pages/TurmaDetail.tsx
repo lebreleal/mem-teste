@@ -468,7 +468,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 onArchive={noopStr}
                 onDelete={noopDeck}
                 expandedDecks={expandedDecks}
-                toggleExpand={noopStr}
+                toggleExpand={toggleExpand}
                 expandedAccordionId={expandedAccordionId}
                 onAccordionToggle={(id) => setExpandedAccordionId(prev => prev === id ? null : id)}
                 questionCountMap={questionCountMap}
