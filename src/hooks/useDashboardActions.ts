@@ -68,8 +68,10 @@ export function useDashboardActions(state: DashboardState, defaultAlgorithm: str
 
   const doCreate = useCallback((name: string) => {
     if (state.createType === 'deck') {
+      const isMateria = state.createParentDeckId === '__materia__';
+      const actualParentDeckId = isMateria ? null : state.createParentDeckId;
       state.createDeck.mutate(
-        { name, folderId: state.createParentDeckId ? null : state.currentFolderId, parentDeckId: state.createParentDeckId, algorithmMode: defaultAlgorithm },
+        { name, folderId: actualParentDeckId ? null : state.currentFolderId, parentDeckId: actualParentDeckId, algorithmMode: defaultAlgorithm },
         {
           onSuccess: () => {
             state.setCreateType(null); state.setCreateName('');
