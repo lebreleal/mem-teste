@@ -652,17 +652,7 @@ const Dashboard = () => {
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={async () => {
-                                if (!user || !sourceTurmaId) return;
-                                await supabase.from('turma_members').delete().eq('turma_id', sourceTurmaId).eq('user_id', user.id);
-                                await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.currentFolderId!);
-                                await supabase.from('folders').delete().eq('id', state.currentFolderId!);
-                                queryClient.invalidateQueries({ queryKey: ['folders'] });
-                                queryClient.invalidateQueries({ queryKey: ['turma-members'] });
-                                state.setCurrentFolderId(null);
-                                setSearchParams({}, { replace: true });
-                                toast({ title: 'Sala removida do seu menu Início' });
-                              }}
+                              onClick={() => setLeaveSalaConfirm({ folderId: state.currentFolderId!, turmaId: sourceTurmaId! })}
                             >
                               <LogOut className="h-4 w-4 mr-2" /> Sair da sala
                             </DropdownMenuItem>
