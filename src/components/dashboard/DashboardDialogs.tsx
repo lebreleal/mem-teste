@@ -289,7 +289,6 @@ const DeckMoveDialog = ({
                     onClick={() => handleMoveToMateria(m.id)}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                   >
-                    <GraduationCap className="h-4 w-4 text-primary shrink-0" />
                     <span className="flex-1 text-left truncate">{m.name}</span>
                   </button>
                 ))}
