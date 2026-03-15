@@ -150,12 +150,12 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       let totalCards = 0, masteredCards = 0, dueCount = 0;
       for (const d of folderDecks) {
         totalCards += d.total_cards;
-        masteredCards += d.mastered_cards;
+        masteredCards += Math.max(0, (d.total_cards ?? 0) - (d.class_novo ?? 0));
         const collectSubs = (parentId: string) => {
           const subs = decks.filter(s => s.parent_deck_id === parentId && !s.is_archived);
           for (const sub of subs) {
             totalCards += sub.total_cards;
-            masteredCards += sub.mastered_cards;
+            masteredCards += Math.max(0, (sub.total_cards ?? 0) - (sub.class_novo ?? 0));
             collectSubs(sub.id);
           }
         };
