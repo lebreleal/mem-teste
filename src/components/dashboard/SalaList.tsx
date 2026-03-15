@@ -111,27 +111,15 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       }
       const allTDeckIds = (turmaDecks ?? []).map((td: any) => td.deck_id);
       let lastUpdatedMap = new Map<string, string>();
-      let cardCountMap = new Map<string, number>();
       if (allTDeckIds.length > 0) {
         const { data: tDecks } = await supabase.from('decks').select('id, updated_at').in('id', allTDeckIds);
         for (const d of (tDecks ?? []) as any[]) {
-          // Find which turma this deck belongs to
           for (const [tid, dids] of deckIdsByTurma.entries()) {
             if (dids.includes(d.id)) {
               const cur = lastUpdatedMap.get(tid) ?? '';
               if (d.updated_at > cur) lastUpdatedMap.set(tid, d.updated_at);
             }
           }
-        }
-        const { data: cardCounts } = await supabase.from('cards').select('deck_id').in('deck_id', allTDeckIds);
-        const countByDeck = new Map<string, number>();
-        for (const c of (cardCounts ?? []) as any[]) {
-          countByDeck.set(c.deck_id, (countByDeck.get(c.deck_id) ?? 0) + 1);
-        }
-        for (const [tid, dids] of deckIdsByTurma.entries()) {
-          let total = 0;
-          for (const did of dids) total += countByDeck.get(did) ?? 0;
-          cardCountMap.set(tid, total);
         }
       }
       const result = new Map<string, { ownerName: string; lastUpdated: string; coverUrl: string | null; deckCount: number; cardCount: number }>();
