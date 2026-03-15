@@ -38,37 +38,91 @@ export async function fetchStudyQueue(
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
-  const activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
+  let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
+  const foldersData = foldersResult.data ?? [];
 
-  let deckIds: string[];
-  let deckConfig: any;
-  let limitScopeIds: string[];
+  const isDeckEnabled = (deckIdToCheck: string): boolean => {
+    let current = activeDecks.find(d => d.id === deckIdToCheck);
+    while (current) {
+      if ((current.daily_new_limit ?? 20) <= 0) return false;
+      if (!current.parent_deck_id) break;
+      current = activeDecks.find(d => d.id === current!.parent_deck_id);
+    }
+    return true;
+  };
+
+  let deckIds: string[] = [];
+  let deckConfig: any = {};
+  let limitScopeIds: string[] = [];
+  let folderLimitDecks: typeof activeDecks = [];
 
   if (folderId) {
-    const rootDeckIds = collectFolderDeckIds(activeDecks, foldersResult.data ?? [], folderId);
+    const collectRootDeckIds = () => collectFolderDeckIds(activeDecks, foldersData, folderId);
+    let rootDeckIds = collectRootDeckIds();
+
+    // Follower room safety: if folder came from Explorar and local decks are missing, bootstrap on demand.
+    if (rootDeckIds.length === 0) {
+      const { data: folderMeta } = await supabase
+        .from('folders')
+        .select('source_turma_id')
+        .eq('id', folderId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if ((folderMeta as any)?.source_turma_id) {
+        await supabase.rpc('bootstrap_follower_decks' as any, {
+          p_user_id: userId,
+          p_turma_id: (folderMeta as any).source_turma_id,
+          p_folder_id: folderId,
+        });
+
+        const { data: refreshedDecks, error: refreshError } = await supabase
+          .from('decks')
+          .select(DECK_SELECT_COLS)
+          .eq('user_id', userId);
+        if (refreshError) throw refreshError;
+
+        activeDecks = (refreshedDecks ?? []).filter(d => !d.is_archived);
+        rootDeckIds = collectRootDeckIds();
+      }
+    }
+
     const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
-    deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
-    const firstDeck = activeDecks.find(d => deckIds.includes(d.id));
-    deckConfig = firstDeck ?? {};
+    const allCandidateIds = [...new Set([...rootDeckIds, ...allDescendants])];
+
+    // Decks with limit 0 are treated as disabled from queue.
+    deckIds = allCandidateIds.filter(isDeckEnabled);
+
+    const enabledRootDecks = rootDeckIds
+      .map(id => activeDecks.find(d => d.id === id))
+      .filter((d): d is (typeof activeDecks)[number] => !!d)
+      .filter(d => isDeckEnabled(d.id));
+
+    folderLimitDecks = enabledRootDecks;
+    deckConfig = enabledRootDecks[0] ?? {};
     limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(activeDecks, deckId);
-    deckIds = [deckId, ...descendantIds];
+    const allCandidateIds = [deckId, ...descendantIds];
+
+    deckIds = allCandidateIds.filter(isDeckEnabled);
+
     const rootId = findRootAncestorId(activeDecks, deckId);
     deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
-    limitScopeIds = [rootId, ...rootDescendants];
+    limitScopeIds = [rootId, ...rootDescendants].filter(isDeckEnabled);
   }
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
   const reviewLimit = deckConfig?.daily_review_limit ?? 100;
-  const scopedDecks = activeDecks.filter(d => limitScopeIds.includes(d.id));
+
   const folderNewLimit = folderId
-    ? scopedDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
+    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_new_limit ?? 20), 0)
     : deckNewLimit;
   const folderReviewLimit = folderId
-    ? scopedDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
+    ? folderLimitDecks.reduce((sum, d) => sum + (d.daily_review_limit ?? 100), 0)
     : reviewLimit;
+
   const algorithmMode = deckConfig?.algorithm_mode || 'fsrs';
   const shuffle = deckConfig?.shuffle_cards ?? false;
 
