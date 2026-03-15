@@ -50,7 +50,7 @@ interface DashboardDialogsProps {
   movableDecks: MovableDeck[];
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
   onCreateFolderInMove: () => void;
 
   // Delete
@@ -159,7 +159,7 @@ const DeckMoveDialog = ({
   setMoveParentDeckId: (v: string | null) => void;
   folders: Folder[];
   decks: { id: string; name: string; parent_deck_id: string | null; folder_id: string | null }[];
-  onMoveSubmit: () => void;
+  onMoveSubmit: (overrideParentDeckId?: string | null) => void;
 }) => {
   const [switchSala, setSwitchSala] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -204,14 +204,11 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveToRoot = () => {
-    // Move to root of current sala (remove parent_deck_id)
-    setMoveParentDeckId(null);
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   const handleMoveToMateria = (materiaId: string) => {
-    setMoveParentDeckId(materiaId);
-    onMoveSubmit();
+    onMoveSubmit(materiaId);
   };
 
   const handleMoveToSala = (salaId: string) => {
@@ -222,7 +219,7 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveConfirmSala = () => {
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   // Phase: switching sala
@@ -340,7 +337,7 @@ const DeckMoveDialog = ({
       {currentDeck?.parent_deck_id && (
         <Button variant="outline" size="sm" onClick={handleMoveToRoot} className="w-full gap-2 text-sm">
           <Layers className="h-4 w-4" />
-          Mover para raiz da sala
+          Tirar da matéria (mover para a sala)
         </Button>
       )}
 
