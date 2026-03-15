@@ -278,7 +278,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
         </div>
 
         {/* Actions on hover for loose decks, always when matéria expanded */}
-        {!isErrorDeck && !deckSelectionMode && (
+        {!isErrorDeck && !deckSelectionMode && !readOnly && (
           <div className={`flex items-center gap-1.5 shrink-0 transition-opacity duration-200 ${
             hasChildren && isExpanded
               ? 'opacity-100'
