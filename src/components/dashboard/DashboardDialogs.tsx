@@ -17,7 +17,7 @@ import { ArrowLeft, ArrowUpRight, ChevronRight, CirclePlus, Search, Layers, Refr
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 import type { BreadcrumbItem } from './useDashboardState';
 
-interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null }
+interface Folder { id: string; name: string; parent_id: string | null; is_archived: boolean; image_url?: string | null; source_turma_id?: string | null }
 interface MovableDeck { id: string; name: string; parent_deck_id: string | null }
 
 interface DashboardDialogsProps {
