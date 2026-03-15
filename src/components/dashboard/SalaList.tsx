@@ -129,7 +129,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
           lastUpdated: lastUpdatedMap.get(t.id) ?? '',
           coverUrl: t.cover_image_url,
           deckCount: deckIdsByTurma.get(t.id)?.length ?? 0,
-          cardCount: cardCountMap.get(t.id) ?? 0,
+          cardCount: 0,
         });
       }
       return result;
