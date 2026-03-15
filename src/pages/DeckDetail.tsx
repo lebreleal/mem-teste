@@ -384,7 +384,7 @@ const DeckDetailContent = () => {
 
   // Resolve back destination: folder name for label
   const backInfo = useMemo(() => {
-    if (fromCommunity && communityTurmaId) return { label: 'Turma', path: `/turmas/${communityTurmaId}` };
+    if (fromCommunity && communityTurmaId) return { label: 'Sala', path: `/turmas/${communityTurmaId}` };
     let folderId = (deck as any)?.folder_id;
     if (!folderId && (deck as any)?.parent_deck_id && decks) {
       let current = deck as any;

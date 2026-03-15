@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TurmaDetailProvider, useTurmaDetail } from '@/components/turma-detail/TurmaDetailContext';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, Users, Star, Heart, FolderOpen } from 'lucide-react';
+import { ChevronLeft, Users, Star, Heart, FolderOpen, Share2, Layers, Play } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
@@ -21,13 +21,11 @@ import type { DeckWithStats } from '@/types/deck';
 /**
  * Fetches the owner's published decks (+ their sub-decks) as DeckWithStats,
  * reading directly from the owner's data via turma_decks RLS.
- * NO duplication — same cards, same decks, same DB rows.
  */
 function useSalaDecks(turmaId: string) {
   return useQuery<DeckWithStats[]>({
     queryKey: ['sala-decks', turmaId],
     queryFn: async () => {
-      // 1. Get published turma_decks
       const { data: turmaDecks } = await supabase
         .from('turma_decks')
         .select('id, deck_id, is_published')
@@ -38,7 +36,6 @@ function useSalaDecks(turmaId: string) {
 
       const rootDeckIds = turmaDecks.map((td: any) => td.deck_id);
 
-      // 2. Fetch root decks + their children (sub-decks)
       const { data: childDecks } = await supabase
         .from('decks')
         .select('id')
@@ -47,7 +44,6 @@ function useSalaDecks(turmaId: string) {
 
       const allDeckIds = [...rootDeckIds, ...(childDecks ?? []).map((d: any) => d.id)];
 
-      // 3. Fetch full deck rows
       const { data: decks } = await supabase
         .from('decks')
         .select('*')
@@ -55,7 +51,7 @@ function useSalaDecks(turmaId: string) {
 
       if (!decks) return [];
 
-      // 4. Fetch card stats (state + difficulty for classification bar)
+      // Fetch card stats
       const cardCountMap = new Map<string, { total: number; mastered: number; novo: number; facil: number; bom: number; dificil: number; errei: number }>();
       const PAGE = 1000;
 
@@ -92,7 +88,6 @@ function useSalaDecks(turmaId: string) {
         }
       }
 
-      // 5. Map to DeckWithStats (read-only, so study stats are zeroed for the viewer)
       return decks
         .filter((d: any) => !d.name?.includes('Caderno de Erros'))
         .map((d: any) => {
@@ -123,7 +118,6 @@ function useSalaDecks(turmaId: string) {
           } satisfies DeckWithStats;
         })
         .sort((a: DeckWithStats, b: DeckWithStats) => {
-          // Matérias first, then loose decks
           const aHasChildren = decks.some((d: any) => d.parent_deck_id === a.id);
           const bHasChildren = decks.some((d: any) => d.parent_deck_id === b.id);
           if (aHasChildren && !bHasChildren) return -1;
@@ -139,7 +133,7 @@ function useSalaDecks(turmaId: string) {
 // ─── Sala View (public, read-only) ───
 const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const ctx = useTurmaDetail();
-  const { turma, turmaId, isMember } = ctx;
+  const { turma, turmaId } = ctx;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -181,7 +175,26 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     staleTime: 60_000,
   });
 
-  // ── DeckRow helpers (read-only — no-op callbacks) ──
+  // Aggregated stats
+  const totalStats = useMemo(() => {
+    let totalCards = 0, mastered = 0, novo = 0, facil = 0, bom = 0, dificil = 0, errei = 0, totalQuestions = 0;
+    for (const d of salaDecks) {
+      totalCards += d.total_cards;
+      mastered += d.mastered_cards;
+      novo += d.class_novo ?? 0;
+      facil += d.class_facil ?? 0;
+      bom += d.class_bom ?? 0;
+      dificil += d.class_dificil ?? 0;
+      errei += d.class_errei ?? 0;
+    }
+    if (questionCountMap) {
+      for (const c of questionCountMap.values()) totalQuestions += c;
+    }
+    const progressPct = totalCards > 0 ? Math.round(((totalCards - novo) / totalCards) * 100) : 0;
+    return { totalCards, mastered, novo, facil, bom, dificil, errei, totalQuestions, progressPct };
+  }, [salaDecks, questionCountMap]);
+
+  // DeckRow helpers
   const rootDecks = useMemo(
     () => salaDecks.filter(d => !d.parent_deck_id),
     [salaDecks],
@@ -202,7 +215,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
     [],
   );
 
-  const noop = useCallback(() => {}, []);
   const noopDeck = useCallback((_d: DeckWithStats) => {}, []);
   const noopStr = useCallback((_s: string) => {}, []);
   const getCommunityLinkId = useCallback((_d: DeckWithStats) => null as string | null, []);
@@ -210,22 +222,18 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
   const [expandedDecks] = useState(new Set<string>());
   const [expandedAccordionId, setExpandedAccordionId] = useState<string | null>(null);
 
-  // Follow = join turma_members (shortcut in dashboard)
+  // Follow handler
   const handleFollow = async () => {
     if (!user) { navigate('/auth'); return; }
     setFollowing(true);
     try {
       await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user.id } as any);
-
-      // Create a folder shortcut in the user's dashboard
       const { data: existingFolders } = await supabase.from('folders')
         .select('id').eq('user_id', user.id).eq('source_turma_id', turmaId);
-
       if (!existingFolders || existingFolders.length === 0) {
         await supabase.from('folders')
           .insert({ user_id: user.id, name: turma?.name || 'Sala', section: 'community', source_turma_id: turmaId } as any);
       }
-
       queryClient.invalidateQueries({ queryKey: ['turma-role', turmaId, user.id] });
       queryClient.invalidateQueries({ queryKey: ['turma-members', turmaId] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
@@ -240,6 +248,42 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
       setFollowing(false);
     }
   };
+
+  // Share handler
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: turma?.name || 'Sala', url });
+      } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copiado!' });
+    }
+  };
+
+  // Study handler — navigate to first deck with cards
+  const handleStudy = () => {
+    const firstWithCards = salaDecks.find(d => d.total_cards > 0 && !salaDecks.some(s => s.parent_deck_id === d.id));
+    if (firstWithCards) {
+      navigate(`/decks/${firstWithCards.id}`);
+    } else if (rootDecks.length > 0) {
+      navigate(`/decks/${rootDecks[0].id}`);
+    }
+  };
+
+  // Classification bar for overall progress
+  const overallBarPcts = useMemo(() => {
+    const t = totalStats.totalCards;
+    if (t === 0) return { facilPct: 0, bomPct: 0, dificilPct: 0, erreiPct: 0, novoPct: 100 };
+    return {
+      facilPct: (totalStats.facil / t) * 100,
+      bomPct: (totalStats.bom / t) * 100,
+      dificilPct: (totalStats.dificil / t) * 100,
+      erreiPct: (totalStats.errei / t) * 100,
+      novoPct: (totalStats.novo / t) * 100,
+    };
+  }, [totalStats]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -259,9 +303,16 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
               <ChevronLeft className="h-4 w-4" />
               <span>Explorar</span>
             </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center justify-center h-8 w-8 rounded-full hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Compartilhar"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-3">
             <img src={coverUrl || defaultSalaIcon} alt={turma?.name} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-display font-bold text-foreground truncate">{turma?.name}</h1>
@@ -279,33 +330,85 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
               </div>
             </div>
           </div>
+
+          {/* Stats strip */}
+          {!decksLoading && totalStats.totalCards > 0 && (
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-2">
+              <span className="inline-flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                {totalStats.totalCards} cards
+              </span>
+              <span>·</span>
+              <span>{rootDecks.length} {rootDecks.length === 1 ? 'deck' : 'decks'}</span>
+              {totalStats.totalQuestions > 0 && (
+                <>
+                  <span>·</span>
+                  <span>{totalStats.totalQuestions} questões</span>
+                </>
+              )}
+              <span>·</span>
+              <span>{totalStats.progressPct}% revisado</span>
+            </div>
+          )}
+
+          {/* Overall classification bar */}
+          {!decksLoading && totalStats.totalCards > 0 && (
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted/30">
+              <div className="absolute inset-y-0 left-0 flex w-full">
+                {overallBarPcts.facilPct > 0 && (
+                  <div className="h-full transition-all duration-500 rounded-l-full" style={{ width: `${overallBarPcts.facilPct}%`, backgroundColor: 'hsl(var(--info))' }} />
+                )}
+                {overallBarPcts.bomPct > 0 && (
+                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.bomPct}%`, backgroundColor: 'hsl(var(--success))' }} />
+                )}
+                {overallBarPcts.dificilPct > 0 && (
+                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.dificilPct}%`, backgroundColor: 'hsl(var(--warning))' }} />
+                )}
+                {overallBarPcts.erreiPct > 0 && (
+                  <div className="h-full transition-all duration-500" style={{ width: `${overallBarPcts.erreiPct}%`, backgroundColor: 'hsl(var(--destructive))' }} />
+                )}
+                {overallBarPcts.novoPct > 0 && (
+                  <div className="h-full bg-muted transition-all duration-500 rounded-r-full" style={{ width: `${overallBarPcts.novoPct}%` }} />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Study + Follow buttons */}
+          <div className="flex items-center gap-2 mt-3">
+            {!isFollower && (
+              <Button
+                onClick={handleFollow}
+                disabled={following}
+                variant="outline"
+                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+              >
+                <Heart className="h-4 w-4" />
+                {following ? 'Seguindo...' : 'Seguir Sala'}
+              </Button>
+            )}
+            {totalStats.totalCards > 0 && (
+              <Button
+                onClick={handleStudy}
+                className="h-10 rounded-full text-sm font-bold gap-2 flex-1"
+              >
+                <Play className="h-4 w-4 fill-current" />
+                ESTUDAR
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Follow CTA */}
-      {!isFollower && (
-        <div className="flex items-center gap-4 px-4 py-3 max-w-md mx-auto md:max-w-lg">
-          <Button
-            onClick={handleFollow}
-            disabled={following}
-            className="flex-1 h-11 md:h-10 rounded-full text-base md:text-sm font-bold gap-2"
-            size="lg"
-          >
-            <Heart className="h-4 w-4" />
-            {following ? 'Seguindo...' : 'Seguir Sala'}
-          </Button>
-        </div>
-      )}
 
       {/* Description */}
       <main className="pb-24">
         {turma?.description && (
-          <div className="px-4 mb-3">
+          <div className="px-4 py-3">
             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{turma.description}</p>
           </div>
         )}
 
-        {/* Deck list — SAME DeckRow component from Dashboard, readOnly mode */}
+        {/* Deck list */}
         {decksLoading ? (
           <div className="divide-y divide-border/50">
             {[1, 2, 3].map(i => (
@@ -318,7 +421,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
             ))}
           </div>
         ) : rootDecks.length === 0 ? (
-          <div className="px-4">
+          <div className="px-4 pt-3">
             <div className="rounded-xl border border-dashed border-border py-8 text-center">
               <FolderOpen className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
@@ -331,6 +434,7 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
                 key={deck.id}
                 deck={deck}
                 readOnly
+                readOnlyNavState={{ from: 'community', turmaId }}
                 deckSelectionMode={false}
                 selectedDeckIds={new Set()}
                 toggleDeckSelection={noopStr}
@@ -360,9 +464,6 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
 // ─── Router ───
 const TurmaDetailInner = () => {
   const { turma, isMember, isLoading } = useTurmaDetail();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const turmaId = useTurmaDetail().turmaId;
 
   if (isLoading || !turma) {
     return (

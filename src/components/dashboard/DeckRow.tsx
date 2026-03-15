@@ -115,6 +115,8 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
   /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
   readOnly?: boolean;
+  /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
+  readOnlyNavState?: Record<string, any>;
 }
 
 /** Aggregate 5-segment classification counts across deck + descendants */
@@ -150,6 +152,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   expandedAccordionId, onAccordionToggle,
   questionCountMap,
   readOnly = false,
+  readOnlyNavState,
 }, ref) => {
   const navigate = useNavigate();
   const { isAdmin } = useIsAdmin();
@@ -184,8 +187,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     if (hasChildren) {
       onAccordionToggle?.(deck.id);
     } else {
-      // Navigate to deck detail
-      navigate(`/decks/${deck.id}`);
+      navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
   };
 
@@ -314,7 +316,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <div
                 key={sub.id}
                 className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
-                onClick={() => navigate(`/decks/${sub.id}`)}
+                onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
