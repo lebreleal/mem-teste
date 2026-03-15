@@ -418,36 +418,40 @@ const DashboardDialogs = (props: DashboardDialogsProps) => {
 
       {/* Move Dialog (single item) */}
       <Dialog open={!!props.moveTarget} onOpenChange={open => { if (!open) { props.setMoveTarget(null); props.setMoveParentDeckId(null); } }}>
-        <DialogContent className="sm:max-w-lg max-w-[calc(100vw-2rem)] w-full">
-          <DialogHeader className="pr-8">
-            <DialogTitle className="font-display flex items-center gap-2 min-w-0">
-              <ArrowUpRight className="h-5 w-5 shrink-0" />
-              <span className="truncate text-base">Mover "{props.moveTarget?.name}"</span>
+        <DialogContent className="!w-[calc(100vw-1rem)] !max-w-[40rem] p-4 sm:p-6 overflow-x-hidden">
+          <DialogHeader className="min-w-0 pr-9">
+            <DialogTitle className="font-display flex items-start gap-2 min-w-0">
+              <ArrowUpRight className="h-5 w-5 shrink-0 mt-0.5" />
+              <span className="min-w-0 text-base leading-snug break-words">
+                Mover "{props.moveTarget?.name}"
+              </span>
             </DialogTitle>
           </DialogHeader>
-          {props.moveTarget?.type === 'deck' ? (
-            <DeckMoveDialog
-              moveTarget={props.moveTarget}
-              setMoveTarget={props.setMoveTarget}
-              moveBrowseFolderId={props.moveBrowseFolderId}
-              setMoveBrowseFolderId={props.setMoveBrowseFolderId}
-              moveParentDeckId={props.moveParentDeckId}
-              setMoveParentDeckId={props.setMoveParentDeckId}
-              folders={props.folders}
-              decks={props.decks}
-              onMoveSubmit={props.onMoveSubmit}
-            />
-          ) : (
-            <FolderBrowser
-              folders={props.folders}
-              movableFolders={props.movableFolders}
-              moveBrowseFolderId={props.moveBrowseFolderId}
-              setMoveBrowseFolderId={props.setMoveBrowseFolderId}
-              onMoveSubmit={props.onMoveSubmit}
-              onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
-              submitLabel={getMoveSubmitLabel()}
-            />
-          )}
+          <div className="min-w-0">
+            {props.moveTarget?.type === 'deck' ? (
+              <DeckMoveDialog
+                moveTarget={props.moveTarget}
+                setMoveTarget={props.setMoveTarget}
+                moveBrowseFolderId={props.moveBrowseFolderId}
+                setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+                moveParentDeckId={props.moveParentDeckId}
+                setMoveParentDeckId={props.setMoveParentDeckId}
+                folders={props.folders}
+                decks={props.decks}
+                onMoveSubmit={props.onMoveSubmit}
+              />
+            ) : (
+              <FolderBrowser
+                folders={props.folders}
+                movableFolders={props.movableFolders}
+                moveBrowseFolderId={props.moveBrowseFolderId}
+                setMoveBrowseFolderId={props.setMoveBrowseFolderId}
+                onMoveSubmit={props.onMoveSubmit}
+                onCancel={() => { props.setMoveTarget(null); props.setMoveParentDeckId(null); }}
+                submitLabel={getMoveSubmitLabel()}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
