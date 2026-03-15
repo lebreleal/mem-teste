@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ChevronLeft, ChevronDown, Users, Star,
-  Layers, Heart, Check, FolderOpen, Download, HelpCircle, Plus, Minus,
+  ChevronLeft, Users, Star,
+  Layers, Heart, FolderOpen, HelpCircle, Plus, Minus,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
