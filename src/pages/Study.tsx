@@ -59,6 +59,7 @@ type LeechInterruptionState = {
   leechKey: string;
   failCount: number;
   interruptedAt: string;
+  cardSnapshot?: any; // full card data at interruption time
 };
 
 const Study = () => {
