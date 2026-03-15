@@ -481,7 +481,10 @@ const Dashboard = () => {
       return t;
     };
 
-    const collectStudyStats = (deckId: string) => {
+    let totalDailyReviewLimit = 0;
+    let totalReviewReviewedToday = 0;
+
+    const collectStudyStats = (deckId: string, isRoot: boolean) => {
       const dk = allDecks.find(d => d.id === deckId);
       if (!dk || dk.is_archived) return;
 
@@ -489,6 +492,7 @@ const Dashboard = () => {
       const deckLearningCount = dk.learning_count ?? 0;
       const deckReviewCount = dk.review_count ?? 0;
       const deckNewReviewedToday = dk.new_reviewed_today ?? 0;
+      const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
       const deckDailyNewLimit = dk.daily_new_limit ?? 20;
 
       rawNewCount += deckNewCount;
@@ -496,26 +500,34 @@ const Dashboard = () => {
       reviewCount += deckReviewCount;
       reviewedToday += dk.reviewed_today ?? 0;
 
+      // Track review limits per root deck for capping
+      if (isRoot) {
+        totalDailyReviewLimit += dk.daily_review_limit ?? 100;
+        totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
+      }
+
       const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
       newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);
 
       const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
-      for (const c of children) collectStudyStats(c.id);
+      for (const c of children) collectStudyStats(c.id, false);
     };
 
     for (const deck of state.currentDecks) {
-      collectStudyStats(deck.id);
+      collectStudyStats(deck.id, true);
       totalCards += collectTotalCards(deck.id);
     }
 
     // Inside a Sala, honor the per-deck limits configured in "Configurar Estudo"
     const newCountToday = newCountTodayByDeckLimits;
-    const totalDue = newCountToday + learningCount + reviewCount;
+    // Cap review count by daily review limit (prevents inflated time estimates)
+    const cappedReviewCount = Math.max(0, Math.min(reviewCount, totalDailyReviewLimit - totalReviewReviewedToday));
+    const totalDue = newCountToday + learningCount + cappedReviewCount;
     const totalSession = totalDue + reviewedToday;
     const progressPct = totalSession > 0 ? Math.round((reviewedToday / totalSession) * 100) : 0;
 
     // Use per-state time estimation (new cards generate multiple interactions, reviews may lapse)
-    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, reviewCount, realStudyMetrics);
+    const remainingSeconds = calculateRealStudyTime(newCountToday, learningCount, cappedReviewCount, realStudyMetrics);
     const remainingMin = Math.ceil(remainingSeconds / 60);
     const timeLabel = remainingMin >= 60
       ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
