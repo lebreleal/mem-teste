@@ -60,7 +60,7 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
   const { user } = useAuth();
   const rootDecks = decks.filter(d => !d.parent_deck_id && !d.is_archived);
 
-  // Fetch question counts per deck (batch query)
+  // Fetch question counts per deck (batch query) — only at root level (not inside a sala)
   const allDeckIds = decks.filter(d => !d.is_archived).map(d => d.id);
   const { data: questionCounts } = useQuery({
     queryKey: ['deck-question-counts', user?.id],
@@ -76,8 +76,8 @@ const SalaList = ({ folders, decks, isLoading, getAggregateStats, onSalaClick }:
       }
       return counts;
     },
-    enabled: !!user && allDeckIds.length > 0,
-    staleTime: 60_000,
+    enabled: !!user && allDeckIds.length > 0 && !isLoading,
+    staleTime: 120_000,
   });
 
   const getQuestionCount = (deckIds: string[]): number => {

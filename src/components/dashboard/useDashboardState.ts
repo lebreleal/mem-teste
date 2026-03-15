@@ -338,6 +338,7 @@ export function useDashboardState(planRootIds?: Set<string>, planDeckOrder?: str
   return {
     // Data
     decks, folders, isLoading,
+    deckMap, childrenIndex,
     currentFolderId, setCurrentFolderId,
     isInsideSala,
     currentFolders, currentDecks, allRootDecks, communityDecks, decksWithPendingUpdates,
