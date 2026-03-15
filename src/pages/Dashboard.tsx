@@ -484,32 +484,49 @@ const Dashboard = () => {
     let totalDailyReviewLimit = 0;
     let totalReviewReviewedToday = 0;
 
+    // Helper: collect new_count and new_reviewed_today from a deck and all descendants
+    const collectHierarchyNew = (parentId: string): { newCount: number; newReviewed: number } => {
+      let nc = 0, nr = 0;
+      const children = allDecks.filter(d => d.parent_deck_id === parentId && !d.is_archived);
+      for (const c of children) {
+        nc += c.new_count ?? 0;
+        nr += c.new_reviewed_today ?? 0;
+        const sub = collectHierarchyNew(c.id);
+        nc += sub.newCount;
+        nr += sub.newReviewed;
+      }
+      return { newCount: nc, newReviewed: nr };
+    };
+
     const collectStudyStats = (deckId: string, isRoot: boolean) => {
       const dk = allDecks.find(d => d.id === deckId);
       if (!dk || dk.is_archived) return;
 
-      const deckNewCount = dk.new_count ?? 0;
-      const deckLearningCount = dk.learning_count ?? 0;
-      const deckReviewCount = dk.review_count ?? 0;
-      const deckNewReviewedToday = dk.new_reviewed_today ?? 0;
-      const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
-      const deckDailyNewLimit = dk.daily_new_limit ?? 20;
-
-      rawNewCount += deckNewCount;
-      learningCount += deckLearningCount;
-      reviewCount += deckReviewCount;
+      // Accumulate learning + review from every deck (root and children)
+      learningCount += dk.learning_count ?? 0;
+      reviewCount += dk.review_count ?? 0;
       reviewedToday += dk.reviewed_today ?? 0;
-
-      // Track review limits from root decks, but accumulate actual reviews from ALL decks
-      if (isRoot) {
-        totalDailyReviewLimit += dk.daily_review_limit ?? 100;
-      }
-      // Sum review-reviewed-today from every deck (not just roots) so cap works correctly
+      const deckNewGraduatedToday = dk.new_graduated_today ?? 0;
       totalReviewReviewedToday += Math.max(0, (dk.reviewed_today ?? 0) - deckNewGraduatedToday);
 
-      const deckRemainingNewToday = Math.max(0, deckDailyNewLimit - deckNewReviewedToday);
-      newCountTodayByDeckLimits += Math.min(deckNewCount, deckRemainingNewToday);
+      if (isRoot) {
+        totalDailyReviewLimit += dk.daily_review_limit ?? 100;
 
+        // Collect ALL new_count from this hierarchy (root + all descendants)
+        let hierarchyNewCount = dk.new_count ?? 0;
+        let hierarchyNewReviewed = dk.new_reviewed_today ?? 0;
+        const childNew = collectHierarchyNew(deckId);
+        hierarchyNewCount += childNew.newCount;
+        hierarchyNewReviewed += childNew.newReviewed;
+
+        rawNewCount += hierarchyNewCount;
+
+        // Apply daily_new_limit ONCE for the whole hierarchy
+        const remaining = Math.max(0, (dk.daily_new_limit ?? 20) - hierarchyNewReviewed);
+        newCountTodayByDeckLimits += Math.min(hierarchyNewCount, remaining);
+      }
+
+      // Recurse for learning/review/reviewedToday (but NOT new — handled above)
       const children = allDecks.filter(d => d.parent_deck_id === deckId && !d.is_archived);
       for (const c of children) collectStudyStats(c.id, false);
     };
