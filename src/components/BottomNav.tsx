@@ -36,14 +36,18 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
       <div className="flex items-center justify-around px-2 pb-2 pt-1">
         {items.map((item, i) => {
           const Icon = item.icon;
+          const isDisabled = !!(item as any).disabled;
           return (
             <button
               key={i}
-              onClick={item.onClick}
+              onClick={isDisabled ? undefined : item.onClick}
+              disabled={isDisabled}
               className={cn(
                 'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors',
-                item.accent
+                item.accent && !isDisabled
                   ? 'text-primary-foreground bg-primary rounded-full h-10 w-10 flex items-center justify-center shadow-md -mt-2'
+                  : item.accent && isDisabled
+                  ? 'text-muted-foreground bg-muted rounded-full h-10 w-10 flex items-center justify-center -mt-2 opacity-40'
                   : item.active ? 'text-primary' : 'text-muted-foreground'
               )}
             >
