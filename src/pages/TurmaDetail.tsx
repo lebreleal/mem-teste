@@ -361,26 +361,26 @@ const SalaView = ({ isFollower }: { isFollower: boolean }) => {
           )}
 
 
-          {/* Study + Join buttons — matching reference layout */}
-          <div className="flex items-center gap-3 mt-3">
+          {/* Study + Entrar buttons */}
+          <div className="flex items-center gap-3 mt-3 px-1">
             {!isFollower && (
               <button
                 onClick={handleFollow}
                 disabled={following}
                 className="flex flex-col items-center gap-0.5 shrink-0"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--primary))] text-primary-foreground">
-                  <Plus className="h-5 w-5" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-warning text-warning-foreground">
+                  <Plus className="h-4 w-4" />
                 </span>
-                <span className="text-[10px] font-bold text-primary uppercase">Join</span>
+                <span className="text-[9px] font-bold text-warning uppercase">Entrar</span>
               </button>
             )}
             {totalStats.totalCards > 0 && (
               <button
                 onClick={handleStudy}
-                className="flex-1 h-11 rounded-full bg-[hsl(var(--primary))] text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                className="flex-1 h-11 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
               >
-                <span>STUDY</span>
+                <span>ESTUDAR</span>
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-foreground/20">
                   <Play className="h-3.5 w-3.5 fill-current" />
                 </span>
