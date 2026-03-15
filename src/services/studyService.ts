@@ -41,14 +41,18 @@ export async function fetchStudyQueue(
   let activeDecks = (decksResult.data ?? []).filter(d => !d.is_archived);
   const foldersData = foldersResult.data ?? [];
 
-  const isDeckEnabled = (deckIdToCheck: string): boolean => {
+  // Builds a set of deck IDs whose new-card limit is 0 (used to exclude their NEW cards only, not reviews)
+  const zeroNewLimitDeckIds = new Set<string>();
+  const buildZeroLimitSet = (deckIdToCheck: string) => {
     let current = activeDecks.find(d => d.id === deckIdToCheck);
     while (current) {
-      if ((current.daily_new_limit ?? 20) <= 0) return false;
+      if ((current.daily_new_limit ?? 20) <= 0) {
+        zeroNewLimitDeckIds.add(deckIdToCheck);
+        return;
+      }
       if (!current.parent_deck_id) break;
       current = activeDecks.find(d => d.id === current!.parent_deck_id);
     }
-    return true;
   };
 
   let deckIds: string[] = [];
@@ -88,29 +92,29 @@ export async function fetchStudyQueue(
     }
 
     const allDescendants = rootDeckIds.flatMap(id => collectDescendantIds(activeDecks, id));
-    const allCandidateIds = [...new Set([...rootDeckIds, ...allDescendants])];
+    deckIds = [...new Set([...rootDeckIds, ...allDescendants])];
 
-    // Decks with limit 0 are treated as disabled from queue.
-    deckIds = allCandidateIds.filter(isDeckEnabled);
+    // Mark decks with zero new-card limit (their reviews still participate)
+    deckIds.forEach(buildZeroLimitSet);
 
-    const enabledRootDecks = rootDeckIds
+    const rootDecks = rootDeckIds
       .map(id => activeDecks.find(d => d.id === id))
-      .filter((d): d is (typeof activeDecks)[number] => !!d)
-      .filter(d => isDeckEnabled(d.id));
+      .filter((d): d is (typeof activeDecks)[number] => !!d);
 
-    folderLimitDecks = enabledRootDecks;
-    deckConfig = enabledRootDecks[0] ?? {};
+    folderLimitDecks = rootDecks;
+    deckConfig = rootDecks[0] ?? {};
     limitScopeIds = deckIds;
   } else {
     const descendantIds = collectDescendantIds(activeDecks, deckId);
-    const allCandidateIds = [deckId, ...descendantIds];
+    deckIds = [deckId, ...descendantIds];
 
-    deckIds = allCandidateIds.filter(isDeckEnabled);
+    // Mark decks with zero new-card limit
+    deckIds.forEach(buildZeroLimitSet);
 
     const rootId = findRootAncestorId(activeDecks, deckId);
     deckConfig = activeDecks.find(d => d.id === rootId) ?? {};
     const rootDescendants = collectDescendantIds(activeDecks, rootId);
-    limitScopeIds = [rootId, ...rootDescendants].filter(isDeckEnabled);
+    limitScopeIds = [rootId, ...rootDescendants];
   }
 
   const deckNewLimit = deckConfig?.daily_new_limit ?? 20;
