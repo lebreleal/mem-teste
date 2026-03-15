@@ -1,0 +1,1 @@
+UPDATE decks SET folder_id = '8902dd57-6b6c-4d52-9151-522443a83cab' WHERE id = '35aa3ae9-76e8-4d4d-9fa1-c2866a0a6afc';
