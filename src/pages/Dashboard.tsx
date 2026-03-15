@@ -186,6 +186,10 @@ const Dashboard = () => {
     if (!user || !leaveSalaConfirm) return;
     const { folderId, turmaId } = leaveSalaConfirm;
     try {
+      // Cleanup local mirrored decks and cards first
+      const { cleanupFollowerDecks } = await import('@/services/followerBootstrap');
+      await cleanupFollowerDecks(user.id, folderId);
+      
       await supabase.from('turma_members').delete().eq('turma_id', turmaId).eq('user_id', user.id);
       await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', folderId);
       await supabase.from('folders').delete().eq('id', folderId);
@@ -195,6 +199,7 @@ const Dashboard = () => {
       queryClient.invalidateQueries({ queryKey: ['turma-role'] });
       queryClient.invalidateQueries({ queryKey: ['discover-turmas'] });
       queryClient.invalidateQueries({ queryKey: ['turma-public'] });
+      queryClient.invalidateQueries({ queryKey: ['decks'] });
       state.setCurrentFolderId(null);
       setSearchParams({}, { replace: true });
       toast({ title: 'Sala removida do seu menu Início', description: 'Suas estatísticas e progresso ficam salvos por 30 dias.' });
