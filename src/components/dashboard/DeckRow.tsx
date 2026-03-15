@@ -187,8 +187,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
     if (hasChildren) {
       onAccordionToggle?.(deck.id);
     } else {
-      // Navigate to deck detail
-      navigate(`/decks/${deck.id}`);
+      navigate(`/decks/${deck.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined);
     }
   };
 
