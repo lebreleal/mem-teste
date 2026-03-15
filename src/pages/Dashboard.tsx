@@ -200,6 +200,9 @@ const Dashboard = () => {
   const [studySettingsOpen, setStudySettingsOpen] = useState(false);
   const [salaImageOpen, setSalaImageOpen] = useState(false);
   const [salaImageFile, setSalaImageFile] = useState<File | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareSlugEdit, setShareSlugEdit] = useState('');
+  const [savingSlug, setSavingSlug] = useState(false);
   const [pendingReviewData, setPendingReviewData] = useState<{
     pendingId: string;
     cards: GeneratedCard[];
