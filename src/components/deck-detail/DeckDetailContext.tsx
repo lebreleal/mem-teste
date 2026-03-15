@@ -299,6 +299,11 @@ export const DeckDetailProvider = ({ children }: { children: ReactNode }) => {
           mc_count: cards.filter((c: any) => c.card_type === 'multiple_choice').length,
           occlusion_count: cards.filter((c: any) => c.card_type === 'occlusion').length,
           frozen_count: 0,
+          diff_novo: total,
+          diff_facil: 0,
+          diff_bom: 0,
+          diff_dificil: 0,
+          diff_errei: 0,
         } as cardService.DescendantCardCounts;
       }
       return cardService.fetchDescendantCardCounts(deckId);
