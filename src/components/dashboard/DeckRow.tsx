@@ -316,7 +316,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
               <div
                 key={sub.id}
                 className="group/sub flex items-center gap-3 pl-10 pr-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors border-t border-border/30"
-                onClick={() => navigate(`/decks/${sub.id}`)}
+                onClick={() => navigate(`/decks/${sub.id}`, readOnlyNavState ? { state: readOnlyNavState } : undefined)}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
