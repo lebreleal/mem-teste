@@ -134,30 +134,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Add menu sheet — only for inside a sala (own, not community) */}
-      <Sheet open={showAddMenu} onOpenChange={setShowAddMenu}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8">
-          <SheetHeader>
-            <SheetTitle className="text-base">Adicionar</SheetTitle>
-          </SheetHeader>
-          <div className="grid gap-2 pt-4">
-            {isInsideSala && (
-              <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + `&folder=${folderId}`); }}>
-                <BookOpen className="h-5 w-5 text-primary" /> Criar matéria
-              </Button>
-            )}
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
-              <BookOpen className="h-5 w-5 text-primary" /> Criar deck
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
-              <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
-              <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Add menu removed — "+" now only triggers create-sala on dashboard root */}
 
       {/* Floating Pomodoro Timer */}
       {pomodoroActive && (
