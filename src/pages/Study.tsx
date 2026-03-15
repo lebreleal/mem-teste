@@ -951,6 +951,7 @@ const Study = () => {
   }
 
   if (!currentCard && !allWaiting && reviewCount > 0) {
+    sessionDoneRef.current = true;
     // Auto-navigate back after a brief moment
     setTimeout(() => goBack(), 1500);
     return (
