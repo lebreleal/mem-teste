@@ -18,11 +18,7 @@ const BottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   };
 
   const handleExplorar = () => {
-    if (isAdmin) {
-      navigate('/explorar');
-    } else {
-      toast({ title: '🚧 Em desenvolvimento', description: 'A seção Explorar estará disponível em breve!' });
-    }
+    navigate('/turmas');
   };
 
   const items = [
