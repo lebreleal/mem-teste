@@ -8,7 +8,7 @@ import { useDeckDetail } from './DeckDetailContext';
 import { Button } from '@/components/ui/button';
 import { Play, Info, Clock, HelpCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { deriveAvgSecondsPerCard, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
+import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -88,10 +88,15 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
     : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
 
-  // Time estimate — based on ALL cards in the collection (not just today's due)
-  const avgSec = deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS);
-  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : serverTotal;
-  const remainingMin = Math.ceil((pendingForTime * avgSec) / 60);
+  // Time estimate — based on today's due cards (not total collection)
+  const dueNew = serverCardCounts?.new_count ?? 0;
+  const dueLearning = serverCardCounts?.learning_count ?? 0;
+  const dueReview = serverCardCounts?.review_count ?? 0;
+  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : (dueNew + dueLearning + dueReview);
+  const remainingSeconds = isQMode
+    ? pendingForTime * deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS)
+    : calculateRealStudyTime(dueNew, dueLearning, dueReview, DEFAULT_STUDY_METRICS);
+  const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
     : `${remainingMin}min`;
