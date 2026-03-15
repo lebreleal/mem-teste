@@ -3,6 +3,10 @@
  * Reuses the EXACT same DeckRow component from the Dashboard in readOnly mode.
  * No data duplication — reads the owner's decks directly via turma_decks RLS.
  */
+// @ts-ignore
+import { formatDistanceToNow } from 'date-fns';
+// @ts-ignore
+import { ptBR } from 'date-fns/locale';
 
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
