@@ -115,6 +115,8 @@ interface DeckRowProps {
   questionCountMap?: Map<string, number>;
   /** When true, hides all management actions (menu, play, drag). Used in public/community views. */
   readOnly?: boolean;
+  /** When true, hides deck management menu (rename/move/archive/delete) but keeps study actions. */
+  disableManagementActions?: boolean;
   /** Navigation state passed when clicking decks in readOnly mode (e.g. { from: 'community', turmaId }) */
   readOnlyNavState?: Record<string, any>;
 }
@@ -152,6 +154,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   expandedAccordionId, onAccordionToggle,
   questionCountMap,
   readOnly = false,
+  disableManagementActions = false,
   readOnlyNavState,
 }, ref) => {
   const navigate = useNavigate();
@@ -283,7 +286,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                 <Play className="h-3.5 w-3.5 fill-current" />
               </button>
             )}
-            <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            {!disableManagementActions && (
+              <DeckMenu deck={deck} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+            )}
           </div>
         )}
 
@@ -342,7 +347,9 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
                         <Play className="h-3 w-3 fill-current" />
                       </button>
                     )}
-                    <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                    {!disableManagementActions && (
+                      <DeckMenu deck={sub} onRename={onRename} onMove={onMove} onArchive={onArchive} onDelete={onDelete} navigate={navigate} />
+                    )}
                   </div>
                 )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90 group-hover/sub:hidden" />
