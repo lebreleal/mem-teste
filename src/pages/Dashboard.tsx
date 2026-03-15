@@ -1327,40 +1327,73 @@ const Dashboard = () => {
       </AlertDialog>
 
       {/* Add menu sheet for own sala */}
-      <Sheet open={salaAddMenuOpen} onOpenChange={setSalaAddMenuOpen}>
+      <Sheet open={salaAddMenuOpen} onOpenChange={(v) => { setSalaAddMenuOpen(v); if (!v) setAddMenuStep('main'); }}>
         <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
           <SheetHeader className="mb-4">
-            <SheetTitle className="text-base font-bold">Adicionar</SheetTitle>
+            <SheetTitle className="text-base font-bold">
+              {addMenuStep === 'main' ? 'Adicionar' : 'Criar deck'}
+            </SheetTitle>
           </SheetHeader>
-          <div className="flex flex-col gap-1">
-            <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
-              onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
-            >
-              <SquarePlus className="h-5 w-5 text-primary shrink-0" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Criar deck</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
-              </div>
-            </button>
-            <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
-              onClick={() => { setSalaAddMenuOpen(false); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
-            >
-              <Layers className="h-5 w-5 text-primary shrink-0" />
-              <div>
-                <span className="text-sm font-medium text-foreground">Criar matéria</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
-              </div>
-            </button>
-            <button
-              className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
-              onClick={() => { setSalaAddMenuOpen(false); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
-            >
-              <Archive className="h-5 w-5 text-primary shrink-0" />
-              <span className="text-sm font-medium text-foreground">Importar cartões</span>
-            </button>
-          </div>
+
+          {addMenuStep === 'main' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => setAddMenuStep('create-deck')}
+              >
+                <SquarePlus className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar deck</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Criar manualmente ou com IA</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId('__materia__'); }}
+              >
+                <Layers className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar matéria</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Organiza seus decks por tema</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setImportOpen(true); state.setImportDeckId(null); state.setImportDeckName(''); }}
+              >
+                <Archive className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-sm font-medium text-foreground">Importar cartões</span>
+              </button>
+            </div>
+          )}
+
+          {addMenuStep === 'create-deck' && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setCreateType('deck'); state.setCreateName(''); state.setCreateParentDeckId(null); }}
+              >
+                <Pencil className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar manualmente</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">Defina nome e adicione cartões</span>
+                </div>
+              </button>
+              <button
+                className="w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted flex items-center gap-3"
+                onClick={() => { setSalaAddMenuOpen(false); setAddMenuStep('main'); state.setAiDeckOpen(true); }}
+              >
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Criar com IA</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">A partir do seu material de estudo</span>
+                </div>
+              </button>
+              <Button variant="ghost" size="sm" className="mt-2 self-start text-xs gap-1" onClick={() => setAddMenuStep('main')}>
+                <ChevronLeft className="h-3.5 w-3.5" /> Voltar
+              </Button>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 
