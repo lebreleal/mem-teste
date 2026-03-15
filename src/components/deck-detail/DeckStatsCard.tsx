@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { deriveAvgSecondsPerCard, calculateRealStudyTime, DEFAULT_STUDY_METRICS } from '@/lib/studyUtils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { useStudyPlan } from '@/hooks/useStudyPlan';
 import { supabase } from '@/integrations/supabase/client';
 
 interface DeckStatsCardProps {
@@ -21,8 +22,11 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
   const {
     studyPending, isQuickReview, totalCards, deckId, navigate,
     cardCounts: serverCardCounts,
+    newCountToday, learningCount: ctxLearningCount, masteredToday,
+    dailyReviewLimit,
   } = useDeckDetail();
   const { user } = useAuth();
+  const { realStudyMetrics } = useStudyPlan();
 
   // === Card classification from server-side RPC (handles any deck size) ===
   const diffCounts = useMemo(() => {
@@ -88,14 +92,15 @@ const DeckStatsCard = ({ mode = 'cards' }: DeckStatsCardProps) => {
     ? (qd.total > 0 ? Math.round((qd.correct / qd.total) * 100) : 0)
     : (serverTotal > 0 ? Math.round(((serverTotal - diffCounts.novo) / serverTotal) * 100) : 0);
 
-  // Time estimate — based on today's due cards (not total collection)
-  const dueNew = serverCardCounts?.new_count ?? 0;
-  const dueLearning = serverCardCounts?.learning_count ?? 0;
-  const dueReview = serverCardCounts?.review_count ?? 0;
-  const pendingForTime = isQMode ? qd.unanswered + qd.wrong : (dueNew + dueLearning + dueReview);
+  // Time estimate — based on today's due cards (capped by daily limits from context)
+  const dueNew = isQMode ? qd.unanswered + qd.wrong : newCountToday;
+  const dueLearning = isQMode ? 0 : ctxLearningCount;
+  const dueReview = isQMode ? 0 : masteredToday;
+  const pendingForTime = isQMode ? (qd.unanswered + qd.wrong) : (dueNew + dueLearning + dueReview);
+  const studyMetrics = realStudyMetrics ?? DEFAULT_STUDY_METRICS;
   const remainingSeconds = isQMode
-    ? pendingForTime * deriveAvgSecondsPerCard(DEFAULT_STUDY_METRICS)
-    : calculateRealStudyTime(dueNew, dueLearning, dueReview, DEFAULT_STUDY_METRICS);
+    ? pendingForTime * deriveAvgSecondsPerCard(studyMetrics)
+    : calculateRealStudyTime(dueNew, dueLearning, dueReview, studyMetrics);
   const remainingMin = Math.ceil(remainingSeconds / 60);
   const timeLabel = remainingMin >= 60
     ? `${Math.floor(remainingMin / 60)}h${remainingMin % 60 > 0 ? `${remainingMin % 60}min` : ''}`
