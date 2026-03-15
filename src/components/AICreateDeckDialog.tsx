@@ -6,7 +6,7 @@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Brain } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useAIDeckFlow } from '@/components/ai-deck/useAIDeckFlow';
 import UploadStep from '@/components/ai-deck/UploadStep';
 import LoadingPagesStep from '@/components/ai-deck/LoadingPagesStep';
