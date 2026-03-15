@@ -27,15 +27,15 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   // Check if current folder is a community (followed) sala
   const isCommunityFolder = useMemo(() => {
-    if (!folderId) return false;
-    // Try to find folder in React Query cache
-    const foldersCache = queryClient.getQueryData<any[]>(['folders']);
+    if (!folderId || !user) return false;
+    // Use the correct cache key that matches useFolders
+    const foldersCache = queryClient.getQueryData<any[]>(['folders', user.id]);
     if (foldersCache) {
       const folder = foldersCache.find((f: any) => f.id === folderId);
       if (folder) return !!folder.source_turma_id;
     }
     return false;
-  }, [folderId, queryClient]);
+  }, [folderId, queryClient, user]);
   const showNavRoutes = ['/dashboard', '/turmas', '/profile', '/desempenho'];
   const hideNavPatterns = ['/study/', '/exam/', '/lessons/'];
   const showNav = showNavRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'))
