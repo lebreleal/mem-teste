@@ -901,7 +901,7 @@ const Dashboard = () => {
         )}
 
         {/* Inside Sala: Deck List */}
-        {state.isInsideSala && (
+        {state.isInsideSala && !isCommunityFolder && (
           <DeckList
             isLoading={state.isLoading}
             currentDecks={state.currentDecks}
@@ -926,6 +926,38 @@ const Dashboard = () => {
             decksWithPendingUpdates={state.decksWithPendingUpdates}
           />
         )}
+
+        {/* Community followed sala: show turma decks in readOnly mode */}
+        {state.isInsideSala && isCommunityFolder && (() => {
+          const cDecks = communityTurmaInfo?.deckStats ?? [];
+          const cRootDecks = cDecks.filter((d: any) => !d.parent_deck_id);
+          const cGetSubDecks = (parentId: string) => cDecks.filter((d: any) => d.parent_deck_id === parentId);
+          const cGetAggStats = (deck: any) => ({ new_count: deck.new_count, learning_count: 0, review_count: 0, reviewed_today: 0 });
+          const noop = () => {};
+          const noopD = (_d: any) => {};
+          const noopS = (_s: string) => {};
+          const getCLinkId = (_d: any) => null as string | null;
+          
+          if (cRootDecks.length === 0) {
+            return (
+              <div className="px-4 pt-3">
+                <div className="rounded-xl border border-dashed border-border py-8 text-center">
+                  <p className="text-sm text-muted-foreground">Nenhum deck publicado</p>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <CommunityDeckList
+              rootDecks={cRootDecks}
+              getSubDecks={cGetSubDecks}
+              getAggregateStats={cGetAggStats}
+              getCommunityLinkId={getCLinkId}
+              turmaId={sourceTurmaId!}
+            />
+          );
+        })()}
 
         {/* Archived section */}
         {state.totalArchived > 0 && (
