@@ -154,6 +154,7 @@ const DeckRow = React.forwardRef<HTMLDivElement, DeckRowProps>(({
   expandedAccordionId, onAccordionToggle,
   questionCountMap,
   readOnly = false,
+  disableManagementActions = false,
   readOnlyNavState,
 }, ref) => {
   const navigate = useNavigate();
