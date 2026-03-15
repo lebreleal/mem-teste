@@ -534,24 +534,25 @@ const Dashboard = () => {
       <main className="pb-24">
         {/* Inside a Sala: Hero banner with image, name, creator, time estimate */}
         {state.isInsideSala && (() => {
-          const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-          const folderName = currentFolder?.name ?? 'Sala';
-          const folderImage = currentFolder?.image_url;
-          const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
-          const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você';
+          const cf = state.folders.find(f => f.id === state.currentFolderId);
+          const folderName = cf?.name ?? 'Sala';
+          const folderImage = cf?.image_url;
+          const isComm = isCommunityFolder;
+          const displayName = isComm ? (communityTurmaInfo?.ownerName ?? 'Criador') : (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Você');
+          const avatarUrl = isComm ? undefined : (user?.user_metadata?.avatar_url as string | undefined);
+          const heroImage = isComm ? (communityTurmaInfo?.coverUrl || folderImage) : folderImage;
 
           return (
             <>
               {/* Hero banner */}
               <div className="relative bg-muted/50 overflow-hidden">
-                {/* Background image (blurred) */}
                 <div className="absolute inset-0">
-                  <img src={folderImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
+                  <img src={heroImage || defaultSalaIcon} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
                   <div className="absolute inset-0 bg-gradient-to-b from-background/60 to-background" />
                 </div>
 
                 <div className="relative px-4 pt-3 pb-4">
-                  {/* Top bar: back + actions */}
+                  {/* Top bar */}
                   <div className="flex items-center justify-between mb-3">
                     <button
                       onClick={() => state.setCurrentFolderId(null)}
@@ -561,121 +562,157 @@ const Dashboard = () => {
                       <span>Dashboard</span>
                     </button>
                     <div className="flex items-center gap-1.5">
-                      {/* Share button — always visible */}
-                      <button
-                        onClick={async () => {
-                          let turmaId = userTurma?.id;
-                          let slug = userTurma?.share_slug;
-                          if (!turmaId) {
-                            const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-                            const folderName = currentFolder?.name ?? 'Minha Sala';
-                            const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-                            const { data: newTurma } = await supabase.from('turmas').insert({
-                              name: folderName, description: '', owner_id: user!.id,
-                              invite_code: inviteCode, is_private: true,
-                            } as any).select('id, share_slug').single();
-                            if (newTurma) {
-                              turmaId = (newTurma as any).id;
-                              slug = (newTurma as any).share_slug;
-                              await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
-                              await refetchTurma();
-                            }
-                          }
-                          if (!slug && turmaId) {
-                            const generated = turmaId.substring(0, 8);
-                            await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
-                            slug = generated;
-                            await refetchTurma();
-                          }
-                          setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
-                          setShareModalOpen(true);
-                        }}
-                        className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
-                        aria-label="Compartilhar link da sala"
-                      >
-                        <Share2 className="h-4 w-4" />
-                      </button>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => {
-                            if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
-                          }}>
-                            <Pencil className="h-4 w-4 mr-2" /> Renomear sala
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
-                            <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
-                            {userTurma?.is_private === false ? (
-                              <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
-                            ) : (
-                              <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={async () => {
-                            await state.archiveFolder.mutateAsync(state.currentFolderId!);
-                            state.setCurrentFolderId(null);
-                            setSearchParams({}, { replace: true });
-                          }}>
-                            <Archive className="h-4 w-4 mr-2" /> Arquivar sala
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => {
-                              if (currentFolder) state.setDeleteTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name });
+                      {!isComm && (
+                        <>
+                          {/* Share button — only for own salas */}
+                          <button
+                            onClick={async () => {
+                              let turmaId = userTurma?.id;
+                              let slug = userTurma?.share_slug;
+                              if (!turmaId) {
+                                const cFolder = state.folders.find(f => f.id === state.currentFolderId);
+                                const fName = cFolder?.name ?? 'Minha Sala';
+                                const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                                const { data: newTurma } = await supabase.from('turmas').insert({
+                                  name: fName, description: '', owner_id: user!.id,
+                                  invite_code: inviteCode, is_private: true,
+                                } as any).select('id, share_slug').single();
+                                if (newTurma) {
+                                  turmaId = (newTurma as any).id;
+                                  slug = (newTurma as any).share_slug;
+                                  await supabase.from('turma_members').insert({ turma_id: turmaId, user_id: user!.id, role: 'admin' } as any);
+                                  await refetchTurma();
+                                }
+                              }
+                              if (!slug && turmaId) {
+                                const generated = turmaId.substring(0, 8);
+                                await supabase.from('turmas').update({ share_slug: generated } as any).eq('id', turmaId);
+                                slug = generated;
+                                await refetchTurma();
+                              }
+                              setShareSlugEdit(slug || turmaId?.substring(0, 8) || '');
+                              setShareModalOpen(true);
                             }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                            aria-label="Compartilhar link da sala"
                           >
-                            <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            <Share2 className="h-4 w-4" />
+                          </button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => {
+                                if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
+                              }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Renomear sala
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setSalaImageOpen(true)}>
+                                <ImageIcon className="h-4 w-4 mr-2" /> Mudar imagem
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={handleTogglePublish} disabled={publishing}>
+                                {userTurma?.is_private === false ? (
+                                  <><EyeOff className="h-4 w-4 mr-2" /> Despublicar</>
+                                ) : (
+                                  <><Compass className="h-4 w-4 mr-2" /> Publicar no Explorar</>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={async () => {
+                                await state.archiveFolder.mutateAsync(state.currentFolderId!);
+                                state.setCurrentFolderId(null);
+                                setSearchParams({}, { replace: true });
+                              }}>
+                                <Archive className="h-4 w-4 mr-2" /> Arquivar sala
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
+                                  if (cf) state.setDeleteTarget({ type: 'folder', id: cf.id, name: cf.name });
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Excluir sala
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                      {isComm && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground">
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={async () => {
+                                if (!user || !sourceTurmaId) return;
+                                await supabase.from('turma_members').delete().eq('turma_id', sourceTurmaId).eq('user_id', user.id);
+                                await supabase.from('folders').update({ source_turma_id: null, source_turma_subject_id: null } as any).eq('id', state.currentFolderId!);
+                                await supabase.from('folders').delete().eq('id', state.currentFolderId!);
+                                queryClient.invalidateQueries({ queryKey: ['folders'] });
+                                queryClient.invalidateQueries({ queryKey: ['turma-members'] });
+                                state.setCurrentFolderId(null);
+                                setSearchParams({}, { replace: true });
+                                toast({ title: 'Sala removida do seu menu Início' });
+                              }}
+                            >
+                              <LogOut className="h-4 w-4 mr-2" /> Sair da sala
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
 
-                  {/* Sala image + name + edit */}
+                  {/* Sala image + name */}
                   <div className="flex items-center gap-3 mb-2">
-                    {/* Sala image with change-image overlay */}
                     <div className="relative shrink-0">
-                      <img src={folderImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
-                      <button
-                        onClick={() => setSalaImageOpen(true)}
-                        className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label="Trocar imagem da sala"
-                      >
-                        <ImageIcon className="h-3 w-3" />
-                      </button>
+                      <img src={heroImage || defaultSalaIcon} alt={folderName} className="h-14 w-14 rounded-xl object-cover border border-border/30 shadow-sm" />
+                      {!isComm && (
+                        <button
+                          onClick={() => setSalaImageOpen(true)}
+                          className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Trocar imagem da sala"
+                        >
+                          <ImageIcon className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <h1 className="text-lg font-display font-bold text-foreground truncate">{folderName}</h1>
-                        <button
-                          onClick={() => {
-                            if (currentFolder) { state.setRenameTarget({ type: 'folder', id: currentFolder.id, name: currentFolder.name }); state.setRenameName(currentFolder.name); }
-                          }}
-                          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        {!isComm && (
+                          <button
+                            onClick={() => {
+                              if (cf) { state.setRenameTarget({ type: 'folder', id: cf.id, name: cf.name }); state.setRenameName(cf.name); }
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-muted-foreground">Por</span>
-                        <span className="text-xs font-medium text-foreground">{userName}</span>
-                        <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
-                          {avatarUrl ? (
+                        <span className="text-xs font-medium text-foreground">{displayName}</span>
+                        {!isComm && avatarUrl && (
+                          <div className="h-5 w-5 rounded-full overflow-hidden bg-muted shrink-0">
                             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
+                      {isComm && communityTurmaInfo?.lastUpdated && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
+                          <RefreshCw className="h-2.5 w-2.5" />
+                          {(() => { try { return formatDistanceToNow(new Date(communityTurmaInfo.lastUpdated), { addSuffix: true, locale: ptBR }); } catch { return ''; } })()}
+                        </div>
+                      )}
                     </div>
                   </div>
 
