@@ -129,35 +129,46 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
       {showNav && <BottomNav />}
 
-      {/* Add menu sheet */}
+      {/* Add menu sheet — hidden for community (followed) folders */}
       <Sheet open={showAddMenu} onOpenChange={setShowAddMenu}>
         <SheetContent side="bottom" className="rounded-t-2xl pb-8">
           <SheetHeader>
             <SheetTitle className="text-base">Adicionar</SheetTitle>
           </SheetHeader>
           <div className="grid gap-2 pt-4">
-            {/* At dashboard root (not inside a classe): show "Criar Classe" */}
-            {isOnDashboard && !isInsideSala && (
-              <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
-                <FolderPlus className="h-5 w-5 text-primary" /> Criar classe
-              </Button>
-            )}
-            {/* Inside a classe or not on dashboard: show deck actions */}
-            {(!isOnDashboard || isInsideSala) && (
+            {isCommunityFolder ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Você está em uma sala seguida. Não é possível criar conteúdo aqui.
+              </p>
+            ) : (
               <>
-                {isInsideSala && (
-                  <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                    <BookOpen className="h-5 w-5 text-primary" /> Criar matéria
+                {/* At dashboard root (not inside a classe): show "Criar Classe" */}
+                {isOnDashboard && !isInsideSala && (
+                  <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-sala'); }}>
+                    <FolderPlus className="h-5 w-5 text-primary" /> Criar classe
                   </Button>
                 )}
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <BookOpen className="h-5 w-5 text-primary" /> Criar deck
-                </Button>
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
-                </Button>
-                <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${searchParams.get('folder')}` : '')); }}>
-                  <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+                {/* Inside a classe or not on dashboard: show deck actions */}
+                {(!isOnDashboard || isInsideSala) && (
+                  <>
+                    {isInsideSala && (
+                      <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
+                        <BookOpen className="h-5 w-5 text-primary" /> Criar matéria
+                      </Button>
+                    )}
+                    <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=create-deck' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
+                      <BookOpen className="h-5 w-5 text-primary" /> Criar deck
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=ai-deck' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
+                      <Brain className="h-5 w-5" style={{ color: 'hsl(var(--energy-purple))' }} /> Criar com IA
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-12 text-base" onClick={() => { setShowAddMenu(false); navigate('/dashboard?action=import' + (isInsideSala ? `&folder=${folderId}` : '')); }}>
+                      <Download className="h-5 w-5 text-muted-foreground" /> Importar cartões
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
                 </Button>
               </>
             )}
