@@ -204,14 +204,11 @@ const DeckMoveDialog = ({
   };
 
   const handleMoveToRoot = () => {
-    // Move to root of current sala (remove parent_deck_id)
-    setMoveParentDeckId(null);
-    onMoveSubmit();
+    onMoveSubmit(null);
   };
 
   const handleMoveToMateria = (materiaId: string) => {
-    setMoveParentDeckId(materiaId);
-    onMoveSubmit();
+    onMoveSubmit(materiaId);
   };
 
   const handleMoveToSala = (salaId: string) => {
