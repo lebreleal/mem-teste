@@ -615,6 +615,7 @@ const DeckSettings = () => {
                 icon={<Edit3 className="h-5 w-5" />}
                 label="Renomear baralho"
                 onClick={() => setRenameModal(true)}
+                disabled={isCommunityDeck}
               />
               {isCommunityDeck ? (
                 <SettingsRow
@@ -634,11 +635,13 @@ const DeckSettings = () => {
                 icon={<RotateCcw className="h-5 w-5" />}
                 label="Redefinir progresso"
                 onClick={() => setResetConfirm(true)}
+                disabled={isCommunityDeck}
               />
               <SettingsRow
                 icon={<Archive className="h-5 w-5" />}
                 label="Arquivar baralho"
                 onClick={handleArchive}
+                disabled={isCommunityDeck}
               />
               <SettingsRow
                 icon={<Upload className="h-5 w-5" />}
@@ -646,6 +649,9 @@ const DeckSettings = () => {
                 subtitle="CSV ou Anki (.apkg)"
                 onClick={() => setExportModal(true)}
               />
+              {isCommunityDeck && (
+                <p className="px-5 pb-2 text-xs text-muted-foreground">Para alterar conteúdo, envie uma sugestão ao dono da sala.</p>
+              )}
             </SettingsGroup>
 
             {/* ── Section: Danger ─────────────────────────────── */}
