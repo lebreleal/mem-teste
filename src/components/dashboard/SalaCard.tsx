@@ -3,7 +3,7 @@
  * Shows custom image (or default icon), name, deck/card/question counts, mastery bar.
  */
 
-import { ChevronRight, Layers, HelpCircle } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import defaultSalaIcon from '@/assets/default-sala-icon.jpg';
 
